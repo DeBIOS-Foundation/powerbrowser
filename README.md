@@ -5,15 +5,19 @@ supervises a bundled Theia backend on localhost, and presents the IDE as the
 GUI. Web pages and editors run in the same application, on a real browser
 engine.
 
-Firefox is the substrate rather than Electron because it brings things Electron
-cannot: Widevine DRM, the full WebExtensions API, per-site process isolation,
-and Mozilla's security patch stream.
+The substrate is Firefox, not Electron, because the point is to have a **whole
+browser** — not a browser-shaped shell around an editor. Everything a real
+browser does, it does: DRM and streaming, the full WebExtensions API, per-site
+process isolation, Mozilla's security patch stream. An Electron app can imitate
+none of that.
 
 ## What this repo is
 
-Power Browser is a **platform**, not a finished product. It is unopinionated:
-no bundled database, no curated extension set, no vendor branding beyond a
-neutral default. It builds and ships on its own.
+Power Browser is a **platform**, and it is deliberately agnostic. It has no
+opinion about how you should code — no bundled database, no curated extension
+set, no workflow baked in, no branding beyond a neutral default. It ships that
+way on purpose, so anyone can remake it into the environment they actually
+want.
 
 Distributions are built on top of it. [Sourcerer](https://github.com/DeBIOS-Foundation/sourcerer)
 is the first one.
