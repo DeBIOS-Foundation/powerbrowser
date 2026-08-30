@@ -53,8 +53,43 @@
 // extension list rather than by content sniffing. Positions are reported as
 // `path:line`, never as byte offsets.
 //
+// -- `--except-hand-write` is a hand-off, not a mute button --
+//
+// D-18 makes this scan a permanent gate the moment the rename turns it green,
+// so it has to be runnable green while one surface set is still legitimately
+// outstanding: plan 01-02 renames every identifier mechanically, and plan
+// 01-03 hand-writes the surfaces afterwards. `--except-hand-write` holds back
+// EXACTLY the sites `rename-brand.mjs` is forbidden to touch, by calling the
+// very predicates that forbid it (`excludedWholeFile` / `excludedLine`, below,
+// which rename-brand.mjs re-exports rather than re-implements). The gate's
+// exception and the rename's prohibition are therefore the same code reading
+// the same `hand_write` block, and cannot drift apart.
+//
+// It is scoped by SITE and not by class, which is not a stylistic choice --
+// excepting a class cannot express this hand-off:
+//
+//   * Pitfall 1 puts `brand-display` residue in the branding locale files,
+//     `configure.sh` and the LICENSE notice, because no token-boundary rule
+//     separates `Power Browser` (the display value, with a space) from
+//     `PowerBrowser` (the identifier).
+//   * Pitfall 4 puts `brand-identifier` residue in the two `.desktop` files,
+//     because `Exec=/home/chris/coding/sourcerer/objdir/dist/bin/sourcerer`
+//     carries three tokens on one line with three different correct targets.
+//
+// So the outstanding set spans two classes. `--except-class brand-display`
+// leaves the six `.desktop` identifier sites failing and the gate can never go
+// green; `--except-class brand-identifier` would except the 899 sites this
+// very plan exists to rename, i.e. it would gut the gate. Excepting the
+// hand-write SITES holds back all 31 and keeps every other class-and-site
+// combination fully enforced -- a stray `brand-identifier` anywhere outside a
+// hand-write surface still fails.
+//
+// An excepted site is REPORTED with its count on every run, never hidden, and
+// the flag is dropped from the gate once 01-03 lands.
+//
 // Usage:
 //   node scripts/scan-brand-residue.mjs [--reconcile] [--scope-chain <name>]
+//                                       [--except-hand-write]
 //                                       [--report <path>] [--self-test]
 
 import { execFileSync } from 'node:child_process';
@@ -329,6 +364,61 @@ export function offensesOf(result) {
 }
 
 // ---------------------------------------------------------------------------
+// Hand-write exclusions
+// ---------------------------------------------------------------------------
+//
+// These two predicates live here, in the lower-level module, and
+// rename-brand.mjs re-exports them. That direction matters: rename-brand.mjs
+// already imports this file, so defining them there and importing them here
+// would make the pair circular. One definition, two consumers -- the rename
+// refuses to touch exactly what the gate agrees to hold back.
+
+/** True when the whole file is hand-written by a later plan. */
+export function excludedWholeFile(inv, file) {
+  return (inv.hand_write?.files ?? []).includes(file);
+}
+
+/**
+ * True when this one line is hand-written by a later plan. Line-scoped rather
+ * than file-scoped where a file carries ordinary identifier sites too --
+ * `theia/applications/browser/package.json`'s `"applicationName"` is a display
+ * literal, but the rest of that file must still rename.
+ */
+export function excludedLine(inv, file, lineText) {
+  return (inv.hand_write?.line_contains ?? [])
+    .some((r) => r.file === file && lineText.includes(r.contains));
+}
+
+/**
+ * Splits offenses into the ones a later plan hand-writes and the ones this gate
+ * enforces. Matched by SITE, using the same predicates rename-brand.mjs obeys,
+ * so the gate cannot except a site the rename would have been allowed to touch
+ * (nor keep failing on one it was forbidden to fix).
+ *
+ * Files are read here rather than carried on every occurrence because only the
+ * offending files are ever needed, and `excludedLine` needs the line's text.
+ */
+export function partitionHandWrite(inv, offenses, { root = REPO_ROOT } = {}) {
+  const lines = new Map();
+  const linesOf = (file) => {
+    if (!lines.has(file)) {
+      let text = '';
+      try { text = readFileSync(join(root, file), 'utf8'); } catch { /* unreadable: treat as enforced */ }
+      lines.set(file, text.split('\n'));
+    }
+    return lines.get(file);
+  };
+  const handWritten = [];
+  const enforced = [];
+  for (const o of offenses) {
+    const excepted = excludedWholeFile(inv, o.file) ||
+      excludedLine(inv, o.file, linesOf(o.file)[o.line - 1] ?? '');
+    (excepted ? handWritten : enforced).push(o);
+  }
+  return { handWritten, enforced };
+}
+
+// ---------------------------------------------------------------------------
 // Reconciliation
 // ---------------------------------------------------------------------------
 
@@ -573,6 +663,36 @@ function selfTest() {
       overall = 1;
     }
 
+    // Fixture 5: --except-hand-write must have TEETH. It holds back the
+    // hand-write surfaces (whole-file and line-scoped alike) and NOTHING else:
+    // an ordinary identifier site in a non-hand-write file, and an ordinary
+    // line in a line-scoped file, both stay enforced. An exception that
+    // excepted more than its declared sites would be indistinguishable from a
+    // green tree, which is the whole failure mode this flag risks.
+    const hwFileRel = 'planted-handwrite.desktop';
+    const hwLineRel = 'planted-linescoped.json';
+    const ordinaryRel = 'planted-ordinary.txt';
+    writeFileSync(join(tmp, hwFileRel), 'Exec=/x/sourcerer/bin/sourcerer\n');
+    writeFileSync(join(tmp, hwLineRel), '"applicationName": "sourcerer"\n"id": "sourcerer"\n');
+    writeFileSync(join(tmp, ordinaryRel), 'chrome://sourcerer/content/y\n');
+    const invHW = structuredClone(SELF_TEST_INVENTORY);
+    invHW.hand_write = {
+      files: [hwFileRel],
+      line_contains: [{ file: hwLineRel, contains: '"applicationName"' }],
+    };
+    const r4 = scan(invHW, { root: tmp, files: [hwFileRel, hwLineRel, ordinaryRel] });
+    const { handWritten, enforced } = partitionHandWrite(invHW, offensesOf(r4), { root: tmp });
+    const hwSites = handWritten.map((o) => `${o.file}:${o.line}`).sort();
+    const enSites = enforced.map((o) => `${o.file}:${o.line}`).sort();
+    const wantHW = [`${hwFileRel}:1`, `${hwFileRel}:1`, `${hwLineRel}:1`].sort();
+    const wantEn = [`${hwLineRel}:2`, `${ordinaryRel}:1`].sort();
+    if (String(hwSites) === String(wantHW) && String(enSites) === String(wantEn)) {
+      console.log(`scan-brand-residue: --self-test PASS -- --except-hand-write held back ${handWritten.length} declared hand-write site(s) and still enforced ${enforced.length} ordinary site(s), including line 2 of the line-scoped file`);
+    } else {
+      console.error(`scan-brand-residue: --self-test FAIL -- --except-hand-write partitioned wrongly: held back [${hwSites}] (expected [${wantHW}]), enforced [${enSites}] (expected [${wantEn}])`);
+      overall = 1;
+    }
+
     // Fixture 4: non-vacuity. An empty scan set is a FAIL, not a clean pass.
     const r3 = scan(SELF_TEST_INVENTORY, { root: tmp, files: [] });
     if (r3.empty) {
@@ -606,6 +726,7 @@ function main(argv) {
     console.error('scan-brand-residue: FAIL -- --report requires a path');
     return 2;
   }
+  const exceptHandWrite = argv.includes('--except-hand-write');
   const wantReconcile = argv.includes('--reconcile');
 
   if (!existsSync(INVENTORY_PATH)) {
@@ -624,9 +745,27 @@ function main(argv) {
     return 1;
   }
 
-  const offenses = offensesOf(result);
+  const allOffenses = offensesOf(result);
+  const split = exceptHandWrite
+    ? partitionHandWrite(inv, allOffenses)
+    : { handWritten: [], enforced: allOffenses };
+  const offenses = split.enforced;
   for (const o of offenses) {
     console.error(`  ${o.file}:${o.line}: ${o.row.token}`);
+  }
+  // Report what was held back, by file and by class, with counts. A gate that
+  // goes quiet about what it stopped checking is how an exception outlives its
+  // hand-off. Naming the classes too makes it visible that this exception
+  // spans `brand-display` (Pitfall 1) AND `brand-identifier` (Pitfall 4).
+  if (split.handWritten.length !== 0) {
+    const files = [...new Set(split.handWritten.map((o) => o.file))].sort();
+    const classes = [...new Set(split.handWritten.map((o) => o.row.class))].sort();
+    console.log(`scan-brand-residue: HELD BACK -- ${split.handWritten.length} occurrence(s) across ${files.length} hand-write surface(s) [${classes.join(', ')}] excepted by --except-hand-write (owned by a later plan, not clean):`);
+    for (const f of files) {
+      console.log(`  ${f}: ${split.handWritten.filter((o) => o.file === f).length}`);
+    }
+  } else if (exceptHandWrite) {
+    console.log('scan-brand-residue: HELD BACK -- nothing; every hand-write surface is already clean, so --except-hand-write can be dropped from the gate');
   }
 
   const rec = reconcile(inv, result, { chain, chainFiles: chain ? chainOf(inv, chain).files : null });
@@ -649,7 +788,7 @@ function main(argv) {
     console.error(`scan-brand-residue: FAIL -- ${rec.failures.length} reconciliation failure(s)`);
     return 1;
   }
-  console.log(`scan-brand-residue: PASS -- no residual brand occurrence in ${result.files.length} scanned file(s)${chain ? ` for chain "${chain}"` : ''}`);
+  console.log(`scan-brand-residue: PASS -- no residual brand occurrence in ${result.files.length} scanned file(s)${chain ? ` for chain "${chain}"` : ''}${exceptHandWrite ? ' (excepting the hand-write surfaces named above)' : ''}`);
   return 0;
 }
 

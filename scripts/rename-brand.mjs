@@ -45,8 +45,22 @@
 // second pass that could compound a wrong replacement is the tampering risk
 // this property closes.
 //
+// -- Staging by contract (D-06, Pitfall 3) --
+//
+// `--scope-files a,b,c` narrows the FILE SET only, exactly like
+// `--scope-chain`: every inventory row stays active, so a staged run is the
+// full ruleset restricted to those files, never a second weaker ruleset. It
+// exists because D-06's bisectable stages must be cut by CONTRACT rather than
+// by tier -- a cross-tier env var whose chrome half lands in one commit and
+// whose Node half lands in the next leaves an intermediate tree whose backend
+// 403s every request while smoke-theia.sh still passes, because that smoke
+// test sets the token-disable bypass. The file list for the cross-tier stage
+// is derived from the inventory's own `stage` field, so the staging plan is
+// data, not a hand-kept list.
+//
 // Usage:
-//   node scripts/rename-brand.mjs [--scope-chain <name>] [--dry-run] [--self-test]
+//   node scripts/rename-brand.mjs [--scope-chain <name>] [--scope-files <a,b,..>]
+//                                 [--dry-run] [--self-test]
 
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -60,6 +74,8 @@ import {
   RENAMEABLE_CLASSES,
   chainOf,
   claimOccurrences,
+  excludedLine,
+  excludedWholeFile,
   loadInventory,
   scopeFiles,
 } from './scan-brand-residue.mjs';
@@ -96,14 +112,11 @@ export function gateFailures(inv) {
 // Exclusions
 // ---------------------------------------------------------------------------
 
-export function excludedWholeFile(inv, file) {
-  return (inv.hand_write?.files ?? []).includes(file);
-}
-
-export function excludedLine(inv, file, lineText) {
-  return (inv.hand_write?.line_contains ?? [])
-    .some((r) => r.file === file && lineText.includes(r.contains));
-}
+// Defined in scan-brand-residue.mjs and re-exported here, NOT duplicated. The
+// residual scan's `--except-hand-write` holds back exactly the sites these two
+// predicates forbid this script to touch; one definition is what makes that an
+// identity rather than two lists that agree until someone edits one of them.
+export { excludedWholeFile, excludedLine };
 
 // ---------------------------------------------------------------------------
 // Rewrite
@@ -284,6 +297,12 @@ function main(argv) {
     console.error('rename-brand: FAIL -- --scope-chain requires a chain name');
     return 2;
   }
+  const filesIdx = argv.indexOf('--scope-files');
+  const filesArg = filesIdx === -1 ? null : argv[filesIdx + 1];
+  if (filesIdx !== -1 && !filesArg) {
+    console.error('rename-brand: FAIL -- --scope-files requires a comma-separated path list');
+    return 2;
+  }
   const dryRun = argv.includes('--dry-run');
 
   if (!existsSync(INVENTORY_PATH)) {
@@ -299,9 +318,27 @@ function main(argv) {
     return 1;
   }
 
+  // A requested path is INTERSECTED with the ordinary scope rather than
+  // trusted: --scope-files must never be a way past scope.exclude (which
+  // covers the inventory and these two scripts -- the rename's own machinery,
+  // which necessarily spells out every token). A path outside the scope is
+  // named and rejected rather than silently dropped, because a typo that
+  // quietly rewrites nothing looks exactly like a completed stage.
+  let files = null;
+  if (filesArg !== null) {
+    const inScope = new Set(scopeFiles(inv));
+    files = filesArg.split(',').map((p) => p.trim()).filter(Boolean);
+    const outside = files.filter((p) => !inScope.has(p));
+    if (outside.length !== 0) {
+      console.error(`rename-brand: FAIL -- ${outside.length} --scope-files path(s) are not in the scanned scope:`);
+      for (const p of outside) console.error(`  ${p}`);
+      return 1;
+    }
+  }
+
   let changes;
   try {
-    changes = run(inv, { chain, dryRun });
+    changes = run(inv, { chain, dryRun, files });
   } catch (err) {
     console.error(String(err.message));
     return 1;
