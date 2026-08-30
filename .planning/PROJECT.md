@@ -45,22 +45,31 @@ rebrand ever requires editing a second file, that is a bug.
 | `configuration.toml` (TOML) as the single rebrand/config file | Human-editable by non-developers; Nix reads it natively (`builtins.fromTOML`); Node/Theia side reads it trivially | — Pending |
 | Copy sourcerer tree then debrand (not fresh port) | Most of that tree is already platform code per the stream-model doc | — Pending |
 | Re-fetch `upstream/` via `fetch-upstream.sh`; never copy objdirs | Multi-GB checkouts are reproducible from the pinned tag | — Pending |
-| Telemetry configured in `configuration.toml` | Mirror Theia's model: endpoint field + send toggle (+ toggle to send to Theia upstream); default off | — Pending |
+| Telemetry configured in `configuration.toml` | Theia ships no telemetry destination — expose Theia's real `telemetry.telemetryLevel` enum (off/crash/error/all, default off) + downstream's own endpoint; Power Browser implements the destination | — Pending |
+| Internal identifiers fixed, only user-visible surfaces configurable | `chrome://powerbrowser/`, `@powerbrowser/*`, pref branches, API names stay constant for every downstream; halves generator scope, keeps patches brand-free (exception: app basename/remoting name must vary to avoid profile collisions) | — Pending |
+| Identity fields required, no silent fallback | A downstream omitting `vendor` must hard-fail, not ship under Power Browser's mark; cosmetic fields default with an echo | — Pending |
 | Extensions declared in `configuration.toml` with sources | Each entry: id + source (Open VSX / npm / URL / local path) + pin | — Pending |
 | Adversarial review enabled | plan_check + verifier on; /gsd-plan-review-convergence on risky phases (rename pass, generator) | — Pending |
 
 ## configuration.toml planned sections
 
-[product] name, short name, vendor, version scheme, description, homepage ·
-[assets] logo SVG/PNG, icon source, wordmark · [identity] app id, binary name,
-installer name, npm scope, URI scheme prefix · [telemetry] enabled, endpoint,
-send-to-theia toggle · [extensions] declared list with sources and pins ·
-[urls] support, release notes, update check, crash report, default homepage,
-default search · [legal] license, copyright holder, trademark notice ·
+[product] display name, vendor, version scheme, description, homepage ·
+[identity] app basename, binary name (validated `^[a-z][a-z0-9-]{1,31}$`),
+installer name, remoting name — REQUIRED, hard-fail if unset ·
+[assets] logo SVG/PNG, icon source (generator derives the 5 Linux PNG sizes),
+wordmark · [telemetry] level enum (off/crash/error/all, default off) + endpoint
+(flows into generated endpoint allowlist) · [extensions] declared list with
+sources (Open VSX/npm/URL/path) and pins · [urls] support, release notes,
+update check, crash report, default homepage, default search ·
+[legal] license, copyright holder, trademark notice — REQUIRED ·
 [theia] welcome/about text, logo, default theme · [upstreams] Firefox ESR tag,
 Theia release pin · [build] channel, release/debug defaults.
 
-Unset values fall back to Power Browser defaults.
+Identity and legal keys are required (hard build failure if unset — a
+downstream must never silently ship under Power Browser's mark). Cosmetic keys
+fall back to Power Browser defaults with a visible echo at generate time.
+Internal identifiers (`chrome://powerbrowser/`, `@powerbrowser/*`, pref
+branches, `PowerBrowserAPI`) are fixed and never configurable.
 
 ## Requirements
 
@@ -77,9 +86,11 @@ Unset values fall back to Power Browser defaults.
 - [ ] Build-time generator materializes all branding surfaces (Firefox
       branding dir, desktop files, installer name, icons, Theia welcome/about)
       from `configuration.toml`
-- [ ] Verification script fails the build if any branding value is hardcoded
-      outside the manifest (evolve existing `verify-branding*.mjs`)
-- [ ] Telemetry endpoint + toggles wired through `configuration.toml`
+- [ ] Two-layer verification: static scoped brand-literal scan (committed
+      scope list, boundary-matched tokens, stale-allowlist-entry fails) +
+      runtime six-surface exact-equality checks reading expectations from
+      `configuration.toml` (evolve existing `verify-branding*.mjs`)
+- [ ] Telemetry level + endpoint wired through `configuration.toml`
 - [ ] Extension declarations (id + source + pin) installed into the Theia
       sidecar at build time
 - [ ] `docs/REBRANDING.md` walks a stranger through a full rebrand
