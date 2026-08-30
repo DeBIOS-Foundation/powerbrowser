@@ -37,7 +37,8 @@
     "migrating_files": 69,
     "phase_verifier_occurrences": 247,
     "phase_verifier_files": 4,
-    "phase_verifier_note": "scripts/verify-phase-0{2,3,4,5}.sh. Research counted them separately because their disposition was undecided; D-21 decided it -- the checks are migrated now and consolidated into scripts/verify-platform.sh later, so their occurrences are inside this scan's scope and must be accounted for here.",
+    "phase_verifier_note": "scripts/verify-phase-0{2,3,4,5}.sh. Research counted them separately because their disposition was undecided; D-21 decided it -- the checks were migrated and then consolidated into scripts/verify-platform.sh in plan 01-03, which DELETED all four driver files. Their occurrences were inside this scan's scope when this census was taken and are accounted for here; the four paths no longer exist on disk.",
+    "census_status": "HISTORICAL -- PRE-RENAME, AND DELIBERATELY NOT REWRITTEN (plan 01-03's call, deferred to it by 01-02). Everything in this `ground_truth` block and every `expected_count` / `expected_files` on a row below describes the tree AT THE IMPORT COMMIT, before scripts/rename-brand.mjs ran. That is what made 01-SCAN-RED-REPORT.md a checkable artifact: a red scan reconciled against an independently-grepped outside number is evidence, whereas a non-zero exit alone is not, because an UNDER-scanning scanner also exits non-zero (D-17). Post-rename, `--reconcile` reports condition failures and a large negative ground-truth deviation. That is the census correctly describing a tree that no longer exists -- it is not a live defect and it is not the gate. THE GATE IS THE PLAIN RUN: `node scripts/scan-brand-residue.mjs`, no flags, which is what scripts/rebase-upstream.sh, the CI rebase workflow, and verify-platform.sh's `scan-brand-residue` check all invoke, and which exits 0 over the current tree. Rewriting these numbers to the post-rename tree was considered and REJECTED: post-rename every count is zero by construction, so the rewritten census would assert nothing the plain gate does not already assert, while destroying the only record of what the pre-rename tree actually contained. An all-zeros census is a vacuous duplicate of a gate that already works. The `expected_files` arrays are likewise left pointing at pre-rename paths where a file has since moved or been deleted -- they are provenance, the same reason D-08 freezes the historical plan-file citations rather than renumbering them.",
     "already_renamed": [
       {
         "what": "the `chrome-package` coupled chain, renamed by the tracer in plan 01-01 before this report was produced",
@@ -68,6 +69,40 @@
         "scripts/check-internals-boundary.sh"
       ]
     }
+  },
+  "brand_display_expectations": {
+    "$comment": "THE EXPECTED-VALUE SOURCE for scripts/verify-branding-preflight.mjs, and the reason that script is not a tautology. Authored by hand in plan 01-03 from the RECORDED IDENTITY DECISIONS (01-CONTEXT.md D-09 as amended, D-10, D-12, D-13) -- not read back out of the branding files, not produced by scripts/rename-brand.mjs, and not derived from scripts/verify-branding-identity.mjs's VARIANTS descriptor. That independence is the whole point: Pitfall 1's failure mode is a mechanical pass that rewrites BOTH a display literal and the expectation that checks it, so the build succeeds, the window title is wrong, and the verifier agrees. It actually happened -- the rename left verify-branding-identity.mjs expecting `PowerBrowser Dev`, the space-less identifier form, and nothing in the tree disagreed with it. A third source that no pass writes is the only thing that catches that. The `tokens` rows below carry the same targets as COUNTS (how many occurrences per file); this block carries them as VALUES (which literal at which named key), and the preflight asserts both.",
+    "variants": {
+      "dev": {
+        "brand_full_name": "Power Browser Dev",
+        "brand_short_name": "Power Browser",
+        "brand_shorter_name": "Power Browser",
+        "brand_shortcut_name": "Power Browser",
+        "app_display_name": "Power Browser Dev",
+        "branding_dir": "powerbrowser/branding/dev",
+        "objdir": "objdir",
+        "desktop_entry": "powerbrowser/powerbrowser.desktop"
+      },
+      "release": {
+        "brand_full_name": "Power Browser",
+        "brand_short_name": "Power Browser",
+        "brand_shorter_name": "Power Browser",
+        "brand_shortcut_name": "Power Browser",
+        "app_display_name": "Power Browser",
+        "branding_dir": "powerbrowser/branding/release",
+        "objdir": "objdir-release",
+        "desktop_entry": "powerbrowser/powerbrowser-release.desktop"
+      }
+    },
+    "vendor_display": "DeBIOS Foundation",
+    "vendor_machine": "DeBIOS",
+    "vendor_split_reason": "D-09 as amended 2026-08-30. MOZ_APP_VENDOR is lowercased and concatenated into the Firefox profile path with no space stripping (upstream/toolkit/xre/nsXREDirProvider.cpp:1621-1637), so the display-side `DeBIOS Foundation` would yield `~/.config/debios foundation/powerbrowser/` -- a space in a path, against this repo's hard no-spaces rule. The two values MUST be distinct and the preflight asserts that they are: collapsing them either puts a space in the profile path or ships a vendor string that is not the foundation's name.",
+    "app_basename": "powerbrowser",
+    "distribution_id": "org.debios",
+    "domain": "powerbrowser.org",
+    "identifier_form": "PowerBrowser",
+    "identifier_form_reason": "D-10's TitleCase identifier prefix. It is listed here as the value that must NEVER appear in a display string -- the preflight asserts its absence from every display surface, because `PowerBrowser Dev` is exactly what a token-boundary rename produces and exactly what nothing else in the tree would object to.",
+    "repo_root": "/home/chris/coding/Power-Browser"
   },
   "hand_write": {
     "$comment": "Surfaces rename-brand.mjs is forbidden to touch, in addition to every `brand-display` and `frozen` row, which it skips by class. These are hand-written in plan 01-03. The display literals are Pitfall 1: `Sourcerer` here means `Power Browser` (two words, with the space), and a mechanical pass gets them wrong while the verifier that checks them AGREES, because the same pass rewrote both sides. The `.desktop` files are excluded for a second, independent reason (Pitfall 4): three tokens on one `Icon=`/`Exec=` line with three different correct targets, which no token-boundary rule can get right.",

@@ -1,71 +1,96 @@
 #!/usr/bin/env bash
-# scripts/verify-phase-05.sh
+# scripts/verify-platform.sh
 #
-# The single aggregator for every Phase 5 check, modelled on
-# scripts/verify-phase-04.sh: unofficial-mode error handling (deliberately
-# no `-e`, only `-u` and `pipefail` -- every check runs even if an earlier
-# one failed), a CHECKS array later tasks append to rather than forking a
-# sibling driver, and a per-check PASS/FAIL summary table with a non-zero
-# exit if anything failed. One verification script per phase, extended
-# never sibling'd (05-PATTERNS.md).
+# THE verification driver for this repo. One script, one CHECKS registry, one
+# summary table. It replaces scripts/verify-phase-0{2,3,4,5}.sh, which were
+# deleted in the same commit that created this file (D-21).
 #
-# `--quick` runs only checks needing no browser launch and no built tree.
-# `--only <label>` runs exactly one named check and nothing else -- per-task
-# sampling depends on it.
+# Why the four drivers went and the checks stayed. They were named against the
+# UPSTREAM PROJECT'S phase numbering, which means something entirely different
+# in this repo -- "phase 04" here is not "phase 04" there, and a reader
+# following a driver's name to this project's roadmap lands on the wrong work
+# every time. The assertions inside them are about the PLATFORM (patch surface,
+# branding identity, the token gate, the shell's supervision contract) and
+# outlive any phase numbering, so they are ported here verbatim, label for
+# label, and the upstream plan-file citations inside the ported comments are
+# FROZEN as provenance rather than renumbered (D-08). A citation that names
+# 05-04-PLAN.md points at a plan in the frozen upstream repo; renumbering it to
+# this project's 05 would be a lie that reads as a fact.
 #
-# Task 1 registers side04-sigkill-no-orphan and
-# side04-unsupervised-backend-survives, both outside --quick (they launch
-# the built objdir/dist/bin/powerbrowser binary or spawn the Node backend
-# directly). Task 2 appends side04-leftover-reaped and
-# side04-stale-identity-not-signalled, also outside --quick.
+# (That upstream project is named only in inventory/brand-tokens.json. Every
+# other file in this tree is inside the D-18 residual-brand scan's scope, and
+# spelling the token here would make this file fail the very check it
+# registers -- which is exactly what happened when this header was first
+# written, because the scan iterates `git ls-files` and an unstaged new file is
+# invisible to it. Stage before you trust a green scan.)
 #
-# Every external script invocation runs under `setsid`, exactly like
-# scripts/verify-phase-02.sh's/03.sh's/04.sh's own pattern: this script is
-# non-interactive so job control is off, and a plain `cmd &` would share
-# this script's own process group with every descendant a check
-# backgrounds -- setsid makes the check the leader of its own new process
-# group so `kill -- "-$PID"` on interrupt reaches the whole group in one
-# signal.
+# Error handling is deliberate: `set -uo pipefail` and NO `-e`. Every check runs
+# even if an earlier one failed, because the value of a verification run is the
+# whole table, not the first red row.
+#
+# Flags:
+#   --quick        Only checks needing no build, no browser launch, and no
+#                  display. Seconds, not minutes. This is the set that gates a
+#                  commit.
+#   --only <label> Exactly one named check and nothing else. Per-task sampling
+#                  depends on it.
+#   --gate         The full set plus the known-open ledger exclusions (D-127).
+#                  Cannot be combined with --quick or --only: narrowing "every
+#                  gate" to a subset would contradict the flag's own purpose, so
+#                  the combination is a named, loud error rather than one flag
+#                  silently winning.
+#   --build        Build the Theia app before running (ported from
+#                  verify-phase-02.sh, which owned that lifecycle).
+#
+# Every external script invocation runs under `setsid`. This script is
+# non-interactive, so job control is off and a plain `cmd &` would share this
+# script's own process group with every descendant a check backgrounds --
+# verify-endpoints.sh backgrounds a real browser two layers deep. setsid makes
+# the check the leader of its own new process group, so `kill -- "-$PID"` on
+# interrupt reaches the whole group in one signal.
+#
+# Adding a check means appending one row to the registry near the bottom of this
+# file. It does NOT mean creating a sibling driver. That rule is the entire
+# reason this consolidation was necessary.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+THEIA_DIR="$REPO_ROOT/theia"
+APP_URL="http://localhost:3000"
 
 QUICK=0
 ONLY=""
 GATE=0
+DO_BUILD=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --quick) QUICK=1; shift ;;
     --gate) GATE=1; shift ;;
+    --build) DO_BUILD=1; shift ;;
     --only)
       if [ "$#" -lt 2 ]; then
-        echo "verify-phase-05: FAIL -- --only requires a label argument" >&2
+        echo "verify-platform: FAIL -- --only requires a label argument" >&2
         exit 1
       fi
       ONLY="$2"
       shift 2
       ;;
     *)
-      echo "verify-phase-05: FAIL -- unknown argument '$1'" >&2
+      echo "verify-platform: FAIL -- unknown argument '$1'" >&2
       exit 1
       ;;
   esac
 done
 
-# --gate proves every phase gate green at one commit (D-127) -- it always
-# runs this script's own FULL check set plus verify-phase-04.sh and
-# verify-phase-03.sh in full. Combining it with --quick or --only would
-# silently narrow "every phase gate" to a subset, contradicting the flag's
-# own purpose, so the combination is a named, loud error rather than one
-# flag winning silently.
 if [ "$GATE" -eq 1 ] && { [ "$QUICK" -eq 1 ] || [ -n "$ONLY" ]; }; then
-  echo "verify-phase-05: FAIL -- --gate cannot be combined with --quick or --only (rejected combination: --gate plus $([ "$QUICK" -eq 1 ] && echo -n '--quick'; [ "$QUICK" -eq 1 ] && [ -n "$ONLY" ] && echo -n ' and '; [ -n "$ONLY" ] && echo -n "--only $ONLY"))" >&2
+  echo "verify-platform: FAIL -- --gate cannot be combined with --quick or --only (rejected combination: --gate plus $([ "$QUICK" -eq 1 ] && echo -n '--quick'; [ "$QUICK" -eq 1 ] && [ -n "$ONLY" ] && echo -n ' and '; [ -n "$ONLY" ] && echo -n "--only $ONLY"))" >&2
   exit 1
 fi
 
 CURRENT_CHECK_PID=""
 BACKEND_SPAWN_PID=""
 BROWSER_SPAWN_PID=""
+SERVER_PID=""
 declare -a TEMP_PATHS=()
 track_temp() { TEMP_PATHS+=("$1"); }
 
@@ -80,23 +105,48 @@ track_temp() { TEMP_PATHS+=("$1"); }
 # inherits process.env by default and is invoked from inline node scripts
 # this script itself spawns -- lands in the throwaway dir too; start_shell's
 # explicit VERIFY05_XDG_CONFIG_HOME override still wins for its own launch.
+#
+# REAL_XDG_CONFIG_HOME preserves whatever the caller's shell had (possibly
+# unset) BEFORE this export, so start_backend()'s own config_dir line --
+# explicitly out of scope -- keeps resolving against the real value, not the
+# harness override. Ported from verify-phase-04.sh, where start_backend lives.
+REAL_XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-}"
 HARNESS_CONFIG_HOME="$(mktemp -d)"; track_temp "$HARNESS_CONFIG_HOME"
 export XDG_CONFIG_HOME="$HARNESS_CONFIG_HOME"
+
+# The merged teardown. This is the UNION of the four deleted drivers' cleanup()
+# bodies, not a rewrite: verify-phase-05.sh's was already a superset of 03's and
+# 04's (all three tracked PIDs plus `rm -rf` over TEMP_PATHS, which carries
+# throwaway profile and config DIRECTORIES, not only files), and 02's
+# SERVER_PID branch is the one thing it did not carry.
 cleanup() {
   if [ -n "$CURRENT_CHECK_PID" ]; then
     kill -- "-$CURRENT_CHECK_PID" 2>/dev/null || kill "$CURRENT_CHECK_PID" 2>/dev/null || true
     wait "$CURRENT_CHECK_PID" 2>/dev/null || true
     CURRENT_CHECK_PID=""
   fi
+  # Safety net for a check that started the sidecar via start_backend() and was
+  # interrupted before its own stop_backend() -- setsid gives the sidecar its
+  # own process group, so a plain SIGINT to this script's foreground group
+  # would otherwise orphan it.
   if [ -n "$BACKEND_SPAWN_PID" ]; then
     kill -- "-$BACKEND_SPAWN_PID" 2>/dev/null || kill "$BACKEND_SPAWN_PID" 2>/dev/null || true
     wait "$BACKEND_SPAWN_PID" 2>/dev/null || true
     BACKEND_SPAWN_PID=""
   fi
+  # Same safety net for a check that started the built browser via start_shell().
   if [ -n "$BROWSER_SPAWN_PID" ]; then
     kill -- "-$BROWSER_SPAWN_PID" 2>/dev/null || kill "$BROWSER_SPAWN_PID" 2>/dev/null || true
     wait "$BROWSER_SPAWN_PID" 2>/dev/null || true
     BROWSER_SPAWN_PID=""
+  fi
+  # Ported from verify-phase-02.sh: yarn does not exec-replace itself running a
+  # package script, so the Node backend actually holding :3000 is a GRANDCHILD
+  # of the tracked PID -- signal the whole process group.
+  if [ -n "$SERVER_PID" ]; then
+    kill -- "-$SERVER_PID" 2>/dev/null || kill "$SERVER_PID" 2>/dev/null || true
+    wait "$SERVER_PID" 2>/dev/null || true
+    SERVER_PID=""
   fi
   # -rf (not -f): TEMP_PATHS also carries throwaway profile/config directories.
   for p in "${TEMP_PATHS[@]:-}"; do
@@ -105,11 +155,92 @@ cleanup() {
   TEMP_PATHS=()
 }
 # EXIT alone is not enough: bash resumes the rest of the script after a
-# non-EXIT trap handler returns unless that handler exits itself
-# (scripts/verify-phase-02.sh/03.sh/04.sh's own documented reason for
-# splitting this into two traps).
+# non-EXIT trap handler returns unless that handler exits itself. Discovered
+# live in verify-phase-02.sh: a bare `trap cleanup EXIT INT TERM` let a SIGINT
+# delivered before SERVER_PID was assigned run cleanup() as a no-op and then
+# continue straight through the script as if uninterrupted, orphaning the
+# backend it went on to start.
 trap cleanup EXIT
 trap 'cleanup; exit 130' INT TERM
+
+if [ "$DO_BUILD" -eq 1 ]; then
+  echo "verify-platform: building..."
+  if ! nix develop "$REPO_ROOT#theia" --command bash -c "cd '$THEIA_DIR' && yarn build"; then
+    echo "verify-platform: FAIL -- build failed" >&2
+    exit 1
+  fi
+fi
+
+# --- Theia dev-app lifecycle, ported from verify-phase-02.sh ----------------
+#
+# The five ported phase-02 checks each need a live Theia frontend at $APP_URL.
+# The deleted driver started it unconditionally at the top of the script; here
+# it is started LAZILY by the first check that needs one, because an
+# unconditional start would make `--quick` (which needs no app at all) pay a
+# 60-second boot, and would make `--only allowlist-schema` boot a web app to
+# assert a JSON schema. cleanup() tears it down on every path.
+THEIA_APP_UP=0
+theia_app_up() {
+  [ "$THEIA_APP_UP" -eq 1 ] && return 0
+  if curl -sf "$APP_URL" >/dev/null 2>&1; then
+    echo "theia_app_up: FAIL -- something is already listening on $APP_URL (stale run?). Kill it and re-run." >&2
+    return 1
+  fi
+  echo "theia_app_up: starting theia start..."
+  # The @powerbrowser/token-gate extension gates the backend on
+  # POWERBROWSER_TOKEN; this dev loop drives it unauthenticated (including from
+  # a cookie-less browser session), so it opts out via the named bypass. The
+  # supervised PowerBrowser path never sets this.
+  setsid env POWERBROWSER_TOKEN_DISABLE=1 nix develop "$REPO_ROOT#theia" --command yarn --cwd "$THEIA_DIR" start &
+  SERVER_PID=$!
+  local deadline=$((SECONDS + 60))
+  until curl -sf "$APP_URL" >/dev/null 2>&1; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "theia_app_up: FAIL -- $APP_URL did not answer within 60s" >&2
+      return 1
+    fi
+    sleep 1
+  done
+  echo "theia_app_up: app is up at $APP_URL"
+  THEIA_APP_UP=1
+  return 0
+}
+
+# One wrapper per ported phase-02 check. They exist because the registry's
+# runner takes a bare function name for anything that is not a plain external
+# `bash`/`node` invocation, and because each of these has a precondition (the
+# app) that the label alone cannot express.
+#
+# diff-theia-core.sh needs `yarn` on PATH, which the plain host shell does not
+# provide (D-69 confirmed `node` and objdir/dist/bin/firefox both work outside
+# nix develop; yarn does not), so only that one check runs through the theia
+# dev shell.
+check_diff_theia_core() {
+  theia_app_up || return 1
+  setsid nix develop "$REPO_ROOT#theia" --command bash "$REPO_ROOT/scripts/diff-theia-core.sh" &
+  CURRENT_CHECK_PID=$!
+  local rc=0; wait "$CURRENT_CHECK_PID" || rc=$?; CURRENT_CHECK_PID=""
+  return "$rc"
+}
+_run_app_check_mjs() {
+  theia_app_up || return 1
+  setsid node "$REPO_ROOT/scripts/$1" "$APP_URL" &
+  CURRENT_CHECK_PID=$!
+  local rc=0; wait "$CURRENT_CHECK_PID" || rc=$?; CURRENT_CHECK_PID=""
+  return "$rc"
+}
+check_verify_branding()        { _run_app_check_mjs verify-branding.mjs; }
+check_verify_customize_inert() { _run_app_check_mjs verify-customize-inert.mjs; }
+check_verify_dev_flag_off()    { _run_app_check_mjs verify-dev-flag-off.mjs; }
+check_verify_uri_roundtrip()   { _run_app_check_mjs verify-uri-roundtrip.mjs; }
+
+# ============================================================================
+# SHARED HELPERS  (ported verbatim from verify-phase-05.sh, whose copies were
+# already the supersets: its start_shell takes the optional profile override
+# and user.js hooks verify-phase-04.sh's did not, and calling it with no
+# arguments is byte-for-byte 04's behaviour. stop_shell, first_byte_offset and
+# backend_ready_pids were already IDENTICAL in both files.)
+# ============================================================================
 
 # --- shared helpers, ported from verify-phase-04.sh (one-self-contained-
 # script-per-phase idiom -- never sourced from that file) ------------------
@@ -1850,26 +1981,967 @@ check_side04_token_not_in_environment() {
   return "$result"
 }
 
-# Runs this script's own CHECKS (respecting QUICK/ONLY exactly as before),
-# prints the per-check PASS/FAIL summary table, and RETURNS (not exits) the
-# aggregate result -- factored out of the former top-level script body so
-# --gate mode (below) can call it as "this phase's own section" without a
-# second process. Normal (non-gate) invocation calls this once and exits on
-# its return value, unchanged from the prior behaviour.
+# ============================================================================
+# PORTED FROM verify-phase-03.sh -- the patch-surface, allowlist and
+# branding-variant checks and their self-tests.
+# ============================================================================
+
+# --- --quick's standalone .desktop/config.status equality check ---
+check_desktop_entry_quick() {
+  node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const repoRoot = process.argv[1];
+    const desktopPath = path.join(repoRoot, "powerbrowser", "powerbrowser.desktop");
+    const configStatusPath = path.join(repoRoot, "objdir", "config.status");
+
+    if (!fs.existsSync(desktopPath)) {
+      console.error(`check-desktop-entry-quick: FAIL -- ${desktopPath} does not exist`);
+      process.exit(1);
+    }
+    if (!fs.existsSync(configStatusPath)) {
+      console.error(`check-desktop-entry-quick: FAIL -- ${configStatusPath} does not exist`);
+      process.exit(1);
+    }
+
+    const configText = fs.readFileSync(configStatusPath, "utf8");
+    function readVar(name) {
+      const re = new RegExp("\x27" + name + "\x27:\\s*\x27([^\x27]*)\x27");
+      const m = configText.match(re);
+      return m ? m[1] : undefined;
+    }
+    const expectedName = readVar("MOZ_APP_DISPLAYNAME");
+    const expectedWmClass = readVar("MOZ_APP_REMOTINGNAME");
+
+    const lines = fs.readFileSync(desktopPath, "utf8").split(/\r?\n/);
+    const nameLine = lines.find(l => l.startsWith("Name="));
+    const wmClassLine = lines.find(l => l.startsWith("StartupWMClass="));
+    const name = nameLine !== undefined ? nameLine.slice("Name=".length) : undefined;
+    const wmClass = wmClassLine !== undefined ? wmClassLine.slice("StartupWMClass=".length) : undefined;
+
+    if (expectedName && expectedWmClass && name === expectedName && wmClass === expectedWmClass) {
+      console.log(`check-desktop-entry-quick: PASS -- Name=${name}, StartupWMClass=${wmClass}`);
+      process.exit(0);
+    }
+    console.error(`check-desktop-entry-quick: FAIL -- Name=${JSON.stringify(name)} (expected ${JSON.stringify(expectedName)}), StartupWMClass=${JSON.stringify(wmClass)} (expected ${JSON.stringify(expectedWmClass)})`);
+    process.exit(1);
+  ' "$REPO_ROOT"
+}
+
+# --- the allowlist schema check ---
+check_allowlist_schema() {
+  node -e '
+    const fs = require("fs");
+    const allowlistPath = process.argv[1];
+    if (!fs.existsSync(allowlistPath)) {
+      console.error(`allowlist-schema: FAIL -- ${allowlistPath} does not exist`);
+      process.exit(1);
+    }
+    const a = JSON.parse(fs.readFileSync(allowlistPath, "utf8"));
+    if (!Array.isArray(a.hosts) || !Array.isArray(a.prefs)) {
+      console.error("allowlist-schema: FAIL -- hosts/prefs are not both arrays");
+      process.exit(1);
+    }
+    for (const h of a.hosts) {
+      if (!h.host || !["allow", "deny"].includes(h.disposition) || !h.reason) {
+        console.error(`allowlist-schema: FAIL -- malformed host entry: ${JSON.stringify(h)}`);
+        process.exit(1);
+      }
+    }
+    for (const p of a.prefs) {
+      if (!p.name || p.expect === undefined || !p.reason) {
+        console.error(`allowlist-schema: FAIL -- malformed pref entry: ${JSON.stringify(p)}`);
+        process.exit(1);
+      }
+    }
+    console.log(`allowlist-schema: PASS -- ${a.hosts.length} host(s), ${a.prefs.length} pref(s)`);
+  ' "$REPO_ROOT/powerbrowser/endpoint-allowlist.json"
+}
+
+# --- allowlist-to-document consistency (03-VERIFICATION.md Gap 2) ---
+#
+# Shared inner helper: takes an allowlist path as its one argument, always
+# reads the real ROADMAP.md/REQUIREMENTS.md (the documents Task 1 amended).
+# Selects every allow-dispositioned mozilla.com/mozilla.net host and requires
+# a whole-token occurrence of each in both documents. Whole-token matching is
+# load-bearing: a plain substring search would let a documented host's own
+# suffix (e.g. "cdn.mozilla.net" inside "content-signature-2.cdn.mozilla.net")
+# pass vacuously, so the regex requires the character on each side of the
+# match to be absent or outside the hostname character class
+# (letters/digits/dot/hyphen). An empty filtered set is a FAIL, not a vacuous
+# PASS. Output (host list order, violation order) is fully determined by the
+# allowlist's own on-disk order plus a sort of the violation list, so two runs
+# against unchanged input are byte-identical.
+_allowlist_doc_consistency_impl() {
+  local allowlist_path="$1"
+  node -e '
+    const fs = require("fs");
+    const [allowlistPath, roadmapPath, requirementsPath] = process.argv.slice(1);
+    const a = JSON.parse(fs.readFileSync(allowlistPath, "utf8"));
+    const roadmap = fs.readFileSync(roadmapPath, "utf8");
+    const requirements = fs.readFileSync(requirementsPath, "utf8");
+
+    const hosts = (a.hosts || [])
+      .filter(h => h.disposition === "allow" && /(^|\.)mozilla\.(com|net)$/i.test(h.host))
+      .map(h => h.host);
+
+    if (hosts.length === 0) {
+      console.error(`allowlist-doc-consistency: FAIL -- filter matched no allow-dispositioned mozilla.com/mozilla.net host in ${allowlistPath}`);
+      process.exit(1);
+    }
+
+    function hasWholeToken(text, host) {
+      const escaped = host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp("(^|[^A-Za-z0-9.-])" + escaped + "($|[^A-Za-z0-9.-])");
+      return re.test(text);
+    }
+
+    const violations = [];
+    let roadmapFound = 0, requirementsFound = 0;
+    for (const host of hosts) {
+      const inRoadmap = hasWholeToken(roadmap, host);
+      const inRequirements = hasWholeToken(requirements, host);
+      if (inRoadmap) roadmapFound++;
+      if (inRequirements) requirementsFound++;
+      if (!inRoadmap || !inRequirements) {
+        const missing = [];
+        if (!inRoadmap) missing.push("ROADMAP.md");
+        if (!inRequirements) missing.push("REQUIREMENTS.md");
+        violations.push(`${host}: missing from ${missing.join(", ")}`);
+      }
+    }
+    violations.sort();
+
+    if (violations.length > 0) {
+      console.error(`allowlist-doc-consistency: FAIL -- ${hosts.length} Mozilla allow host(s) checked, ${violations.length} violation(s):`);
+      for (const v of violations) console.error(`  ${v}`);
+      process.exit(1);
+    }
+
+    console.log(`allowlist-doc-consistency: PASS -- ${hosts.length} Mozilla allow host(s) checked, found in both ROADMAP.md (${roadmapFound}) and REQUIREMENTS.md (${requirementsFound})`);
+  ' "$allowlist_path" "$REPO_ROOT/.planning/ROADMAP.md" "$REPO_ROOT/.planning/REQUIREMENTS.md"
+}
+
+# Argument-free wrapper for the CHECKS array (see the dispatch guard below --
+# a function-branch CHECKS entry must be a bare name, never a command carrying
+# arguments).
+check_allowlist_doc_consistency() {
+  _allowlist_doc_consistency_impl "$REPO_ROOT/powerbrowser/endpoint-allowlist.json"
+}
+
+# Plants a temp copy of the real allowlist carrying two additional allow
+# entries -- one undocumented host, one that is a proper suffix of two
+# genuinely-documented hosts (proving whole-token, not substring, matching --
+# a bare substring search would let this second one pass vacuously) -- and
+# requires the helper to reject both. Never writes to the real allowlist; the
+# temp copy is registered with track_temp so the script's own trap-covered
+# cleanup() removes it on every exit path, including an interrupt mid-test.
+check_allowlist_doc_consistency_self_test() {
+  local real="$REPO_ROOT/powerbrowser/endpoint-allowlist.json"
+  local tmp
+  tmp="$(mktemp)"
+  track_temp "$tmp"
+
+  node -e '
+    const fs = require("fs");
+    const [realPath, outPath] = process.argv.slice(1);
+    const a = JSON.parse(fs.readFileSync(realPath, "utf8"));
+    a.hosts.push({
+      host: "powerbrowser-selftest-control.cdn.mozilla.net",
+      disposition: "allow",
+      reason: "allowlist-doc-consistency-self-test: undocumented host, must be rejected"
+    });
+    a.hosts.push({
+      host: "cdn.mozilla.net",
+      disposition: "allow",
+      reason: "allowlist-doc-consistency-self-test: proper suffix of two documented hosts, must be rejected (proves whole-token matching)"
+    });
+    fs.writeFileSync(outPath, JSON.stringify(a, null, 2));
+  ' "$real" "$tmp"
+
+  local out
+  if out="$(_allowlist_doc_consistency_impl "$tmp" 2>&1)"; then
+    echo "allowlist-doc-consistency-self-test: FAIL -- planted undocumented/suffix hosts were NOT rejected" >&2
+    echo "$out" >&2
+    return 1
+  fi
+
+  if echo "$out" | grep -qF 'powerbrowser-selftest-control.cdn.mozilla.net' \
+     && echo "$out" | grep -qE '^  cdn\.mozilla\.net:'; then
+    echo "allowlist-doc-consistency-self-test: PASS -- both planted hosts (undocumented control, suffix-adjacency) correctly rejected"
+    return 0
+  fi
+
+  echo "allowlist-doc-consistency-self-test: FAIL -- rejected, but output doesn't name both planted hosts" >&2
+  echo "$out" >&2
+  return 1
+}
+
+# --- branding-variant-divergence (03-11-PLAN.md, closes BRAND-06's gap) ---
+#
+# Shared inner helper: takes four path arguments -- dev brand.properties,
+# release brand.properties, dev branding pref file, release branding pref
+# file -- so the self-test can point it at temp files without ever touching
+# the real tree. Asserts all four of: (1) dev brandFullName == "PowerBrowser
+# Dev", (2) release brandFullName == "PowerBrowser", (3) the dev pref file sets
+# browser.tabs.inTitlebar to 0 via a pref() call, (4) the release pref file
+# sets no value for that same pref name. A missing/unreadable input path is
+# a FAIL naming that path, never a skip.
+_branding_variant_divergence_impl() {
+  local dev_properties="$1"
+  local release_properties="$2"
+  local dev_pref="$3"
+  local release_pref="$4"
+  node -e '
+    const fs = require("fs");
+    const [devPropPath, relPropPath, devPrefPath, relPrefPath] = process.argv.slice(1);
+
+    function readPropsFullName(path) {
+      if (!fs.existsSync(path)) {
+        console.error(`branding-variant-divergence: FAIL -- ${path} does not exist`);
+        process.exit(1);
+      }
+      let text;
+      try {
+        text = fs.readFileSync(path, "utf8");
+      } catch (err) {
+        console.error(`branding-variant-divergence: FAIL -- ${path} could not be read: ${err.message}`);
+        process.exit(1);
+      }
+      // Selection and matching both operate on the TRIMMED line -- WR-01
+      // (03-REVIEW.md) already fixed this exact selection-vs-matching
+      // mismatch once in scripts/verify-branding-identity.mjs; do not
+      // reintroduce it here.
+      const line = text.split(/\r?\n/).find(l => l.trim().startsWith("brandFullName"));
+      if (!line) {
+        console.error(`branding-variant-divergence: FAIL -- ${path} has no brandFullName entry`);
+        process.exit(1);
+      }
+      const trimmed = line.trim();
+      const m = trimmed.match(/^brandFullName\s*=\s*(.*)$/);
+      if (!m) {
+        console.error(`branding-variant-divergence: FAIL -- ${path} brandFullName line has an unexpected shape: ${JSON.stringify(line)}`);
+        process.exit(1);
+      }
+      // .properties values are unquoted -- trim trailing whitespace only,
+      // compare with exact string equality, never includes/case-insensitive.
+      return m[1].trim();
+    }
+
+    function readTitlebarPref(path) {
+      if (!fs.existsSync(path)) {
+        console.error(`branding-variant-divergence: FAIL -- ${path} does not exist`);
+        process.exit(1);
+      }
+      let text;
+      try {
+        text = fs.readFileSync(path, "utf8");
+      } catch (err) {
+        console.error(`branding-variant-divergence: FAIL -- ${path} could not be read: ${err.message}`);
+        process.exit(1);
+      }
+      for (const l of text.split(/\r?\n/)) {
+        const trimmed = l.trim();
+        // A mention inside a `//` line comment must not satisfy this --
+        // skip such lines entirely rather than regex-matching them.
+        if (trimmed.startsWith("//")) continue;
+        const m = trimmed.match(/pref\(\s*"browser\.tabs\.inTitlebar"\s*,\s*([^)]+?)\s*\)/);
+        if (m) return m[1].trim();
+      }
+      return undefined; // no pref() call sets this name at all
+    }
+
+    const devValue = readPropsFullName(devPropPath);
+    const relValue = readPropsFullName(relPropPath);
+    const devTitlebar = readTitlebarPref(devPrefPath);
+    const relTitlebar = readTitlebarPref(relPrefPath);
+
+    const failures = [];
+    if (devValue !== "PowerBrowser Dev") {
+      failures.push(`dev brand.properties brandFullName=${JSON.stringify(devValue)} (expected "PowerBrowser Dev") at ${devPropPath}`);
+    }
+    if (relValue !== "PowerBrowser") {
+      failures.push(`release brand.properties brandFullName=${JSON.stringify(relValue)} (expected "PowerBrowser") at ${relPropPath}`);
+    }
+    if (devTitlebar !== "0") {
+      failures.push(`dev pref file browser.tabs.inTitlebar=${JSON.stringify(devTitlebar)} (expected a pref() call setting 0) at ${devPrefPath}`);
+    }
+    if (relTitlebar !== undefined) {
+      failures.push(`release pref file sets browser.tabs.inTitlebar=${JSON.stringify(relTitlebar)} (expected no pref() call for this name) at ${relPrefPath}`);
+    }
+
+    if (failures.length > 0) {
+      for (const f of failures) console.error(`branding-variant-divergence: FAIL -- ${f}`);
+      process.exit(1);
+    }
+
+    console.log(`branding-variant-divergence: PASS -- dev brand.properties brandFullName=${JSON.stringify(devValue)}, release brand.properties brandFullName=${JSON.stringify(relValue)}, dev titlebar pref=${JSON.stringify(devTitlebar)}, release titlebar pref=unset`);
+  ' "$dev_properties" "$release_properties" "$dev_pref" "$release_pref"
+}
+
+# Argument-free wrapper for the CHECKS array -- feeds the four INSTALLED
+# paths under objdir/dist/bin and objdir-release/dist/bin (symlinks into
+# powerbrowser/branding/<variant>/, D-70 tier 1), proving the divergence reaches
+# a built tree, not just the repo-root source.
+check_branding_variant_divergence() {
+  _branding_variant_divergence_impl \
+    "$REPO_ROOT/objdir/dist/bin/browser/chrome/en-US/locale/branding/brand.properties" \
+    "$REPO_ROOT/objdir-release/dist/bin/browser/chrome/en-US/locale/branding/brand.properties" \
+    "$REPO_ROOT/objdir/dist/bin/browser/defaults/preferences/firefox-branding.js" \
+    "$REPO_ROOT/objdir-release/dist/bin/browser/defaults/preferences/firefox-branding.js"
+}
+
+# Synthesises its own known-good quartet into mktemp files (registered with
+# track_temp -- the script's existing trap-covered cleanup() removes them on
+# every exit path), asserts the comparator goes green on it, then re-runs it
+# twice more -- once with the dev suffix stripped, once with the titlebar
+# default also present in the release pref file -- requiring each mutation
+# to be rejected by name (D-88: a working positive control in both
+# directions). Synthesising rather than copying the repo's current files
+# makes this self-test's verdict independent of whether Task 2 has run yet.
+check_branding_variant_divergence_self_test() {
+  local dev_props rel_props dev_pref rel_pref
+  dev_props="$(mktemp)"; track_temp "$dev_props"
+  rel_props="$(mktemp)"; track_temp "$rel_props"
+  dev_pref="$(mktemp)"; track_temp "$dev_pref"
+  rel_pref="$(mktemp)"; track_temp "$rel_pref"
+
+  printf 'brandFullName=PowerBrowser Dev\n' > "$dev_props"
+  printf 'brandFullName=PowerBrowser\n' > "$rel_props"
+  printf 'pref("browser.tabs.inTitlebar", 0);\n' > "$dev_pref"
+  printf '// release: no titlebar override\n' > "$rel_pref"
+
+  local out
+  if ! out="$(_branding_variant_divergence_impl "$dev_props" "$rel_props" "$dev_pref" "$rel_pref" 2>&1)"; then
+    echo "branding-variant-divergence-self-test: FAIL -- synthesised correct quartet did not go green" >&2
+    echo "$out" >&2
+    return 1
+  fi
+
+  # Mutation 1: strip the dev suffix.
+  local dev_props_bad
+  dev_props_bad="$(mktemp)"; track_temp "$dev_props_bad"
+  printf 'brandFullName=PowerBrowser\n' > "$dev_props_bad"
+  local out1
+  if out1="$(_branding_variant_divergence_impl "$dev_props_bad" "$rel_props" "$dev_pref" "$rel_pref" 2>&1)"; then
+    echo "branding-variant-divergence-self-test: FAIL -- planted properties-suffix mutation was NOT rejected" >&2
+    echo "$out1" >&2
+    return 1
+  fi
+  if ! echo "$out1" | grep -qF 'brand.properties'; then
+    echo "branding-variant-divergence-self-test: FAIL -- properties mutation rejected, but output doesn't name the properties divergence" >&2
+    echo "$out1" >&2
+    return 1
+  fi
+
+  # Mutation 2: titlebar default copied into the release pref file too.
+  local rel_pref_bad
+  rel_pref_bad="$(mktemp)"; track_temp "$rel_pref_bad"
+  printf 'pref("browser.tabs.inTitlebar", 0);\n' > "$rel_pref_bad"
+  local out2
+  if out2="$(_branding_variant_divergence_impl "$dev_props" "$rel_props" "$dev_pref" "$rel_pref_bad" 2>&1)"; then
+    echo "branding-variant-divergence-self-test: FAIL -- planted titlebar mutation was NOT rejected" >&2
+    echo "$out2" >&2
+    return 1
+  fi
+  if ! echo "$out2" | grep -qF 'browser.tabs.inTitlebar'; then
+    echo "branding-variant-divergence-self-test: FAIL -- titlebar mutation rejected, but output doesn't name the titlebar divergence" >&2
+    echo "$out2" >&2
+    return 1
+  fi
+
+  echo "branding-variant-divergence-self-test: PASS -- synthesised correct quartet went green; properties-suffix mutation and titlebar mutation both went red"
+  return 0
+}
+
+# ============================================================================
+# PORTED FROM verify-phase-04.sh -- the token-gate/bind-scope backend checks
+# and the end-to-end shell checks. Its own start_shell/stop_shell/
+# first_byte_offset/backend_ready_pids definitions are NOT ported: the copies
+# above are identical or strict supersets, and a second definition would
+# silently shadow them depending on file order.
+# ============================================================================
+
+# --- Task 2: backend-facing checks (SIDE-01, SIDE-02) -----------------------
+#
+# Every check below is expected to FAIL until plan 04-02 lands the
+# @powerbrowser/token-gate extension: start_backend spawns the STOCK Theia
+# backend (no token gate wired in yet), so POWERBROWSER_BACKEND_READY never
+# appears in its log and every check that depends on it fails via the
+# "backend never became ready" branch. That is the correct Wave 0 signal,
+# not a broken harness (04-01-PLAN.md must_haves).
+#
+# start_backend/stop_backend set/clear a shared set of globals
+# (BACKEND_TOKEN, BACKEND_PORT, BACKEND_PID, BACKEND_LOG, BACKEND_SPAWN_PID)
+# rather than being passed around, mirroring this script's own CURRENT_CHECK_PID
+# convention -- each check function calls start_backend, uses the globals,
+# and always calls stop_backend before returning, on every path.
+BACKEND_TOKEN=""
+BACKEND_PORT=""
+BACKEND_PID=""
+BACKEND_LOG=""
+
+# Spawns theia/applications/browser/lib/backend/main.js directly (D-101,
+# Pitfall 2 -- never through the yarn/bash `theia start` wrapper, which
+# would make kill() only reach a shell and orphan the real backend), inside
+# `nix develop $REPO_ROOT#theia --command` so it gets the pinned Node 22.
+# Binds --hostname 127.0.0.1 --port 0 (SIDE-01). Polls BACKEND_LOG for a
+# `POWERBROWSER_BACKEND_READY {"port":N,"pid":N}` line for up to 90s. Returns
+# 0 with BACKEND_TOKEN/BACKEND_PORT/BACKEND_PID/BACKEND_SPAWN_PID all set
+# on success; on failure/timeout, prints the captured log and returns 1
+# with BACKEND_SPAWN_PID left set so the caller's stop_backend still reaps
+# whatever did spawn.
+start_backend() {
+  BACKEND_TOKEN="$(node -e 'console.log(require("crypto").randomBytes(24).toString("hex"))')"
+  local log
+  log="$(mktemp)"
+  track_temp "$log"
+  BACKEND_LOG="$log"
+
+  local config_dir="${REAL_XDG_CONFIG_HOME:-$HOME/.config}/powerbrowser"
+  mkdir -p "$config_dir"
+
+  # -u: this is one of the three unsupervised callers the watchdog's marker
+  # gate exists to protect. Run from a terminal inside a PowerBrowser instance,
+  # an inherited POWERBROWSER_SUPERVISED would arm the watchdog in this backend,
+  # which then self-terminates the moment its own stdin EOFs -- every check
+  # below it failing for a reason that has nothing to do with Phase 4. The
+  # dev bypass is cleared for the same reason: it must never be inherited
+  # into a run that mints its own token.
+  setsid env -u POWERBROWSER_SUPERVISED -u POWERBROWSER_TOKEN_DISABLE \
+    POWERBROWSER_TOKEN="$BACKEND_TOKEN" \
+    THEIA_CONFIG_DIR="$config_dir" \
+    VSX_REGISTRY_URL="https://open-vsx.org" \
+    nix develop "$REPO_ROOT#theia" --command \
+    node "$REPO_ROOT/theia/applications/browser/lib/backend/main.js" --hostname 127.0.0.1 --port 0 \
+    >"$log" 2>&1 &
+  BACKEND_SPAWN_PID=$!
+
+  local deadline=$((SECONDS + 90))
+  local line json
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if line="$(grep -m1 '^POWERBROWSER_BACKEND_READY ' "$log" 2>/dev/null)"; then
+      json="${line#POWERBROWSER_BACKEND_READY }"
+      BACKEND_PORT="$(node -e 'try{const j=JSON.parse(process.argv[1]);if(typeof j.port==="number")console.log(j.port)}catch{}' "$json" 2>/dev/null)"
+      BACKEND_PID="$(node -e 'try{const j=JSON.parse(process.argv[1]);if(typeof j.pid==="number")console.log(j.pid)}catch{}' "$json" 2>/dev/null)"
+      if [ -n "$BACKEND_PORT" ] && [ -n "$BACKEND_PID" ]; then
+        return 0
+      fi
+    fi
+    if ! kill -0 "$BACKEND_SPAWN_PID" 2>/dev/null; then
+      echo "start_backend: FAIL -- backend process exited before printing POWERBROWSER_BACKEND_READY; log:" >&2
+      cat "$log" >&2
+      return 1
+    fi
+    sleep 0.5
+  done
+
+  echo "start_backend: FAIL -- POWERBROWSER_BACKEND_READY did not appear within 90s; log:" >&2
+  cat "$log" >&2
+  return 1
+}
+
+stop_backend() {
+  if [ -n "$BACKEND_SPAWN_PID" ]; then
+    kill -- "-$BACKEND_SPAWN_PID" 2>/dev/null || kill "$BACKEND_SPAWN_PID" 2>/dev/null || true
+    wait "$BACKEND_SPAWN_PID" 2>/dev/null || true
+    BACKEND_SPAWN_PID=""
+  fi
+}
+
+# Negative control (SIDE-02, Pitfall 1): a request with no cookie must be
+# 403 AND must carry no Set-Cookie header at all -- a 403 that still leaks
+# the stock theia-connection-token cookie is a FAIL, not just a status-code
+# check.
+check_side02_token_negative() {
+  if ! start_backend; then
+    echo "side02-token-negative: FAIL -- SIDE-02 -- backend never became ready, cannot test the token gate" >&2
+    stop_backend
+    return 1
+  fi
+  local headers status result=0
+  headers="$(mktemp)"; track_temp "$headers"
+  status="$(curl -sS -o /dev/null -w '%{http_code}' -D "$headers" "http://127.0.0.1:$BACKEND_PORT/powerbrowser/health")"
+  if [ "$status" != "403" ]; then
+    echo "side02-token-negative: FAIL -- SIDE-02 -- expected 403 without a token, got $status" >&2
+    result=1
+  fi
+  if grep -qi '^Set-Cookie:' "$headers"; then
+    echo "side02-token-negative: FAIL -- SIDE-02 -- 403 response leaked a Set-Cookie header:" >&2
+    grep -i '^Set-Cookie:' "$headers" >&2
+    result=1
+  fi
+  stop_backend
+  return "$result"
+}
+
+# Paired positive control (D-68 idiom): the same route, with the token
+# cookie, must be 200 with a JSON body carrying ok:true and a numeric pid
+# (D-103 -- one request proves both liveness and enforcement).
+check_side02_token_positive() {
+  if ! start_backend; then
+    echo "side02-token-positive: FAIL -- SIDE-02 -- backend never became ready, cannot test the token gate" >&2
+    stop_backend
+    return 1
+  fi
+  local body status result=0
+  body="$(mktemp)"; track_temp "$body"
+  status="$(curl -sS -o "$body" -w '%{http_code}' -b "POWERBROWSER_TOKEN=$BACKEND_TOKEN" "http://127.0.0.1:$BACKEND_PORT/powerbrowser/health")"
+  if [ "$status" != "200" ]; then
+    echo "side02-token-positive: FAIL -- SIDE-02 -- expected 200 with a valid token, got $status" >&2
+    result=1
+  elif ! node -e '
+    const fs = require("fs");
+    const b = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    process.exit(b.ok === true && typeof b.pid === "number" ? 0 : 1);
+  ' "$body" 2>/dev/null; then
+    echo "side02-token-positive: FAIL -- SIDE-02 -- 200 response body is not {ok:true, pid:<number>}: $(cat "$body")" >&2
+    result=1
+  fi
+  stop_backend
+  return "$result"
+}
+
+# D-98's clause that static assets and index.html are gated too (the stock
+# Theia token does not do this -- it only enforces on WS upgrade and
+# opt-in routes).
+check_side02_index_gated() {
+  if ! start_backend; then
+    echo "side02-index-gated: FAIL -- SIDE-02 -- backend never became ready, cannot test the token gate" >&2
+    stop_backend
+    return 1
+  fi
+  local status_no status_yes result=0
+  status_no="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$BACKEND_PORT/")"
+  if [ "$status_no" != "403" ]; then
+    echo "side02-index-gated: FAIL -- SIDE-02 -- expected 403 for / without a token, got $status_no" >&2
+    result=1
+  fi
+  status_yes="$(curl -sS -o /dev/null -w '%{http_code}' -b "POWERBROWSER_TOKEN=$BACKEND_TOKEN" "http://127.0.0.1:$BACKEND_PORT/")"
+  if [ "$status_yes" = "403" ]; then
+    echo "side02-index-gated: FAIL -- SIDE-02 -- expected a non-403 for / with a valid token, still got 403" >&2
+    result=1
+  fi
+  stop_backend
+  return "$result"
+}
+
+# SIDE-01: the announced port must be bound to 127.0.0.1 only (never
+# 0.0.0.0/[::]), and must be OS-assigned (port 0 requested), not the fixed
+# stock default 3000.
+check_side01_bind_scope() {
+  if ! start_backend; then
+    echo "side01-bind-scope: FAIL -- SIDE-01 -- backend never became ready, cannot inspect its bind scope" >&2
+    stop_backend
+    return 1
+  fi
+  local result=0 rows non_loopback_rows
+  rows="$(ss -ltnH "sport = :$BACKEND_PORT" 2>/dev/null)"
+  if [ -z "$rows" ]; then
+    echo "side01-bind-scope: FAIL -- SIDE-01 -- ss found no listening socket on port $BACKEND_PORT" >&2
+    result=1
+  else
+    non_loopback_rows="$(echo "$rows" | awk '{print $4}' | grep -vE '^127\.0\.0\.1:' || true)"
+    if [ -n "$non_loopback_rows" ]; then
+      echo "side01-bind-scope: FAIL -- SIDE-01 -- a listening row's local address is not 127.0.0.1:*: $non_loopback_rows" >&2
+      result=1
+    fi
+    if echo "$rows" | awk '{print $4}' | grep -qE '^(0\.0\.0\.0:|\[::\]:)'; then
+      echo "side01-bind-scope: FAIL -- SIDE-01 -- found a 0.0.0.0/[::] listening row: $rows" >&2
+      result=1
+    fi
+  fi
+  if [ "$BACKEND_PORT" = "3000" ]; then
+    echo "side01-bind-scope: FAIL -- SIDE-01 -- announced port is the fixed default 3000, not OS-assigned" >&2
+    result=1
+  fi
+  stop_backend
+  return "$result"
+}
+
+# --- Task 3: end-to-end checks (SHELL-01, SHELL-05, SIDE-03) ----------------
+#
+# All three launch $REPO_ROOT/objdir/dist/bin/powerbrowser, the same binary
+# scripts/lib/firefox-bidi.mjs targets by default (its FIREFOX_BIN export).
+# shell05/side03 need the launched process's own stdout+stderr (to read the
+# POWERBROWSER_SHELL_READY/POWERBROWSER_BACKEND_READY/POWERBROWSER_SHELL_SWAP
+# sentinels) -- withFirefoxPage's spawn discards stdout, so those two use
+# start_shell/stop_shell below (this script's own setsid + log-file
+# capture, exactly like start_backend/stop_backend). shell01 needs real
+# page evaluation (DOM presence of Theia's own shell) instead, so it is
+# generated as a small temp .mjs runner that imports
+# scripts/lib/firefox-bidi.mjs's withFirefoxPage/waitFor UNCHANGED
+# (04-PATTERNS.md key_link) -- never a second driver, and never a
+# persisted sibling file: the runner lives only under mktemp, registered
+# with track_temp like every other self-test fixture in this file.
+
+# The port announced alongside <pid> in <log>.
+backend_ready_port_for_pid() {
+  sed -E 's/^\[PowerBrowserAPI\] [a-z]+: //' "$1" 2>/dev/null \
+    | grep -E '^POWERBROWSER_BACKEND_READY ' \
+    | sed -E 's/^POWERBROWSER_BACKEND_READY //' \
+    | node -e 'let s="";const want=Number(process.argv[1]);process.stdin.on("data",d=>s+=d).on("end",()=>{for(const l of s.split("\n")){if(!l.trim())continue;try{const j=JSON.parse(l);if(j.pid===want&&typeof j.port==="number"){console.log(j.port);return}}catch{}}})' "$2" 2>/dev/null
+}
+
+# SHELL-05: window show must never wait on backend readiness. The shell-
+# ready sentinel must appear strictly before the backend-ready sentinel,
+# and the shell-swap sentinel after both. Also the Pitfall 4 residual-risk
+# smoke check: zero occurrences of "gBrowser is undefined" in the log.
+check_shell05_paint_before_backend() {
+  if ! start_shell; then
+    echo "shell05-paint-before-backend: FAIL -- SHELL-05 -- could not launch the built binary" >&2
+    return 1
+  fi
+
+  local deadline=$((SECONDS + 60))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if grep -q '^POWERBROWSER_SHELL_SWAP ' "$BROWSER_LOG" 2>/dev/null; then
+      break
+    fi
+    if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
+      break
+    fi
+    sleep 0.5
+  done
+
+  local result=0 shell_off backend_off swap_off
+  shell_off="$(first_byte_offset 'POWERBROWSER_SHELL_READY ' "$BROWSER_LOG")"
+  backend_off="$(first_byte_offset 'POWERBROWSER_BACKEND_READY ' "$BROWSER_LOG")"
+  swap_off="$(first_byte_offset 'POWERBROWSER_SHELL_SWAP ' "$BROWSER_LOG")"
+
+  if [ -z "$shell_off" ] || [ -z "$backend_off" ] || [ -z "$swap_off" ]; then
+    echo "shell05-paint-before-backend: FAIL -- SHELL-05 -- one or more of POWERBROWSER_SHELL_READY/POWERBROWSER_BACKEND_READY/POWERBROWSER_SHELL_SWAP never appeared within 60s; log:" >&2
+    cat "$BROWSER_LOG" >&2
+    result=1
+  else
+    if [ "$shell_off" -ge "$backend_off" ]; then
+      echo "shell05-paint-before-backend: FAIL -- SHELL-05 -- POWERBROWSER_SHELL_READY (byte $shell_off) did not appear strictly before POWERBROWSER_BACKEND_READY (byte $backend_off)" >&2
+      result=1
+    fi
+    if [ "$swap_off" -le "$backend_off" ] || [ "$swap_off" -le "$shell_off" ]; then
+      echo "shell05-paint-before-backend: FAIL -- SHELL-05 -- POWERBROWSER_SHELL_SWAP (byte $swap_off) did not appear after both READY sentinels (shell $shell_off, backend $backend_off)" >&2
+      result=1
+    fi
+  fi
+
+  if grep -q 'gBrowser is undefined' "$BROWSER_LOG" 2>/dev/null; then
+    echo "shell05-paint-before-backend: FAIL -- SHELL-05 -- log contains 'gBrowser is undefined' (Pitfall 4 residual-risk check)" >&2
+    result=1
+  fi
+
+  # "Theia is the only GUI" is not proven by the swap sentinel: the swap
+  # genuinely happened in the build where BOTH deck overlays painted on top
+  # of it (a CSP-dropped style attribute -- see powerbrowser.css's header), and
+  # every DOM/screenshot assertion in this file targets the CONTENT browsing
+  # context, which stays perfectly healthy underneath an occluding chrome
+  # overlay. The shell's own POWERBROWSER_DECK_STATE sentinel reports resolved
+  # visibility from inside the chrome document, the one place that can see
+  # it. Positive control lives in verify-phase-05.sh's
+  # shell03-budget-exhausted-error, so this "none" can never pass vacuously.
+  if [ -n "$swap_off" ]; then
+    local deck_off deck_line
+    deck_off="$(grep -abo -E '^(\[PowerBrowserAPI\] [a-z]+: )?POWERBROWSER_DECK_STATE ' "$BROWSER_LOG" 2>/dev/null | awk -F: -v s="$swap_off" '$1 > s { print $1; exit }')"
+    if [ -z "$deck_off" ]; then
+      echo "shell05-paint-before-backend: FAIL -- SHELL-05 -- no POWERBROWSER_DECK_STATE sentinel after the swap (byte $swap_off); overlay occlusion is unproven; log:" >&2
+      cat "$BROWSER_LOG" >&2
+      result=1
+    else
+      deck_line="$(tail -c +$((deck_off + 1)) "$BROWSER_LOG" | head -1)"
+      if ! grep -q '"loading":"none","error":"none","diagnostics":"none"' <<<"$deck_line"; then
+        echo "shell05-paint-before-backend: FAIL -- SHELL-05 -- a deck overlay is painted over the swapped-in Theia: $deck_line" >&2
+        result=1
+      fi
+    fi
+  fi
+
+  stop_shell
+  return "$result"
+}
+
+# SIDE-03: kill the backend the chrome side spawned and assert TheiaService
+# recovers it on the SAME port with a DIFFERENT pid (D-104 -- a fresh port
+# would break the already-loaded page's reconnect), without the browser
+# process itself ever exiting.
+#
+# Known limitation (documented, not silently assumed): D-99's chrome-set
+# token cookie is not observable to a bash/curl driver with no chrome-side
+# access -- reading it would need a WebDriver BiDi storage.getCookies call,
+# which scripts/lib/firefox-bidi.mjs does not currently export (adding it
+# would touch the "reused unchanged" file this phase's own key_link
+# forbids touching). This check proves the pid/port half of D-104 (the
+# actually load-bearing half -- a fresh port silently breaks reconnect)
+# against the currently-ungated health route. The cookie-continuity half
+# is deferred to whichever future task extends firefox-bidi.mjs's exported
+# surface with cookie access; recorded here rather than asserted falsely.
+check_side03_kill_and_recover() {
+  if ! start_shell; then
+    echo "side03-kill-and-recover: FAIL -- SIDE-03 -- could not launch the built binary" >&2
+    return 1
+  fi
+
+  local deadline=$((SECONDS + 60)) result=0
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    grep -q '^POWERBROWSER_SHELL_SWAP ' "$BROWSER_LOG" 2>/dev/null && break
+    if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
+      echo "side03-kill-and-recover: FAIL -- SIDE-03 -- browser process exited before POWERBROWSER_SHELL_SWAP appeared; log:" >&2
+      cat "$BROWSER_LOG" >&2
+      stop_shell
+      return 1
+    fi
+    sleep 0.5
+  done
+  if ! grep -q '^POWERBROWSER_SHELL_SWAP ' "$BROWSER_LOG" 2>/dev/null; then
+    echo "side03-kill-and-recover: FAIL -- SIDE-03 -- POWERBROWSER_SHELL_SWAP did not appear within 60s; log:" >&2
+    cat "$BROWSER_LOG" >&2
+    stop_shell
+    return 1
+  fi
+
+  local ready_line json port
+  # Same PowerBrowserAPI.log() prefix as first_byte_offset() above: in the browser
+  # log this sentinel is mirrored, not raw. Strip any prefix before parsing.
+  ready_line="$(grep -m1 -E '^(\[PowerBrowserAPI\] [a-z]+: )?POWERBROWSER_BACKEND_READY ' "$BROWSER_LOG" 2>/dev/null | sed -E 's/^\[PowerBrowserAPI\] [a-z]+: //')"
+  if [ -z "$ready_line" ]; then
+    echo "side03-kill-and-recover: FAIL -- SIDE-03 -- POWERBROWSER_BACKEND_READY never appeared, cannot recover the port" >&2
+    stop_shell
+    return 1
+  fi
+  json="${ready_line#POWERBROWSER_BACKEND_READY }"
+  port="$(node -e 'try{const j=JSON.parse(process.argv[1]);if(typeof j.port==="number")console.log(j.port)}catch{}' "$json" 2>/dev/null)"
+  if [ -z "$port" ]; then
+    echo "side03-kill-and-recover: FAIL -- SIDE-03 -- could not parse a port out of POWERBROWSER_BACKEND_READY's JSON" >&2
+    stop_shell
+    return 1
+  fi
+
+  # D-99's chrome-minted token gates EVERY backend route including
+  # /powerbrowser/health, and a bash/curl driver has no chrome-side access to it,
+  # so the health endpoint is unreadable from here (403, no body). The
+  # supervisor's own POWERBROWSER_BACKEND_READY sentinel carries the same
+  # {port,pid} pair and needs no token, so read both generations from the
+  # browser log instead. This asserts strictly more than the old health probe
+  # did: it proves the supervisor itself observed the respawn, not merely that
+  # something is listening on the port.
+  local pid1
+  pid1="$(backend_ready_pids "$BROWSER_LOG" | head -1)"
+  if [ -z "$pid1" ]; then
+    echo "side03-kill-and-recover: FAIL -- SIDE-03 -- could not read a pid from POWERBROWSER_BACKEND_READY in the browser log" >&2
+    stop_shell
+    return 1
+  fi
+
+  kill -9 "$pid1" 2>/dev/null || true
+
+  local recover_deadline=$((SECONDS + 60)) pid2="" port2=""
+  while [ "$SECONDS" -lt "$recover_deadline" ]; do
+    # A respawn announces a fresh sentinel; take the newest one that is not pid1.
+    pid2="$(backend_ready_pids "$BROWSER_LOG" | grep -vx "$pid1" | tail -1)"
+    if [ -n "$pid2" ]; then
+      port2="$(backend_ready_port_for_pid "$BROWSER_LOG" "$pid2")"
+      break
+    fi
+    if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
+      echo "side03-kill-and-recover: FAIL -- SIDE-03 -- browser process exited during the recovery wait" >&2
+      result=1
+      break
+    fi
+    sleep 0.5
+  done
+
+  if [ -z "$pid2" ] && [ "$result" -eq 0 ]; then
+    echo "side03-kill-and-recover: FAIL -- SIDE-03 -- no POWERBROWSER_BACKEND_READY with a pid different from $pid1 appeared within 60s of killing it" >&2
+    result=1
+  fi
+
+  # D-104's load-bearing half: the respawn MUST reuse the same port, or the
+  # already-loaded page's reconnect silently breaks.
+  if [ -n "$pid2" ] && [ "$port2" != "$port" ]; then
+    echo "side03-kill-and-recover: FAIL -- SIDE-03 -- respawn (pid $pid2) came back on port $port2, not the pinned port $port (D-104)" >&2
+    result=1
+  fi
+
+  if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
+    echo "side03-kill-and-recover: FAIL -- SIDE-03 -- browser process itself exited during the check" >&2
+    result=1
+  fi
+
+  stop_shell
+  return "$result"
+}
+
+# SHELL-01: builds a temp .mjs runner (never a persisted repo file) that
+# imports withFirefoxPage/waitFor from scripts/lib/firefox-bidi.mjs
+# unchanged. Asserts the top-level content context's URL starts with
+# http://127.0.0.1: and that Theia's own application shell, a menu bar and
+# a status bar are all present after a bounded 60s poll -- never a point-
+# in-time assertion (02-LEARNINGS). Paired with a static assertion that
+# powerbrowser/shell/powerbrowser.xhtml adds no custom chrome (zero occurrences
+# of tabbrowser/nav-bar/toolbarbutton/urlbar).
+SHELL01_MJS=""
+if [ "$QUICK" -eq 0 ]; then
+  SHELL01_MJS="$(mktemp --suffix=.mjs)"
+  track_temp "$SHELL01_MJS"
+  cat > "$SHELL01_MJS" <<MJSEOF
+import { withFirefoxPage } from '$REPO_ROOT/scripts/lib/firefox-bidi.mjs';
+import { readFileSync, existsSync } from 'node:fs';
+
+const xhtmlPath = '$REPO_ROOT/powerbrowser/shell/powerbrowser.xhtml';
+const forbidden = ['tabbrowser', 'nav-bar', 'toolbarbutton', 'urlbar'];
+let ok = true;
+
+if (!existsSync(xhtmlPath)) {
+  console.error(\`shell01-theia-is-the-window: FAIL -- SHELL-01 -- \${xhtmlPath} does not exist yet\`);
+  ok = false;
+} else {
+  const text = readFileSync(xhtmlPath, 'utf8');
+  for (const term of forbidden) {
+    if (text.includes(term)) {
+      console.error(\`shell01-theia-is-the-window: FAIL -- SHELL-01 -- \${xhtmlPath} contains forbidden custom-chrome string '\${term}'\`);
+      ok = false;
+    }
+  }
+}
+
+try {
+  await withFirefoxPage('about:blank', async ({ evaluate, waitFor }) => {
+    // SHELL-05 requires the shell to paint BEFORE the backend is ready, so the
+    // swap to the Theia URL is necessarily asynchronous and the first context
+    // URL seen here is the shell's own about:blank placeholder. Poll for the
+    // swap rather than sampling once (02-LEARNINGS: never a point-in-time
+    // assertion); the assertion itself is unchanged -- the top-level content
+    // context must end up on the loopback backend.
+    try {
+      await waitFor('location.href.startsWith("http://127.0.0.1:")', { timeoutMs: 60000 });
+    } catch {
+      // fall through to report the actual URL below
+    }
+    const contextUrl = await evaluate('location.href');
+    if (typeof contextUrl !== 'string' || !contextUrl.startsWith('http://127.0.0.1:')) {
+      console.error(\`shell01-theia-is-the-window: FAIL -- SHELL-01 -- top-level context URL '\${contextUrl}' does not start with http://127.0.0.1:\`);
+      ok = false;
+    }
+    // Selectors verified against the pinned Theia v1.74.1 DOM, not guessed:
+    // 1.74 renders on Lumino, so the menu bar is \`#theia:menubar\` with classes
+    // \`lm-Widget lm-MenuBar\` -- the PhosphorJS-era \`.p-MenuBar\` and a
+    // \`.theia-menubar\` class do not exist -- and the status bar is the id
+    // \`#theia-statusBar\`, not a class of that name.
+    await waitFor('!!document.querySelector("#theia-app-shell")', { timeoutMs: 60000 });
+    await waitFor('!!document.querySelector("#theia-app-shell .lm-MenuBar")', { timeoutMs: 60000 });
+    await waitFor('!!document.querySelector("#theia-statusBar")', { timeoutMs: 60000 });
+  });
+} catch (err) {
+  console.error(\`shell01-theia-is-the-window: FAIL -- SHELL-01 -- \${err.message}\`);
+  ok = false;
+}
+
+if (!ok) process.exitCode = 1;
+else console.log('shell01-theia-is-the-window: PASS');
+process.exit(process.exitCode || 0);
+MJSEOF
+fi
+
+# ============================================================================
+# THE REGISTRY
+# ============================================================================
+#
+# Every check in this repo, in one array. Each entry is "label|command", where
+# command is either a bare argument-free shell function name or a plain
+# `bash <path> [args]` / `node <path> [args]` external invocation.
+#
+# The label is the contract: `--only <label>` runs exactly that row, and the
+# summary table prints it verbatim. Labels are ported UNCHANGED from the four
+# deleted drivers so an existing citation of a label -- in a plan, a summary, a
+# ledger entry, or a commit message -- still resolves.
+#
+# Provenance of every ported label (44 rows, matching the four deleted drivers'
+# registries exactly: verify-phase-02.sh had 5, -03 had 14, -04 had 10, -05 had
+# 15). The three rows marked NEW are this plan's own additions.
 run_own_checks() {
-  # Each entry: "label|command...". Later tasks append here, never as a
-  # sibling driver script.
-  # Registered OUTSIDE the --quick guard: it needs no browser, no display and
-  # no built tree, runs in milliseconds, and --quick would otherwise iterate
-  # an empty array and print "PASS -- all checks passed" having asserted
-  # nothing at all.
+  # The --quick set: no build, no browser launch, no display, no network. These
+  # run in BOTH modes -- --quick is a narrowing, never a different set.
   local -a CHECKS=(
+    # NEW (01-03): the two cheap static gates. Registered first and OUTSIDE any
+    # build-dependent guard on purpose -- Pitfall 6 measures a full tier-3
+    # rebuild at ~39 minutes, so a typo in a hand-written branding literal must
+    # cost seconds here rather than forty minutes after the build.
+    "scan-brand-residue|node $REPO_ROOT/scripts/scan-brand-residue.mjs"
+    "branding-preflight|node $REPO_ROOT/scripts/verify-branding-preflight.mjs"
+    "branding-preflight-self-test|node $REPO_ROOT/scripts/verify-branding-preflight.mjs --self-test"
+
+    # from verify-phase-03.sh
+    "check-patch-surface|bash $REPO_ROOT/scripts/check-patch-surface.sh"
+    "check-patch-surface-self-test|bash $REPO_ROOT/scripts/check-patch-surface.sh --self-test"
+    "fetch-upstream-self-test|bash $REPO_ROOT/scripts/fetch-upstream.sh --self-test"
+    "allowlist-schema|check_allowlist_schema"
+    "allowlist-doc-consistency|check_allowlist_doc_consistency"
+    "allowlist-doc-consistency-self-test|check_allowlist_doc_consistency_self_test"
+    "branding-variant-divergence-self-test|check_branding_variant_divergence_self_test"
+    # from verify-phase-04.sh
+    "internals-boundary-self-test|bash $REPO_ROOT/scripts/check-internals-boundary.sh --self-test"
+    "internals-boundary|bash $REPO_ROOT/scripts/check-internals-boundary.sh"
+    "internals-catalogue|bash $REPO_ROOT/scripts/check-internals-boundary.sh --catalogue"
+
+    # from verify-phase-05.sh -- registered outside the --quick guard there too,
+    # for the reason its own comment gives: they need no browser, no display and
+    # no built tree, run in milliseconds, and a --quick that iterated an empty
+    # array would print "PASS -- all checks passed" having asserted nothing.
     "shell-csp-inline-attrs|check_shell_csp_inline_attrs"
     "shell04-log-redacts-token|check_shell04_log_redacts_token"
   )
 
   if [ "$QUICK" -eq 0 ]; then
     CHECKS+=(
+      # from verify-phase-02.sh -- each needs a live Theia frontend, started
+      # lazily by the wrapper (see theia_app_up above).
+      "diff-theia-core|check_diff_theia_core"
+      "verify-branding|check_verify_branding"
+      "verify-customize-inert|check_verify_customize_inert"
+      "verify-dev-flag-off|check_verify_dev_flag_off"
+      "verify-uri-roundtrip|check_verify_uri_roundtrip"
+
+      # RE-TIERED, not weakened. Both of these were registered in a deleted
+      # driver's --quick set while actually depending on something --quick
+      # promises not to need, so `--quick` could never be green on a fresh
+      # checkout and was therefore useless as a commit gate -- the failure it
+      # printed was always the same two rows and carried no information.
+      #
+      #   desktop-entry-quick     reads objdir/config.status, i.e. a BUILT tree.
+      #                           verify-phase-03.sh registered it ONLY under
+      #                           --quick, so it was also unreachable in a full
+      #                           run; here it runs in the full set and under
+      #                           --only, which is strictly more reach.
+      #   apply-patches-self-test derives its fixture from
+      #                           upstream/browser/moz.configure -- the 1.1 GB
+      #                           clone scripts/fetch-upstream.sh materialises,
+      #                           which is git-ignored and absent on a fresh
+      #                           checkout.
+      #
+      # Neither is excused: both still run, and `--only <label>` reaches each.
+      # What changed is which tier honestly describes their prerequisites.
+      "desktop-entry-quick|check_desktop_entry_quick"
+      "apply-patches-self-test|bash $REPO_ROOT/scripts/apply-patches.sh --self-test"
+
+      # from verify-phase-03.sh -- branding-variant-divergence reads from BOTH
+      # objdir/dist/bin and objdir-release/dist/bin, so it needs a full dev AND
+      # release build; verify-branding-identity.mjs's about-support surface
+      # launches a real browser session.
+      "branding-variant-divergence|check_branding_variant_divergence"
+      "verify-branding-identity-dev|node $REPO_ROOT/scripts/verify-branding-identity.mjs"
+      "verify-branding-identity-release|node $REPO_ROOT/scripts/verify-branding-identity.mjs --variant release"
+      "verify-branding-identity-brand-ftl-control|node $REPO_ROOT/scripts/verify-branding-identity.mjs --variant release --positive-control brand-full-name"
+      "verify-endpoints|bash $REPO_ROOT/scripts/verify-endpoints.sh"
+      "verify-endpoints-interrupt-self-test|bash $REPO_ROOT/scripts/verify-endpoints.sh --interrupt-self-test"
+
+      # from verify-phase-04.sh
+      "side02-token-negative|check_side02_token_negative"
+      "side02-token-positive|check_side02_token_positive"
+      "side02-index-gated|check_side02_index_gated"
+      "side01-bind-scope|check_side01_bind_scope"
+      "shell01-theia-is-the-window|node $SHELL01_MJS"
+      "shell05-paint-before-backend|check_shell05_paint_before_backend"
+      "side03-kill-and-recover|check_side03_kill_and_recover"
+
+      # from verify-phase-05.sh
       "side04-sigkill-no-orphan|check_side04_sigkill_no_orphan"
       "side04-unsupervised-backend-survives|check_side04_unsupervised_backend_survives"
       "side04-leftover-reaped|check_side04_leftover_reaped"
@@ -1886,6 +2958,14 @@ run_own_checks() {
     )
   fi
 
+  # A --quick run with an empty registry would print "all checks passed" having
+  # asserted nothing. That is not a clean result, it is an unrun one, and the
+  # two are indistinguishable from the exit code alone. Fail loudly instead.
+  if [ "${#CHECKS[@]}" -eq 0 ]; then
+    echo "verify-platform: FAIL -- the check set is EMPTY, so nothing was scanned. A clean result from an empty set proves nothing; this is a registry bug, not a pass." >&2
+    return 1
+  fi
+
   if [ -n "$ONLY" ]; then
     local -a FILTERED=()
     local ONLY_FOUND=0
@@ -1897,7 +2977,7 @@ run_own_checks() {
       fi
     done
     if [ "$ONLY_FOUND" -eq 0 ]; then
-      echo "verify-phase-05: FAIL -- unknown --only label '$ONLY'" >&2
+      echo "verify-platform: FAIL -- unknown --only label '$ONLY'" >&2
       return 1
     fi
     CHECKS=("${FILTERED[@]}")
@@ -1909,43 +2989,61 @@ run_own_checks() {
   for entry in "${CHECKS[@]}"; do
     local label="${entry%%|*}"
     local cmd="${entry#*|}"
-    echo "verify-phase-05: running $label..."
-    # Every check here is a bare, argument-free shell function name -- the
-    # function itself is responsible for using setsid on whatever it spawns
-    # (start_shell/start_backend already do). setsid cannot exec a shell
-    # function directly (it needs an executable file), so the function is
-    # called directly, mirroring verify-phase-04.sh's own bare-function-name
-    # branch.
-    if [[ "$cmd" == *[[:space:]]* ]]; then
-      echo "verify-phase-05: FAIL -- check '$label' has a non-function-name command ('$cmd'); add a wrapper function instead" >&2
-      SUMMARY+=("$label: FAIL")
-      FAILED=1
-      continue
-    fi
-    if "$cmd"; then
-      SUMMARY+=("$label: PASS")
-    else
-      SUMMARY+=("$label: FAIL")
-      FAILED=1
-    fi
+    echo "verify-platform: running $label..."
+    # External bash/node script invocations get their own process group via
+    # setsid, so an interrupt's group-kill in cleanup() can reach whatever they
+    # background (verify-endpoints.sh's own powerbrowser child, two layers
+    # deep). Plain function calls run inline -- setsid cannot exec a shell
+    # function, and each such function is itself responsible for setsid'ing
+    # whatever it spawns (start_shell/start_backend already do).
+    case "$cmd" in
+      bash\ */*|node\ */*)
+        setsid $cmd &
+        CURRENT_CHECK_PID=$!
+        if wait "$CURRENT_CHECK_PID"; then
+          SUMMARY+=("$label: PASS")
+        else
+          SUMMARY+=("$label: FAIL")
+          FAILED=1
+        fi
+        CURRENT_CHECK_PID=""
+        ;;
+      *)
+        # Every entry reaching this branch must be a bare, argument-free shell
+        # function name (WR-02: `eval "$cmd"` is the wrong tool for a
+        # statically-known function name). A future entry that needs arguments
+        # must add a wrapper function, not smuggle a command string here --
+        # guarded loudly rather than silently mis-invoked.
+        if [[ "$cmd" == *[[:space:]]* ]]; then
+          echo "verify-platform: FAIL -- check '$label' has a non-function-name command ('$cmd'); add a wrapper function instead" >&2
+          SUMMARY+=("$label: FAIL")
+          FAILED=1
+        elif "$cmd"; then
+          SUMMARY+=("$label: PASS")
+        else
+          SUMMARY+=("$label: FAIL")
+          FAILED=1
+        fi
+        ;;
+    esac
   done
 
   echo ""
-  echo "verify-phase-05: summary"
+  echo "verify-platform: summary"
   for line in "${SUMMARY[@]}"; do
     echo "  $line"
   done
 
   if [ "$FAILED" -eq 0 ]; then
-    echo "verify-phase-05: PASS -- all checks passed"
+    echo "verify-platform: PASS -- all checks passed"
     return 0
   else
-    echo "verify-phase-05: FAIL -- see summary above" >&2
+    echo "verify-platform: FAIL -- see summary above" >&2
     return 1
   fi
 }
 
-# --- --gate mode (D-127, 05-05-PLAN.md Task 1) ------------------------------
+# --- --gate mode (D-127) ----------------------------------------------------
 #
 # Reads the broken-windows ledger's own JSON block (the fenced array at the
 # bottom of .planning/WINDOWS.md -- the markdown table above it is the
@@ -1972,93 +3070,51 @@ ledger_entry_status() {
   ' "$windows_md" "$id"
 }
 
-# True (exit 0) only when ledger entry <id> is still status "open". A
-# "fixed" or "waived" entry (or an unreadable ledger) returns false -- the
-# exclusion this backs must stop applying the instant the entry stops being
-# open, per D-127's own recorded guard.
+# True (exit 0) only when ledger entry <id> is still status "open". A "fixed" or
+# "waived" entry (or an unreadable ledger) returns false -- the exclusion this
+# backs must stop applying the instant the entry stops being open.
 ledger_entry_is_open() {
   local id="$1" status
   status="$(ledger_entry_status "$id")" || return 1
   [ "$status" = "open" ]
 }
 
-# Runs an external phase script (verify-phase-04.sh / verify-phase-03.sh)
-# to completion under setsid (same process-group discipline every other
-# external invocation in this file already uses), capturing its combined
-# output to a track_temp-registered log and its exit status. Prints the
-# captured output so a human reading --gate's own output sees exactly what
-# that script printed, not a paraphrase.
-GATE_LAST_LOG=""
-GATE_LAST_RC=0
-run_external_phase_script() {
-  local script_path="$1"
-  local log
-  log="$(mktemp)"; track_temp "$log"
-  setsid bash "$script_path" >"$log" 2>&1 &
-  CURRENT_CHECK_PID=$!
-  local rc=0
-  wait "$CURRENT_CHECK_PID" || rc=$?
-  CURRENT_CHECK_PID=""
-  cat "$log"
-  GATE_LAST_LOG="$log"
-  GATE_LAST_RC="$rc"
-}
-
-# Failing-check labels are read off the target script's OWN printed summary
-# lines ("  <label>: FAIL") rather than by re-deriving or re-running
-# anything -- exactly the "extract, don't reimplement" instruction the plan
-# gives.
+# Failing-check labels are read off this run's OWN printed summary lines
+# ("  <label>: FAIL") rather than by re-deriving or re-running anything.
 extract_failed_labels() {
   grep -E '^  [A-Za-z0-9_.-]+: FAIL$' "$1" | sed -E 's/^  ([A-Za-z0-9_.-]+): FAIL$/\1/'
 }
 
-# The known-open exclusion list (D-127): exactly one entry today. Keyed on
-# the broken-windows ledger id, never on a bare assertion -- see
-# ledger_entry_is_open above. label|ledger_id|reason
+# The known-open exclusion list (D-127). Keyed on the broken-windows ledger id,
+# never on a bare assertion -- see ledger_entry_is_open above.
+# label|ledger_id|reason
 declare -a GATE_KNOWN_OPEN_EXCLUSIONS=(
-  "verify-endpoints|5|Gecko resolves 3 hosts absent from the BRAND-04 allowlist once the shell actually works (127.0.0.1 the Theia sidecar, ciscobinary.openh264.org the GMP manager, github.com the Theia frontend) -- not a code defect, needs a product/privacy decision this phase's scope explicitly excludes (05-CONTEXT.md <deferred>)"
+  "verify-endpoints|5|Gecko resolves 3 hosts absent from the BRAND-04 allowlist once the shell actually works (127.0.0.1 the Theia sidecar, ciscobinary.openh264.org the GMP manager, and the welcome widget's own project link) -- not a code defect, needs a product/privacy decision that phase's scope explicitly excluded"
 )
 
+# Before consolidation, --gate ran this script's own set and then SHELLED OUT to
+# verify-phase-04.sh and verify-phase-03.sh, parsing their summaries back. With
+# one registry there is nothing to shell out to: --gate is the full set in one
+# process, and the only thing it adds over a plain full run is the ledger-backed
+# exclusion pass over the failures. That is a simplification the consolidation
+# paid for, not a capability lost.
 run_gate_mode() {
   local gate_start="$SECONDS"
   local commit
   commit="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
-  echo "verify-phase-05: --gate -- commit $commit"
-  echo "verify-phase-05: --gate -- proving verify-phase-05.sh + verify-phase-04.sh + verify-phase-03.sh all green at this one commit (D-127)"
+  echo "verify-platform: --gate -- commit $commit"
+  echo "verify-platform: --gate -- proving every registered check is green (or a named, still-open ledger exclusion) at this one commit (D-127)"
   echo ""
 
-  local overall_failed=0
+  local log
+  log="$(mktemp)"; track_temp "$log"
+  local rc=0
+  run_own_checks 2>&1 | tee "$log"
+  rc="${PIPESTATUS[0]}"
 
-  echo "=== Section 1/3: verify-phase-05.sh (this script's own full check set) ==="
-  local phase5_rc=0
-  run_own_checks || phase5_rc=$?
-  if [ "$phase5_rc" -ne 0 ]; then
-    overall_failed=1
-    echo "--- Phase 5 section: FAIL ---"
-  else
-    echo "--- Phase 5 section: PASS ---"
-  fi
-  echo ""
-
-  echo "=== Section 2/3: scripts/verify-phase-04.sh (full run) ==="
-  run_external_phase_script "$REPO_ROOT/scripts/verify-phase-04.sh"
-  local phase4_log="$GATE_LAST_LOG" phase4_rc="$GATE_LAST_RC"
-  if [ "$phase4_rc" -ne 0 ]; then
-    overall_failed=1
-    echo "--- Phase 4 section: FAIL -- failing checks:"
-    extract_failed_labels "$phase4_log" | sed 's/^/    /'
-    echo "--- Phase 4 section: FAIL ---"
-  else
-    echo "--- Phase 4 section: PASS ---"
-  fi
-  echo ""
-
-  echo "=== Section 3/3: scripts/verify-phase-03.sh (full run) ==="
-  run_external_phase_script "$REPO_ROOT/scripts/verify-phase-03.sh"
-  local phase3_log="$GATE_LAST_LOG" phase3_rc="$GATE_LAST_RC"
-  local phase3_section_failed=0
+  local gate_failed=0
   local excluded_count=0
-  if [ "$phase3_rc" -ne 0 ]; then
+  if [ "$rc" -ne 0 ]; then
     while IFS= read -r label; do
       [ -z "$label" ] && continue
       local excused=0
@@ -2077,35 +3133,30 @@ run_gate_mode() {
             excluded_count=$((excluded_count + 1))
           else
             echo "  FAIL (exclusion no longer applies): $label -- WINDOWS.md ledger entry $excl_ledger_id is no longer 'open' (fixed or waived); this check must be green now, not silently excused" >&2
-            phase3_section_failed=1
+            gate_failed=1
           fi
           break
         fi
       done
       if [ "$excused" -ne 1 ] && [ "$matched_known_exclusion" -ne 1 ]; then
         echo "  FAIL (not excluded): $label" >&2
-        phase3_section_failed=1
+        gate_failed=1
       fi
-    done < <(extract_failed_labels "$phase3_log")
+    done < <(extract_failed_labels "$log")
   fi
-  if [ "$phase3_section_failed" -eq 1 ]; then
-    overall_failed=1
-    echo "--- Phase 3 section: FAIL ---"
-  elif [ "$phase3_rc" -ne 0 ] && [ "$excluded_count" -gt 0 ]; then
-    echo "--- Phase 3 section: PASS-WITH-EXCLUSIONS ($excluded_count named known-open exclusion(s)) ---"
-  else
-    echo "--- Phase 3 section: PASS ---"
-  fi
-  echo ""
 
   local gate_elapsed=$((SECONDS - gate_start))
-  echo "verify-phase-05: --gate -- total runtime ${gate_elapsed}s"
+  echo ""
+  echo "verify-platform: --gate -- total runtime ${gate_elapsed}s"
 
-  if [ "$overall_failed" -eq 0 ]; then
-    echo "verify-phase-05: --gate PASS -- commit $commit -- every phase gate is green at this commit"
+  if [ "$gate_failed" -eq 0 ] && [ "$excluded_count" -gt 0 ]; then
+    echo "verify-platform: --gate PASS-WITH-EXCLUSIONS -- commit $commit -- $excluded_count named known-open exclusion(s)"
+    return 0
+  elif [ "$gate_failed" -eq 0 ]; then
+    echo "verify-platform: --gate PASS -- commit $commit -- every registered check is green at this commit"
     return 0
   else
-    echo "verify-phase-05: --gate FAIL -- commit $commit -- see section output above" >&2
+    echo "verify-platform: --gate FAIL -- commit $commit -- see output above" >&2
     return 1
   fi
 }

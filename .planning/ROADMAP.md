@@ -222,3 +222,17 @@ All 31 v1 requirements map to exactly one phase each.
 - Patch de-configuration follows generator existence — a patch can only `include()` into `generated/` once it exists.
 - Verification is rewritten after the generator, because the verifier's contract depends on the generator's file manifest, and must read the built artifact, never the manifest that produced it.
 - Sourcerer-as-downstream is last and is insufficient alone — adversarial fixtures ship alongside it.
+
+## Inherited network egress (carried through the migration, not decided here)
+
+The imported platform allows exactly three Mozilla hosts, all one feature —
+Remote Settings, which cannot be disabled without also losing CRLite
+certificate revocation, intermediate certificate preloading, and
+tracking-protection updates: **firefox.settings.services.mozilla.com**,
+**content-signature-2.cdn.mozilla.net**, and
+**firefox-settings-attachments.cdn.mozilla.net**. They are named here and in
+REQUIREMENTS.md because `verify-platform.sh`'s `allowlist-doc-consistency`
+check requires every allow-dispositioned Mozilla host to be documented in this
+project's own planning record rather than only inside the allowlist file — an
+allow entry nobody had to write down is one nobody has to defend. Repointing
+them per a downstream's manifest is Phase 4's TEL-03.

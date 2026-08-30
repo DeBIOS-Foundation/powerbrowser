@@ -319,7 +319,7 @@ export const TheiaService = {
    * Ring buffer AND console/stdout, same dual-channel convention `_fatal`
    * already uses -- the reap decision must be independently observable
    * both from `getRecentLog()` (Phase 5's diagnostics page) and from the
-   * process's own stdout (verify-phase-05.sh's automated controls read the
+   * process's own stdout (verify-platform.sh's automated controls read the
    * launch log directly, with no chrome-side access).
    */
   _reapLog(message) {
@@ -379,7 +379,7 @@ export const TheiaService = {
       // without this exact "1" -- three unsupervised callers depend on
       // staying inert when their own stdin closes/EOFs for unrelated
       // reasons: `yarn start`, `scripts/smoke-theia.sh`, and
-      // verify-phase-04.sh's own start_backend (stdin redirected from
+      // verify-platform.sh's own start_backend (stdin redirected from
       // /dev/null). Only this supervisor's spawn sets it.
       POWERBROWSER_SUPERVISED: "1",
       // PowerBrowserAPI.spawnProcess uses environmentAppend:true, so the child

@@ -414,7 +414,7 @@ found insufficient for at-a-glance distinguishability on 2026-08-22 (a few
 pixels at 16-32px) — this gap closure did not re-badge the icons; it added
 the title-bar divergence as the primary, unambiguous cue instead.
 
-`scripts/verify-phase-03.sh`'s `branding-variant-divergence` check is the
+`verify-platform.sh`'s `branding-variant-divergence` check is the
 machine gate for both of the divergences this fix added (properties string,
 titlebar default); its self-test proves it goes red if either is removed.
 It cannot verify the perceptual claim itself — "tellable apart at a
@@ -424,7 +424,7 @@ glance" is a human judgment, recorded in `03-MANUAL-VERIFICATION.md`.
 `firefox-branding.js` under both `objdir/dist/bin/...` and
 `objdir-release/dist/bin/...`, so it needs a full dev build **and** a full
 release build (`POWERBROWSER_OBJDIR=objdir-release ... ./mach build`, Tier 3)
-already in place — it runs only under `scripts/verify-phase-03.sh`'s full
+already in place — it runs only under `verify-platform.sh`'s full
 mode, never under `--quick`. `--quick` still runs the check's self-test
 (synthetic temp files, no build required).
 

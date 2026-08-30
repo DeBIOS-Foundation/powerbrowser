@@ -107,7 +107,7 @@ fi
 # ---------------------------------------------------------------------------
 # Process/temp-file hygiene, shared by every layer. Split trap: EXIT alone is
 # not enough -- bash resumes the rest of the script after a non-EXIT trap
-# handler returns unless that handler exits itself (scripts/verify-phase-02.sh
+# handler returns unless that handler exits itself (verify-platform.sh
 # lines 50-58, quoted in 03-PATTERNS.md).
 # ---------------------------------------------------------------------------
 ACTIVE_PID=""

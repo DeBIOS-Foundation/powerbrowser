@@ -102,6 +102,30 @@
       Mozilla telemetry/crash endpoints are repointed or disabled per the
       manifest
 
+#### Inherited Mozilla egress carve-out (Remote Settings)
+
+Three Mozilla hosts are `allow`-dispositioned in
+`powerbrowser/endpoint-allowlist.json` and are named here because
+`verify-platform.sh --only allowlist-doc-consistency` requires every such host
+to carry a documented reason in this project's own requirements, not only in
+the allowlist file. They are one feature, not three decisions:
+
+- **firefox.settings.services.mozilla.com** — Remote Settings itself. Gecko
+  refuses a `services.settings.server` override outside Nightly, and the only
+  alternative also disables CRLite certificate-revocation data, intermediate
+  certificate preloading, and tracking-protection list updates. Turning it off
+  is unacceptable for a substrate whose pitch is that it is a real browser.
+- **content-signature-2.cdn.mozilla.net** — the content-signature certificate
+  chain each downloaded Remote Settings collection is verified against. Part of
+  the same feature; without it the data above is unauthenticated.
+- **firefox-settings-attachments.cdn.mozilla.net** — Remote Settings' attachment
+  CDN for large collection blobs, including CRLite's own data.
+
+Full rationale, with the upstream source citations and the observed polling
+cadence, lives in each host's `reason` field in
+`powerbrowser/endpoint-allowlist.json`, which stays the single source of truth.
+Repointing or disabling these per a downstream's manifest is TEL-03's job.
+
 ### Extensions (EXT)
 
 - [ ] **EXT-01**: A downstream can declare Theia extensions in

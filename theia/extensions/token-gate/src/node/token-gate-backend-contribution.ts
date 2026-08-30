@@ -36,7 +36,7 @@ export class PowerBrowserTokenGateContribution implements BackendApplicationCont
         const disable = POWERBROWSER_ENV[TOKEN_DISABLE_ENV_VAR] === '1';
         if (disable) {
             // Named legacy-dev bypass (scripts/smoke-theia.sh,
-            // scripts/verify-phase-02.sh only). The supervised PowerBrowser path
+            // verify-platform.sh only). The supervised PowerBrowser path
             // never sets this -- it is a deliberately-typed name, not an
             // omission, so an unconfigured token never silently passes
             // through.

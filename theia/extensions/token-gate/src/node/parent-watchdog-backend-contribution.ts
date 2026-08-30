@@ -6,7 +6,7 @@ import { POWERBROWSER_ENV } from './powerbrowser-env';
 // when the supervisor's spawn environment carries POWERBROWSER_SUPERVISED=1
 // (see TheiaService.sys.mjs's _spawnAndGate environment object) -- without
 // this gate, stdin EOF also fires for `yarn start`, `scripts/smoke-theia.sh`
-// and verify-phase-04.sh's own start_backend (stdin redirected from
+// and verify-platform.sh's own start_backend (stdin redirected from
 // /dev/null), all three of which would otherwise self-terminate on launch.
 //
 // Subprocess.sys.mjs creates the child's stdin as a pipe unconditionally on
@@ -30,7 +30,7 @@ export class PowerBrowserParentWatchdogContribution implements BackendApplicatio
         // by the time this runs.
         if (POWERBROWSER_ENV[SUPERVISED_ENV_VAR] !== '1') {
             // Unsupervised launch (yarn start, smoke-theia.sh,
-            // verify-phase-04.sh's start_backend): stay inert. Stdin may be
+            // verify-platform.sh's start_backend): stay inert. Stdin may be
             // closed, redirected from /dev/null, or otherwise EOF'd for
             // reasons that have nothing to do with the parent dying.
             return;

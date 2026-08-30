@@ -351,7 +351,7 @@ const APP_IDENTITY_LINE_RE = /^(?:\[PowerBrowserAPI\] [a-z]+: )?POWERBROWSER_APP
 // (powerbrowser.js writes it once, unconditionally, right after the sidecar
 // prefs sentinel -- before TheiaService.start(), so it needs no backend and
 // no display). Tolerates the same "[PowerBrowserAPI] <level>: " console-mirror
-// prefix verify-phase-05.sh's own sentinel readers do. Always kills the
+// prefix verify-platform.sh's own sentinel readers do. Always kills the
 // spawned process and removes the throwaway profile, on every exit path --
 // this is a verification harness for Phase 5's own subject (orphaned
 // processes); it must not manufacture that failure mode itself.

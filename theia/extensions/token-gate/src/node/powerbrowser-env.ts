@@ -12,7 +12,7 @@ import * as fs from 'fs';
 //    filesystem-watcher fork. POWERBROWSER_SUPERVISED arms the parent-death
 //    watchdog, so inherited it arms one in a NESTED backend started from a
 //    PowerBrowser terminal (`yarn start`, scripts/smoke-theia.sh,
-//    scripts/verify-phase-04.sh), which then self-terminates the instant its
+//    verify-platform.sh), which then self-terminates the instant its
 //    own stdin EOFs -- the exact three unsupervised callers
 //    parent-watchdog-backend-contribution.ts's gate exists to protect, killed
 //    by an unexplained death. POWERBROWSER_TOKEN_DISABLE, the gate's named dev
