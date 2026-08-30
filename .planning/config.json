@@ -1,0 +1,41 @@
+{
+  "model_profile": "quality",
+  "commit_docs": true,
+  "parallelization": true,
+  "search_gitignored": false,
+  "phase_naming": "sequential",
+  "project_code": null,
+  "claude_md_path": "./CLAUDE.md",
+  "git": {
+    "branching_strategy": "none",
+    "create_tag": true,
+    "phase_branch_template": "gsd/phase-{phase}-{slug}",
+    "milestone_branch_template": "gsd/{milestone}-{slug}",
+    "quick_branch_template": null
+  },
+  "workflow": {
+    "research": true,
+    "plan_check": true,
+    "verifier": true,
+    "nyquist_validation": true,
+    "research_before_questions": true,
+    "discuss_mode": "discuss",
+    "auto_advance": false,
+    "human_verify_mode": "end-of-phase",
+    "code_review": true,
+    "code_review_depth": "standard",
+    "pattern_mapper": true,
+    "plan_bounce": true,
+    "plan_bounce_passes": 2,
+    "post_planning_gaps": true,
+    "use_worktrees": false
+  },
+  "plan_review": {
+    "source_grounding": true
+  },
+  "intel": {
+    "enabled": true
+  },
+  "mode": "balanced",
+  "granularity": "standard"
+}
