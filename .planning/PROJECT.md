@@ -3,24 +3,33 @@
 ## What This Is
 
 Power Browser is the open platform (middle stream) extracted from the Sourcerer
-codebase: a Firefox-ESR fork hosting Eclipse Theia IDE, debranded and made
-trivially rebrandable. Firefox ESR and Theia are the two upstreams; Power
-Browser is the middle stream; Sourcerer (and anyone else's derivative) is a
-downstream distribution.
+codebase: a Firefox-ESR fork hosting Eclipse Theia IDE that is **an actual web
+browser** — the user can toggle between Theia and proper browser UI, and browse
+the web inside Theia — debranded and made trivially rebrandable. Firefox ESR
+and Theia are the two upstreams; Power Browser is the middle stream; Sourcerer
+(and anyone else's derivative) is a downstream distribution.
 
-The core deliverable is **one file — `configuration.toml`** — plus a `brand/`
-assets folder, from which a build-time generator materializes every branding
-and configuration surface: application name, window title, icons at all sizes,
-installer name, desktop files, Theia welcome/about branding, telemetry
-endpoints, declared extensions, URLs, and upstream pins. Anyone who copies the
-repo edits that single file and owns a fully rebranded browser — the same role
-`configuration.nix` plays for a NixOS machine.
+Two core deliverables:
+
+1. **One file — `configuration.toml`** — plus a `brand/` assets folder, from
+   which a build-time generator materializes every branding and configuration
+   surface: application name, window title, icons, installer branding for
+   Linux/Windows/macOS (Firefox's packaging machinery is why the fork exists —
+   Power Browser installs anywhere Firefox installs), desktop files, Theia
+   welcome/about branding, telemetry, declared extensions, URLs, and upstream
+   pins. The same role `configuration.nix` plays for a NixOS machine.
+2. **A vibe-codeable GUI**: Theia extensions are the sanctioned mechanism for
+   reshaping the browser's GUI — the customize bridge (runtime CSS +
+   dev-flagged JS) and URL-addressable tabs inherited from sourcerer are
+   platform features, so anyone can code their own browser chrome/setup
+   without forking the platform.
 
 ## Core Value
 
 A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo,
-and build their own branded browser without touching any other file. If a
-rebrand ever requires editing a second file, that is a bug.
+and build their own branded, working web browser without touching any other
+file — then reshape its GUI through Theia extensions without forking the
+platform. If a rebrand ever requires editing a second file, that is a bug.
 
 ## Context
 
@@ -100,14 +109,14 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 
 ### Out of Scope
 
-- Custom browser GUI (tab strip, toolbar) — post-4.0 in the upstream plan,
-  unchanged here
-- Windows/macOS packaging — Linux first, as in sourcerer
+- Unified tab strip where web pages and editors are peers — the mirror/proxy
+  bridge stays a later milestone, as in the upstream plan; v1's browser access
+  is the toggle + browsing inside Theia
 - Databasise and the curated addon set — composed in downstream, never in the
   platform tree
 - Moving every conceivable setting into `configuration.toml` in milestone 1 —
-  the file grows toward "everything configurable" incrementally; branding,
-  telemetry, extensions, URLs, and pins come first
+  the file grows toward "everything configurable" incrementally
+- npm and local-path extension source kinds — Open VSX + URL cover v1
 
 ## Evolution
 
