@@ -69,7 +69,7 @@ None yet.
 - [Phase 3]: `--with-branding` into a sibling `generated/` dir via symlink is architecturally sound but never executed. Also open: whether the generated-`.mozconfig` route works with `imply_option("MOZ_APP_VENDOR", ...)` dropped from the patch.
 - [Phase 4]: `theia download:plugins` / Open VSX pin semantics unexercised in this tree; hash-verifiable pins unknown.
 - [Phase 6]: Mozilla and Eclipse trademark findings are LOW-confidence web-sourced; re-verify against primary policy before gating.
-- [Spelling]: REQUIREMENTS.md DOC-02 writes "Sorcerer"; PROJECT.md, research, and the repo name use "Sourcerer". Roadmap uses "Sourcerer". Reconcile at first phase transition.
+- ~~[Spelling]~~ Resolved 2026-08-29: user confirmed "Sourcerer"; REQUIREMENTS.md and PROJECT.md normalized.
 
 ## Deferred Items
 
