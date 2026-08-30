@@ -2,16 +2,16 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# SHELL-01/D-89: registers the sourcerer chrome package as a new top-level
+# SHELL-01/D-89: registers the powerbrowser chrome package as a new top-level
 # package inside browser.jar (not a separate jar file -- avoids a third
 # patch hunk against browser/installer/package-manifest.in). No web-
 # accessible flag on the registration line below -- nothing on the web
-# may reach chrome://sourcerer/.
+# may reach chrome://powerbrowser/.
 
 browser.jar:
-%  content sourcerer %content/sourcerer/
-   content/sourcerer/sourcerer.xhtml         (sourcerer.xhtml)
-   content/sourcerer/sourcerer.js            (sourcerer.js)
-   content/sourcerer/sourcerer.css           (sourcerer.css)
-   content/sourcerer/SourcererAPI.sys.mjs    (SourcererAPI.sys.mjs)
-   content/sourcerer/TheiaService.sys.mjs    (TheiaService.sys.mjs)
+%  content powerbrowser %content/powerbrowser/
+   content/powerbrowser/powerbrowser.xhtml         (powerbrowser.xhtml)
+   content/powerbrowser/powerbrowser.js            (powerbrowser.js)
+   content/powerbrowser/powerbrowser.css           (powerbrowser.css)
+   content/powerbrowser/PowerBrowserAPI.sys.mjs    (PowerBrowserAPI.sys.mjs)
+   content/powerbrowser/TheiaService.sys.mjs    (TheiaService.sys.mjs)

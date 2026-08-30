@@ -3,19 +3,19 @@
 #
 # D-96/D-97: SHELL-02's boundary as an executable guard, not prose. Fails if
 # any file under the scanned directory imports a Firefox internal outside
-# `SourcererAPI.sys.mjs` -- D-96 defines "Firefox internal" maximally:
+# `PowerBrowserAPI.sys.mjs` -- D-96 defines "Firefox internal" maximally:
 # `Services.*`, `Cc`/`Ci`/`Cr`/`Cu`/XPCOM constructors, `AppConstants`, and
 # `ChromeUtils.import`/`ChromeUtils.defineESModuleGetters` of anything
-# outside `chrome://sourcerer/`. Structured exactly like
+# outside `chrome://powerbrowser/`. Structured exactly like
 # scripts/check-patch-surface.sh (D-97's named idiom): a scan function, a
 # `--self-test` planting a violating fixture in `mktemp -d`, and a default
 # path scanning the real tree.
 #
-# Default scan target is `sourcerer/shell/` -- the directory the phase's own
+# Default scan target is `powerbrowser/shell/` -- the directory the phase's own
 # artifact manifest (04-01-PLAN.md, 04-PATTERNS.md) names as the only home
-# for boundary-relevant chrome code (`sourcerer.xhtml`, `SourcererAPI.sys.mjs`,
-# `TheiaService.sys.mjs`). NOT the whole `sourcerer/` tree: prior phases
-# already ship `sourcerer/branding/*/pref/firefox-branding.js` (pref-list
+# for boundary-relevant chrome code (`powerbrowser.xhtml`, `PowerBrowserAPI.sys.mjs`,
+# `TheiaService.sys.mjs`). NOT the whole `powerbrowser/` tree: prior phases
+# already ship `powerbrowser/branding/*/pref/firefox-branding.js` (pref-list
 # data, matched by the `*.js` glob but containing no forbidden pattern) --
 # scanning the whole tree would make this check start non-vacuous and green
 # before any shell code exists, defeating Wave 0's red-by-design requirement
@@ -25,10 +25,10 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_SCAN_DIR="$REPO_ROOT/sourcerer/shell"
+DEFAULT_SCAN_DIR="$REPO_ROOT/powerbrowser/shell"
 
 # The one file exempt from every forbidden pattern below (D-96/D-97).
-BOUNDARY_FILE_BASENAME="SourcererAPI.sys.mjs"
+BOUNDARY_FILE_BASENAME="PowerBrowserAPI.sys.mjs"
 
 # Forbidden pattern set, D-96 verbatim. The two ChromeUtils.* entries are
 # conditional (see is_conditional_pattern below); every other entry is an
@@ -46,8 +46,8 @@ FORBIDDEN_PATTERNS=(
   'ChromeUtils.import'
   'ChromeUtils.defineESModuleGetters'
   # Privileged chrome API that is not Services/Cc/Ci-shaped and so slipped the
-  # list above: sourcerer.js reached for both directly, with a comment saying
-  # it did so to avoid SourcererAPI -- a real internals touch living outside
+  # list above: powerbrowser.js reached for both directly, with a comment saying
+  # it did so to avoid PowerBrowserAPI -- a real internals touch living outside
   # the one boundary file and absent from the catalogue, while this guard
   # reported PASS. That is exactly the hole SHELL-02 exists to close, so the
   # names are enumerated here rather than left to the Services. prefix.
@@ -116,7 +116,7 @@ scan_internals_boundary() {
             offense=1
             if is_conditional_pattern "$pattern"; then
               case "$line" in
-                *'chrome://sourcerer/'*) offense=0 ;;
+                *'chrome://powerbrowser/'*) offense=0 ;;
               esac
             fi
             if [ "$offense" -eq 1 ]; then
@@ -139,16 +139,16 @@ scan_internals_boundary() {
 
 # --- Catalogue consistency (04-05, SHELL-02's second half) -----------------
 #
-# SHELL-02 has two halves: nothing outside SourcererAPI.sys.mjs imports a
+# SHELL-02 has two halves: nothing outside PowerBrowserAPI.sys.mjs imports a
 # Firefox internal (the scan above), and every internal that file DOES
-# import is catalogued in sourcerer/INTERNAL-APIS.md. This mode scans
-# SourcererAPI.sys.mjs itself -- normally excluded above by
+# import is catalogued in powerbrowser/INTERNAL-APIS.md. This mode scans
+# PowerBrowserAPI.sys.mjs itself -- normally excluded above by
 # BOUNDARY_FILE_BASENAME -- with the exact same FORBIDDEN_PATTERNS/
 # is_conditional_pattern/is_comment_line logic, so the rule is written once
 # and the catalogue is derived from the code rather than maintained beside
 # it.
-CATALOGUE_PATH="$REPO_ROOT/sourcerer/INTERNAL-APIS.md"
-CATALOGUE_TARGET="$REPO_ROOT/sourcerer/shell/SourcererAPI.sys.mjs"
+CATALOGUE_PATH="$REPO_ROOT/powerbrowser/INTERNAL-APIS.md"
+CATALOGUE_TARGET="$REPO_ROOT/powerbrowser/shell/PowerBrowserAPI.sys.mjs"
 
 # Prints one distinct line number per output line for every forbidden-
 # pattern occurrence in <file>. Two offending patterns on the same line
@@ -169,7 +169,7 @@ catalogue_occurrence_lines() {
           offense=1
           if is_conditional_pattern "$pattern"; then
             case "$line" in
-              *'chrome://sourcerer/'*) offense=0 ;;
+              *'chrome://powerbrowser/'*) offense=0 ;;
             esac
           fi
           if [ "$offense" -eq 1 ] && [ -z "${seen[$line_no]:-}" ]; then
@@ -226,7 +226,7 @@ check_catalogue_consistency() {
 # D-68 idiom: a negative assertion without a demonstrated-red control proves
 # nothing. Also plants a mutated scratch copy of the real catalogue with one
 # row removed and asserts check_catalogue_consistency rejects it and names
-# the missing row -- never mutates the real sourcerer/INTERNAL-APIS.md.
+# the missing row -- never mutates the real powerbrowser/INTERNAL-APIS.md.
 run_self_test() {
   local tmp
   tmp="$(mktemp -d)"

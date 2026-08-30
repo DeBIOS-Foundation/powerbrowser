@@ -6,10 +6,10 @@ index 5a03cfc6d3..ab2c84df3c 100644
      "app",
  ]
  
-+# D-89/D-92: sourcerer/shell/ resolves through the upstream/sourcerer
-+# symlink to the repo's own sourcerer/ tree -- our chrome code stays
-+# entirely in sourcerer/, never inside upstream/.
-+DIRS += ["../sourcerer/shell"]
++# D-89/D-92: powerbrowser/shell/ resolves through the upstream/powerbrowser
++# symlink to the repo's own powerbrowser/ tree -- our chrome code stays
++# entirely in powerbrowser/, never inside upstream/.
++DIRS += ["../powerbrowser/shell"]
 +
  if CONFIG["MAKENSISU"]:
      DIRS += ["installer/windows"]
@@ -23,7 +23,7 @@ index 33098ee135..a3dbfad2f5 100644
  # Include the DevTools client, not just the server (which is the default)
  imply_option("MOZ_DEVTOOLS", "all")
 -imply_option("BROWSER_CHROME_URL", "chrome://browser/content/browser.xhtml")
-+imply_option("BROWSER_CHROME_URL", "chrome://sourcerer/content/sourcerer.xhtml")
++imply_option("BROWSER_CHROME_URL", "chrome://powerbrowser/content/powerbrowser.xhtml")
  
  
  with only_when(target_has_linux_kernel & compile_environment):
