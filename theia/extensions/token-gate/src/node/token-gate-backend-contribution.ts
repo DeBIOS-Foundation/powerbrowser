@@ -4,7 +4,7 @@ import * as https from 'https';
 import { injectable, inject } from '@theia/core/shared/inversify';
 import * as express from '@theia/core/shared/express';
 import { BackendApplicationContribution, EarlyExpressMiddleware } from '@theia/core/lib/node';
-import { SOURCERER_ENV } from './sourcerer-env';
+import { POWERBROWSER_ENV } from './powerbrowser-env';
 
 // D-98: replaces the trust root for backend access on plain HTTP -- the
 // stock BrowserConnectionTokenBackendContribution (browser-connection-token.js)
@@ -13,12 +13,12 @@ import { SOURCERER_ENV } from './sourcerer-env';
 // its own cookie regardless of what this contribution decides. This gate
 // sits ahead of it (see initialize() below) so a rejected request never
 // reaches that stock middleware.
-export const SOURCERER_TOKEN_COOKIE_NAME = 'SOURCERER_TOKEN';
-const TOKEN_ENV_VAR = 'SOURCERER_TOKEN';
-const TOKEN_DISABLE_ENV_VAR = 'SOURCERER_TOKEN_DISABLE';
+export const POWERBROWSER_TOKEN_COOKIE_NAME = 'POWERBROWSER_TOKEN';
+const TOKEN_ENV_VAR = 'POWERBROWSER_TOKEN';
+const TOKEN_DISABLE_ENV_VAR = 'POWERBROWSER_TOKEN_DISABLE';
 
 @injectable()
-export class SourcererTokenGateContribution implements BackendApplicationContribution {
+export class PowerBrowserTokenGateContribution implements BackendApplicationContribution {
 
     @inject(EarlyExpressMiddleware)
     protected readonly earlyMiddleware: EarlyExpressMiddleware;
@@ -28,26 +28,26 @@ export class SourcererTokenGateContribution implements BackendApplicationContrib
     protected port: number | undefined;
 
     initialize(): void {
-        // SOURCERER_ENV, never process.env: sourcerer-env.ts resolved the
+        // POWERBROWSER_ENV, never process.env: powerbrowser-env.ts resolved the
         // whole handshake at module load -- the dev bypass captured from and
         // scrubbed out of process.env, and on a supervised launch the token
         // read off the stdin pipe, which is where the supervisor puts it so it
         // never appears in this process's /proc/<pid>/environ at all.
-        const disable = SOURCERER_ENV[TOKEN_DISABLE_ENV_VAR] === '1';
+        const disable = POWERBROWSER_ENV[TOKEN_DISABLE_ENV_VAR] === '1';
         if (disable) {
             // Named legacy-dev bypass (scripts/smoke-theia.sh,
-            // scripts/verify-phase-02.sh only). The supervised Sourcerer path
+            // scripts/verify-phase-02.sh only). The supervised PowerBrowser path
             // never sets this -- it is a deliberately-typed name, not an
             // omission, so an unconfigured token never silently passes
             // through.
             this.disabled = true;
             process.stderr.write(
-                `SourcererTokenGateContribution: WARNING -- ${TOKEN_DISABLE_ENV_VAR}=1 is set. The token gate is DISABLED and this backend is reachable without a token.\n`
+                `PowerBrowserTokenGateContribution: WARNING -- ${TOKEN_DISABLE_ENV_VAR}=1 is set. The token gate is DISABLED and this backend is reachable without a token.\n`
             );
             return;
         }
 
-        const token = SOURCERER_ENV[TOKEN_ENV_VAR];
+        const token = POWERBROWSER_ENV[TOKEN_ENV_VAR];
         if (!token) {
             // Fail-closed (D-98/SIDE-02): an unconfigured token is a startup
             // failure, never an inert/pass-through gate. On a supervised
@@ -58,7 +58,7 @@ export class SourcererTokenGateContribution implements BackendApplicationContrib
             // BackendApplication#configure() which itself runs before
             // BackendApplication#start() binds the socket.
             process.stderr.write(
-                `SourcererTokenGateContribution: FATAL -- ${TOKEN_ENV_VAR} is not set. Refusing to start an ungated backend.\n`
+                `PowerBrowserTokenGateContribution: FATAL -- ${TOKEN_ENV_VAR} is not set. Refusing to start an ungated backend.\n`
             );
             process.exit(78);
             return;
@@ -77,7 +77,7 @@ export class SourcererTokenGateContribution implements BackendApplicationContrib
         // Gated for free: this route is registered in configure(), which
         // BackendApplication runs after applying earlyMiddleware.handlers, so
         // every request here has already passed (or been rejected by) gate().
-        app.get('/sourcerer/health', (_req, res) => {
+        app.get('/powerbrowser/health', (_req, res) => {
             res.json({ ok: true, pid: process.pid, port: this.port ?? null });
         });
     }
@@ -86,7 +86,7 @@ export class SourcererTokenGateContribution implements BackendApplicationContrib
         const address = server.address();
         if (address === null || typeof address === 'string') {
             process.stderr.write(
-                `SourcererTokenGateContribution: FATAL -- could not determine the bound address (got ${JSON.stringify(address)}). Refusing to announce readiness.\n`
+                `PowerBrowserTokenGateContribution: FATAL -- could not determine the bound address (got ${JSON.stringify(address)}). Refusing to announce readiness.\n`
             );
             process.exit(78);
             return;
@@ -99,7 +99,7 @@ export class SourcererTokenGateContribution implements BackendApplicationContrib
             || (address.family === 'IPv6' && address.address === '::1');
         if (!isLoopback) {
             process.stderr.write(
-                `SourcererTokenGateContribution: FATAL -- backend bound to non-loopback address ${address.address} (family ${address.family}). Refusing to announce readiness.\n`
+                `PowerBrowserTokenGateContribution: FATAL -- backend bound to non-loopback address ${address.address} (family ${address.family}). Refusing to announce readiness.\n`
             );
             process.exit(78);
             return;
@@ -111,7 +111,7 @@ export class SourcererTokenGateContribution implements BackendApplicationContrib
         // with the process, and it needs no atomic-write/stale-file handling.
         // D-104: this contribution persists no state across process
         // lifetimes -- the expected token is read once per backend PROCESS
-        // start (sourcerer-env.ts, at module load) and every request is
+        // start (powerbrowser-env.ts, at module load) and every request is
         // validated against that in-memory value. The
         // respawn-accepts-the-same-cookie property comes from the supervisor
         // writing the same token onto each spawn's stdin pipe
@@ -119,7 +119,7 @@ export class SourcererTokenGateContribution implements BackendApplicationContrib
         // later -- and the token is never in this process's environment, so
         // neither a child nor a co-resident same-uid reader of
         // /proc/<pid>/environ can recover it.
-        process.stdout.write(`SOURCERER_BACKEND_READY ${JSON.stringify({ port: this.port, pid: process.pid })}\n`);
+        process.stdout.write(`POWERBROWSER_BACKEND_READY ${JSON.stringify({ port: this.port, pid: process.pid })}\n`);
     }
 
     protected gate(req: express.Request, res: express.Response, next: express.NextFunction): void {
@@ -145,7 +145,7 @@ export class SourcererTokenGateContribution implements BackendApplicationContrib
                 continue;
             }
             const name = part.slice(0, eq).trim();
-            if (name === SOURCERER_TOKEN_COOKIE_NAME) {
+            if (name === POWERBROWSER_TOKEN_COOKIE_NAME) {
                 return part.slice(eq + 1).trim();
             }
         }

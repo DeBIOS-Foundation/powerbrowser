@@ -93,10 +93,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Phase 4's @sourcerer/token-gate extension gates the backend on
-# SOURCERER_TOKEN; this dev loop drives it unauthenticated, so it opts out
-# via the named bypass. The supervised Sourcerer path never sets this.
-setsid env SOURCERER_TOKEN_DISABLE=1 nix develop "$REPO_ROOT#theia" --command yarn --cwd applications/browser start &
+# Phase 4's @powerbrowser/token-gate extension gates the backend on
+# POWERBROWSER_TOKEN; this dev loop drives it unauthenticated, so it opts out
+# via the named bypass. The supervised PowerBrowser path never sets this.
+setsid env POWERBROWSER_TOKEN_DISABLE=1 nix develop "$REPO_ROOT#theia" --command yarn --cwd applications/browser start &
 SERVER_PID=$!
 
 DEADLINE=$((SECONDS + 60))

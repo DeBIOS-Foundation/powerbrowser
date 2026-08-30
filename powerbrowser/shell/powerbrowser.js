@@ -3,12 +3,12 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
- * D-89/D-94/SHELL-05: the chrome bootstrap for sourcerer.xhtml. A classic
+ * D-89/D-94/SHELL-05: the chrome bootstrap for powerbrowser.xhtml. A classic
  * script (not a module) -- ES modules are reached from here via
  * ChromeUtils.importESModule, matching the Picture-in-Picture player
  * window's own pattern.
  *
- * The SOURCERER_SHELL_READY sentinel is written to stdout via dump() as
+ * The POWERBROWSER_SHELL_READY sentinel is written to stdout via dump() as
  * the very first thing this handler does, before any other bootstrap
  * work -- SHELL-05's ordering assertion (shell paints before backend
  * work is even attempted) can never be satisfied by accident.
@@ -17,20 +17,20 @@
 document.addEventListener(
   "DOMContentLoaded",
   () => {
-    dump("SOURCERER_SHELL_READY chrome://sourcerer/content/sourcerer.xhtml\n");
+    dump("POWERBROWSER_SHELL_READY chrome://powerbrowser/content/powerbrowser.xhtml\n");
 
-    const { SourcererAPI } = ChromeUtils.importESModule("chrome://sourcerer/content/SourcererAPI.sys.mjs");
+    const { PowerBrowserAPI } = ChromeUtils.importESModule("chrome://powerbrowser/content/PowerBrowserAPI.sys.mjs");
 
-    const browserElement = document.getElementById("sourcerer-content");
-    const loadingElement = document.getElementById("sourcerer-loading");
-    const errorElement = document.getElementById("sourcerer-error");
-    const errorMessageElement = document.getElementById("sourcerer-error-message");
-    const errorRetryButton = document.getElementById("sourcerer-error-retry");
-    const errorDiagnosticsButton = document.getElementById("sourcerer-error-diagnostics");
-    const diagnosticsElement = document.getElementById("sourcerer-diagnostics");
-    const diagnosticsFieldsElement = document.getElementById("sourcerer-diagnostics-fields");
-    const diagnosticsLogElement = document.getElementById("sourcerer-diagnostics-log");
-    const diagnosticsCloseButton = document.getElementById("sourcerer-diagnostics-close");
+    const browserElement = document.getElementById("powerbrowser-content");
+    const loadingElement = document.getElementById("powerbrowser-loading");
+    const errorElement = document.getElementById("powerbrowser-error");
+    const errorMessageElement = document.getElementById("powerbrowser-error-message");
+    const errorRetryButton = document.getElementById("powerbrowser-error-retry");
+    const errorDiagnosticsButton = document.getElementById("powerbrowser-error-diagnostics");
+    const diagnosticsElement = document.getElementById("powerbrowser-diagnostics");
+    const diagnosticsFieldsElement = document.getElementById("powerbrowser-diagnostics-fields");
+    const diagnosticsLogElement = document.getElementById("powerbrowser-diagnostics-log");
+    const diagnosticsCloseButton = document.getElementById("powerbrowser-diagnostics-close");
     // The deck's RESOLVED visibility, on the same dump() sentinel channel as
     // everything else here. This is the only assertion available on Linux
     // that observes the chrome document's rendered state at all: BiDi's
@@ -45,7 +45,7 @@ document.addEventListener(
     // positive control without touching any other path.
     const dumpDeckState = (where) =>
       dump(
-        `SOURCERER_DECK_STATE ${JSON.stringify({
+        `POWERBROWSER_DECK_STATE ${JSON.stringify({
           loading: window.getComputedStyle(loadingElement).display,
           error: window.getComputedStyle(errorElement).display,
           diagnostics: window.getComputedStyle(diagnosticsElement).display,
@@ -60,53 +60,53 @@ document.addEventListener(
     // chrome and has no tabbrowser, so it presents its single browser through
     // that same shape -- also the seed of the chrome-owned tab model the
     // post-4.0 bridge needs.
-    browserElement.permanentKey = SourcererAPI.createPermanentKey();
+    browserElement.permanentKey = PowerBrowserAPI.createPermanentKey();
     window.gBrowser = { tabs: [{ linkedBrowser: browserElement }] };
 
     // Exposed for plan 04-04's TheiaService.sys.mjs to call once the
     // backend is ready: navigates the content browser to the Theia
     // backend's URL and hides the branded loading layer. The navigation
-    // itself goes through SourcererAPI.loadURIInBrowser -- both
+    // itself goes through PowerBrowserAPI.loadURIInBrowser -- both
     // fixupAndLoadURIString and nodePrincipal are privileged chrome API and
     // belong behind the one boundary file, not here.
-    window.sourcererSwapToUrl = function sourcererSwapToUrl(url) {
-      dump(`SOURCERER_SHELL_SWAP ${url}\n`);
-      SourcererAPI.loadURIInBrowser(browserElement, url);
+    window.powerbrowserSwapToUrl = function powerbrowserSwapToUrl(url) {
+      dump(`POWERBROWSER_SHELL_SWAP ${url}\n`);
+      PowerBrowserAPI.loadURIInBrowser(browserElement, url);
       loadingElement.style.display = "none";
       dumpDeckState("swap");
     };
 
-    window.sourcererGetBrowser = function sourcererGetBrowser() {
+    window.powerbrowserGetBrowser = function powerbrowserGetBrowser() {
       return browserElement;
     };
 
     // SHELL-03 (05-02): the error layer, reached by TheiaService exactly
-    // the same way sourcererSwapToUrl is -- through this window's exposed
+    // the same way powerbrowserSwapToUrl is -- through this window's exposed
     // globals, never by touching browserElement's own location (D-114).
     // Neither the message text nor either sentinel may ever carry the
     // per-launch token or any credential; TheiaService's `reason` strings
     // are always static/derived-from-config text, never the token, and
     // `detail` here carries only `reason` and `recoverable`.
-    window.sourcererShowError = function sourcererShowError(detail) {
+    window.powerbrowserShowError = function powerbrowserShowError(detail) {
       const { reason, recoverable } = detail;
       errorMessageElement.textContent = reason;
       errorElement.style.display = "flex";
-      dump(`SOURCERER_SHELL_ERROR ${JSON.stringify({ reason, recoverable })}\n`);
+      dump(`POWERBROWSER_SHELL_ERROR ${JSON.stringify({ reason, recoverable })}\n`);
       dumpDeckState("error");
     };
 
-    window.sourcererHideError = function sourcererHideError() {
+    window.powerbrowserHideError = function powerbrowserHideError() {
       errorElement.style.display = "none";
-      dump(`SOURCERER_SHELL_ERROR_CLEARED ${JSON.stringify({})}\n`);
+      dump(`POWERBROWSER_SHELL_ERROR_CLEARED ${JSON.stringify({})}\n`);
     };
 
-    window.sourcererRetry = function sourcererRetry() {
+    window.powerbrowserRetry = function powerbrowserRetry() {
       errorElement.style.display = "none";
       TheiaService.retry();
     };
 
     errorRetryButton.addEventListener("click", () => {
-      window.sourcererRetry();
+      window.powerbrowserRetry();
     });
 
     // SHELL-04 (05-03): the diagnostics layer, third member of the deck.
@@ -122,10 +122,10 @@ document.addEventListener(
     // instead, so the same chord opens and closes. A sentinel line is
     // written on EVERY call (open or close) -- the field values only,
     // never the log text itself.
-    window.sourcererShowDiagnostics = function sourcererShowDiagnostics() {
+    window.powerbrowserShowDiagnostics = function powerbrowserShowDiagnostics() {
       const state = TheiaService.getState();
       const log = TheiaService.getRecentLog();
-      const identity = SourcererAPI.getAppIdentity();
+      const identity = PowerBrowserAPI.getAppIdentity();
       const sentinel = {
         port: state.port,
         pid: state.pid,
@@ -138,14 +138,14 @@ document.addEventListener(
       };
 
       // Resolved value, not the inline one: the layer's hidden DEFAULT comes
-      // from sourcerer.css (the CSP drops a style attribute -- see that
+      // from powerbrowser.css (the CSP drops a style attribute -- see that
       // file's header), so `.style.display` reads "" until the first CSSOM
       // write and `!== "none"` would report a never-opened layer as visible,
       // making the first chord press hide something already hidden.
       const wasVisible = window.getComputedStyle(diagnosticsElement).display !== "none";
       if (wasVisible) {
         diagnosticsElement.style.display = "none";
-        dump(`SOURCERER_DIAGNOSTICS ${JSON.stringify(sentinel)}\n`);
+        dump(`POWERBROWSER_DIAGNOSTICS ${JSON.stringify(sentinel)}\n`);
         return;
       }
 
@@ -167,27 +167,27 @@ document.addEventListener(
       diagnosticsLogElement.textContent = log.join("\n");
 
       diagnosticsElement.style.display = "flex";
-      dump(`SOURCERER_DIAGNOSTICS ${JSON.stringify(sentinel)}\n`);
+      dump(`POWERBROWSER_DIAGNOSTICS ${JSON.stringify(sentinel)}\n`);
     };
 
-    window.sourcererHideDiagnostics = function sourcererHideDiagnostics() {
+    window.powerbrowserHideDiagnostics = function powerbrowserHideDiagnostics() {
       diagnosticsElement.style.display = "none";
     };
 
     diagnosticsCloseButton.addEventListener("click", () => {
-      window.sourcererHideDiagnostics();
+      window.powerbrowserHideDiagnostics();
     });
 
     errorDiagnosticsButton.addEventListener("click", () => {
-      window.sourcererShowDiagnostics();
+      window.powerbrowserShowDiagnostics();
     });
 
-    // Task 2 (04-03) proof-of-resolution: import SourcererAPI.sys.mjs and
+    // Task 2 (04-03) proof-of-resolution: import PowerBrowserAPI.sys.mjs and
     // read back two sidecar prefs through it, emitting an additional
     // sentinel. Left in place -- plan 04-04 keeps it.
-    const backendMain = SourcererAPI.getStringPref("sourcerer.sidecar.backendMain", "");
-    const nodePath = SourcererAPI.getStringPref("sourcerer.sidecar.nodePath", "");
-    dump(`SOURCERER_SIDECAR_PREFS backendMain=${backendMain} nodePath=${nodePath}\n`);
+    const backendMain = PowerBrowserAPI.getStringPref("powerbrowser.sidecar.backendMain", "");
+    const nodePath = PowerBrowserAPI.getStringPref("powerbrowser.sidecar.nodePath", "");
+    dump(`POWERBROWSER_SIDECAR_PREFS backendMain=${backendMain} nodePath=${nodePath}\n`);
 
     // D-119/D-120 (05-03): the startup identity sentinel. Written once per
     // launch, from the SAME accessor the diagnostics layer's show global
@@ -195,15 +195,15 @@ document.addEventListener(
     // rendered surface can never disagree. Deterministic and headless-safe
     // -- unlike the diagnostics sentinel above, this never depends on the
     // chord or a chrome driver.
-    dump(`SOURCERER_APP_IDENTITY ${JSON.stringify(SourcererAPI.getAppIdentity())}\n`);
+    dump(`POWERBROWSER_APP_IDENTITY ${JSON.stringify(PowerBrowserAPI.getAppIdentity())}\n`);
 
     // 04-04: hand off to the backend supervisor. The shell-ready sentinel
     // above is already written -- nothing in this spawn path may run
     // before it.
-    const { TheiaService } = ChromeUtils.importESModule("chrome://sourcerer/content/TheiaService.sys.mjs");
+    const { TheiaService } = ChromeUtils.importESModule("chrome://powerbrowser/content/TheiaService.sys.mjs");
     // Announce shell readiness the way Firefox's own chrome does, so WebDriver
     // will create a session against the shell window.
-    SourcererAPI.notifyStartupFinished(window);
+    PowerBrowserAPI.notifyStartupFinished(window);
 
     TheiaService.start(browserElement);
 
@@ -213,15 +213,15 @@ document.addEventListener(
     // Ctrl+L, ...) use, not a raw keydown listener (RESEARCH.md Pattern 6).
     // Research confirmed zero three-modifier chords are claimed anywhere in
     // the pinned Theia packages. The same chord closes the layer when it is
-    // already open (sourcererShowDiagnostics's own toggle).
+    // already open (powerbrowserShowDiagnostics's own toggle).
     const diagnosticsKeyset = document.createXULElement("keyset");
     const diagnosticsKey = document.createXULElement("key");
-    diagnosticsKey.setAttribute("id", "sourcerer-diagnostics-key");
+    diagnosticsKey.setAttribute("id", "powerbrowser-diagnostics-key");
     diagnosticsKey.setAttribute("modifiers", "accel,alt,shift");
     diagnosticsKey.setAttribute("key", "D");
     diagnosticsKey.setAttribute("reserved", "true");
     diagnosticsKey.addEventListener("command", () => {
-      window.sourcererShowDiagnostics();
+      window.powerbrowserShowDiagnostics();
     });
     diagnosticsKeyset.appendChild(diagnosticsKey);
     document.documentElement.appendChild(diagnosticsKeyset);

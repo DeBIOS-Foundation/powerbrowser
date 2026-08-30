@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
- * D-96: TheiaService is a *consumer* of the SourcererAPI boundary, not a
+ * D-96: TheiaService is a *consumer* of the PowerBrowserAPI boundary, not a
  * second one -- it imports nothing else. Supervises the Theia backend
  * sidecar: mint token -> resolve sidecar location -> spawn -> watch stdout
  * for the ready sentinel -> health-gate -> set cookie -> swap (Task 1);
@@ -13,12 +13,12 @@
  * a file.
  */
 
-const { SourcererAPI } = ChromeUtils.importESModule("chrome://sourcerer/content/SourcererAPI.sys.mjs");
+const { PowerBrowserAPI } = ChromeUtils.importESModule("chrome://powerbrowser/content/PowerBrowserAPI.sys.mjs");
 
-const HEALTH_PATH = "/sourcerer/health";
+const HEALTH_PATH = "/powerbrowser/health";
 
 // Discretionary constants (plan 04-04 recorded_decisions) -- no pref exists
-// for these (04-03's sourcerer-sidecar.js ships only the health/timeout/
+// for these (04-03's powerbrowser-sidecar.js ships only the health/timeout/
 // grace/log-buffer prefs), so they stay literal here.
 const RESTART_BACKOFF_INITIAL_MS = 500;
 const RESTART_BACKOFF_CAP_MS = 5000;
@@ -75,7 +75,7 @@ export const TheiaService = {
    * the sidecar, spawn it on port 0, wait for the ready sentinel and a
    * passing health probe, set the token cookie, then swap the browser
    * element onto the backend's URL. Window show never waited on this --
-   * sourcerer.js already wrote SOURCERER_SHELL_READY before calling here.
+   * powerbrowser.js already wrote POWERBROWSER_SHELL_READY before calling here.
    */
   async start(browserElement) {
     // D-121: the supervisor's own idempotency guard -- refuses to start
@@ -103,7 +103,7 @@ export const TheiaService = {
     }
 
     this._configDir = this._resolveConfigDir();
-    await SourcererAPI.ensureDirectory(this._configDir);
+    await PowerBrowserAPI.ensureDirectory(this._configDir);
     // CR-01 fix (05-REVIEW.md): the state file name itself carries a
     // profile-scoped suffix -- _configDir stays exactly as before (it also
     // backs THEIA_CONFIG_DIR below, unrelated to this fix and out of
@@ -116,7 +116,7 @@ export const TheiaService = {
     // D-105: observe the topic that fires once quit is final and can no
     // longer be cancelled -- beginning an irreversible shutdown under a
     // quit that gets aborted would kill a backend the user still wants.
-    SourcererAPI.onQuitGranted(() => this.stop());
+    PowerBrowserAPI.onQuitGranted(() => this.stop());
 
     // SIDE-04: reap a verified leftover from a previous crashed launch
     // BEFORE this session's own first spawn -- a leftover recorded in the
@@ -128,7 +128,7 @@ export const TheiaService = {
     // SHELL-03: the very first spawn attempt is folded into _restart()'s
     // own bounded give-up loop (D-103 was Phase 4's indefinite-retry
     // default) rather than being a separate uncounted attempt outside the
-    // budget -- `sourcerer.sidecar.giveUpAttempts` is the TOTAL number of
+    // budget -- `powerbrowser.sidecar.giveUpAttempts` is the TOTAL number of
     // spawn attempts this launch gets, first attempt included.
     // `_spawnAndGate`'s own success path (cookie + swap + health loop)
     // fires exactly once, on whichever attempt first succeeds.
@@ -149,9 +149,9 @@ export const TheiaService = {
     this._shuttingDown = true;
 
     if (this._proc && this._proc.exitCode == null) {
-      const graceMs = SourcererAPI.getIntPref("sourcerer.sidecar.killGraceMs", 3000);
+      const graceMs = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.killGraceMs", 3000);
       try {
-        await SourcererAPI.killProcess(this._proc, graceMs);
+        await PowerBrowserAPI.killProcess(this._proc, graceMs);
       } catch {
         // Already exited.
       }
@@ -164,7 +164,7 @@ export const TheiaService = {
     // signals nothing.
     if (this._stateFilePath) {
       try {
-        await SourcererAPI.removeStateFile(this._stateFilePath);
+        await PowerBrowserAPI.removeStateFile(this._stateFilePath);
       } catch {
         // Best-effort: removeStateFile already tolerates an absent file;
         // anything else here is not worth blocking shutdown over.
@@ -196,22 +196,22 @@ export const TheiaService = {
    * case.
    */
   async _resolveSidecar() {
-    this._backendMain = SourcererAPI.getStringPref("sourcerer.sidecar.backendMain", "");
+    this._backendMain = PowerBrowserAPI.getStringPref("powerbrowser.sidecar.backendMain", "");
     if (!this._backendMain) {
-      const reason = "sourcerer.sidecar.backendMain is unset -- cannot locate the Theia backend entry file.";
+      const reason = "powerbrowser.sidecar.backendMain is unset -- cannot locate the Theia backend entry file.";
       this._fatal(reason);
       return { ok: false, reason };
     }
-    if (!(await SourcererAPI.pathExists(this._backendMain))) {
-      const reason = `sourcerer.sidecar.backendMain (${this._backendMain}) does not exist -- cannot locate the Theia backend entry file.`;
+    if (!(await PowerBrowserAPI.pathExists(this._backendMain))) {
+      const reason = `powerbrowser.sidecar.backendMain (${this._backendMain}) does not exist -- cannot locate the Theia backend entry file.`;
       this._fatal(reason);
       return { ok: false, reason };
     }
 
-    const configured = SourcererAPI.getStringPref("sourcerer.sidecar.nodePath", "");
-    this._nodePath = configured || (await SourcererAPI.pathSearch("node"));
+    const configured = PowerBrowserAPI.getStringPref("powerbrowser.sidecar.nodePath", "");
+    this._nodePath = configured || (await PowerBrowserAPI.pathSearch("node"));
     if (!this._nodePath) {
-      const reason = "Could not resolve a Node executable -- set sourcerer.sidecar.nodePath or add node to PATH.";
+      const reason = "Could not resolve a Node executable -- set powerbrowser.sidecar.nodePath or add node to PATH.";
       this._fatal(reason);
       return { ok: false, reason };
     }
@@ -220,16 +220,16 @@ export const TheiaService = {
   },
 
   _resolveConfigDir() {
-    const xdg = SourcererAPI.getEnv("XDG_CONFIG_HOME");
-    const home = SourcererAPI.getEnv("HOME");
+    const xdg = PowerBrowserAPI.getEnv("XDG_CONFIG_HOME");
+    const home = PowerBrowserAPI.getEnv("HOME");
     const base = xdg || `${home}/.config`;
-    return `${base}/sourcerer`;
+    return `${base}/powerbrowser`;
   },
 
   /**
    * CR-01 fix (05-REVIEW.md): a filesystem-safe key derived from this
    * launch's own profile directory (ProfD), used to suffix the state file
-   * name so two Sourcerer instances running under different `--profile`
+   * name so two PowerBrowser instances running under different `--profile`
    * paths never share one `sidecar-state.json` -- previously
    * `_resolveConfigDir()` was keyed only on `XDG_CONFIG_HOME`/`HOME`, so
    * every instance under the same OS user read and wrote the exact same
@@ -246,7 +246,7 @@ export const TheiaService = {
    * crashing startup.
    */
   _profileStateKey() {
-    const profileDir = SourcererAPI.getProfileDir();
+    const profileDir = PowerBrowserAPI.getProfileDir();
     return profileDir ? profileDir.replace(/[^a-zA-Z0-9]+/g, "_") : "default";
   },
 
@@ -260,24 +260,24 @@ export const TheiaService = {
    * this returns without ever calling signalBarePid, no escalation.
    *
    * SIDE-04 empty edge: an absent, zero-byte, or malformed state file
-   * resolves via `SourcererAPI.readStateFile` to `null` (never throws) --
+   * resolves via `PowerBrowserAPI.readStateFile` to `null` (never throws) --
    * this returns silently and start()'s normal spawn sequence proceeds
    * exactly as it does today.
    */
   async _reapLeftover() {
-    const record = await SourcererAPI.readStateFile(this._stateFilePath);
+    const record = await PowerBrowserAPI.readStateFile(this._stateFilePath);
     if (!record || typeof record.pid !== "number") {
       return;
     }
 
-    const alive = SourcererAPI.signalBarePid(record.pid, /* signal 0: liveness only */ 0);
+    const alive = PowerBrowserAPI.signalBarePid(record.pid, /* signal 0: liveness only */ 0);
     if (!alive) {
       this._reapLog(`Leftover state file named pid ${record.pid}, already gone -- removing stale state file.`);
       await this._removeStateFileQuietly();
       return;
     }
 
-    const observedTicks = await SourcererAPI.readProcessStartTicks(record.pid);
+    const observedTicks = await PowerBrowserAPI.readProcessStartTicks(record.pid);
     if (observedTicks === null || observedTicks !== record.startTicks) {
       // Recycled-pid footgun (D-111): pid is alive, but it is NOT the
       // process this project recorded. Never signal it.
@@ -290,7 +290,7 @@ export const TheiaService = {
     }
 
     const SIGTERM = 15;
-    const signalled = SourcererAPI.signalBarePid(record.pid, SIGTERM);
+    const signalled = PowerBrowserAPI.signalBarePid(record.pid, SIGTERM);
     if (!signalled) {
       this._reapLog(`Leftover pid ${record.pid} (verified identity match) could not be signalled with SIGTERM.`);
       await this._removeStateFileQuietly();
@@ -301,10 +301,10 @@ export const TheiaService = {
     // state file is removed either way below), just makes the reap
     // outcome observable in the log without an unbounded wait.
     const deadline = Date.now() + 3000;
-    let stillAlive = SourcererAPI.signalBarePid(record.pid, 0);
+    let stillAlive = PowerBrowserAPI.signalBarePid(record.pid, 0);
     while (stillAlive && Date.now() < deadline) {
-      await SourcererAPI.sleep(100);
-      stillAlive = SourcererAPI.signalBarePid(record.pid, 0);
+      await PowerBrowserAPI.sleep(100);
+      stillAlive = PowerBrowserAPI.signalBarePid(record.pid, 0);
     }
 
     if (stillAlive) {
@@ -324,12 +324,12 @@ export const TheiaService = {
    */
   _reapLog(message) {
     this._pushLog(message);
-    SourcererAPI.log("log", `[TheiaService] ${message}`);
+    PowerBrowserAPI.log("log", `[TheiaService] ${message}`);
   },
 
   async _removeStateFileQuietly() {
     try {
-      await SourcererAPI.removeStateFile(this._stateFilePath);
+      await PowerBrowserAPI.removeStateFile(this._stateFilePath);
     } catch {
       // Best-effort; removeStateFile already tolerates an absent file.
     }
@@ -362,13 +362,13 @@ export const TheiaService = {
     // legible to a co-resident process. `this._token` is therefore handed over
     // the stdin pipe instead, immediately after the spawn below.
     //
-    // The remaining SOURCERER_* variables are a one-way handshake into the
+    // The remaining POWERBROWSER_* variables are a one-way handshake into the
     // backend PROCESS, not something its children may see: the backend
-    // captures and deletes every SOURCERER_*-prefixed key from its own
+    // captures and deletes every POWERBROWSER_*-prefixed key from its own
     // process.env at module load
-    // (theia/extensions/token-gate/src/node/sourcerer-env.ts), because Node
+    // (theia/extensions/token-gate/src/node/powerbrowser-env.ts), because Node
     // hands process.env to every child -- terminals, tasks, the plugin host
-    // running third-party extensions. Do not add a SOURCERER_* key here
+    // running third-party extensions. Do not add a POWERBROWSER_* key here
     // expecting a grandchild to read it, and do not add one carrying a secret
     // at all.
     const environment = {
@@ -381,8 +381,8 @@ export const TheiaService = {
       // reasons: `yarn start`, `scripts/smoke-theia.sh`, and
       // verify-phase-04.sh's own start_backend (stdin redirected from
       // /dev/null). Only this supervisor's spawn sets it.
-      SOURCERER_SUPERVISED: "1",
-      // SourcererAPI.spawnProcess uses environmentAppend:true, so the child
+      POWERBROWSER_SUPERVISED: "1",
+      // PowerBrowserAPI.spawnProcess uses environmentAppend:true, so the child
       // inherits this process's own environment and anything already exported
       // in the shell that launched the browser comes along. The token gate's
       // named dev bypass must therefore be cleared EXPLICITLY here: inherited,
@@ -393,12 +393,12 @@ export const TheiaService = {
       // rather than belt-and-braces now that the backend captures the value
       // at module load: an inherited "1" would be captured before the scrub
       // and would disable the gate for that whole process lifetime.
-      SOURCERER_TOKEN_DISABLE: "",
+      POWERBROWSER_TOKEN_DISABLE: "",
     };
 
     let proc;
     try {
-      proc = await SourcererAPI.spawnProcess({ command: this._nodePath, args, environment });
+      proc = await PowerBrowserAPI.spawnProcess({ command: this._nodePath, args, environment });
     } catch (err) {
       // D-113: the spawn() call itself throwing is unrecoverable -- a
       // platform-level failure to exec at all is never going to succeed on
@@ -418,12 +418,12 @@ export const TheiaService = {
     // above carries no token. One line, written once per spawn, on a pipe that
     // stays OPEN afterwards -- the backend's parent-death watchdog reads the
     // same fd for EOF, so closing it here would kill the backend on the spot.
-    // sourcerer-env.ts consumes exactly this line, byte-at-a-time up to the
+    // powerbrowser-env.ts consumes exactly this line, byte-at-a-time up to the
     // newline, before the token gate decides whether to fail closed. D-104 is
     // unaffected: every respawn writes the SAME this._token, so the cookie
     // chrome minted on the first spawn keeps authenticating.
     try {
-      await SourcererAPI.writeStdinLine(proc, this._token);
+      await PowerBrowserAPI.writeStdinLine(proc, this._token);
     } catch (err) {
       // The backend is now blocked reading a line that will never arrive, and
       // would sit there until the startup timeout. Reap it and report instead:
@@ -437,13 +437,13 @@ export const TheiaService = {
 
     const pinnedPort = firstSpawn ? null : this._port;
     const readyPromise = this._pumpOutput(proc, pinnedPort);
-    const startupTimeoutMs = SourcererAPI.getIntPref("sourcerer.sidecar.startupTimeoutMs", 90000);
+    const startupTimeoutMs = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.startupTimeoutMs", 90000);
 
     let ready;
     try {
       ready = await Promise.race([
         readyPromise,
-        SourcererAPI.sleep(startupTimeoutMs).then(() => null),
+        PowerBrowserAPI.sleep(startupTimeoutMs).then(() => null),
       ]);
     } catch (err) {
       // D-112: `_pumpOutput` marks a pinned-port-conflict rejection with
@@ -460,7 +460,7 @@ export const TheiaService = {
     }
 
     if (!ready) {
-      const reason = `Backend did not announce SOURCERER_BACKEND_READY within ${startupTimeoutMs}ms.`;
+      const reason = `Backend did not announce POWERBROWSER_BACKEND_READY within ${startupTimeoutMs}ms.`;
       this._fatal(reason);
       return { ok: false, recoverable: true, reason };
     }
@@ -471,12 +471,12 @@ export const TheiaService = {
     // D-110: record this spawn in the state file on EVERY successful spawn,
     // first and respawn alike -- a crash after a restart must still leave
     // an accurate record for the next startup's _reapLeftover() to find.
-    // Read via SourcererAPI.readProcessStartTicks (the same field-22
+    // Read via PowerBrowserAPI.readProcessStartTicks (the same field-22
     // /proc/<pid>/stat reader _reapLeftover() uses to verify identity
     // later), so writer and reader always agree on format.
-    const startTicks = await SourcererAPI.readProcessStartTicks(this._pid);
+    const startTicks = await PowerBrowserAPI.readProcessStartTicks(this._pid);
     try {
-      await SourcererAPI.writeStateFile(this._stateFilePath, {
+      await PowerBrowserAPI.writeStateFile(this._stateFilePath, {
         pid: this._pid,
         port: this._port,
         startTicks,
@@ -490,8 +490,8 @@ export const TheiaService = {
       this._pushLog(`Failed to write sidecar state file: ${err.message}`);
     }
 
-    const healthIntervalStartupMs = SourcererAPI.getIntPref("sourcerer.sidecar.healthIntervalStartupMs", 250);
-    const healthTimeoutMs = SourcererAPI.getIntPref("sourcerer.sidecar.healthTimeoutMs", 4000);
+    const healthIntervalStartupMs = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.healthIntervalStartupMs", 250);
+    const healthTimeoutMs = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.healthTimeoutMs", 4000);
     const healthy = await this._pollUntilHealthy(startupTimeoutMs, healthIntervalStartupMs, healthTimeoutMs);
     if (!healthy) {
       const reason = `Health probe on port ${this._port} never returned 200 within ${startupTimeoutMs}ms.`;
@@ -502,10 +502,10 @@ export const TheiaService = {
     this._healthy = true;
 
     if (firstSpawn) {
-      SourcererAPI.setSessionCookie({
+      PowerBrowserAPI.setSessionCookie({
         host: "127.0.0.1",
         path: "/",
-        name: "SOURCERER_TOKEN",
+        name: "POWERBROWSER_TOKEN",
         value: this._token,
       });
       this._swap();
@@ -534,13 +534,13 @@ export const TheiaService = {
     let consecutiveFailures = 0;
 
     while (!this._shuttingDown) {
-      const steadyIntervalMs = SourcererAPI.getIntPref("sourcerer.sidecar.healthIntervalSteadyMs", 5000);
-      await SourcererAPI.sleep(steadyIntervalMs);
+      const steadyIntervalMs = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.healthIntervalSteadyMs", 5000);
+      await PowerBrowserAPI.sleep(steadyIntervalMs);
       if (this._shuttingDown) {
         break;
       }
 
-      const healthTimeoutMs = SourcererAPI.getIntPref("sourcerer.sidecar.healthTimeoutMs", 4000);
+      const healthTimeoutMs = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.healthTimeoutMs", 4000);
       const ok = await this._probeHealth(healthTimeoutMs);
       if (this._shuttingDown) {
         break;
@@ -572,7 +572,7 @@ export const TheiaService = {
    * readiness stream classified unrecoverable -- D-112's stolen pinned
    * port) gives up immediately with no wait at all; a recoverable one keeps
    * retrying until the attempt cap or the wall-clock ceiling trips,
-   * whichever comes first (`sourcerer.sidecar.giveUpAttempts`/
+   * whichever comes first (`powerbrowser.sidecar.giveUpAttempts`/
    * `giveUpWallclockMs`). Either give-up path calls `_showError`; a
    * successful spawn calls `_hideError`.
    *
@@ -607,8 +607,8 @@ export const TheiaService = {
       let backoffMs = RESTART_BACKOFF_INITIAL_MS;
       this._pushLog(`Restarting backend (attempt ${this._restartCount}).`);
 
-      const giveUpAttempts = SourcererAPI.getIntPref("sourcerer.sidecar.giveUpAttempts", 6);
-      const giveUpWallclockMs = SourcererAPI.getIntPref("sourcerer.sidecar.giveUpWallclockMs", 45000);
+      const giveUpAttempts = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.giveUpAttempts", 6);
+      const giveUpWallclockMs = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.giveUpWallclockMs", 45000);
       const deadline = Date.now() + giveUpWallclockMs;
       let attempts = 0;
 
@@ -646,7 +646,7 @@ export const TheiaService = {
         }
 
         this._pushLog(`Respawn attempt failed; waiting ${backoffMs}ms before retrying.`);
-        await SourcererAPI.sleep(backoffMs);
+        await PowerBrowserAPI.sleep(backoffMs);
         backoffMs = Math.min(backoffMs * 2, RESTART_BACKOFF_CAP_MS);
       }
     } finally {
@@ -671,7 +671,7 @@ export const TheiaService = {
   /**
    * D-115: a slow background probe, started when the error state is
    * entered (`_showError`) and stopped when it clears (`_hideError`). Fires
-   * no sooner than `sourcerer.sidecar.recoveryProbeIntervalMs` after
+   * no sooner than `powerbrowser.sidecar.recoveryProbeIntervalMs` after
    * entering the error state, and takes the exact same recovery path Retry
    * does (`_restart()`, sharing its `_restartInFlight` guard) -- so a
    * backend whose failure condition has cleared on its own (D-112's port
@@ -680,8 +680,8 @@ export const TheiaService = {
    */
   async _recoveryProbeLoop() {
     while (this._recoveryProbeActive && !this._shuttingDown) {
-      const intervalMs = SourcererAPI.getIntPref("sourcerer.sidecar.recoveryProbeIntervalMs", 15000);
-      await SourcererAPI.sleep(intervalMs);
+      const intervalMs = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.recoveryProbeIntervalMs", 15000);
+      await PowerBrowserAPI.sleep(intervalMs);
       if (!this._recoveryProbeActive || this._shuttingDown) {
         return;
       }
@@ -722,7 +722,7 @@ export const TheiaService = {
     }
     this._errorShown = true;
     this._pushLog(`Showing error state (recoverable=${recoverable}): ${reason}`);
-    this._browserElement.ownerDocument.defaultView.sourcererShowError({ reason, recoverable });
+    this._browserElement.ownerDocument.defaultView.powerbrowserShowError({ reason, recoverable });
     this._startRecoveryProbe();
   },
 
@@ -733,15 +733,15 @@ export const TheiaService = {
     }
     this._errorShown = false;
     this._stopRecoveryProbe();
-    this._browserElement.ownerDocument.defaultView.sourcererHideError();
+    this._browserElement.ownerDocument.defaultView.powerbrowserHideError();
   },
 
   /** Kills the current process handle, if it's still alive, and clears it. */
   async _reap() {
     if (this._proc && this._proc.exitCode == null) {
-      const graceMs = SourcererAPI.getIntPref("sourcerer.sidecar.killGraceMs", 3000);
+      const graceMs = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.killGraceMs", 3000);
       try {
-        await SourcererAPI.killProcess(this._proc, graceMs);
+        await PowerBrowserAPI.killProcess(this._proc, graceMs);
       } catch {
         // Already exited, or the platform kill failed on an already-dead
         // handle -- nothing more to do either way.
@@ -756,7 +756,7 @@ export const TheiaService = {
    * running after the ready sentinel is found (the returned promise settles
    * once, but the pumps themselves are not stopped) so ongoing backend
    * output during the steady state and any later restart also lands in the
-   * log. Resolves `{port, pid}` parsed from the SOURCERER_BACKEND_READY
+   * log. Resolves `{port, pid}` parsed from the POWERBROWSER_BACKEND_READY
    * line; rejects if both pipes close without ever finding it.
    *
    * `pinnedPort`, when non-null, is D-104's restart invariant: a
@@ -775,14 +775,14 @@ export const TheiaService = {
 
     const handleLine = line => {
       this._pushLog(line);
-      SourcererAPI.log("log", line);
+      PowerBrowserAPI.log("log", line);
 
-      if (settled || !line.startsWith("SOURCERER_BACKEND_READY")) {
+      if (settled || !line.startsWith("POWERBROWSER_BACKEND_READY")) {
         return;
       }
       let parsed;
       try {
-        parsed = JSON.parse(line.slice("SOURCERER_BACKEND_READY".length).trim());
+        parsed = JSON.parse(line.slice("POWERBROWSER_BACKEND_READY".length).trim());
       } catch {
         return;
       }
@@ -816,7 +816,7 @@ export const TheiaService = {
       for (;;) {
         let chunk;
         try {
-          chunk = await SourcererAPI.readPipeChunk(proc, which);
+          chunk = await PowerBrowserAPI.readPipeChunk(proc, which);
         } catch {
           break;
         }
@@ -853,18 +853,18 @@ export const TheiaService = {
       if (Date.now() >= deadline) {
         return false;
       }
-      await SourcererAPI.sleep(intervalMs);
+      await PowerBrowserAPI.sleep(intervalMs);
     }
   },
 
   _probeHealth(timeoutMs) {
     const url = `http://127.0.0.1:${this._port}${HEALTH_PATH}`;
-    return SourcererAPI.probeHealth(url, this._token, timeoutMs);
+    return PowerBrowserAPI.probeHealth(url, this._token, timeoutMs);
   },
 
   /**
    * Hides the loading layer and navigates the browser element exactly
-   * once, via sourcerer.js's own exposed function (reached through the
+   * once, via powerbrowser.js's own exposed function (reached through the
    * browser element's owner window, not a Firefox-internal import).
    */
   _swap() {
@@ -872,23 +872,23 @@ export const TheiaService = {
       return;
     }
     this._swapped = true;
-    this._browserElement.ownerDocument.defaultView.sourcererSwapToUrl(`http://127.0.0.1:${this._port}/`);
+    this._browserElement.ownerDocument.defaultView.powerbrowserSwapToUrl(`http://127.0.0.1:${this._port}/`);
   },
 
   _fatal(message) {
     this._pushLog(`FATAL: ${message}`);
-    SourcererAPI.log("error", `[TheiaService] ${message}`);
+    PowerBrowserAPI.log("error", `[TheiaService] ${message}`);
   },
 
   /**
    * Buffers one line, oldest dropped first, sized from
-   * sourcerer.sidecar.logBufferLines. Timestamped (Date.now(), not the raw
+   * powerbrowser.sidecar.logBufferLines. Timestamped (Date.now(), not the raw
    * pipe text) so a restart's actual backoff gaps are independently
    * measurable from getRecentLog() alone -- the acceptance bar for the
    * backoff-is-observable check.
    */
   _pushLog(line) {
-    const max = SourcererAPI.getIntPref("sourcerer.sidecar.logBufferLines", 500);
+    const max = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.logBufferLines", 500);
     // MED-02 / WINDOWS.md 10: the diagnostics ring buffer is in-app reachable
     // (SHELL-04), so a line carrying the per-launch token (it arrives on
     // every request as a Cookie header, and _pumpOutput copies stdout here
@@ -896,7 +896,7 @@ export const TheiaService = {
     // load-bearing, not defensive: `_token` is null until start() mints it,
     // and `replaceAll(null, ...)` would match the literal string "null"
     // while `replaceAll("", ...)` splices the replacement between every
-    // character of the line. Scope boundary: the sibling SourcererAPI.log
+    // character of the line. Scope boundary: the sibling PowerBrowserAPI.log
     // mirror in _pumpOutput stays unredacted -- it goes to the browser's own
     // stdout, the same sink the text already came from, not a new surface.
     const safe = this._token ? line.replaceAll(this._token, "[redacted]") : line;

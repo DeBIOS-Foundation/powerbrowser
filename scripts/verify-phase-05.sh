@@ -15,7 +15,7 @@
 #
 # Task 1 registers side04-sigkill-no-orphan and
 # side04-unsupervised-backend-survives, both outside --quick (they launch
-# the built objdir/dist/bin/sourcerer binary or spawn the Node backend
+# the built objdir/dist/bin/powerbrowser binary or spawn the Node backend
 # directly). Task 2 appends side04-leftover-reaped and
 # side04-stale-identity-not-signalled, also outside --quick.
 #
@@ -73,7 +73,7 @@ track_temp() { TEMP_PATHS+=("$1"); }
 # script makes that doesn't explicitly override it (CR-01's plant_leftover
 # still points its own launches at its own parent dir via
 # VERIFY05_XDG_CONFIG_HOME). Without this, TheiaService._resolveConfigDir()
-# falls through to the real $HOME/.config/sourcerer and litters it with one
+# falls through to the real $HOME/.config/powerbrowser and litters it with one
 # sidecar-state-<profile>.json per mktemp profile this harness ever used.
 # Exported (not just passed to start_shell/start_shell_display's own setsid
 # env) so scripts/lib/firefox-bidi.mjs's own child_process.spawn -- which
@@ -136,7 +136,7 @@ DISPLAY_IN_USE=""
 # otherwise mint internally.
 start_shell() {
   local profile_override="${1:-}"
-  local bin="$REPO_ROOT/objdir/dist/bin/sourcerer"
+  local bin="$REPO_ROOT/objdir/dist/bin/powerbrowser"
   if [ ! -x "$bin" ]; then
     echo "start_shell: FAIL -- $bin does not exist or is not executable (run the Phase 1 Firefox build first)" >&2
     return 1
@@ -170,26 +170,26 @@ stop_shell() {
 }
 
 # Byte offset (not line number) of the first line beginning with the given
-# literal prefix, or empty if absent. Tolerates the SourcererAPI.log()
-# mirror prefix "[SourcererAPI] <level>: " exactly like verify-phase-04.sh's
+# literal prefix, or empty if absent. Tolerates the PowerBrowserAPI.log()
+# mirror prefix "[PowerBrowserAPI] <level>: " exactly like verify-phase-04.sh's
 # own helper.
 first_byte_offset() {
-  grep -abom1 -E "^(\\[SourcererAPI\\] [a-z]+: )?$1" "$2" 2>/dev/null | cut -d: -f1
+  grep -abom1 -E "^(\\[PowerBrowserAPI\\] [a-z]+: )?$1" "$2" 2>/dev/null | cut -d: -f1
 }
 
 # True (exit 0) when <log> contains a line beginning with the literal
-# prefix <1>, tolerating the same "[SourcererAPI] <level>: " mirror prefix
+# prefix <1>, tolerating the same "[PowerBrowserAPI] <level>: " mirror prefix
 # first_byte_offset does.
 sentinel_present() {
-  grep -qE "^(\\[SourcererAPI\\] [a-z]+: )?$1" "$2" 2>/dev/null
+  grep -qE "^(\\[PowerBrowserAPI\\] [a-z]+: )?$1" "$2" 2>/dev/null
 }
 
-# Every pid announced by a SOURCERER_BACKEND_READY sentinel in <log>, oldest
+# Every pid announced by a POWERBROWSER_BACKEND_READY sentinel in <log>, oldest
 # first, one per line.
 backend_ready_pids() {
-  sed -E 's/^\[SourcererAPI\] [a-z]+: //' "$1" 2>/dev/null \
-    | grep -E '^SOURCERER_BACKEND_READY ' \
-    | sed -E 's/^SOURCERER_BACKEND_READY //' \
+  sed -E 's/^\[PowerBrowserAPI\] [a-z]+: //' "$1" 2>/dev/null \
+    | grep -E '^POWERBROWSER_BACKEND_READY ' \
+    | sed -E 's/^POWERBROWSER_BACKEND_READY //' \
     | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{for(const l of s.split("\n")){if(!l.trim())continue;try{const j=JSON.parse(l);if(typeof j.pid==="number")console.log(j.pid)}catch{}}})' 2>/dev/null
 }
 
@@ -200,12 +200,12 @@ pgid_of() {
 
 # Hermetic replacement for a machine-wide `pgrep -f 'backend/main.js'`:
 # considers ONLY backends inside process groups this run created. A backend
-# inherits its browser's process group (SourcererAPI's Subprocess does not
+# inherits its browser's process group (PowerBrowserAPI's Subprocess does not
 # setsid the child, so browser and backend report the same PGID -- verified
 # live against a running instance) and keeps that group after the browser
 # dies, so the group is a stable, run-scoped identity for exactly the orphan
 # these checks hunt. An unscoped pattern match instead fails on any machine
-# that has a Sourcerer open -- which is the state a phase-5 session itself
+# that has a PowerBrowser open -- which is the state a phase-5 session itself
 # leaves behind, making the gate unreproducible on a developer box.
 # $1: comma-separated pgid list. Prints "pid cmdline" lines, one per match.
 backends_in_groups() {
@@ -302,7 +302,7 @@ start_shell_display() {
     display_to_use=":$XVFB_DISPLAY_NUM"
   fi
 
-  local bin="$REPO_ROOT/objdir/dist/bin/sourcerer"
+  local bin="$REPO_ROOT/objdir/dist/bin/powerbrowser"
   if [ ! -x "$bin" ]; then
     echo "start_shell_display: FAIL -- $bin does not exist or is not executable (run the Phase 1 Firefox build first)" >&2
     stop_virtual_display
@@ -333,7 +333,7 @@ stop_shell_display() {
   stop_virtual_display
 }
 
-# Launches through start_shell_display(), asserts SOURCERER_SHELL_READY
+# Launches through start_shell_display(), asserts POWERBROWSER_SHELL_READY
 # appears within a bounded poll, and stops it -- a display that cannot be
 # obtained at all is a named FAIL (start_shell_display's propagated 1/2),
 # never a skip and never a pass.
@@ -349,16 +349,16 @@ check_harness_display_available() {
 
   local deadline=$((SECONDS + 30))
   while [ "$SECONDS" -lt "$deadline" ]; do
-    sentinel_present 'SOURCERER_SHELL_READY' "$BROWSER_LOG" && { stop_shell_display; return 0; }
+    sentinel_present 'POWERBROWSER_SHELL_READY' "$BROWSER_LOG" && { stop_shell_display; return 0; }
     if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
-      echo "harness-display-available: FAIL -- browser process exited before SOURCERER_SHELL_READY appeared; log:" >&2
+      echo "harness-display-available: FAIL -- browser process exited before POWERBROWSER_SHELL_READY appeared; log:" >&2
       cat "$BROWSER_LOG" >&2
       stop_shell_display
       return 1
     fi
     sleep 0.5
   done
-  echo "harness-display-available: FAIL -- SOURCERER_SHELL_READY did not appear within 30s; log:" >&2
+  echo "harness-display-available: FAIL -- POWERBROWSER_SHELL_READY did not appear within 30s; log:" >&2
   cat "$BROWSER_LOG" >&2
   stop_shell_display
   return 1
@@ -376,7 +376,7 @@ check_harness_display_available() {
 # already-terminated child returns immediately rather than blocking, so
 # this never stalls. Without this, D-125's own planted process would sit
 # as an unreaped zombie until this script's unplant_leftover() finally
-# calls `wait` at cleanup time, and kill(pid,0) (SourcererAPI.signalBarePid's
+# calls `wait` at cleanup time, and kill(pid,0) (PowerBrowserAPI.signalBarePid's
 # liveness re-check, same zombie-blind gotcha) would see it as "still
 # alive" from the browser's side for however long that takes -- exactly
 # the false-alive race this helper exists to avoid. `wait` on a pid this
@@ -414,17 +414,17 @@ check_side04_sigkill_no_orphan() {
 
   local deadline=$((SECONDS + 60))
   while [ "$SECONDS" -lt "$deadline" ]; do
-    sentinel_present 'SOURCERER_BACKEND_READY ' "$BROWSER_LOG" && break
+    sentinel_present 'POWERBROWSER_BACKEND_READY ' "$BROWSER_LOG" && break
     if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
-      echo "side04-sigkill-no-orphan: FAIL -- SIDE-04 -- browser process exited before SOURCERER_BACKEND_READY appeared; log:" >&2
+      echo "side04-sigkill-no-orphan: FAIL -- SIDE-04 -- browser process exited before POWERBROWSER_BACKEND_READY appeared; log:" >&2
       cat "$BROWSER_LOG" >&2
       stop_shell
       return 1
     fi
     sleep 0.5
   done
-  if ! sentinel_present 'SOURCERER_BACKEND_READY ' "$BROWSER_LOG"; then
-    echo "side04-sigkill-no-orphan: FAIL -- SIDE-04 -- SOURCERER_BACKEND_READY did not appear within 60s; log:" >&2
+  if ! sentinel_present 'POWERBROWSER_BACKEND_READY ' "$BROWSER_LOG"; then
+    echo "side04-sigkill-no-orphan: FAIL -- SIDE-04 -- POWERBROWSER_BACKEND_READY did not appear within 60s; log:" >&2
     cat "$BROWSER_LOG" >&2
     stop_shell
     return 1
@@ -433,7 +433,7 @@ check_side04_sigkill_no_orphan() {
   local backend_pid
   backend_pid="$(backend_ready_pids "$BROWSER_LOG" | head -1)"
   if [ -z "$backend_pid" ]; then
-    echo "side04-sigkill-no-orphan: FAIL -- SIDE-04 -- could not read a pid from SOURCERER_BACKEND_READY in the browser log" >&2
+    echo "side04-sigkill-no-orphan: FAIL -- SIDE-04 -- could not read a pid from POWERBROWSER_BACKEND_READY in the browser log" >&2
     stop_shell
     return 1
   fi
@@ -490,7 +490,7 @@ check_side04_sigkill_no_orphan() {
 }
 
 # D-109's negative control: a backend started directly (no supervisor, no
-# SOURCERER_SUPERVISED marker) with stdin redirected from /dev/null must
+# POWERBROWSER_SUPERVISED marker) with stdin redirected from /dev/null must
 # NOT self-terminate. Proves the watchdog cannot break yarn start,
 # smoke-theia.sh, or verify-phase-04.sh's own start_backend.
 check_side04_unsupervised_backend_survives() {
@@ -500,11 +500,11 @@ check_side04_unsupervised_backend_survives() {
 
   # -u, not just the assignments below: this is the NEGATIVE control, so it
   # must supply the marker's absence rather than inherit it. A harness run
-  # from a shell that exported SOURCERER_SUPERVISED (or the dev bypass) would
+  # from a shell that exported POWERBROWSER_SUPERVISED (or the dev bypass) would
   # otherwise arm the very watchdog this check proves stays inert, and fail
   # for a reason that has nothing to do with the code under test.
-  setsid env -u SOURCERER_SUPERVISED -u SOURCERER_TOKEN_DISABLE \
-    SOURCERER_TOKEN="$token" \
+  setsid env -u POWERBROWSER_SUPERVISED -u POWERBROWSER_TOKEN_DISABLE \
+    POWERBROWSER_TOKEN="$token" \
     THEIA_CONFIG_DIR="$(mktemp -d)" \
     VSX_REGISTRY_URL="https://open-vsx.org" \
     nix develop "$REPO_ROOT#theia" --command \
@@ -540,7 +540,7 @@ read_start_ticks() {
   }' "/proc/$1/stat" 2>/dev/null
 }
 
-# Mirrors TheiaService._profileStateKey() (sourcerer/shell/
+# Mirrors TheiaService._profileStateKey() (powerbrowser/shell/
 # TheiaService.sys.mjs) byte-for-byte: the CR-01 fix suffixes the sidecar
 # state file's name with a sanitized form of the launch's own resolved
 # profile directory path (Services.dirsvc.get("ProfD", ...).path), every
@@ -585,7 +585,7 @@ plant_leftover() {
 
   local parent
   parent="$(mktemp -d)"; track_temp "$parent"
-  PLANTED_CONFIG_DIR="$parent/sourcerer"
+  PLANTED_CONFIG_DIR="$parent/powerbrowser"
   mkdir -p "$PLANTED_CONFIG_DIR"
 
   PLANTED_PROFILE_DIR="$(mktemp -d)"; track_temp "$PLANTED_PROFILE_DIR"
@@ -692,7 +692,7 @@ check_side04_stale_identity_not_signalled() {
   local deadline=$((SECONDS + 20))
   while [ "$SECONDS" -lt "$deadline" ]; do
     grep -qi 'startTicks' "$BROWSER_LOG" 2>/dev/null && break
-    sentinel_present 'SOURCERER_BACKEND_READY ' "$BROWSER_LOG" && break
+    sentinel_present 'POWERBROWSER_BACKEND_READY ' "$BROWSER_LOG" && break
     sleep 0.5
   done
 
@@ -728,13 +728,13 @@ check_side04_stale_identity_not_signalled() {
 # D-125-style positive control: the unrecoverable case must show NO
 # spawn-attempt-failure line at all, so this can never pass merely because
 # the recoverable-failure detection also happens to fire zero times.
-SPAWN_ATTEMPT_FAILURE_PATTERN='Backend output stream ended before announcing readiness|did not announce SOURCERER_BACKEND_READY within|Health probe on port .* never returned 200'
+SPAWN_ATTEMPT_FAILURE_PATTERN='Backend output stream ended before announcing readiness|did not announce POWERBROWSER_BACKEND_READY within|Health probe on port .* never returned 200'
 
 check_shell03_unrecoverable_immediate_error() {
   local user_js result=0
   user_js="$(mktemp)"; track_temp "$user_js"
   cat > "$user_js" <<'EOF'
-user_pref("sourcerer.sidecar.backendMain", "/nonexistent/sourcerer-verify-05/main.js");
+user_pref("powerbrowser.sidecar.backendMain", "/nonexistent/powerbrowser-verify-05/main.js");
 EOF
 
   export VERIFY05_USER_JS_PROFILE="$user_js"
@@ -748,7 +748,7 @@ EOF
 
   local deadline=$((SECONDS + 15))
   while [ "$SECONDS" -lt "$deadline" ]; do
-    sentinel_present 'SOURCERER_SHELL_ERROR ' "$BROWSER_LOG" && break
+    sentinel_present 'POWERBROWSER_SHELL_ERROR ' "$BROWSER_LOG" && break
     if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
       echo "shell03-unrecoverable-immediate-error: FAIL -- SHELL-03 -- browser exited before the error sentinel appeared; log:" >&2
       cat "$BROWSER_LOG" >&2
@@ -758,14 +758,14 @@ EOF
     sleep 0.25
   done
 
-  if ! sentinel_present 'SOURCERER_SHELL_ERROR ' "$BROWSER_LOG"; then
-    echo "shell03-unrecoverable-immediate-error: FAIL -- SHELL-03 -- SOURCERER_SHELL_ERROR did not appear within 15s; log:" >&2
+  if ! sentinel_present 'POWERBROWSER_SHELL_ERROR ' "$BROWSER_LOG"; then
+    echo "shell03-unrecoverable-immediate-error: FAIL -- SHELL-03 -- POWERBROWSER_SHELL_ERROR did not appear within 15s; log:" >&2
     cat "$BROWSER_LOG" >&2
     stop_shell
     return 1
   fi
 
-  if sentinel_present 'SOURCERER_SHELL_SWAP ' "$BROWSER_LOG"; then
+  if sentinel_present 'POWERBROWSER_SHELL_SWAP ' "$BROWSER_LOG"; then
     echo "shell03-unrecoverable-immediate-error: FAIL -- SHELL-03 -- launch log carries a swap sentinel; an unrecoverable failure must never reach it" >&2
     result=1
   fi
@@ -792,8 +792,8 @@ check_shell03_budget_exhausted_error() {
 
   user_js="$(mktemp)"; track_temp "$user_js"
   cat > "$user_js" <<EOF
-user_pref("sourcerer.sidecar.backendMain", "$crasher");
-user_pref("sourcerer.sidecar.giveUpAttempts", 2);
+user_pref("powerbrowser.sidecar.backendMain", "$crasher");
+user_pref("powerbrowser.sidecar.giveUpAttempts", 2);
 EOF
 
   export VERIFY05_USER_JS_PROFILE="$user_js"
@@ -807,7 +807,7 @@ EOF
 
   local deadline=$((SECONDS + 30))
   while [ "$SECONDS" -lt "$deadline" ]; do
-    sentinel_present 'SOURCERER_SHELL_ERROR ' "$BROWSER_LOG" && break
+    sentinel_present 'POWERBROWSER_SHELL_ERROR ' "$BROWSER_LOG" && break
     if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
       echo "shell03-budget-exhausted-error: FAIL -- SHELL-03 -- browser exited before the error sentinel appeared; log:" >&2
       cat "$BROWSER_LOG" >&2
@@ -817,17 +817,17 @@ EOF
     sleep 0.5
   done
 
-  if ! sentinel_present 'SOURCERER_SHELL_ERROR ' "$BROWSER_LOG"; then
-    echo "shell03-budget-exhausted-error: FAIL -- SHELL-03 -- SOURCERER_SHELL_ERROR did not appear within 30s; log:" >&2
+  if ! sentinel_present 'POWERBROWSER_SHELL_ERROR ' "$BROWSER_LOG"; then
+    echo "shell03-budget-exhausted-error: FAIL -- SHELL-03 -- POWERBROWSER_SHELL_ERROR did not appear within 30s; log:" >&2
     cat "$BROWSER_LOG" >&2
     stop_shell
     return 1
   fi
 
   # Every failed spawn attempt logs one "output stream ended" fatal line
-  # via SourcererAPI.log(), which Firefox's own console mirror duplicates
+  # via PowerBrowserAPI.log(), which Firefox's own console mirror duplicates
   # onto a second stdout line (dump() + console.error(), the established
-  # SourcererAPI.log() shape) -- divide by 2 for the true attempt count.
+  # PowerBrowserAPI.log() shape) -- divide by 2 for the true attempt count.
   local raw_lines attempt_count
   raw_lines="$(grep -cE "$SPAWN_ATTEMPT_FAILURE_PATTERN" "$BROWSER_LOG")"
   attempt_count=$((raw_lines / 2))
@@ -841,19 +841,19 @@ EOF
   # reached only once per launch -- guards _showError's _errorShown flag
   # against re-painting/re-emitting for the same state.
   local error_sentinel_count
-  error_sentinel_count="$(grep -c 'SOURCERER_SHELL_ERROR ' "$BROWSER_LOG")"
+  error_sentinel_count="$(grep -c 'POWERBROWSER_SHELL_ERROR ' "$BROWSER_LOG")"
   if [ "$error_sentinel_count" -ne 1 ]; then
-    echo "shell03-budget-exhausted-error: FAIL -- SHELL-03 -- expected exactly one SOURCERER_SHELL_ERROR sentinel, found $error_sentinel_count" >&2
+    echo "shell03-budget-exhausted-error: FAIL -- SHELL-03 -- expected exactly one POWERBROWSER_SHELL_ERROR sentinel, found $error_sentinel_count" >&2
     result=1
   fi
 
   # The sentinel's JSON must carry only reason + classification -- never
   # the per-launch token or any other key.
-  if ! grep -qE '^SOURCERER_SHELL_ERROR \{"reason":"[^"]*","recoverable":(true|false)\}$' "$BROWSER_LOG"; then
-    echo "shell03-budget-exhausted-error: FAIL -- SHELL-03 -- SOURCERER_SHELL_ERROR sentinel JSON does not match the expected {reason, recoverable} shape" >&2
+  if ! grep -qE '^POWERBROWSER_SHELL_ERROR \{"reason":"[^"]*","recoverable":(true|false)\}$' "$BROWSER_LOG"; then
+    echo "shell03-budget-exhausted-error: FAIL -- SHELL-03 -- POWERBROWSER_SHELL_ERROR sentinel JSON does not match the expected {reason, recoverable} shape" >&2
     result=1
   fi
-  if grep 'SOURCERER_SHELL_ERROR ' "$BROWSER_LOG" | grep -qi 'SOURCERER_TOKEN'; then
+  if grep 'POWERBROWSER_SHELL_ERROR ' "$BROWSER_LOG" | grep -qi 'POWERBROWSER_TOKEN'; then
     echo "shell03-budget-exhausted-error: FAIL -- SHELL-03 -- an error sentinel line mentions the token environment-variable name" >&2
     result=1
   fi
@@ -864,9 +864,9 @@ EOF
   # that does not work headless) would satisfy it forever. This run really
   # does put the error layer up, so its deck-state line must NOT say "none".
   local deck_error_line
-  deck_error_line="$(sed -E 's/^\[SourcererAPI\] [a-z]+: //' "$BROWSER_LOG" | grep -E '^SOURCERER_DECK_STATE .*"where":"error"' | head -1)"
+  deck_error_line="$(sed -E 's/^\[PowerBrowserAPI\] [a-z]+: //' "$BROWSER_LOG" | grep -E '^POWERBROWSER_DECK_STATE .*"where":"error"' | head -1)"
   if [ -z "$deck_error_line" ]; then
-    echo "shell03-budget-exhausted-error: FAIL -- SHELL-03 -- no SOURCERER_DECK_STATE sentinel accompanied the error sentinel" >&2
+    echo "shell03-budget-exhausted-error: FAIL -- SHELL-03 -- no POWERBROWSER_DECK_STATE sentinel accompanied the error sentinel" >&2
     result=1
   elif grep -q '"error":"none"' <<<"$deck_error_line"; then
     echo "shell03-budget-exhausted-error: FAIL -- SHELL-03 -- the error layer reports display:none while its own error sentinel was just written: $deck_error_line" >&2
@@ -911,10 +911,10 @@ EOF
 
   user_js="$(mktemp)"; track_temp "$user_js"
   cat > "$user_js" <<EOF
-user_pref("sourcerer.sidecar.backendMain", "$wrap_dir/main.js");
-user_pref("sourcerer.sidecar.giveUpAttempts", 1);
-user_pref("sourcerer.sidecar.healthIntervalSteadyMs", 1000);
-user_pref("sourcerer.sidecar.recoveryProbeIntervalMs", 2000);
+user_pref("powerbrowser.sidecar.backendMain", "$wrap_dir/main.js");
+user_pref("powerbrowser.sidecar.giveUpAttempts", 1);
+user_pref("powerbrowser.sidecar.healthIntervalSteadyMs", 1000);
+user_pref("powerbrowser.sidecar.recoveryProbeIntervalMs", 2000);
 EOF
 
   export VERIFY05_USER_JS_PROFILE="$user_js"
@@ -928,7 +928,7 @@ EOF
 
   local deadline=$((SECONDS + 40))
   while [ "$SECONDS" -lt "$deadline" ]; do
-    sentinel_present 'SOURCERER_SHELL_ERROR_CLEARED' "$BROWSER_LOG" && break
+    sentinel_present 'POWERBROWSER_SHELL_ERROR_CLEARED' "$BROWSER_LOG" && break
     if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
       echo "shell03-auto-dismiss-on-selfheal: FAIL -- SHELL-03 -- browser exited before the cleared sentinel appeared; log:" >&2
       cat "$BROWSER_LOG" >&2
@@ -938,14 +938,14 @@ EOF
     sleep 0.5
   done
 
-  if ! sentinel_present 'SOURCERER_SHELL_ERROR_CLEARED' "$BROWSER_LOG"; then
-    echo "shell03-auto-dismiss-on-selfheal: FAIL -- SHELL-03 -- SOURCERER_SHELL_ERROR_CLEARED did not appear within 40s (no input was ever sent to the window); log:" >&2
+  if ! sentinel_present 'POWERBROWSER_SHELL_ERROR_CLEARED' "$BROWSER_LOG"; then
+    echo "shell03-auto-dismiss-on-selfheal: FAIL -- SHELL-03 -- POWERBROWSER_SHELL_ERROR_CLEARED did not appear within 40s (no input was ever sent to the window); log:" >&2
     cat "$BROWSER_LOG" >&2
     stop_shell
     return 1
   fi
 
-  if ! sentinel_present 'SOURCERER_SHELL_ERROR ' "$BROWSER_LOG"; then
+  if ! sentinel_present 'POWERBROWSER_SHELL_ERROR ' "$BROWSER_LOG"; then
     echo "shell03-auto-dismiss-on-selfheal: FAIL -- SHELL-03 -- cleared sentinel appeared without ever showing the error sentinel first -- this run proves nothing" >&2
     result=1
   fi
@@ -955,7 +955,7 @@ EOF
   # across the whole session (the original successful launch), never a
   # second one for the recovery.
   local swap_count
-  swap_count="$(grep -c 'SOURCERER_SHELL_SWAP ' "$BROWSER_LOG")"
+  swap_count="$(grep -c 'POWERBROWSER_SHELL_SWAP ' "$BROWSER_LOG")"
   if [ "$swap_count" -ne 1 ]; then
     echo "shell03-auto-dismiss-on-selfheal: FAIL -- SHELL-03 -- expected exactly one swap sentinel across the whole session, found $swap_count; log:" >&2
     cat "$BROWSER_LOG" >&2
@@ -976,14 +976,14 @@ EOF
 # all), then asserts what this repo can automate without chrome-context
 # driving:
 #
-#   1. The startup identity sentinel (SOURCERER_APP_IDENTITY) is present
+#   1. The startup identity sentinel (POWERBROWSER_APP_IDENTITY) is present
 #      with all three fields populated -- written unconditionally, right
 #      after the sidecar prefs sentinel and BEFORE TheiaService.start(), so
 #      it can never depend on a live backend. This is the fully-automated
 #      half of "the surface is alive precisely when the backend is not."
 #   2. The error layer's details control is present and enabled in the
-#      shipped markup (sourcerer.xhtml has no `disabled` attribute on
-#      #sourcerer-error-diagnostics) -- the plan's own named fallback for
+#      shipped markup (powerbrowser.xhtml has no `disabled` attribute on
+#      #powerbrowser-error-diagnostics) -- the plan's own named fallback for
 #      when no chrome-context driver exists.
 #
 # What this check does NOT do, and why: opening the diagnostics layer
@@ -991,11 +991,11 @@ EOF
 # automation, and Discriminator B (05-02-PLAN.md Task 1, WINDOWS.md #7)
 # found that blocked on Linux -- capabilities.alwaysMatch['moz:windowless']
 # is silently ignored outside AppInfo.isMac, so WebDriver:NewSession can
-# never create a session against the shell's own windowtype="sourcerer:main"
+# never create a session against the shell's own windowtype="powerbrowser:main"
 # chrome window. scripts/lib/firefox-marionette.mjs does not exist (05-02
 # confirmed it cannot). With no driver, this check cannot click the Details
 # control or evaluate the show global, so it cannot produce a live
-# SOURCERER_DIAGNOSTICS sentinel to read the rendered health/port/pid
+# POWERBROWSER_DIAGNOSTICS sentinel to read the rendered health/port/pid
 # fields from. That gap is routed to the human record (05-03-SUMMARY.md),
 # exactly as 05-02 routed the Retry-button click -- not fabricated as a
 # pass.
@@ -1003,7 +1003,7 @@ check_shell04_diagnostics_with_backend_down() {
   local user_js result=0
   user_js="$(mktemp)"; track_temp "$user_js"
   cat > "$user_js" <<'EOF'
-user_pref("sourcerer.sidecar.backendMain", "/nonexistent/sourcerer-verify-05/shell04-main.js");
+user_pref("powerbrowser.sidecar.backendMain", "/nonexistent/powerbrowser-verify-05/shell04-main.js");
 EOF
 
   export VERIFY05_USER_JS_PROFILE="$user_js"
@@ -1017,7 +1017,7 @@ EOF
 
   local deadline=$((SECONDS + 15))
   while [ "$SECONDS" -lt "$deadline" ]; do
-    sentinel_present 'SOURCERER_SHELL_ERROR ' "$BROWSER_LOG" && break
+    sentinel_present 'POWERBROWSER_SHELL_ERROR ' "$BROWSER_LOG" && break
     if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
       echo "shell04-diagnostics-with-backend-down: FAIL -- SHELL-04 -- browser exited before the error sentinel appeared; log:" >&2
       cat "$BROWSER_LOG" >&2
@@ -1027,8 +1027,8 @@ EOF
     sleep 0.25
   done
 
-  if ! sentinel_present 'SOURCERER_SHELL_ERROR ' "$BROWSER_LOG"; then
-    echo "shell04-diagnostics-with-backend-down: FAIL -- SHELL-04 -- SOURCERER_SHELL_ERROR did not appear within 15s (no backend was ever supposed to exist); log:" >&2
+  if ! sentinel_present 'POWERBROWSER_SHELL_ERROR ' "$BROWSER_LOG"; then
+    echo "shell04-diagnostics-with-backend-down: FAIL -- SHELL-04 -- POWERBROWSER_SHELL_ERROR did not appear within 15s (no backend was ever supposed to exist); log:" >&2
     cat "$BROWSER_LOG" >&2
     stop_shell
     return 1
@@ -1037,7 +1037,7 @@ EOF
   # There is genuinely no backend in this run -- confirm the unrecoverable
   # classification, so a later assertion can never be read as "it happened
   # to recover before we checked."
-  if ! grep -qE '^(\[SourcererAPI\] [a-z]+: )?SOURCERER_SHELL_ERROR \{"reason":"[^"]*","recoverable":false\}$' "$BROWSER_LOG"; then
+  if ! grep -qE '^(\[PowerBrowserAPI\] [a-z]+: )?POWERBROWSER_SHELL_ERROR \{"reason":"[^"]*","recoverable":false\}$' "$BROWSER_LOG"; then
     echo "shell04-diagnostics-with-backend-down: FAIL -- SHELL-04 -- error sentinel is not classified recoverable:false; this run does not prove 'no backend at all'; log:" >&2
     cat "$BROWSER_LOG" >&2
     result=1
@@ -1045,9 +1045,9 @@ EOF
 
   # Identity half: alive independent of the backend, fully automated.
   local identity_line
-  identity_line="$(grep -E '^(\[SourcererAPI\] [a-z]+: )?SOURCERER_APP_IDENTITY ' "$BROWSER_LOG" | head -1 | sed -E 's/^(\[SourcererAPI\] [a-z]+: )?SOURCERER_APP_IDENTITY //')"
+  identity_line="$(grep -E '^(\[PowerBrowserAPI\] [a-z]+: )?POWERBROWSER_APP_IDENTITY ' "$BROWSER_LOG" | head -1 | sed -E 's/^(\[PowerBrowserAPI\] [a-z]+: )?POWERBROWSER_APP_IDENTITY //')"
   if [ -z "$identity_line" ]; then
-    echo "shell04-diagnostics-with-backend-down: FAIL -- SHELL-04 -- no SOURCERER_APP_IDENTITY sentinel with the backend unreachable; log:" >&2
+    echo "shell04-diagnostics-with-backend-down: FAIL -- SHELL-04 -- no POWERBROWSER_APP_IDENTITY sentinel with the backend unreachable; log:" >&2
     cat "$BROWSER_LOG" >&2
     result=1
   elif ! node -e '
@@ -1061,7 +1061,7 @@ EOF
       process.exit(1);
     });
   ' <<<"$identity_line"; then
-    echo "shell04-diagnostics-with-backend-down: FAIL -- SHELL-04 -- SOURCERER_APP_IDENTITY sentinel is not populated ($identity_line)" >&2
+    echo "shell04-diagnostics-with-backend-down: FAIL -- SHELL-04 -- POWERBROWSER_APP_IDENTITY sentinel is not populated ($identity_line)" >&2
     result=1
   fi
 
@@ -1069,16 +1069,16 @@ EOF
 
   # Fallback half (no chrome-context driver in this repo -- WINDOWS.md #7):
   # the details control is present and enabled in the shipped markup.
-  local xhtml="$REPO_ROOT/sourcerer/shell/sourcerer.xhtml"
-  if ! grep -q 'id="sourcerer-error-diagnostics"' "$xhtml"; then
-    echo "shell04-diagnostics-with-backend-down: FAIL -- SHELL-04 -- #sourcerer-error-diagnostics is not present in sourcerer.xhtml" >&2
+  local xhtml="$REPO_ROOT/powerbrowser/shell/powerbrowser.xhtml"
+  if ! grep -q 'id="powerbrowser-error-diagnostics"' "$xhtml"; then
+    echo "shell04-diagnostics-with-backend-down: FAIL -- SHELL-04 -- #powerbrowser-error-diagnostics is not present in powerbrowser.xhtml" >&2
     result=1
-  elif grep 'id="sourcerer-error-diagnostics"' "$xhtml" | grep -q 'disabled'; then
-    echo "shell04-diagnostics-with-backend-down: FAIL -- SHELL-04 -- #sourcerer-error-diagnostics still carries a disabled attribute" >&2
+  elif grep 'id="powerbrowser-error-diagnostics"' "$xhtml" | grep -q 'disabled'; then
+    echo "shell04-diagnostics-with-backend-down: FAIL -- SHELL-04 -- #powerbrowser-error-diagnostics still carries a disabled attribute" >&2
     result=1
   fi
 
-  echo "shell04-diagnostics-with-backend-down: NOTE -- chrome-context driving (the chord, the Details click, and reading the live SOURCERER_DIAGNOSTICS sentinel) is routed to the human record, per WINDOWS.md #7 / Discriminator B; see 05-03-SUMMARY.md" >&2
+  echo "shell04-diagnostics-with-backend-down: NOTE -- chrome-context driving (the chord, the Details click, and reading the live POWERBROWSER_DIAGNOSTICS sentinel) is routed to the human record, per WINDOWS.md #7 / Discriminator B; see 05-03-SUMMARY.md" >&2
 
   return "$result"
 }
@@ -1092,10 +1092,10 @@ EOF
 # drives _pushLog on a bare receiver -- no browser, no display, no built
 # tree needed.
 check_shell04_log_redacts_token() {
-  local shipped="$REPO_ROOT/sourcerer/shell/TheiaService.sys.mjs"
+  local shipped="$REPO_ROOT/powerbrowser/shell/TheiaService.sys.mjs"
   local out result=0
   out="$(SHIPPED_THEIA_SERVICE="$shipped" node --input-type=module -e '
-    globalThis.ChromeUtils = { importESModule: () => ({ SourcererAPI: { getIntPref: (_k, d) => d } }) };
+    globalThis.ChromeUtils = { importESModule: () => ({ PowerBrowserAPI: { getIntPref: (_k, d) => d } }) };
     const { TheiaService } = await import(process.env.SHIPPED_THEIA_SERVICE);
 
     if (typeof TheiaService._pushLog !== "function") {
@@ -1107,7 +1107,7 @@ check_shell04_log_redacts_token() {
     // marker must be present.
     {
       const receiver = { _token: "TOK-11111111", _log: [] };
-      TheiaService._pushLog.call(receiver, "Cookie: sourcerer-token=TOK-11111111");
+      TheiaService._pushLog.call(receiver, "Cookie: powerbrowser-token=TOK-11111111");
       const entry = receiver._log[receiver._log.length - 1];
       if (receiver._log.length !== 1) {
         console.error("FAIL -- case (a): expected exactly one buffered entry, got " + receiver._log.length);
@@ -1184,14 +1184,14 @@ check_shell04_log_redacts_token() {
 # file-path argument -- D-123/D-124's "arguments are ignored" truth), and
 # asserts each time: the second process exits (never runs on as an
 # independent instance), the first process is still running, and exactly
-# one SOURCERER_SHELL_READY sentinel exists in the first process's own log
+# one POWERBROWSER_SHELL_READY sentinel exists in the first process's own log
 # (a second window opening would paint and announce its own readiness
 # through the SAME process's stdout, since remoting delivers the second
 # launch's command line into the first process in-process -- never a
 # second OS process's own separate log).
 check_side05_second_launch_focuses() {
   local bin profile result=0
-  bin="$REPO_ROOT/objdir/dist/bin/sourcerer"
+  bin="$REPO_ROOT/objdir/dist/bin/powerbrowser"
   if [ ! -x "$bin" ]; then
     echo "side05-second-launch-focuses: FAIL -- SIDE-05 -- $bin does not exist or is not executable (run the Phase 1 Firefox build first)" >&2
     return 1
@@ -1212,17 +1212,17 @@ check_side05_second_launch_focuses() {
 
   local deadline=$((SECONDS + 60))
   while [ "$SECONDS" -lt "$deadline" ]; do
-    sentinel_present 'SOURCERER_BACKEND_READY ' "$first_log" && break
+    sentinel_present 'POWERBROWSER_BACKEND_READY ' "$first_log" && break
     if ! kill -0 "$first_pid" 2>/dev/null; then
-      echo "side05-second-launch-focuses: FAIL -- SIDE-05 -- first launch exited before SOURCERER_BACKEND_READY appeared; log:" >&2
+      echo "side05-second-launch-focuses: FAIL -- SIDE-05 -- first launch exited before POWERBROWSER_BACKEND_READY appeared; log:" >&2
       cat "$first_log" >&2
       stop_shell_display
       return 1
     fi
     sleep 0.5
   done
-  if ! sentinel_present 'SOURCERER_BACKEND_READY ' "$first_log"; then
-    echo "side05-second-launch-focuses: FAIL -- SIDE-05 -- SOURCERER_BACKEND_READY did not appear within 60s; log:" >&2
+  if ! sentinel_present 'POWERBROWSER_BACKEND_READY ' "$first_log"; then
+    echo "side05-second-launch-focuses: FAIL -- SIDE-05 -- POWERBROWSER_BACKEND_READY did not appear within 60s; log:" >&2
     cat "$first_log" >&2
     stop_shell_display
     return 1
@@ -1253,9 +1253,9 @@ check_side05_second_launch_focuses() {
     fi
 
     local ready_count
-    ready_count="$(grep -c 'SOURCERER_SHELL_READY' "$first_log")"
+    ready_count="$(grep -c 'POWERBROWSER_SHELL_READY' "$first_log")"
     if [ "$ready_count" -ne 1 ]; then
-      echo "side05-second-launch-focuses: FAIL -- SIDE-05 -- expected exactly one SOURCERER_SHELL_READY in the first process's log after the second launch ($round), found $ready_count -- a second window opened; log:" >&2
+      echo "side05-second-launch-focuses: FAIL -- SIDE-05 -- expected exactly one POWERBROWSER_SHELL_READY in the first process's log after the second launch ($round), found $ready_count -- a second window opened; log:" >&2
       cat "$first_log" >&2
       result=1
     fi
@@ -1268,7 +1268,7 @@ check_side05_second_launch_focuses() {
 # D-125's invariant assertion, paired with its own positive control. Does
 # its own two-launch-same-profile session (not a reuse of the previous
 # check's state -- --only must be able to run this alone) and asserts:
-# exactly one SOURCERER_BACKEND_READY sentinel across both launches, the
+# exactly one POWERBROWSER_BACKEND_READY sentinel across both launches, the
 # announced backend pid unchanged, and exactly one live process matching
 # 'backend/main.js' among this run's own process groups. Then a THIRD
 # launch against a DIFFERENT profile must
@@ -1276,7 +1276,7 @@ check_side05_second_launch_focuses() {
 # to the profile, not simply "second launches never work at all."
 check_side05_no_second_backend() {
   local bin profile result=0
-  bin="$REPO_ROOT/objdir/dist/bin/sourcerer"
+  bin="$REPO_ROOT/objdir/dist/bin/powerbrowser"
   if [ ! -x "$bin" ]; then
     echo "side05-no-second-backend: FAIL -- SIDE-05 -- $bin does not exist or is not executable (run the Phase 1 Firefox build first)" >&2
     return 1
@@ -1297,17 +1297,17 @@ check_side05_no_second_backend() {
 
   local deadline=$((SECONDS + 60))
   while [ "$SECONDS" -lt "$deadline" ]; do
-    sentinel_present 'SOURCERER_BACKEND_READY ' "$first_log" && break
+    sentinel_present 'POWERBROWSER_BACKEND_READY ' "$first_log" && break
     if ! kill -0 "$first_pid" 2>/dev/null; then
-      echo "side05-no-second-backend: FAIL -- SIDE-05 -- first launch exited before SOURCERER_BACKEND_READY appeared; log:" >&2
+      echo "side05-no-second-backend: FAIL -- SIDE-05 -- first launch exited before POWERBROWSER_BACKEND_READY appeared; log:" >&2
       cat "$first_log" >&2
       stop_shell_display
       return 1
     fi
     sleep 0.5
   done
-  if ! sentinel_present 'SOURCERER_BACKEND_READY ' "$first_log"; then
-    echo "side05-no-second-backend: FAIL -- SIDE-05 -- SOURCERER_BACKEND_READY did not appear within 60s; log:" >&2
+  if ! sentinel_present 'POWERBROWSER_BACKEND_READY ' "$first_log"; then
+    echo "side05-no-second-backend: FAIL -- SIDE-05 -- POWERBROWSER_BACKEND_READY did not appear within 60s; log:" >&2
     cat "$first_log" >&2
     stop_shell_display
     return 1
@@ -1316,7 +1316,7 @@ check_side05_no_second_backend() {
   local first_backend_pid
   first_backend_pid="$(backend_ready_pids "$first_log" | head -1)"
   if [ -z "$first_backend_pid" ]; then
-    echo "side05-no-second-backend: FAIL -- SIDE-05 -- could not read a pid from SOURCERER_BACKEND_READY in the first process's log" >&2
+    echo "side05-no-second-backend: FAIL -- SIDE-05 -- could not read a pid from POWERBROWSER_BACKEND_READY in the first process's log" >&2
     stop_shell_display
     return 1
   fi
@@ -1335,7 +1335,7 @@ check_side05_no_second_backend() {
   ready_pids_after="$(backend_ready_pids "$first_log")"
   ready_count="$(printf '%s\n' "$ready_pids_after" | grep -c .)"
   if [ "$ready_count" -ne 1 ]; then
-    echo "side05-no-second-backend: FAIL -- SIDE-05 -- expected exactly one SOURCERER_BACKEND_READY sentinel across both launches, found $ready_count; log:" >&2
+    echo "side05-no-second-backend: FAIL -- SIDE-05 -- expected exactly one POWERBROWSER_BACKEND_READY sentinel across both launches, found $ready_count; log:" >&2
     cat "$first_log" >&2
     result=1
   fi
@@ -1349,7 +1349,7 @@ check_side05_no_second_backend() {
   # backend live there), and this script's group, where a backend spawned by
   # the SECOND launch would land -- that launch runs in the foreground and
   # so inherits the harness's group. A backend outside both belongs to some
-  # other Sourcerer on the machine and is not this check's business.
+  # other PowerBrowser on the machine and is not this check's business.
   local scope_pgids backends backend_proc_count
   scope_pgids="$(pgid_of "$first_backend_pid"),$(pgid_of $$)"
   backends="$(backends_in_groups "$scope_pgids")"
@@ -1377,16 +1377,16 @@ check_side05_no_second_backend() {
 
   local control_deadline=$((SECONDS + 60))
   while [ "$SECONDS" -lt "$control_deadline" ]; do
-    sentinel_present 'SOURCERER_BACKEND_READY ' "$control_log" && break
+    sentinel_present 'POWERBROWSER_BACKEND_READY ' "$control_log" && break
     if ! kill -0 "$control_pid" 2>/dev/null; then
-      echo "side05-no-second-backend: FAIL -- SIDE-05 -- positive control exited before SOURCERER_BACKEND_READY appeared; log:" >&2
+      echo "side05-no-second-backend: FAIL -- SIDE-05 -- positive control exited before POWERBROWSER_BACKEND_READY appeared; log:" >&2
       cat "$control_log" >&2
       stop_shell_display
       return 1
     fi
     sleep 0.5
   done
-  if ! sentinel_present 'SOURCERER_BACKEND_READY ' "$control_log"; then
+  if ! sentinel_present 'POWERBROWSER_BACKEND_READY ' "$control_log"; then
     echo "side05-no-second-backend: FAIL -- SIDE-05 -- positive control (different profile) never announced its own backend -- the guard is not profile-scoped, it broke second launches globally; log:" >&2
     cat "$control_log" >&2
     result=1
@@ -1421,7 +1421,7 @@ check_side05_no_second_backend() {
 # RUNNING and launches instance B under a genuinely different profile while
 # A is still alive, then asserts A's backend survived B's entire startup
 # (including B's own _reapLeftover pass, already run by the time B
-# announces its own SOURCERER_BACKEND_READY). Reuses start_shell_display
+# announces its own POWERBROWSER_BACKEND_READY). Reuses start_shell_display
 # (never headless -- SIDE-05's own display requirement applies equally
 # here, since this is the same nsRemoteService-adjacent profile-keyed
 # machinery) for both launches; no new launch scaffolding.
@@ -1457,7 +1457,7 @@ check_cr01_different_profile_backend_survives() {
 
   local a_deadline=$((SECONDS + 60)) a_ready=0
   while [ "$SECONDS" -lt "$a_deadline" ]; do
-    if sentinel_present 'SOURCERER_BACKEND_READY ' "$log_a"; then
+    if sentinel_present 'POWERBROWSER_BACKEND_READY ' "$log_a"; then
       a_ready=1
       break
     fi
@@ -1467,7 +1467,7 @@ check_cr01_different_profile_backend_survives() {
     sleep 0.5
   done
   if [ "$a_ready" -ne 1 ]; then
-    echo "cr01-different-profile-backend-survives: FAIL -- CR-01 -- instance A never announced SOURCERER_BACKEND_READY within 60s; log:" >&2
+    echo "cr01-different-profile-backend-survives: FAIL -- CR-01 -- instance A never announced POWERBROWSER_BACKEND_READY within 60s; log:" >&2
     cat "$log_a" >&2
     result=1
   fi
@@ -1502,7 +1502,7 @@ check_cr01_different_profile_backend_survives() {
 
       local b_deadline=$((SECONDS + 60)) b_ready=0
       while [ "$SECONDS" -lt "$b_deadline" ]; do
-        if sentinel_present 'SOURCERER_BACKEND_READY ' "$log_b"; then
+        if sentinel_present 'POWERBROWSER_BACKEND_READY ' "$log_b"; then
           b_ready=1
           break
         fi
@@ -1512,13 +1512,13 @@ check_cr01_different_profile_backend_survives() {
         sleep 0.5
       done
       if [ "$b_ready" -ne 1 ]; then
-        echo "cr01-different-profile-backend-survives: FAIL -- CR-01 -- instance B never announced SOURCERER_BACKEND_READY within 60s; log:" >&2
+        echo "cr01-different-profile-backend-survives: FAIL -- CR-01 -- instance B never announced POWERBROWSER_BACKEND_READY within 60s; log:" >&2
         cat "$log_b" >&2
         result=1
       fi
 
       # The headline assertion: by the time B has announced its own
-      # SOURCERER_BACKEND_READY, B's start() has already run _reapLeftover()
+      # POWERBROWSER_BACKEND_READY, B's start() has already run _reapLeftover()
       # (called before B's own first spawn attempt) -- pre-fix, that reap
       # read the SHARED state file, found A's still-healthy pid, and
       # SIGTERM'd it.
@@ -1564,7 +1564,7 @@ check_cr01_different_profile_backend_survives() {
 
 # --- shell-csp-inline-attrs -------------------------------------------------
 #
-# sourcerer.xhtml declares `default-src chrome:` with no 'unsafe-inline', and
+# powerbrowser.xhtml declares `default-src chrome:` with no 'unsafe-inline', and
 # Gecko applies that policy to inline style/event-handler ATTRIBUTES too:
 # nsStyledElement::ParseStyleAttribute calls nsStyleUtil::CSPAllowsInlineStyle,
 # whose STYLE_SRC_ATTR lookup falls back to default-src, and simply never
@@ -1595,7 +1595,7 @@ scan_inline_attrs() {
       try { src = fs.readFileSync(f, "utf8"); } catch { console.error(`  ${f}: unreadable`); bad++; continue; }
       // Blank comments before matching (preserving newlines, so the reported
       // line numbers stay exact) -- a comment explaining this very rule, or
-      // the header comment in sourcerer.css, must not flag itself.
+      // the header comment in powerbrowser.css, must not flag itself.
       const blank = (m) => m.replace(/[^\n]/g, " ");
       src = src.replace(/<!--[\s\S]*?-->/g, blank).replace(/\/\*[\s\S]*?\*\//g, blank);
       // Branch on extension: the markup attribute pattern applied to a script
@@ -1615,8 +1615,8 @@ scan_inline_attrs() {
 
 check_shell_csp_inline_attrs() {
   local shell_dir xhtml result=0
-  shell_dir="$REPO_ROOT/sourcerer/shell"
-  xhtml="$shell_dir/sourcerer.xhtml"
+  shell_dir="$REPO_ROOT/powerbrowser/shell"
+  xhtml="$shell_dir/powerbrowser.xhtml"
 
   # The policy is the whole justification for the ban. If it ever goes away,
   # or gains 'unsafe-inline', that is a decision to argue explicitly -- not
@@ -1624,7 +1624,7 @@ check_shell_csp_inline_attrs() {
   local csp_line
   csp_line="$(grep -i 'http-equiv="Content-Security-Policy"' "$xhtml")"
   if [ -z "$csp_line" ]; then
-    echo "shell-csp-inline-attrs: FAIL -- sourcerer.xhtml no longer declares a Content-Security-Policy meta" >&2
+    echo "shell-csp-inline-attrs: FAIL -- powerbrowser.xhtml no longer declares a Content-Security-Policy meta" >&2
     result=1
   elif grep -qi 'unsafe-inline' <<<"$csp_line"; then
     echo "shell-csp-inline-attrs: FAIL -- the shell CSP was loosened with 'unsafe-inline' ($csp_line); re-argue this check rather than weakening the policy" >&2
@@ -1640,9 +1640,9 @@ check_shell_csp_inline_attrs() {
   fixture="$fixture_dir/fixture.xhtml"
   cat > "$fixture" <<'EOF'
 <!-- decoy: style="display:none;" inside a comment must not be flagged -->
-<div id="sourcerer-error" style="display:none;"></div>
-<button id="sourcerer-error-retry" onclick="sourcererRetry()">Retry</button>
-<div id="sourcerer-loading">Sourcerer</div>
+<div id="powerbrowser-error" style="display:none;"></div>
+<button id="powerbrowser-error-retry" onclick="powerbrowserRetry()">Retry</button>
+<div id="powerbrowser-loading">PowerBrowser</div>
 EOF
   rows="$(scan_inline_attrs "$fixture" 2>&1 >/dev/null)"
   rc=$?
@@ -1672,7 +1672,7 @@ EOF
   fi
 
   if ! scan_inline_attrs "${files[@]}"; then
-    echo "shell-csp-inline-attrs: FAIL -- the shipped chrome surface contains inline attributes the CSP silently drops (see rows above); put the state in sourcerer.css or set it from JS via the CSSOM instead" >&2
+    echo "shell-csp-inline-attrs: FAIL -- the shipped chrome surface contains inline attributes the CSP silently drops (see rows above); put the state in powerbrowser.css or set it from JS via the CSSOM instead" >&2
     result=1
   fi
 
@@ -1695,16 +1695,16 @@ EOF
 #      the user runs recovers it, and that recovered value authenticates. The
 #      only fix is not putting the token in the environment at all, which is
 #      why the supervisor writes it on the backend's stdin pipe instead
-#      (SourcererAPI.writeStdinLine -> sourcerer-env.ts's readTokenFromStdin).
-#      SOURCERER_TOKEN must therefore be absent here entirely.
-#      SOURCERER_SUPERVISED is expected to be present -- it is a marker, not a
+#      (PowerBrowserAPI.writeStdinLine -> powerbrowser-env.ts's readTokenFromStdin).
+#      POWERBROWSER_TOKEN must therefore be absent here entirely.
+#      POWERBROWSER_SUPERVISED is expected to be present -- it is a marker, not a
 #      secret -- so only the token is asserted.
 #
 #   B. EVERY CHILD'S environ. Node's process.env is inherited by every child
 #      the backend spawns, and a child's environ is built fresh from the
 #      parent's LIVE process.env at fork/exec -- which is what makes a child
-#      the only witness for the module-load scrub in sourcerer-env.ts.
-#      Without that scrub SOURCERER_SUPERVISED reaches every IDE terminal,
+#      the only witness for the module-load scrub in powerbrowser-env.ts.
+#      Without that scrub POWERBROWSER_SUPERVISED reaches every IDE terminal,
 #      task, debug adapter and the plugin host running third-party
 #      extensions, so a NESTED backend (`yarn start`, smoke-theia.sh,
 #      verify-phase-04.sh) arms a watchdog nobody supervises and dies on its
@@ -1729,13 +1729,13 @@ EOF
 # should not be, so its absence is a FAIL, never a vacuous pass. Same for "no
 # children" and "no readable environ".
 #
-# SOURCERER_SHELL_SWAP is the positive control for the replacement channel: it
+# POWERBROWSER_SHELL_SWAP is the positive control for the replacement channel: it
 # is only ever printed after _pollUntilHealthy got a 200 from
-# /sourcerer/health, and that probe authenticates with the token. A backend
+# /powerbrowser/health, and that probe authenticates with the token. A backend
 # that never received the stdin line exits 78 and never reaches it, so a
 # passing scan cannot be bought by simply never delivering a token.
 #
-# On its own this check is satisfiable by never setting SOURCERER_SUPERVISED
+# On its own this check is satisfiable by never setting POWERBROWSER_SUPERVISED
 # at all, which would silently disarm the dies-with-the-browser watchdog. It
 # is only meaningful alongside side04-sigkill-no-orphan and
 # side04-unsupervised-backend-survives, which prove the marker still arms and
@@ -1760,7 +1760,7 @@ check_side04_token_not_in_environment() {
     sleep 0.5
   done
   if [ -z "$backend_pid" ]; then
-    echo "side04-token-not-in-environment: FAIL -- SIDE-04 -- the backend never announced SOURCERER_BACKEND_READY within 90s; last 30 log lines:" >&2
+    echo "side04-token-not-in-environment: FAIL -- SIDE-04 -- the backend never announced POWERBROWSER_BACKEND_READY within 90s; last 30 log lines:" >&2
     tail -30 "$log" >&2
     stop_shell
     unset VERIFY05_LEAK_CANARY
@@ -1769,10 +1769,10 @@ check_side04_token_not_in_environment() {
 
   # Positive control for the stdin credential channel (see the header): the
   # swap is printed only after a token-authenticated 200 from
-  # /sourcerer/health.
+  # /powerbrowser/health.
   local swap_deadline=$((SECONDS + 60)) swapped=0
   while [ "$SECONDS" -lt "$swap_deadline" ]; do
-    if grep -q '^SOURCERER_SHELL_SWAP ' "$log"; then
+    if grep -q '^POWERBROWSER_SHELL_SWAP ' "$log"; then
       swapped=1
       break
     fi
@@ -1780,7 +1780,7 @@ check_side04_token_not_in_environment() {
     sleep 0.5
   done
   if [ "$swapped" -eq 0 ]; then
-    echo "side04-token-not-in-environment: FAIL -- SIDE-04 -- the shell never printed SOURCERER_SHELL_SWAP, so the token handed over stdin never authenticated a health probe; an environ scan that finds no token would only mean no token was ever delivered. Last 30 log lines:" >&2
+    echo "side04-token-not-in-environment: FAIL -- SIDE-04 -- the shell never printed POWERBROWSER_SHELL_SWAP, so the token handed over stdin never authenticated a health probe; an environ scan that finds no token would only mean no token was ever delivered. Last 30 log lines:" >&2
     tail -30 "$log" >&2
     result=1
   fi
@@ -1794,8 +1794,8 @@ check_side04_token_not_in_environment() {
   elif ! grep -qxF "VERIFY05_LEAK_CANARY=$canary" <<<"$backend_env"; then
     echo "side04-token-not-in-environment: FAIL -- SIDE-04 -- self-test: VERIFY05_LEAK_CANARY was exported into this harness but is absent from backend pid $backend_pid's own /proc/<pid>/environ, so the harness -> browser -> spawnProcess chain this scan reads is broken and a clean scan means nothing" >&2
     result=1
-  elif grep -q '^SOURCERER_TOKEN=' <<<"$backend_env"; then
-    echo "side04-token-not-in-environment: FAIL -- SIDE-04 -- backend pid $backend_pid carries SOURCERER_TOKEN= in its OWN /proc/<pid>/environ. That file is the exec-time snapshot: no process.env delete rewrites it, and it stays readable by every same-uid process for the life of the backend. Hand the token over the stdin pipe instead (SourcererAPI.writeStdinLine)" >&2
+  elif grep -q '^POWERBROWSER_TOKEN=' <<<"$backend_env"; then
+    echo "side04-token-not-in-environment: FAIL -- SIDE-04 -- backend pid $backend_pid carries POWERBROWSER_TOKEN= in its OWN /proc/<pid>/environ. That file is the exec-time snapshot: no process.env delete rewrites it, and it stays readable by every same-uid process for the life of the backend. Hand the token over the stdin pipe instead (PowerBrowserAPI.writeStdinLine)" >&2
     result=1
   fi
 
@@ -1824,9 +1824,9 @@ check_side04_token_not_in_environment() {
     if grep -qxF "VERIFY05_LEAK_CANARY=$canary" <<<"$env_dump"; then
       saw_canary=1
     fi
-    # The trailing '=' anchors each name: without it SOURCERER_TOKEN would
-    # also match a SOURCERER_TOKEN_DISABLE line and misattribute the leak.
-    for var in SOURCERER_TOKEN SOURCERER_SUPERVISED SOURCERER_TOKEN_DISABLE; do
+    # The trailing '=' anchors each name: without it POWERBROWSER_TOKEN would
+    # also match a POWERBROWSER_TOKEN_DISABLE line and misattribute the leak.
+    for var in POWERBROWSER_TOKEN POWERBROWSER_SUPERVISED POWERBROWSER_TOKEN_DISABLE; do
       if grep -q "^$var=" <<<"$env_dump"; then
         echo "side04-token-not-in-environment: FAIL -- SIDE-04 -- backend child pid $kid ($cmd) inherited $var from the backend's process.env" >&2
         result=1

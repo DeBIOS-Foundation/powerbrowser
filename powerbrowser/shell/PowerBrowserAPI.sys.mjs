@@ -4,11 +4,11 @@
 
 /*
  * D-96/D-97: the single anti-corruption layer. This is the ONLY file in
- * sourcerer/ permitted to reach a Firefox internal (Services, Cc/Ci/Cr/Cu,
+ * powerbrowser/ permitted to reach a Firefox internal (Services, Cc/Ci/Cr/Cu,
  * Subprocess, the cookie manager, quit observers) -- every method below is
  * a thin named wrapper with no policy of its own, so the audit surface at
  * the next ESR rebase is exactly this file. Every touchpoint is catalogued
- * in sourcerer/INTERNAL-APIS.md (plan 04-05).
+ * in powerbrowser/INTERNAL-APIS.md (plan 04-05).
  */
 
 const lazy = {};
@@ -28,7 +28,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 // fire and the awaiting promise never settles.
 const pendingTimers = new Set();
 
-export const SourcererAPI = Object.freeze({
+export const PowerBrowserAPI = Object.freeze({
   /**
    * Reads a string pref, returning `fallback` (never throwing) when the
    * pref is unset or holds a different type.
@@ -98,7 +98,7 @@ export const SourcererAPI = Object.freeze({
    * XREAppData); `version` is the same MOZ_APP_VERSION_DISPLAY
    * preprocessor substitution (from upstream/browser/config/
    * version_display.txt) about:support's own version string uses. Both
-   * the startup identity sentinel (sourcerer.js) and the diagnostics
+   * the startup identity sentinel (powerbrowser.js) and the diagnostics
    * layer's show global read this SAME accessor, so the repointed D-120
    * branding check and the rendered surface can never disagree. Never
    * throws: any field that cannot be read resolves to an empty string
@@ -140,7 +140,7 @@ export const SourcererAPI = Object.freeze({
    * never be sent, silently defeating the whole mechanism.
    *
    * SameSite is Lax, not Strict, for the same class of reason: the shell's one
-   * swap is a top-level navigation from `chrome://sourcerer/...` to
+   * swap is a top-level navigation from `chrome://powerbrowser/...` to
    * `http://127.0.0.1:PORT/`, which is cross-site, and Strict withholds the
    * cookie on exactly that navigation -- the backend then answers the shell's
    * own first request with 403 Forbidden and Theia never loads. Lax still sends
@@ -296,7 +296,7 @@ export const SourcererAPI = Object.freeze({
       const xhr = new XMLHttpRequest();
       xhr.open("GET", url, true);
       xhr.timeout = timeoutMs;
-      xhr.setRequestHeader("Cookie", `SOURCERER_TOKEN=${token}`);
+      xhr.setRequestHeader("Cookie", `POWERBROWSER_TOKEN=${token}`);
       xhr.onload = () => resolve(xhr.status === 200);
       xhr.onerror = () => resolve(false);
       xhr.ontimeout = () => resolve(false);
@@ -320,7 +320,7 @@ export const SourcererAPI = Object.freeze({
    * stream.
    */
   log(level, message) {
-    dump(`[SourcererAPI] ${level}: ${message}\n`);
+    dump(`[PowerBrowserAPI] ${level}: ${message}\n`);
     const fn = typeof console[level] === "function" ? console[level] : console.log;
     fn(message);
   },
@@ -329,7 +329,7 @@ export const SourcererAPI = Object.freeze({
    * Announces that the shell window has finished initializing, by firing the
    * same observer topic Firefox's own chrome fires from
    * `browser/base/content/browser-init.js`. WebDriver's session.new blocks on
-   * this topic (`remote/components/RemoteAgent.sys.mjs`), and the Sourcerer
+   * this topic (`remote/components/RemoteAgent.sys.mjs`), and the PowerBrowser
    * shell is deliberately not that chrome, so nothing else would ever fire it
    * and no automated check could drive the shell.
    */
@@ -354,9 +354,9 @@ export const SourcererAPI = Object.freeze({
    * principal as the triggering principal. Both halves are privileged chrome
    * API -- `ownerDocument.nodePrincipal` is the system principal because the
    * shell is loaded from chrome://, and `fixupAndLoadURIString` is a
-   * <browser> method -- so they belong here rather than in sourcerer.js.
-   * Previously this lived in sourcerer.js with a comment saying it avoided
-   * SourcererAPI "to dodge the boundary guard", which is precisely the hole
+   * <browser> method -- so they belong here rather than in powerbrowser.js.
+   * Previously this lived in powerbrowser.js with a comment saying it avoided
+   * PowerBrowserAPI "to dodge the boundary guard", which is precisely the hole
    * SHELL-02 exists to prevent: the guard's pattern list simply did not name
    * these two APIs, so a real internals touch sat outside the one file that
    * is supposed to hold them all, uncatalogued. Both patterns are in
@@ -470,12 +470,12 @@ export const SourcererAPI = Object.freeze({
 
   /**
    * D-121/D-122: finds the shell's own already-open window, by the window
-   * type `sourcerer.xhtml`'s root element declares (`windowtype`). Returns
+   * type `powerbrowser.xhtml`'s root element declares (`windowtype`). Returns
    * `null` (never throws) when none exists -- the first-launch case, where
    * the single-instance handler below must do nothing at all.
    */
   findShellWindow() {
-    return Services.wm.getMostRecentWindow("sourcerer:main");
+    return Services.wm.getMostRecentWindow("powerbrowser:main");
   },
 
   /** Focuses an already-found shell window. */
@@ -486,14 +486,14 @@ export const SourcererAPI = Object.freeze({
 
 /**
  * D-121/D-123/D-124: the single-instance command-line handler, registered
- * via `sourcerer/shell/components.conf` under the `command-line-handler`
- * category, entry name `a-sourcerer` (sorts ahead of the stock browser
+ * via `powerbrowser/shell/components.conf` under the `command-line-handler`
+ * category, entry name `a-powerbrowser` (sorts ahead of the stock browser
  * handler's `m-browser`, and far ahead of `x-default`, the handler that
  * actually opens a window -- see components.conf's own comment). Exported
  * from this file rather than a sibling module because it needs
  * `ChromeUtils.generateQI`/`Ci.nsICommandLineHandler`, both `Ci.`-pattern
  * touches the boundary guard forbids everywhere else under
- * `sourcerer/shell/` (D-96/D-97).
+ * `powerbrowser/shell/` (D-96/D-97).
  *
  * Behaviour (D-123/D-124): look up the existing shell window. If none is
  * found -- the first launch, or any launch naming a different profile
@@ -506,21 +506,21 @@ export const SourcererAPI = Object.freeze({
  * left to propagate into the platform's own handler enumeration, which
  * would otherwise break every handler still due to run after this one.
  */
-export class SourcererSingleInstanceHandler {
+export class PowerBrowserSingleInstanceHandler {
   QueryInterface = ChromeUtils.generateQI([Ci.nsICommandLineHandler]);
 
   helpInfo = "";
 
   handle(cmdLine) {
     try {
-      const win = SourcererAPI.findShellWindow();
+      const win = PowerBrowserAPI.findShellWindow();
       if (!win) {
         return;
       }
-      SourcererAPI.focusWindow(win);
+      PowerBrowserAPI.focusWindow(win);
       cmdLine.preventDefault = true;
     } catch (err) {
-      SourcererAPI.log("error", `[SourcererSingleInstanceHandler] ${err}`);
+      PowerBrowserAPI.log("error", `[PowerBrowserSingleInstanceHandler] ${err}`);
     }
   }
 }

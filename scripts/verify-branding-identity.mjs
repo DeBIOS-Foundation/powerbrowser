@@ -9,12 +9,12 @@
 //
 // The six surfaces, each an EXACT string/boolean equality -- never
 // includes/startsWith, never case-insensitive:
-//   1. executable    -- a file named `sourcerer` exists+executable under
+//   1. executable    -- a file named `powerbrowser` exists+executable under
 //                       objdir/dist/bin, and no file named `firefox` remains.
 //   2. application-ini -- application.ini's Name=/Vendor= lines.
 //   3. runtime-identity -- D-120 (05-03): launches the built binary
 //                       headless with a throwaway profile and reads its
-//                       SOURCERER_APP_IDENTITY startup stdout sentinel --
+//                       POWERBROWSER_APP_IDENTITY startup stdout sentinel --
 //                       name/vendor from Services.appinfo, version from
 //                       AppConstants.MOZ_APP_VERSION_DISPLAY, the exact
 //                       accessor the chrome-rendered diagnostics layer
@@ -28,7 +28,7 @@
 //                       surface could only ever read a stock, unbranded
 //                       Firefox page. This is a real live process launch,
 //                       not a constant -- confirmed live this session:
-//                       {"name":"Sourcerer","vendor":"Deocracy","version":"153.1.0esr"}.
+//                       {"name":"powerbrowser","vendor":"DeBIOS","version":"153.1.0esr"}.
 //                       When a chrome-context driver exists (none does in
 //                       this repo -- WINDOWS.md #7, chrome-side Marionette
 //                       automation is blocked on Linux), this surface also
@@ -39,7 +39,7 @@
 //                       string -- the three sentinel equalities are never
 //                       weakened to compensate.
 //   4. brand-full-name -- reads the resolved variant's own
-//                       sourcerer/branding/<variant>/locales/en-US/brand.ftl
+//                       powerbrowser/branding/<variant>/locales/en-US/brand.ftl
 //                       `-brand-full-name` AND that same variant's own
 //                       locales/en-US/brand.properties `brandFullName`, and
 //                       asserts BOTH against that variant's own expected
@@ -65,7 +65,7 @@
 //                       variant's expected value -- proving both that the
 //                       paths are honored and that the comparison
 //                       discriminates (03-07-PLAN.md, extended 03-11).
-//   5. desktop-entry  -- sourcerer/sourcerer.desktop's Name=/StartupWMClass=
+//   5. desktop-entry  -- powerbrowser/powerbrowser.desktop's Name=/StartupWMClass=
 //                       against config.status's resolved MOZ_APP_DISPLAYNAME/
 //                       MOZ_APP_REMOTINGNAME. Expected RED until 03-05 --
 //                       the file does not exist yet.
@@ -125,20 +125,20 @@ const REPO_ROOT = join(__dirname, '..');
 // silently-defaulting fallback -- the exact seam CR-01 fell through.
 const VARIANTS = {
     dev: {
-        bin: join(REPO_ROOT, 'objdir', 'dist', 'bin', 'sourcerer'),
-        desktop: join(REPO_ROOT, 'sourcerer', 'sourcerer.desktop'),
+        bin: join(REPO_ROOT, 'objdir', 'dist', 'bin', 'powerbrowser'),
+        desktop: join(REPO_ROOT, 'powerbrowser', 'powerbrowser.desktop'),
         configStatus: join(REPO_ROOT, 'objdir', 'config.status'),
-        brandFtl: join(REPO_ROOT, 'sourcerer', 'branding', 'dev', 'locales', 'en-US', 'brand.ftl'),
-        brandProperties: join(REPO_ROOT, 'sourcerer', 'branding', 'dev', 'locales', 'en-US', 'brand.properties'),
-        brandFullName: 'Sourcerer Dev',
+        brandFtl: join(REPO_ROOT, 'powerbrowser', 'branding', 'dev', 'locales', 'en-US', 'brand.ftl'),
+        brandProperties: join(REPO_ROOT, 'powerbrowser', 'branding', 'dev', 'locales', 'en-US', 'brand.properties'),
+        brandFullName: 'PowerBrowser Dev',
     },
     release: {
-        bin: join(REPO_ROOT, 'objdir-release', 'dist', 'bin', 'sourcerer'),
-        desktop: join(REPO_ROOT, 'sourcerer', 'sourcerer-release.desktop'),
+        bin: join(REPO_ROOT, 'objdir-release', 'dist', 'bin', 'powerbrowser'),
+        desktop: join(REPO_ROOT, 'powerbrowser', 'powerbrowser-release.desktop'),
         configStatus: join(REPO_ROOT, 'objdir-release', 'config.status'),
-        brandFtl: join(REPO_ROOT, 'sourcerer', 'branding', 'release', 'locales', 'en-US', 'brand.ftl'),
-        brandProperties: join(REPO_ROOT, 'sourcerer', 'branding', 'release', 'locales', 'en-US', 'brand.properties'),
-        brandFullName: 'Sourcerer',
+        brandFtl: join(REPO_ROOT, 'powerbrowser', 'branding', 'release', 'locales', 'en-US', 'brand.ftl'),
+        brandProperties: join(REPO_ROOT, 'powerbrowser', 'branding', 'release', 'locales', 'en-US', 'brand.properties'),
+        brandFullName: 'PowerBrowser',
     },
 };
 const VARIANT_IDS = Object.keys(VARIANTS);
@@ -312,30 +312,30 @@ function parseDesktopFile(path) {
 // --- the six surfaces ---
 
 function checkExecutable() {
-    const sourcererPath = join(BIN_DIR, 'sourcerer');
+    const powerbrowserPath = join(BIN_DIR, 'powerbrowser');
     const firefoxPath = join(BIN_DIR, 'firefox');
 
-    let sourcererOk = false;
-    if (existsSync(sourcererPath)) {
+    let powerbrowserOk = false;
+    if (existsSync(powerbrowserPath)) {
         try {
-            sourcererOk = (statSync(sourcererPath).mode & 0o111) !== 0;
+            powerbrowserOk = (statSync(powerbrowserPath).mode & 0o111) !== 0;
         } catch {
-            sourcererOk = false;
+            powerbrowserOk = false;
         }
     }
     const firefoxAbsent = !existsSync(firefoxPath);
-    const pass = sourcererOk && firefoxAbsent;
+    const pass = powerbrowserOk && firefoxAbsent;
     surfacesRun.push('executable');
     return {
         pass,
-        detail: `${sourcererPath} executable=${sourcererOk}; ${firefoxPath} absent=${firefoxAbsent}`,
+        detail: `${powerbrowserPath} executable=${powerbrowserOk}; ${firefoxPath} absent=${firefoxAbsent}`,
     };
 }
 
 function checkApplicationIni({ stockControl = false } = {}) {
     const { name, vendor } = readAppIni(APP_INI_PATH);
-    const expectedName = stockControl ? 'Firefox' : 'Sourcerer';
-    const expectedVendor = stockControl ? 'Mozilla' : 'Deocracy';
+    const expectedName = stockControl ? 'Firefox' : 'powerbrowser';
+    const expectedVendor = stockControl ? 'Mozilla' : 'DeBIOS';
     const pass = name === expectedName && vendor === expectedVendor;
     surfacesRun.push('application-ini');
     return {
@@ -344,20 +344,20 @@ function checkApplicationIni({ stockControl = false } = {}) {
     };
 }
 
-const APP_IDENTITY_LINE_RE = /^(?:\[SourcererAPI\] [a-z]+: )?SOURCERER_APP_IDENTITY (\{.*\})$/m;
+const APP_IDENTITY_LINE_RE = /^(?:\[PowerBrowserAPI\] [a-z]+: )?POWERBROWSER_APP_IDENTITY (\{.*\})$/m;
 
 // Launches <binPath> headless with a throwaway profile, capturing combined
-// stdout+stderr until the SOURCERER_APP_IDENTITY startup sentinel appears
-// (sourcerer.js writes it once, unconditionally, right after the sidecar
+// stdout+stderr until the POWERBROWSER_APP_IDENTITY startup sentinel appears
+// (powerbrowser.js writes it once, unconditionally, right after the sidecar
 // prefs sentinel -- before TheiaService.start(), so it needs no backend and
-// no display). Tolerates the same "[SourcererAPI] <level>: " console-mirror
+// no display). Tolerates the same "[PowerBrowserAPI] <level>: " console-mirror
 // prefix verify-phase-05.sh's own sentinel readers do. Always kills the
 // spawned process and removes the throwaway profile, on every exit path --
 // this is a verification harness for Phase 5's own subject (orphaned
 // processes); it must not manufacture that failure mode itself.
 async function readRuntimeIdentity(binPath, { timeoutMs = 30000 } = {}) {
     if (!existsSync(binPath)) throw new Error(`${binPath} does not exist`);
-    const profileDir = await mkdtemp(join(tmpdir(), 'sourcerer-verify-identity-'));
+    const profileDir = await mkdtemp(join(tmpdir(), 'powerbrowser-verify-identity-'));
     let child;
     try {
         child = spawn(binPath, ['--headless', '--profile', profileDir], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -366,7 +366,7 @@ async function readRuntimeIdentity(binPath, { timeoutMs = 30000 } = {}) {
             let settled = false;
             const timer = setTimeout(() => {
                 finish(() => reject(new Error(
-                    `SOURCERER_APP_IDENTITY did not appear within ${timeoutMs}ms; output so far:\n${buf}`
+                    `POWERBROWSER_APP_IDENTITY did not appear within ${timeoutMs}ms; output so far:\n${buf}`
                 )));
             }, timeoutMs);
 
@@ -388,14 +388,14 @@ async function readRuntimeIdentity(binPath, { timeoutMs = 30000 } = {}) {
                     try {
                         resolve(JSON.parse(m[1]));
                     } catch {
-                        reject(new Error(`SOURCERER_APP_IDENTITY line did not carry valid JSON: ${m[1]}`));
+                        reject(new Error(`POWERBROWSER_APP_IDENTITY line did not carry valid JSON: ${m[1]}`));
                     }
                 });
             }
 
             function onExit(code) {
                 finish(() => reject(new Error(
-                    `sourcerer exited (code ${code}) before printing SOURCERER_APP_IDENTITY; output so far:\n${buf}`
+                    `powerbrowser exited (code ${code}) before printing POWERBROWSER_APP_IDENTITY; output so far:\n${buf}`
                 )));
             }
 
@@ -449,7 +449,7 @@ async function checkRuntimeIdentity({ stockControl = false } = {}) {
     surfacesRun.push('runtime-identity');
     return {
         pass,
-        detail: `SOURCERER_APP_IDENTITY name=${JSON.stringify(identity.name)} (expected ${JSON.stringify(expectedName)})` +
+        detail: `POWERBROWSER_APP_IDENTITY name=${JSON.stringify(identity.name)} (expected ${JSON.stringify(expectedName)})` +
             `${stockControl ? '' : `, vendor=${JSON.stringify(identity.vendor)} (expected ${JSON.stringify(expectedVendor)}), version=${JSON.stringify(identity.version)} (expected ${JSON.stringify(versionDisplay)})`}` +
             `; ${crossCheckDetail}`,
     };

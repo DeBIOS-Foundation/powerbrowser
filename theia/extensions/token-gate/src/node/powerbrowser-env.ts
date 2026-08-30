@@ -9,17 +9,17 @@ import * as fs from 'fs';
 //    EnvironmentUtils.mergeProcessEnv, which reads process.env LIVE at
 //    terminal-creation time), a task, a debug adapter, the plugin host that
 //    runs every installed VS Code extension, and the parcel
-//    filesystem-watcher fork. SOURCERER_SUPERVISED arms the parent-death
+//    filesystem-watcher fork. POWERBROWSER_SUPERVISED arms the parent-death
 //    watchdog, so inherited it arms one in a NESTED backend started from a
-//    Sourcerer terminal (`yarn start`, scripts/smoke-theia.sh,
+//    PowerBrowser terminal (`yarn start`, scripts/smoke-theia.sh,
 //    scripts/verify-phase-04.sh), which then self-terminates the instant its
 //    own stdin EOFs -- the exact three unsupervised callers
 //    parent-watchdog-backend-contribution.ts's gate exists to protect, killed
-//    by an unexplained death. SOURCERER_TOKEN_DISABLE, the gate's named dev
+//    by an unexplained death. POWERBROWSER_TOKEN_DISABLE, the gate's named dev
 //    bypass, has never leaked only because the supervisor sets it to "" and
 //    normalizeEnv drops empty values -- which is precisely why this class of
 //    bug stayed invisible. Capture-and-delete below closes inheritance for
-//    every SOURCERER_*-prefixed key at once.
+//    every POWERBROWSER_*-prefixed key at once.
 //
 // 2. EXPOSURE. `delete process.env.X` does NOT rewrite /proc/<pid>/environ --
 //    glibc's unsetenv edits the pointer array, never the original stack
@@ -28,14 +28,14 @@ import * as fs from 'fs';
 //    this project's own target, blocks /proc/<pid>/mem but NOT environ
 //    (procfs environ checks PTRACE_MODE_READ, which Yama's hook does not
 //    gate), so the environment is the ONE place a credential stays legible to
-//    a co-resident process. SOURCERER_TOKEN is the backend's auth credential
+//    a co-resident process. POWERBROWSER_TOKEN is the backend's auth credential
 //    for a loopback server with arbitrary file access and terminal spawn, so
 //    scrubbing it from process.env would have removed the automatic path and
 //    left the exposure: one `tr '\0' '\n' < /proc/<backend>/environ` from any
 //    process the user runs still recovers it. So the supervisor does not put
 //    the token in the environment at all. It writes it as the first line on
 //    the backend's stdin pipe (TheiaService._spawnAndGate ->
-//    SourcererAPI.writeStdinLine) and this module reads it back here.
+//    PowerBrowserAPI.writeStdinLine) and this module reads it back here.
 //
 // Placement is MODULE LOAD, not a contribution's initialize(), and that is
 // load-bearing rather than stylistic for both halves:
@@ -54,7 +54,7 @@ import * as fs from 'fs';
 //     process.env`), which fires during the initialize() phase, and
 //     contribution initialize() calls run under Promise.all with no
 //     guaranteed ordering.
-//   - The token read must complete before SourcererTokenGateContribution's
+//   - The token read must complete before PowerBrowserTokenGateContribution's
 //     synchronous initialize() decides whether to fail closed, which is
 //     itself before the HTTP server ever binds.
 //
@@ -65,7 +65,7 @@ import * as fs from 'fs';
 
 const captured: { [key: string]: string | undefined } = {};
 for (const key of Object.keys(process.env)) {
-    if (key.startsWith('SOURCERER_')) {
+    if (key.startsWith('POWERBROWSER_')) {
         captured[key] = process.env[key];
         delete process.env[key];
     }
@@ -112,22 +112,22 @@ function readTokenFromStdin(): string | undefined {
     return undefined;
 }
 
-if (captured.SOURCERER_SUPERVISED === '1') {
+if (captured.POWERBROWSER_SUPERVISED === '1') {
     // Supervised: the stdin line is the ONLY accepted source. Any inherited
-    // SOURCERER_TOKEN was captured and deleted above and is deliberately
+    // POWERBROWSER_TOKEN was captured and deleted above and is deliberately
     // overwritten here -- the supervisor never sets one, so a value present in
     // the launching shell's environment is not this backend's credential and
     // must not be treated as one. Undefined (parent died, or wrote nothing)
     // leaves the gate to fail closed.
-    captured.SOURCERER_TOKEN = readTokenFromStdin();
+    captured.POWERBROWSER_TOKEN = readTokenFromStdin();
 }
 
 /**
- * The supervisor's handshake as it was actually delivered: the SOURCERER_*
+ * The supervisor's handshake as it was actually delivered: the POWERBROWSER_*
  * variables captured before they were scrubbed from `process.env`, with
- * SOURCERER_TOKEN replaced by the stdin-delivered value on a supervised
+ * POWERBROWSER_TOKEN replaced by the stdin-delivered value on a supervised
  * launch. Every reader in this extension must use this instead of
  * `process.env` -- reading `process.env` directly would find nothing, and
  * re-introducing any of these variables would re-open the leak.
  */
-export const SOURCERER_ENV: Readonly<{ [key: string]: string | undefined }> = captured;
+export const POWERBROWSER_ENV: Readonly<{ [key: string]: string | undefined }> = captured;
