@@ -39,11 +39,13 @@
 // green run from being vacuous.
 //
 // -- `--scope-chain <name>` is a proof, not the gate --
-// It narrows the scan to one coupled chain's files and rows so the rename
-// machinery can be proven end-to-end on six sites before it is pointed at 755.
-// Condition 2 (exact global counts) is deliberately NOT asserted in chain mode,
-// because a chain row's expected_count is a whole-tree figure. The gate is the
-// full-tree run.
+// It narrows the scan to the files of one coupled chain (`chains.<name>.files`)
+// so the rename machinery can be proven end-to-end on six coupled sites before
+// it is pointed at the whole tree. It narrows the FILE SET ONLY -- every
+// inventory row stays active, so a chain run is the full ruleset restricted to
+// those files, never a second, weaker ruleset. Condition 2 (exact counts) is
+// the one thing it cannot assert, because expected_count is a whole-tree
+// figure; the full-tree run is the gate.
 //
 // Text is read as UTF-8 and matched on JavaScript string code units with NO
 // Unicode normalization -- normalizing would silently fold distinct byte
@@ -162,9 +164,26 @@ const CASE_RANK = { upper: 0, title: 1, lower: 2, literal: 3 };
 export function orderRows(rows) {
   return [...rows].sort((a, b) =>
     b.token.length - a.token.length ||
+    // A row scoped to specific files (`only_in`) outranks the broad row for the
+    // same literal. This is how the TitleCase ambiguity is resolved PER SITE
+    // (Pitfall 1): `Sourcerer` in brand.ftl is a `brand-display` row scoped to
+    // that file and means `Power Browser`, while the same nine characters
+    // everywhere else fall through to the broad `brand-identifier` row and mean
+    // `PowerBrowser`.
+    (a.only_in ? 0 : 1) - (b.only_in ? 0 : 1) ||
     (CASE_RANK[a.case_form] ?? 9) - (CASE_RANK[b.case_form] ?? 9) ||
     a.token.localeCompare(b.token) ||
     a.class.localeCompare(b.class));
+}
+
+/** A row applies to `file` unless it declares an `only_in` list that omits it. */
+export function rowAppliesTo(row, file) {
+  return !row.only_in || row.only_in.includes(file);
+}
+
+/** Stable identity for a row, so two rows sharing a literal stay distinct. */
+export function rowKey(row) {
+  return `${row.token}@${row.case_form}@${row.class}@${(row.only_in ?? []).join(',')}`;
 }
 
 /**
@@ -179,6 +198,7 @@ export function claimOccurrences(text, rows, file) {
   const claimed = [];
   const taken = new Uint8Array(text.length);
   for (const row of orderRows(rows)) {
+    if (!rowAppliesTo(row, file)) continue;
     for (const index of findMatches(text, row.token, row.case_form)) {
       let free = true;
       for (let k = index; k < index + row.token.length; k++) {
@@ -213,13 +233,17 @@ export function scopeFiles(inv, { chainFiles = null } = {}) {
   return files.sort();
 }
 
+/**
+ * A named coupled chain. `--scope-chain` narrows the FILE SET only -- every
+ * inventory row stays active -- so a chain run is the full ruleset restricted
+ * to the files whose sites must move together, never a second, weaker ruleset.
+ */
 export function chainOf(inv, name) {
-  const rows = inv.tokens.filter((t) => t.chain === name);
-  if (rows.length === 0) {
-    throw new Error(`scan-brand-residue: FAIL -- no inventory row carries chain "${name}"`);
+  const files = inv.chains?.[name]?.files;
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new Error(`scan-brand-residue: FAIL -- inventory declares no chain "${name}" with a non-empty files[]`);
   }
-  const files = [...new Set(rows.flatMap((t) => t.expected_files ?? []))].sort();
-  return { rows, files };
+  return { files: [...files].sort() };
 }
 
 // ---------------------------------------------------------------------------
@@ -227,7 +251,7 @@ export function chainOf(inv, name) {
 // ---------------------------------------------------------------------------
 
 export function scan(inv, { chain = null, root = REPO_ROOT, files = null, rows = null } = {}) {
-  const activeRows = rows ?? (chain ? chainOf(inv, chain).rows : inv.tokens);
+  const activeRows = rows ?? inv.tokens;
   const activeFiles = files ?? scopeFiles(inv, { chainFiles: chain ? chainOf(inv, chain).files : null });
 
   if (activeFiles.length === 0) {
@@ -237,6 +261,13 @@ export function scan(inv, { chain = null, root = REPO_ROOT, files = null, rows =
   const occurrences = [];
   const unclaimedProbes = [];
   const probes = inv.scope?.residue_probes ?? [];
+  // A second, deliberately dumb recount: plain case-sensitive substring, no
+  // rows, no boundary rule, no claim order. It is the only number in this file
+  // computed the same way 01-RESEARCH.md computed its ground truth, which is
+  // what makes the ground-truth arithmetic below a real cross-check rather
+  // than this scanner agreeing with itself.
+  const rawForms = inv.ground_truth?.raw_forms ?? [];
+  const rawCounts = Object.fromEntries(rawForms.map((f) => [f, 0]));
 
   for (const file of activeFiles) {
     let text;
@@ -247,6 +278,11 @@ export function scan(inv, { chain = null, root = REPO_ROOT, files = null, rows =
     }
     const { claimed, taken } = claimOccurrences(text, activeRows, file);
     occurrences.push(...claimed);
+
+    for (const form of rawForms) {
+      let i = text.indexOf(form);
+      while (i !== -1) { rawCounts[form]++; i = text.indexOf(form, i + 1); }
+    }
 
     // Condition 4's independent detector: raw case-insensitive substring, no
     // boundary rule, deliberately NOT the matcher above.
@@ -266,7 +302,26 @@ export function scan(inv, { chain = null, root = REPO_ROOT, files = null, rows =
 
   occurrences.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.index - b.index);
   unclaimedProbes.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
-  return { empty: false, occurrences, unclaimedProbes, files: activeFiles, rows: activeRows };
+  return { empty: false, occurrences, unclaimedProbes, rawCounts, files: activeFiles, rows: activeRows };
+}
+
+/**
+ * D-17's "reconciled counts, not an exit code", checked against a source
+ * outside this repo's own tooling: 01-RESEARCH.md's independently measured
+ * occurrence census of the sourcerer tree. The arithmetic must CLOSE --
+ * observed now, plus everything already renamed, plus everything deliberately
+ * not imported, must equal the researched total exactly. A deviation is
+ * reconciled here by name, never absorbed into a fudge factor.
+ */
+export function groundTruth(inv, result) {
+  const gt = inv.ground_truth;
+  if (!gt || !result.rawCounts) return null;
+  const observed = Object.values(result.rawCounts).reduce((a, b) => a + b, 0);
+  const alreadyRenamed = (gt.already_renamed ?? []).reduce((n, e) => n + e.occurrences, 0);
+  const notImported = (gt.not_imported ?? []).reduce((n, e) => n + e.occurrences, 0);
+  const expected = (gt.migrating_occurrences ?? 0) + (gt.phase_verifier_occurrences ?? 0);
+  const accounted = observed + alreadyRenamed + notImported;
+  return { observed, alreadyRenamed, notImported, expected, accounted, closes: accounted === expected };
 }
 
 export function offensesOf(result) {
@@ -277,11 +332,11 @@ export function offensesOf(result) {
 // Reconciliation
 // ---------------------------------------------------------------------------
 
-export function reconcile(inv, result, { chain = null } = {}) {
+export function reconcile(inv, result, { chain = null, chainFiles = null } = {}) {
   const failures = [];
   const byRow = new Map();
   for (const o of result.occurrences) {
-    const key = `${o.row.token}@${o.row.case_form}@${o.row.class}`;
+    const key = rowKey(o.row);
     if (!byRow.has(key)) byRow.set(key, []);
     byRow.get(key).push(o);
   }
@@ -293,19 +348,24 @@ export function reconcile(inv, result, { chain = null } = {}) {
     // Green state. The four pre-rename conditions describe a tree that no
     // longer exists; assert instead that nothing the rename was forbidden to
     // touch moved, which is a real assertion over a real expected count.
+    // In chain mode only rows whose whole expected_files set lies inside the
+    // chain can be reconciled exactly -- expected_count is a whole-tree figure,
+    // so a row that also lives outside the chain would report a short count for
+    // a tree that is simply not all being looked at.
+    const inChain = chainFiles ? new Set(chainFiles) : null;
     let checked = 0;
     for (const row of result.rows) {
       if (row.class !== 'frozen' && row.class !== 'coincidental') continue;
-      const key = `${row.token}@${row.case_form}@${row.class}`;
-      const observed = (byRow.get(key) ?? []).length;
+      if (inChain && !(row.expected_files ?? []).every((f) => inChain.has(f))) continue;
+      const observed = (byRow.get(rowKey(row)) ?? []).length;
       checked++;
       if (observed !== row.expected_count) {
         failures.push(`held-back row "${row.token}" (${row.case_form}/${row.class}): expected ${row.expected_count} occurrence(s), observed ${observed}`);
       }
     }
-    conditions.push(`held-back rows intact: every frozen/coincidental row still reconciles by count (${checked} row(s) checked)`);
+    conditions.push(`held-back rows intact: every frozen/coincidental row wholly inside the scanned scope still reconciles by count (${checked} row(s) checked)`);
     if (checked === 0) {
-      failures.push('held-back rows intact: no frozen or coincidental row was in scope, so a clean result would prove nothing');
+      failures.push('held-back rows intact: no frozen or coincidental row was wholly inside the scanned scope, so a clean result would prove nothing');
     }
     return { postRename, conditions, failures };
   }
@@ -314,8 +374,7 @@ export function reconcile(inv, result, { chain = null } = {}) {
   conditions.push('condition 1: every inventoried token with expected_count > 0 was found');
   for (const row of result.rows) {
     if (!(row.expected_count > 0)) continue;
-    const key = `${row.token}@${row.case_form}@${row.class}`;
-    if (!byRow.has(key)) {
+    if (!byRow.has(rowKey(row))) {
       failures.push(`condition 1: token "${row.token}" (${row.case_form}/${row.class}) expected ${row.expected_count} occurrence(s), found none`);
     }
   }
@@ -325,8 +384,7 @@ export function reconcile(inv, result, { chain = null } = {}) {
   } else {
     conditions.push('condition 2: each token\'s observed count EQUALS its expected count');
     for (const row of result.rows) {
-      const key = `${row.token}@${row.case_form}@${row.class}`;
-      const observed = (byRow.get(key) ?? []).length;
+      const observed = (byRow.get(rowKey(row)) ?? []).length;
       if (observed !== row.expected_count) {
         failures.push(`condition 2: token "${row.token}" (${row.case_form}/${row.class}): expected ${row.expected_count}, observed ${observed}`);
       }
@@ -334,12 +392,12 @@ export function reconcile(inv, result, { chain = null } = {}) {
   }
 
   conditions.push('condition 3: every observed file appears in that token\'s expected_files');
-  for (const [key, list] of byRow) {
+  for (const list of byRow.values()) {
     const row = list[0].row;
     const allowed = new Set(row.expected_files ?? []);
     for (const file of new Set(list.map((o) => o.file))) {
       if (!allowed.has(file)) {
-        failures.push(`condition 3: token "${row.token}" (${key.split('@').slice(1).join('/')}) found in ${file}, which is not in its expected_files`);
+        failures.push(`condition 3: token "${row.token}" (${row.case_form}/${row.class}) found in ${file}, which is not in its expected_files`);
       }
     }
   }
@@ -347,6 +405,16 @@ export function reconcile(inv, result, { chain = null } = {}) {
   conditions.push('condition 4: no occurrence was found that the inventory does not account for (independent case-insensitive probe, no boundary rule)');
   for (const u of result.unclaimedProbes) {
     failures.push(`condition 4: ${u.file}:${u.line}: "${u.text}" matched probe "${u.probe}" but no inventory row claimed it`);
+  }
+
+  const gt = groundTruth(inv, result);
+  if (gt && !chain) {
+    conditions.push(`ground truth: observed + already-renamed + not-imported EQUALS 01-RESEARCH.md's independently measured census (${gt.observed} + ${gt.alreadyRenamed} + ${gt.notImported} = ${gt.accounted}, expected ${gt.expected})`);
+    if (!gt.closes) {
+      failures.push(`ground truth: the arithmetic does not close -- ${gt.accounted} accounted for against a researched total of ${gt.expected}, a deviation of ${gt.accounted - gt.expected}. Reconcile it in inventory/brand-tokens.json's ground_truth block by name; do not absorb it.`);
+    }
+  } else if (gt && chain) {
+    conditions.push('ground truth: SKIPPED in --scope-chain mode -- the census is a whole-tree figure');
   }
 
   return { postRename, conditions, failures };
@@ -379,6 +447,35 @@ export function renderReport(inv, result, rec, { chain = null } = {}) {
     lines.push('');
     for (const f of rec.failures) lines.push(`- ${f}`);
   }
+  const gt = groundTruth(inv, result);
+  if (gt && !chain) {
+    lines.push('');
+    lines.push('## Ground-truth reconciliation');
+    lines.push('');
+    lines.push(`Source: \`${inv.ground_truth.source}\`. Counted the same way that census was counted — plain case-sensitive substring over the scanned scope, no boundary rule and no inventory rows — so this is a cross-check against a number produced by a different tool on a different tree, not this scanner agreeing with itself.`);
+    lines.push('');
+    lines.push('| accounting line | occurrences |');
+    lines.push('|---|---:|');
+    for (const form of inv.ground_truth.raw_forms ?? []) {
+      lines.push(`| observed now: \`${form}\` | ${result.rawCounts[form]} |`);
+    }
+    lines.push(`| **observed now, total** | **${gt.observed}** |`);
+    for (const e of inv.ground_truth.already_renamed ?? []) {
+      lines.push(`| already renamed: ${e.what} | ${e.occurrences} |`);
+    }
+    for (const e of inv.ground_truth.not_imported ?? []) {
+      lines.push(`| not imported: \`${e.path}\` | ${e.occurrences} |`);
+    }
+    lines.push(`| **accounted for** | **${gt.accounted}** |`);
+    lines.push(`| researched migrating scope | ${inv.ground_truth.migrating_occurrences} |`);
+    lines.push(`| researched phase-verifier drivers (D-21, migrated now, consolidated later) | ${inv.ground_truth.phase_verifier_occurrences} |`);
+    lines.push(`| **researched total** | **${gt.expected}** |`);
+    lines.push('');
+    lines.push(gt.closes
+      ? `**The arithmetic closes exactly: ${gt.accounted} = ${gt.expected}.** Nothing is absorbed.`
+      : `**The arithmetic does NOT close: ${gt.accounted} against ${gt.expected}, a deviation of ${gt.accounted - gt.expected}.**`);
+  }
+
   lines.push('');
   lines.push(`## Offenses — occurrences that must be renamed (${offenses.length})`);
   lines.push('');
@@ -398,16 +495,15 @@ export function renderReport(inv, result, rec, { chain = null } = {}) {
   lines.push('');
   lines.push('## Per-token totals');
   lines.push('');
-  lines.push('| token | case | class | expected | observed |');
-  lines.push('|---|---|---|---|---|');
+  lines.push('| token | case | class | scoped to | expected | observed |');
+  lines.push('|---|---|---|---|---|---|');
   const counts = new Map();
   for (const o of result.occurrences) {
-    const key = `${o.row.token}@${o.row.case_form}@${o.row.class}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    counts.set(rowKey(o.row), (counts.get(rowKey(o.row)) ?? 0) + 1);
   }
   for (const row of orderRows(result.rows)) {
-    const key = `${row.token}@${row.case_form}@${row.class}`;
-    lines.push(`| \`${row.token}\` | ${row.case_form} | ${row.class} | ${row.expected_count} | ${counts.get(key) ?? 0} |`);
+    const scope = row.only_in ? row.only_in.join('<br>') : '(all files in scope)';
+    lines.push(`| \`${row.token}\` | ${row.case_form} | ${row.class} | ${scope} | ${row.expected_count} | ${counts.get(rowKey(row)) ?? 0} |`);
   }
   lines.push('');
   return lines.join('\n');
@@ -533,7 +629,7 @@ function main(argv) {
     console.error(`  ${o.file}:${o.line}: ${o.row.token}`);
   }
 
-  const rec = reconcile(inv, result, { chain });
+  const rec = reconcile(inv, result, { chain, chainFiles: chain ? chainOf(inv, chain).files : null });
 
   if (reportPath) {
     writeFileSync(resolve(REPO_ROOT, reportPath), renderReport(inv, result, rec, { chain }));

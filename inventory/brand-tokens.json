@@ -1,5 +1,5 @@
 {
-  "$comment": "MIG-02 (D-15/D-16/D-17): the single machine-readable source of truth for the Sourcerer -> Power Browser rename. It has exactly two consumers, and they read this same file so that what is scanned and what is renamed cannot drift apart: scripts/rename-brand.mjs (the rerunnable rename executor) and scripts/scan-brand-residue.mjs (the residual-brand scan and its reconciled red-scan evidence). FAIL-CLOSED RULE: an occurrence found in the migrating scope that no row here accounts for is a FAILURE, never silently ignored -- that is reconciliation condition 4, and it is the one condition that catches an under-scanning scanner rather than a stale inventory. rename-brand.mjs refuses to run at all while any row lacks a `class` from the five-value set, so this file is the gate, not documentation. Per-row keys: `token`; `case_form` (lower | title | upper | literal -- the three case forms are three DIFFERENT tokens matched case-sensitively, per Pitfall 1; `literal` is a structural anchor matched as a raw substring with no boundary rule); `class` (brand-identifier | brand-display | identity | frozen | coincidental); `target`; `expected_count`; `expected_files[]`; `couples_with[]` (paths whose sites must move in the SAME pass, per Pitfall 2); `reason` (mandatory on every frozen and coincidental row, citing file:line evidence); `chain` (names a coupled chain that `--scope-chain` can prove end-to-end in isolation); and the optional `site_overrides[]` of {file, line, class, target, reason} for disambiguating the TitleCase form per site. SEEDED STATE: this file currently carries only the `chrome-package` chain plus the held-back rows that chain proves the classifier can hold back. Plan 01-02 extends it to the complete migrating scope; extend it, do not restructure it. The `chrome-package` chain is the chrome://sourcerer/ coupled chain: the chrome package name and its six jar.mn registration lines, the components.conf esModule and constructor keys, the moz.build JAR_MANIFESTS/DEFINES/JS_PREFERENCE_PP_FILES/XPCOM_MANIFESTS wiring, the reference inside patches/020-sourcerer-shell.patch, and the chrome-package allowlist glob in scripts/check-internals-boundary.sh -- six coupled reference formats that must move together in one pass or the build packages a chrome package nothing can reach.",
+  "$comment": "MIG-02 (D-15/D-16/D-17): the single machine-readable source of truth for the Sourcerer -> Power Browser rename. It has exactly two consumers, and they read this same file so that what is scanned and what is renamed cannot drift apart: scripts/rename-brand.mjs (the rerunnable rename executor) and scripts/scan-brand-residue.mjs (the residual-brand scan and its reconciled red-scan evidence). FAIL-CLOSED RULE: an occurrence found in the migrating scope that no row here accounts for is a FAILURE, never silently ignored -- that is reconciliation condition 4, and it is the one condition that catches an under-scanning scanner rather than a stale inventory. rename-brand.mjs refuses to run at all while any row lacks a `class` from the five-value set, so this file is the gate, not documentation. Per-row keys: `token`; `case_form` (lower | title | upper | literal -- the three case forms are three DIFFERENT tokens matched case-sensitively, per Pitfall 1; `literal` is a structural or site anchor matched as a raw substring with no boundary rule); `class` (brand-identifier | brand-display | identity | frozen | coincidental); `target`; `expected_count` and `expected_files[]` (measured against this tree, and reconciled against research's independent ground truth in 01-SCAN-RED-REPORT.md); `couples_with[]` (paths whose sites must move in the SAME pass, per Pitfall 2); `stage` (the cross-tier contract group a row belongs to, so plan 01-02 can stage commits by CONTRACT rather than by tier -- Pitfall 3); `reason` (mandatory on every frozen and coincidental row, citing file:line evidence); `only_in[]` (restricts a row to named files, and OUTRANKS the broad row for the same literal -- this is how the ambiguous TitleCase form is classified per site rather than per token); and `site_overrides[]` of {file, line, class, target, reason} for the same purpose keyed by line. Prefer `only_in` with a longer context-anchored token over `site_overrides`: a pinned line number silently stops meaning anything the moment an edit above it shifts the file.",
   "scope": {
     "include": "Every path `git ls-files` reports from the repo root, minus the `exclude` prefixes below, minus any path ending in one of `binary_extensions`. Derived from git rather than from a hand-kept list because git already excludes every ignored path -- upstream/, objdir/, objdir-release/, .mozbuild/, node_modules/, theia/**/lib/ -- which is the half of Pitfall 7 that drowns the scan in Gecko's own thousands of firefox-named files.",
     "exclude": [
@@ -8,7 +8,7 @@
       "scripts/scan-brand-residue.mjs",
       "scripts/rename-brand.mjs"
     ],
-    "exclude_reason": ".planning/ is this repo's own planning record, not migrating source; it quotes the Sourcerer tokens as historical evidence and renaming it would destroy the provenance D-08 protects. inventory/ and the two rename scripts are the rename's own machinery: they necessarily spell out every token, so scanning them would be scanning the scan's own input -- vacuous, and it would make the tree permanently red. Every other tracked path is in scope, including docs/, README.md, patches/, theia/ and scripts/.",
+    "exclude_reason": ".planning/ is this repo's own planning record, not migrating source; it quotes the Sourcerer tokens as historical evidence and renaming it would destroy the provenance D-08 protects. inventory/ and the two rename scripts are the rename's own machinery: they necessarily spell out every token, so scanning them would be scanning the scan's own input -- vacuous, and it would make the tree permanently red. Every other tracked path is in scope, including docs/, README.md, LICENSE, .mozconfig, patches/, theia/ and the rest of scripts/.",
     "binary_extensions": [
       ".png",
       ".ico",
@@ -23,10 +23,54 @@
       "sourcerer",
       "deocracy"
     ],
-    "residue_probes_reason": "Used ONLY by reconciliation condition 4, and deliberately NOT by the boundary matcher: a raw case-insensitive substring search with no boundary rule at all. Every probe hit must land inside a span some row above claimed. A bug in the boundary matcher (missing `sourcererPrivilegedJs`, say) therefore leaves an unclaimed probe hit and fails condition 4, even though conditions 1-3 would all agree with themselves. This is the independent source T-01-04 requires -- the rename script never writes it."
+    "residue_probes_reason": "Used ONLY by reconciliation condition 4, and deliberately NOT by the boundary matcher: a raw case-insensitive substring search with no boundary rule at all. Every probe hit must land inside a span some row below claimed. A bug in the boundary matcher (missing `sourcererPrivilegedJs`, say) therefore leaves an unclaimed probe hit and fails condition 4, even though conditions 1-3 would all agree with themselves. This is the independent source T-01-04 requires -- the rename script never writes it."
+  },
+  "ground_truth": {
+    "$comment": "D-17 says a non-zero exit is not evidence, because an under-scanning scanner also exits non-zero. This block is the outside number the scan is checked against: 01-RESEARCH.md counted the sourcerer tree independently, with grep, before any of this tooling existed. scan-brand-residue.mjs recounts `raw_forms` the same dumb way -- plain case-sensitive substring over the scanned scope, no rows and no boundary rule -- and asserts that observed + already_renamed + not_imported equals migrating_occurrences + phase_verifier_occurrences EXACTLY. Every line below is a named deviation rather than a fudge factor, which is the difference between reconciling a count and absorbing one.",
+    "source": "01-RESEARCH.md, \"Token Inventory Ground Truth -> Occurrence counts by migration disposition\", measured over `git ls-files` at sourcerer@bce68bb468e4dc160da8c9e238e030a400b806f8 with a clean working tree",
+    "raw_forms": [
+      "sourcerer",
+      "Sourcerer",
+      "SOURCERER"
+    ],
+    "migrating_occurrences": 755,
+    "migrating_files": 69,
+    "phase_verifier_occurrences": 247,
+    "phase_verifier_files": 4,
+    "phase_verifier_note": "scripts/verify-phase-0{2,3,4,5}.sh. Research counted them separately because their disposition was undecided; D-21 decided it -- the checks are migrated now and consolidated into scripts/verify-platform.sh later, so their occurrences are inside this scan's scope and must be accounted for here.",
+    "already_renamed": [
+      {
+        "what": "the `chrome-package` coupled chain, renamed by the tracer in plan 01-01 before this report was produced",
+        "occurrences": 57
+      }
+    ],
+    "not_imported": [
+      {
+        "path": "CLAUDE.md",
+        "occurrences": 12,
+        "reason": "Sourcerer's own agent instructions. Left downstream by the plan 01-01 import alongside the D-03 exclusions; research's census predates that decision and still counts it."
+      },
+      {
+        "path": ".claude/CLAUDE.md",
+        "occurrences": 5,
+        "reason": "Same: Sourcerer's agent configuration, not platform source."
+      }
+    ]
+  },
+  "chains": {
+    "chrome-package": {
+      "reason": "The chrome://sourcerer/ coupled chain, renamed end-to-end by the tracer in plan 01-01 before the machinery was pointed at the rest of the tree: the chrome package name and its six jar.mn registration lines, the components.conf esModule and constructor keys, the moz.build JAR_MANIFESTS / DEFINES / JS_PREFERENCE_PP_FILES / XPCOM_MANIFESTS wiring, the reference inside patches/020, and the two chrome-package allowlist globs in check-internals-boundary.sh -- six coupled reference formats that must move together or the build packages a chrome package nothing can reach. `--scope-chain` narrows the FILE SET only; every row stays active, so a chain run is the full ruleset restricted to these files.",
+      "files": [
+        "sourcerer/shell/jar.mn",
+        "sourcerer/shell/components.conf",
+        "sourcerer/shell/moz.build",
+        "patches/020-sourcerer-shell.patch",
+        "scripts/check-internals-boundary.sh"
+      ]
+    }
   },
   "hand_write": {
-    "$comment": "Surfaces rename-brand.mjs is forbidden to touch. These are the display literals of Pitfall 1: `Sourcerer` here means `Power Browser` (two words, with the space), not the identifier `PowerBrowser`, and a mechanical pass gets them wrong while the verifier that checks them agrees with the wrong answer because the same pass rewrote both sides. Plan 01-03 hand-writes every one of them. The `.desktop` files are excluded for a second reason (Pitfall 4): three `sourcerer` tokens on one `Icon=`/`Exec=` line with three different correct targets, which no token-boundary rule can get right.",
+    "$comment": "Surfaces rename-brand.mjs is forbidden to touch, in addition to every `brand-display` and `frozen` row, which it skips by class. These are hand-written in plan 01-03. The display literals are Pitfall 1: `Sourcerer` here means `Power Browser` (two words, with the space), and a mechanical pass gets them wrong while the verifier that checks them AGREES, because the same pass rewrote both sides. The `.desktop` files are excluded for a second, independent reason (Pitfall 4): three tokens on one `Icon=`/`Exec=` line with three different correct targets, which no token-boundary rule can get right.",
     "files": [
       "sourcerer/sourcerer.desktop",
       "sourcerer/sourcerer-release.desktop",
@@ -42,82 +86,607 @@
         "file": "theia/applications/browser/package.json",
         "contains": "\"applicationName\"",
         "reason": "theia/applications/browser/package.json:13 -- `\"applicationName\": \"Sourcerer\"` is a display literal whose target is `Power Browser`, but the rest of this file carries ordinary identifier occurrences the script must rename. Excluding the whole file would leave those behind, so the exclusion is line-scoped."
+      },
+      {
+        "file": "LICENSE",
+        "contains": "Required Notice:",
+        "reason": "LICENSE:133 -- the MPL Exhibit B notice names a legal entity, not an identifier. Rewritten whole by hand in plan 01-03."
       }
     ]
   },
   "tokens": [
     {
-      "token": "sourcerer",
-      "case_form": "lower",
-      "class": "brand-identifier",
-      "target": "powerbrowser",
-      "expected_count": 41,
+      "token": "{\"name\":\"Sourcerer\",\"vendor\":\"Deocracy\"",
+      "case_form": "literal",
+      "class": "identity",
+      "target": "{\"name\":\"powerbrowser\",\"vendor\":\"DeBIOS\"",
+      "expected_count": 1,
       "expected_files": [
-        "sourcerer/shell/jar.mn",
-        "sourcerer/shell/components.conf",
-        "sourcerer/shell/moz.build",
-        "patches/020-sourcerer-shell.patch",
-        "scripts/check-internals-boundary.sh"
+        "scripts/verify-branding-identity.mjs"
       ],
       "couples_with": [
-        "sourcerer/shell/jar.mn",
-        "sourcerer/shell/components.conf",
-        "sourcerer/shell/moz.build",
-        "patches/020-sourcerer-shell.patch",
-        "scripts/check-internals-boundary.sh"
+        "scripts/verify-branding-identity.mjs",
+        ".mozconfig",
+        "patches/010-sourcerer-identity.patch"
       ],
-      "chain": "chrome-package",
-      "reason": "The fixed-identifier form (D-10, one word). Carries the chrome package name in jar.mn:12, the virtual paths and parenthesised source filenames on the six registration lines jar.mn:12-17, every `chrome://sourcerer/` string, the `../sourcerer/shell` DIRS entry inside patches/020, and the `*'chrome://sourcerer/'*` allowlist globs at check-internals-boundary.sh:119,172 -- a missed rename there silently WIDENS the boundary guard rather than failing it."
+      "reason": "scripts/verify-branding-identity.mjs:31 -- a comment recording the live application.ini values this verifier asserts. It must move with the expectation on the same file's checkApplicationIni, or the comment documents a value the code no longer expects. Anchored on the surrounding literal rather than on a line number so an edit above it cannot silently retarget the rule."
     },
     {
-      "token": "Sourcerer",
-      "case_form": "title",
-      "class": "brand-identifier",
-      "target": "PowerBrowser",
-      "expected_count": 13,
+      "token": "stockControl ? 'Firefox' : 'Sourcerer'",
+      "case_form": "literal",
+      "class": "identity",
+      "target": "stockControl ? 'Firefox' : 'powerbrowser'",
+      "expected_count": 1,
       "expected_files": [
-        "sourcerer/shell/jar.mn",
-        "sourcerer/shell/components.conf",
-        "scripts/check-internals-boundary.sh"
+        "scripts/verify-branding-identity.mjs"
       ],
       "couples_with": [
-        "sourcerer/shell/jar.mn",
-        "sourcerer/shell/components.conf",
-        "scripts/check-internals-boundary.sh"
+        ".mozconfig",
+        "scripts/verify-branding-identity.mjs"
       ],
-      "chain": "chrome-package",
-      "reason": "TitleCase AS AN IDENTIFIER PREFIX, target `PowerBrowser` with no space: the `SourcererAPI.sys.mjs` source filename on jar.mn:16, the `constructor` key `SourcererSingleInstanceHandler` at components.conf:19 (coupled to the exported class name), and the hardcoded basename and catalogue path at check-internals-boundary.sh:31,150,151. Every TitleCase occurrence in this chain is an identifier; not one of them is a display literal, which is why the whole chain can carry a single row. Plan 01-02 must classify TitleCase PER SITE once the display surfaces enter scope (Pitfall 1)."
+      "reason": "scripts/verify-branding-identity.mjs:337 -- application.ini's Name comes from MOZ_APP_BASENAME, which .mozconfig's --with-app-basename sets. D-10 fixes that identifier at the one-word lowercase form `powerbrowser`, NOT the TitleCase display name, so this expectation is `powerbrowser` and is class identity rather than a mechanical case swap. Coupled to .mozconfig: if only one side moves the surface fails with a value mismatch that names neither cause."
     },
     {
-      "token": "SOURCERER",
+      "token": "--with-app-basename=Sourcerer",
+      "case_form": "literal",
+      "class": "identity",
+      "target": "--with-app-basename=powerbrowser",
+      "expected_count": 1,
+      "expected_files": [
+        ".mozconfig"
+      ],
+      "couples_with": [
+        ".mozconfig",
+        "scripts/verify-branding-identity.mjs"
+      ],
+      "reason": ".mozconfig:6 -- MOZ_APP_BASENAME is lowercased into the profile path (upstream/toolkit/xre/nsXREDirProvider.cpp:1621-1637) and surfaces as application.ini Name. D-10 fixes it at `powerbrowser`, one word, matching MOZ_APP_REMOTINGNAME and StartupWMClass. Anchored on the option text so the TitleCase-to-lowercase target cannot leak into the 300-odd other TitleCase sites."
+    },
+    {
+      "token": "SOURCERER_TOKEN_COOKIE_NAME",
       "case_form": "upper",
       "class": "brand-identifier",
-      "target": "POWERBROWSER",
+      "target": "POWERBROWSER_TOKEN_COOKIE_NAME",
       "expected_count": 2,
       "expected_files": [
-        "sourcerer/shell/moz.build"
+        "theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts"
+      ],
+      "stage": "token-cookie-name",
+      "reason": "Cross-tier: the cookie name the chrome side sets and the Node token gate reads. Longer than SOURCERER_TOKEN, so the longest-token-first claim order takes it first and the shorter row never splits it."
+    },
+    {
+      "token": "SOURCERER_TOKEN_DISABLE",
+      "case_form": "upper",
+      "class": "brand-identifier",
+      "target": "POWERBROWSER_TOKEN_DISABLE",
+      "expected_count": 9,
+      "expected_files": [
+        "scripts/smoke-theia.sh",
+        "scripts/verify-phase-02.sh",
+        "scripts/verify-phase-04.sh",
+        "scripts/verify-phase-05.sh",
+        "sourcerer/shell/TheiaService.sys.mjs",
+        "theia/extensions/token-gate/src/node/sourcerer-env.ts",
+        "theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts"
+      ],
+      "stage": "token-disable-bypass",
+      "reason": "Cross-tier test bypass. smoke-theia.sh sets it, so a half-renamed tree still passes the smoke test while the real gate is broken -- the exact blind spot Pitfall 3 names."
+    },
+    {
+      "token": "SOURCERER_BACKEND_READY",
+      "case_form": "upper",
+      "class": "brand-identifier",
+      "target": "POWERBROWSER_BACKEND_READY",
+      "expected_count": 59,
+      "expected_files": [
+        "scripts/verify-phase-04.sh",
+        "scripts/verify-phase-05.sh",
+        "sourcerer/shell/TheiaService.sys.mjs",
+        "theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts"
+      ],
+      "stage": "backend-ready-sentinel",
+      "reason": "Cross-tier stdout sentinel: the Node backend prints it, the chrome side waits for it. Renamed on one side only, the chrome side waits forever and reports a timeout that names nothing."
+    },
+    {
+      "token": "SOURCERER_APP_IDENTITY",
+      "case_form": "upper",
+      "class": "brand-identifier",
+      "target": "POWERBROWSER_APP_IDENTITY",
+      "expected_count": 13,
+      "expected_files": [
+        "scripts/verify-branding-identity.mjs",
+        "scripts/verify-phase-05.sh",
+        "sourcerer/shell/sourcerer.js"
+      ],
+      "stage": "app-identity-sentinel",
+      "reason": "Cross-tier stdout sentinel AND half of the verifier regex at scripts/verify-branding-identity.mjs:347, which embeds two brand tokens (this one and the [SourcererAPI] console-mirror prefix). Pitfall 2: rename the emitter without the regex and the surface fails with \"did not appear within Nms\", a timeout that names no cause."
+    },
+    {
+      "token": "SOURCERER_SUPERVISED",
+      "case_form": "upper",
+      "class": "brand-identifier",
+      "target": "POWERBROWSER_SUPERVISED",
+      "expected_count": 14,
+      "expected_files": [
+        "scripts/verify-phase-04.sh",
+        "scripts/verify-phase-05.sh",
+        "sourcerer/shell/TheiaService.sys.mjs",
+        "theia/extensions/token-gate/src/node/parent-watchdog-backend-contribution.ts",
+        "theia/extensions/token-gate/src/node/sourcerer-env.ts"
+      ],
+      "stage": "supervised-env-var",
+      "reason": "Cross-tier env var: the chrome side sets it when spawning the backend, the parent watchdog reads it. Split across commits, the watchdog silently stops supervising."
+    },
+    {
+      "token": "SOURCERER_TOKEN",
+      "case_form": "upper",
+      "class": "brand-identifier",
+      "target": "POWERBROWSER_TOKEN",
+      "expected_count": 21,
+      "expected_files": [
+        "scripts/smoke-theia.sh",
+        "scripts/verify-phase-02.sh",
+        "scripts/verify-phase-04.sh",
+        "scripts/verify-phase-05.sh",
+        "sourcerer/INTERNAL-APIS.md",
+        "sourcerer/shell/SourcererAPI.sys.mjs",
+        "sourcerer/shell/TheiaService.sys.mjs",
+        "theia/extensions/token-gate/src/node/sourcerer-env.ts",
+        "theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts"
+      ],
+      "stage": "auth-token-env-var",
+      "reason": "Cross-tier auth-token env var, minted at runtime by TheiaService.sys.mjs and read by the Node token gate. Split across commits, the backend boots and rejects every request with a 403 that names no cause -- and smoke-theia.sh still passes, because it sets the disable bypass."
+    },
+    {
+      "token": "SOURCERER_DEV_TREE",
+      "case_form": "upper",
+      "class": "brand-identifier",
+      "target": "POWERBROWSER_DEV_TREE",
+      "expected_count": 3,
+      "expected_files": [
+        "sourcerer/shell/sourcerer-sidecar.js"
       ],
       "couples_with": [
         "sourcerer/shell/moz.build",
         "sourcerer/shell/sourcerer-sidecar.js"
       ],
-      "chain": "chrome-package",
-      "reason": "`DEFINES[\"SOURCERER_DEV_TREE\"]` at moz.build:14 is consumed by `#filter substitution` as the `@SOURCERER_DEV_TREE@` token inside the preprocessed pref file sourcerer-sidecar.js. The define name and the substitution token must rename together or the sidecar pref carries a literal unsubstituted `@POWERBROWSER_DEV_TREE@` path and the backend never starts -- which is why sourcerer-sidecar.js is in couples_with even though its own occurrences are outside this chain's scope."
+      "stage": "dev-tree-define",
+      "reason": "Coupled format 3: a mozbuild DEFINES[] name consumed as the `@SOURCERER_DEV_TREE@` substitution token in the preprocessed sidecar pref file. The define and the substitution token must rename together or the pref carries a literal unsubstituted path and the backend never starts. The moz.build half already moved with the chrome-package chain; the sidecar half is what remains."
+    },
+    {
+      "token": "SourcererPrivilegedJs",
+      "case_form": "title",
+      "class": "brand-identifier",
+      "target": "PowerBrowserPrivilegedJs",
+      "expected_count": 14,
+      "expected_files": [
+        "scripts/verify-dev-flag-off.mjs",
+        "theia/extensions/customize/src/browser/customize-frontend-module.ts",
+        "theia/extensions/customize/src/browser/customize-privileged-js-contribution.ts",
+        "theia/extensions/customize/src/browser/sourcerer-privileged-js.ts"
+      ],
+      "couples_with": [
+        "scripts/verify-dev-flag-off.mjs",
+        "theia/extensions/customize/src/browser/sourcerer-privileged-js.ts",
+        "theia/extensions/customize/src/browser/customize-frontend-module.ts",
+        "theia/extensions/customize/src/browser/customize-privileged-js-contribution.ts"
+      ],
+      "reason": "Coupled format 5: scripts/verify-dev-flag-off.mjs:68 carries the symbol key inside a STRING evaluated in the page (`Symbol.for('SourcererPrivilegedJs')`), so TypeScript cannot catch a drift between it and the module that registers the symbol. Both sides are listed in couples_with."
+    },
+    {
+      "token": "010-sourcerer-identity.patch",
+      "case_form": "lower",
+      "class": "brand-identifier",
+      "target": "010-powerbrowser-identity.patch",
+      "expected_count": 5,
+      "expected_files": [
+        "docs/BUILD.md",
+        "scripts/apply-patches.sh"
+      ],
+      "couples_with": [
+        "scripts/apply-patches.sh",
+        "patches/010-sourcerer-identity.patch",
+        "patches/020-sourcerer-shell.patch"
+      ],
+      "reason": "Coupled format 4/6: scripts/apply-patches.sh's run_self_test() hardcodes this patch filename, so the file rename and the self-test's literal must move together or the self-test silently stops testing anything. Its sibling 020-sourcerer-shell.patch gets no row of its own because no file NAMES it -- only 010 is referenced by a literal -- so its rename is entirely a git mv, which plan 01-02 owns. Both patch files' CONTENT is regenerated from a patched tree in plan 01-04, never text-edited: editing a .patch invalidates the index blob hashes that make `git apply --3way` a real 3-way merge, and 010's post-image hash is literally 020's pre-image hash."
+    },
+    {
+      "token": "SourcererAPI",
+      "case_form": "title",
+      "class": "brand-identifier",
+      "target": "PowerBrowserAPI",
+      "expected_count": 140,
+      "expected_files": [
+        "docs/BUILD.md",
+        "scripts/verify-branding-identity.mjs",
+        "scripts/verify-phase-04.sh",
+        "scripts/verify-phase-05.sh",
+        "sourcerer/INTERNAL-APIS.md",
+        "sourcerer/shell/SourcererAPI.sys.mjs",
+        "sourcerer/shell/TheiaService.sys.mjs",
+        "sourcerer/shell/sourcerer.js",
+        "theia/extensions/token-gate/src/node/sourcerer-env.ts"
+      ],
+      "couples_with": [
+        "sourcerer/shell/jar.mn",
+        "sourcerer/shell/components.conf",
+        "sourcerer/shell/SourcererAPI.sys.mjs",
+        "sourcerer/INTERNAL-APIS.md",
+        "scripts/check-internals-boundary.sh",
+        "scripts/verify-branding-identity.mjs"
+      ],
+      "reason": "Coupled formats 1/2/5/6 at once: the parenthesised source filename in jar.mn, the esModule chrome:// URL in components.conf, the exempt-file basename and catalogue target in check-internals-boundary.sh, every catalogue row in INTERNAL-APIS.md, and the console-mirror prefix inside scripts/verify-branding-identity.mjs:347's regex. Given its own row so that coupling is declared rather than left to the broad TitleCase pass."
+    },
+    {
+      "token": "/home/chris/coding/sourcerer",
+      "case_form": "lower",
+      "class": "coincidental",
+      "target": "/home/chris/coding/Power-Browser",
+      "expected_count": 4,
+      "expected_files": [
+        "sourcerer/sourcerer-release.desktop",
+        "sourcerer/sourcerer.desktop"
+      ],
+      "reason": "sourcerer/sourcerer.desktop:3-4 and sourcerer-release.desktop:3-4 -- the ABSOLUTE REPO ROOT, which is not the product identifier and does not take the `powerbrowser` target. `Exec=/home/chris/coding/sourcerer/objdir/dist/bin/sourcerer` carries three tokens with three different correct targets on one line; a token-boundary rename produces a path that does not exist, the script reports success, and the desktop entry silently does nothing when clicked (Pitfall 4). Classified coincidental so the scan REPORTS it and the rename script leaves it alone; both .desktop files are hand-written in plan 01-03. Longer than the bare `sourcerer` token, so the claim order takes the repo root first and the tree directory after it."
+    },
+    {
+      "token": "Sourcerer",
+      "case_form": "title",
+      "class": "brand-display",
+      "target": "Power Browser",
+      "expected_count": 5,
+      "expected_files": [
+        "sourcerer/branding/dev/locales/en-US/brand.ftl"
+      ],
+      "only_in": [
+        "sourcerer/branding/dev/locales/en-US/brand.ftl"
+      ],
+      "reason": "sourcerer/branding/dev/locales/en-US/brand.ftl:5-8,11 -- -brand-shorter-name, -brand-short-name, -brand-shortcut-name, -brand-full-name, and the D-78 rationale comment naming the product. Display literal: the target is `Power Browser`, TWO WORDS WITH A SPACE, not the identifier `PowerBrowser`. Hand-written in plan 01-03. This is Pitfall 1's exact trap: a mechanical pass writes `PowerBrowser Dev`, the build succeeds, and verify-branding-identity.mjs surface 4 AGREES because the same pass rewrote the descriptor it compares against."
+    },
+    {
+      "token": "Sourcerer",
+      "case_form": "title",
+      "class": "brand-display",
+      "target": "Power Browser",
+      "expected_count": 5,
+      "expected_files": [
+        "sourcerer/branding/release/locales/en-US/brand.ftl"
+      ],
+      "only_in": [
+        "sourcerer/branding/release/locales/en-US/brand.ftl"
+      ],
+      "reason": "sourcerer/branding/release/locales/en-US/brand.ftl:5-8,11 -- the release variant of the same four terms plus the D-78 comment. -brand-full-name here is bare `Sourcerer` (no \" Dev\"), so the release display name is `Power Browser` and the dev one is `Power Browser Dev`; D-13 keeps both presentations."
+    },
+    {
+      "token": "Sourcerer",
+      "case_form": "title",
+      "class": "brand-display",
+      "target": "Power Browser",
+      "expected_count": 3,
+      "expected_files": [
+        "sourcerer/branding/dev/locales/en-US/brand.properties"
+      ],
+      "only_in": [
+        "sourcerer/branding/dev/locales/en-US/brand.properties"
+      ],
+      "reason": "sourcerer/branding/dev/locales/en-US/brand.properties:5-7 -- brandShorterName, brandShortName, brandFullName. The .properties file is the second half of the same display surface as brand.ftl and verify-branding-identity.mjs asserts BOTH against the variant's expected value, so they must be hand-written to the same literal."
+    },
+    {
+      "token": "Sourcerer",
+      "case_form": "title",
+      "class": "brand-display",
+      "target": "Power Browser",
+      "expected_count": 3,
+      "expected_files": [
+        "sourcerer/branding/release/locales/en-US/brand.properties"
+      ],
+      "only_in": [
+        "sourcerer/branding/release/locales/en-US/brand.properties"
+      ],
+      "reason": "sourcerer/branding/release/locales/en-US/brand.properties:5-7 -- the release variant of the same three keys."
+    },
+    {
+      "token": "Sourcerer",
+      "case_form": "title",
+      "class": "brand-display",
+      "target": "Power Browser",
+      "expected_count": 1,
+      "expected_files": [
+        "sourcerer/branding/dev/configure.sh"
+      ],
+      "only_in": [
+        "sourcerer/branding/dev/configure.sh"
+      ],
+      "reason": "sourcerer/branding/dev/configure.sh:5 -- MOZ_APP_DISPLAYNAME=\"Sourcerer Dev\". A COMPILED define: Pitfall 6 measures a full tier-3 rebuild at ~39 minutes, so a typo here costs 40 minutes, which is why every display literal is hand-written and cross-checked before the first build rather than iterated on."
+    },
+    {
+      "token": "Sourcerer",
+      "case_form": "title",
+      "class": "brand-display",
+      "target": "Power Browser",
+      "expected_count": 1,
+      "expected_files": [
+        "sourcerer/branding/release/configure.sh"
+      ],
+      "only_in": [
+        "sourcerer/branding/release/configure.sh"
+      ],
+      "reason": "sourcerer/branding/release/configure.sh:5 -- MOZ_APP_DISPLAYNAME=\"Sourcerer\", the release variant."
+    },
+    {
+      "token": "Sourcerer",
+      "case_form": "title",
+      "class": "brand-display",
+      "target": "Power Browser",
+      "expected_count": 1,
+      "expected_files": [
+        "sourcerer/sourcerer.desktop"
+      ],
+      "only_in": [
+        "sourcerer/sourcerer.desktop"
+      ],
+      "reason": "sourcerer/sourcerer.desktop:2 -- `Name=Sourcerer Dev` takes the DISPLAY form while `StartupWMClass=sourcerer` on line 8 takes the identifier form, in the same nine-line file. The whole file is hand-written in plan 01-03 (see hand_write.files) for the separate Pitfall 4 reason."
+    },
+    {
+      "token": "Sourcerer",
+      "case_form": "title",
+      "class": "brand-display",
+      "target": "Power Browser",
+      "expected_count": 1,
+      "expected_files": [
+        "sourcerer/sourcerer-release.desktop"
+      ],
+      "only_in": [
+        "sourcerer/sourcerer-release.desktop"
+      ],
+      "reason": "sourcerer/sourcerer-release.desktop:2 -- the release desktop entry's Name=. Same split as the dev entry."
+    },
+    {
+      "token": "Sourcerer",
+      "case_form": "title",
+      "class": "brand-display",
+      "target": "Power Browser",
+      "expected_count": 1,
+      "expected_files": [
+        "theia/applications/browser/package.json"
+      ],
+      "only_in": [
+        "theia/applications/browser/package.json"
+      ],
+      "reason": "theia/applications/browser/package.json:13 -- `\"applicationName\": \"Sourcerer\"` is the Theia frontend's window/title display name. The rest of this file carries ordinary lowercase identifier occurrences the rename script DOES handle, so the exclusion is line-scoped in hand_write.line_contains rather than whole-file."
+    },
+    {
+      "token": "Sourcerer",
+      "case_form": "title",
+      "class": "brand-display",
+      "target": "Power Browser",
+      "expected_count": 1,
+      "expected_files": [
+        "LICENSE"
+      ],
+      "only_in": [
+        "LICENSE"
+      ],
+      "reason": "LICENSE:133 -- the MPL Exhibit B \"Required Notice\" line, `Copyright Deocracy Institute Corporation (Sourcerer)`. A legal notice, not an identifier: the whole line is rewritten by hand in plan 01-03 to the DeBIOS Foundation's own notice. Held out of the script because a token-wise pass would produce \"DeBIOS Foundation Institute Corporation\", which is not a legal entity."
+    },
+    {
+      "token": "Deocracy",
+      "case_form": "title",
+      "class": "brand-display",
+      "target": "DeBIOS Foundation",
+      "expected_count": 1,
+      "expected_files": [
+        "sourcerer/branding/dev/locales/en-US/brand.ftl"
+      ],
+      "only_in": [
+        "sourcerer/branding/dev/locales/en-US/brand.ftl"
+      ],
+      "reason": "sourcerer/branding/dev/locales/en-US/brand.ftl:15 -- `-vendor-short-name` is the DISPLAY-side vendor string, so its target is `DeBIOS Foundation` (D-09 as amended 2026-08-30), NOT the path-forming `DeBIOS` that MOZ_APP_VENDOR takes. The residual scan and verify-branding-identity.mjs must treat these as two distinct expected values -- that is the whole point of the amendment, since \"DeBIOS Foundation\" lowercased into a profile path would put a space in a path."
+    },
+    {
+      "token": "Deocracy",
+      "case_form": "title",
+      "class": "brand-display",
+      "target": "DeBIOS Foundation",
+      "expected_count": 1,
+      "expected_files": [
+        "sourcerer/branding/release/locales/en-US/brand.ftl"
+      ],
+      "only_in": [
+        "sourcerer/branding/release/locales/en-US/brand.ftl"
+      ],
+      "reason": "sourcerer/branding/release/locales/en-US/brand.ftl:15 -- the release variant's display-side vendor string. Same split as the dev variant."
+    },
+    {
+      "token": "Deocracy",
+      "case_form": "title",
+      "class": "brand-display",
+      "target": "DeBIOS Foundation",
+      "expected_count": 1,
+      "expected_files": [
+        "LICENSE"
+      ],
+      "only_in": [
+        "LICENSE"
+      ],
+      "reason": "LICENSE:133 -- the vendor half of the same MPL Required Notice line. Hand-written with the rest of the line in plan 01-03."
     },
     {
       "token": "sourcerer.dev",
       "case_form": "lower",
       "class": "identity",
       "target": "powerbrowser.org",
-      "expected_count": 1,
+      "expected_count": 0,
       "expected_files": [
         "sourcerer/shell/components.conf"
       ],
       "couples_with": [
         "sourcerer/shell/components.conf"
       ],
-      "chain": "chrome-package",
-      "reason": "components.conf:17 -- `@sourcerer.dev/single-instance-clh;1` is an XPCOM contract id namespaced by a DNS name, so its target is NOT the mechanical `powerbrowser.dev`: the DeBIOS Foundation does not own a .dev domain, and D-12 establishes powerbrowser.org. Class `identity`, not `brand-identifier`, precisely because the target is a decision rather than a case swap (T-01-05). Longer than the bare `sourcerer` token, so the longest-token-first claim order takes this site before the lowercase brand row can."
+      "reason": "The XPCOM contract-id DNS namespace, `@sourcerer.dev/single-instance-clh;1`. Class identity, not brand-identifier, because the target is a decision rather than a case swap: the DeBIOS Foundation does not own a .dev domain, and D-12 establishes powerbrowser.org (T-01-05). EXPECTED_COUNT IS 0 ON PURPOSE -- its one site, sourcerer/shell/components.conf:17, already moved with the chrome-package chain in plan 01-01. expected_files still names that file because it is where the row is anchored; the row is kept as the standing record of the decision and as the classification any reappearance of the token would land in."
+    },
+    {
+      "token": "SOURCERER",
+      "case_form": "upper",
+      "class": "brand-identifier",
+      "target": "POWERBROWSER",
+      "expected_count": 104,
+      "expected_files": [
+        ".mozconfig",
+        "docs/BUILD.md",
+        "scripts/verify-phase-04.sh",
+        "scripts/verify-phase-05.sh",
+        "sourcerer/branding/dev/pref/firefox-branding.js",
+        "sourcerer/branding/release/pref/firefox-branding.js",
+        "sourcerer/endpoint-allowlist.json",
+        "sourcerer/shell/TheiaService.sys.mjs",
+        "sourcerer/shell/sourcerer-sidecar.js",
+        "sourcerer/shell/sourcerer.js",
+        "theia/extensions/branding/src/browser/sourcerer-about-dialog.tsx",
+        "theia/extensions/branding/src/browser/sourcerer-favicon-contribution.ts",
+        "theia/extensions/branding/src/browser/sourcerer-mark.ts",
+        "theia/extensions/branding/src/browser/sourcerer-welcome-widget.tsx",
+        "theia/extensions/tab-uris/src/browser/tab-uri-registry.ts",
+        "theia/extensions/tab-uris/src/browser/view-factory-table.ts",
+        "theia/extensions/token-gate/src/node/parent-watchdog-backend-contribution.ts",
+        "theia/extensions/token-gate/src/node/sourcerer-env.ts",
+        "theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts"
+      ],
+      "reason": "The UPPER_SNAKE form: env vars, dump()/stdout sentinels, TS exports and build defines. Matched with an UPPER_SNAKE join allowed on either side, so `SOURCERER_SHELL_READY` matches while `SOURCERERX` would not. The six cross-tier contracts above carry their own longer rows and a `stage`, so this row is everything that is NOT a cross-tier contract."
+    },
+    {
+      "token": "Sourcerer",
+      "case_form": "title",
+      "class": "brand-identifier",
+      "target": "PowerBrowser",
+      "expected_count": 132,
+      "expected_files": [
+        "README.md",
+        "docs/BUILD.md",
+        "docs/CUSTOMIZE.md",
+        "docs/URI-SCHEMES.md",
+        "flake.nix",
+        "scripts/lib/firefox-bidi.mjs",
+        "scripts/smoke-theia.sh",
+        "scripts/verify-branding-identity.mjs",
+        "scripts/verify-branding.mjs",
+        "scripts/verify-phase-02.sh",
+        "scripts/verify-phase-03.sh",
+        "scripts/verify-phase-04.sh",
+        "scripts/verify-phase-05.sh",
+        "sourcerer/INTERNAL-APIS.md",
+        "sourcerer/endpoint-allowlist.json",
+        "sourcerer/shell/SourcererAPI.sys.mjs",
+        "sourcerer/shell/TheiaService.sys.mjs",
+        "sourcerer/shell/sourcerer.xhtml",
+        "theia/extensions/branding/src/browser/sourcerer-about-dialog.tsx",
+        "theia/extensions/branding/src/browser/sourcerer-ai-layout-contribution.ts",
+        "theia/extensions/branding/src/browser/sourcerer-favicon-contribution.ts",
+        "theia/extensions/branding/src/browser/sourcerer-frontend-module.ts",
+        "theia/extensions/branding/src/browser/sourcerer-mark.ts",
+        "theia/extensions/branding/src/browser/sourcerer-welcome-contribution.ts",
+        "theia/extensions/branding/src/browser/sourcerer-welcome-widget.tsx",
+        "theia/extensions/tab-uris/src/browser/existing-scheme-coverage.ts",
+        "theia/extensions/tab-uris/src/browser/tab-uris-frontend-module.ts",
+        "theia/extensions/tab-uris/src/browser/terminal-naming-contribution.ts",
+        "theia/extensions/tab-uris/src/browser/terminal-open-handler.ts",
+        "theia/extensions/token-gate/src/node/parent-watchdog-backend-contribution.ts",
+        "theia/extensions/token-gate/src/node/sourcerer-env.ts",
+        "theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts",
+        "theia/extensions/token-gate/src/node/token-gate-backend-module.ts"
+      ],
+      "reason": "TitleCase AS AN IDENTIFIER PREFIX -- class and symbol names, target `PowerBrowser` with no space. Every display site is carved out above by a file-scoped brand-display row that outranks this one, which is how the same nine characters resolve to two different targets per site (Pitfall 1). This row is the identifier remainder."
+    },
+    {
+      "token": "sourcerer",
+      "case_form": "lower",
+      "class": "brand-identifier",
+      "target": "powerbrowser",
+      "expected_count": 383,
+      "expected_files": [
+        ".mozconfig",
+        "README.md",
+        "docs/BUILD.md",
+        "docs/CUSTOMIZE.md",
+        "scripts/fetch-upstream.sh",
+        "scripts/lib/firefox-bidi.mjs",
+        "scripts/rebase-upstream.sh",
+        "scripts/smoke-theia.sh",
+        "scripts/verify-branding-identity.mjs",
+        "scripts/verify-branding.mjs",
+        "scripts/verify-customize-inert.mjs",
+        "scripts/verify-dev-flag-off.mjs",
+        "scripts/verify-endpoints.sh",
+        "scripts/verify-phase-02.sh",
+        "scripts/verify-phase-03.sh",
+        "scripts/verify-phase-04.sh",
+        "scripts/verify-phase-05.sh",
+        "scripts/verify-uri-roundtrip.mjs",
+        "sourcerer/INTERNAL-APIS.md",
+        "sourcerer/branding/dev/pref/firefox-branding.js",
+        "sourcerer/branding/release/pref/firefox-branding.js",
+        "sourcerer/endpoint-allowlist.json",
+        "sourcerer/shell/SourcererAPI.sys.mjs",
+        "sourcerer/shell/TheiaService.sys.mjs",
+        "sourcerer/shell/sourcerer-sidecar.js",
+        "sourcerer/shell/sourcerer.css",
+        "sourcerer/shell/sourcerer.js",
+        "sourcerer/shell/sourcerer.xhtml",
+        "sourcerer/sourcerer-release.desktop",
+        "sourcerer/sourcerer.desktop",
+        "theia/applications/browser/package.json",
+        "theia/extensions/branding/package.json",
+        "theia/extensions/branding/src/browser/sourcerer-about-dialog.tsx",
+        "theia/extensions/branding/src/browser/sourcerer-ai-layout-contribution.ts",
+        "theia/extensions/branding/src/browser/sourcerer-favicon-contribution.ts",
+        "theia/extensions/branding/src/browser/sourcerer-frontend-module.ts",
+        "theia/extensions/branding/src/browser/sourcerer-welcome-contribution.ts",
+        "theia/extensions/branding/src/browser/sourcerer-welcome-widget.tsx",
+        "theia/extensions/customize/package.json",
+        "theia/extensions/customize/src/browser/customize-frontend-module.ts",
+        "theia/extensions/customize/src/browser/customize-privileged-js-contribution.ts",
+        "theia/extensions/customize/src/browser/sourcerer-privileged-js.ts",
+        "theia/extensions/tab-uris/package.json",
+        "theia/extensions/tab-uris/src/browser/existing-scheme-coverage.ts",
+        "theia/extensions/tab-uris/src/browser/tab-uri-registry.ts",
+        "theia/extensions/tab-uris/src/browser/tab-uris-frontend-module.ts",
+        "theia/extensions/tab-uris/src/browser/terminal-open-handler.ts",
+        "theia/extensions/tab-uris/src/browser/view-factory-table.ts",
+        "theia/extensions/tab-uris/src/browser/view-open-handler.ts",
+        "theia/extensions/token-gate/package.json",
+        "theia/extensions/token-gate/src/node/parent-watchdog-backend-contribution.ts",
+        "theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts"
+      ],
+      "reason": "The fixed-identifier form (D-10, one word so camelCase collapses into it rather than needing a sixth case variant). Matched with a camelCase join allowed on the right and no token character on the left, so `sourcererPrivilegedJs` matches while `resourcerer` does not -- both proved by the rename script's --self-test."
+    },
+    {
+      "token": "Deocracy",
+      "case_form": "title",
+      "class": "brand-identifier",
+      "target": "DeBIOS",
+      "expected_count": 4,
+      "expected_files": [
+        "patches/010-sourcerer-identity.patch",
+        "scripts/verify-branding-identity.mjs",
+        "sourcerer/endpoint-allowlist.json",
+        "theia/extensions/branding/src/browser/sourcerer-welcome-widget.tsx"
+      ],
+      "couples_with": [
+        "patches/010-sourcerer-identity.patch",
+        "scripts/verify-branding-identity.mjs"
+      ],
+      "reason": "The PATH-FORMING vendor value: MOZ_APP_VENDOR in patches/010 and the expectation that reads it back in verify-branding-identity.mjs. D-09 as amended splits the vendor in two -- `DeBIOS` compiled (it is lowercased into ~/.config/<vendor>/<basename>, and a space there breaks the no-spaces repo rule this project builds under) and `DeBIOS Foundation` on display. Note that the endpoint-allowlist.json and welcome-widget GitHub URLs become github.com/DeBIOS/PowerBrowser under this row; the foundation's actual GitHub org is not yet established (D-12 fixes only the domain), so those two URLs must be confirmed before any release."
+    },
+    {
+      "token": "deocracy",
+      "case_form": "lower",
+      "class": "brand-identifier",
+      "target": "debios",
+      "expected_count": 2,
+      "expected_files": [
+        ".mozconfig",
+        "scripts/verify-endpoints.sh"
+      ],
+      "reason": "The lowercase vendor form: `--with-distribution-id=org.deocracy` becomes `org.debios`, and the `~/.config/deocracy/sourcerer` profile-path comment in verify-endpoints.sh becomes `~/.config/debios/powerbrowser`. Seeded explicitly because Pitfall 8 is that the vendor token is invisible to a scan for three case forms of \"sourcerer\" -- it is a token SET, not a search for one string."
     },
     {
       "token": "{7539c85c-f1f6-43a3-9a45-48fd27140596}",
@@ -128,8 +697,7 @@
       "expected_files": [
         "sourcerer/shell/components.conf"
       ],
-      "chain": "chrome-package",
-      "reason": "components.conf:16 -- the XPCOM class id. Nothing requires it to be new: no downstream, no pref, and no manifest keys off its value, so regenerating it is pure churn in a bisect. Held back by class, and asserted still present by count after the rename so the pass cannot quietly eat it."
+      "reason": "sourcerer/shell/components.conf:16 -- the XPCOM class id. Nothing keys off its value, so regenerating it is pure churn in a bisect. Held back by class and asserted still present by count after the rename."
     },
     {
       "token": "\"command-line-handler\": \"a-",
@@ -140,8 +708,7 @@
       "expected_files": [
         "sourcerer/shell/components.conf"
       ],
-      "chain": "chrome-package",
-      "reason": "components.conf:20 -- the `a-` category-entry PREFIX is frozen while the brand suffix after it is not. The file's own comment (components.conf:8-12) states the mechanism: `a-sourcerer` sorts ahead of the stock handler's `m-browser` and far ahead of `x-default` under ascending strcmp (upstream/xpcom/components/nsCategoryManager.cpp:210-213), and that ordering IS the single-instance mechanism. Claiming this literal first leaves the following `sourcerer` with a `-` on its left, which is a legal token boundary, so the site renames to `a-powerbrowser` -- still ahead of both by inspection of the strings."
+      "reason": "sourcerer/shell/components.conf:20 -- the `a-` category-entry PREFIX is frozen while the brand suffix after it is not. The file's own comment states the mechanism: the name sorts ahead of the stock handler's \"m-browser\" and far ahead of \"x-default\" under ascending strcmp (upstream/xpcom/components/nsCategoryManager.cpp:210-213), and that ordering IS the single-instance mechanism. Claiming this literal first leaves the following token with a `-` on its left, a legal boundary, so the site becomes `a-powerbrowser` -- still ahead of both."
     },
     {
       "token": "%content/branding/",
@@ -153,8 +720,7 @@
         "sourcerer/branding/dev/content/jar.mn",
         "sourcerer/branding/release/content/jar.mn"
       ],
-      "chain": null,
-      "reason": "sourcerer/branding/{dev,release}/content/jar.mn:12 -- `branding` here is Gecko's OWN chrome slot name, not this product's brand. Renaming it detaches the branding package from every stock consumer of chrome://branding/content/. Seeded now because this chain is what proves the classifier can hold a row back; it is exercised by the full-tree run in plan 01-02."
+      "reason": "sourcerer/branding/{dev,release}/content/jar.mn:12 -- `branding` here is Gecko's OWN chrome slot name, not this product's brand. Renaming it detaches the branding package from every stock consumer of chrome://branding/content/."
     },
     {
       "token": "%locale/branding/",
@@ -166,8 +732,79 @@
         "sourcerer/branding/dev/locales/jar.mn",
         "sourcerer/branding/release/locales/jar.mn"
       ],
-      "chain": null,
-      "reason": "sourcerer/branding/{dev,release}/locales/jar.mn:10 -- the locale half of the same stock Gecko slot. Same rule as %content/branding/: upstream's name, never ours."
+      "reason": "sourcerer/branding/{dev,release}/locales/jar.mn:10 -- the locale half of the same stock Gecko slot. Upstream's name, never ours."
+    },
+    {
+      "token": "-brand-product-name = Firefox",
+      "case_form": "literal",
+      "class": "frozen",
+      "target": "-brand-product-name = Firefox",
+      "expected_count": 2,
+      "expected_files": [
+        "sourcerer/branding/dev/locales/en-US/brand.ftl",
+        "sourcerer/branding/release/locales/en-US/brand.ftl"
+      ],
+      "reason": "sourcerer/branding/dev/locales/en-US/brand.ftl:14 and sourcerer/branding/release/locales/en-US/brand.ftl:14 -- deliberately NOT the product name (D-78). A small set of \"requires Firefox\" compatibility strings interpolate this term, and byte-identical UA/product naming is the same rationale D-78 already applied to the User-Agent. Its rationale comment sits directly above it and migrates verbatim under D-08."
+    },
+    {
+      "token": "MOZ_APP_UA_NAME",
+      "case_form": "literal",
+      "class": "frozen",
+      "target": "MOZ_APP_UA_NAME",
+      "expected_count": 2,
+      "expected_files": [
+        "patches/010-sourcerer-identity.patch",
+        "patches/020-sourcerer-shell.patch"
+      ],
+      "reason": "patches/010-sourcerer-identity.patch:21 (and the context line in 020) -- pinned to \"Firefox\" on purpose so the User-Agent stays byte-identical to Firefox's. Neither the option name nor its value is a brand token here."
+    },
+    {
+      "token": "MOZ_APP_ID",
+      "case_form": "literal",
+      "class": "frozen",
+      "target": "MOZ_APP_ID",
+      "expected_count": 2,
+      "expected_files": [
+        "patches/010-sourcerer-identity.patch",
+        "patches/020-sourcerer-shell.patch"
+      ],
+      "reason": "patches/010-sourcerer-identity.patch:22 (and the context line in 020) -- deliberately Firefox's own app id {ec8030f7-c20a-464f-9b0e-13a3a9e97384}, so installed extensions keep resolving. Changing it silently breaks extension compatibility with no build failure."
+    },
+    {
+      "token": "-PLAN.md",
+      "case_form": "literal",
+      "class": "frozen",
+      "target": "-PLAN.md",
+      "expected_count": 21,
+      "expected_files": [
+        "scripts/check-internals-boundary.sh",
+        "scripts/smoke-theia.sh",
+        "scripts/verify-branding-identity.mjs",
+        "scripts/verify-phase-03.sh",
+        "scripts/verify-phase-04.sh",
+        "scripts/verify-phase-05.sh",
+        "scripts/verify-uri-roundtrip.mjs",
+        "sourcerer/INTERNAL-APIS.md",
+        "sourcerer/shell/TheiaService.sys.mjs",
+        "theia/extensions/token-gate/src/node/parent-watchdog-backend-contribution.ts"
+      ],
+      "reason": "D-08: the historical Sourcerer plan-file citations carried in migrated comments (04-01-PLAN.md, 05-01-PLAN.md and the rest) are PROVENANCE, not brand. They name plans that live in the frozen sourcerer repo and renumbering or deleting them destroys the only trail back to why the code is shaped the way it is. Anchored on the filename suffix so the count assertion proves they all survived the rename; the decision-ID citations beside them (D-96/D-97, D-121, SIDE-04) carry no brand token and so cannot be touched by any row here at all."
+    },
+    {
+      "token": "pref(\"",
+      "case_form": "literal",
+      "class": "frozen",
+      "target": "pref(\"",
+      "expected_count": 67,
+      "expected_files": [
+        "sourcerer/branding/dev/pref/firefox-branding.js",
+        "sourcerer/branding/release/pref/firefox-branding.js"
+      ],
+      "only_in": [
+        "sourcerer/branding/dev/pref/firefox-branding.js",
+        "sourcerer/branding/release/pref/firefox-branding.js"
+      ],
+      "reason": "Every Gecko pref key under branding/*/pref/firefox-branding.js is upstream's, not ours -- and none of them contains a brand token, so the only thing the rename touches in these two files is comment text naming the product or a repo path. This row's count is the assertion that the pref statements themselves came through untouched; verify-endpoints.sh layer 1 asserts each key's value against endpoint-allowlist.json on the installed, unpreprocessed copy."
     }
   ]
 }

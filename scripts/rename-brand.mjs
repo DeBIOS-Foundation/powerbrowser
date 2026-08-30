@@ -147,7 +147,7 @@ export function rewrite(inv, file, text, rows) {
 // ---------------------------------------------------------------------------
 
 export function run(inv, { chain = null, dryRun = false, root = REPO_ROOT, files = null } = {}) {
-  const rows = chain ? chainOf(inv, chain).rows : inv.tokens;
+  const rows = inv.tokens;
   const scope = files ?? scopeFiles(inv, { chainFiles: chain ? chainOf(inv, chain).files : null });
 
   if (scope.length === 0) {
