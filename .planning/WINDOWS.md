@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 3
+open_count: 4
 waived_count: 0
 fixed_count: 8
-total_count: 11
-last_updated: 2026-08-30T22:00:29.678Z
+total_count: 12
+last_updated: 2026-08-30T23:38:09.088Z
 ---
 
 # Broken Windows Ledger
@@ -26,6 +26,7 @@ last_updated: 2026-08-30T22:00:29.678Z
 | 9 | 01 | deviation | .planning/REQUIREMENTS.md |  | MIG-04 was auto-checked from plan 01-03's frontmatter but nothing has been built; reverted to unchecked. Plan 01-04 owns the build that closes it. | fixed |  | 2026-08-30T20:49:13.723Z | 2026-08-30T22:00:13.014Z |
 | 10 | 01 | unrun-verify | scripts/verify-platform.sh |  | verify-branding-identity-release and branding-variant-divergence still unrun: both read objdir-release/dist/bin, i.e. a second full ~47m release build that 01-04-PLAN.md explicitly declined to spend. Runnable the moment a release objdir exists. | open |  | 2026-08-30T22:00:29.574Z |  |
 | 11 | 01 | unrun-verify | scripts/verify-platform.sh |  | The ~20 launch-lifecycle checks (side03-*, side04-*, side05-*, shell03-*, shell04-diagnostics-with-backend-down, cr01-*, harness-display-available) became RUNNABLE with 01-04's build but were not run: none is named by 01-04-PLAN.md's verify blocks and each launches a real browser. Not blocked -- unexercised. | open |  | 2026-08-30T22:00:29.678Z |  |
+| 12 | 01 | stub | powerbrowser/shell/powerbrowser.js |  | Env-gated POWERBROWSER_SPIKE_GUI01 instrumentation left in the shell bootstrap by plan 01-05 Task 1; it is spike scaffolding and Task 3 of the same plan removes it | open |  | 2026-08-30T23:38:09.088Z |  |
 
 ````json
 [
@@ -159,6 +160,18 @@ last_updated: 2026-08-30T22:00:29.678Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-08-30T22:00:29.678Z",
+    "resolved_at": null
+  },
+  {
+    "id": 12,
+    "kind": "stub",
+    "phase": "01",
+    "file": "powerbrowser/shell/powerbrowser.js",
+    "line": null,
+    "description": "Env-gated POWERBROWSER_SPIKE_GUI01 instrumentation left in the shell bootstrap by plan 01-05 Task 1; it is spike scaffolding and Task 3 of the same plan removes it",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-30T23:38:09.088Z",
     "resolved_at": null
   }
 ]
