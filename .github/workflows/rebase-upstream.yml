@@ -34,6 +34,15 @@ jobs:
       - name: Check out repo
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
+      # D-18's permanent gate, run BEFORE the rebase as well as inside it. It
+      # is static and needs no build, no Nix and no upstream tree, so it costs
+      # seconds and fails fast on a tree that was already dirty -- which keeps
+      # a pre-existing residue from being misread as something the replay
+      # introduced. --except-hand-write is the plan 01-03 hand-off and reports
+      # what it holds back on every run.
+      - name: Scan for residual brand strings
+        run: node scripts/scan-brand-residue.mjs --except-hand-write
+
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache

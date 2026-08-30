@@ -63,6 +63,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   echo "  2. rm -rf '$UPSTREAM_DIR' && TAG=$NEW_TAG '$REPO_ROOT/scripts/fetch-upstream.sh'"
   echo "  3. '$REPO_ROOT/scripts/apply-patches.sh'"
   echo "  4. '$REPO_ROOT/scripts/check-patch-surface.sh'"
+  echo "  4b. node '$REPO_ROOT/scripts/scan-brand-residue.mjs' --except-hand-write  # D-18 permanent gate"
   echo "  5. TAG=$NEW_TAG '$REPO_ROOT/scripts/fetch-upstream.sh'  # re-check: fully-applied state at $NEW_TAG, not the pinned default"
   echo "  5b. readlink -f '$UPSTREAM_DIR/powerbrowser'  # must resolve to '$REPO_ROOT/powerbrowser' -- git-excluded, invisible to step 5's classifier otherwise"
   echo "  6. Operator follow-up (not run here): '$REPO_ROOT/scripts/toolchain-baseline.sh' under 'nix develop .#firefox', diffed against '$REPO_ROOT/toolchain-baseline.txt' (PITFALLS #2)"
@@ -85,6 +86,25 @@ fi
 echo "rebase-upstream: checking patch surface"
 if ! "$REPO_ROOT/scripts/check-patch-surface.sh"; then
   echo "rebase-upstream: FAIL -- check-patch-surface.sh rejected the replayed stack" >&2
+  exit 1
+fi
+
+# D-18: the residual-brand scan is a PERMANENT gate from Phase 1 onward, not a
+# one-shot migration check. It runs here because a rebase is the one routine
+# operation that pulls in content nobody in this repo wrote, and a patch that
+# replays cleanly can still reintroduce a stale brand string. Static and
+# no-build, so it costs nothing next to the replay it follows.
+#
+# (Deliberately not spelling the old brand token in this comment: it lives in
+# the scanned scope, so naming the literal here would make this file fail the
+# very gate it invokes. The scan caught exactly that when this block was first
+# written -- the inventory is the place that spells the tokens out.)
+#
+# --except-hand-write is the plan 01-03 hand-off and is REPORTED on every run,
+# never silent. Drop the flag once 01-03 lands and the whole tree is clean.
+echo "rebase-upstream: scanning for residual brand strings"
+if ! node "$REPO_ROOT/scripts/scan-brand-residue.mjs" --except-hand-write; then
+  echo "rebase-upstream: FAIL -- scan-brand-residue.mjs found residual brand strings after the replay" >&2
   exit 1
 fi
 
