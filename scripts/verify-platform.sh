@@ -2929,6 +2929,18 @@ run_own_checks() {
       "verify-branding-identity-dev|node $REPO_ROOT/scripts/verify-branding-identity.mjs"
       "verify-branding-identity-release|node $REPO_ROOT/scripts/verify-branding-identity.mjs --variant release"
       "verify-branding-identity-brand-ftl-control|node $REPO_ROOT/scripts/verify-branding-identity.mjs --variant release --positive-control brand-full-name"
+      # NEW (01-04): the runtime-identity positive control. The brand-ftl
+      # control above proves the comparison discriminates on a value read out
+      # of a packaged .ftl; runtime-identity is read from the LAUNCHED binary
+      # via BiDi, a different read path with its own way of agreeing with
+      # everything, so it needs its own control rather than inheriting the
+      # other surface's.
+      "verify-branding-identity-runtime-control|node $REPO_ROOT/scripts/verify-branding-identity.mjs --positive-control runtime-identity"
+      # NEW (01-04): the Gecko smoke script. On an already-built tree its
+      # `./mach build` is an incremental no-op and what it actually asserts is
+      # post-build -- that the build never invoked `mach bootstrap` (D-18) and
+      # that `./mach run --version` reports the pinned ESR version.
+      "smoke-firefox|bash $REPO_ROOT/scripts/smoke-firefox.sh"
       "verify-endpoints|bash $REPO_ROOT/scripts/verify-endpoints.sh"
       "verify-endpoints-interrupt-self-test|bash $REPO_ROOT/scripts/verify-endpoints.sh --interrupt-self-test"
 

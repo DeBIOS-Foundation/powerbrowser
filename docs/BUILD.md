@@ -163,12 +163,19 @@ either `nix develop` shell. It is safely re-runnable: if `upstream/`
 already exists at the pinned tag it no-ops instead of re-cloning.
 
 **Measured on the reference host:** the clone took 438s and produced a
-5.6 G `upstream/` tree. A full non-artifact `./mach build` (the phase's
-acceptance proof — this is not an artifact build, see D-11/D-12) took
-3224s (~54 minutes) wall time on 16 cores / 62 GB RAM, peaking at 14 G of
-`objdir/`. Expect similar order-of-magnitude numbers; do not be surprised
-if a first-time contributor's build takes an hour. The resulting binary
-reports `Mozilla Firefox 153.1.0esr` via `./mach run --version`.
+5.6 G `upstream/` tree (re-measured 2026-08-30 on `legion`: 677s, same
+5.6 G — the size is stable, the time is network-bound). A full non-artifact
+`./mach build` (the phase's acceptance proof — this is not an artifact
+build, see D-11/D-12) took 3224s (~54 minutes) wall time on 16 cores /
+62 GB RAM, peaking at 14 G of `objdir/`. Expect similar order-of-magnitude
+numbers; do not be surprised if a first-time contributor's build takes an
+hour. The resulting binary reports **`DeBIOS powerbrowser 153.1.0esr`** via
+`./mach run --version` — `--version` concatenates `MOZ_APP_VENDOR` with the
+app **basename** (`MOZ_APP_NAME`, the fixed lowercase platform name), not
+with the display name, so `Power Browser` correctly does **not** appear
+here. The display name is asserted on its own surfaces
+(`brand-full-name`, `desktop-entry`) by
+`scripts/verify-branding-identity.mjs`.
 
 `nix develop .#firefox` supplies the entire compiler toolchain (clang,
 rustc, cargo, cbindgen) matched to what nixpkgs itself builds this exact
@@ -263,16 +270,25 @@ happened as part of this measurement task; the phase's build budget is
 exactly two full builds, both already spent by the two compiled-define
 changes below, harvested here rather than re-run:
 
-| Build | Command | Wall time | sccache hit rate | Source |
-|---|---|---|---|---|
-| #1 (dev, `objdir/`) | `MOZCONFIG=../.mozconfig ./mach build` | **2368s (~39m28s)** | not recoverable — the sccache server that ran this build had already recycled by the time its stats were checked in the same session (`03-01-SUMMARY.md`, "Issues Encountered") | `03-01-SUMMARY.md` |
-| #2 (release, `objdir-release/`) | `POWERBROWSER_OBJDIR=objdir-release POWERBROWSER_BRANDING=powerbrowser/branding/release MOZCONFIG=../.mozconfig ./mach build` | **2822s (~47m2s)** | **0.14%** — 5648 new sccache requests this build's delta, 5043 executed, 7 hits, 5022 misses | `03-05-SUMMARY.md` |
+Every row names the tree it was measured on. Rows #1 and #2 predate the
+rename and were measured on the **upstream project's tree**; row #3 is the
+first full build of the **Power Browser** tree. Mixing the three under one
+heading without that attribution would read as three measurements of the same
+thing, which they are not.
 
-Neither build is re-run here — doing so would spend a third full compile,
-which this phase's stated build-cycle budget does not allow; both figures are
-taken verbatim, with their exact commands, from the SUMMARY that actually ran
-them. Both builds were measured 2026-08-21 on `legion`: build #1 per
-`03-01-SUMMARY.md`, build #2 per `03-05-SUMMARY.md`.
+| Build | Tree / host | Command | Wall time | sccache hit rate | Source |
+|---|---|---|---|---|---|
+| #1 (dev, `objdir/`) | pre-rename tree, `legion`, 2026-08-21 | `MOZCONFIG=../.mozconfig ./mach build` | **2368s (~39m28s)** | not recoverable — the sccache server that ran this build had already recycled by the time its stats were checked in the same session (`03-01-SUMMARY.md`, "Issues Encountered") | `03-01-SUMMARY.md` |
+| #2 (release, `objdir-release/`) | pre-rename tree, `legion`, 2026-08-21 | `POWERBROWSER_OBJDIR=objdir-release POWERBROWSER_BRANDING=powerbrowser/branding/release MOZCONFIG=../.mozconfig ./mach build` | **2822s (~47m2s)** | **0.14%** — 5648 new sccache requests this build's delta, 5043 executed, 7 hits, 5022 misses | `03-05-SUMMARY.md` |
+| #3 (dev, `objdir/`) | **Power Browser tree**, `legion`, 2026-08-30 | `scripts/smoke-firefox.sh` (which runs `MOZCONFIG=../.mozconfig ./mach build`) | **2830s (~47m11s)** | not sampled — the build ran under `scripts/smoke-firefox.sh`, which does not capture `sccache --show-stats`; the near-zero hit rate measured for #2 is the expectation for this class of change | `01-04-SUMMARY.md` |
+
+Builds #1 and #2 are not re-run — doing so would spend two more full compiles
+for figures that would not differ; both are taken verbatim, with their exact
+commands, from the SUMMARY that actually ran them. Build #3 is this repo's own
+first full compile, from a `scripts/fetch-upstream.sh` clone (677s, 5.6 G) with
+both patches applied. The **release** variant was deliberately **not** re-built
+after the rename: nothing in this phase needs a second objdir, and row #2's
+figure already bounds it.
 
 ### The three tiers, at a glance
 
