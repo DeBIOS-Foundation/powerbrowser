@@ -59,7 +59,7 @@ export class PowerBrowserWelcomeWidget extends ReactWidget {
     // repo link only -- no invented marketing copy or tagline.
     protected render(): React.ReactNode {
         return <div className='gs-container'>
-            <img src={POWERBROWSER_MARK_DATA_URI} alt='' width={64} height={56} />
+            <img src={POWERBROWSER_MARK_DATA_URI} alt='' width={64} height={64} />
             <h1>PowerBrowser</h1>
             {this.version && <p>Version {this.version}</p>}
             <p>

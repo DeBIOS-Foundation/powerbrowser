@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The Power Browser placeholder mark (D-11). ORIGINAL geometry: a broken ring
+  and a bar, the IEC 60417-5009 power glyph, constructed here from arc and
+  rectangle primitives. It is deliberately not a recolour, crop, trace, or
+  rearrangement of the upstream project's crossed-lens-and-dots mark (which
+  stays downstream under D-03 and is not in this repo; the inventory is the one
+  place that spells that project's name, since every other file is inside the
+  D-18 scan's scope) or of any Mozilla mark, and it is unmistakably a
+  placeholder -- a real logo replaces this file and the ten rasters derived
+  from it with no structural change anywhere.
+
+  SQUARE viewBox, not a preference. Gecko's icon slots are square, Phase 3's
+  icon pipeline rasterizes five square sizes from this one source, and Phase 7
+  lists a non-square logo as a fixture that must fail loudly. The square source
+  is also what deletes the 64x56 / 48x42 magic render sizes the two Theia
+  widgets carried, which existed only because the previous mark was 99x85.9.
+
+  The two-value fill pair is LOAD-BEARING, not decorative. This mark ships as
+  the tab-strip favicon, which follows the OS theme independently of the shell's
+  fixed dark background, so a single-fill mark disappears against one of the
+  two. Gecko honours prefers-color-scheme inside an inlined SVG favicon. No
+  brand hue is invented: #1a1a1a is the shell's dominant neutral and #fff its
+  ink, and Phase 1 keeps the tree's zero-invented-colours property so Phase 3's
+  emitter has nothing extra to generate and Phase 6's scan nothing extra to
+  police.
+
+  The <svg> element below is ONE LINE and is byte-identical to the
+  POWERBROWSER_MARK_SVG string in
+  theia/extensions/branding/src/browser/powerbrowser-mark.ts.
+  scripts/verify-branding-preflight.mjs asserts that equality; the two must
+  never be edited apart.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><defs><style>.a{fill:#1a1a1a;}@media (prefers-color-scheme: dark){.a{fill:#fff;}}</style></defs><path class="a" d="M89.24 27.96A44 44 0 1 1 38.76 27.96L45.64 37.79A32 32 0 1 0 82.36 37.79Z"/><rect class="a" x="58" y="18" width="12" height="46" rx="6"/></svg>
