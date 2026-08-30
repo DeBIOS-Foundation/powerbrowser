@@ -26,7 +26,10 @@ Sourcerer's platform code becomes a booting, browsable `powerbrowser/` tree in t
 - **D-08:** Historical Sourcerer planning citations in comments (decision IDs like D-98/SIDE-04, plan-file references like `05-01-PLAN.md`) stay **verbatim** as provenance, classified `frozen` in the inventory. Only brand tokens naming the product rename in comments.
 
 ### Brand identity values (hand-written in Phase 1)
-- **D-09:** Display name **Power Browser**; `MOZ_APP_VENDOR` **DeBIOS Foundation** (the 501(c)(3) platform owner). Replaces sourcerer's vendor "Deocracy".
+- **D-09:** Display name **Power Browser**; vendor is the 501(c)(3) platform owner, **DeBIOS Foundation**. Replaces sourcerer's vendor "Deocracy". **Amended 2026-08-30** after research found the vendor string forms the profile path: `nsXREDirProvider.cpp:1621-1637` lowercases vendor and appName with no space stripping, so "DeBIOS Foundation" would yield `~/.config/debios foundation/powerbrowser/` — a space in a path, against this repo's hard no-spaces rule (Nix linker). Split machine-side from display-side:
+  - `MOZ_APP_VENDOR` = **`DeBIOS`** — the compiled, path-forming value.
+  - **`DeBIOS Foundation`** remains the display-side vendor string in branding files (about dialog, desktop entries, license/credits surfaces).
+  - The residual-brand scan and `verify-branding-identity.mjs` must treat these as two distinct expected values, not one.
 - **D-10:** App basename / binary / remoting name / StartupWMClass: **`powerbrowser`** — one word, matching the fixed internal identifiers (`chrome://powerbrowser/`, `@powerbrowser/*`) exactly. No hyphenated sixth case-variant.
 - **D-11:** Logo: an original **placeholder geometric mark** created during Phase 1 (SVG source, rasterized to the needed PNG sizes). A real logo replaces the asset files later without structural change.
 - **D-12:** Domain: **powerbrowser.org** — homepage/support/release-notes URLs hand-written against it; exact URL paths are researcher/planner discretion.
@@ -38,6 +41,13 @@ Sourcerer's platform code becomes a booting, browsable `powerbrowser/` tree in t
 - **D-16:** The red scan is a **new standalone static script** (working name `scripts/scan-brand-residue`, final name planner's pick) reading tokens from the inventory with a committed scope list. Grep-class, no build required. It is a separate layer from the runtime `verify-branding*.mjs` verifiers and grows into VER-01 in Phase 6.
 - **D-17:** "Demonstrably red" (success criterion 1) means **reconciled counts**: on the pre-rename tree, every inventoried brand/identity token is found where the inventory says, totals reconcile, and the run's report is committed in the phase dir as evidence. A nonzero exit alone is insufficient — it wouldn't catch an under-scanning scanner.
 - **D-18:** After the rename turns it green, the scan becomes a **permanent gate** — it joins the verify/smoke script set immediately and must pass from Phase 1 onward. Residual Sourcerer strings can never re-enter.
+
+### Post-research decisions (added 2026-08-30, after 01-RESEARCH.md)
+
+- **D-19:** **GUI-01 and GUI-02 are net-new work in Phase 1, not migration.** Research disproved the earlier "the browser toggle already exists in sourcerer" premise three ways: sourcerer's CLAUDE.md hard rule ("Theia is the only GUI in v4.0. No custom browser chrome"), `sourcerer.xhtml`'s own header comment, and the absence of any `http:`/`https:` open handler or `browser-bridge` package. Both stay in Phase 1 and are planned as new features. Success criteria 3 and 4 are unchanged. — **Reversibility:** reversible — they could still be split into a later phase before execution starts.
+- **D-20:** The GUI-01 approach gets a **spike task before the implementation task commits to it**. Research's mechanism (move startup-window selection out of patch `020`'s `BROWSER_CHROME_URL` override and into the already-registered `a-sourcerer` command-line handler, restoring stock chrome — working Ctrl+L, working modal dialogs) is verified at all four upstream call sites but never executed. The spike must confirm the side effects at the five call sites that read `BROWSER_CHROME_URL` directly before the plan hard-commits. Bonus if it holds: patch `020` becomes a pure hook patch, pre-paying part of Phase 5's MIG-05.
+- **D-21:** `scripts/verify-phase-0{2,3,4,5}.sh` — **migrate the checks, consolidate the drivers.** Port the actual assertions into a single `scripts/verify-platform.sh`; drop the four per-phase driver shells. Keeps coverage while cutting ~247 occurrences (4 files) out of the rename surface.
+- **D-22:** `@theia/mini-browser` is flagged `SUS` (`too-new`) by the package audit — the flag derives from v1.75.0's publish date, not the pinned 1.74.1, and the package is first-party Theia. A `checkpoint:human-verify` must precede installing it.
 
 ### Claude's Discretion
 - Inventory file format (TOML vs JSON) and exact scan script name.
@@ -72,7 +82,7 @@ Sourcerer's platform code becomes a booting, browsable `powerbrowser/` tree in t
 - `scripts/fetch-upstream.sh`, `apply-patches.sh`, `rebase-upstream.sh` — the upstream re-fetch pipeline MIG-01 requires; migrates as-is (debranded)
 - `scripts/smoke-firefox.sh`, `smoke-theia.sh` — the "existing smoke tests" MIG-04 cites as the boot proof
 - `scripts/verify-*.mjs` + `scripts/lib/firefox-bidi.mjs` — runtime verification harness (WebDriver BiDi); rename only in Phase 1
-- Theia extensions `branding`, `customize` (GUI-03 customize bridge), `tab-uris` (GUI-02 URL-addressable tabs), `token-gate` (backend security) — the GUI requirements are satisfied by these surviving migration, not by new code
+- Theia extensions `branding`, `customize` (GUI-03 customize bridge), `tab-uris` (GUI-04 tab URI registry), `token-gate` (backend security) — **GUI-03 and GUI-04 are satisfied by these surviving migration.** ⚠ **Corrected 2026-08-30:** GUI-01 (browser-UI toggle) and GUI-02 (web pages as URL-addressable Theia tabs) are **not** covered by any existing extension — see D-19. `tab-uris` provides the `TabUriRegistry` contract GUI-02 will build on, but no `http:`/`https:` open handler exists.
 
 ### Established Patterns
 - Zen-style layout: pinned `upstream/` + `patches/` + own tree + Theia sidecar; downstreams add, never patch
@@ -80,7 +90,8 @@ Sourcerer's platform code becomes a booting, browsable `powerbrowser/` tree in t
 - Security rationale lives in comments citing decision IDs (D-98, SIDE-04) — classified `frozen`, preserved verbatim
 
 ### Integration Points
-- ~1,090 brand occurrences across 5 case forms and 6 coupled reference formats (jar.mn, components.conf, moz.build, patch content, verifier regex, file/dir names) — the inventory must cover all six formats
+- **755 brand occurrences across 69 files** (measured 2026-08-30 over `git ls-files`, after D-03's exclusions — supersedes the earlier ~1,090 estimate). D-21's consolidation keeps another 247 occurrences across 4 files out of the surface. Six coupled reference formats (jar.mn, components.conf, moz.build, patch content, verifier regex, file/dir names) — the inventory must cover all six.
+- **Three raw case forms, five replacement targets.** TitleCase `Sourcerer` is ambiguous between the display value (`Power Browser`, with a space) and the identifier value (`PowerBrowser`). Disambiguating per occurrence — not the raw count — is the phase's central hazard; the inventory's case-form field must record which target each TitleCase occurrence takes.
 - `sourcerer/` own tree → `powerbrowser/`; `sourcerer.desktop` / `sourcerer-release.desktop` → powerbrowser equivalents
 - Env vars (`SOURCERER_TOKEN`, `SOURCERER_SUPERVISED`, `SOURCERER_ENV` module) rename with the identity class
 
