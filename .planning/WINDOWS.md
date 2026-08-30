@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 6
+open_count: 9
 waived_count: 0
 fixed_count: 0
-total_count: 6
-last_updated: 2026-08-30T20:24:38.216Z
+total_count: 9
+last_updated: 2026-08-30T20:49:13.723Z
 ---
 
 # Broken Windows Ledger
@@ -21,6 +21,9 @@ last_updated: 2026-08-30T20:24:38.216Z
 | 4 | 01 | unrun-verify | scripts/verify-customize-inert.mjs |  | verify-customize-inert.mjs unrun: needs a built binary at objdir/dist/bin/powerbrowser (Tier 3 Gecko build) | open |  | 2026-08-30T20:24:38.018Z |  |
 | 5 | 01 | unrun-verify | scripts/verify-dev-flag-off.mjs |  | verify-dev-flag-off.mjs unrun: needs a built binary at objdir/dist/bin/powerbrowser (Tier 3 Gecko build) | open |  | 2026-08-30T20:24:38.116Z |  |
 | 6 | 01 | deviation | inventory/brand-tokens.json |  | scan-brand-residue.mjs --reconcile no longer closes post-rename; its expected_count census describes the pre-rename tree. Gate is the plain run. Terminal census owned by plan 01-03. | open |  | 2026-08-30T20:24:38.216Z |  |
+| 7 | 01 | unrun-verify | scripts/verify-platform.sh |  | 31 of verify-platform.sh's 48 checks could not run: they need a built tree, a launched browser, or a display. objdir/ does not exist yet (plan 01-04). | open |  | 2026-08-30T20:49:13.526Z |  |
+| 8 | 01 | unrun-verify | scripts/verify-platform.sh |  | apply-patches-self-test cannot run: it derives its fixture from upstream/browser/moz.configure and upstream/ is a git-ignored 1.1 GB clone absent on a fresh checkout. Pre-existing, rename-independent. | open |  | 2026-08-30T20:49:13.628Z |  |
+| 9 | 01 | deviation | .planning/REQUIREMENTS.md |  | MIG-04 was auto-checked from plan 01-03's frontmatter but nothing has been built; reverted to unchecked. Plan 01-04 owns the build that closes it. | open |  | 2026-08-30T20:49:13.723Z |  |
 
 ````json
 [
@@ -94,6 +97,42 @@ last_updated: 2026-08-30T20:24:38.216Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-08-30T20:24:38.216Z",
+    "resolved_at": null
+  },
+  {
+    "id": 7,
+    "kind": "unrun-verify",
+    "phase": "01",
+    "file": "scripts/verify-platform.sh",
+    "line": null,
+    "description": "31 of verify-platform.sh's 48 checks could not run: they need a built tree, a launched browser, or a display. objdir/ does not exist yet (plan 01-04).",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-30T20:49:13.526Z",
+    "resolved_at": null
+  },
+  {
+    "id": 8,
+    "kind": "unrun-verify",
+    "phase": "01",
+    "file": "scripts/verify-platform.sh",
+    "line": null,
+    "description": "apply-patches-self-test cannot run: it derives its fixture from upstream/browser/moz.configure and upstream/ is a git-ignored 1.1 GB clone absent on a fresh checkout. Pre-existing, rename-independent.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-30T20:49:13.628Z",
+    "resolved_at": null
+  },
+  {
+    "id": 9,
+    "kind": "deviation",
+    "phase": "01",
+    "file": ".planning/REQUIREMENTS.md",
+    "line": null,
+    "description": "MIG-04 was auto-checked from plan 01-03's frontmatter but nothing has been built; reverted to unchecked. Plan 01-04 owns the build that closes it.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-30T20:49:13.723Z",
     "resolved_at": null
   }
 ]

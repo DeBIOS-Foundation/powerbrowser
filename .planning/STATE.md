@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-08-30T20:24:30.977Z"
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-08-30T20:48:51.246Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 7
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-08-30 — Phase 01 execution started
 
-Progress: [███░░░░░░░] 29%
+Progress: [████░░░░░░] 43%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [███░░░░░░░] 29%
 |------|----------|-------|-------|
 | Phase 01 P01 | 35min | 2 tasks | 116 files |
 | Phase 01 P02 | 2h25m | 2 tasks | 61 files |
+| Phase 01 P03 | ~18m | 3 tasks | 45 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,11 @@ Recent decisions affecting current work:
 - [Phase ?]: The D-18 gate excepts hand-write SITES not a class — the outstanding set spans brand-display (Pitfall 1) and brand-identifier (Pitfall 4), so no class exception can express the 01-03 hand-off
 - [Phase ?]: The npm scope is one indivisible contract group — yarn install proved customize/package.json cannot be staged apart from its sibling dependency
 - [Phase ?]: theia/yarn.lock needs no regeneration: yarn v1 never records workspace-local packages in the lock
+- [Phase ?]: 01-03: D-18 gate carve-out dropped — bare scan-brand-residue exits 0, so --except-hand-write excepts nothing and is removed from both call sites
+- [Phase ?]: 01-03: verify-branding-preflight.mjs derives expectations from a new inventory brand_display_expectations block, not from verify-branding-identity.mjs — the rename had written PowerBrowser Dev into that verifier's own expectation
+- [Phase ?]: 01-03: the pre-rename census stays HISTORICAL, not rewritten — an all-zeros post-rename census is a vacuous duplicate of the plain gate and destroys the red-scan evidence
+- [Phase ?]: 01-03: four per-phase drivers consolidated into scripts/verify-platform.sh; 45 labels ported with parity asserted programmatically before git rm
+- [Phase ?]: 01-03: placeholder mark is the IEC 60417-5009 power glyph — a standard symbol, so non-derivation is answerable rather than a matter of opinion
 
 ### Pending Todos
 
@@ -93,6 +99,7 @@ None yet.
 - [Phase 4]: `theia download:plugins` / Open VSX pin semantics unexercised in this tree; hash-verifiable pins unknown.
 - [Phase 6]: Mozilla and Eclipse trademark findings are LOW-confidence web-sourced; re-verify against primary policy before gating.
 - ~~[Spelling]~~ Resolved 2026-08-29: user confirmed "Sourcerer"; REQUIREMENTS.md and PROJECT.md normalized.
+- MIG-04 is NOT complete: nothing has been built (objdir/ absent). 01-03 delivered its prerequisites only; plan 01-04 owns the build. Nine verify-platform.sh checks become runnable at that point.
 
 ## Deferred Items
 
@@ -104,6 +111,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-30T20:24:22.060Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-08-30T20:48:23.893Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None
