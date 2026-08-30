@@ -46,9 +46,19 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A user can toggle from Theia to proper browser UI and back, and open web pages as URL-addressable tabs inside Theia — with nothing welding Theia to full-window presentation, so the future unified tab strip stays landable
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Import the platform tree and prove the rename machinery on one coupled chain, then classify all 755 occurrences and commit the reconciled red-scan evidence
+- [ ] 01-02-PLAN.md — Execute the rename: `git mv` every branded path, then rewrite content staged by contract until the residual scan is green
+- [ ] 01-03-PLAN.md — Hand-write every display literal, create the original square placeholder mark, and build the pre-build preflight plus the consolidated verifier
+- [ ] 01-04-PLAN.md — Walking skeleton far end: re-derive the patches, fetch upstream, build Gecko, and verify branding on the built artifact
+- [ ] 01-05-PLAN.md — GUI-01: spike the command-line-handler startup-window move, ratify it, then land the browser-window toggle
+- [ ] 01-06-PLAN.md — GUI-02: gated widget install, http/https open handler, frame-refusal carve-out, and the tab-URI registry shape assertion
+- [ ] 01-07-PLAN.md — User-facing error copy, keyboard focus indicator, `CLAUDE.md`, and the full-suite phase gate
+
 **UI hint**: yes
-**Research**: recommended — ~1,090 occurrences across five case-variant forms and six coupled reference formats (jar.mn, components.conf, moz.build, patch content, verifier regex); the classification inventory needs its own deep pass. Highest-risk phase; plan-review-convergence applies.
+**Research**: recommended — ~1,090 occurrences across five case-variant forms and six coupled reference formats (jar.mn, components.conf, moz.build, patch content, verifier regex); the classification inventory needs its own deep pass. Highest-risk phase; plan-review-convergence applies. *(Research completed 2026-08-30: the real migrating surface measured 755 occurrences across 69 files; GUI-01 and GUI-02 found to be net-new work, not migration.)*
 
 ### Phase 2: Configuration Manifest and Generator Core
 **Goal**: A downstream author can express their entire brand in `configuration.toml` + `brand/`, and one generator turns it into the cheap build surfaces
@@ -139,7 +149,7 @@ than noisy.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Platform Extraction and Rename | 0/TBD | Not started | - |
+| 1. Platform Extraction and Rename | 0/7 | Planned | - |
 | 2. Configuration Manifest and Generator Core | 0/TBD | Not started | - |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
