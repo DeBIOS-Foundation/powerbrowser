@@ -32,7 +32,7 @@
       visible echo at generate time; the defaults are themselves a
       `configuration.toml` (one merge code path)
 - [ ] **CFG-05**: A downstream can point the build at an external config dir
-      (`PB_CONFIG_DIR`) so distributions like Sorcerer live in their own repo
+      (`PB_CONFIG_DIR`) so distributions like Sourcerer live in their own repo
 - [ ] **CFG-06**: Upstream pins (Firefox ESR tag, Theia release) are declared
       in `configuration.toml` and consumed by the fetch/build scripts
 
@@ -100,7 +100,7 @@
       from constants — so it passes for every correctly-configured downstream
 - [ ] **VER-03**: Adversarial fixture configs (e.g. a downstream named
       "Zebra") build and verify correctly, proving nothing is accidentally
-      keyed to Power Browser's or Sorcerer's values
+      keyed to Power Browser's or Sourcerer's values
 
 ### Upstream Uptake (UPD)
 
@@ -115,9 +115,9 @@
 - [ ] **DOC-01**: `docs/REBRANDING.md` walks a stranger through a complete
       rebrand — edit `configuration.toml`, drop in logos, build — with every
       field documented
-- [ ] **DOC-02**: Sorcerer is reproduced as a pure downstream: its own
+- [ ] **DOC-02**: Sourcerer is reproduced as a pure downstream: its own
       `configuration.toml` + logo assets (its branding separate from Power
-      Browser's) yield the Sorcerer-branded product with zero platform-file
+      Browser's) yield the Sourcerer-branded product with zero platform-file
       edits — the acceptance test for the whole milestone
 
 ## v2 Requirements (deferred)
@@ -142,4 +142,38 @@
 
 ## Traceability
 
-(Filled by roadmap — maps REQ-IDs to phases)
+All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| MIG-01 | Phase 1 | Pending |
+| MIG-02 | Phase 1 | Pending |
+| MIG-03 | Phase 1 | Pending |
+| MIG-04 | Phase 1 | Pending |
+| GUI-01 | Phase 1 | Pending |
+| GUI-02 | Phase 1 | Pending |
+| GUI-03 | Phase 1 | Pending |
+| GUI-04 | Phase 1 | Pending |
+| CFG-01 | Phase 2 | Pending |
+| CFG-02 | Phase 2 | Pending |
+| CFG-03 | Phase 2 | Pending |
+| CFG-04 | Phase 2 | Pending |
+| GEN-04 | Phase 2 | Pending |
+| GEN-01 | Phase 3 | Pending |
+| GEN-02 | Phase 3 | Pending |
+| GEN-03 | Phase 3 | Pending |
+| GEN-05 | Phase 4 | Pending |
+| EXT-01 | Phase 4 | Pending |
+| TEL-01 | Phase 4 | Pending |
+| TEL-02 | Phase 4 | Pending |
+| TEL-03 | Phase 4 | Pending |
+| MIG-05 | Phase 5 | Pending |
+| CFG-06 | Phase 5 | Pending |
+| UPD-01 | Phase 5 | Pending |
+| UPD-02 | Phase 5 | Pending |
+| VER-01 | Phase 6 | Pending |
+| VER-02 | Phase 6 | Pending |
+| DOC-01 | Phase 6 | Pending |
+| CFG-05 | Phase 7 | Pending |
+| VER-03 | Phase 7 | Pending |
+| DOC-02 | Phase 7 | Pending |
