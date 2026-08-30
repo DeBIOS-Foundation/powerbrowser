@@ -63,7 +63,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   echo "  2. rm -rf '$UPSTREAM_DIR' && TAG=$NEW_TAG '$REPO_ROOT/scripts/fetch-upstream.sh'"
   echo "  3. '$REPO_ROOT/scripts/apply-patches.sh'"
   echo "  4. '$REPO_ROOT/scripts/check-patch-surface.sh'"
-  echo "  4b. node '$REPO_ROOT/scripts/scan-brand-residue.mjs' --except-hand-write  # D-18 permanent gate"
+  echo "  4b. node '$REPO_ROOT/scripts/scan-brand-residue.mjs'  # D-18 permanent gate, no exception"
   echo "  5. TAG=$NEW_TAG '$REPO_ROOT/scripts/fetch-upstream.sh'  # re-check: fully-applied state at $NEW_TAG, not the pinned default"
   echo "  5b. readlink -f '$UPSTREAM_DIR/powerbrowser'  # must resolve to '$REPO_ROOT/powerbrowser' -- git-excluded, invisible to step 5's classifier otherwise"
   echo "  6. Operator follow-up (not run here): '$REPO_ROOT/scripts/toolchain-baseline.sh' under 'nix develop .#firefox', diffed against '$REPO_ROOT/toolchain-baseline.txt' (PITFALLS #2)"
@@ -100,10 +100,12 @@ fi
 # very gate it invokes. The scan caught exactly that when this block was first
 # written -- the inventory is the place that spells the tokens out.)
 #
-# --except-hand-write is the plan 01-03 hand-off and is REPORTED on every run,
-# never silent. Drop the flag once 01-03 lands and the whole tree is clean.
+# Run with NO exception. Plan 01-03 hand-wrote the surfaces the codemod was
+# forbidden to touch, so --except-hand-write was dropped here the moment the
+# bare scan went green -- an exception that outlives the plan it was cut for is
+# how a gate quietly stops being one.
 echo "rebase-upstream: scanning for residual brand strings"
-if ! node "$REPO_ROOT/scripts/scan-brand-residue.mjs" --except-hand-write; then
+if ! node "$REPO_ROOT/scripts/scan-brand-residue.mjs"; then
   echo "rebase-upstream: FAIL -- scan-brand-residue.mjs found residual brand strings after the replay" >&2
   exit 1
 fi

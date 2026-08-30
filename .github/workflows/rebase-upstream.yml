@@ -38,10 +38,11 @@ jobs:
       # is static and needs no build, no Nix and no upstream tree, so it costs
       # seconds and fails fast on a tree that was already dirty -- which keeps
       # a pre-existing residue from being misread as something the replay
-      # introduced. --except-hand-write is the plan 01-03 hand-off and reports
-      # what it holds back on every run.
+      # introduced. Run with NO exception: plan 01-03 hand-wrote the surfaces
+      # the codemod could not, so the carve-out was dropped once the bare scan
+      # went green.
       - name: Scan for residual brand strings
-        run: node scripts/scan-brand-residue.mjs --except-hand-write
+        run: node scripts/scan-brand-residue.mjs
 
       - name: Free disk space
         run: |
