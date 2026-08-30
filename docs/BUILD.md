@@ -1,7 +1,7 @@
-# Building Sourcerer
+# Building PowerBrowser
 
 This documents the commands that actually built and ran both halves of
-Sourcerer on the reference NixOS host, with the durations actually measured
+PowerBrowser on the reference NixOS host, with the durations actually measured
 there. It does not describe the patch-stack tree, artifact builds, or a
 rebase procedure — those land in Phase 3.
 
@@ -18,7 +18,7 @@ rebase procedure — those land in Phase 3.
   split that variable on the space and every native link step fails. Both
   the Firefox compile and Theia's `node-gyp` native modules drive that same
   linker, so this is not a Firefox-only caveat — clone somewhere like
-  `~/coding/sourcerer`, never under a directory such as `~/My Projects`.
+  `~/coding/powerbrowser`, never under a directory such as `~/My Projects`.
 
 Nothing else needs installing by hand. Both `nix develop` shells below
 supply their entire toolchain; there is no `mach bootstrap` step and no
@@ -121,9 +121,9 @@ decides to ship default extensions.
 Theia's defaults, before invoking `theia start`:
 
 - `VSX_REGISTRY_URL=https://open-vsx.org` — explicit so that repointing at
-  Sourcerer's own registry mirror (R9, post-4.0) is a config change, not a
+  PowerBrowser's own registry mirror (R9, post-4.0) is a config change, not a
   code change.
-- `THEIA_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/sourcerer"`, with a
+- `THEIA_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/powerbrowser"`, with a
   `mkdir -p` run first — Theia never creates the config directory on this
   branch, and an absent directory leaves the config-dir file watch stuck in
   a 500 ms `fs.stat` poll loop with no hot reload (load-bearing for the
@@ -257,7 +257,7 @@ close but not the same measurement.
 ### Tier 3 — full `./mach build`
 
 Trigger: a change to a **compiled define** — in this repo that means editing
-`patches/010-sourcerer-identity.patch` (the one Gecko patch hunk this phase
+`patches/010-powerbrowser-identity.patch` (the one Gecko patch hunk this phase
 carries) or adding a `--with-*`/`--enable-*` option to `.mozconfig`. Neither
 happened as part of this measurement task; the phase's build budget is
 exactly two full builds, both already spent by the two compiled-define
@@ -266,7 +266,7 @@ changes below, harvested here rather than re-run:
 | Build | Command | Wall time | sccache hit rate | Source |
 |---|---|---|---|---|
 | #1 (dev, `objdir/`) | `MOZCONFIG=../.mozconfig ./mach build` | **2368s (~39m28s)** | not recoverable — the sccache server that ran this build had already recycled by the time its stats were checked in the same session (`03-01-SUMMARY.md`, "Issues Encountered") | `03-01-SUMMARY.md` |
-| #2 (release, `objdir-release/`) | `SOURCERER_OBJDIR=objdir-release SOURCERER_BRANDING=sourcerer/branding/release MOZCONFIG=../.mozconfig ./mach build` | **2822s (~47m2s)** | **0.14%** — 5648 new sccache requests this build's delta, 5043 executed, 7 hits, 5022 misses | `03-05-SUMMARY.md` |
+| #2 (release, `objdir-release/`) | `POWERBROWSER_OBJDIR=objdir-release POWERBROWSER_BRANDING=powerbrowser/branding/release MOZCONFIG=../.mozconfig ./mach build` | **2822s (~47m2s)** | **0.14%** — 5648 new sccache requests this build's delta, 5043 executed, 7 hits, 5022 misses | `03-05-SUMMARY.md` |
 
 Neither build is re-run here — doing so would spend a third full compile,
 which this phase's stated build-cycle budget does not allow; both figures are
@@ -280,7 +280,7 @@ them. Both builds were measured 2026-08-21 on `legion`: build #1 per
 |---|---|---|---|
 | 1 — no build | `objdir/dist/bin/modules/PageThumbs.worker.js` (symlink into `upstream/toolkit/components/thumbnails/PageThumbs.worker.js`) | `MOZCONFIG=../.mozconfig ./mach run --version` | 1.05s (2026-08-22, `legion`) |
 | 2 — `./mach build faster` | `upstream/browser/base/content/browser.xhtml` (preprocessed) | `MOZCONFIG=../.mozconfig ./mach build faster` | 1.84s warm (2026-08-22, `legion`) |
-| 3 — full `./mach build` | `patches/010-sourcerer-identity.patch` (or any `--with-*`/`--enable-*` `.mozconfig` option) | `MOZCONFIG=../.mozconfig ./mach build` | 2368s / 2822s (2026-08-21, `legion`) |
+| 3 — full `./mach build` | `patches/010-powerbrowser-identity.patch` (or any `--with-*`/`--enable-*` `.mozconfig` option) | `MOZCONFIG=../.mozconfig ./mach build` | 2368s / 2822s (2026-08-21, `legion`) |
 
 **A file that is neither symlinked into `dist/bin` nor preprocessed falls
 through to tier 3** — a full `./mach build` — because there is no faster path
@@ -293,7 +293,7 @@ the first build is always a full compile (tier 3, ~54 minutes per the
 original research estimate; this phase's own two full builds ran 2368s and
 2822s). Artifact builds cannot produce a renamed binary (C-1: `MOZ_APP_NAME`
 is a compiled define and the Taskcluster job configuration hardcodes
-`product="firefox"`), so there is no faster path to a first, Sourcerer-branded
+`product="firefox"`), so there is no faster path to a first, PowerBrowser-branded
 binary than tier 3.
 
 ## The compiled-file boundary (D-72)
@@ -318,18 +318,18 @@ bash scripts/check-patch-surface.sh --self-test   # plants a throwaway compiled-
 subsequent rebuild is tier 3 (a full `./mach build`, ~2368-2822s measured
 above) — there is no tier-1/tier-2 path for a change the linker has to see.
 This is the entire reason the phase's one Gecko patch
-(`patches/010-sourcerer-identity.patch`) is confined to a single hunk in
+(`patches/010-powerbrowser-identity.patch`) is confined to a single hunk in
 `browser/moz.configure`, a config file, not a compiled source.
 
-Deliberately **not created**: `sourcerer/ARTIFACT-BOUNDARY.md` (the name
+Deliberately **not created**: `powerbrowser/ARTIFACT-BOUNDARY.md` (the name
 presumes artifact builds, which D-70 replaced with the tiered loop — this
 section of `docs/BUILD.md` is the boundary's home instead) and
-`sourcerer/INTERNAL-APIS.md` (that catalogues `SourcererAPI.sys.mjs`
+`powerbrowser/INTERNAL-APIS.md` (that catalogues `PowerBrowserAPI.sys.mjs`
 touchpoints, none of which exist until Phase 4).
 
 ## Endpoints and the one carve-out (D-83–D-88)
 
-`sourcerer/endpoint-allowlist.json` is the single machine-readable source of
+`powerbrowser/endpoint-allowlist.json` is the single machine-readable source of
 truth for every host and pref this build's network/telemetry surface is
 allowed to touch, read directly by `scripts/verify-endpoints.sh`'s layers 1
 and 3. Any host observed at runtime absent from this file, or any host in it
@@ -349,7 +349,7 @@ also stops CRLite certificate-revocation data, intermediate-certificate
 preloading, and tracking-protection list updates — unacceptable on a substrate
 whose entire pitch is that it is a real browser.
 
-Every host in `sourcerer/endpoint-allowlist.json` with disposition `allow`,
+Every host in `powerbrowser/endpoint-allowlist.json` with disposition `allow`,
 and why:
 
 | Host | Reason |
@@ -383,27 +383,27 @@ objdir loses it — it must be re-copied after any clobber):
 
 ```
 mkdir -p objdir/dist/bin/distribution
-cp sourcerer/distribution/policies.json objdir/dist/bin/distribution/policies.json
+cp powerbrowser/distribution/policies.json objdir/dist/bin/distribution/policies.json
 ```
 
 ## Telling a dev build from a release build (BRAND-06)
 
 What a person actually sees, side by side on a real desktop session: the dev
 variant paints a real window title bar, reading the page title followed by
-the suffixed brand name from its own `brand.ftl` (`... — Sourcerer Dev`); the
+the suffixed brand name from its own `brand.ftl` (`... — PowerBrowser Dev`); the
 release variant paints no title bar at all and keeps drawing tabs-in-titlebar
 (client-side decorations), the same as it always did.
 
 The two variants diverge in exactly three places:
 
-1. `configure.sh`'s `MOZ_APP_DISPLAYNAME` (dev: "Sourcerer Dev", release:
-   "Sourcerer") — this was already correct and machine-verified before this
+1. `configure.sh`'s `MOZ_APP_DISPLAYNAME` (dev: "PowerBrowser Dev", release:
+   "PowerBrowser") — this was already correct and machine-verified before this
    gap closed; it was never the problem.
 2. The `brand.ftl` / `brand.properties` pair, per variant. `brand.ftl`'s
    `-brand-full-name` already diverged correctly; `brand.properties`'s
    `brandFullName` did not (03-REVIEW.md WR-01) — both now read the same
    suffixed/unsuffixed value within each variant.
-3. The dev-only `browser.tabs.inTitlebar` default (`sourcerer/branding/dev/
+3. The dev-only `browser.tabs.inTitlebar` default (`powerbrowser/branding/dev/
    pref/firefox-branding.js`, value `0`) — the release tree carries no such
    default, and that absence is what makes the two variants differ in window
    shape, not just in string content.
@@ -423,7 +423,7 @@ glance" is a human judgment, recorded in `03-MANUAL-VERIFICATION.md`.
 `branding-variant-divergence` reads the installed `brand.properties` and
 `firefox-branding.js` under both `objdir/dist/bin/...` and
 `objdir-release/dist/bin/...`, so it needs a full dev build **and** a full
-release build (`SOURCERER_OBJDIR=objdir-release ... ./mach build`, Tier 3)
+release build (`POWERBROWSER_OBJDIR=objdir-release ... ./mach build`, Tier 3)
 already in place — it runs only under `scripts/verify-phase-03.sh`'s full
 mode, never under `--quick`. `--quick` still runs the check's self-test
 (synthetic temp files, no build required).
@@ -446,8 +446,8 @@ failing to re-materialize `upstream/` at the new tag,
 `apply-patches.sh` failing to replay `patches/*.patch` (including D-75's
 non-vacuous per-patch assertion — a patch that applies as a silent no-op is a
 failure, by name), `check-patch-surface.sh` rejecting the replayed stack, or
-the git-excluded branding-overlay symlink (`upstream/sourcerer`) failing to
-resolve back to this repo's `sourcerer/` directory after the rebase.
+the git-excluded branding-overlay symlink (`upstream/powerbrowser`) failing to
+resolve back to this repo's `powerbrowser/` directory after the rebase.
 
 **CI story:** `.github/workflows/rebase-upstream.yml` is `workflow_dispatch`-only
 (no `schedule:` — the ~4-weekly ESR cadence is a standing post-v4.0 operational
@@ -463,13 +463,13 @@ sequence — it never runs `./mach build`. Consequently, the
 successful CI replay — not a CI step, because the toolchain that produces it
 only exists in the `firefox` devShell this workflow does not enter.
 
-**Desktop install (local dev testing).** `sourcerer/sourcerer.desktop` (dev)
-and `sourcerer/sourcerer-release.desktop` (release) install at the user-scope
+**Desktop install (local dev testing).** `powerbrowser/powerbrowser.desktop` (dev)
+and `powerbrowser/powerbrowser-release.desktop` (release) install at the user-scope
 path:
 
 ```
-~/.local/share/applications/sourcerer.desktop
-~/.local/share/applications/sourcerer-release.desktop
+~/.local/share/applications/powerbrowser.desktop
+~/.local/share/applications/powerbrowser-release.desktop
 ```
 
 Both `Exec=` and `Icon=` in each file are **absolute paths** into this

@@ -111,12 +111,12 @@ classify_upstream_dirt() {
 # tree that cannot configure.
 ensure_branding_overlay() {
   local git_dir="$1"
-  ln -sfn ../sourcerer "$git_dir/sourcerer"
+  ln -sfn ../powerbrowser "$git_dir/powerbrowser"
   local exclude_file="$git_dir/.git/info/exclude"
-  if [ -f "$exclude_file" ] && ! grep -qxF '/sourcerer' "$exclude_file"; then
-    echo "/sourcerer" >> "$exclude_file"
+  if [ -f "$exclude_file" ] && ! grep -qxF '/powerbrowser' "$exclude_file"; then
+    echo "/powerbrowser" >> "$exclude_file"
   elif [ ! -f "$exclude_file" ]; then
-    echo "/sourcerer" >> "$exclude_file"
+    echo "/powerbrowser" >> "$exclude_file"
   fi
 }
 

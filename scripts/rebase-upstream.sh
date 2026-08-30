@@ -64,7 +64,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   echo "  3. '$REPO_ROOT/scripts/apply-patches.sh'"
   echo "  4. '$REPO_ROOT/scripts/check-patch-surface.sh'"
   echo "  5. TAG=$NEW_TAG '$REPO_ROOT/scripts/fetch-upstream.sh'  # re-check: fully-applied state at $NEW_TAG, not the pinned default"
-  echo "  5b. readlink -f '$UPSTREAM_DIR/sourcerer'  # must resolve to '$REPO_ROOT/sourcerer' -- git-excluded, invisible to step 5's classifier otherwise"
+  echo "  5b. readlink -f '$UPSTREAM_DIR/powerbrowser'  # must resolve to '$REPO_ROOT/powerbrowser' -- git-excluded, invisible to step 5's classifier otherwise"
   echo "  6. Operator follow-up (not run here): '$REPO_ROOT/scripts/toolchain-baseline.sh' under 'nix develop .#firefox', diffed against '$REPO_ROOT/toolchain-baseline.txt' (PITFALLS #2)"
   exit 0
 fi
@@ -95,9 +95,9 @@ if ! TAG="$NEW_TAG" "$REPO_ROOT/scripts/fetch-upstream.sh"; then
 fi
 
 echo "rebase-upstream: asserting branding overlay resolves"
-RESOLVED="$(readlink -f "$UPSTREAM_DIR/sourcerer" 2>/dev/null || true)"
-if [ "$RESOLVED" != "$REPO_ROOT/sourcerer" ]; then
-  echo "rebase-upstream: FAIL -- upstream/sourcerer does not resolve to $REPO_ROOT/sourcerer (got: ${RESOLVED:-<broken symlink>})" >&2
+RESOLVED="$(readlink -f "$UPSTREAM_DIR/powerbrowser" 2>/dev/null || true)"
+if [ "$RESOLVED" != "$REPO_ROOT/powerbrowser" ]; then
+  echo "rebase-upstream: FAIL -- upstream/powerbrowser does not resolve to $REPO_ROOT/powerbrowser (got: ${RESOLVED:-<broken symlink>})" >&2
   echo "  The overlay path is git-excluded, so this is invisible to git status and to the classifier above --" >&2
   echo "  without this assertion a missing symlink would exit 0 here and fail later, deep in moz.build traversal." >&2
   exit 1

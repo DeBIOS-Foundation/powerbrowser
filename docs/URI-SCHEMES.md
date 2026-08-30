@@ -1,6 +1,6 @@
 # Tab addresses (URI schemes)
 
-Every shipped tab in Sourcerer has a typeable address of the form
+Every shipped tab in PowerBrowser has a typeable address of the form
 `scheme:path` — no host, no query, no fragment, no encoded payload. This
 document names every scheme the app registers, what the path encodes, what
 an empty path means, and its open-versus-focus behaviour. It also states

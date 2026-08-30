@@ -1,15 +1,15 @@
-# Sourcerer
+# PowerBrowser
 
-Sourcerer is a Firefox-ESR fork under its own branding, hosting Eclipse Theia
+PowerBrowser is a Firefox-ESR fork under its own branding, hosting Eclipse Theia
 IDE. Version 4.0 ships Theia as the only GUI: the fork boots under the
-Sourcerer name, supervises a bundled Theia backend on localhost, and presents
+PowerBrowser name, supervises a bundled Theia backend on localhost, and presents
 Theia full-window. The custom browser interface — a unified tab strip where
 web pages and editors are peers — comes in later milestones, and v4.0 is built
 so they land without rework.
 
 **Status:** pre-build. This repository was reset to a clean slate on 2026-08-19.
 Requirements live in [docs/PRODUCT-REQUIREMENTS.md](docs/PRODUCT-REQUIREMENTS.md);
-the architecture is [docs/research/sourcerer-architecture.md](docs/research/sourcerer-architecture.md).
+the architecture is [docs/research/powerbrowser-architecture.md](docs/research/powerbrowser-architecture.md).
 
 ## What v4.0 is
 
@@ -18,7 +18,7 @@ the architecture is [docs/research/sourcerer-architecture.md](docs/research/sour
 - **R2 — Own build.** A Zen-style Firefox-ESR fork (pinned ESR tag + patches +
   our tree) with a bundled Node + Theia browser-target backend as a supervised
   localhost sidecar. Theia loads full-window as the sole GUI. Linux first.
-- **R3 — Extension-based internals.** Theia-side additions are `@sourcerer/*`
+- **R3 — Extension-based internals.** Theia-side additions are `@powerbrowser/*`
   Theia extensions — Theia core is never forked or patched. Firefox-side code
   touches internals only through one anti-corruption layer.
 - **R4 — Incremental growth.** Parts are added without rework of what came
@@ -48,7 +48,7 @@ endpoint allowlist, and the rebase/desktop-install procedures.
 ## History
 
 Versions 1.0–3.0 were a bespoke Tauri 2 + React desktop shell. That work is
-frozen with its full git history at `/home/chris/Vibe Coding/Sourcerer-Archived`.
+frozen with its full git history at `/home/chris/Vibe Coding/PowerBrowser-Archived`.
 Nothing from it is a dependency of v4.0.
 
 ## License

@@ -18,7 +18,7 @@
 -->
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
-      windowtype="sourcerer:main"
+      windowtype="powerbrowser:main"
       scrolling="false"
       width="1280"
       height="800"
@@ -27,24 +27,24 @@
   <head>
     <meta charset="utf-8"/>
     <meta http-equiv="Content-Security-Policy" content="default-src chrome:"/>
-    <title>Sourcerer</title>
-    <link rel="stylesheet" href="chrome://sourcerer/content/sourcerer.css"/>
-    <script src="chrome://sourcerer/content/sourcerer.js"></script>
+    <title>PowerBrowser</title>
+    <link rel="stylesheet" href="chrome://powerbrowser/content/powerbrowser.css"/>
+    <script src="chrome://powerbrowser/content/powerbrowser.js"></script>
   </head>
   <body>
-    <div id="sourcerer-loading">Sourcerer</div>
-    <div id="sourcerer-error">
-      <p id="sourcerer-error-message"></p>
-      <div id="sourcerer-error-controls">
-        <button id="sourcerer-error-retry" type="button">Retry</button>
-        <button id="sourcerer-error-diagnostics" type="button">Details</button>
+    <div id="powerbrowser-loading">PowerBrowser</div>
+    <div id="powerbrowser-error">
+      <p id="powerbrowser-error-message"></p>
+      <div id="powerbrowser-error-controls">
+        <button id="powerbrowser-error-retry" type="button">Retry</button>
+        <button id="powerbrowser-error-diagnostics" type="button">Details</button>
       </div>
     </div>
-    <div id="sourcerer-diagnostics">
-      <div id="sourcerer-diagnostics-fields"></div>
-      <pre id="sourcerer-diagnostics-log"></pre>
-      <button id="sourcerer-diagnostics-close" type="button">Close</button>
+    <div id="powerbrowser-diagnostics">
+      <div id="powerbrowser-diagnostics-fields"></div>
+      <pre id="powerbrowser-diagnostics-log"></pre>
+      <button id="powerbrowser-diagnostics-close" type="button">Close</button>
     </div>
-    <xul:browser id="sourcerer-content" type="content" primary="true" remote="true" remoteType="web" src="about:blank" tabindex="-1"/>
+    <xul:browser id="powerbrowser-content" type="content" primary="true" remote="true" remoteType="web" src="about:blank" tabindex="-1"/>
   </body>
 </html>

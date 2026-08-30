@@ -4,7 +4,7 @@
 
 /*
  * The shell's layout lives here, in its own chrome: stylesheet, rather than in
- * a <style> block in sourcerer.xhtml. The document's CSP is `default-src
+ * a <style> block in powerbrowser.xhtml. The document's CSP is `default-src
  * chrome:`, which has no 'unsafe-inline', so an inline <style> is silently
  * dropped -- leaving the content <browser> at display:inline/position:static
  * and a 0x0 viewport. Theia still loads into it and still runs, but lays out
@@ -17,13 +17,13 @@
  * CSP check (nsStyledElement::ParseStyleAttribute ->
  * nsStyleUtil::CSPAllowsInlineStyle -> STYLE_SRC_ATTR falling back to
  * default-src) and simply never builds the declaration. Phase 5 hid
- * #sourcerer-error and #sourcerer-diagnostics that way; both attributes were
+ * #powerbrowser-error and #powerbrowser-diagnostics that way; both attributes were
  * inert, so their `display: flex` base rules below won and BOTH overlays
  * painted over a perfectly healthy Theia at every startup, with nothing
  * logged. Their hidden DEFAULT therefore lives here, in the stylesheet, and
- * the layers are shown by the CSSOM writes in sourcerer.js -- which the CSP
+ * the layers are shown by the CSSOM writes in powerbrowser.js -- which the CSP
  * does NOT check, because they never go through attribute parsing. Do not
- * move a hidden default back into a style attribute in sourcerer.xhtml;
+ * move a hidden default back into a style attribute in powerbrowser.xhtml;
  * scripts/verify-phase-05.sh's shell-csp-inline-attrs check fails if you do.
  */
 
@@ -36,7 +36,7 @@ body {
   background: #1a1a1a;
 }
 
-#sourcerer-loading {
+#powerbrowser-loading {
   position: fixed;
   inset: 0;
   z-index: 1;
@@ -50,20 +50,20 @@ body {
 }
 
 /*
- * SHELL-03/D-114/D-116: the error layer joins #sourcerer-loading as a
+ * SHELL-03/D-114/D-116: the error layer joins #powerbrowser-loading as a
  * second member of the deck, same family (fixed full-inset, dark
  * background, light text, sans-serif) at a higher stacking index so it
  * paints over the loading layer too if both are ever visible in the same
- * frame. Never navigates or hides #sourcerer-content -- only ever toggles
+ * frame. Never navigates or hides #powerbrowser-content -- only ever toggles
  * this layer's own display.
  */
-#sourcerer-error {
+#powerbrowser-error {
   position: fixed;
   inset: 0;
   z-index: 2;
   /* Hidden by default (see the header comment). The flex properties below
    * are inert while this is `none` and take effect the instant
-   * sourcererShowError writes `display = "flex"` on the element. */
+   * powerbrowserShowError writes `display = "flex"` on the element. */
   display: none;
   flex-direction: column;
   align-items: center;
@@ -77,19 +77,19 @@ body {
   box-sizing: border-box;
 }
 
-#sourcerer-error-message {
+#powerbrowser-error-message {
   font-size: 1.25em;
   max-width: 40em;
   margin: 0;
 }
 
-#sourcerer-error-controls {
+#powerbrowser-error-controls {
   display: flex;
   gap: 1em;
 }
 
-#sourcerer-error-retry,
-#sourcerer-error-diagnostics {
+#powerbrowser-error-retry,
+#powerbrowser-error-diagnostics {
   font-family: sans-serif;
   font-size: 1em;
   color: #e8e8e8;
@@ -100,26 +100,26 @@ body {
   cursor: pointer;
 }
 
-#sourcerer-error-retry:hover,
-#sourcerer-error-diagnostics:hover {
+#powerbrowser-error-retry:hover,
+#powerbrowser-error-diagnostics:hover {
   background: #444;
 }
 
 /*
  * SHELL-04/D-117: the diagnostics layer is the third member of the deck,
- * same family as #sourcerer-loading/#sourcerer-error (fixed full-inset,
+ * same family as #powerbrowser-loading/#powerbrowser-error (fixed full-inset,
  * dark background, light text, sans-serif) at a higher stacking index than
  * both so it paints over either. Snapshot-on-open only (no live polling
  * loop, per D-118's recorded decision) -- opened via the Ctrl+Alt+Shift+D
  * chord or the error layer's Details control, closed by its own Close
  * control or the same chord again (toggle).
  */
-#sourcerer-diagnostics {
+#powerbrowser-diagnostics {
   position: fixed;
   inset: 0;
   z-index: 3;
   /* Hidden by default (see the header comment), shown by the CSSOM write in
-   * sourcererShowDiagnostics. */
+   * powerbrowserShowDiagnostics. */
   display: none;
   flex-direction: column;
   align-items: center;
@@ -132,14 +132,14 @@ body {
   box-sizing: border-box;
 }
 
-#sourcerer-diagnostics-fields {
+#powerbrowser-diagnostics-fields {
   display: flex;
   flex-direction: column;
   gap: 0.25em;
   font-size: 1em;
 }
 
-#sourcerer-diagnostics-log {
+#powerbrowser-diagnostics-log {
   font-family: monospace;
   font-size: 0.85em;
   background: #111;
@@ -155,7 +155,7 @@ body {
   margin: 0;
 }
 
-#sourcerer-diagnostics-close {
+#powerbrowser-diagnostics-close {
   font-family: sans-serif;
   font-size: 1em;
   color: #e8e8e8;
@@ -166,11 +166,11 @@ body {
   cursor: pointer;
 }
 
-#sourcerer-diagnostics-close:hover {
+#powerbrowser-diagnostics-close:hover {
   background: #444;
 }
 
-#sourcerer-content {
+#powerbrowser-content {
   position: fixed;
   inset: 0;
   z-index: 0;

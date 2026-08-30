@@ -39,7 +39,7 @@
     {
       "host": "push.services.mozilla.com",
       "disposition": "deny",
-      "reason": "dom.push.serverURL (modules/libpref/init/all.js:3197), blanked in sourcerer/branding/dev/pref/firefox-branding.js. No feature in this phase's scope (no Theia-side work ships until Phase 4) depends on Web Push; disabled rather than waived. The Push API surface itself (dom.push.enabled) is left untouched -- only the startup server URL this specific host requires is blanked, so a page that calls the API still gets a permission prompt, it simply cannot register a working subscription against this build."
+      "reason": "dom.push.serverURL (modules/libpref/init/all.js:3197), blanked in powerbrowser/branding/dev/pref/firefox-branding.js. No feature in this phase's scope (no Theia-side work ships until Phase 4) depends on Web Push; disabled rather than waived. The Push API surface itself (dom.push.enabled) is left untouched -- only the startup server URL this specific host requires is blanked, so a page that calls the API still gets a permission prompt, it simply cannot register a working subscription against this build."
     },
     {
       "host": "contile.services.mozilla.com",
@@ -49,7 +49,7 @@
     {
       "host": "location.services.mozilla.com",
       "disposition": "deny",
-      "reason": "browser.region.network.url (modules/libpref/init/all.js:3094), blanked in sourcerer/branding/dev/pref/firefox-branding.js -- Mozilla's region-lookup service, used for search-engine/locale defaults and queried unattended at startup. Not a DRM/security-parity concern; disabled rather than waived. This host is distinct from the geolocation provider (geo.provider.network.url, also this same host by stock default) that actually serves an explicit site's navigator.geolocation request -- that pref is deliberately left untouched (real capability, fires only on explicit request), so a site that does request geolocation will still attempt this host and fail; that trade-off is accepted for this phase, which ships no Theia-side feature depending on it."
+      "reason": "browser.region.network.url (modules/libpref/init/all.js:3094), blanked in powerbrowser/branding/dev/pref/firefox-branding.js -- Mozilla's region-lookup service, used for search-engine/locale defaults and queried unattended at startup. Not a DRM/security-parity concern; disabled rather than waived. This host is distinct from the geolocation provider (geo.provider.network.url, also this same host by stock default) that actually serves an explicit site's navigator.geolocation request -- that pref is deliberately left untouched (real capability, fires only on explicit request), so a site that does request geolocation will still attempt this host and fail; that trade-off is accepted for this phase, which ships no Theia-side feature depending on it."
     },
     {
       "host": "edgedl.me.gvt1.com",
@@ -74,12 +74,12 @@
     {
       "host": "127.0.0.1",
       "disposition": "allow",
-      "reason": "The Theia sidecar loopback -- architecture, not a concession. The phase-04 shell (sourcerer/shell/TheiaService.sys.mjs) supervises a bundled Node + Theia browser-target backend on localhost and presents it full-window as the only GUI; a build that could not reach loopback would have no GUI at all. A literal loopback address, so no name resolution leaves the machine. Exact-string match only (allowlist_host_allowed, scripts/verify-endpoints.sh:340-352 -- suffix matching requires a leading literal dot in the allowlist entry), so this entry admits the one literal address 127.0.0.1 and nothing else."
+      "reason": "The Theia sidecar loopback -- architecture, not a concession. The phase-04 shell (powerbrowser/shell/TheiaService.sys.mjs) supervises a bundled Node + Theia browser-target backend on localhost and presents it full-window as the only GUI; a build that could not reach loopback would have no GUI at all. A literal loopback address, so no name resolution leaves the machine. Exact-string match only (allowlist_host_allowed, scripts/verify-endpoints.sh:340-352 -- suffix matching requires a leading literal dot in the allowlist entry), so this entry admits the one literal address 127.0.0.1 and nothing else."
     },
     {
       "host": "github.com",
       "disposition": "deny",
-      "reason": "Root cause: theia/extensions/branding/src/browser/sourcerer-welcome-widget.tsx:13 exports SOURCERER_REPO_URL = 'https://github.com/Deocracy/Sourcerer' and renders it as a link; Gecko speculatively DNS-prefetches link targets (network.dns.disablePrefetch defaults false, modules/libpref/init/StaticPrefList.yaml:15308; network.dns.disablePrefetchFromHTTPS also defaults false, :15161, so the http-vs-https origin of the Theia frontend does not matter). Closed by network.dns.disablePrefetch = true, not by removing the link -- the link is a real, wanted affordance and a user who clicks it is making an explicit request, the same allow-the-capability/deny-the-unattended-callout distinction the geo.provider.network.url and dom.push.enabled entries already draw. Kept as `deny` rather than absent so the file stays the single source of truth: an observation of this host is a failure either way, and this reason records why it is not expected."
+      "reason": "Root cause: theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx:13 exports POWERBROWSER_REPO_URL = 'https://github.com/DeBIOS/PowerBrowser' and renders it as a link; Gecko speculatively DNS-prefetches link targets (network.dns.disablePrefetch defaults false, modules/libpref/init/StaticPrefList.yaml:15308; network.dns.disablePrefetchFromHTTPS also defaults false, :15161, so the http-vs-https origin of the Theia frontend does not matter). Closed by network.dns.disablePrefetch = true, not by removing the link -- the link is a real, wanted affordance and a user who clicks it is making an explicit request, the same allow-the-capability/deny-the-unattended-callout distinction the geo.provider.network.url and dom.push.enabled entries already draw. Kept as `deny` rather than absent so the file stays the single source of truth: an observation of this host is a failure either way, and this reason records why it is not expected."
     },
     {
       "host": "cloudflare-dns.com",
@@ -246,7 +246,7 @@
     {
       "name": "network.dns.disablePrefetch",
       "expect": true,
-      "reason": "BRAND-04 ledger entry 5 fix, 2026-08-29: stops Gecko's speculative DNS prefetch of Theia-rendered link targets -- specifically the github.com repo link in sourcerer-welcome-widget.tsx. Defaults false (modules/libpref/init/StaticPrefList.yaml:15308); network.dns.disablePrefetchFromHTTPS also defaults false (:15161), so the origin scheme does not matter."
+      "reason": "BRAND-04 ledger entry 5 fix, 2026-08-29: stops Gecko's speculative DNS prefetch of Theia-rendered link targets -- specifically the github.com repo link in powerbrowser-welcome-widget.tsx. Defaults false (modules/libpref/init/StaticPrefList.yaml:15308); network.dns.disablePrefetchFromHTTPS also defaults false (:15161), so the origin scheme does not matter."
     },
     {
       "name": "extensions.update.autoUpdateDefault",

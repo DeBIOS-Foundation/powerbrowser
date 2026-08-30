@@ -8,7 +8,7 @@
 # lesson, restated for this phase).
 #
 #   Layer 1 -- static prefs. Reads the effective installed default-pref
-#     value for every key in sourcerer/endpoint-allowlist.json's `prefs`
+#     value for every key in powerbrowser/endpoint-allowlist.json's `prefs`
 #     array (greprefs.js, then browser/defaults/preferences/firefox.js, then
 #     .../firefox-branding.js, later file wins) and compares to `expect`. A
 #     pref that cannot be found at all is a FAILURE, not a skip.
@@ -44,8 +44,8 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="$REPO_ROOT/objdir/dist/bin"
-BIN_PATH="$BIN_DIR/sourcerer"
-ALLOWLIST="$REPO_ROOT/sourcerer/endpoint-allowlist.json"
+BIN_PATH="$BIN_DIR/powerbrowser"
+ALLOWLIST="$REPO_ROOT/powerbrowser/endpoint-allowlist.json"
 BRANDING_PREF_FILE="$BIN_DIR/browser/defaults/preferences/firefox-branding.js"
 
 HELP="Usage: verify-endpoints.sh [--layer 1|2|3] [--positive-control] [--help]
@@ -297,7 +297,7 @@ run_layer2_impl() {
   # confirmed by a real back-to-back pair of runs on this host, one
   # observing it and the very next observing zero. $HOME itself, by
   # contrast, is touched hundreds of times every run (the real profile at
-  # ~/.config/deocracy/sourcerer) and is what genuinely proves strace
+  # ~/.config/debios/powerbrowser) and is what genuinely proves strace
   # captured live filesystem activity rather than an empty/broken log.
   local home_count exact_count
   home_count="$(grep -cF "$home_for_run" "$log" || true)"
@@ -378,7 +378,7 @@ PREFEOF
   fi
 
   local log_base profile_dir
-  log_base="$(mktemp -u "${TMPDIR:-/tmp}/sourcerer-hostresolver-XXXXXX")"
+  log_base="$(mktemp -u "${TMPDIR:-/tmp}/powerbrowser-hostresolver-XXXXXX")"
   profile_dir="$(mktemp -d)"
   track_temp "$profile_dir"
 

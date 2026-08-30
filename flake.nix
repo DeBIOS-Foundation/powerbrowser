@@ -1,5 +1,5 @@
 {
-  description = "Sourcerer build environment: Theia sidecar + Firefox-ESR fork";
+  description = "PowerBrowser build environment: Theia sidecar + Firefox-ESR fork";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -41,7 +41,7 @@
             # pkgs.node-gyp, which is built against the default nodejs (24.x) and
             # would drag that Node back into the toolchain (D-16 / PITFALLS #7).
             export PATH="${nodejs}/lib/node_modules/npm/bin/node-gyp-bin:$PATH"
-            echo "Sourcerer theia shell ready. Next: cd theia && yarn install && yarn build && yarn start" >&2
+            echo "PowerBrowser theia shell ready. Next: cd theia && yarn install && yarn build && yarn start" >&2
           '';
         };
 
@@ -83,7 +83,7 @@
               # D-71: sccache must see the already-corrected toolchain env
               # above, so this export comes after the unset line, never before.
               export RUSTC_WRAPPER=sccache
-              echo "Sourcerer firefox shell ready. This shell already supplies the full Gecko toolchain (rustc, cargo, cbindgen, clang) -- no separate toolchain setup is needed. Next: scripts/fetch-upstream.sh, then cd upstream && MOZCONFIG=../.mozconfig ./mach build" >&2
+              echo "PowerBrowser firefox shell ready. This shell already supplies the full Gecko toolchain (rustc, cargo, cbindgen, clang) -- no separate toolchain setup is needed. Next: scripts/fetch-upstream.sh, then cd upstream && MOZCONFIG=../.mozconfig ./mach build" >&2
             '';
           };
       };

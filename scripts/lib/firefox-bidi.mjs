@@ -30,13 +30,13 @@ import { existsSync } from 'node:fs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..', '..');
 // Phase 3 (03-02): the binary this driver targets by default is the
-// Sourcerer-branded build, not stock `firefox` -- plan 03-01 step 8 removes
+// PowerBrowser-branded build, not stock `firefox` -- plan 03-01 step 8 removes
 // the stale `dist/bin/firefox` entirely, and identity surface 1 requires
 // that no file by that name remain. Every caller that passes no override
 // (four of the five Phase 2 checks) now routes through this renamed target;
 // callers that need a different binary (e.g. a release-branding build) pass
 // `binPath` explicitly.
-export const FIREFOX_BIN = join(REPO_ROOT, 'objdir', 'dist', 'bin', 'sourcerer');
+export const FIREFOX_BIN = join(REPO_ROOT, 'objdir', 'dist', 'bin', 'powerbrowser');
 
 const BIDI_LINE_RE = /WebDriver BiDi listening on (ws:\/\/127\.0\.0\.1:\d+)/;
 
@@ -178,7 +178,7 @@ export async function captureScreenshot(url, outputPath, { windowSize = '800,600
         );
     }
 
-    const profileDir = await mkdtemp(join(tmpdir(), 'sourcerer-firefox-bidi-'));
+    const profileDir = await mkdtemp(join(tmpdir(), 'powerbrowser-firefox-bidi-'));
     let sigintHandler;
 
     const child = spawn(binPath, [
@@ -259,7 +259,7 @@ export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN } =
         );
     }
 
-    const profileDir = await mkdtemp(join(tmpdir(), 'sourcerer-firefox-bidi-'));
+    const profileDir = await mkdtemp(join(tmpdir(), 'powerbrowser-firefox-bidi-'));
     const port = await freePort();
 
     // Without the flag below, script.evaluate against a parent-process

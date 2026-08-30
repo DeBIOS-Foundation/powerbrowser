@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // scripts/verify-branding.mjs
 //
-// Headless proof that `@sourcerer/branding` is loaded by the running app:
+// Headless proof that `@powerbrowser/branding` is loaded by the running app:
 // document title, favicon link, the `theia.frontend.config` custom-key path
-// (D-62), the Sourcerer welcome widget (D-33), and the Sourcerer About
+// (D-62), the PowerBrowser welcome widget (D-33), and the PowerBrowser About
 // dialog (D-35) -- all read live in the page over WebDriver BiDi, not by
 // reading source or package.json on disk (D-64's vacuous-pass caveat). No
 // npm test dependency is added to the `theia` workspace (D-69).
@@ -57,7 +57,7 @@ function __getByName(container, name) {
 
 const NO_STOCK_IDENTITY = /Theia|Eclipse/i;
 
-// -- BRAND-05 surface: the Sourcerer welcome widget (D-33) --
+// -- BRAND-05 surface: the PowerBrowser welcome widget (D-33) --
 // Not toggled through the command (AbstractViewContribution.toggleView()
 // closes an already-open main-area widget instead of re-opening it, and a
 // fresh headless profile already has the widget open via
@@ -65,7 +65,7 @@ const NO_STOCK_IDENTITY = /Theia|Eclipse/i;
 async function checkWelcome({ evaluate, waitFor }) {
     await evaluate(`(async function() {
         ${PRELUDE}
-        const contribution = __getByName(window.theia.container, 'SourcererWelcomeViewContribution');
+        const contribution = __getByName(window.theia.container, 'PowerBrowserWelcomeViewContribution');
         await contribution.openView({ reveal: true, activate: true });
         return true;
     })()`);
@@ -81,8 +81,8 @@ async function checkWelcome({ evaluate, waitFor }) {
         }
     })()`);
 
-    if (!text.includes('Sourcerer')) {
-        throw new Error(`welcome widget textContent missing "Sourcerer": ${JSON.stringify(text)}`);
+    if (!text.includes('PowerBrowser')) {
+        throw new Error(`welcome widget textContent missing "PowerBrowser": ${JSON.stringify(text)}`);
     }
     if (NO_STOCK_IDENTITY.test(text)) {
         throw new Error(`welcome widget textContent matched /Theia|Eclipse/i: ${JSON.stringify(text)}`);
@@ -101,7 +101,7 @@ async function checkWelcome({ evaluate, waitFor }) {
     return { text, version };
 }
 
-// -- BRAND-05 surface: the Sourcerer About dialog (D-35) --
+// -- BRAND-05 surface: the PowerBrowser About dialog (D-35) --
 async function checkAbout({ evaluate, waitFor }) {
     await evaluate(`(async function() {
         ${PRELUDE}
@@ -149,8 +149,8 @@ async function main() {
         await waitFor('window.theia && window.theia.container ? true : false');
 
         const title = await evaluate('document.title');
-        if (title !== 'Sourcerer') {
-            throw new Error(`document.title was ${JSON.stringify(title)}, expected "Sourcerer"`);
+        if (title !== 'PowerBrowser') {
+            throw new Error(`document.title was ${JSON.stringify(title)}, expected "PowerBrowser"`);
         }
         surfacesRun.push('title');
 
@@ -166,9 +166,9 @@ async function main() {
         }
         surfacesRun.push('favicon');
 
-        const sourcererPrivilegedJs = await evaluate(`(${FIND_FRONTEND_CONFIG})?.sourcererPrivilegedJs`);
-        if (sourcererPrivilegedJs !== false) {
-            throw new Error(`sourcererPrivilegedJs was ${JSON.stringify(sourcererPrivilegedJs)}, expected boolean false`);
+        const powerbrowserPrivilegedJs = await evaluate(`(${FIND_FRONTEND_CONFIG})?.powerbrowserPrivilegedJs`);
+        if (powerbrowserPrivilegedJs !== false) {
+            throw new Error(`powerbrowserPrivilegedJs was ${JSON.stringify(powerbrowserPrivilegedJs)}, expected boolean false`);
         }
 
         const welcome = await checkWelcome({ evaluate, waitFor });
@@ -177,7 +177,7 @@ async function main() {
         const about = await checkAbout({ evaluate, waitFor });
         surfacesRun.push('about');
 
-        return { title, iconHref, sourcererPrivilegedJs, welcome, about };
+        return { title, iconHref, powerbrowserPrivilegedJs, welcome, about };
     });
 
     // Coverage guard: a surface that silently never ran (widget/dialog

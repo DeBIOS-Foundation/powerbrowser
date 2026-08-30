@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // BRAND-04 (D-83..D-88): every pref that gates an unattended callout to a
-// host not in sourcerer/endpoint-allowlist.json's `hosts` array. Every key
+// host not in powerbrowser/endpoint-allowlist.json's `hosts` array. Every key
 // here that appears in the allowlist's `prefs` array must match its
 // `expect` value exactly -- scripts/verify-endpoints.sh layer 1 asserts
 // this on the installed, unpreprocessed copy of this file
@@ -11,7 +11,7 @@
 //
 // Prefs stay UNLOCKED (plain pref(), never the locking variant) so the
 // developer can flip them while debugging -- D-84. No autoconfig.js / .cfg
-// pair exists anywhere under sourcerer/ (D-84 rejects that mechanism
+// pair exists anywhere under powerbrowser/ (D-84 rejects that mechanism
 // explicitly).
 
 pref("startup.homepage_override_url", "");
@@ -70,7 +70,7 @@ pref("browser.topsites.contile.enabled", false);
 
 // --- Region-lookup and Web Push server URLs (both resolve
 // location.services.mozilla.com / push.services.mozilla.com respectively,
-// which sourcerer/endpoint-allowlist.json disposition `deny` -- neither
+// which powerbrowser/endpoint-allowlist.json disposition `deny` -- neither
 // URL is essential to this phase's scope, no Theia-side feature depends on
 // them yet). The GEOLOCATION and PUSH *APIs themselves*
 // (geo.enabled/geo.provider.network.url, dom.push.enabled) are deliberately
@@ -116,8 +116,8 @@ pref("network.connectivity-service.enabled", false);
 // (modules/libpref/init/StaticPrefList.yaml:15308) and
 // network.dns.disablePrefetchFromHTTPS also defaults false (:15161), so
 // the origin scheme is irrelevant. Root cause traced to
-// theia/extensions/branding/src/browser/sourcerer-welcome-widget.tsx:13's
-// SOURCERER_REPO_URL link to github.com. Disabled rather than removing
+// theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx:13's
+// POWERBROWSER_REPO_URL link to github.com. Disabled rather than removing
 // the link -- the link is a real, wanted affordance, and an explicit
 // click is a user request this pref does not block, only the
 // speculative prefetch. github.com stays a `deny` entry in

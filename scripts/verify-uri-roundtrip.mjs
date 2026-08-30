@@ -71,7 +71,7 @@ import { withFirefoxPage } from './lib/firefox-bidi.mjs';
 
 const HELP = `Usage: node scripts/verify-uri-roundtrip.mjs [url] [--scheme <scheme>]
 
-Table-driven URI-01..URI-04 round-trip proof against @sourcerer/tab-uris.
+Table-driven URI-01..URI-04 round-trip proof against @powerbrowser/tab-uris.
 
   [url]              App URL to check (default http://localhost:3000)
   --scheme <scheme>  Run only one scheme's rows: view, settings, or terminal

@@ -23,7 +23,7 @@
 # under --quick. No flag runs everything, including
 # verify-branding-identity.mjs and verify-endpoints.sh.
 #
-# verify-endpoints.sh's layers 2 and 3 background a `sourcerer` process of
+# verify-endpoints.sh's layers 2 and 3 background a `powerbrowser` process of
 # their own (with their own split trap). Every external-script check runs
 # under `setsid`, exactly like scripts/verify-phase-02.sh's own SERVER_PID
 # pattern: since this script is non-interactive, job control is off and a
@@ -82,7 +82,7 @@ check_desktop_entry_quick() {
     const fs = require("fs");
     const path = require("path");
     const repoRoot = process.argv[1];
-    const desktopPath = path.join(repoRoot, "sourcerer", "sourcerer.desktop");
+    const desktopPath = path.join(repoRoot, "powerbrowser", "powerbrowser.desktop");
     const configStatusPath = path.join(repoRoot, "objdir", "config.status");
 
     if (!fs.existsSync(desktopPath)) {
@@ -145,7 +145,7 @@ check_allowlist_schema() {
       }
     }
     console.log(`allowlist-schema: PASS -- ${a.hosts.length} host(s), ${a.prefs.length} pref(s)`);
-  ' "$REPO_ROOT/sourcerer/endpoint-allowlist.json"
+  ' "$REPO_ROOT/powerbrowser/endpoint-allowlist.json"
 }
 
 # --- allowlist-to-document consistency (03-VERIFICATION.md Gap 2) ---
@@ -216,7 +216,7 @@ _allowlist_doc_consistency_impl() {
 # a function-branch CHECKS entry must be a bare name, never a command carrying
 # arguments).
 check_allowlist_doc_consistency() {
-  _allowlist_doc_consistency_impl "$REPO_ROOT/sourcerer/endpoint-allowlist.json"
+  _allowlist_doc_consistency_impl "$REPO_ROOT/powerbrowser/endpoint-allowlist.json"
 }
 
 # Plants a temp copy of the real allowlist carrying two additional allow
@@ -227,7 +227,7 @@ check_allowlist_doc_consistency() {
 # temp copy is registered with track_temp so the script's own trap-covered
 # cleanup() removes it on every exit path, including an interrupt mid-test.
 check_allowlist_doc_consistency_self_test() {
-  local real="$REPO_ROOT/sourcerer/endpoint-allowlist.json"
+  local real="$REPO_ROOT/powerbrowser/endpoint-allowlist.json"
   local tmp
   tmp="$(mktemp)"
   track_temp "$tmp"
@@ -237,7 +237,7 @@ check_allowlist_doc_consistency_self_test() {
     const [realPath, outPath] = process.argv.slice(1);
     const a = JSON.parse(fs.readFileSync(realPath, "utf8"));
     a.hosts.push({
-      host: "sourcerer-selftest-control.cdn.mozilla.net",
+      host: "powerbrowser-selftest-control.cdn.mozilla.net",
       disposition: "allow",
       reason: "allowlist-doc-consistency-self-test: undocumented host, must be rejected"
     });
@@ -256,7 +256,7 @@ check_allowlist_doc_consistency_self_test() {
     return 1
   fi
 
-  if echo "$out" | grep -qF 'sourcerer-selftest-control.cdn.mozilla.net' \
+  if echo "$out" | grep -qF 'powerbrowser-selftest-control.cdn.mozilla.net' \
      && echo "$out" | grep -qE '^  cdn\.mozilla\.net:'; then
     echo "allowlist-doc-consistency-self-test: PASS -- both planted hosts (undocumented control, suffix-adjacency) correctly rejected"
     return 0
@@ -272,8 +272,8 @@ check_allowlist_doc_consistency_self_test() {
 # Shared inner helper: takes four path arguments -- dev brand.properties,
 # release brand.properties, dev branding pref file, release branding pref
 # file -- so the self-test can point it at temp files without ever touching
-# the real tree. Asserts all four of: (1) dev brandFullName == "Sourcerer
-# Dev", (2) release brandFullName == "Sourcerer", (3) the dev pref file sets
+# the real tree. Asserts all four of: (1) dev brandFullName == "PowerBrowser
+# Dev", (2) release brandFullName == "PowerBrowser", (3) the dev pref file sets
 # browser.tabs.inTitlebar to 0 via a pref() call, (4) the release pref file
 # sets no value for that same pref name. A missing/unreadable input path is
 # a FAIL naming that path, never a skip.
@@ -347,11 +347,11 @@ _branding_variant_divergence_impl() {
     const relTitlebar = readTitlebarPref(relPrefPath);
 
     const failures = [];
-    if (devValue !== "Sourcerer Dev") {
-      failures.push(`dev brand.properties brandFullName=${JSON.stringify(devValue)} (expected "Sourcerer Dev") at ${devPropPath}`);
+    if (devValue !== "PowerBrowser Dev") {
+      failures.push(`dev brand.properties brandFullName=${JSON.stringify(devValue)} (expected "PowerBrowser Dev") at ${devPropPath}`);
     }
-    if (relValue !== "Sourcerer") {
-      failures.push(`release brand.properties brandFullName=${JSON.stringify(relValue)} (expected "Sourcerer") at ${relPropPath}`);
+    if (relValue !== "PowerBrowser") {
+      failures.push(`release brand.properties brandFullName=${JSON.stringify(relValue)} (expected "PowerBrowser") at ${relPropPath}`);
     }
     if (devTitlebar !== "0") {
       failures.push(`dev pref file browser.tabs.inTitlebar=${JSON.stringify(devTitlebar)} (expected a pref() call setting 0) at ${devPrefPath}`);
@@ -371,7 +371,7 @@ _branding_variant_divergence_impl() {
 
 # Argument-free wrapper for the CHECKS array -- feeds the four INSTALLED
 # paths under objdir/dist/bin and objdir-release/dist/bin (symlinks into
-# sourcerer/branding/<variant>/, D-70 tier 1), proving the divergence reaches
+# powerbrowser/branding/<variant>/, D-70 tier 1), proving the divergence reaches
 # a built tree, not just the repo-root source.
 check_branding_variant_divergence() {
   _branding_variant_divergence_impl \
@@ -396,8 +396,8 @@ check_branding_variant_divergence_self_test() {
   dev_pref="$(mktemp)"; track_temp "$dev_pref"
   rel_pref="$(mktemp)"; track_temp "$rel_pref"
 
-  printf 'brandFullName=Sourcerer Dev\n' > "$dev_props"
-  printf 'brandFullName=Sourcerer\n' > "$rel_props"
+  printf 'brandFullName=PowerBrowser Dev\n' > "$dev_props"
+  printf 'brandFullName=PowerBrowser\n' > "$rel_props"
   printf 'pref("browser.tabs.inTitlebar", 0);\n' > "$dev_pref"
   printf '// release: no titlebar override\n' > "$rel_pref"
 
@@ -411,7 +411,7 @@ check_branding_variant_divergence_self_test() {
   # Mutation 1: strip the dev suffix.
   local dev_props_bad
   dev_props_bad="$(mktemp)"; track_temp "$dev_props_bad"
-  printf 'brandFullName=Sourcerer\n' > "$dev_props_bad"
+  printf 'brandFullName=PowerBrowser\n' > "$dev_props_bad"
   local out1
   if out1="$(_branding_variant_divergence_impl "$dev_props_bad" "$rel_props" "$dev_pref" "$rel_pref" 2>&1)"; then
     echo "branding-variant-divergence-self-test: FAIL -- planted properties-suffix mutation was NOT rejected" >&2
@@ -479,7 +479,7 @@ for entry in "${CHECKS[@]}"; do
   echo "verify-phase-03: running $label..."
   # External bash/node script invocations get their own process group via
   # setsid, so an interrupt's group-kill in cleanup() can reach whatever
-  # they background (verify-endpoints.sh's own sourcerer child, two layers
+  # they background (verify-endpoints.sh's own powerbrowser child, two layers
   # deep). Plain function calls (allowlist-schema, desktop-entry-quick) are
   # synchronous, spawn no children of their own, and run inline -- no
   # process-group indirection needed or possible for a shell function.
