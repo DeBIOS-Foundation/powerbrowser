@@ -16,14 +16,19 @@
       `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and these never
       vary per downstream
 
-- [ ] **MIG-04**: The renamed tree builds and boots on Linux under Power
+- [x] **MIG-04**: The renamed tree builds and boots on Linux under Power
       Browser branding (proven by the existing smoke tests)
-      <!-- Plan 01-03 declared MIG-04 in its frontmatter and delivered its
-           PREREQUISITES (working desktop entries, correct compiled display
-           literals, the pre-build preflight), but NOT the requirement: nothing
-           has been built yet. objdir/ does not exist. Marking it complete here
-           would be a claim no evidence supports. Plan 01-04 owns the build and
-           closes this. -->
+      <!-- CLOSED by plan 01-04, 2026-08-30, on evidence rather than
+           frontmatter. Build: `scripts/smoke-firefox.sh` PASS, 2830s
+           (~47m11s) on `legion`, producing objdir/dist/bin/powerbrowser.
+           Boot: `scripts/smoke-theia.sh` PASS; shell01-theia-is-the-window
+           and shell05-paint-before-backend both PASS against the launched
+           binary. Branding: all six surfaces of
+           scripts/verify-branding-identity.mjs PASS against the BUILT
+           ARTIFACT, with `--positive-control runtime-identity` green, so the
+           comparison is proven to discriminate rather than agree with
+           everything. Plan 01-03 had delivered only the prerequisites and
+           correctly left this unchecked. -->
 
 - [ ] **MIG-05**: Brand values are removed from `patches/*.patch` (hook-only
       patches that `include()` generated files), preserving the 3-way-merge
@@ -207,7 +212,7 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 | MIG-01 | Phase 1 | Complete |
 | MIG-02 | Phase 1 | Complete |
 | MIG-03 | Phase 1 | Complete |
-| MIG-04 | Phase 1 | In progress — prerequisites landed in 01-03; the build itself is 01-04 |
+| MIG-04 | Phase 1 | Complete — closed by 01-04's build (smoke-firefox + smoke-theia PASS, six identity surfaces green on the built artifact with the positive control) |
 | GUI-01 | Phase 1 | Pending |
 | GUI-02 | Phase 1 | Pending |
 | GUI-03 | Phase 1 | Complete |

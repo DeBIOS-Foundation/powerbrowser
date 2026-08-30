@@ -50,7 +50,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 3/7 plans executed
+**Plans**: 4/7 plans executed
 
 Plans:
 **Wave 1**
@@ -67,7 +67,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 01-04-PLAN.md — Walking skeleton far end: re-derive the patches, fetch upstream, build Gecko, and verify branding on the built artifact
+- [x] 01-04-PLAN.md — Walking skeleton far end: re-derive the patches, fetch upstream, build Gecko, and verify branding on the built artifact
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -191,7 +191,7 @@ than noisy.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Platform Extraction and Rename | 3/7 | In Progress|  |
+| 1. Platform Extraction and Rename | 4/7 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 0/TBD | Not started | - |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
