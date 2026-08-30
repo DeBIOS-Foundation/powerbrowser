@@ -1,0 +1,173 @@
+{
+  "$comment": "MIG-02 (D-15/D-16/D-17): the single machine-readable source of truth for the Sourcerer -> Power Browser rename. It has exactly two consumers, and they read this same file so that what is scanned and what is renamed cannot drift apart: scripts/rename-brand.mjs (the rerunnable rename executor) and scripts/scan-brand-residue.mjs (the residual-brand scan and its reconciled red-scan evidence). FAIL-CLOSED RULE: an occurrence found in the migrating scope that no row here accounts for is a FAILURE, never silently ignored -- that is reconciliation condition 4, and it is the one condition that catches an under-scanning scanner rather than a stale inventory. rename-brand.mjs refuses to run at all while any row lacks a `class` from the five-value set, so this file is the gate, not documentation. Per-row keys: `token`; `case_form` (lower | title | upper | literal -- the three case forms are three DIFFERENT tokens matched case-sensitively, per Pitfall 1; `literal` is a structural anchor matched as a raw substring with no boundary rule); `class` (brand-identifier | brand-display | identity | frozen | coincidental); `target`; `expected_count`; `expected_files[]`; `couples_with[]` (paths whose sites must move in the SAME pass, per Pitfall 2); `reason` (mandatory on every frozen and coincidental row, citing file:line evidence); `chain` (names a coupled chain that `--scope-chain` can prove end-to-end in isolation); and the optional `site_overrides[]` of {file, line, class, target, reason} for disambiguating the TitleCase form per site. SEEDED STATE: this file currently carries only the `chrome-package` chain plus the held-back rows that chain proves the classifier can hold back. Plan 01-02 extends it to the complete migrating scope; extend it, do not restructure it. The `chrome-package` chain is the chrome://sourcerer/ coupled chain: the chrome package name and its six jar.mn registration lines, the components.conf esModule and constructor keys, the moz.build JAR_MANIFESTS/DEFINES/JS_PREFERENCE_PP_FILES/XPCOM_MANIFESTS wiring, the reference inside patches/020-sourcerer-shell.patch, and the chrome-package allowlist glob in scripts/check-internals-boundary.sh -- six coupled reference formats that must move together in one pass or the build packages a chrome package nothing can reach.",
+  "scope": {
+    "include": "Every path `git ls-files` reports from the repo root, minus the `exclude` prefixes below, minus any path ending in one of `binary_extensions`. Derived from git rather than from a hand-kept list because git already excludes every ignored path -- upstream/, objdir/, objdir-release/, .mozbuild/, node_modules/, theia/**/lib/ -- which is the half of Pitfall 7 that drowns the scan in Gecko's own thousands of firefox-named files.",
+    "exclude": [
+      ".planning/",
+      "inventory/",
+      "scripts/scan-brand-residue.mjs",
+      "scripts/rename-brand.mjs"
+    ],
+    "exclude_reason": ".planning/ is this repo's own planning record, not migrating source; it quotes the Sourcerer tokens as historical evidence and renaming it would destroy the provenance D-08 protects. inventory/ and the two rename scripts are the rename's own machinery: they necessarily spell out every token, so scanning them would be scanning the scan's own input -- vacuous, and it would make the tree permanently red. Every other tracked path is in scope, including docs/, README.md, patches/, theia/ and scripts/.",
+    "binary_extensions": [
+      ".png",
+      ".ico",
+      ".icns",
+      ".jpg",
+      ".gif",
+      ".woff",
+      ".woff2",
+      ".zip"
+    ],
+    "residue_probes": [
+      "sourcerer",
+      "deocracy"
+    ],
+    "residue_probes_reason": "Used ONLY by reconciliation condition 4, and deliberately NOT by the boundary matcher: a raw case-insensitive substring search with no boundary rule at all. Every probe hit must land inside a span some row above claimed. A bug in the boundary matcher (missing `sourcererPrivilegedJs`, say) therefore leaves an unclaimed probe hit and fails condition 4, even though conditions 1-3 would all agree with themselves. This is the independent source T-01-04 requires -- the rename script never writes it."
+  },
+  "hand_write": {
+    "$comment": "Surfaces rename-brand.mjs is forbidden to touch. These are the display literals of Pitfall 1: `Sourcerer` here means `Power Browser` (two words, with the space), not the identifier `PowerBrowser`, and a mechanical pass gets them wrong while the verifier that checks them agrees with the wrong answer because the same pass rewrote both sides. Plan 01-03 hand-writes every one of them. The `.desktop` files are excluded for a second reason (Pitfall 4): three `sourcerer` tokens on one `Icon=`/`Exec=` line with three different correct targets, which no token-boundary rule can get right.",
+    "files": [
+      "sourcerer/sourcerer.desktop",
+      "sourcerer/sourcerer-release.desktop",
+      "sourcerer/branding/dev/locales/en-US/brand.ftl",
+      "sourcerer/branding/release/locales/en-US/brand.ftl",
+      "sourcerer/branding/dev/locales/en-US/brand.properties",
+      "sourcerer/branding/release/locales/en-US/brand.properties",
+      "sourcerer/branding/dev/configure.sh",
+      "sourcerer/branding/release/configure.sh"
+    ],
+    "line_contains": [
+      {
+        "file": "theia/applications/browser/package.json",
+        "contains": "\"applicationName\"",
+        "reason": "theia/applications/browser/package.json:13 -- `\"applicationName\": \"Sourcerer\"` is a display literal whose target is `Power Browser`, but the rest of this file carries ordinary identifier occurrences the script must rename. Excluding the whole file would leave those behind, so the exclusion is line-scoped."
+      }
+    ]
+  },
+  "tokens": [
+    {
+      "token": "sourcerer",
+      "case_form": "lower",
+      "class": "brand-identifier",
+      "target": "powerbrowser",
+      "expected_count": 41,
+      "expected_files": [
+        "sourcerer/shell/jar.mn",
+        "sourcerer/shell/components.conf",
+        "sourcerer/shell/moz.build",
+        "patches/020-sourcerer-shell.patch",
+        "scripts/check-internals-boundary.sh"
+      ],
+      "couples_with": [
+        "sourcerer/shell/jar.mn",
+        "sourcerer/shell/components.conf",
+        "sourcerer/shell/moz.build",
+        "patches/020-sourcerer-shell.patch",
+        "scripts/check-internals-boundary.sh"
+      ],
+      "chain": "chrome-package",
+      "reason": "The fixed-identifier form (D-10, one word). Carries the chrome package name in jar.mn:12, the virtual paths and parenthesised source filenames on the six registration lines jar.mn:12-17, every `chrome://sourcerer/` string, the `../sourcerer/shell` DIRS entry inside patches/020, and the `*'chrome://sourcerer/'*` allowlist globs at check-internals-boundary.sh:119,172 -- a missed rename there silently WIDENS the boundary guard rather than failing it."
+    },
+    {
+      "token": "Sourcerer",
+      "case_form": "title",
+      "class": "brand-identifier",
+      "target": "PowerBrowser",
+      "expected_count": 13,
+      "expected_files": [
+        "sourcerer/shell/jar.mn",
+        "sourcerer/shell/components.conf",
+        "scripts/check-internals-boundary.sh"
+      ],
+      "couples_with": [
+        "sourcerer/shell/jar.mn",
+        "sourcerer/shell/components.conf",
+        "scripts/check-internals-boundary.sh"
+      ],
+      "chain": "chrome-package",
+      "reason": "TitleCase AS AN IDENTIFIER PREFIX, target `PowerBrowser` with no space: the `SourcererAPI.sys.mjs` source filename on jar.mn:16, the `constructor` key `SourcererSingleInstanceHandler` at components.conf:19 (coupled to the exported class name), and the hardcoded basename and catalogue path at check-internals-boundary.sh:31,150,151. Every TitleCase occurrence in this chain is an identifier; not one of them is a display literal, which is why the whole chain can carry a single row. Plan 01-02 must classify TitleCase PER SITE once the display surfaces enter scope (Pitfall 1)."
+    },
+    {
+      "token": "SOURCERER",
+      "case_form": "upper",
+      "class": "brand-identifier",
+      "target": "POWERBROWSER",
+      "expected_count": 2,
+      "expected_files": [
+        "sourcerer/shell/moz.build"
+      ],
+      "couples_with": [
+        "sourcerer/shell/moz.build",
+        "sourcerer/shell/sourcerer-sidecar.js"
+      ],
+      "chain": "chrome-package",
+      "reason": "`DEFINES[\"SOURCERER_DEV_TREE\"]` at moz.build:14 is consumed by `#filter substitution` as the `@SOURCERER_DEV_TREE@` token inside the preprocessed pref file sourcerer-sidecar.js. The define name and the substitution token must rename together or the sidecar pref carries a literal unsubstituted `@POWERBROWSER_DEV_TREE@` path and the backend never starts -- which is why sourcerer-sidecar.js is in couples_with even though its own occurrences are outside this chain's scope."
+    },
+    {
+      "token": "sourcerer.dev",
+      "case_form": "lower",
+      "class": "identity",
+      "target": "powerbrowser.org",
+      "expected_count": 1,
+      "expected_files": [
+        "sourcerer/shell/components.conf"
+      ],
+      "couples_with": [
+        "sourcerer/shell/components.conf"
+      ],
+      "chain": "chrome-package",
+      "reason": "components.conf:17 -- `@sourcerer.dev/single-instance-clh;1` is an XPCOM contract id namespaced by a DNS name, so its target is NOT the mechanical `powerbrowser.dev`: the DeBIOS Foundation does not own a .dev domain, and D-12 establishes powerbrowser.org. Class `identity`, not `brand-identifier`, precisely because the target is a decision rather than a case swap (T-01-05). Longer than the bare `sourcerer` token, so the longest-token-first claim order takes this site before the lowercase brand row can."
+    },
+    {
+      "token": "{7539c85c-f1f6-43a3-9a45-48fd27140596}",
+      "case_form": "literal",
+      "class": "frozen",
+      "target": "{7539c85c-f1f6-43a3-9a45-48fd27140596}",
+      "expected_count": 1,
+      "expected_files": [
+        "sourcerer/shell/components.conf"
+      ],
+      "chain": "chrome-package",
+      "reason": "components.conf:16 -- the XPCOM class id. Nothing requires it to be new: no downstream, no pref, and no manifest keys off its value, so regenerating it is pure churn in a bisect. Held back by class, and asserted still present by count after the rename so the pass cannot quietly eat it."
+    },
+    {
+      "token": "\"command-line-handler\": \"a-",
+      "case_form": "literal",
+      "class": "frozen",
+      "target": "\"command-line-handler\": \"a-",
+      "expected_count": 1,
+      "expected_files": [
+        "sourcerer/shell/components.conf"
+      ],
+      "chain": "chrome-package",
+      "reason": "components.conf:20 -- the `a-` category-entry PREFIX is frozen while the brand suffix after it is not. The file's own comment (components.conf:8-12) states the mechanism: `a-sourcerer` sorts ahead of the stock handler's `m-browser` and far ahead of `x-default` under ascending strcmp (upstream/xpcom/components/nsCategoryManager.cpp:210-213), and that ordering IS the single-instance mechanism. Claiming this literal first leaves the following `sourcerer` with a `-` on its left, which is a legal token boundary, so the site renames to `a-powerbrowser` -- still ahead of both by inspection of the strings."
+    },
+    {
+      "token": "%content/branding/",
+      "case_form": "literal",
+      "class": "frozen",
+      "target": "%content/branding/",
+      "expected_count": 2,
+      "expected_files": [
+        "sourcerer/branding/dev/content/jar.mn",
+        "sourcerer/branding/release/content/jar.mn"
+      ],
+      "chain": null,
+      "reason": "sourcerer/branding/{dev,release}/content/jar.mn:12 -- `branding` here is Gecko's OWN chrome slot name, not this product's brand. Renaming it detaches the branding package from every stock consumer of chrome://branding/content/. Seeded now because this chain is what proves the classifier can hold a row back; it is exercised by the full-tree run in plan 01-02."
+    },
+    {
+      "token": "%locale/branding/",
+      "case_form": "literal",
+      "class": "frozen",
+      "target": "%locale/branding/",
+      "expected_count": 2,
+      "expected_files": [
+        "sourcerer/branding/dev/locales/jar.mn",
+        "sourcerer/branding/release/locales/jar.mn"
+      ],
+      "chain": null,
+      "reason": "sourcerer/branding/{dev,release}/locales/jar.mn:10 -- the locale half of the same stock Gecko slot. Same rule as %content/branding/: upstream's name, never ours."
+    }
+  ]
+}
