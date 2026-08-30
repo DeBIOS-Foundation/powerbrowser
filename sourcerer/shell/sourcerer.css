@@ -1,0 +1,181 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/*
+ * The shell's layout lives here, in its own chrome: stylesheet, rather than in
+ * a <style> block in sourcerer.xhtml. The document's CSP is `default-src
+ * chrome:`, which has no 'unsafe-inline', so an inline <style> is silently
+ * dropped -- leaving the content <browser> at display:inline/position:static
+ * and a 0x0 viewport. Theia still loads into it and still runs, but lays out
+ * into nothing and paints an empty window. Keeping the rules in a real
+ * chrome: file satisfies the existing CSP as written; do NOT "fix" a future
+ * styling problem here by adding 'unsafe-inline' back to the policy.
+ *
+ * The same policy drops an inline style ATTRIBUTE (`style="display:none;"`)
+ * just as silently -- Gecko's style-attribute parse path runs the identical
+ * CSP check (nsStyledElement::ParseStyleAttribute ->
+ * nsStyleUtil::CSPAllowsInlineStyle -> STYLE_SRC_ATTR falling back to
+ * default-src) and simply never builds the declaration. Phase 5 hid
+ * #sourcerer-error and #sourcerer-diagnostics that way; both attributes were
+ * inert, so their `display: flex` base rules below won and BOTH overlays
+ * painted over a perfectly healthy Theia at every startup, with nothing
+ * logged. Their hidden DEFAULT therefore lives here, in the stylesheet, and
+ * the layers are shown by the CSSOM writes in sourcerer.js -- which the CSP
+ * does NOT check, because they never go through attribute parsing. Do not
+ * move a hidden default back into a style attribute in sourcerer.xhtml;
+ * scripts/verify-phase-05.sh's shell-csp-inline-attrs check fails if you do.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #1a1a1a;
+}
+
+#sourcerer-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e8e8e8;
+  font-family: sans-serif;
+  font-size: 1.5em;
+  background: #1a1a1a;
+}
+
+/*
+ * SHELL-03/D-114/D-116: the error layer joins #sourcerer-loading as a
+ * second member of the deck, same family (fixed full-inset, dark
+ * background, light text, sans-serif) at a higher stacking index so it
+ * paints over the loading layer too if both are ever visible in the same
+ * frame. Never navigates or hides #sourcerer-content -- only ever toggles
+ * this layer's own display.
+ */
+#sourcerer-error {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  /* Hidden by default (see the header comment). The flex properties below
+   * are inert while this is `none` and take effect the instant
+   * sourcererShowError writes `display = "flex"` on the element. */
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5em;
+  color: #e8e8e8;
+  font-family: sans-serif;
+  background: #1a1a1a;
+  text-align: center;
+  padding: 2em;
+  box-sizing: border-box;
+}
+
+#sourcerer-error-message {
+  font-size: 1.25em;
+  max-width: 40em;
+  margin: 0;
+}
+
+#sourcerer-error-controls {
+  display: flex;
+  gap: 1em;
+}
+
+#sourcerer-error-retry,
+#sourcerer-error-diagnostics {
+  font-family: sans-serif;
+  font-size: 1em;
+  color: #e8e8e8;
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 0.5em 1.25em;
+  cursor: pointer;
+}
+
+#sourcerer-error-retry:hover,
+#sourcerer-error-diagnostics:hover {
+  background: #444;
+}
+
+/*
+ * SHELL-04/D-117: the diagnostics layer is the third member of the deck,
+ * same family as #sourcerer-loading/#sourcerer-error (fixed full-inset,
+ * dark background, light text, sans-serif) at a higher stacking index than
+ * both so it paints over either. Snapshot-on-open only (no live polling
+ * loop, per D-118's recorded decision) -- opened via the Ctrl+Alt+Shift+D
+ * chord or the error layer's Details control, closed by its own Close
+ * control or the same chord again (toggle).
+ */
+#sourcerer-diagnostics {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  /* Hidden by default (see the header comment), shown by the CSSOM write in
+   * sourcererShowDiagnostics. */
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1em;
+  color: #e8e8e8;
+  font-family: sans-serif;
+  background: #1a1a1a;
+  padding: 2em;
+  box-sizing: border-box;
+}
+
+#sourcerer-diagnostics-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+  font-size: 1em;
+}
+
+#sourcerer-diagnostics-log {
+  font-family: monospace;
+  font-size: 0.85em;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 1em;
+  max-width: 60em;
+  max-height: 40vh;
+  width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+#sourcerer-diagnostics-close {
+  font-family: sans-serif;
+  font-size: 1em;
+  color: #e8e8e8;
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 0.5em 1.25em;
+  cursor: pointer;
+}
+
+#sourcerer-diagnostics-close:hover {
+  background: #444;
+}
+
+#sourcerer-content {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+}

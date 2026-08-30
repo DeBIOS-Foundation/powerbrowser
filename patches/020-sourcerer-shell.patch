@@ -1,0 +1,29 @@
+diff --git a/browser/moz.build b/browser/moz.build
+index 5a03cfc6d3..ab2c84df3c 100644
+--- a/browser/moz.build
++++ b/browser/moz.build
+@@ -27,6 +27,11 @@ DIRS += [
+     "app",
+ ]
+ 
++# D-89/D-92: sourcerer/shell/ resolves through the upstream/sourcerer
++# symlink to the repo's own sourcerer/ tree -- our chrome code stays
++# entirely in sourcerer/, never inside upstream/.
++DIRS += ["../sourcerer/shell"]
++
+ if CONFIG["MAKENSISU"]:
+     DIRS += ["installer/windows"]
+ 
+diff --git a/browser/moz.configure b/browser/moz.configure
+index 33098ee135..a3dbfad2f5 100644
+--- a/browser/moz.configure
++++ b/browser/moz.configure
+@@ -16,7 +16,7 @@ imply_option("MOZ_APP_UA_NAME", "Firefox")
+ imply_option("MOZ_APP_ID", "{ec8030f7-c20a-464f-9b0e-13a3a9e97384}")
+ # Include the DevTools client, not just the server (which is the default)
+ imply_option("MOZ_DEVTOOLS", "all")
+-imply_option("BROWSER_CHROME_URL", "chrome://browser/content/browser.xhtml")
++imply_option("BROWSER_CHROME_URL", "chrome://sourcerer/content/sourcerer.xhtml")
+ 
+ 
+ with only_when(target_has_linux_kernel & compile_environment):

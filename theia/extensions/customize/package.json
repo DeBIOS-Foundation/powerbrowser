@@ -1,0 +1,26 @@
+{
+  "private": true,
+  "name": "@sourcerer/customize",
+  "version": "0.1.0",
+  "license": "MIT",
+  "dependencies": {
+    "@sourcerer/tab-uris": "0.1.0",
+    "@theia/core": "1.74.1",
+    "@theia/filesystem": "1.74.1",
+    "@theia/userstorage": "1.74.1",
+    "p-debounce": "^2.1.0"
+  },
+  "theiaExtensions": [
+    {
+      "frontend": "lib/browser/customize-frontend-module"
+    }
+  ],
+  "files": [
+    "lib",
+    "src"
+  ],
+  "scripts": {
+    "clean": "rm -rf lib *.tsbuildinfo",
+    "build": "tsc -b"
+  }
+}

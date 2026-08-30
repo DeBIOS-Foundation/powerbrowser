@@ -1,0 +1,26 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+# SHELL-01/D-89: registers the chrome://sourcerer/content/ package that
+# replaces BROWSER_CHROME_URL as the startup window. SOURCERER_DEV_TREE is
+# the repo root (TOPSRCDIR is upstream/, the Gecko source tree; the repo
+# root is its parent), substituted into sourcerer-sidecar.js so the sidecar
+# prefs carry an absolute dev-tree path with no hardcoded user path checked
+# into the repo.
+
+JAR_MANIFESTS += ["jar.mn"]
+
+DEFINES["SOURCERER_DEV_TREE"] = TOPSRCDIR + "/.."
+
+JS_PREFERENCE_PP_FILES += [
+    "sourcerer-sidecar.js",
+]
+
+# D-121: the single-instance command-line handler. XPCOM_MANIFESTS is a
+# tier-3 build trigger (feeds the generated StaticComponents.cpp compiled
+# into libxul) -- a full `./mach build` is required after this, not the
+# fast preprocessing tier.
+XPCOM_MANIFESTS += [
+    "components.conf",
+]

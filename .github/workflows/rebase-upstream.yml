@@ -1,0 +1,45 @@
+# D-77: workflow_dispatch-only. Deliberately no `schedule:` key -- the
+# ~4-weekly ESR rebase cadence (PITFALLS #8) is a standing operational item
+# for after v4.0, not a Phase 3 deliverable, and a red scheduled job with
+# nobody watching is the exact failure mode PITFALLS #8 warns about.
+#
+# Nix and the Gecko build are deliberately OUT of scope for this workflow:
+# the Nix Gecko toolchain closure does not fit a standard GitHub-hosted
+# runner alongside a 5.6 GB Gecko working tree (01-03-SUMMARY.md), so this
+# job only exercises scripts/rebase-upstream.sh's clone/replay/verify
+# sequence -- it never runs `./mach build`. The toolchain-baseline.sh diff
+# PITFALLS #2 requires after every ESR rebase is therefore an operator step,
+# run locally under `nix develop .#firefox` after a successful CI replay,
+# not something this workflow silently skips.
+#
+# This workflow is not dispatched from plan 03-04: workflow_dispatch only
+# registers a workflow present on the repo's default branch, and
+# origin/master has zero registered workflows as of this plan. The first
+# real dispatch is plan 03-06's job, after the push that registers it.
+
+name: Rebase upstream
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Upstream Firefox-ESR tag to rebase onto"
+        required: true
+        default: FIREFOX_153_1_0esr_RELEASE
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          df -h
+
+      - name: Rebase onto requested tag
+        env:
+          REBASE_TAG: ${{ inputs.tag }}
+        run: bash scripts/rebase-upstream.sh --tag "$REBASE_TAG"

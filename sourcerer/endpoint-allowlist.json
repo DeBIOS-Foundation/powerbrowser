@@ -1,0 +1,257 @@
+{
+  "$comment": "BRAND-04 (D-83..D-88): the single machine-readable source of truth for every endpoint this build is allowed to contact and every pref that gates an unattended callout. Read directly by scripts/verify-endpoints.sh layers 1 and 3. D-85: any host observed at runtime that is absent from `hosts`, or any host present here with disposition `deny`, is a FAILURE -- Mozilla or not. Any pref in `prefs` whose installed value differs from `expect` is a FAILURE. A host or pref absent from this file fails the check rather than being silently ignored.",
+  "hosts": [
+    {
+      "host": "firefox.settings.services.mozilla.com",
+      "disposition": "allow",
+      "reason": "D-83: Remote Settings. services/settings/Utils.sys.mjs:52-84 refuses any services.settings.server override off Nightly, and the only alternative (DisableRemoteSettingsAndAcceptSecurityConsequences) also stops CRLite certificate-revocation data, intermediate-certificate preloading, and tracking-protection list updates -- unacceptable on a substrate whose entire pitch is that it is a real browser. Polling cadence is services.settings.poll_interval = 86400 (24 hours, modules/libpref/init/all.js:1745) -- NOT the 6-hour figure, which belongs to app.normandy.run_interval_seconds and is moot since Normandy is compiled out (D-84)."
+    },
+    {
+      "host": "content-signature-2.cdn.mozilla.net",
+      "disposition": "allow",
+      "reason": "D-83 carve-out, same feature: Remote Settings verifies each downloaded collection against a content-signature certificate chain fetched from this host (security.content.signer.root_hash's CDN). Observed live in this session's real layer-3 run alongside firefox.settings.services.mozilla.com -- an omission from the allowlist's first draft, not a new decision; it is structurally part of the one feature D-83 already carves out."
+    },
+    {
+      "host": "firefox-settings-attachments.cdn.mozilla.net",
+      "disposition": "allow",
+      "reason": "D-83 carve-out, same feature: Remote Settings' attachment CDN, used for large collection blobs (e.g. CRLite's own data, one of the reasons D-83 keeps Remote Settings on at all). Observed live in this session's real layer-3 run; same status as content-signature-2.cdn.mozilla.net above."
+    },
+    {
+      "host": "aus5.mozilla.org",
+      "disposition": "deny",
+      "reason": "Mozilla's AUS (Application Update Service) host. The updater is disabled (--disable-updater, already in .mozconfig) and media.gmp-manager.url / extensions.systemAddon.update.url are blanked (D-84/D-86) so this build never has a reason to resolve it."
+    },
+    {
+      "host": "normandy.cdn.mozilla.net",
+      "disposition": "deny",
+      "reason": "Normandy/Shield CDN (app.normandy.api_url, modules/libpref/init/all.js:2866). D-84: imply_option(\"MOZ_NORMANDY\", False) in the browser/moz.configure hunk compiles the entire subsystem, and every app.normandy.* pref that would name this host, out of the build -- code that is not compiled cannot be re-enabled at runtime."
+    },
+    {
+      "host": "incoming.telemetry.mozilla.org",
+      "disposition": "deny",
+      "reason": "toolkit.telemetry.server (modules/libpref/init/all.js:534). D-84: imply_option(\"MOZ_SERVICES_HEALTHREPORT\", False) in the same hunk, alongside MOZ_NORMANDY, removes the compiled telemetry-reporting code path this pref would otherwise feed."
+    },
+    {
+      "host": "detectportal.firefox.com",
+      "disposition": "deny",
+      "reason": "captivedetect.canonicalURL (modules/libpref/init/all.js:3279). Captive-portal detection is not part of this phase's BRAND-04 waiver set (D-85, D-86) -- disabled via network.captive-portal-service.enabled rather than left on, since there is no DRM/security-parity rationale for it the way there is for CRLite or Safe Browsing."
+    },
+    {
+      "host": "push.services.mozilla.com",
+      "disposition": "deny",
+      "reason": "dom.push.serverURL (modules/libpref/init/all.js:3197), blanked in sourcerer/branding/dev/pref/firefox-branding.js. No feature in this phase's scope (no Theia-side work ships until Phase 4) depends on Web Push; disabled rather than waived. The Push API surface itself (dom.push.enabled) is left untouched -- only the startup server URL this specific host requires is blanked, so a page that calls the API still gets a permission prompt, it simply cannot register a working subscription against this build."
+    },
+    {
+      "host": "contile.services.mozilla.com",
+      "disposition": "deny",
+      "reason": "browser.topsites.contile.endpoint (browser/app/profile/firefox.js:1827) -- Mozilla Tiles Service, sponsored New Tab content. Disabled via browser.topsites.contile.enabled; not a DRM/security-parity concern."
+    },
+    {
+      "host": "location.services.mozilla.com",
+      "disposition": "deny",
+      "reason": "browser.region.network.url (modules/libpref/init/all.js:3094), blanked in sourcerer/branding/dev/pref/firefox-branding.js -- Mozilla's region-lookup service, used for search-engine/locale defaults and queried unattended at startup. Not a DRM/security-parity concern; disabled rather than waived. This host is distinct from the geolocation provider (geo.provider.network.url, also this same host by stock default) that actually serves an explicit site's navigator.geolocation request -- that pref is deliberately left untouched (real capability, fires only on explicit request), so a site that does request geolocation will still attempt this host and fail; that trade-off is accepted for this phase, which ships no Theia-side feature depending on it."
+    },
+    {
+      "host": "edgedl.me.gvt1.com",
+      "disposition": "allow",
+      "reason": "D-86: Google's Widevine CDM download host. DRM is deliberately kept working -- the in-tree widevinecdm.json (toolkit/content/gmp-sources/widevinecdm.json) fetches the CDM from this host with no Mozilla host involved. Per C-4 this costs nothing at startup: media.eme.enabled defaults false on Linux (modules/libpref/init/StaticPrefList.yaml:12162-12175), so GMPUtils.isPluginHidden filters Widevine out of the idle-task check entirely."
+    },
+    {
+      "host": "safebrowsing.google.com",
+      "disposition": "allow",
+      "reason": "D-85: Google Safe Browsing v2 API (browser.safebrowsing.provider.google.updateURL/gethashURL/reportURL, modules/libpref/init/all.js:3389-3391). Deliberate waiver, not an inherited default -- malware and phishing protection stay on for the same reason D-83 keeps Remote Settings: this substrate's entire pitch is that it is a real browser."
+    },
+    {
+      "host": "safebrowsing.googleapis.com",
+      "disposition": "allow",
+      "reason": "D-85: Google Safe Browsing v4 API (browser.safebrowsing.provider.google4.updateURL/gethashURL/dataSharingURL, modules/libpref/init/all.js:3400-3407). Same waiver as safebrowsing.google.com above -- the v2 and v4 endpoints are two hosts for the one waived feature."
+    },
+    {
+      "host": "ciscobinary.openh264.org",
+      "disposition": "deny",
+      "reason": "D-87, corrected 2026-08-29 (ledger entry 5): media.gmp-gmpopenh264.enabled = false alone does not stop this resolution once a real Theia content page is loaded and the periodic AddonManager update timer fires. GMPProvider.findUpdates() (toolkit/mozapps/extensions/internal/GMPProvider.sys.mjs:380-451) runs on that periodic reason (UPDATE_WHEN_PERIODIC_UPDATE) regardless of .enabled -- the same correction already recorded for Widevine on the update.googleapis.com entry: GMPUtils.isPluginHidden (toolkit/modules/GMPUtils.sys.mjs:27-41) reads media.{id}.visible, not .enabled, and findUpdates() consults neither. The real gate is AddonManager.shouldAutoUpdate() (AddonManager.sys.mjs:4577-4598) falling through to the global extensions.update.autoUpdateDefault -- the addon's own per-plugin applyBackgroundUpdates override (GMPProvider.sys.mjs:347-358, media.gmp-gmpopenh264.autoupdate) cannot be set from this repo's default-branch pref files at all, because that getter gates on GMPPrefs.isSet() -> Services.prefs.prefHasUserValue(), which a pref() call in a branding file never satisfies (confirmed live: setting media.gmp-gmpopenh264.autoupdate = false via the branding file had zero effect on the resolution). extensions.update.autoUpdateDefault = false is the one lever that is a plain default-branch-readable bool and is confirmed safe for Widevine: its own findUpdates() never reaches this fallback (media.eme.enabled defaults false on Linux, so GMPProvider.appDisabled is true for the EME plugin and shouldAutoUpdate() returns false earlier, at the PERM_CAN_UPGRADE check), and a real EME/DRM request instead drives the separate checkForUpdates() -> simpleCheckAndInstall() path (GMPProvider.sys.mjs:557-574), untouched by this pref. Traced live against the real built binary: with extensions.update.autoUpdateDefault at its stock true, findUpdates() ran checkForAddons() -> downloadLocalConfig(chrome://global/content/gmp-sources/openh264.json) -> installAddon(), genuinely downloading and extracting the OpenH264 zip from this host; with it false, that call never ran. media.gmp-gmpopenh264.enabled stays false too -- still correct, still wanted, just not sufficient on its own."
+    },
+    {
+      "host": "127.0.0.1",
+      "disposition": "allow",
+      "reason": "The Theia sidecar loopback -- architecture, not a concession. The phase-04 shell (sourcerer/shell/TheiaService.sys.mjs) supervises a bundled Node + Theia browser-target backend on localhost and presents it full-window as the only GUI; a build that could not reach loopback would have no GUI at all. A literal loopback address, so no name resolution leaves the machine. Exact-string match only (allowlist_host_allowed, scripts/verify-endpoints.sh:340-352 -- suffix matching requires a leading literal dot in the allowlist entry), so this entry admits the one literal address 127.0.0.1 and nothing else."
+    },
+    {
+      "host": "github.com",
+      "disposition": "deny",
+      "reason": "Root cause: theia/extensions/branding/src/browser/sourcerer-welcome-widget.tsx:13 exports SOURCERER_REPO_URL = 'https://github.com/Deocracy/Sourcerer' and renders it as a link; Gecko speculatively DNS-prefetches link targets (network.dns.disablePrefetch defaults false, modules/libpref/init/StaticPrefList.yaml:15308; network.dns.disablePrefetchFromHTTPS also defaults false, :15161, so the http-vs-https origin of the Theia frontend does not matter). Closed by network.dns.disablePrefetch = true, not by removing the link -- the link is a real, wanted affordance and a user who clicks it is making an explicit request, the same allow-the-capability/deny-the-unattended-callout distinction the geo.provider.network.url and dom.push.enabled entries already draw. Kept as `deny` rather than absent so the file stays the single source of truth: an observation of this host is a failure either way, and this reason records why it is not expected."
+    },
+    {
+      "host": "cloudflare-dns.com",
+      "disposition": "deny",
+      "reason": "TRR open item, resolved 03-03: NOT network.trr.mode (confirmed 0/off by default in modules/libpref/init/StaticPrefList.yaml:15642-15644 -- TRR is not active in this build). The real source is network.connectivity-service.DNS_HTTPS.domain (modules/libpref/init/all.js:3260), read by NetworkConnectivityService.cpp's own unattended-startup DNS-over-HTTPS-record probe. No DRM/security-parity rationale applies (unlike Remote Settings/Safe Browsing), so per D-85 this is turned off at the single master switch, network.connectivity-service.enabled = false, rather than waived. Not named in D-83..D-88; this entry and the two below are the explicit resolution the 03-02-SUMMARY.md open item asked for."
+    },
+    {
+      "host": "example.org",
+      "disposition": "deny",
+      "reason": "Same root cause and fix as cloudflare-dns.com above: network.connectivity-service.DNSv4.domain and .DNSv6.domain both default to \"example.org\" (modules/libpref/init/all.js:3258-3259), read by NetworkConnectivityService.cpp's IPv4/IPv6-reachability DNS probe -- unrelated to network.trr.confirmationNS (which defaults to \"example.com\", one letter different, and was never actually the host observed). Disabled via network.connectivity-service.enabled = false."
+    },
+    {
+      "host": "ipv4only.arpa",
+      "disposition": "deny",
+      "reason": "Same root cause and fix as cloudflare-dns.com above: hardcoded directly in NetworkConnectivityService.cpp:400 as the NAT64-prefix discovery target (RFC 7050), not a preference-driven host. Disabled via network.connectivity-service.enabled = false, the same master switch that also stops the DNSv4/DNSv6/DNS_HTTPS probes above -- one pref, four hosts."
+    },
+    {
+      "host": "services.addons.mozilla.org",
+      "disposition": "deny",
+      "reason": "Discovered only after correcting layer 3's observation window from 20s to 35s (scripts/verify-endpoints.sh -- app.update.timerFirstInterval defaults to 30000ms, toolkit/components/timermanager/UpdateTimerManager.sys.mjs:97-103, so the periodic AddonManager update-check timer never fired inside a 20-second capture). AMO's addon-search/langpack-matching/discovery/browser-mappings API (extensions.getAddons.*, browser/app/profile/firefox.js:40-45). Not the Remote Settings carve-out (D-83) -- turned off via the extensions.getAddons.cache.enabled master switch, not waived."
+    },
+    {
+      "host": "update.googleapis.com",
+      "disposition": "allow",
+      "reason": "D-86 extension, same real session: Widevine's Chromium-Omaha-protocol update-check host (media.gmp-manager.chromium-update-url, browser/app/profile/firefox.js:2370), fetched by the same periodic AddonManager update-check timer as services.addons.mozilla.org above -- fires regardless of media.eme.enabled (which stays false by default on Linux, C-4), correcting C-4's premise that GMPUtils.isPluginHidden filters Widevine out of every unattended check: it filters the EME-toggle-triggered idle task, not this general periodic findUpdates() path. A Google host, not Mozilla -- same D-86 rationale as edgedl.me.gvt1.com (DRM stays working, no Mozilla host involved)."
+    },
+    {
+      "host": "www.google.com",
+      "disposition": "allow",
+      "reason": "D-86 extension: observed resolving in the same 35-second window alongside update.googleapis.com, immediately after it -- media.gmp-manager.chromium-update-url's own query string (`response=redirect`) means a successful Omaha check redirects to a Google-hosted download location; this is that redirect target, part of the same Widevine update-check flow, not an independent concern."
+    },
+    {
+      "host": "dl.google.com",
+      "disposition": "allow",
+      "reason": "D-86 extension, discovered during 03-06's phase-gate close-out run: a second real redirect target in the same Widevine Chromium-Omaha update-check flow as www.google.com above -- media.gmp-manager.chromium-update-url's redirect response varies which Google-owned download host it names between runs (both are Google's own public download-serving domains for this exact protocol, no Mozilla host involved), so this is the same D-86 waiver category, not a new concern. No tree reference names this host by pref; it is a live protocol redirect target, exactly like www.google.com's own entry above."
+    }
+  ],
+  "prefs": [
+    {
+      "name": "media.gmp-manager.url",
+      "expect": "",
+      "reason": "D-86: blanked so the GMP manager never contacts aus5.mozilla.org for a plugin manifest. Widevine's own CDM fetch (widevinecdm.json's fileUrl, edgedl.me.gvt1.com) does not depend on this pref. media.gmp-manager.allowLocalSources deliberately stays true (D-86) and is not tracked here -- it is a fallback flag, not an unattended-callout gate."
+    },
+    {
+      "name": "extensions.systemAddon.update.url",
+      "expect": "",
+      "reason": "D-84: blanked so a system-addon update check, if one ever ran, would have nowhere to send it. Belt-and-braces alongside extensions.systemAddon.update.enabled below."
+    },
+    {
+      "name": "extensions.systemAddon.update.enabled",
+      "expect": false,
+      "reason": "D-87: kills the system-addon callout before AddonManager.sys.mjs ever reads the update URL -- lazier and more robust than blanking the URL alone."
+    },
+    {
+      "name": "media.gmp-gmpopenh264.enabled",
+      "expect": false,
+      "reason": "D-87: OpenH264 is visible and enabled unconditionally on stock Firefox (browser/app/profile/firefox.js:2393-2394) and is the one genuinely unattended download at the 20s idle-task mark (C-4). Disabled outright."
+    },
+    {
+      "name": "toolkit.telemetry.unified",
+      "expect": false,
+      "reason": "D-84 defence in depth: MOZ_SERVICES_HEALTHREPORT is compiled out, but this pref is disabled anyway so the intent is stated at the pref layer too."
+    },
+    {
+      "name": "toolkit.telemetry.server",
+      "expect": "",
+      "reason": "D-84 defence in depth: blanked so the compiled-out telemetry path has nowhere to send a report even if a future rebuild restored the flag. Stock value is https://incoming.telemetry.mozilla.org (modules/libpref/init/all.js:534), the deny-listed host above."
+    },
+    {
+      "name": "datareporting.healthreport.uploadEnabled",
+      "expect": false,
+      "reason": "D-84 defence in depth, same rationale as toolkit.telemetry.unified."
+    },
+    {
+      "name": "datareporting.policy.dataSubmissionEnabled",
+      "expect": false,
+      "reason": "D-84 defence in depth: the master data-submission policy gate, disabled alongside the two prefs above."
+    },
+    {
+      "name": "network.captive-portal-service.enabled",
+      "expect": false,
+      "reason": "browser/app/profile/firefox.js:1375 re-enables this to true, overriding toolkit's own default of false (modules/libpref/init/all.js:3255) -- our branding pref file loads last (JS_PREFERENCE_FILES, branding-common.mozbuild) so this restores it to off, stopping detectportal.firefox.com."
+    },
+    {
+      "name": "captivedetect.canonicalURL",
+      "expect": "",
+      "reason": "Belt-and-braces alongside network.captive-portal-service.enabled: blanks the canonical detection URL itself (modules/libpref/init/all.js:3279) so a captive-portal check, if one ever ran, has nowhere to send it."
+    },
+    {
+      "name": "app.normandy.enabled",
+      "expect": false,
+      "reason": "D-84 defence in depth: MOZ_NORMANDY is compiled out, so this pref is moot at runtime, but disabled anyway so a reader of the pref file sees the intent stated."
+    },
+    {
+      "name": "app.shield.optoutstudies.enabled",
+      "expect": false,
+      "reason": "D-84 defence in depth, same rationale as app.normandy.enabled -- both are compiled out via MOZ_NORMANDY but disabled at the pref layer too."
+    },
+    {
+      "name": "browser.newtabpage.activity-stream.discoverystream.enabled",
+      "expect": false,
+      "reason": "Disables the Pocket-powered Discover feed on New Tab (the code-level default is true, set in ActivityStream's own feature manifest rather than a static pref file, so this branding pref is what actually turns it off)."
+    },
+    {
+      "name": "browser.newtabpage.activity-stream.showSponsored",
+      "expect": false,
+      "reason": "Sponsored Discover-feed stories; belt-and-braces alongside discoverystream.enabled above."
+    },
+    {
+      "name": "browser.newtabpage.activity-stream.showSponsoredTopSites",
+      "expect": false,
+      "reason": "Sponsored New Tab tiles; the companion pref to contile.services.mozilla.com's disposition below."
+    },
+    {
+      "name": "browser.topsites.contile.enabled",
+      "expect": false,
+      "reason": "Mozilla Tiles Service (browser.topsites.contile.endpoint, browser/app/profile/firefox.js:1827) -- the pref that stops contile.services.mozilla.com from ever being contacted."
+    },
+    {
+      "name": "browser.region.network.url",
+      "expect": "",
+      "reason": "Blanks the region-lookup service URL -- the pref behind location.services.mozilla.com's `deny` disposition above."
+    },
+    {
+      "name": "dom.push.serverURL",
+      "expect": "",
+      "reason": "Blanks the Web Push server URL -- the pref behind push.services.mozilla.com's `deny` disposition above. dom.push.enabled (the API surface) is untouched."
+    },
+    {
+      "name": "network.connectivity-service.enabled",
+      "expect": false,
+      "reason": "TRR open item, resolved 03-03: the single master switch for NetworkConnectivityService.cpp's DNSv4/DNSv6/DNS_HTTPS/NAT64 probes -- stops cloudflare-dns.com, example.org and ipv4only.arpa (all three above) in one pref. Confirmed by reading RecheckDNS() (NetworkConnectivityService.cpp:354-356): it reads exactly this pref before ever issuing the probes."
+    },
+    {
+      "name": "extensions.getAddons.cache.enabled",
+      "expect": false,
+      "reason": "The master switch (AddonRepository.sys.mjs's `cacheEnabled` getter, checked before every network call the class makes) that stops services.addons.mozilla.org -- discovered only after the layer-3 window correction to 35s."
+    },
+    {
+      "name": "extensions.getAddons.get.url",
+      "expect": "",
+      "reason": "Belt-and-braces alongside extensions.getAddons.cache.enabled: blanks the addon-search URL itself."
+    },
+    {
+      "name": "extensions.getAddons.langpacks.url",
+      "expect": "",
+      "reason": "Belt-and-braces: blanks the langpack-matching URL, the specific endpoint this build's 35-second layer-3 capture actually observed being queried at startup."
+    },
+    {
+      "name": "extensions.getAddons.discovery.api_url",
+      "expect": "",
+      "reason": "Belt-and-braces: blanks the Discovery pane's AMO API URL."
+    },
+    {
+      "name": "extensions.getAddons.browserMappings.url",
+      "expect": "",
+      "reason": "Belt-and-braces: blanks the browser-mappings API URL."
+    },
+    {
+      "name": "extensions.addonAbuseReport.url",
+      "expect": "",
+      "reason": "Belt-and-braces: blanks the abuse-report submission URL, the same AMO host as the four prefs above."
+    },
+    {
+      "name": "network.dns.disablePrefetch",
+      "expect": true,
+      "reason": "BRAND-04 ledger entry 5 fix, 2026-08-29: stops Gecko's speculative DNS prefetch of Theia-rendered link targets -- specifically the github.com repo link in sourcerer-welcome-widget.tsx. Defaults false (modules/libpref/init/StaticPrefList.yaml:15308); network.dns.disablePrefetchFromHTTPS also defaults false (:15161), so the origin scheme does not matter."
+    },
+    {
+      "name": "extensions.update.autoUpdateDefault",
+      "expect": false,
+      "reason": "BRAND-04 ledger entry 5 fix, 2026-08-29: the real gate on GMPProvider.findUpdates()'s periodic auto-update task (AddonManager.shouldAutoUpdate() falling through to this global default), which downloads and installs OpenH264 from ciscobinary.openh264.org regardless of media.gmp-gmpopenh264.enabled. The per-plugin override (media.gmp-gmpopenh264.autoupdate) cannot be set from a default-branch pref file at all (GMPPrefs.isSet() requires prefHasUserValue()), which is why this global switch is used instead; confirmed safe for Widevine (see the ciscobinary.openh264.org host entry above for the full trace and the Widevine-safety argument)."
+    }
+  ]
+}

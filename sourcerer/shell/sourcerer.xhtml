@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!--
+  D-89/D-91/D-94: the entire startup window. No custom browser chrome:
+  no tab strip, toolbar, address bar, or menu. One branded loading layer
+  (chrome-rendered, no network, no sidecar) painted above one remote
+  <browser> element waiting for a URL. Theia's own shell is the UI.
+-->
+<!--
+  width/height/persist are read off the ROOT element by
+  xpfe/appshell/AppWindow.cpp's LoadSizeFromXUL (namespace-agnostic, so an
+  <html> root works). Without them the window falls back to its 100x100 default
+  and the content <browser> below ends up a 0x0 viewport: Theia still loads and
+  runs, but lays out into nothing and renders as an empty window. persist makes
+  a user's own resize stick across restarts, the same way browser.xhtml does.
+-->
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+      windowtype="sourcerer:main"
+      scrolling="false"
+      width="1280"
+      height="800"
+      persist="screenX screenY width height sizemode"
+      >
+  <head>
+    <meta charset="utf-8"/>
+    <meta http-equiv="Content-Security-Policy" content="default-src chrome:"/>
+    <title>Sourcerer</title>
+    <link rel="stylesheet" href="chrome://sourcerer/content/sourcerer.css"/>
+    <script src="chrome://sourcerer/content/sourcerer.js"></script>
+  </head>
+  <body>
+    <div id="sourcerer-loading">Sourcerer</div>
+    <div id="sourcerer-error">
+      <p id="sourcerer-error-message"></p>
+      <div id="sourcerer-error-controls">
+        <button id="sourcerer-error-retry" type="button">Retry</button>
+        <button id="sourcerer-error-diagnostics" type="button">Details</button>
+      </div>
+    </div>
+    <div id="sourcerer-diagnostics">
+      <div id="sourcerer-diagnostics-fields"></div>
+      <pre id="sourcerer-diagnostics-log"></pre>
+      <button id="sourcerer-diagnostics-close" type="button">Close</button>
+    </div>
+    <xul:browser id="sourcerer-content" type="content" primary="true" remote="true" remoteType="web" src="about:blank" tabindex="-1"/>
+  </body>
+</html>

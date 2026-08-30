@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Theia / TypeScript build output
+# Anchored under theia/ so this doesn't also swallow scripts/lib/, which is
+# hand-written source (the shared BiDi driver), not build output.
+theia/**/lib/
+src-gen/
+gen-webpack*.js
+gen-esbuild*.mjs
+esbuild.mjs
+*.tsbuildinfo
+.eslintcache
+
+# Theia runtime
+plugins/
+.theia/
+
+# Firefox fork build spill (D-01 containment)
+upstream/
+objdir/
+objdir-release/
+.mozbuild/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Nix build outputs / direnv state
+result
+result-*
+.direnv/
+
+# Editor
+.idea
+.DS_Store
+*.sw?
+
+# Per-machine Claude Code settings
+.claude/settings.local.json

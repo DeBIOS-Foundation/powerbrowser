@@ -1,0 +1,22 @@
+{
+  "private": true,
+  "name": "@sourcerer/token-gate",
+  "version": "0.1.0",
+  "license": "MIT",
+  "dependencies": {
+    "@theia/core": "1.74.1"
+  },
+  "theiaExtensions": [
+    {
+      "backend": "lib/node/token-gate-backend-module"
+    }
+  ],
+  "files": [
+    "lib",
+    "src"
+  ],
+  "scripts": {
+    "clean": "rm -rf lib *.tsbuildinfo",
+    "build": "tsc -b"
+  }
+}

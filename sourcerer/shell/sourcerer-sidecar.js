@@ -1,0 +1,44 @@
+#filter substitution
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// Default prefs for the Theia sidecar supervisor (plan 04-04's
+// TheiaService.sys.mjs) and the chrome bootstrap's dump() sentinel
+// channel. Preprocessed (JS_PREFERENCE_PP_FILES, #filter substitution
+// above) so the SOURCERER_DEV_TREE define substitutes to the repo root at
+// build time -- no user-specific absolute path is ever checked into the
+// repo (sourcerer/shell/moz.build defines SOURCERER_DEV_TREE from the
+// mozbuild TOPSRCDIR global).
+
+// Empty string: resolve `node` on PATH at spawn time.
+pref("sourcerer.sidecar.nodePath", "");
+
+pref("sourcerer.sidecar.backendMain", "@SOURCERER_DEV_TREE@/theia/applications/browser/lib/backend/main.js");
+
+pref("sourcerer.sidecar.healthIntervalStartupMs", 250);
+pref("sourcerer.sidecar.healthIntervalSteadyMs", 5000);
+pref("sourcerer.sidecar.startupTimeoutMs", 90000);
+pref("sourcerer.sidecar.healthTimeoutMs", 4000);
+pref("sourcerer.sidecar.killGraceMs", 3000);
+pref("sourcerer.sidecar.logBufferLines", 500);
+
+// SHELL-03 (plan 05-02) give-up budget: a recoverable respawn failure keeps
+// retrying with the existing backoff (500ms doubling to a 5000ms cap) until
+// EITHER of these trips, whichever comes first -- an unrecoverable failure
+// (missing backend entry file, unresolvable Node, a spawn() throw, or the
+// pinned port held by another process) skips both and gives up immediately.
+// Prefs, not literals, so a verification run can force a fast give-up via a
+// launch profile's user.js.
+pref("sourcerer.sidecar.giveUpAttempts", 6);
+pref("sourcerer.sidecar.giveUpWallclockMs", 45000);
+// Deliberately slow -- three times the steady-state health interval. Exists
+// to notice a backend that healed on its own, not to be a second health
+// loop.
+pref("sourcerer.sidecar.recoveryProbeIntervalMs", 15000);
+
+// sourcerer.js's SOURCERER_SHELL_READY/SOURCERER_SHELL_SWAP sentinels are
+// written with the chrome global dump() -- needs this pref on to reach
+// stdout.
+pref("browser.dom.window.dump.enabled", true);

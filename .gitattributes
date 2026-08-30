@@ -1,0 +1,11 @@
+# Normalize all text to LF in the repo, and check it out as LF everywhere.
+# Migrated Windows->Linux 2026-08; the index was already pure LF, only the
+# working tree had CRLF. eol=lf stops that recurring from a Windows/WSL checkout.
+* text=auto eol=lf
+
+# Windows shells are the one place CRLF is load-bearing.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell scripts must stay LF -- they run inside NixOS-WSL (v2.0 milestone).
+*.sh text eol=lf
