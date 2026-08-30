@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 1
-current_phase_name: Platform Extraction and Rename
+current_phase: 01
+current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Phase 1 UI-SPEC approved
-last_updated: "2026-08-30T17:22:28.161Z"
-last_activity: 2026-08-29
-last_activity_desc: Roadmap created, 31 v1 requirements mapped across 7 phases
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-08-30T17:53:26.949Z"
+last_activity: 2026-08-30
+last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 7
-  completed_plans: 0
+  completed_plans: 1
 ---
 
 # Project State
@@ -23,16 +23,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 1 — Platform Extraction and Rename
+**Current focus:** Phase 01 — platform-extraction-and-rename
 
 ## Current Position
 
-Phase: 1 of 7 (Platform Extraction and Rename)
-Plan: 0 of TBD in current phase
+Phase: 01 (platform-extraction-and-rename) — EXECUTING
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-08-29 — Roadmap created, 31 v1 requirements mapped across 7 phases
+Last activity: 2026-08-30 — Phase 01 execution started
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 14%
 
 ## Performance Metrics
 
@@ -54,6 +54,11 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 01 P01 | 35min | 2 tasks | 116 files |
 
 ## Accumulated Context
 
@@ -67,6 +72,11 @@ Recent decisions affecting current work:
 - [Roadmap]: Telemetry, extensions, and Theia branding consolidate into one Theia-surface phase (Phase 4) rather than three thin phases
 - [Research]: `[telemetry] send-to-theia` replaced by Theia's real enum (off/crash/error/all) + endpoint — Theia ships no destination, Power Browser implements the only one
 - [Research]: Identity/legal keys hard-fail with no code-level default; cosmetic keys default with a visible echo
+- [Phase ?]: Inventory format is JSON (D-15 left it open) — zero dependencies, both consumers are Node
+- [Phase ?]: The 01-01 tracer renames CONTENT only; every file/directory git mv stays in plan 01-02 per D-06
+- [Phase ?]: MOZ_APP_BASENAME takes the one-word lowercase identifier 'powerbrowser' (D-10), so --with-app-basename and verify-branding-identity.mjs's application.ini expectation are class 'identity' and move together
+- [Phase ?]: Per-site token classification uses file-scoped 'only_in' rows with context-anchored tokens in preference to line-pinned site_overrides
+- [Phase ?]: Reconciliation condition 4 and the ground-truth check both use detectors independent of the boundary matcher, so the scan cannot pass by agreeing with itself (T-01-04)
 
 ### Pending Todos
 
@@ -90,6 +100,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-30T15:29:57.706Z
-Stopped at: Phase 1 UI-SPEC approved
-Resume file: /home/chris/coding/Power-Browser/.planning/phases/01-platform-extraction-and-rename/01-UI-SPEC.md
+Last session: 2026-08-30T17:53:13.247Z
+Stopped at: Completed 01-01-PLAN.md
+Resume file: None
