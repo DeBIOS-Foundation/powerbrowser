@@ -2,11 +2,11 @@ import { interfaces } from '@theia/core/shared/inversify';
 import { ApplicationShell, FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { UserStorageUri } from '@theia/userstorage/lib/browser/user-storage-uri';
-import { TabUriRegistry } from '@sourcerer/tab-uris/lib/browser/tab-uri-registry';
-import { SourcererPrivilegedJsSurface } from './sourcerer-privileged-js';
+import { TabUriRegistry } from '@powerbrowser/tab-uris/lib/browser/tab-uri-registry';
+import { PowerBrowserPrivilegedJsSurface } from './powerbrowser-privileged-js';
 
 // The privileged JS layer (D-62..D-67, CUST-02). Only ever bound when
-// `theia.frontend.config.sourcererPrivilegedJs` is `true` at build time --
+// `theia.frontend.config.powerbrowserPrivilegedJs` is `true` at build time --
 // see the guarded `if` in customize-frontend-module.ts, which is what makes
 // CUST-02's "the binding does not exist" claim true rather than a runtime
 // no-op guard sitting on top of an always-present binding.
@@ -22,8 +22,8 @@ export class CustomizePrivilegedJsContribution implements FrontendApplicationCon
         protected readonly fileService: FileService,
         protected readonly shell: ApplicationShell,
         protected readonly container: interfaces.Container,
-        // Undefined when @sourcerer/tab-uris's TabUriRegistry is not bound
-        // in this container -- see sourcerer-privileged-js.ts's header.
+        // Undefined when @powerbrowser/tab-uris's TabUriRegistry is not bound
+        // in this container -- see powerbrowser-privileged-js.ts's header.
         protected readonly tabUriRegistry: TabUriRegistry | undefined,
     ) { }
 
@@ -51,7 +51,7 @@ export class CustomizePrivilegedJsContribution implements FrontendApplicationCon
             return;
         }
 
-        const surface: SourcererPrivilegedJsSurface = {
+        const surface: PowerBrowserPrivilegedJsSurface = {
             container: this.container,
             shell: this.shell,
             tabUriRegistry: this.tabUriRegistry,
@@ -59,13 +59,13 @@ export class CustomizePrivilegedJsContribution implements FrontendApplicationCon
 
         try {
             // eslint-disable-next-line no-new-func
-            const run = new Function('sourcerer', source);
+            const run = new Function('powerbrowser', source);
             run(surface);
         } catch (error) {
             // A throwing user script is reported, never fatal to the
             // frontend -- startup has already completed by the time this
             // runs, and the shell must stay attached regardless.
-            console.error('[@sourcerer/customize] customize.js threw during execution:', error);
+            console.error('[@powerbrowser/customize] customize.js threw during execution:', error);
         }
     }
 }

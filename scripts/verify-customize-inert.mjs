@@ -58,7 +58,7 @@ const url = process.argv[2] || 'http://localhost:3000';
 // Past the CSS layer's ~150ms hot-reload debounce, with margin.
 const SETTLE_MS = 2000;
 
-const CONFIG_DIR = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'sourcerer');
+const CONFIG_DIR = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'powerbrowser');
 const CSS_PATH = join(CONFIG_DIR, 'customize.css');
 
 const sha256 = buf => createHash('sha256').update(buf).digest('hex');

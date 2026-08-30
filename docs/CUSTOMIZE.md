@@ -1,6 +1,6 @@
-# Customizing Sourcerer
+# Customizing PowerBrowser
 
-Sourcerer's customization seam (R4a) has two layers: a user CSS file that
+PowerBrowser's customization seam (R4a) has two layers: a user CSS file that
 always exists as an address but never as a file, and a developer-only JS
 layer that is off by default and stays off unless the build says otherwise.
 
@@ -8,8 +8,8 @@ layer that is off by default and stays off unless the build says otherwise.
 
 The file is `$THEIA_CONFIG_DIR/customize.css`, next to `settings.json` and
 `keymaps.json` — the same directory a human already knows to look in, and
-the same one every Sourcerer window shares regardless of which workspace is
-open. **Sourcerer never creates this file.** Its absence is the default,
+the same one every PowerBrowser window shares regardless of which workspace is
+open. **PowerBrowser never creates this file.** Its absence is the default,
 untouched state: with no file present, the app renders exactly as it would
 with an empty one — this is CUST-01's whole guarantee, and it is proven by
 pixel comparison (`scripts/verify-customize-inert.mjs`), not asserted.
@@ -29,7 +29,7 @@ consequence: a malformed rule is silently dropped by the browser's own CSS
 parser, the same as it would be in any stylesheet — it does not throw or
 break the rest of the file.
 
-Editing the file while Sourcerer is running restyles the page within about
+Editing the file while PowerBrowser is running restyles the page within about
 a second, no reload needed — the same recursive filesystem watch that
 already covers `settings.json` and `keymaps.json` covers this file too, so
 there is nothing to configure.
@@ -38,7 +38,7 @@ there is nothing to configure.
 
 A second file, `$THEIA_CONFIG_DIR/customize.js`, can run arbitrary code
 inside the frontend at startup — but only when the build was produced with
-`theia.frontend.config.sourcererPrivilegedJs` set to `true` in
+`theia.frontend.config.powerbrowserPrivilegedJs` set to `true` in
 `applications/browser/package.json`. This is a **build-time** flag: `theia
 start` never re-reads it, only `theia generate`/`theia build` do, so
 flipping it needs a rebuild, not a restart. That immovability is
@@ -68,7 +68,7 @@ alike. Any script already running inside the Theia page — from a
 compromised extension, an injected `<script>`, or anything else with page
 execution — already owns that container regardless of this flag. **The
 flag is not a security boundary against script already executing in the
-page.** What it decides is exactly one thing: whether Sourcerer itself
+page.** What it decides is exactly one thing: whether PowerBrowser itself
 auto-executes a user-supplied JS file from disk at startup.
 
 One honest caveat: with the flag off, the *binding* for the privileged
@@ -85,5 +85,5 @@ Reading `customize.css`/`customize.js` adds no capability the app did not
 already have: the frontend's file provider already proxies the backend's
 disk provider with no root restriction, for the workspace file tree and
 everywhere else. The workspace was never a sandbox, and this file's
-location — inside the Sourcerer config directory rather than a workspace —
+location — inside the PowerBrowser config directory rather than a workspace —
 is not a security boundary either way.

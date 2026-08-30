@@ -11,7 +11,7 @@
 #
 # --self-test (03-02 Task 3) proves the assertion actually goes red, without
 # touching upstream/ or patches/ and without a 1.1 GB clone: reverse-applies
-# the real 010-sourcerer-identity.patch against a COPY of the real (already-
+# the real 010-powerbrowser-identity.patch against a COPY of the real (already-
 # patched) upstream file to derive a byte-identical pre-patch fixture --
 # byte-identical is what matters here, because it makes the fixture's blob
 # hash equal the patch's own "before" index hash, which is what lets the
@@ -68,7 +68,7 @@ run_self_test() {
   tmp="$(mktemp -d)"
   trap 'find "$tmp" -delete' RETURN
 
-  local patch="$PATCHES_DIR/010-sourcerer-identity.patch"
+  local patch="$PATCHES_DIR/010-powerbrowser-identity.patch"
   if [ ! -f "$patch" ]; then
     echo "apply-patches: --self-test FAIL -- $patch does not exist" >&2
     return 1
