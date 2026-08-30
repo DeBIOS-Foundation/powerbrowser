@@ -21,7 +21,7 @@ import { PLUGIN_VIEW_CONTAINER_FACTORY_ID, SETTINGS_WIDGET_FACTORY_ID } from './
 @injectable()
 export class ViewUriOpenHandler implements OpenHandler {
 
-    readonly id = 'sourcerer.view-uri-open-handler';
+    readonly id = 'powerbrowser.view-uri-open-handler';
 
     @inject(TabUriRegistry)
     protected readonly registry: TabUriRegistry;
@@ -98,7 +98,7 @@ export class ViewUriOpenHandler implements OpenHandler {
             const viewContainerId = name.substring(PLUGIN_VIEW_CONTAINER_FACTORY_ID.length + 1);
             const widget = await this.pluginViewRegistry.openViewContainer(viewContainerId);
             if (!widget) {
-                throw new Error(`sourcerer.view-uri-open-handler: no plugin view container '${viewContainerId}'`);
+                throw new Error(`powerbrowser.view-uri-open-handler: no plugin view container '${viewContainerId}'`);
             }
             await this.shell.activateWidget(widget.id);
             return widget;
@@ -107,7 +107,7 @@ export class ViewUriOpenHandler implements OpenHandler {
         // see, not resolve to `undefined` silently -- a silent no-op fails
         // at exactly the moment a human types the URI by hand, which is
         // URI-04's whole acceptance criterion.
-        throw new Error(`sourcerer.view-uri-open-handler: no view registered for 'view:${name}'`);
+        throw new Error(`powerbrowser.view-uri-open-handler: no view registered for 'view:${name}'`);
     }
 
     protected async openSettings(uri: URI, viewArgs: Partial<OpenViewArguments>): Promise<object | undefined> {
@@ -116,7 +116,7 @@ export class ViewUriOpenHandler implements OpenHandler {
         if (!name) {
             // An empty path means the Settings widget itself.
             if (!contribution) {
-                throw new Error('sourcerer.view-uri-open-handler: settings_widget view contribution not found');
+                throw new Error('powerbrowser.view-uri-open-handler: settings_widget view contribution not found');
             }
             await contribution.openView(viewArgs);
             // Same defensive fetch-by-id as openView() above, rather than

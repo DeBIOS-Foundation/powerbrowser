@@ -37,7 +37,7 @@ export function terminalIdentityOptions(name: string): TerminalWidgetOptions & P
  * restore, which is what makes the address survive a reload (D-47).
  */
 @injectable()
-export class SourcererTerminalFrontendContribution extends TerminalFrontendContribution {
+export class PowerBrowserTerminalFrontendContribution extends TerminalFrontendContribution {
 
     override async newTerminal(options: TerminalWidgetOptions): Promise<TerminalWidget> {
         const asFactoryOptions = options as Partial<TerminalWidgetFactoryOptions>;
@@ -96,7 +96,7 @@ export class SourcererTerminalFrontendContribution extends TerminalFrontendContr
  * not merely inferred from the gate's source).
  */
 @injectable()
-export class SourcererTerminalWidget extends TerminalWidgetImpl implements Navigatable {
+export class PowerBrowserTerminalWidget extends TerminalWidgetImpl implements Navigatable {
     getResourceUri(): URI | undefined {
         return new URI('terminal:' + this.id);
     }

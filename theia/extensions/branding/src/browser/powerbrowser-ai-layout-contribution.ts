@@ -1,8 +1,8 @@
-// These two rebinds live in @sourcerer/branding, not @sourcerer/customize or
-// @sourcerer/tab-uris, because both are first-boot *presentation* decisions --
+// These two rebinds live in @powerbrowser/branding, not @powerbrowser/customize or
+// @powerbrowser/tab-uris, because both are first-boot *presentation* decisions --
 // what the app looks like out of the box -- not tab-model or customization
 // concerns. See 02-CONTEXT.md D-22. A later reader should not move them into
-// @sourcerer/tab-uris just because both classes originate in @theia/ai-ide.
+// @powerbrowser/tab-uris just because both classes originate in @theia/ai-ide.
 
 import { injectable } from '@theia/core/shared/inversify';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
@@ -12,14 +12,14 @@ import { AIAgentConfigurationViewContribution } from '@theia/ai-ide/lib/browser/
 
 /**
  * D-22 rebind 1: a no-op subclass of `AIFirstPerspectiveContribution`.
- * `@theia/ai-ide` v1.74 ships an "AI First" perspective option; Sourcerer's
+ * `@theia/ai-ide` v1.74 ships an "AI First" perspective option; PowerBrowser's
  * out-of-box layout is the stock shell plus the welcome tab (Plan 03), never
  * a switchable AI-first arrangement. Overriding `registerPerspectives` to a
  * no-op means the perspective is never registered with `PerspectiveService`,
  * so it cannot be selected or applied by any route.
  */
 @injectable()
-export class SourcererAIFirstPerspectiveContribution extends AIFirstPerspectiveContribution {
+export class PowerBrowserAIFirstPerspectiveContribution extends AIFirstPerspectiveContribution {
     override registerPerspectives(_service: PerspectiveService): void {
         // Intentionally empty -- see file header.
     }
@@ -35,7 +35,7 @@ export class SourcererAIFirstPerspectiveContribution extends AIFirstPerspectiveC
  * `view:ai-configuration`.
  */
 @injectable()
-export class SourcererAIConfigurationViewContribution extends AIAgentConfigurationViewContribution {
+export class PowerBrowserAIConfigurationViewContribution extends AIAgentConfigurationViewContribution {
     override async initializeLayout(_app: FrontendApplication): Promise<void> {
         // Intentionally empty -- see file header. openView()/registerCommands
         // are untouched, so the view still opens on demand.

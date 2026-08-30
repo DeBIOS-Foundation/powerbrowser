@@ -29,7 +29,7 @@ import { terminalIdentityOptions } from './terminal-naming-contribution';
 @injectable()
 export class TerminalUriOpenHandler implements OpenHandler {
 
-    readonly id = 'sourcerer.terminal-uri-open-handler';
+    readonly id = 'powerbrowser.terminal-uri-open-handler';
 
     @inject(TabUriRegistry)
     protected readonly registry: TabUriRegistry;
@@ -56,7 +56,7 @@ export class TerminalUriOpenHandler implements OpenHandler {
             // D-48: a stale name -- or no terminal at all for an empty
             // path -- creates a fresh shell under that name rather than
             // erroring. `terminalIdentityOptions` is the same helper
-            // `SourcererTerminalFrontendContribution` uses when it mints a
+            // `PowerBrowserTerminalFrontendContribution` uses when it mints a
             // name itself, so a widget created here and one created via
             // the "new terminal" command carry the identical
             // `{created, id, title}` shape -- required for

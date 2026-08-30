@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "@sourcerer/branding",
+  "name": "@powerbrowser/branding",
   "version": "0.1.0",
   "license": "MIT",
   "dependencies": {
@@ -9,7 +9,7 @@
   },
   "theiaExtensions": [
     {
-      "frontend": "lib/browser/sourcerer-frontend-module"
+      "frontend": "lib/browser/powerbrowser-frontend-module"
     }
   ],
   "files": [

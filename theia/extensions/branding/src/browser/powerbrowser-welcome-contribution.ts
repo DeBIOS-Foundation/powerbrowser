@@ -1,9 +1,9 @@
 import { injectable } from '@theia/core/shared/inversify';
 import { AbstractViewContribution, FrontendApplicationContribution } from '@theia/core/lib/browser';
-import { SourcererWelcomeWidget } from './sourcerer-welcome-widget';
+import { PowerBrowserWelcomeWidget } from './powerbrowser-welcome-widget';
 
-export const SourcererWelcomeCommand = {
-    id: 'sourcerer.welcome:toggle',
+export const PowerBrowserWelcomeCommand = {
+    id: 'powerbrowser.welcome:toggle',
     label: 'Toggle Welcome'
 };
 
@@ -12,7 +12,7 @@ export const SourcererWelcomeCommand = {
 // scanning `AbstractViewContribution` instances -- can address this widget
 // as `view:welcome`.
 @injectable()
-export class SourcererWelcomeViewContribution extends AbstractViewContribution<SourcererWelcomeWidget> implements FrontendApplicationContribution {
+export class PowerBrowserWelcomeViewContribution extends AbstractViewContribution<PowerBrowserWelcomeWidget> implements FrontendApplicationContribution {
 
     constructor() {
         super({
@@ -21,7 +21,7 @@ export class SourcererWelcomeViewContribution extends AbstractViewContribution<S
             defaultWidgetOptions: {
                 area: 'main',
             },
-            toggleCommandId: SourcererWelcomeCommand.id,
+            toggleCommandId: PowerBrowserWelcomeCommand.id,
         });
     }
 

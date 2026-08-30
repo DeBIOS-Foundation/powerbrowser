@@ -3,43 +3,43 @@ import { FrontendApplicationContribution, WidgetFactory, bindViewContribution } 
 import { AboutDialog } from '@theia/core/lib/browser/about-dialog';
 import { AIFirstPerspectiveContribution } from '@theia/ai-ide/lib/browser/ai-first-perspective-contribution';
 import { AIAgentConfigurationViewContribution } from '@theia/ai-ide/lib/browser/ai-configuration/ai-configuration-view-contribution';
-import { SourcererFaviconContribution } from './sourcerer-favicon-contribution';
-import { SourcererWelcomeWidget } from './sourcerer-welcome-widget';
-import { SourcererWelcomeViewContribution } from './sourcerer-welcome-contribution';
-import { SourcererAboutDialog } from './sourcerer-about-dialog';
-import { SourcererAIFirstPerspectiveContribution, SourcererAIConfigurationViewContribution } from './sourcerer-ai-layout-contribution';
+import { PowerBrowserFaviconContribution } from './powerbrowser-favicon-contribution';
+import { PowerBrowserWelcomeWidget } from './powerbrowser-welcome-widget';
+import { PowerBrowserWelcomeViewContribution } from './powerbrowser-welcome-contribution';
+import { PowerBrowserAboutDialog } from './powerbrowser-about-dialog';
+import { PowerBrowserAIFirstPerspectiveContribution, PowerBrowserAIConfigurationViewContribution } from './powerbrowser-ai-layout-contribution';
 
 export default new ContainerModule((bind, _unbind, isBound, rebind) => {
-    bind(SourcererFaviconContribution).toSelf().inSingletonScope();
-    bind(FrontendApplicationContribution).toService(SourcererFaviconContribution);
+    bind(PowerBrowserFaviconContribution).toSelf().inSingletonScope();
+    bind(FrontendApplicationContribution).toService(PowerBrowserFaviconContribution);
 
-    bind(SourcererWelcomeWidget).toSelf();
+    bind(PowerBrowserWelcomeWidget).toSelf();
     bind(WidgetFactory).toDynamicValue(context => ({
         id: 'welcome', // D-43: the path is the factory id verbatim -- view:welcome
-        createWidget: () => context.container.get<SourcererWelcomeWidget>(SourcererWelcomeWidget),
+        createWidget: () => context.container.get<PowerBrowserWelcomeWidget>(PowerBrowserWelcomeWidget),
     })).inSingletonScope();
-    bindViewContribution(bind, SourcererWelcomeViewContribution);
-    bind(FrontendApplicationContribution).toService(SourcererWelcomeViewContribution);
+    bindViewContribution(bind, PowerBrowserWelcomeViewContribution);
+    bind(FrontendApplicationContribution).toService(PowerBrowserWelcomeViewContribution);
 
     // D-35: guarded rebind -- the in-tree idiom, keeps the module loadable
     // in a container where the base AboutDialog binding is absent.
     if (isBound(AboutDialog)) {
-        rebind(AboutDialog).to(SourcererAboutDialog).inSingletonScope();
+        rebind(AboutDialog).to(PowerBrowserAboutDialog).inSingletonScope();
     } else {
-        bind(AboutDialog).to(SourcererAboutDialog).inSingletonScope();
+        bind(AboutDialog).to(PowerBrowserAboutDialog).inSingletonScope();
     }
 
     // D-22: guarded rebinds neutralizing @theia/ai-ide's two first-boot
-    // layout behaviours. See sourcerer-ai-layout-contribution.ts for why
-    // these live here rather than in @sourcerer/tab-uris.
+    // layout behaviours. See powerbrowser-ai-layout-contribution.ts for why
+    // these live here rather than in @powerbrowser/tab-uris.
     if (isBound(AIFirstPerspectiveContribution)) {
-        rebind(AIFirstPerspectiveContribution).to(SourcererAIFirstPerspectiveContribution).inSingletonScope();
+        rebind(AIFirstPerspectiveContribution).to(PowerBrowserAIFirstPerspectiveContribution).inSingletonScope();
     } else {
-        bind(AIFirstPerspectiveContribution).to(SourcererAIFirstPerspectiveContribution).inSingletonScope();
+        bind(AIFirstPerspectiveContribution).to(PowerBrowserAIFirstPerspectiveContribution).inSingletonScope();
     }
     if (isBound(AIAgentConfigurationViewContribution)) {
-        rebind(AIAgentConfigurationViewContribution).to(SourcererAIConfigurationViewContribution).inSingletonScope();
+        rebind(AIAgentConfigurationViewContribution).to(PowerBrowserAIConfigurationViewContribution).inSingletonScope();
     } else {
-        bind(AIAgentConfigurationViewContribution).to(SourcererAIConfigurationViewContribution).inSingletonScope();
+        bind(AIAgentConfigurationViewContribution).to(PowerBrowserAIConfigurationViewContribution).inSingletonScope();
     }
 });

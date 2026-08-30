@@ -9,13 +9,13 @@ import { OutputChannelManager } from '@theia/output/lib/browser/output-channel';
 import { OutputUri } from '@theia/output/lib/common/output-uri';
 import { OutputWidget } from '@theia/output/lib/browser/output-widget';
 import {
-    PLUGIN_VIEW_CONTAINER_FACTORY_ID, SETTINGS_WIDGET_FACTORY_ID, SOURCERER_VIEW_FACTORY_IDS
+    PLUGIN_VIEW_CONTAINER_FACTORY_ID, SETTINGS_WIDGET_FACTORY_ID, POWERBROWSER_VIEW_FACTORY_IDS
 } from './view-factory-table';
 import { extensionDetailUriOf, webviewUriOf } from './existing-scheme-coverage';
 
 /**
  * The `factoryId <-> URI` registry (D-38). Its exported shape is the
- * public interface `@sourcerer/browser-bridge` consumes post-4.0 -- treat
+ * public interface `@powerbrowser/browser-bridge` consumes post-4.0 -- treat
  * it as an API, not an implementation detail.
  *
  * Resolution (URI -> target) discovers its targets at runtime rather than
@@ -60,10 +60,10 @@ export class TabUriRegistry {
             // nothing at exactly the moment a human types it -- into a
             // startup complaint (D-46's sibling hazard for the table
             // itself, not just the options fork).
-            for (const row of SOURCERER_VIEW_FACTORY_IDS) {
+            for (const row of POWERBROWSER_VIEW_FACTORY_IDS) {
                 if (!index.has(row.factoryId)) {
                     console.error(
-                        `[@sourcerer/tab-uris] view-factory-table.ts names '${row.factoryId}', but no ` +
+                        `[@powerbrowser/tab-uris] view-factory-table.ts names '${row.factoryId}', but no ` +
                         'AbstractViewContribution is registered under that id -- a view was renamed, ' +
                         'removed, or never bound.'
                     );

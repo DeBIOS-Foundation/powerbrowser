@@ -30,7 +30,7 @@ export interface ViewFactoryTableRow {
     readonly container: boolean;
 }
 
-export const SOURCERER_VIEW_FACTORY_IDS: readonly ViewFactoryTableRow[] = Object.freeze([
+export const POWERBROWSER_VIEW_FACTORY_IDS: readonly ViewFactoryTableRow[] = Object.freeze([
     { factoryId: 'problems', container: false }, // packages/markers/src/browser/problem/problem-widget.tsx:32 PROBLEMS_WIDGET_ID
     { factoryId: 'explorer-view-container', container: true }, // packages/navigator/src/browser/navigator-widget-factory.ts:29 EXPLORER_VIEW_CONTAINER_ID
     { factoryId: 'outline-view', container: false }, // packages/outline-view/src/browser/outline-view-contribution.ts:29 OUTLINE_WIDGET_FACTORY_ID
@@ -51,7 +51,7 @@ export const SOURCERER_VIEW_FACTORY_IDS: readonly ViewFactoryTableRow[] = Object
     { factoryId: 'bulkedit', container: false }, // packages/bulk-edit/src/browser/bulk-edit-tree/bulk-edit-tree-widget.tsx:33 BULK_EDIT_TREE_WIDGET_ID
     { factoryId: 'plugins', container: false }, // packages/plugin-ext/src/main/browser/plugin-frontend-view-contribution.ts:24 PLUGINS_WIDGET_FACTORY_ID
     { factoryId: 'vsx-extensions-view-container', container: true }, // packages/vsx-registry/src/browser/vsx-extensions-view-container.ts:30 static ID
-    { factoryId: 'welcome', container: false }, // theia/extensions/branding/src/browser/sourcerer-frontend-module.ts:18 -- @sourcerer/branding's own WidgetFactory id, Claude's Discretion per 02-CONTEXT.md (not a Theia-source citation)
+    { factoryId: 'welcome', container: false }, // theia/extensions/branding/src/browser/powerbrowser-frontend-module.ts:18 -- @powerbrowser/branding's own WidgetFactory id, Claude's Discretion per 02-CONTEXT.md (not a Theia-source citation)
 ]);
 
 /**

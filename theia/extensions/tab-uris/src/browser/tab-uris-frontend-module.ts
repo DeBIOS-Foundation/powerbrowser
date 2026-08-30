@@ -6,9 +6,9 @@ import { TerminalFrontendContribution } from '@theia/terminal/lib/browser/termin
 import { TerminalWidget } from '@theia/terminal/lib/browser/base/terminal-widget';
 import { TabUriRegistry } from './tab-uri-registry';
 import { ViewUriOpenHandler } from './view-open-handler';
-import { SourcererTerminalFrontendContribution, SourcererTerminalWidget } from './terminal-naming-contribution';
+import { PowerBrowserTerminalFrontendContribution, PowerBrowserTerminalWidget } from './terminal-naming-contribution';
 import { TerminalUriOpenHandler } from './terminal-open-handler';
-import { SourcererOutputOpenHandler, SourcererWebviewOpenHandler } from './existing-scheme-coverage';
+import { PowerBrowserOutputOpenHandler, PowerBrowserWebviewOpenHandler } from './existing-scheme-coverage';
 
 /**
  * Registers an `OpenHandler` after the app's first `OpenerService.open()`
@@ -21,7 +21,7 @@ import { SourcererOutputOpenHandler, SourcererWebviewOpenHandler } from './exist
  */
 export function registerLateOpenHandler(openerService: OpenerService, handler: OpenHandler): Disposable {
     if (!openerService.addHandler) {
-        throw new Error('@sourcerer/tab-uris: OpenerService.addHandler is not available on this OpenerService implementation');
+        throw new Error('@powerbrowser/tab-uris: OpenerService.addHandler is not available on this OpenerService implementation');
     }
     return openerService.addHandler(handler);
 }
@@ -37,7 +37,7 @@ export default new ContainerModule((bind, _unbind, isBound, rebind) => {
     bind(ViewUriOpenHandler).toSelf().inSingletonScope();
     bind(OpenHandler).toService(ViewUriOpenHandler);
 
-    // D-47: guarded rebind -- the in-tree idiom (see @sourcerer/branding's
+    // D-47: guarded rebind -- the in-tree idiom (see @powerbrowser/branding's
     // own rebinds), keeps this module loadable even in a container where
     // @theia/terminal's own binding is somehow absent. Every terminal
     // binding in @theia/terminal is `.toService(TerminalFrontendContribution)`
@@ -48,19 +48,19 @@ export default new ContainerModule((bind, _unbind, isBound, rebind) => {
     // CONTEXT.md's own summary of it), so this one rebind reaches all of
     // them.
     if (isBound(TerminalFrontendContribution)) {
-        rebind(TerminalFrontendContribution).to(SourcererTerminalFrontendContribution).inSingletonScope();
+        rebind(TerminalFrontendContribution).to(PowerBrowserTerminalFrontendContribution).inSingletonScope();
     } else {
-        bind(TerminalFrontendContribution).to(SourcererTerminalFrontendContribution).inSingletonScope();
+        bind(TerminalFrontendContribution).to(PowerBrowserTerminalFrontendContribution).inSingletonScope();
     }
     // D-38: Terminal is the one widget type with a real `Navigatable`
     // implementation -- rebinding the `TerminalWidget` DI token (not a
     // subclass of the `terminal` WidgetFactory's own `createWidget`, which
     // stays untouched) means every terminal, regardless of which code path
-    // created it, resolves through `SourcererTerminalWidget`.
+    // created it, resolves through `PowerBrowserTerminalWidget`.
     if (isBound(TerminalWidget)) {
-        rebind(TerminalWidget).to(SourcererTerminalWidget).inTransientScope();
+        rebind(TerminalWidget).to(PowerBrowserTerminalWidget).inTransientScope();
     } else {
-        bind(TerminalWidget).to(SourcererTerminalWidget).inTransientScope();
+        bind(TerminalWidget).to(PowerBrowserTerminalWidget).inTransientScope();
     }
 
     bind(TerminalUriOpenHandler).toSelf().inSingletonScope();
@@ -71,18 +71,18 @@ export default new ContainerModule((bind, _unbind, isBound, rebind) => {
     // discards the URI's channel, found live. Priority 1000 clears its
     // 200 and delegates the actual reveal to it once the channel is
     // selected.
-    bind(SourcererOutputOpenHandler).toSelf().inSingletonScope();
-    bind(OpenHandler).toService(SourcererOutputOpenHandler);
+    bind(PowerBrowserOutputOpenHandler).toSelf().inSingletonScope();
+    bind(OpenHandler).toService(PowerBrowserOutputOpenHandler);
 
     // D-43's session-scoped fourth scheme -- reuses WidgetManager's own
     // dedup, no restore machinery added (D-51 carve-out 4).
-    bind(SourcererWebviewOpenHandler).toSelf().inSingletonScope();
-    bind(OpenHandler).toService(SourcererWebviewOpenHandler);
+    bind(PowerBrowserWebviewOpenHandler).toSelf().inSingletonScope();
+    bind(OpenHandler).toService(PowerBrowserWebviewOpenHandler);
 
     // D-27: the AI chat widget must never escape into a secondary window
     // -- the future unified tab strip has no way to model a chrome-owned
     // tab living outside the shell it tracks. Lives here rather than in
-    // @sourcerer/branding because it is a tab-model constraint, not a
+    // @powerbrowser/branding because it is a tab-model constraint, not a
     // branding one.
     //
     // Implemented via `WidgetManager.onDidCreateWidget` rather than a

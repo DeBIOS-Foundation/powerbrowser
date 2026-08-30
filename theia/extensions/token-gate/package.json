@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "@sourcerer/token-gate",
+  "name": "@powerbrowser/token-gate",
   "version": "0.1.0",
   "license": "MIT",
   "dependencies": {

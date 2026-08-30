@@ -1,10 +1,10 @@
 {
   "private": true,
-  "name": "@sourcerer/customize",
+  "name": "@powerbrowser/customize",
   "version": "0.1.0",
   "license": "MIT",
   "dependencies": {
-    "@sourcerer/tab-uris": "0.1.0",
+    "@powerbrowser/tab-uris": "0.1.0",
     "@theia/core": "1.74.1",
     "@theia/filesystem": "1.74.1",
     "@theia/userstorage": "1.74.1",

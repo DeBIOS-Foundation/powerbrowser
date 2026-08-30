@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "@sourcerer/tab-uris",
+  "name": "@powerbrowser/tab-uris",
   "version": "0.1.0",
   "license": "MIT",
   "dependencies": {

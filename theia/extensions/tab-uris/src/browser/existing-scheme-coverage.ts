@@ -80,7 +80,7 @@ function parseWebviewPath(path: string): WebviewWidgetIdentifier {
         // under `WidgetManager`'s dedup key than any real panel's whenever
         // that panel has a non-empty `viewId` -- silently minting a second,
         // empty widget under the same apparent id instead of resolving to
-        // the one meant. `SourcererWebviewOpenHandler.open()` below never
+        // the one meant. `PowerBrowserWebviewOpenHandler.open()` below never
         // passes this shape straight to `getOrCreateWidget`; it looks up an
         // already-cached widget by `id` alone first and throws if none is
         // found, rather than treating an under-specified address as valid.
@@ -104,9 +104,9 @@ function parseWebviewPath(path: string): WebviewWidgetIdentifier {
  * plain `selectedChannel =` assignment, so this cannot loop.
  */
 @injectable()
-export class SourcererOutputOpenHandler implements OpenHandler {
+export class PowerBrowserOutputOpenHandler implements OpenHandler {
 
-    readonly id = 'sourcerer.output-uri-open-handler';
+    readonly id = 'powerbrowser.output-uri-open-handler';
 
     @inject(OutputChannelManager)
     protected readonly outputChannelManager: OutputChannelManager;
@@ -137,9 +137,9 @@ export class SourcererOutputOpenHandler implements OpenHandler {
  * blank panel" degradation (D-51 carve-out 4), not engineered around here.
  */
 @injectable()
-export class SourcererWebviewOpenHandler implements OpenHandler {
+export class PowerBrowserWebviewOpenHandler implements OpenHandler {
 
-    readonly id = 'sourcerer.webview-uri-open-handler';
+    readonly id = 'powerbrowser.webview-uri-open-handler';
 
     @inject(WidgetManager)
     protected readonly widgetManager: WidgetManager;
@@ -164,7 +164,7 @@ export class SourcererWebviewOpenHandler implements OpenHandler {
             : await this.widgetManager.getOrCreateWidget<WebviewWidget>(WebviewWidget.FACTORY_ID, identifier);
         if (!widget) {
             throw new Error(
-                `sourcerer.webview-uri-open-handler: no open webview panel with id '${identifier.id}' -- ` +
+                `powerbrowser.webview-uri-open-handler: no open webview panel with id '${identifier.id}' -- ` +
                 'a bare webview:<id> address must name an already-open panel; copy the full ' +
                 'webview:<viewType>/<id> address out of the registry instead of typing one from memory'
             );
@@ -214,8 +214,8 @@ export const CARVE_OUTS: ReadonlyArray<{ readonly name: string, readonly reason:
  * already claims the scheme at priority 500, and this phase adds only a
  * documentation entry (Task 3) -- registering a competing handler, or
  * reimplementing preference navigation, is explicitly out of scope. The
- * only thing worth asserting is the negative: no `@sourcerer` handler's
+ * only thing worth asserting is the negative: no `@powerbrowser` handler's
  * `canHandle` claims it (verified live against `ViewUriOpenHandler`,
- * `TerminalUriOpenHandler`, `SourcererOutputOpenHandler` and
- * `SourcererWebviewOpenHandler` -- all scheme-gated, none match `preference`).
+ * `TerminalUriOpenHandler`, `PowerBrowserOutputOpenHandler` and
+ * `PowerBrowserWebviewOpenHandler` -- all scheme-gated, none match `preference`).
  */
