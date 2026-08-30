@@ -290,19 +290,50 @@ as a defect later.
 
 ## UI Considerations
 
-Applicable state considerations resolved: **5 covered, 3 backstop, 0 unresolved**
+Probe run 2026-08-30 (post-verification, user-confirmed kinds and resolutions).
+Coverage: **40 applicable — 21 explicit, 3 backstop, 16 dismissed with reason, 0 unresolved.**
 
-| Category | Element(s) | Status | Resolution / Reason |
-|----------|------------|--------|---------------------|
-| loading | shell deck layer 1 | ✅ covered | `#powerbrowser-loading` paints the wordmark at `1.5em` on `#1a1a1a` from first frame; chrome-rendered, no network, no sidecar dependency |
-| error | shell deck layer 2 | ✅ covered | `#powerbrowser-error` shows plain-language problem + next step per `## Copywriting Contract`, with Retry and Details affordances; `z-index: 2` paints above loading |
-| overflow | diagnostics log | ✅ covered | `max-height: 40vh; overflow: auto; white-space: pre-wrap` on `#powerbrowser-diagnostics-log` — long logs scroll inside the layer, never grow the window |
-| long-text | shell error message | ✅ covered | `max-width: 40em` with centred text wraps a long `err.message` instead of running edge to edge |
-| populated | Theia frontend | ✅ covered | `#powerbrowser-content` remote `<browser>` at `inset: 0`, `z-index: 0`; deck layers hide via CSSOM writes, never by navigating or hiding the content browser |
-| empty | GUI-02 web tab, no URL | 🧪 backstop | Delegated to `@theia/mini-browser` stock empty state — unexercised in this tree. Held-out visual check that a URL-less web tab renders a usable state, not a blank panel |
-| partial | GUI-02 frame-refused site | 🧪 backstop | Always-on "Open in browser window" action must be reachable on a tab whose iframe rendered blank. Held-out check against a known `X-Frame-Options: DENY` origin |
-| zero-one-many | window count (GUI-01) | 🧪 backstop | 1 shell window + N browser windows. Held-out check: closing the last browser window returns to the shell and does **not** quit the application. Pairs with the D-20 spike |
-| focus-visible | 3 shell buttons | ✅ covered | Net-new `:focus-visible` outline per `## Color`; the error deck must be keyboard-operable because it is reached after the pointer path already failed |
+Elements probed: E1 loading layer (`static-content`), E2 error layer, E3 diagnostics layer,
+E4 Theia content browser (`media`), E5 GUI-01 window flow (`list-collection`+`interactive-control`),
+E6 GUI-02 web tabs (`nav`+`media`+`list-collection`), E7 welcome/about branding surfaces.
+
+| Category | Element | Status | Resolution / Reason |
+|----------|---------|--------|---------------------|
+| overflow | E1 loading layer | ✅ covered | The wordmark is a single short text node centred on a full-viewport layer at `1.5em`; there is no overflow path |
+| loading | E2 error layer | ✅ covered | Error layer paints at `z-index: 2` above the loading layer; Retry returns control to the loading layer rather than showing an in-flight state of its own |
+| error | E2 error layer | ✅ covered | Two-part plain-language copy (what failed + next step) per `## Copywriting Contract`, with Retry and Details as on-screen affordances; internal identifiers forbidden in the string |
+| overflow | E2 error message | ✅ covered | `max-width: 40em` with centred text — a long message wraps inside the layer instead of running edge to edge |
+| long-text | E2 error message | ✅ covered | Long `err.message`-derived copy wraps at `max-width: 40em`; never truncated or ellipsised — the full next-step sentence must remain visible |
+| empty | E3 diagnostics | ✅ covered | Only reachable from the error deck, at which point the failing error's field rows exist; an empty log well renders as an empty bordered well, not a collapsed layout |
+| populated | E3 diagnostics | ✅ covered | Field rows at the 4px row gap and the monospace log well per the declared spacing scale (16px layer gap, 16px well padding) |
+| partial | E3 diagnostics | ✅ covered | Rows render only for identifiers present on the current failure (pref key, sentinel, port, timeout, `err.message`); absent identifiers produce no empty-labelled rows |
+| overflow | E3 diagnostics log | ✅ covered | `max-height: 40vh; overflow: auto` on the log well — long logs scroll inside the layer and never grow the window |
+| zero-one-many | E3 log lines | ✅ covered | Zero, one, or many log lines all stay inside the scrolling well; layout is line-count-independent |
+| long-text | E3 log lines | ✅ covered | `white-space: pre-wrap` wraps long log lines inside the well; no horizontal scroll is introduced |
+| loading | E4 content browser | ✅ covered | While the backend starts, the loading deck layer covers the content browser; the content browser never shows its own loading UI |
+| error | E4 content browser | ✅ covered | Backend failure raises the error deck above the content browser; the content browser never paints its own error UI |
+| populated | E4 content browser | ✅ covered | Remote `<browser>` at `inset: 0`, `z-index: 0`; deck layers hide via CSSOM writes, never by navigating or hiding the content browser |
+| empty | E5 window count | ✅ covered | Zero browser windows is the default state: the shell window alone, with the "Open Browser Window" command available from the palette |
+| loading | E5 window open | ✅ covered | Brief startup flicker from closing the early `navigator:blank` window is accepted and documented, not fixed in Phase 1 |
+| populated | E5 windows | ✅ covered | 1 shell window plus N stock `browser.xhtml` windows with zero Power Browser styling; native address bar, tabs, and dialogs |
+| zero-one-many | E5 window count | 🧪 backstop | Held-out check: closing the last browser window returns focus to the shell window and never quits the application (Gecko quits on last-window-close). Pairs with the D-20 spike |
+| empty | E6 web tab, no URL | 🧪 backstop | Held-out visual check: a URL-less web tab renders `@theia/mini-browser`'s stock empty state, not a blank panel — this delegated state is unexercised in this tree |
+| loading | E6 web tab | ✅ covered | Stock `@theia/mini-browser` loading state; replacements must not be authored |
+| error | E6 web tab | ✅ covered | Stock `@theia/mini-browser` error state; replacements must not be authored |
+| populated | E6 web tab | ✅ covered | Stock widget with the page URL as its resource URI, round-tripping the existing `TabUriRegistry` unchanged; no custom widget chrome |
+| partial | E6 frame-refused site | 🧪 backstop | Held-out check against a known `X-Frame-Options: DENY` origin: the always-visible "Open in browser window" action is reachable on a tab whose iframe rendered blank |
+| populated | E7 welcome/about | ✅ covered | Theia `gs-container`/`ad-container` defaults; the mark renders square at 64×64 (welcome) and 48×48 (about) with the `prefers-color-scheme` dual fill so it stays visible on light and dark tab strips (D-36) |
+
+**Dismissed (reasoned, not lift rows):** E1 long-text (fixed literal wordmark); E3 loading/error
+(local synchronous chrome content — the layer *is* the error-detail surface); E4 empty (a not-ready
+frontend is the deck's state, never an empty content state); E5 error/partial/overflow/long-text
+(stock chrome windows, OS-managed, fixed command label); E6 overflow/zero-one-many/long-text
+(tab-strip overflow, many-tab handling, and title truncation are Theia shell stock behaviour);
+E7 empty/loading/error/overflow/long-text (static branded surfaces, inline `data:` asset with no
+fetch or failure path, fixed copy, type delegated to `--theia-*`).
+
+Net-new `:focus-visible` outline on the 3 shell buttons remains contracted in `## Color`
+(WCAG 2.4.7 / 2.4.11) — an accessibility contract, not a probe state category.
 
 <!-- Status vocabulary (locked by probe-core projectTruths):
      ✅ covered   → a plain truth string lifted into must_haves.truths
@@ -332,14 +363,14 @@ block at `1.74.1` alongside the other 49, or the workspace resolves a mismatched
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: FLAG (non-blocking — verb-only CTA labels justified by adjacent error copy)
+- [x] Dimension 2 Visuals: FLAG (non-blocking — no explicit focal-point declaration for the error deck)
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** APPROVED — gsd-ui-checker, 2026-08-30 (2 non-blocking FLAGs recorded above)
 
 ---
 
