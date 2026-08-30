@@ -130,7 +130,7 @@ const VARIANTS = {
         configStatus: join(REPO_ROOT, 'objdir', 'config.status'),
         brandFtl: join(REPO_ROOT, 'powerbrowser', 'branding', 'dev', 'locales', 'en-US', 'brand.ftl'),
         brandProperties: join(REPO_ROOT, 'powerbrowser', 'branding', 'dev', 'locales', 'en-US', 'brand.properties'),
-        brandFullName: 'PowerBrowser Dev',
+        brandFullName: 'Power Browser Dev',
     },
     release: {
         bin: join(REPO_ROOT, 'objdir-release', 'dist', 'bin', 'powerbrowser'),
@@ -138,7 +138,7 @@ const VARIANTS = {
         configStatus: join(REPO_ROOT, 'objdir-release', 'config.status'),
         brandFtl: join(REPO_ROOT, 'powerbrowser', 'branding', 'release', 'locales', 'en-US', 'brand.ftl'),
         brandProperties: join(REPO_ROOT, 'powerbrowser', 'branding', 'release', 'locales', 'en-US', 'brand.properties'),
-        brandFullName: 'PowerBrowser',
+        brandFullName: 'Power Browser',
     },
 };
 const VARIANT_IDS = Object.keys(VARIANTS);

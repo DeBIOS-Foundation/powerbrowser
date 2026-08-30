@@ -10,7 +10,10 @@ import { POWERBROWSER_MARK_DATA_URI } from './powerbrowser-mark';
 // Registered under the `WidgetFactory` id `welcome` in
 // `powerbrowser-frontend-module.ts`, so its `view:` address is `view:welcome`
 // verbatim (D-43).
-export const POWERBROWSER_REPO_URL = 'https://github.com/DeBIOS/PowerBrowser';
+// D-12 fixes the domain `powerbrowser.org` and nothing else. The inherited
+// value was a github.com org URL that does not exist -- the DeBIOS Foundation
+// has no GitHub org yet -- so this points at the one host the project owns.
+export const POWERBROWSER_REPO_URL = 'https://powerbrowser.org/';
 
 @injectable()
 export class PowerBrowserWelcomeWidget extends ReactWidget {

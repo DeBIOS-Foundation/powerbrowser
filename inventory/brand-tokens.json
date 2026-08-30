@@ -329,6 +329,30 @@
       "reason": "sourcerer/sourcerer.desktop:3-4 and sourcerer-release.desktop:3-4 -- the ABSOLUTE REPO ROOT, which is not the product identifier and does not take the `powerbrowser` target. `Exec=/home/chris/coding/sourcerer/objdir/dist/bin/sourcerer` carries three tokens with three different correct targets on one line; a token-boundary rename produces a path that does not exist, the script reports success, and the desktop entry silently does nothing when clicked (Pitfall 4). Classified coincidental so the scan REPORTS it and the rename script leaves it alone; both .desktop files are hand-written in plan 01-03. Longer than the bare `sourcerer` token, so the claim order takes the repo root first and the tree directory after it."
     },
     {
+      "token": "#130829",
+      "case_form": "literal",
+      "class": "coincidental",
+      "target": "#1a1a1a",
+      "expected_count": 0,
+      "expected_files": [
+        "powerbrowser/branding/dev/content/aboutDialog.css",
+        "powerbrowser/branding/release/content/aboutDialog.css"
+      ],
+      "reason": "MOZILLA'S BRAND PURPLE, not a neutral, and it was sitting inside Power Browser's branding directory at branding/{dev,release}/content/aboutDialog.css:7 -- invisible to this scan for its whole life, because the boundary matcher matches brand TOKENS (`sourcerer`, `deocracy`) and never a hex. 01-UI-SPEC.md \"Color -> Residual Mozilla brand value\" requires it replaced with the shell's dominant neutral #1a1a1a, which plan 01-03 did. EXPECTED_COUNT IS 0 ON PURPOSE: the row exists so a rebase that reintroduces the value is caught by name rather than rediscovered, and so Phase 6's static scan inherits the knowledge instead of re-deriving it. Class coincidental rather than brand-display because the string is a colour value, not a name -- it takes a target but is not a presentation of the product."
+    },
+    {
+      "token": "hsla(235, 43%, 10%, 0.5)",
+      "case_form": "literal",
+      "class": "coincidental",
+      "target": "rgba(17, 17, 17, 0.5)",
+      "expected_count": 0,
+      "expected_files": [
+        "powerbrowser/branding/dev/content/aboutDialog.css",
+        "powerbrowser/branding/release/content/aboutDialog.css"
+      ],
+      "reason": "The translucent form of the SAME Mozilla brand hue as the row above, at branding/{dev,release}/content/aboutDialog.css:13. Given its own row rather than folded into the hex row because it is a different notation of the same value and a scan for one would not find the other -- the same token-SET reasoning Pitfall 8 applies to the vendor. Replaced with rgba(17, 17, 17, 0.5), the shell's diagnostics-well neutral #111 at fifty percent, per 01-UI-SPEC.md \"Color\". expected_count 0 for the same reason as the row above."
+    },
+    {
       "token": "Sourcerer",
       "case_form": "title",
       "class": "brand-display",
@@ -674,7 +698,7 @@
         "patches/010-powerbrowser-identity.patch",
         "scripts/verify-branding-identity.mjs"
       ],
-      "reason": "The PATH-FORMING vendor value: MOZ_APP_VENDOR in patches/010 and the expectation that reads it back in verify-branding-identity.mjs. D-09 as amended splits the vendor in two -- `DeBIOS` compiled (it is lowercased into ~/.config/<vendor>/<basename>, and a space there breaks the no-spaces repo rule this project builds under) and `DeBIOS Foundation` on display. Note that the endpoint-allowlist.json and welcome-widget GitHub URLs become github.com/DeBIOS/PowerBrowser under this row; the foundation's actual GitHub org is not yet established (D-12 fixes only the domain), so those two URLs must be confirmed before any release."
+      "reason": "The PATH-FORMING vendor value: MOZ_APP_VENDOR in patches/010 and the expectation that reads it back in verify-branding-identity.mjs. D-09 as amended splits the vendor in two -- `DeBIOS` compiled (it is lowercased into ~/.config/<vendor>/<basename>, and a space there breaks the no-spaces repo rule this project builds under) and `DeBIOS Foundation` on display. The rename pass carried the endpoint-allowlist.json and welcome-widget URLs to github.com/DeBIOS/PowerBrowser, an org the foundation has never established; plan 01-03 retargeted both at https://powerbrowser.org/, the one host D-12 actually fixes, so no shipped link points at a namespace a third party could claim."
     },
     {
       "token": "deocracy",

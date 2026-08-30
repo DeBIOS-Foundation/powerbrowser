@@ -10,7 +10,7 @@
     },
     "frontend": {
       "config": {
-        "applicationName": "Sourcerer",
+        "applicationName": "Power Browser",
         "powerbrowserPrivilegedJs": false,
         "preferences": {
           "security.workspace.trust.enabled": false

@@ -4,13 +4,19 @@
 
 @media not ((prefers-contrast) and (prefers-color-scheme: light)) {
   #aboutDialogContainer {
-    background-color: #130829;
+    /* The shell's dominant neutral (01-UI-SPEC.md "Color"). Replaces the
+       inherited Mozilla brand purple, which was a Mozilla brand value sitting
+       inside Power Browser's branding directory and invisible to the residual
+       scan, which matches brand tokens rather than hexes. */
+    background-color: #1a1a1a;
     color: #fff;
     color-scheme: dark;
   }
 
   #bottomBox {
-    background-color: hsla(235, 43%, 10%, 0.5);
+    /* #111 at 50% -- the shell's diagnostics-well neutral. Replaces the
+       translucent form of the same Mozilla brand hue. */
+    background-color: rgba(17, 17, 17, 0.5);
   }
 }
 

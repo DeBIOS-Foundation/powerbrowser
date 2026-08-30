@@ -1,9 +1,9 @@
 [Desktop Entry]
-Name=Sourcerer
-Exec=/home/chris/coding/sourcerer/objdir-release/dist/bin/sourcerer %u
-Icon=/home/chris/coding/sourcerer/sourcerer/branding/release/default128.png
+Name=Power Browser
+Exec=/home/chris/coding/Power-Browser/objdir-release/dist/bin/powerbrowser %u
+Icon=/home/chris/coding/Power-Browser/powerbrowser/branding/release/default128.png
 Terminal=false
 Type=Application
 Categories=Development;IDE;
-StartupWMClass=sourcerer
+StartupWMClass=powerbrowser
 MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/vnd.mozilla.xul+xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;
