@@ -78,7 +78,7 @@
 - [ ] **GUI-02**: The user can open and browse web pages inside Theia as
       tabs (URL-addressable, per the inherited URI-scheme model)
 
-- [ ] **GUI-03**: The GUI customization bridge (runtime CSS layer +
+- [x] **GUI-03**: The GUI customization bridge (runtime CSS layer +
       dev-flagged privileged JS) ships as a platform feature so anyone can
       restyle/re-shape the GUI at runtime via Theia extensions — "vibe code
       your own browser" is the supported path, forking is not required
@@ -178,7 +178,7 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 | MIG-04 | Phase 1 | Pending |
 | GUI-01 | Phase 1 | Pending |
 | GUI-02 | Phase 1 | Pending |
-| GUI-03 | Phase 1 | Pending |
+| GUI-03 | Phase 1 | Complete |
 | GUI-04 | Phase 1 | Pending |
 | CFG-01 | Phase 2 | Pending |
 | CFG-02 | Phase 2 | Pending |

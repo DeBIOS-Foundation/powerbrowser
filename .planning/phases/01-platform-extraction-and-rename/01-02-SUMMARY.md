@@ -263,3 +263,7 @@ Ready for plan 01-03 (the hand-write surfaces). It inherits:
 ---
 *Phase: 01-platform-extraction-and-rename*
 *Completed: 2026-08-30*
+
+## Self-Check: PASSED
+
+All ten commits resolve in `git log` and every file this plan claims to have created or renamed into existence is present on disk.

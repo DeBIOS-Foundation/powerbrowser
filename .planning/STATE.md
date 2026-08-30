@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-08-30T17:53:26.949Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-08-30T20:24:30.977Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 7
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-08-30 — Phase 01 execution started
 
-Progress: [█░░░░░░░░░] 14%
+Progress: [███░░░░░░░] 29%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [█░░░░░░░░░] 14%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 01 P01 | 35min | 2 tasks | 116 files |
+| Phase 01 P02 | 2h25m | 2 tasks | 61 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,9 @@ Recent decisions affecting current work:
 - [Phase ?]: MOZ_APP_BASENAME takes the one-word lowercase identifier 'powerbrowser' (D-10), so --with-app-basename and verify-branding-identity.mjs's application.ini expectation are class 'identity' and move together
 - [Phase ?]: Per-site token classification uses file-scoped 'only_in' rows with context-anchored tokens in preference to line-pinned site_overrides
 - [Phase ?]: Reconciliation condition 4 and the ground-truth check both use detectors independent of the boundary matcher, so the scan cannot pass by agreeing with itself (T-01-04)
+- [Phase ?]: The D-18 gate excepts hand-write SITES not a class — the outstanding set spans brand-display (Pitfall 1) and brand-identifier (Pitfall 4), so no class exception can express the 01-03 hand-off
+- [Phase ?]: The npm scope is one indivisible contract group — yarn install proved customize/package.json cannot be staged apart from its sibling dependency
+- [Phase ?]: theia/yarn.lock needs no regeneration: yarn v1 never records workspace-local packages in the lock
 
 ### Pending Todos
 
@@ -100,6 +104,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-30T17:53:13.247Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-08-30T20:24:22.060Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
