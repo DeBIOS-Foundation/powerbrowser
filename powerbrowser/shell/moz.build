@@ -2,8 +2,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# SHELL-01/D-89: registers the chrome://powerbrowser/content/ package that
-# replaces BROWSER_CHROME_URL as the startup window. POWERBROWSER_DEV_TREE is
+# SHELL-01/D-89: registers the chrome://powerbrowser/content/ package the
+# startup window is opened from. It used to be named as the compiled
+# BROWSER_CHROME_URL by patches/020-powerbrowser-shell.patch; since 01-05
+# (D-20) that define keeps its stock upstream value and startup-window
+# selection lives in PowerBrowserSingleInstanceHandler instead, so a stock
+# browser window opened alongside the shell is a real browser window rather
+# than a structurally degraded one. POWERBROWSER_DEV_TREE is
 # the repo root (TOPSRCDIR is upstream/, the Gecko source tree; the repo
 # root is its parent), substituted into powerbrowser-sidecar.js so the sidecar
 # prefs carry an absolute dev-tree path with no hardcoded user path checked

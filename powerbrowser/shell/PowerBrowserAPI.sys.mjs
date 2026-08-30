@@ -482,6 +482,65 @@ export const PowerBrowserAPI = Object.freeze({
   focusWindow(win) {
     win.focus();
   },
+
+  /**
+   * GUI-01 (01-05): opens the shell's own window. Called by the
+   * single-instance handler below on the FIRST launch, which is what makes
+   * the shell the startup window without the compiled BROWSER_CHROME_URL
+   * override patch 020 used to carry. `null` args: the shell document reads
+   * no `window.arguments` at all (powerbrowser.js), unlike upstream's
+   * browser.xhtml.
+   */
+  openShellWindow() {
+    return Services.ww.openWindow(
+      null,
+      "chrome://powerbrowser/content/powerbrowser.xhtml",
+      "_blank",
+      "chrome,dialog=no,all",
+      null
+    );
+  },
+
+  /**
+   * GUI-01 (01-05): opens ONE stock upstream browser window -- the real
+   * `chrome://browser/content/browser.xhtml`, with its own address bar, tab
+   * strip, and in-window modal dialogs -- optionally loading `url`.
+   *
+   * The chrome URL is read from the build's own BROWSER_CHROME_URL constant
+   * rather than hardcoded, so this opens whatever upstream considers the main
+   * browser document. That is only correct because patch 020 no longer
+   * overrides that define: upstream compares `window.location.href` against
+   * this same constant in five places to decide "am I the main browser
+   * window", and while the override was in place a real browser window lost
+   * address-bar focus (browser.js openLocation), lost in-window modal dialogs
+   * (browser.js gDialogBox), and recursed into the shell on a multi-URI load.
+   *
+   * `url` is wrapped in an nsISupportsString for the same reason upstream's
+   * own `openBrowserWindow` does it: a bare string argument goes through
+   * `loadOneOrMoreURIs`'s "|"-splitting path, so a URL containing a pipe
+   * would be silently split into several loads.
+   */
+  openBrowserWindow(url) {
+    const arg = Cc["@mozilla.org/supports-string;1"].createInstance(Ci.nsISupportsString);
+    arg.data = url || "about:newtab";
+    return Services.ww.openWindow(
+      null,
+      lazy.AppConstants.BROWSER_CHROME_URL,
+      "_blank",
+      "chrome,dialog=no,all",
+      arg
+    );
+  },
+
+  /**
+   * True when `cmdLine` describes this process's own first launch, as
+   * opposed to a remote handoff from a second launch of the same binary
+   * against the same profile. The single-instance handler below branches on
+   * it; the constant lives here because `Ci.` is forbidden everywhere else.
+   */
+  isInitialLaunch(cmdLine) {
+    return cmdLine.state === Ci.nsICommandLine.STATE_INITIAL_LAUNCH;
+  },
 });
 
 /**
@@ -495,16 +554,31 @@ export const PowerBrowserAPI = Object.freeze({
  * touches the boundary guard forbids everywhere else under
  * `powerbrowser/shell/` (D-96/D-97).
  *
- * Behaviour (D-123/D-124): look up the existing shell window. If none is
- * found -- the first launch, or any launch naming a different profile
- * (the platform's remoting is keyed on the profile path, so a
- * different-profile launch never even reaches this handler in the same
- * process) -- do nothing at all; preventing the default here would leave
- * that launch with no window. If one is found, focus it and set
- * `preventDefault`, ignoring every command-line argument: never read one,
- * never open a window. A thrown error is caught and logged rather than
- * left to propagate into the platform's own handler enumeration, which
- * would otherwise break every handler still due to run after this one.
+ * Behaviour (D-123/D-124, extended by 01-05 for GUI-01): look up the
+ * existing shell window. If one is found -- a second launch of the same
+ * binary against the same profile -- focus it and set `preventDefault`,
+ * ignoring every command-line argument: never read one, never open a
+ * window.
+ *
+ * If none is found AND this is the process's own initial launch, open the
+ * shell document here and set `preventDefault`. This is startup-window
+ * selection, and it lives here rather than in the compiled
+ * BROWSER_CHROME_URL define patch 020 used to override (01-05, D-20): the
+ * stock default handler
+ * (upstream/browser/components/BrowserContentHandler.sys.mjs) gates its own
+ * `openBrowserWindow` call on `!cmdLine.preventDefault`, so setting it is
+ * what stops a second, stock window from also opening. Its `else` branch
+ * then closes the early `navigator:blank` window, which is the brief
+ * startup flicker upstream's own comment there calls acceptable and which
+ * 01-UI-SPEC.md accepts and documents rather than fixes.
+ *
+ * If none is found and this is NOT the initial launch -- a remote handoff
+ * that arrived before or without a shell window -- do nothing at all;
+ * preventing the default here would leave that launch with no window.
+ *
+ * A thrown error is caught and logged rather than left to propagate into
+ * the platform's own handler enumeration, which would otherwise break every
+ * handler still due to run after this one.
  */
 export class PowerBrowserSingleInstanceHandler {
   QueryInterface = ChromeUtils.generateQI([Ci.nsICommandLineHandler]);
@@ -514,10 +588,15 @@ export class PowerBrowserSingleInstanceHandler {
   handle(cmdLine) {
     try {
       const win = PowerBrowserAPI.findShellWindow();
-      if (!win) {
+      if (win) {
+        PowerBrowserAPI.focusWindow(win);
+        cmdLine.preventDefault = true;
         return;
       }
-      PowerBrowserAPI.focusWindow(win);
+      if (!PowerBrowserAPI.isInitialLaunch(cmdLine)) {
+        return;
+      }
+      PowerBrowserAPI.openShellWindow();
       cmdLine.preventDefault = true;
     } catch (err) {
       PowerBrowserAPI.log("error", `[PowerBrowserSingleInstanceHandler] ${err}`);

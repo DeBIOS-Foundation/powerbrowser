@@ -1,29 +1,25 @@
 diff --git a/browser/moz.build b/browser/moz.build
-index 5a03cfc6d3..45826c24c0 100644
+index 5a03cfc6d3..c242947294 100644
 --- a/browser/moz.build
 +++ b/browser/moz.build
-@@ -27,6 +27,11 @@ DIRS += [
+@@ -27,6 +27,20 @@ DIRS += [
      "app",
  ]
  
 +# D-89/D-92: powerbrowser/shell/ resolves through the upstream/powerbrowser
 +# symlink to the repo's own powerbrowser/ tree -- our chrome code stays
 +# entirely in powerbrowser/, never inside upstream/.
++#
++# D-20 (01-05): this DIRS entry is the WHOLE of 020-powerbrowser-shell.patch.
++# The patch used to carry a second hunk overriding the compiled
++# browser-chrome-URL define in browser/moz.configure so that the shell became
++# the startup window; startup-window selection now lives in
++# PowerBrowserSingleInstanceHandler (powerbrowser/shell/PowerBrowserAPI.sys.mjs)
++# instead, and that define keeps its stock upstream value. 020 is therefore a
++# hook-only patch: it adds a build directory and changes no upstream value,
++# which is the state Phase 5's brand-value strip (MIG-05) wants it in.
 +DIRS += ["../powerbrowser/shell"]
 +
  if CONFIG["MAKENSISU"]:
      DIRS += ["installer/windows"]
  
-diff --git a/browser/moz.configure b/browser/moz.configure
-index 5923bbd547..8e3e347ed7 100644
---- a/browser/moz.configure
-+++ b/browser/moz.configure
-@@ -16,7 +16,7 @@ imply_option("MOZ_APP_UA_NAME", "Firefox")
- imply_option("MOZ_APP_ID", "{ec8030f7-c20a-464f-9b0e-13a3a9e97384}")
- # Include the DevTools client, not just the server (which is the default)
- imply_option("MOZ_DEVTOOLS", "all")
--imply_option("BROWSER_CHROME_URL", "chrome://browser/content/browser.xhtml")
-+imply_option("BROWSER_CHROME_URL", "chrome://powerbrowser/content/powerbrowser.xhtml")
- 
- 
- with only_when(target_has_linux_kernel & compile_environment):
