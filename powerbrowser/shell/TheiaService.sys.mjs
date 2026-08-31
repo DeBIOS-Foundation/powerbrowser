@@ -72,6 +72,15 @@ export const TheiaService = {
   // early-return shape in stop().
   _started: false,
 
+  // 01-12: the unregister function PowerBrowserAPI.onQuitGranted returns,
+  // retained so the observer's lifetime matches THIS SUPERVISOR's rather than
+  // the application's. Called from exactly one place -- stop(), after the
+  // process has already been signalled and awaited -- because detaching it
+  // while a supervised backend is still live would put back the very leak the
+  // early registration above exists to prevent. In-memory and per-launch like
+  // every other field here (D-107): nothing in this block writes a file.
+  _quitObserverOff: null,
+
   // D-110: this project's first persistence -- a sidecar state file inside
   // _configDir, written on every successful spawn (first and respawn
   // alike) and removed on a clean stop. Derived once in start(), right
@@ -142,6 +151,40 @@ export const TheiaService = {
     }
 
     this._configDir = this._resolveConfigDir();
+
+    // CR-01 fix (05-REVIEW.md): the state file name itself carries a
+    // profile-scoped suffix -- _configDir stays exactly as before (it also
+    // backs THEIA_CONFIG_DIR below, unrelated to this fix and out of
+    // scope to relocate) so two instances under different --profile paths
+    // can never share a state file, while the SAME profile launched twice
+    // (SIDE-04's own crash-leftover scenario) always resolves the same
+    // path.
+    //
+    // 01-12: derived HERE, immediately after _configDir, which is what the
+    // field's own comment already claimed. Both `_resolveConfigDir()` and
+    // `_profileStateKey()` are pure resolutions over the environment and the
+    // profile path -- neither needs a directory to exist -- which is what makes
+    // deriving the path before creating the folder legal. It has to be derived
+    // before every branch that can still reach a spawn, because a crash on such
+    // a launch must leave a record for the next launch's `_reapLeftover()`.
+    this._stateFilePath = `${this._configDir}/sidecar-state-${this._profileStateKey()}.json`;
+
+    // D-105: observe the topic that fires once quit is final and can no
+    // longer be cancelled -- beginning an irreversible shutdown under a
+    // quit that gets aborted would kill a backend the user still wants.
+    //
+    // 01-12 (01-VERIFICATION.md's failed truth 2e): registered HERE, ahead of
+    // every branch that follows, rather than after the last of them. Everything
+    // below this line is classified recoverable, and a recoverable failure still
+    // starts D-115's background probe, which re-enters `_restart()` and can drive
+    // a spawn through the health gate to a completed swap. So a launch that
+    // returns from any later branch can still end up with a live, healthy,
+    // supervised backend -- and if the observer were registered after that
+    // branch, `stop()` would never run on quit and a Node process with the
+    // extension host's file access and terminal surface would outlive the
+    // browser, still holding the token it was handed at spawn.
+    this._quitObserverOff = PowerBrowserAPI.onQuitGranted(() => this.stop());
+
     // 01-10: this was one of three unguarded throw sites in the start path --
     // a rejection here left `start()` altogether and, before the terminal
     // handler existed, vanished as an unhandled promise rejection. Guarded now,
@@ -166,19 +209,6 @@ export const TheiaService = {
       this._showError(failed.message, failed.recoverable, failed.details);
       return;
     }
-    // CR-01 fix (05-REVIEW.md): the state file name itself carries a
-    // profile-scoped suffix -- _configDir stays exactly as before (it also
-    // backs THEIA_CONFIG_DIR below, unrelated to this fix and out of
-    // scope to relocate) so two instances under different --profile paths
-    // can never share a state file, while the SAME profile launched twice
-    // (SIDE-04's own crash-leftover scenario) always resolves the same
-    // path.
-    this._stateFilePath = `${this._configDir}/sidecar-state-${this._profileStateKey()}.json`;
-
-    // D-105: observe the topic that fires once quit is final and can no
-    // longer be cancelled -- beginning an irreversible shutdown under a
-    // quit that gets aborted would kill a backend the user still wants.
-    PowerBrowserAPI.onQuitGranted(() => this.stop());
 
     // SIDE-04: reap a verified leftover from a previous crashed launch
     // BEFORE this session's own first spawn -- a leftover recorded in the
@@ -247,6 +277,18 @@ export const TheiaService = {
         // Best-effort: removeStateFile already tolerates an absent file;
         // anything else here is not worth blocking shutdown over.
       }
+    }
+
+    // 01-12: detach LAST, once the process is already signalled, awaited and
+    // cleared -- an observer removed while a supervised backend is still live
+    // would leave that backend to outlive the browser, which is exactly the leak
+    // the early registration in start() exists to close. Removing an observer
+    // from inside its own notification is safe here, and the guard is what makes
+    // the second of two stop() calls (the observer's, and a direct one) a no-op
+    // rather than a throw.
+    if (this._quitObserverOff) {
+      this._quitObserverOff();
+      this._quitObserverOff = null;
     }
   },
 

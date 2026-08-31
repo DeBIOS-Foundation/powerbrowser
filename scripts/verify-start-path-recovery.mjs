@@ -56,6 +56,23 @@
 //        spawn call of its own so `_restart()` stays the single spawn entry
 //        point and the shared in-flight guard keeps serializing a Retry against
 //        the health loop and the background recovery probe.
+//   E -- 01-12, 01-VERIFICATION.md's failed truth 2e. `start()` must have BOTH
+//        registered the quit observer and derived the state-file path before any
+//        branch that can still end in a spawned, healthy backend. The window is
+//        derived, not enumerated: from the return that terminates the
+//        sidecar-resolution failure branch (located as the first `return` after
+//        that call, never by line number) to the LATER of the two anchors, and
+//        no `return` may appear inside it. Any early return inserted ahead of
+//        the registration goes red, not only the settings-folder one this gap
+//        named. The anchors are found structurally too -- the registration is
+//        the boundary call in `start()` whose argument is an arrow calling one
+//        of this supervisor's own methods, and the state-file field is then the
+//        `this.<field>` that SAME shutdown method hands to the boundary -- so no
+//        identifier is written down here for the tree to agree with. A third,
+//        separately failing clause requires the unregister function the boundary
+//        returns to be retained on a field the shutdown method actually calls:
+//        a discarded result and a retained-but-never-detached one are two
+//        different defects with two different fixes.
 //
 // HOW THE LOG HALF ASSERTS (--log <path>). Before matching anything, the
 // analyzer proves the sentinel prefixes it greps for are emitted BY THE CODE
@@ -551,6 +568,177 @@ function deriveHealthFailureText(src) {
   return fixed.length > 0 ? fixed : null;
 }
 
+/**
+ * Derivation E, step 0: `start()`'s own method body, isolated the same way every
+ * other body here is. Named separately from `deriveSupervisorMethodBodies` so the
+ * "yielded nothing" failure can say which assertion goes vacuous without it.
+ */
+function deriveStartBody(supervisorSrc) {
+  return deriveSupervisorMethodBodies(supervisorSrc).get("start") ?? null;
+}
+
+/**
+ * Derivation E (01-12, 01-VERIFICATION.md's failed truth 2e): no `return` may
+ * appear in `start()` between the sidecar-resolution guard's own return and the
+ * later of the quit-observer registration and the state-file path assignment.
+ *
+ * WHY THAT WINDOW. Everything after the sidecar-resolution branch is classified
+ * recoverable, and after 01-12's probe gate a recoverable classification still
+ * starts D-115's background probe -- which re-enters `_restart()` and can drive a
+ * spawn all the way through the health gate to a completed swap. So a launch that
+ * returns from any of those branches can still end up with a live, healthy,
+ * supervised backend. If the quit observer has not been registered by then,
+ * `stop()` never runs on quit and a Node process with the extension host's file
+ * access and terminal surface outlives the browser, still holding the token it
+ * was handed at spawn; if `_stateFilePath` has not been derived by then, a crash
+ * on that launch leaves nothing for the next launch's leftover reap to find.
+ *
+ * The rule is derived, not enumerated: it goes red on ANY return inserted into
+ * that window, not only on the settings-folder one this gap named.
+ *
+ * Every identifier below comes out of the tree. The registration is located as
+ * the boundary call in `start()` whose argument is an arrow that calls one of
+ * this supervisor's own methods -- the shutdown method -- and the state-file
+ * field is then located as the `this.<field>` that same shutdown method hands to
+ * the boundary. Nothing is written down here for the tree to agree with.
+ */
+function assertQuitObserverPrecedesEveryEarlyReturn(supervisorSrc, supervisorPath) {
+  const body = deriveStartBody(supervisorSrc);
+  if (!body) {
+    fail(
+      "derivation E yielded nothing: `start()`'s method body could not be isolated in " +
+        `${supervisorPath} -- every ordering assertion below would be vacuous`
+    );
+    return;
+  }
+
+  const resolveCall = body.search(/this\._resolveSidecar\(/);
+  if (resolveCall === -1) {
+    fail(
+      "derivation E yielded nothing: `start()` no longer calls `this._resolveSidecar(` -- the unrecoverable " +
+        "branch this window is measured from has moved, so the window cannot be located"
+    );
+    return;
+  }
+  const sidecarReturn = body.slice(resolveCall).search(/\breturn\b/);
+  if (sidecarReturn === -1) {
+    fail(
+      "derivation E yielded nothing: `start()` has no `return` after its `this._resolveSidecar(` call -- " +
+        "the unrecoverable-resolution branch no longer returns, so the ordering window has no lower bound"
+    );
+    return;
+  }
+  const windowStart = resolveCall + sidecarReturn + "return".length;
+
+  // The quit-observer registration, located structurally: the boundary call
+  // whose sole argument is an arrow calling one of this object's own methods.
+  const registrations = [
+    ...body.matchAll(
+      /(?:this\.(_[A-Za-z0-9_]+)\s*=\s*)?PowerBrowserAPI\.([A-Za-z_$][\w$]*)\(\s*\(\s*\)\s*=>\s*this\.([A-Za-z_$][\w$]*)\(\s*\)\s*\)/g
+    ),
+  ];
+  if (registrations.length === 0) {
+    fail(
+      "derivation E yielded nothing: `start()` registers no boundary callback of the shape " +
+        "`PowerBrowserAPI.<method>(() => this.<method>())` -- the quit observer this rule is about is not " +
+        "registered from `start()` at all, so a launch that spawns a backend has nothing arranged to stop it"
+    );
+    return;
+  }
+  if (registrations.length > 1) {
+    fail(
+      `derivation E is ambiguous: \`start()\` makes ${registrations.length} boundary callback registrations ` +
+        `(${registrations.map((m) => `PowerBrowserAPI.${m[2]}`).join(", ")}) -- this rule assumes exactly one ` +
+        `and would otherwise assert about the wrong call`
+    );
+    return;
+  }
+  const [reg] = registrations;
+  const retainedField = reg[1] ?? null;
+  const boundaryMethod = reg[2];
+  const shutdownMethod = reg[3];
+  const regIndex = reg.index;
+
+  const shutdownBody = deriveSupervisorMethodBodies(supervisorSrc).get(shutdownMethod);
+  if (!shutdownBody) {
+    fail(
+      `derivation E yielded nothing: the observer registered by \`PowerBrowserAPI.${boundaryMethod}\` calls ` +
+        `\`this.${shutdownMethod}()\`, which this supervisor does not declare -- the observer would throw on quit`
+    );
+    return;
+  }
+
+  // The state-file field, derived from the shutdown method rather than named
+  // here: the single `this.<field>` it hands to the boundary.
+  const stateFields = [...shutdownBody.matchAll(/PowerBrowserAPI\.[A-Za-z_$][\w$]*\(\s*this\.(_[A-Za-z0-9_]+)\s*\)/g)];
+  const stateField = stateFields.length === 1 ? stateFields[0][1] : null;
+  if (!stateField) {
+    fail(
+      `derivation E yielded nothing: \`${shutdownMethod}()\` hands ${stateFields.length} single-argument ` +
+        `\`this.<field>\` values to the boundary, so the state-file path this launch must have derived before ` +
+        `it can spawn cannot be identified`
+    );
+    return;
+  }
+  const stateIndex = body.indexOf(`this.${stateField} =`);
+  if (stateIndex === -1) {
+    fail(
+      `derivation E yielded nothing: \`start()\` never assigns \`this.${stateField}\` -- the crash record the ` +
+        `next launch's leftover reap reads is never derived at all`
+    );
+    return;
+  }
+
+  // Clause 1, the sanity clause: neither anchor may precede the branch the
+  // window is measured from. That branch is unrecoverable and, after 01-12's
+  // probe gate, spawns nothing, so nothing needs to be arranged ahead of it.
+  if (regIndex < windowStart || stateIndex < windowStart) {
+    fail(
+      `\`start()\` registers the quit observer or derives \`this.${stateField}\` BEFORE its own ` +
+        `sidecar-resolution failure branch returns -- the window this rule measures is inverted, so clause 2 ` +
+        `below would assert nothing`
+    );
+    return;
+  }
+
+  // Clause 2, the rule itself.
+  const windowEnd = Math.max(regIndex, stateIndex);
+  const offending = body.slice(windowStart, windowEnd).search(/\breturn\b/);
+  if (offending !== -1) {
+    const at = windowStart + offending;
+    fail(
+      `\`start()\` can return at byte ${at} of its own body -- BEFORE it has both registered the quit observer ` +
+        `(\`PowerBrowserAPI.${boundaryMethod}\`) and derived \`this.${stateField}\`. That branch is classified ` +
+        `recoverable, so the background recovery probe still runs on it and can drive a spawn through the ` +
+        `health gate to a completed swap: a live, healthy, supervised backend on a launch that has no quit ` +
+        `observer and no state-file record. \`${shutdownMethod}()\` never runs on quit, so a Node process with ` +
+        `the extension host's file access and terminal surface outlives the browser still holding the token it ` +
+        `was handed at spawn, and a crash on that launch leaves the next launch's leftover reap nothing to ` +
+        `find. Source preceding that return:\n        ...${body.slice(Math.max(0, at - 120), at).replace(/\n/g, "\n        ")}`
+    );
+  }
+
+  // Clause 3, in two independently failing halves: the unregister function the
+  // boundary returns must be retained, AND the shutdown method must detach it.
+  // A retained-but-never-detached observer and a discarded one are two different
+  // defects with two different fixes.
+  if (!retainedField) {
+    fail(
+      `\`start()\` discards the unregister function \`PowerBrowserAPI.${boundaryMethod}\` returns -- the ` +
+        `observer's lifetime is then the application's rather than this supervisor's, and nothing can ever ` +
+        `detach it`
+    );
+    return;
+  }
+  if (!shutdownBody.includes(`this.${retainedField}`)) {
+    fail(
+      `\`start()\` retains the unregister function as \`this.${retainedField}\` but \`${shutdownMethod}()\` ` +
+        `never references it -- the observer is held and never detached, which is a retention with no ` +
+        `beneficiary rather than a lifetime that matches the supervisor's`
+    );
+  }
+}
+
 // --- assertions ------------------------------------------------------------
 
 /** Every mode: prove the prefixes this analyzer greps for are actually emitted. */
@@ -585,6 +773,9 @@ function assertStatic(supervisorPath, shellPath) {
     // row rather than minting a second one.
     assertRetryClearsErrorState(src, assertErrorLayerSingleSourced(src, shellSrc, shellPath), supervisorPath);
   }
+
+  // 01-12: derivation E rides the same already registered start-path-recovery row.
+  assertQuitObserverPrecedesEveryEarlyReturn(src, supervisorPath);
 
   const swapField = deriveSwapGuardField(src);
   if (!swapField) {
@@ -835,6 +1026,32 @@ const SOURCE_FAULTS = [
     },
     expect: "calls the restart path BEFORE clearing the error state",
   },
+  {
+    // 01-12, derivation E clause 2. Reproduces the pre-fix ordering exactly:
+    // the registration moved back to after the settings-folder catch, which is a
+    // returnable branch whose failure is classified recoverable and therefore
+    // still probes.
+    name: "the quit observer registered after a returnable branch",
+    target: "supervisor",
+    apply: (s) => {
+      const reg = s.match(/^ *this\._quitObserverOff = PowerBrowserAPI\.[^\n]*\n/m);
+      const reap = "    try {\n      await this._reapLeftover();";
+      if (!reg || !s.includes(reap)) {
+        return s;
+      }
+      return s.replace(reg[0], "").replace(reap, `${reg[0]}\n${reap}`);
+    },
+    expect: "BEFORE it has both registered the quit observer",
+  },
+  {
+    // 01-12, derivation E clause 3. One thing changed: the boundary's return
+    // value is dropped on the floor again. Ordering stays correct, so this row
+    // can only go red on the retention half.
+    name: "the quit observer's unregister function discarded",
+    target: "supervisor",
+    apply: (s) => s.replace("this._quitObserverOff = PowerBrowserAPI.onQuitGranted(", "PowerBrowserAPI.onQuitGranted("),
+    expect: "discards the unregister function",
+  },
 ];
 
 const LOG_FAULTS = [
@@ -1035,7 +1252,7 @@ if (failures.length === 0) {
   console.log(
     logPath
       ? `verify-start-path-recovery: PASS -- the launch recovered from a failed health gate and swapped exactly once (${logPath})`
-      : `verify-start-path-recovery: PASS -- the one-time initialisation block and _swap()'s guard are keyed on the same completion field, the error layer has exactly one visibility owner, and retry() clears the error state before re-entering the single spawn entry point (${supervisorPath})`
+      : `verify-start-path-recovery: PASS -- the one-time initialisation block and _swap()'s guard are keyed on the same completion field, the error layer has exactly one visibility owner, retry() clears the error state before re-entering the single spawn entry point, and no branch of start() can return before the quit observer is registered and the state-file path derived (${supervisorPath})`
   );
   process.exit(0);
 }
