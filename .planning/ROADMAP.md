@@ -50,7 +50,7 @@ Sourcerer's decision IDs as justification.)*
 
   1. A committed token-classification inventory (brand / identity / frozen / coincidental) exists, and the residual-brand scan is demonstrably red on the pre-rename tree — both before any replacement runs
   2. The repo builds from an `upstream/` re-fetched by script (no copied checkouts, no copied objdirs) and launches a Power-Browser-branded application on Linux that passes the existing smoke tests
-  3. A user can toggle from Theia to proper browser UI and back, and open web pages as URL-addressable tabs inside Theia — with nothing welding Theia to full-window presentation, so the future unified tab strip stays landable
+  3. A user can toggle from Theia to proper browser UI and back — with nothing welding Theia to full-window presentation, so the future unified tab strip stays landable, asserted by a check over `TabUriRegistry`'s exported shape *(the "open web pages as URL-addressable tabs inside Theia" clause was GUI-02, deferred to v2 on 2026-08-30)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
