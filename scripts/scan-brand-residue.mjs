@@ -113,7 +113,7 @@
 //                                       [--report <path>] [--self-test]
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -875,6 +875,79 @@ function selfTest() {
       console.error(`scan-brand-residue: --self-test FAIL -- the planted unclaimed form did NOT fail the un-flagged gate: gate=[${gatePlant}], failures=[${recPlant.failures}]`);
       overall = 1;
     }
+
+    // Fixtures 7-9 (01-15): the `--extra-root` mode, which is how this gate
+    // reaches a tree `git ls-files` cannot name.
+    //
+    // Unlike every fixture above, these three spawn the REAL CLI as a
+    // subprocess rather than calling scan() directly, because CR-B's missing[]
+    // names a token "passed as --extra-root" -- the argument parsing, the walk,
+    // the filters, the reporting and the exit code are all part of what has to
+    // be proven, and none of them is exercised by an in-process scan() call.
+    //
+    // Each of these three also runs the ordinary tracked-tree scan as a side
+    // effect, which is precisely why the first row is a control: without it, a
+    // red in the second row could have been caused by the tracked-tree half
+    // rather than by the plant.
+    const SELF = fileURLToPath(import.meta.url);
+    const runCli = (...args) => {
+      try {
+        return { status: 0, out: execFileSync(process.execPath, [SELF, ...args], { encoding: 'utf8', stdio: 'pipe' }) };
+      } catch (err) {
+        return { status: err.status ?? 1, out: `${err.stdout ?? ''}${err.stderr ?? ''}` };
+      }
+    };
+
+    const cleanRootLabel = '--extra-root over a clean scratch root is a PASS control';
+    const cleanRoot = join(tmp, 'extra-root-clean');
+    mkdirSync(cleanRoot);
+    writeFileSync(join(cleanRoot, 'clean.txt'), 'nothing to see here\n');
+    const rClean = runCli('--extra-root', cleanRoot);
+    if (rClean.status === 0) {
+      console.log(`scan-brand-residue: --self-test PASS -- ${cleanRootLabel}`);
+    } else {
+      console.error(`scan-brand-residue: --self-test FAIL -- ${cleanRootLabel}: exited ${rClean.status} over a token-free root, so the two rows below prove nothing -- their red could not be attributed to their plant. Output: ${rClean.out.trim()}`);
+      overall = 1;
+    }
+
+    const plantOutsideLabel = '--extra-root names a brand token planted outside the git index';
+    const plantRoot = join(tmp, 'extra-root-planted');
+    const plantedOutsideRel = 'planted-outside-index.txt';
+    mkdirSync(plantRoot);
+    writeFileSync(join(plantRoot, plantedOutsideRel), 'chrome://sourcerer/content/x\n');
+    const rPlantOutside = runCli('--extra-root', plantRoot);
+    if (rPlantOutside.status !== 0 &&
+        rPlantOutside.out.includes(plantRoot) &&
+        rPlantOutside.out.includes(plantedOutsideRel)) {
+      console.log(`scan-brand-residue: --self-test PASS -- ${plantOutsideLabel}`);
+    } else {
+      console.error(`scan-brand-residue: --self-test FAIL -- ${plantOutsideLabel}: exited ${rPlantOutside.status} and did not name both ${plantRoot} and ${plantedOutsideRel}. A non-zero exit alone is not enough -- a red that does not name the path leaves an operator unable to find the residue. Output: ${rPlantOutside.out.trim()}`);
+      overall = 1;
+    }
+
+    // What this row defends: a skip-when-absent mode would be green by
+    // construction, which is the exact failure class CR-B is.
+    const missingRootLabel = '--extra-root on a nonexistent directory fails loudly rather than skipping';
+    const missingRoot = join(tmp, 'extra-root-never-created');
+    const rMissing = runCli('--extra-root', missingRoot);
+    if (rMissing.status !== 0 && rMissing.out.includes(missingRoot)) {
+      console.log(`scan-brand-residue: --self-test PASS -- ${missingRootLabel}`);
+    } else {
+      console.error(`scan-brand-residue: --self-test FAIL -- ${missingRootLabel}: exited ${rMissing.status} and did not name ${missingRoot}. A root that is silently skipped when absent cannot go red for its stated cause. Output: ${rMissing.out.trim()}`);
+      overall = 1;
+    }
+
+    // The typo guard. Before it, an unknown flag was dropped and the run
+    // reported a green tracked-tree PASS -- so a mistyped `--extra-root` at a
+    // call site would have re-created CR-B silently.
+    const typoLabel = 'a mistyped flag is rejected rather than silently ignored into a green run';
+    const rTypo = runCli('--extra-roots', cleanRoot);
+    if (rTypo.status === 2 && rTypo.out.includes('--extra-roots')) {
+      console.log(`scan-brand-residue: --self-test PASS -- ${typoLabel}`);
+    } else {
+      console.error(`scan-brand-residue: --self-test FAIL -- ${typoLabel}: exited ${rTypo.status} (expected 2) and did not name the argument. Output: ${rTypo.out.trim()}`);
+      overall = 1;
+    }
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -885,7 +958,27 @@ function selfTest() {
 // CLI
 // ---------------------------------------------------------------------------
 
+/** Flags that consume the following argv entry as their value. */
+const FLAGS_TAKING_A_VALUE = new Set(['--scope-chain', '--report', '--extra-root']);
+const KNOWN_FLAGS = new Set([...FLAGS_TAKING_A_VALUE, '--self-test', '--reconcile', '--except-hand-write']);
+
 function main(argv) {
+  // Reject an argument this script does not know, rather than ignoring it.
+  // Until plan 01-15 an unknown flag was silently dropped, so a typo at a call
+  // site -- `--extra-roots "$UPSTREAM_DIR"`, say -- produced a green
+  // tracked-tree PASS while the caller believed a second tree had been
+  // scanned. That is the same green-by-construction failure CR-B is, one
+  // keystroke away, so the guard ships with the mode rather than after the
+  // first time it bites. Measured on the pre-fix script: `--extra-root <dir>`
+  // with a planted token exited 0 printing `PASS -- ... 109 scanned file(s)`.
+  for (let i = 0; i < argv.length; i++) {
+    if (!KNOWN_FLAGS.has(argv[i])) {
+      console.error(`scan-brand-residue: FAIL -- unrecognized argument: ${argv[i]}`);
+      return 2;
+    }
+    if (FLAGS_TAKING_A_VALUE.has(argv[i])) i++;
+  }
+
   if (argv.includes('--self-test')) return selfTest();
 
   const chainIdx = argv.indexOf('--scope-chain');
