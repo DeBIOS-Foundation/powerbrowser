@@ -50,7 +50,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 4/7 plans executed
+**Plans**: 5/7 plans executed
 
 Plans:
 **Wave 1**
@@ -71,7 +71,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 01-05-PLAN.md — GUI-01: spike the command-line-handler startup-window move, ratify it, then land the browser-window toggle
+- [x] 01-05-PLAN.md — GUI-01: spike the command-line-handler startup-window move, ratify it, then land the browser-window toggle
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -191,7 +191,7 @@ than noisy.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Platform Extraction and Rename | 4/7 | In Progress|  |
+| 1. Platform Extraction and Rename | 5/7 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 0/TBD | Not started | - |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
@@ -259,8 +259,10 @@ identity (the GUI-04 declared bridge interface). Stable tab identity is the
 property this would build on, and most browsers do not have it.
 
 **Three migrations, not one:**
+
 - Bookmarks / history — already SQL upstream (`places.sqlite`); expose and
   extend rather than build
+
 - Sessions — `sessionstore` is compressed JSON, not SQL
 - Theia workbench layout — separate again
 - Tabs — the only layer where the schema would be net-new
@@ -270,4 +272,5 @@ property this would build on, and most browsers do not have it.
 extension point; adding a `[features]` flag is the bug, not the fix.
 
 Plans:
+
 - [ ] TBD (promote with /gsd-review-backlog when ready)

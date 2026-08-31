@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-04-PLAN.md
-last_updated: "2026-08-30T22:03:33.097Z"
+stopped_at: Completed 01-05-PLAN.md
+last_updated: "2026-08-31T00:40:59.879Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 7
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-08-30 — Phase 01 execution started
 
-Progress: [██████░░░░] 57%
+Progress: [███████░░░] 71%
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Progress: [██████░░░░] 57%
 | Phase 01 P02 | 2h25m | 2 tasks | 61 files |
 | Phase 01 P03 | ~18m | 3 tasks | 45 files |
 | Phase 01 P04 | ~2h15m | 3 tasks | 5 files |
+| Phase 01 P05 | 50m | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-04: patch chain proof runs against a blob-PRUNED pristine upstream/, not a second 5.6 GB clone -- git apply --3way writes its own post-image blob, so an unpruned re-test passes vacuously
 - [Phase ?]: 01-04: theia/yarn.lock needs no regeneration -- yarn v1 records no workspace-local package, so the @powerbrowser scope rename left it byte-identical
 - [Phase ?]: 01-04: MIG-04 closed on artifact evidence (smoke-firefox + smoke-theia PASS, six identity surfaces green with the runtime-identity positive control), not on plan frontmatter
+- [Phase ?]: GUI-01 ratified land-as-spiked: startup-window selection lives in the command-line handler; BROWSER_CHROME_URL keeps its stock upstream value
+- [Phase ?]: GUI-01 frontend-to-chrome channel is candidate A (window.open from the Theia command handler); the JSWindowActor fallback was not taken
 
 ### Pending Todos
 
@@ -115,6 +118,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-30T22:03:33.088Z
-Stopped at: Completed 01-04-PLAN.md
+Last session: 2026-08-31T00:40:59.870Z
+Stopped at: Completed 01-05-PLAN.md
 Resume file: None

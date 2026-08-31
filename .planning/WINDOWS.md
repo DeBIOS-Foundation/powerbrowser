@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 4
+open_count: 5
 waived_count: 0
-fixed_count: 8
-total_count: 12
-last_updated: 2026-08-30T23:38:09.088Z
+fixed_count: 9
+total_count: 14
+last_updated: 2026-08-31T00:39:33.163Z
 ---
 
 # Broken Windows Ledger
@@ -26,7 +26,9 @@ last_updated: 2026-08-30T23:38:09.088Z
 | 9 | 01 | deviation | .planning/REQUIREMENTS.md |  | MIG-04 was auto-checked from plan 01-03's frontmatter but nothing has been built; reverted to unchecked. Plan 01-04 owns the build that closes it. | fixed |  | 2026-08-30T20:49:13.723Z | 2026-08-30T22:00:13.014Z |
 | 10 | 01 | unrun-verify | scripts/verify-platform.sh |  | verify-branding-identity-release and branding-variant-divergence still unrun: both read objdir-release/dist/bin, i.e. a second full ~47m release build that 01-04-PLAN.md explicitly declined to spend. Runnable the moment a release objdir exists. | open |  | 2026-08-30T22:00:29.574Z |  |
 | 11 | 01 | unrun-verify | scripts/verify-platform.sh |  | The ~20 launch-lifecycle checks (side03-*, side04-*, side05-*, shell03-*, shell04-diagnostics-with-backend-down, cr01-*, harness-display-available) became RUNNABLE with 01-04's build but were not run: none is named by 01-04-PLAN.md's verify blocks and each launches a real browser. Not blocked -- unexercised. | open |  | 2026-08-30T22:00:29.678Z |  |
-| 12 | 01 | stub | powerbrowser/shell/powerbrowser.js |  | Env-gated POWERBROWSER_SPIKE_GUI01 instrumentation left in the shell bootstrap by plan 01-05 Task 1; it is spike scaffolding and Task 3 of the same plan removes it | open |  | 2026-08-30T23:38:09.088Z |  |
+| 12 | 01 | stub | powerbrowser/shell/powerbrowser.js |  | Env-gated POWERBROWSER_SPIKE_GUI01 instrumentation left in the shell bootstrap by plan 01-05 Task 1; it is spike scaffolding and Task 3 of the same plan removes it | fixed |  | 2026-08-30T23:38:09.088Z | 2026-08-31T00:39:32.952Z |
+| 13 | 01 | deviation | scripts/check-internals-boundary.sh |  | ChromeUtils.registerWindowActor is absent from FORBIDDEN_PATTERNS. Latent, not exploited: candidate B (the JSWindowActor pair) was NOT adopted in 01-05, so nothing in-tree uses it. Any future actor pair must add it in the same commit or the boundary guard has a hole. | open |  | 2026-08-31T00:39:33.061Z |  |
+| 14 | 01 | deviation | scripts/lib/firefox-bidi.mjs |  | Every withFirefoxPage caller that passes a URL launches TWO windows (the shell plus a stock browser window for the URL argument), and contexts[0] resolves to the shell's own supervised Theia frontend rather than the URL passed. Pre-existing, unrelated to 01-05's change: the four _run_app_check_mjs checks boot a dev app at localhost:3000 they then do not read. | open |  | 2026-08-31T00:39:33.163Z |  |
 
 ````json
 [
@@ -169,9 +171,33 @@ last_updated: 2026-08-30T23:38:09.088Z
     "file": "powerbrowser/shell/powerbrowser.js",
     "line": null,
     "description": "Env-gated POWERBROWSER_SPIKE_GUI01 instrumentation left in the shell bootstrap by plan 01-05 Task 1; it is spike scaffolding and Task 3 of the same plan removes it",
-    "status": "open",
+    "status": "fixed",
     "reason": "",
     "recorded_at": "2026-08-30T23:38:09.088Z",
+    "resolved_at": "2026-08-31T00:39:32.952Z"
+  },
+  {
+    "id": 13,
+    "kind": "deviation",
+    "phase": "01",
+    "file": "scripts/check-internals-boundary.sh",
+    "line": null,
+    "description": "ChromeUtils.registerWindowActor is absent from FORBIDDEN_PATTERNS. Latent, not exploited: candidate B (the JSWindowActor pair) was NOT adopted in 01-05, so nothing in-tree uses it. Any future actor pair must add it in the same commit or the boundary guard has a hole.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-31T00:39:33.061Z",
+    "resolved_at": null
+  },
+  {
+    "id": 14,
+    "kind": "deviation",
+    "phase": "01",
+    "file": "scripts/lib/firefox-bidi.mjs",
+    "line": null,
+    "description": "Every withFirefoxPage caller that passes a URL launches TWO windows (the shell plus a stock browser window for the URL argument), and contexts[0] resolves to the shell's own supervised Theia frontend rather than the URL passed. Pre-existing, unrelated to 01-05's change: the four _run_app_check_mjs checks boot a dev app at localhost:3000 they then do not read.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-31T00:39:33.163Z",
     "resolved_at": null
   }
 ]

@@ -82,7 +82,7 @@
 
 ### Browser GUI (GUI)
 
-- [ ] **GUI-01**: The user can toggle away from Theia to proper web-browser
+- [x] **GUI-01**: The user can toggle away from Theia to proper web-browser
       UI and back — Power Browser is usable as an actual browser, not only a
       Theia host
 
@@ -94,7 +94,7 @@
       restyle/re-shape the GUI at runtime via Theia extensions — "vibe code
       your own browser" is the supported path, forking is not required
 
-- [ ] **GUI-04**: Nothing in v1 welds Theia to full-window presentation; the
+- [x] **GUI-04**: Nothing in v1 welds Theia to full-window presentation; the
       future unified tab strip (mirror/proxy bridge) remains landable without
       rework
 
@@ -213,10 +213,10 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 | MIG-02 | Phase 1 | Complete |
 | MIG-03 | Phase 1 | Complete |
 | MIG-04 | Phase 1 | Complete — closed by 01-04's build (smoke-firefox + smoke-theia PASS, six identity surfaces green on the built artifact with the positive control) |
-| GUI-01 | Phase 1 | Pending |
+| GUI-01 | Phase 1 | Complete |
 | GUI-02 | Phase 1 | Pending |
 | GUI-03 | Phase 1 | Complete |
-| GUI-04 | Phase 1 | Pending |
+| GUI-04 | Phase 1 | Complete |
 | CFG-01 | Phase 2 | Pending |
 | CFG-02 | Phase 2 | Pending |
 | CFG-03 | Phase 2 | Pending |
