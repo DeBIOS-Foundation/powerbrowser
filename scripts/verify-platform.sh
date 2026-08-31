@@ -3239,6 +3239,16 @@ run_own_checks() {
     # rebuild at ~39 minutes, so a typo in a hand-written branding literal must
     # cost seconds here rather than forty minutes after the build.
     "scan-brand-residue|node $REPO_ROOT/scripts/scan-brand-residue.mjs"
+    # NEW (01-08): the residual-brand gate's own self-test, registered here for
+    # the reason every other self-test row in this registry gives. The row above
+    # was green for its whole life without anyone having seen it go red, and it
+    # could not have: condition 4 sat below reconcile()'s post-rename early
+    # return, so it was unreachable on the only branch this tree occupies, and
+    # its verdict was gated behind --reconcile, which no registered caller
+    # passes. The self-test plants an unclaimed form on a post-rename fixture
+    # and requires this exact un-flagged invocation's decision function to
+    # reject it, with a clean control proving the red is plant-caused.
+    "scan-brand-residue-self-test|node $REPO_ROOT/scripts/scan-brand-residue.mjs --self-test"
     "branding-preflight|node $REPO_ROOT/scripts/verify-branding-preflight.mjs"
     "branding-preflight-self-test|node $REPO_ROOT/scripts/verify-branding-preflight.mjs --self-test"
 

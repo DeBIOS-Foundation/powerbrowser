@@ -356,12 +356,12 @@
       "case_form": "lower",
       "class": "coincidental",
       "target": "/home/chris/coding/Power-Browser",
-      "expected_count": 4,
+      "expected_count": 0,
       "expected_files": [
         "powerbrowser/powerbrowser-release.desktop",
         "powerbrowser/powerbrowser.desktop"
       ],
-      "reason": "sourcerer/sourcerer.desktop:3-4 and sourcerer-release.desktop:3-4 -- the ABSOLUTE REPO ROOT, which is not the product identifier and does not take the `powerbrowser` target. `Exec=/home/chris/coding/sourcerer/objdir/dist/bin/sourcerer` carries three tokens with three different correct targets on one line; a token-boundary rename produces a path that does not exist, the script reports success, and the desktop entry silently does nothing when clicked (Pitfall 4). Classified coincidental so the scan REPORTS it and the rename script leaves it alone; both .desktop files are hand-written in plan 01-03. Longer than the bare `sourcerer` token, so the claim order takes the repo root first and the tree directory after it."
+      "reason": "COUNT MOVED 4 -> 0 (plan 01-08, reconciling against the tree as it stands). The tree change that moved it: plan 01-03 hand-wrote both .desktop entries, rewriting all four sites -- Exec= and Icon= in each file -- to this repo's own root /home/chris/coding/Power-Browser. The four occurrences are gone because the hand-write this row exists to protect actually happened, not because the row stopped being enforced. ZERO IS LOAD-BEARING HERE, exactly as it is on the #130829 row below: the row stays coincidental with a zero count so a rebase or a copied desktop entry that reintroduces the old absolute path fails by name, and so scripts/verify-branding-preflight.mjs's coincidental-zero assertion -- which only asserts against rows that are BOTH coincidental AND zero -- becomes active on it. Original rationale, still the reason this is a row at all: sourcerer/sourcerer.desktop:3-4 and sourcerer-release.desktop:3-4 -- the ABSOLUTE REPO ROOT, which is not the product identifier and does not take the `powerbrowser` target. `Exec=/home/chris/coding/sourcerer/objdir/dist/bin/sourcerer` carries three tokens with three different correct targets on one line; a token-boundary rename produces a path that does not exist, the script reports success, and the desktop entry silently does nothing when clicked (Pitfall 4). Classified coincidental so the scan REPORTS it and the rename script leaves it alone; both .desktop files are hand-written in plan 01-03. Longer than the bare `sourcerer` token, so the claim order takes the repo root first and the tree directory after it."
     },
     {
       "token": "#130829",
@@ -810,44 +810,40 @@
       "case_form": "literal",
       "class": "frozen",
       "target": "MOZ_APP_UA_NAME",
-      "expected_count": 2,
+      "expected_count": 1,
       "expected_files": [
-        "patches/010-powerbrowser-identity.patch",
-        "patches/020-powerbrowser-shell.patch"
+        "patches/010-powerbrowser-identity.patch"
       ],
-      "reason": "patches/010-sourcerer-identity.patch:21 (and the context line in 020) -- pinned to \"Firefox\" on purpose so the User-Agent stays byte-identical to Firefox's. Neither the option name nor its value is a brand token here."
+      "reason": "COUNT MOVED 2 -> 1 (plan 01-08). The tree change that moved it: the second site was never a define of its own -- it was a CONTEXT LINE that patch 020 happened to carry, and patch 020 was regenerated during plan 01-05's browser-window work (it no longer overrides BROWSER_CHROME_URL), which changed its hunk context and dropped the line. The define itself is untouched and still pinned at its one real site, patches/010-powerbrowser-identity.patch, which is what expected_files now names: the row exists to prove the define stayed pinned, so it must keep naming a site that carries it rather than a stale second file. Original rationale: pinned to \"Firefox\" on purpose so the User-Agent stays byte-identical to Firefox's. Neither the option name nor its value is a brand token here."
     },
     {
       "token": "MOZ_APP_ID",
       "case_form": "literal",
       "class": "frozen",
       "target": "MOZ_APP_ID",
-      "expected_count": 2,
+      "expected_count": 1,
       "expected_files": [
-        "patches/010-powerbrowser-identity.patch",
-        "patches/020-powerbrowser-shell.patch"
+        "patches/010-powerbrowser-identity.patch"
       ],
-      "reason": "patches/010-sourcerer-identity.patch:22 (and the context line in 020) -- deliberately Firefox's own app id {ec8030f7-c20a-464f-9b0e-13a3a9e97384}, so installed extensions keep resolving. Changing it silently breaks extension compatibility with no build failure."
+      "reason": "COUNT MOVED 2 -> 1 (plan 01-08). Same tree change as the MOZ_APP_UA_NAME row above and for the same reason: the second occurrence was a context line in patch 020, and patch 020 was regenerated during plan 01-05's browser-window work, which changed its hunk context and dropped the line. The define is untouched at its one real site, which expected_files now names. Original rationale: deliberately Firefox's own app id {ec8030f7-c20a-464f-9b0e-13a3a9e97384}, so installed extensions keep resolving. Changing it silently breaks extension compatibility with no build failure."
     },
     {
       "token": "-PLAN.md",
       "case_form": "literal",
       "class": "frozen",
       "target": "-PLAN.md",
-      "expected_count": 21,
+      "expected_count": 28,
       "expected_files": [
+        "powerbrowser/INTERNAL-APIS.md",
+        "powerbrowser/shell/TheiaService.sys.mjs",
         "scripts/check-internals-boundary.sh",
         "scripts/smoke-theia.sh",
         "scripts/verify-branding-identity.mjs",
-        "scripts/verify-phase-03.sh",
-        "scripts/verify-phase-04.sh",
-        "scripts/verify-phase-05.sh",
+        "scripts/verify-platform.sh",
         "scripts/verify-uri-roundtrip.mjs",
-        "powerbrowser/INTERNAL-APIS.md",
-        "powerbrowser/shell/TheiaService.sys.mjs",
         "theia/extensions/token-gate/src/node/parent-watchdog-backend-contribution.ts"
       ],
-      "reason": "D-08: the historical Sourcerer plan-file citations carried in migrated comments (04-01-PLAN.md, 05-01-PLAN.md and the rest) are PROVENANCE, not brand. They name plans that live in the frozen sourcerer repo and renumbering or deleting them destroys the only trail back to why the code is shaped the way it is. Anchored on the filename suffix so the count assertion proves they all survived the rename; the decision-ID citations beside them (D-96/D-97, D-121, SIDE-04) carry no brand token and so cannot be touched by any row here at all."
+      "reason": "COUNT MOVED 21 -> 28 (plan 01-08), and NOT ONE HISTORICAL CITATION WAS RENUMBERED OR DELETED to get there -- the whole point of the row would be destroyed by that. The census of 21 was taken at the inventory's seeding commit and is reconciled here by name against two tree changes, both of which ADD: (a) +2 from the driver consolidation. Plan 01-03 deleted verify-phase-03.sh, -04.sh and -05.sh, which carried 1, 1 and 3 citations, and consolidated them into scripts/verify-platform.sh, which now carries 7: those same 5 ported verbatim, plus 2 new 01-04 citations that plan added. expected_files therefore drops the three deleted drivers and names the consolidated driver, which is where those citations now live. (b) +5 from powerbrowser/INTERNAL-APIS.md, which grew from 6 citations to 11 when plan 01-05 catalogued its GUI-01 touchpoints, each carrying its own 01-05 provenance citation. The six historical Sourcerer-era citations in that file (05-01 x1, 05-03 x3, 05-04 x2) are byte-identical to the census-era set. 21 + 2 + 5 = 28, closing by name with nothing absorbed. Original rationale: D-08: the historical Sourcerer plan-file citations carried in migrated comments (04-01-PLAN.md, 05-01-PLAN.md and the rest) are PROVENANCE, not brand. They name plans that live in the frozen sourcerer repo and renumbering or deleting them destroys the only trail back to why the code is shaped the way it is. Anchored on the filename suffix so the count assertion proves they all survived the rename; the decision-ID citations beside them (D-96/D-97, D-121, SIDE-04) carry no brand token and so cannot be touched by any row here at all."
     },
     {
       "token": "pref(\"",

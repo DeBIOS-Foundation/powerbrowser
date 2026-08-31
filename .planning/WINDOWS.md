@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 8
+open_count: 7
 waived_count: 0
-fixed_count: 9
+fixed_count: 10
 total_count: 17
-last_updated: 2026-08-31T02:09:52.011Z
+last_updated: 2026-08-31T04:25:03.312Z
 ---
 
 # Broken Windows Ledger
@@ -20,7 +20,7 @@ last_updated: 2026-08-31T02:09:52.011Z
 | 3 | 01 | unrun-verify | scripts/apply-patches.sh |  | apply-patches.sh --self-test cannot run: needs upstream/browser/moz.configure and upstream/ has never been materialized (pre-existing, rename-independent) | fixed |  | 2026-08-30T20:24:37.919Z | 2026-08-30T22:00:12.608Z |
 | 4 | 01 | unrun-verify | scripts/verify-customize-inert.mjs |  | verify-customize-inert.mjs unrun: needs a built binary at objdir/dist/bin/powerbrowser (Tier 3 Gecko build) | fixed |  | 2026-08-30T20:24:38.018Z | 2026-08-30T22:00:12.714Z |
 | 5 | 01 | unrun-verify | scripts/verify-dev-flag-off.mjs |  | verify-dev-flag-off.mjs unrun: needs a built binary at objdir/dist/bin/powerbrowser (Tier 3 Gecko build) | fixed |  | 2026-08-30T20:24:38.116Z | 2026-08-30T22:00:12.816Z |
-| 6 | 01 | deviation | inventory/brand-tokens.json |  | scan-brand-residue.mjs --reconcile no longer closes post-rename; its expected_count census describes the pre-rename tree. Gate is the plain run. Terminal census owned by plan 01-03. | open |  | 2026-08-30T20:24:38.216Z |  |
+| 6 | 01 | deviation | inventory/brand-tokens.json |  | scan-brand-residue.mjs --reconcile no longer closes post-rename; its expected_count census describes the pre-rename tree. Gate is the plain run. Terminal census owned by plan 01-03. | fixed | Both halves of this entry are now false, which is why it closes. (1) --reconcile DOES close post-rename: plan 01-08 reconciled the four drifted rows against the current tree by name -- the absolute-repo-root row to 0 (both .desktop entries hand-rewritten in 01-03), MOZ_APP_UA_NAME and MOZ_APP_ID to 1 each (the second site was a patch-020 context line dropped when 020 was regenerated in 01-05), and the -PLAN.md provenance row to 28 (+2 from the 01-03 driver consolidation, +5 from 01-05's INTERNAL-APIS.md catalogue rows), each with its justification written into its own reason field. (2) The plain run is NO LONGER a separate, weaker gate: reconciliation failures now fail the un-flagged invocation too, through a single gateFailures() exit source, so the two modes agree on the same tree. | 2026-08-30T20:24:38.216Z | 2026-08-31T04:25:03.312Z |
 | 7 | 01 | unrun-verify | scripts/verify-platform.sh |  | 31 of verify-platform.sh's 48 checks could not run: they need a built tree, a launched browser, or a display. objdir/ does not exist yet (plan 01-04). | fixed |  | 2026-08-30T20:49:13.526Z | 2026-08-30T22:00:29.468Z |
 | 8 | 01 | unrun-verify | scripts/verify-platform.sh |  | apply-patches-self-test cannot run: it derives its fixture from upstream/browser/moz.configure and upstream/ is a git-ignored 1.1 GB clone absent on a fresh checkout. Pre-existing, rename-independent. | fixed |  | 2026-08-30T20:49:13.628Z | 2026-08-30T22:00:12.915Z |
 | 9 | 01 | deviation | .planning/REQUIREMENTS.md |  | MIG-04 was auto-checked from plan 01-03's frontmatter but nothing has been built; reverted to unchecked. Plan 01-04 owns the build that closes it. | fixed |  | 2026-08-30T20:49:13.723Z | 2026-08-30T22:00:13.014Z |
@@ -102,10 +102,10 @@ last_updated: 2026-08-31T02:09:52.011Z
     "file": "inventory/brand-tokens.json",
     "line": null,
     "description": "scan-brand-residue.mjs --reconcile no longer closes post-rename; its expected_count census describes the pre-rename tree. Gate is the plain run. Terminal census owned by plan 01-03.",
-    "status": "open",
-    "reason": "",
+    "status": "fixed",
+    "reason": "Both halves of this entry are now false, which is why it closes. (1) --reconcile DOES close post-rename: plan 01-08 reconciled the four drifted rows against the current tree by name -- the absolute-repo-root row to 0 (both .desktop entries hand-rewritten in 01-03), MOZ_APP_UA_NAME and MOZ_APP_ID to 1 each (the second site was a patch-020 context line dropped when 020 was regenerated in 01-05), and the -PLAN.md provenance row to 28 (+2 from the 01-03 driver consolidation, +5 from 01-05's INTERNAL-APIS.md catalogue rows), each with its justification written into its own reason field. (2) The plain run is NO LONGER a separate, weaker gate: reconciliation failures now fail the un-flagged invocation too, through a single gateFailures() exit source, so the two modes agree on the same tree.",
     "recorded_at": "2026-08-30T20:24:38.216Z",
-    "resolved_at": null
+    "resolved_at": "2026-08-31T04:25:03.312Z"
   },
   {
     "id": 7,

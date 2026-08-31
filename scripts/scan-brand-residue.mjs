@@ -434,6 +434,20 @@ export function reconcile(inv, result, { chain = null, chainFiles = null } = {})
   const conditions = [];
   const postRename = offensesOf(result).length === 0;
 
+  // Condition 4 is asserted on BOTH branches, and it sits above the split for
+  // that reason. It used to live below, inside the red-state block only, which
+  // made it unreachable in the one state this tree permanently sits in: the
+  // scanner's only defence against a brand string reappearing in a form no
+  // inventory row matches was live exclusively while the rename was still
+  // outstanding. A defence that cannot run in the state it exists to guard is
+  // not a defence (plan 01-08, closing the D-17/D-18 gap 01-VERIFICATION.md
+  // reproduced). Its detector is deliberately not the boundary matcher above --
+  // see the header note.
+  conditions.push('condition 4: no occurrence was found that the inventory does not account for (independent case-insensitive probe, no boundary rule)');
+  for (const u of result.unclaimedProbes) {
+    failures.push(`condition 4: ${u.file}:${u.line}: "${u.text}" matched probe "${u.probe}" but no inventory row claimed it`);
+  }
+
   if (postRename) {
     // Green state. The four pre-rename conditions describe a tree that no
     // longer exists; assert instead that nothing the rename was forbidden to
@@ -492,11 +506,6 @@ export function reconcile(inv, result, { chain = null, chainFiles = null } = {})
     }
   }
 
-  conditions.push('condition 4: no occurrence was found that the inventory does not account for (independent case-insensitive probe, no boundary rule)');
-  for (const u of result.unclaimedProbes) {
-    failures.push(`condition 4: ${u.file}:${u.line}: "${u.text}" matched probe "${u.probe}" but no inventory row claimed it`);
-  }
-
   const gt = groundTruth(inv, result);
   if (gt && !chain) {
     conditions.push(`ground truth: observed + already-renamed + not-imported EQUALS 01-RESEARCH.md's independently measured census (${gt.observed} + ${gt.alreadyRenamed} + ${gt.notImported} = ${gt.accounted}, expected ${gt.expected})`);
@@ -508,6 +517,29 @@ export function reconcile(inv, result, { chain = null, chainFiles = null } = {})
   }
 
   return { postRename, conditions, failures };
+}
+
+/**
+ * THE gate decision, and the only one. Returns a human-readable reason per
+ * failing category; an empty array means the gate is green.
+ *
+ * It is a pure function of (offenses, reconciliation) so the self-test can
+ * plant a fault and require THIS decision to go red without spawning a
+ * subprocess. Before plan 01-08 the two non-zero exits in `main()` were
+ * independent and the reconciliation one was guarded by `--reconcile`, which no
+ * registered call site passes -- so `verify-platform.sh`, `rebase-upstream.sh`
+ * and the CI workflow all invoked a gate whose reconciliation half could not
+ * fail. One function, one exit source, reachable from the self-test.
+ */
+export function gateFailures(offenses, rec, { chain = null } = {}) {
+  const reasons = [];
+  if (offenses.length !== 0) {
+    reasons.push(`${offenses.length} residual brand occurrence(s) across ${new Set(offenses.map((o) => o.file)).size} file(s)${chain ? ` in chain "${chain}"` : ''}`);
+  }
+  if (rec && rec.failures.length !== 0) {
+    reasons.push(`${rec.failures.length} reconciliation failure(s)`);
+  }
+  return reasons;
 }
 
 // ---------------------------------------------------------------------------
@@ -701,6 +733,65 @@ function selfTest() {
       console.error('scan-brand-residue: --self-test FAIL -- empty scan set was not flagged');
       overall = 1;
     }
+
+    // Fixture 6 (01-08): the gate must be able to go RED on the POST-RENAME
+    // branch, through the UN-FLAGGED path. That is the branch this repo
+    // permanently sits on and the path all three registered call sites take, and
+    // it was exactly the combination nothing exercised: condition 4 sat below
+    // reconcile()'s post-rename early return, and its verdict was gated behind
+    // `--reconcile`, so the registered gate could not fail on an unclaimed
+    // occurrence. Two runs over one fixture inventory differing ONLY by the
+    // plant, so the red is attributable to the plant rather than to the fixture.
+    const postRenameInv = {
+      $comment: 'scan-brand-residue.mjs --self-test post-rename fixture inventory. Never the real one.',
+      scope: { exclude: [], binary_extensions: ['.png'], residue_probes: ['sourcerer'] },
+      tokens: [{
+        token: 'Sourcerer',
+        case_form: 'title',
+        class: 'frozen',
+        expected_count: 1,
+        expected_files: ['planted-postrename.txt'],
+      }],
+    };
+    const postRel = 'planted-postrename.txt';
+    const controlText = 'Sourcerer\n';
+
+    // The control runs FIRST. An unplanted fixture that is not green makes the
+    // red below prove nothing.
+    writeFileSync(join(tmp, postRel), controlText);
+    const rCtl = scan(postRenameInv, { root: tmp, files: [postRel] });
+    const recCtl = reconcile(postRenameInv, rCtl, {});
+    const gateCtl = gateFailures(offensesOf(rCtl), recCtl);
+    if (recCtl.postRename && gateCtl.length === 0) {
+      console.log(`scan-brand-residue: --self-test PASS -- the same post-rename fixture WITHOUT the plant produced no gate failure (${postRel}), so the red below is caused by the plant and not by the fixture`);
+    } else {
+      console.error(`scan-brand-residue: --self-test FAIL -- the unplanted post-rename control was not clean: postRename=${recCtl.postRename}, gate=[${gateCtl}]`);
+      overall = 1;
+    }
+
+    // The plant: the trailing-plural form. Its trailing lowercase character
+    // puts it outside the TitleCase row's right-boundary rule, so no row claims
+    // it, while condition 4's case-insensitive probe substring stays fully
+    // intact. That it is genuinely unclaimed is ASSERTED below, not assumed.
+    writeFileSync(join(tmp, postRel), `${controlText}Sourcerers\n`);
+    const rPlant = scan(postRenameInv, { root: tmp, files: [postRel] });
+    const recPlant = reconcile(postRenameInv, rPlant, {});
+    const gatePlant = gateFailures(offensesOf(rPlant), recPlant);
+    const plantClaimed = rPlant.occurrences.some((o) => o.line === 2);
+    const namesPlant = gatePlant.length !== 0 &&
+      recPlant.failures.some((f) => f.includes('condition 4') && f.includes(`${postRel}:2`));
+    if (!recPlant.postRename) {
+      console.error('scan-brand-residue: --self-test FAIL -- the planted fixture is not on the post-rename branch, so it does not exercise the branch this tree sits on');
+      overall = 1;
+    } else if (plantClaimed) {
+      console.error('scan-brand-residue: --self-test FAIL -- an inventory row claimed the planted trailing-plural form, so it is not a genuinely unclaimed plant; choose another form');
+      overall = 1;
+    } else if (namesPlant) {
+      console.log(`scan-brand-residue: --self-test PASS -- an unclaimed trailing-plural form planted on a POST-RENAME fixture was rejected by the un-flagged gate path, naming ${postRel}:2`);
+    } else {
+      console.error(`scan-brand-residue: --self-test FAIL -- the planted unclaimed form did NOT fail the un-flagged gate: gate=[${gatePlant}], failures=[${recPlant.failures}]`);
+      overall = 1;
+    }
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -775,17 +866,22 @@ function main(argv) {
     console.log(`scan-brand-residue: report written to ${reportPath}`);
   }
 
+  // The `asserting ...` narration is progress reporting and stays behind the
+  // flag. The FAILURES are not narration: a gate that exits non-zero while
+  // saying nothing about what failed is unusable, so they print on every run.
   if (wantReconcile) {
     for (const c of rec.conditions) console.log(`scan-brand-residue: asserting ${c}`);
-    for (const f of rec.failures) console.error(`scan-brand-residue: ${f}`);
   }
+  for (const f of rec.failures) console.error(`scan-brand-residue: ${f}`);
 
-  if (offenses.length !== 0) {
-    console.error(`scan-brand-residue: FAIL -- ${offenses.length} residual brand occurrence(s) across ${new Set(offenses.map((o) => o.file)).size} file(s)${chain ? ` in chain "${chain}"` : ''}`);
-    return 1;
-  }
-  if (wantReconcile && rec.failures.length !== 0) {
-    console.error(`scan-brand-residue: FAIL -- ${rec.failures.length} reconciliation failure(s)`);
+  // One exit source. What this widens, stated plainly: on the pre-rename branch
+  // the un-flagged run now also enforces conditions 1-3 and the ground-truth
+  // arithmetic. That is not a regression -- the pre-rename branch is only
+  // reached when renameable offenses exist, in which case the gate had already
+  // failed on the first reason.
+  const gate = gateFailures(offenses, rec, { chain });
+  if (gate.length !== 0) {
+    for (const reason of gate) console.error(`scan-brand-residue: FAIL -- ${reason}`);
     return 1;
   }
   console.log(`scan-brand-residue: PASS -- no residual brand occurrence in ${result.files.length} scanned file(s)${chain ? ` for chain "${chain}"` : ''}${exceptHandWrite ? ' (excepting the hand-write surfaces named above)' : ''}`);
