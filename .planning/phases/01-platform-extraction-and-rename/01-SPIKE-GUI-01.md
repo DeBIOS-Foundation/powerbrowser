@@ -405,3 +405,51 @@ about sixty lines plus one addition to `FORBIDDEN_PATTERNS`.
   throwaway Xvfb and a throwaway profile and assert nothing, so they are not checks)
 - Run transcripts and per-launch browser logs: scratchpad `spike-out/`, `spike2-out/`, `spike3-out/`
 - The working-tree diff is **preserved** for Task 3, per the plan.
+
+---
+
+## Ratification (Task 2 — the D-20 decision gate)
+
+**Decided 2026-08-30 by the developer, against the observations above.**
+
+| Question | Ratified answer |
+|---|---|
+| Land the startup-window move? | **`land-as-spiked`.** Land it exactly as this spike landed it. Patch `020` stays hook-only; `BROWSER_CHROME_URL` keeps its stock upstream value; no mitigation is added beyond what is recorded here. |
+| Which frontend-to-chrome channel? | **Candidate A** — `window.open(url, '_blank')` from the Theia command handler. |
+| Fallback | **Candidate B (the JSWindowActor pair) is pre-approved**, to be taken ONLY on an actually-observed failure of the popup path — never pre-emptively. Adopting it obliges adding `ChromeUtils.registerWindowActor` to `check-internals-boundary.sh`'s `FORBIDDEN_PATTERNS`, because the guard does not cover it today. |
+
+### Constraints this ratification binds onto Task 3
+
+1. **Never open a browser window during the shell's own startup** (observation 4). A check that opens
+   one must not do it during startup, or it asserts against a window upstream itself left
+   half-initialised (`gURLBar` permanently `undefined`).
+2. **The spike scaffolding is removed, not left in.** `powerbrowser/shell/powerbrowser.js`'s
+   `POWERBROWSER_SPIKE_GUI01` block goes; the ratified channel replaces it.
+3. **The popup path must be asserted by one of the three registered checks**, so a blocked popup
+   surfaces as a red check rather than a dead headline feature.
+4. **Budget minutes, not a build cycle** (observation "Build"): the incremental rebuild was ~3 minutes
+   and `./mach build faster` is well under one.
+5. **The window-count instrument is discarded.** This is a Wayland host; Gecko ignores the Xvfb
+   `DISPLAY` and `xwininfo` returned 0 beside a demonstrably open window. Use `dump()` sentinels and
+   content-side observation.
+
+### Was the fallback taken?
+
+**No.** The popup path was exercised live before any of it was written into a check
+(scratchpad probe, this session, against the Task-1 binary): from the real Theia origin
+`http://127.0.0.1:<port>/` running inside the shell's remote `<browser>`, with **no** user
+activation at all, `window.open('about:blank#gui01probe', '_blank')` returned a live window object
+(never `null`, which is what a blocked popup returns), a new top-level browsing context carrying
+that exact URL appeared in `browsingContext.getTree`, and `POWERBROWSER_SHELL_READY` stayed at `1`
+across the whole sequence — so what opened was not a second shell window. Closing it removed the
+context, left the shell answering `script.evaluate`, and left the process alive.
+
+Observation 7's stated risk — "`window.open` without transient user activation is blocked and fails
+silently" — therefore **did not materialise on this platform**, and the assertion is now permanent:
+`scripts/verify-gui01-window.mjs`, registered as `gui01-browser-close-does-not-quit`, is the check
+that would go red if it ever starts to.
+
+Candidate B is not implemented, and `ChromeUtils.registerWindowActor` is correspondingly **not**
+added to `FORBIDDEN_PATTERNS` — that addition is owed only by the fallback, which was not taken.
+The gap in the guard is real but latent; it is recorded in `.planning/WINDOWS.md` so a future
+adoption of an actor pair cannot land without closing it.
