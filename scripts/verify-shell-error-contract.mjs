@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 // scripts/verify-shell-error-contract.mjs
 //
-// shell-error-contract -- 01-11.
+// shell-error-contract -- 01-11, extended by 01-12.
 //
-// The error state's REPAINT contract: a Retry that fails must put the error
+// The error state's behavioural contract, driven against the shipped supervisor
+// and the shipped chrome bootstrap. Three scenarios, all three closing a clause
+// 01-VERIFICATION.md recorded FAILED.
+//
+// (1) The REPAINT contract: a Retry that fails must put the error
 // layer back. 01-VERIFICATION.md recorded that clause FAILED (truth 2c). The
 // root cause was two owners for one fact -- the chrome bootstrap's Retry global
 // blanked the error element itself while the supervisor's `_errorShown` repaint
@@ -53,6 +57,37 @@
 // shell03-budget-exhausted-error enforces on the first sentinel, so a repaint
 // that starts leaking a key (the per-launch token above all) goes red here too.
 //
+// (2)+(3) THE PROBE GATE, 01-12 (failed truth 2d). `_showError` received a
+// `recoverable` classification and started D-115's background recovery probe
+// regardless, so the one class the supervisor's own D-113 comment calls
+// "unrecoverable by construction ... with no retry at all" drove a process spawn
+// every probe interval, for the life of the session, against a `_configDir` and
+// a `_stateFilePath` that branch returns before ever assigning.
+//
+// The gate is asserted in BOTH directions, because only one direction is a
+// convenient half-truth: `unrecoverable-classification-starts-no-probe` requires
+// ZERO probe-driven spawns after an error state whose `recoverable` was false,
+// and `recoverable-classification-starts-the-probe` -- the positive control --
+// requires AT LEAST ONE after an error state whose `recoverable` was true. A fix
+// that simply stopped probing everywhere passes the first and fails the second,
+// which is what stops the gate being satisfied by never probing at all.
+//
+// The instrument is a counter on the fake boundary's own spawn stub, so it
+// counts calls THE SUPERVISOR MADE, never a line this harness printed. It is
+// causal rather than temporal -- "spawns that happened after the error sentinel
+// was recorded" -- because with the fake sleep resolving immediately the probe
+// is a pure microtask loop that burns its entire sleep budget inside one
+// microtask drain, long before any `setImmediate` turn the harness could read a
+// counter on. That is also why the two scenarios share ONE drain constant: the
+// negative side's zero is only meaningful because the positive side proves the
+// same drain is long enough for the probe to have run.
+//
+// This is what verify-platform.sh's `check_shell03_unrecoverable_immediate_error`
+// could not see. It asserts an unrecoverable classification reaches no spawn
+// ATTEMPT within its 15-second window, and it is green because the probe's first
+// interval had not elapsed yet -- correct for the window it drives, blind to the
+// second one.
+//
 // WHAT THIS DOES NOT PROVE. It proves the supervisor/bootstrap contract and the
 // sentinel ordering under Node. It does not prove the pixels. The perceptual
 // half -- a human clicking Retry in a real window and seeing the error layer
@@ -65,7 +100,7 @@
 //
 // Exit 0 pass, 1 fail. --self-test runs a clean control against the unmutated
 // tree FIRST (a self-test whose fixture is already red proves nothing about its
-// plants), then plants three faults and requires each to go red naming the
+// plants), then plants five faults and requires each to go red naming the
 // drift.
 
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
@@ -87,6 +122,8 @@ const ERROR_SENTINEL = "POWERBROWSER_SHELL_ERROR";
 const CLEARED_SENTINEL = "POWERBROWSER_SHELL_ERROR_CLEARED";
 
 const SCENARIO = "two-consecutive-failing-retries-repaint";
+const SCENARIO_NO_PROBE = "unrecoverable-classification-starts-no-probe";
+const SCENARIO_PROBE = "recoverable-classification-starts-the-probe";
 
 // The expected error-family stream: paint, clear, repaint, clear, repaint.
 const EXPECTED_STREAM = [ERROR_SENTINEL, CLEARED_SENTINEL, ERROR_SENTINEL, CLEARED_SENTINEL, ERROR_SENTINEL];
@@ -99,6 +136,14 @@ const EXPECTED_STREAM = [ERROR_SENTINEL, CLEARED_SENTINEL, ERROR_SENTINEL, CLEAR
 const SLEEP_BUDGET = 50;
 const SCENARIO_TIMEOUT_MS = 20000;
 const DRAIN_TURNS = 20;
+
+// The drain the two probe-gate scenarios share. It is deliberately ONE constant
+// used by both: the negative scenario's "zero spawns" is only meaningful because
+// the positive scenario proves that the SAME drain is long enough for the
+// probe's first interval to elapse under the fake sleep and drive a spawn. A
+// per-scenario drain would let the negative side pass by simply not waiting,
+// which is exactly how shell03-unrecoverable-immediate-error is green and blind.
+const PROBE_DRAIN_TURNS = 60;
 
 const failures = [];
 const fail = (msg) => failures.push(msg);
@@ -170,7 +215,7 @@ function assertEmitters(shellPath) {
  * supervisor change reaching a new boundary method goes red naming that method
  * rather than being silently satisfied by something plausible.
  */
-function makeFakeApi(state) {
+function makeFakeApi(state, overrides = {}) {
   const table = {
     // _resolveSidecar: a backend entry file that resolves, and no configured
     // node path so the PATH search below is what answers.
@@ -196,7 +241,15 @@ function makeFakeApi(state) {
     },
     // The failure this whole scenario rests on. `_spawnAndGate` classifies a
     // throwing spawn unrecoverable (D-113) and reports it through `_showError`.
+    //
+    // Every stub that stands in for the platform's spawn -- this one and every
+    // per-scenario override of it -- calls `state.countSpawn()` FIRST. That
+    // counter is the probe-gate scenarios' only instrument, and it counts calls
+    // the SUPERVISOR made into the boundary, never a line this harness printed:
+    // an absence assertion over a log the harness also writes can never go red
+    // for the right reason.
     spawnProcess: () => {
+      state.countSpawn();
       throw new Error("harness: the platform refused to exec the backend");
     },
     // Reached by the chrome bootstrap rather than the supervisor.
@@ -204,6 +257,7 @@ function makeFakeApi(state) {
     getAppIdentity: () => ({ name: "Power Browser", vendor: "Power Browser", version: "0.0.0" }),
     notifyStartupFinished: () => {},
   };
+  Object.assign(table, overrides);
   return new Proxy(table, {
     get(target, prop) {
       if (prop in target) {
@@ -231,9 +285,30 @@ const drain = async (turns = DRAIN_TURNS) => {
  * can be called the way the button's click handler calls it) and the supervisor
  * module instance (so per-launch state can be read back).
  */
-async function loadShippedSources(supervisorPath, shellPath, tag) {
-  const state = { scratch: `${tmpdir()}/powerbrowser-shell-error-contract`, sleeps: 0 };
-  const api = makeFakeApi(state);
+async function loadShippedSources(supervisorPath, shellPath, tag, overrides = {}) {
+  const recorded = [];
+  const state = {
+    scratch: `${tmpdir()}/powerbrowser-shell-error-contract`,
+    sleeps: 0,
+    spawnCalls: 0,
+    // Spawns the supervisor asked for AFTER it had already painted an error
+    // state. This is the probe-gate scenarios' instrument, and it is CAUSAL
+    // rather than temporal: with the fake sleep resolving immediately the
+    // recovery probe is a pure microtask loop, so it burns its whole sleep
+    // budget inside a single microtask drain, before any `setImmediate` turn the
+    // harness could read a counter on. Reading "how many spawns happened after
+    // the error sentinel" is therefore the only measurement that does not depend
+    // on the harness winning a race it cannot win.
+    spawnsAfterError: 0,
+    recorded,
+  };
+  state.countSpawn = () => {
+    state.spawnCalls += 1;
+    if (recorded.some((line) => line.startsWith(`${ERROR_SENTINEL} `))) {
+      state.spawnsAfterError += 1;
+    }
+  };
+  const api = makeFakeApi(state, typeof overrides === "function" ? overrides(state) : overrides);
 
   // The supervisor's own top-level import resolves against this.
   globalThis.ChromeUtils = { importESModule: () => ({ PowerBrowserAPI: api }) };
@@ -243,7 +318,6 @@ async function loadShippedSources(supervisorPath, shellPath, tag) {
   }
   const TheiaService = mod.TheiaService;
 
-  const recorded = [];
   const elements = new Map();
   const sandbox = {};
   const makeElement = () => ({
@@ -400,6 +474,149 @@ async function runScenario(supervisorPath, shellPath) {
   }
 }
 
+// --- the probe-gate pair ---------------------------------------------------
+
+/** The parsed payload of the first `POWERBROWSER_SHELL_ERROR ` line, or null. */
+function firstErrorPayload(recorded) {
+  const line = recorded.find((l) => l.startsWith(`${ERROR_SENTINEL} `));
+  if (!line) {
+    return null;
+  }
+  try {
+    return JSON.parse(line.slice(ERROR_SENTINEL.length + 1));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The NEGATIVE half of the probe gate. Drive a launch whose sidecar can never be
+ * resolved -- the supervisor's own D-113 comment calls that class "unrecoverable
+ * by construction, straight to the error state with no retry at all" -- and
+ * require that the background recovery probe drives NO spawn at all.
+ *
+ * The absence assertion is the third of three, and the first two are what make
+ * it legitimate: the error state must have been reached (otherwise the drive
+ * never got where the probe starts and the count would be trivially zero), and
+ * the recorded classification must actually be `false` (otherwise the scenario
+ * has quietly drifted onto some other failure class than the one under test).
+ */
+async function runNoProbeScenario(supervisorPath, shellPath) {
+  let loaded;
+  try {
+    loaded = await loadShippedSources(supervisorPath, shellPath, SCENARIO_NO_PROBE, {
+      // `_resolveSidecar`'s unset-preference branch: the one failure this
+      // supervisor classifies unrecoverable before `_configDir`,
+      // `_stateFilePath` or a node path exist at all.
+      getStringPref: (key, fallback) => (key.endsWith(".backendMain") ? "" : fallback ?? ""),
+    });
+  } catch (err) {
+    fail(`scenario ${SCENARIO_NO_PROBE}: the shipped sources could not be evaluated (${err.message})`);
+    return;
+  }
+  const { recorded, TheiaService, handler, state } = loaded;
+
+  handler();
+  await drain(PROBE_DRAIN_TURNS);
+
+  const payload = firstErrorPayload(recorded);
+  if (payload === null) {
+    fail(
+      `scenario ${SCENARIO_NO_PROBE}: the drive never reached the error state -- no parseable ` +
+        `\`${ERROR_SENTINEL} \` line was emitted by the code under test, so the spawn-count assertion ` +
+        `below would be vacuous. Recorded stream: ${JSON.stringify(recorded)}`
+    );
+    return;
+  }
+  if (payload.recoverable !== false) {
+    fail(
+      `scenario ${SCENARIO_NO_PROBE}: the drive reached the error state with recoverable=` +
+        `${JSON.stringify(payload.recoverable)} rather than false -- it is exercising some other failure ` +
+        `class than the unrecoverable one this scenario names, which is how a check quietly stops ` +
+        `asserting what it claims`
+    );
+    return;
+  }
+
+  if (state.spawnsAfterError !== 0) {
+    fail(
+      `scenario ${SCENARIO_NO_PROBE}: the recovery probe ran for a failure the supervisor classified ` +
+        `unrecoverable -- the boundary's spawn was called ${state.spawnsAfterError} time(s) after an error ` +
+        `state whose recoverable flag was false. The supervisor's own D-113 comment calls this class ` +
+        `unrecoverable by construction with no retry at all, so every one of those attempts is a process ` +
+        `spawn against a _configDir and a _stateFilePath that were never assigned, repeating for the life ` +
+        `of the session. (Probe still active: ${TheiaService._recoveryProbeActive === true}; fake sleeps ` +
+        `resolved: ${state.sleeps}.)`
+    );
+  }
+}
+
+/**
+ * The POSITIVE control, and the reason the gate is honest rather than
+ * convenient. A failure classified RECOVERABLE must still start the probe, so
+ * D-115's auto-dismiss survives: a transient condition clearing on its own is
+ * noticed and the error layer disappears with no user action. Without this row a
+ * "fix" that simply stopped probing everywhere would pass the negative half.
+ *
+ * The drive: the spawn itself succeeds, and the stdin credential handshake
+ * throws. `_spawnAndGate` classifies that recoverable in as many words ("a pipe
+ * write failing says nothing about whether the next spawn will"), and with the
+ * give-up budget at one attempt `_restart()` reaches its budget-exhausted
+ * give-up on the first pass and paints with `recoverable: true`.
+ */
+async function runProbeScenario(supervisorPath, shellPath) {
+  let loaded;
+  try {
+    loaded = await loadShippedSources(supervisorPath, shellPath, SCENARIO_PROBE, (state) => ({
+      spawnProcess: () => {
+        state.countSpawn();
+        // exitCode 0 so `_reap()` has nothing to kill and needs no stub.
+        return { exitCode: 0 };
+      },
+      writeStdinLine: () => {
+        throw new Error("harness: the credential could not be handed over stdin");
+      },
+    }));
+  } catch (err) {
+    fail(`scenario ${SCENARIO_PROBE}: the shipped sources could not be evaluated (${err.message})`);
+    return;
+  }
+  const { recorded, handler, state } = loaded;
+
+  handler();
+  await drain(PROBE_DRAIN_TURNS);
+
+  const payload = firstErrorPayload(recorded);
+  if (payload === null) {
+    fail(
+      `scenario ${SCENARIO_PROBE}: the drive never reached the error state -- no parseable ` +
+        `\`${ERROR_SENTINEL} \` line was emitted, so the probe assertion below would be vacuous. ` +
+        `Recorded stream: ${JSON.stringify(recorded)}`
+    );
+    return;
+  }
+  if (payload.recoverable !== true) {
+    fail(
+      `scenario ${SCENARIO_PROBE}: the drive reached the error state with recoverable=` +
+        `${JSON.stringify(payload.recoverable)} rather than true -- it is exercising some other failure ` +
+        `class than the recoverable one this control names, so it would prove nothing about the probe`
+    );
+    return;
+  }
+
+  if (state.spawnsAfterError < 1) {
+    fail(
+      `scenario ${SCENARIO_PROBE}: the recovery probe never drove a spawn after a recoverable ` +
+        `classification -- the boundary's spawn was called ${state.spawnCalls} time(s) in total and ` +
+        `${state.spawnsAfterError} time(s) after the error state was painted. D-115's auto-dismiss is ` +
+        `gone: a transient failure that clears on its own would never be noticed and the error layer ` +
+        `would never disappear without a user action. (Fake sleeps resolved: ${state.sleeps} -- a zero ` +
+        `here means the drain never let the probe's first interval elapse and this control is ` +
+        `timing-blind rather than the code being wrong.)`
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // --self-test
 // ---------------------------------------------------------------------------
@@ -445,6 +662,33 @@ const SOURCE_FAULTS = [
       shellSrc,
     }),
     expect: `no second ${ERROR_SENTINEL} was emitted`,
+  },
+  {
+    // 01-12's defect, reproduced: the classification is received and ignored.
+    name: "the recovery probe started unconditionally, ignoring the recoverable classification",
+    mutate: ({ supervisorSrc, shellSrc }) => ({
+      supervisorSrc: supervisorSrc.replace(
+        "    if (recoverable) {\n      this._startRecoveryProbe();\n    }",
+        "    this._startRecoveryProbe();"
+      ),
+      shellSrc,
+    }),
+    expect: "the recovery probe ran for a failure the supervisor classified unrecoverable",
+  },
+  {
+    // The OTHER direction, and the reason the gate is two-directional. A "fix"
+    // that simply stopped probing everywhere satisfies the row above and would
+    // turn every transient failure into a permanent error state. This row is the
+    // positive control's own plant.
+    name: "the recovery probe never started at all",
+    mutate: ({ supervisorSrc, shellSrc }) => ({
+      supervisorSrc: supervisorSrc.replace(
+        "    if (recoverable) {\n      this._startRecoveryProbe();\n    }\n",
+        ""
+      ),
+      shellSrc,
+    }),
+    expect: "the recovery probe never drove a spawn after a recoverable classification",
   },
 ];
 
@@ -561,23 +805,30 @@ if (selfTest) {
   process.exit(1);
 }
 
-if (assertEmitters(shellPath)) {
+const withTimeout = async (name, run) => {
   await Promise.race([
-    runScenario(supervisorPath, shellPath),
+    run(),
     new Promise((resolve) =>
       setTimeout(() => {
-        fail(`scenario ${SCENARIO} did not settle within ${SCENARIO_TIMEOUT_MS}ms`);
+        fail(`scenario ${name} did not settle within ${SCENARIO_TIMEOUT_MS}ms`);
         resolve();
       }, SCENARIO_TIMEOUT_MS)
     ),
   ]);
+};
+
+if (assertEmitters(shellPath)) {
+  await withTimeout(SCENARIO, () => runScenario(supervisorPath, shellPath));
+  await withTimeout(SCENARIO_NO_PROBE, () => runNoProbeScenario(supervisorPath, shellPath));
+  await withTimeout(SCENARIO_PROBE, () => runProbeScenario(supervisorPath, shellPath));
 }
 
 if (failures.length === 0) {
   console.log(
     `verify-shell-error-contract: PASS -- scenario ${SCENARIO}: a failing Retry repaints the error layer, ` +
-      `twice over, driven against the shipped supervisor (${supervisorPath}) and the shipped chrome ` +
-      `bootstrap (${shellPath})`
+      `twice over; scenario ${SCENARIO_NO_PROBE}: an unrecoverable classification drives no spawn at all; ` +
+      `scenario ${SCENARIO_PROBE}: a recoverable one still drives at least one -- all three driven against ` +
+      `the shipped supervisor (${supervisorPath}) and the shipped chrome bootstrap (${shellPath})`
   );
   process.exit(0);
 }

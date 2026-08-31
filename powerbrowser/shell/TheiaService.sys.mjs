@@ -1007,6 +1007,28 @@ export const TheiaService = {
    * [label, value] rows, stashed for `getFailureDetails()` -- the ONLY route
    * by which an internal identifier reaches a surface at all.
    *
+   * 01-12 (01-VERIFICATION.md's failed truth 2d): `recoverable` GATES the
+   * background recovery probe, and used to be received and ignored. D-115's
+   * probe IS the retry mechanism -- it re-enters `_restart()` on a timer -- so
+   * starting it for a class the supervisor has just classified unretryable
+   * contradicts the classification in the same breath it records it. The three
+   * call sites and what each passes:
+   *   * `start()`'s `_resolveSidecar` failure branch passes FALSE. Its own D-113
+   *     comment calls that class "unrecoverable by construction ... with no
+   *     retry at all", and it returns before `_configDir` and `_stateFilePath`
+   *     exist, so every probe-driven respawn there was spawning against
+   *     unassigned state, once per interval, for the life of the session.
+   *   * `_restart()`'s unrecoverable give-up passes FALSE.
+   *   * `_restart()`'s budget-exhausted give-up and `reportUnexpectedFailure()`
+   *     pass TRUE, and those keep the probe: D-115's auto-dismiss (a transient
+   *     condition clearing on its own, the error layer disappearing with no user
+   *     action) is exactly the recoverable case, and a gate that stopped probing
+   *     everywhere would trade one defect for a worse one.
+   * No second flag records this: the classification is already carried into this
+   * method by every caller, and a "sidecar resolved" boolean beside `_errorShown`
+   * would be a second source of truth for one fact -- the shape of the defect,
+   * not its fix.
+   *
    * Neither this, the chrome layer's sentinel, nor a detail row may ever
    * include the per-launch token: `message` is a static literal, and every
    * detail value goes through the same `this._token` redaction `_pushLog`
@@ -1023,7 +1045,9 @@ export const TheiaService = {
     });
     this._pushLog(`Showing error state (recoverable=${recoverable}): ${message}`);
     this._browserElement.ownerDocument.defaultView.powerbrowserShowError({ reason: message, recoverable });
-    this._startRecoveryProbe();
+    if (recoverable) {
+      this._startRecoveryProbe();
+    }
   },
 
   /** Hides the error layer and stops the background recovery probe. */
