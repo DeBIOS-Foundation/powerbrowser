@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-12-PLAN.md
-last_updated: "2026-08-31T21:37:34.818Z"
+stopped_at: Completed 01-13-PLAN.md
+last_updated: "2026-08-31T21:53:07.049Z"
 last_activity: 2026-08-31
-last_activity_desc: Phase 01 execution started
+last_activity_desc: Completed plan 01-13 (gap closure — user-driven Retry gate)
 progress:
   total_phases: 1
   completed_phases: 1
   total_plans: 13
-  completed_plans: 12
+  completed_plans: 13
 ---
 
 # Project State
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 3 of 12
-Status: Ready to execute
-Last activity: 2026-08-31 — Phase 01 execution started
+Plan: 13 of 13
+Status: All plans executed — ready for phase verification
+Last activity: 2026-08-31 — Completed plan 01-13 (gap closure — user-driven Retry gate)
 
 Progress: [██████████] 100%
 
@@ -69,6 +69,7 @@ Progress: [██████████] 100%
 | Phase 01 P10 | ~40m | 3 tasks | 6 files |
 | Phase 01 P11 | ~35min | 2 tasks | 6 files |
 | Phase 01 P12 | ~30min | 3 tasks | 5 files |
+| Phase 01 P13 | 15min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,11 @@ Recent decisions affecting current work:
 - [Phase ?]: The recovery-probe gate is the recoverable flag _showError already receives, not a new sidecar-resolved boolean: a second source of truth for one fact is the defect's shape, not its fix
 - [Phase ?]: A two-directional gate needs a registered positive control with its own planted fault, or 'stop doing X everywhere' passes the negative half
 - [Phase ?]: Probe instrumentation is causal (spawns after the code-under-test's own error sentinel), not temporal: an immediately-resolving fake sleep makes the probe a pure microtask loop the harness cannot interleave with
+- [Phase ?]: Refusal lives in TheiaService.retry(), not in the DOM — powerbrowserRetry() is a window global any chrome-privileged caller can invoke, so a rendered state is presentation and never authority
+- [Phase ?]: The retry guard returns before _hideError(), so a refused click cannot null _failureDetails and erase the rows that identified the failure
+- [Phase ?]: two-consecutive-failing-retries-repaint retargeted onto the recoverable class rather than retired; the unrecoverable class moved to the new scenario, and the two assert the gate in both directions
+- [Phase ?]: Minted USER_MESSAGE.couldNotStartUnrecoverable where 01-10 declined to mint a key: here the distinction IS the action, because one screen offers Retry and the other does not
+- [Phase ?]: POWERBROWSER_DECK_STATE gained no key for the Retry control's visibility — the named place a future tier-3 launch-level check would add one, rather than scaffolding for a check nobody is writing
 
 ### Pending Todos
 
@@ -153,6 +159,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-31T20:55:01.732Z
-Stopped at: Completed 01-12-PLAN.md
+Last session: 2026-08-31T21:52:35.714Z
+Stopped at: Completed 01-13-PLAN.md
 Resume file: None
