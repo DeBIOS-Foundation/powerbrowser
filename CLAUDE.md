@@ -15,7 +15,9 @@ hold regardless of which phase you are in.
 ## Hard rules
 
 These are inherited constraints, not preferences. Four of them are also binding through
-`REQUIREMENTS.md`'s *Out of Scope* section.
+`REQUIREMENTS.md`'s *Out of Scope* section. In one line each: never fork or patch Theia core;
+never modify Gecko outside the patch stack; design for the bridge; keep the repo at a path with
+no space; and Theia is the default GUI while stock browser chrome stays reachable.
 
 ### 1. Never fork or patch Theia core
 
@@ -113,7 +115,7 @@ changes nothing. `scripts/check-patch-surface.sh` guards the surface; `apply-pat
 **One driver, one registry:** `scripts/verify-platform.sh`. `verify-phase-0{2,3,4,5}.sh` were
 deleted in the commit that created it and must not come back.
 
-```
+```sh
 scripts/verify-platform.sh --quick          # no build, no browser, no display — the commit gate
 scripts/verify-platform.sh --only <label>   # exactly one check
 scripts/verify-platform.sh                  # everything
@@ -154,7 +156,7 @@ by pattern, not by a list of banned strings.
 
 Builds run inside Nix dev shells, never the host shell:
 
-```
+```sh
 nix develop .#firefox    # Gecko toolchain (rustc, cargo, cbindgen, clang) — for upstream/
 nix develop .#theia      # Node/yarn — for theia/
 ```

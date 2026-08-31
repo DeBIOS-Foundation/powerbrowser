@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-08-31T00:40:59.879Z"
+stopped_at: Completed 01-07-PLAN.md
+last_updated: "2026-08-31T02:11:37.762Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 7
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-08-30 — Phase 01 execution started
 
-Progress: [███████░░░] 71%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [███████░░░] 71%
 | Phase 01 P03 | ~18m | 3 tasks | 45 files |
 | Phase 01 P04 | ~2h15m | 3 tasks | 5 files |
 | Phase 01 P05 | 50m | 3 tasks | 13 files |
+| Phase 01 P07 | 2h10m | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,10 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-04: MIG-04 closed on artifact evidence (smoke-firefox + smoke-theia PASS, six identity surfaces green with the runtime-identity positive control), not on plan frontmatter
 - [Phase ?]: GUI-01 ratified land-as-spiked: startup-window selection lives in the command-line handler; BROWSER_CHROME_URL keeps its stock upstream value
 - [Phase ?]: GUI-01 frontend-to-chrome channel is candidate A (window.open from the Theia command handler); the JSWindowActor fallback was not taken
+- [Phase ?]: User-facing error copy lives in one derivable USER_MESSAGE table; nine failure paths collapse onto four sentences because their distinctions are diagnostic, not actionable
+- [Phase ?]: Diagnostics rows and the POWERBROWSER_ERROR_DIAGNOSTICS sentinel read one getFailureDetails() accessor, so the rendered surface and the machine-readable line cannot disagree
+- [Phase ?]: The two objdir-release checks are named --gate exclusions keyed on ledger entry 10 rather than deleted or narrowed
+- [Phase ?]: smoke-theia.sh is a registry row: the consolidated verifier is now a true superset of the validation strategy's full-suite command
 
 ### Pending Todos
 
@@ -107,6 +112,7 @@ None yet.
 - [Phase 6]: Mozilla and Eclipse trademark findings are LOW-confidence web-sourced; re-verify against primary policy before gating.
 - ~~[Spelling]~~ Resolved 2026-08-29: user confirmed "Sourcerer"; REQUIREMENTS.md and PROJECT.md normalized.
 - MIG-04 is NOT complete: nothing has been built (objdir/ absent). 01-03 delivered its prerequisites only; plan 01-04 owns the build. Nine verify-platform.sh checks become runnable at that point.
+- Phase 1's two manual verifications (GUI-01 browser-window toggle, 5 steps; GUI-03 visible runtime restyle, 3 steps) are UNPERFORMED -- 01-07 ran autonomously with no human. Recorded as open WINDOWS.md ledger entries.
 
 ## Deferred Items
 
@@ -118,6 +124,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-31T00:40:59.870Z
-Stopped at: Completed 01-05-PLAN.md
+Last session: 2026-08-31T02:11:28.870Z
+Stopped at: Completed 01-07-PLAN.md
 Resume file: None
