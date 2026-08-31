@@ -81,6 +81,14 @@ body {
   font-size: 1.25em;
   max-width: 40em;
   margin: 0;
+  /* 01-UI-SPEC.md's E2 overflow edge: a long message wraps inside the layer at
+   * this bounded width and is never truncated or ellipsised, so the full
+   * next-step sentence stays readable. `anywhere` (not the default `normal`)
+   * so an unbroken run of characters breaks rather than running off-screen --
+   * structural, rather than resting on the current copy happening to be short
+   * words. Deliberately NO text-overflow/white-space:nowrap: hiding the tail
+   * of an error message hides the affordance it ends with. */
+  overflow-wrap: anywhere;
 }
 
 #powerbrowser-error-controls {
@@ -137,6 +145,14 @@ body {
   flex-direction: column;
   gap: 0.25em;
   font-size: 1em;
+  /* 01-07: these rows now also carry the failure's own identifiers -- notably
+   * a resolved filesystem path, which before this phase was painted into the
+   * error message instead. A long unbroken path would run off the viewport
+   * without these two, and the whole point of moving it here is that it stays
+   * READABLE. max-width matches the log well below, the widest thing in the
+   * layer, so the two line up rather than each picking their own bound. */
+  max-width: 60em;
+  overflow-wrap: anywhere;
 }
 
 #powerbrowser-diagnostics-log {
@@ -168,6 +184,32 @@ body {
 
 #powerbrowser-diagnostics-close:hover {
   background: #444;
+}
+
+/*
+ * 01-07 / 01-UI-SPEC.md "Net-new: focus-visible outline" (WCAG 2.4.7, 2.4.11).
+ * The three shell buttons defined only :hover, so a keyboard user got no
+ * visible focus indicator at all -- and the error deck is precisely the state
+ * a user reaches once the pointer-driven happy path has already failed, which
+ * makes this the one place a missing focus ring actually strands someone.
+ *
+ * Built entirely from values already declared elsewhere in this file: #e8e8e8
+ * is the accent (reserved by the design contract for deck foreground ink,
+ * control label text, and exactly this outline -- never a fill or a surface),
+ * and 2px is the declared 4px spacing scale. No new colour, no new spacing
+ * value, and deliberately no brand hue: the tree contains zero invented brand
+ * colours in Phase 1, and one added here would be a hardcoded literal Phase 3's
+ * emitter must generate and Phase 6's static scan must police.
+ *
+ * It lives HERE, not in a style attribute, for the reason this file's header
+ * documents: the shell document's CSP is `default-src chrome:` with no
+ * 'unsafe-inline', so an inline style is dropped silently, with nothing logged.
+ */
+#powerbrowser-error-retry:focus-visible,
+#powerbrowser-error-diagnostics:focus-visible,
+#powerbrowser-diagnostics-close:focus-visible {
+  outline: 2px solid #e8e8e8;
+  outline-offset: 2px;
 }
 
 #powerbrowser-content {

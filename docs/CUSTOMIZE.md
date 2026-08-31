@@ -4,6 +4,32 @@ PowerBrowser's customization seam (R4a) has two layers: a user CSS file that
 always exists as an address but never as a file, and a developer-only JS
 layer that is off by default and stays off unless the build says otherwise.
 
+## Where the files live
+
+Both layers live in PowerBrowser's own config directory, `$THEIA_CONFIG_DIR`,
+which the shell resolves to:
+
+```sh
+${XDG_CONFIG_HOME:-$HOME/.config}/powerbrowser
+```
+
+`powerbrowser/shell/TheiaService.sys.mjs` derives that path once at startup
+(`_resolveConfigDir()`) and hands it to the sidecar as `THEIA_CONFIG_DIR`, so
+the two never disagree. `scripts/verify-customize-inert.mjs` resolves the same
+path by the same rule, which is why its pixel comparison is testing the
+directory PowerBrowser actually reads.
+
+So in full:
+
+| Layer                               | Path                                                           |
+| ----------------------------------- | -------------------------------------------------------------- |
+| Runtime stylesheet                  | `${XDG_CONFIG_HOME:-$HOME/.config}/powerbrowser/customize.css` |
+| Privileged script (dev builds only) | `${XDG_CONFIG_HOME:-$HOME/.config}/powerbrowser/customize.js`  |
+
+Note this is the *config* directory, not the sidecar state file's location —
+`sidecar-state-<profile>.json` also lives here but is written by the supervisor
+and is not yours to edit.
+
 ## The CSS layer
 
 The file is `$THEIA_CONFIG_DIR/customize.css`, next to `settings.json` and

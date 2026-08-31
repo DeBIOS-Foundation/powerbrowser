@@ -5,6 +5,18 @@ PowerBrowser on the reference NixOS host, with the durations actually measured
 there. It does not describe the patch-stack tree, artifact builds, or a
 rebase procedure — those land in Phase 3.
 
+**What every timing in this document is attributed to.** The reference host is
+`legion` — 16 cores, 62 GB RAM, NixOS. Each figure below additionally names the
+**tree** it was measured on (rows predating the rename say so explicitly) and
+the **date**, and every one of them was produced under the pinned Gecko
+toolchain recorded in `toolchain-baseline.txt` at that commit — the same file
+`scripts/toolchain-baseline.sh` regenerates and the Phase 3 rebase procedure
+diffs against. A figure is only comparable to a new measurement taken under the
+same three: tree, host, toolchain. **These numbers are carried forward rather
+than re-measured**: re-running the tier-3 rows alone costs about eighty minutes
+and would reproduce them, and D-73 forbids presenting an inherited number as a
+fresh measurement, so each row cites the summary it was measured in.
+
 ## Prerequisites
 
 - NixOS (or any host with Nix flakes enabled — `experimental-features =
@@ -18,7 +30,8 @@ rebase procedure — those land in Phase 3.
   split that variable on the space and every native link step fails. Both
   the Firefox compile and Theia's `node-gyp` native modules drive that same
   linker, so this is not a Firefox-only caveat — clone somewhere like
-  `~/coding/powerbrowser`, never under a directory such as `~/My Projects`.
+  `~/coding/Power-Browser` (this repo's own path on the reference host),
+  never under a directory such as `~/My Projects`.
 
 Nothing else needs installing by hand. Both `nix develop` shells below
 supply their entire toolchain; there is no `mach bootstrap` step and no
