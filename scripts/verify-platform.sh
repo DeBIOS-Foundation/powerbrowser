@@ -3263,6 +3263,19 @@ run_own_checks() {
 
   if [ "$QUICK" -eq 0 ]; then
     CHECKS+=(
+      # NEW (01-07): the Theia half's smoke gate. It was the ONLY member of
+      # 01-VALIDATION.md's full-suite command with no row in this registry --
+      # a real superset gap, found by reconciling the two at the phase gate
+      # rather than by assuming consolidation had been exhaustive. Its
+      # sibling `smoke-firefox` was already here.
+      #
+      # Registered FIRST in the full set, ahead of every check that boots the
+      # Theia app: it runs `yarn install --frozen-lockfile` and rebuilds
+      # drivelist's native module, which is the state those checks assume. It
+      # needs the theia dev shell and mutates node_modules, so it is
+      # emphatically not --quick.
+      "smoke-theia|bash $REPO_ROOT/scripts/smoke-theia.sh"
+
       # from verify-phase-02.sh -- each needs a live Theia frontend, started
       # lazily by the wrapper (see theia_app_up above).
       "diff-theia-core|check_diff_theia_core"
