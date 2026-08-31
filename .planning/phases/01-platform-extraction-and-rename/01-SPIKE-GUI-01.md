@@ -408,6 +408,38 @@ about sixty lines plus one addition to `FORBIDDEN_PATTERNS`.
 
 ---
 
+## Correction (written during Task 3, against Task 1's own observations)
+
+Two of the observations above rest on the same bad inference and are **wrong**. They are corrected
+here rather than edited in place, so the reasoning that produced them stays visible.
+
+**The bad inference:** "a `browser.xhtml` window cannot initialise without emitting chrome activity
+on this channel", used in observation 1 to conclude no stock browser window opened, and in
+observation 3 to conclude a command-line URL is silently dropped. The `chrome://browser/content`
+lines the spike saw were emitted by **the spike's own instrumentation**, which dumped the opened
+window's `href`. Nothing upstream writes them. Measured live in Task 3: a run that demonstrably
+opened a stock browser window logged **zero** `chrome://browser/content` lines.
+
+**What is actually true**, read from BiDi's browsing-context tree (the instrument that does carry
+this signal):
+
+| Claim | Corrected finding |
+|---|---|
+| Obs. 1 — "no stock browser window opens alongside the shell" on a bare launch | **Still true**, now on real evidence: a bare launch (no URL argument) produces exactly ONE top-level browsing context, the shell's own content browser. Asserted permanently by `gui01-browser-close-does-not-quit`. |
+| Obs. 3 — "the URL is silently dropped; no browser window opens for it" | **False.** A URL on the command line opens a stock browser window carrying that URL, in addition to the shell. `nsDefaultCommandLineHandler` gates only its **no-URI** branch on `cmdLine.preventDefault`; when `urilist` is non-empty it calls `openBrowserWindow(cmdLine, principal, URLlist)` regardless — and with the define now stock, that is real browser chrome. |
+
+The corrected observation-3 behaviour is **desirable and is kept**: `powerbrowser https://example.com`
+opening a real browser window on that URL is what a browser should do, and it costs no code. It does
+not affect GUI-01's contract, which is about the palette command, and it does not affect the truth
+"first launch opens exactly one shell window" — that launch takes no URL argument.
+
+It does, however, mean every BiDi check that passes a URL to `withFirefoxPage` has been launching
+with two windows rather than one, with `contexts[0]` resolving to the shell's own content browser.
+That is pre-existing, unrelated to the ratified change, and is recorded in `.planning/WINDOWS.md`
+rather than fixed here.
+
+---
+
 ## Ratification (Task 2 — the D-20 decision gate)
 
 **Decided 2026-08-30 by the developer, against the observations above.**

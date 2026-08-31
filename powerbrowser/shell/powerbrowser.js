@@ -226,139 +226,26 @@ document.addEventListener(
     diagnosticsKeyset.appendChild(diagnosticsKey);
     document.documentElement.appendChild(diagnosticsKeyset);
 
-    // ---- SPIKE SCAFFOLDING (01-05 Task 1, D-20) ----------------------------
-    // Env-gated GUI-01 probe. Exercises PowerBrowserAPI.openBrowserWindow()
-    // against the live build and dumps, on the same dump() sentinel channel
-    // everything else here uses, what the five upstream call sites that read
-    // the compiled browser-chrome-URL constant can now actually see. This is
-    // spike instrumentation, not a feature: it is replaced in Task 3 by the
-    // frontend-to-chrome channel the Task 2 checkpoint ratifies, and it does
-    // nothing at all unless POWERBROWSER_SPIKE_GUI01 is set in the
-    // environment. The stock constant is written out as a literal here rather
-    // than read from AppConstants because AppConstants is on the
-    // internals-boundary guard's forbidden list for every file except
-    // PowerBrowserAPI.sys.mjs.
-    const spikeMode = PowerBrowserAPI.getEnv("POWERBROWSER_SPIKE_GUI01");
-    if (spikeMode) {
-      const STOCK_CHROME_URL = "chrome://browser/content/browser.xhtml";
-      const spike = (phase, extra) =>
-        dump(`POWERBROWSER_SPIKE_GUI01 ${JSON.stringify({ phase, ...extra })}\n`);
-      // `late` defers the open until well after startup has settled, to tell
-      // "opening a browser window is broken" apart from "opening one DURING
-      // the shell's own startup is too early".
-      const openDelay = spikeMode === "late" || spikeMode === "lastwindow-late" ? 25000 : 0;
-      window.setTimeout(() => runSpike(), openDelay);
-      function runSpike() {
-      try {
-        const bwin = PowerBrowserAPI.openBrowserWindow("about:blank");
-        spike("opened", { href: bwin.location.href, isStock: bwin.location.href === STOCK_CHROME_URL, openDelay });
-
-        const snapshot = (phase, waited) => {
-          const doc = bwin.document;
-          const root = doc && doc.documentElement;
-          spike(phase, {
-            waited,
-            href: bwin.location.href,
-            isStock: bwin.location.href === STOCK_CHROME_URL,
-            readyState: doc ? doc.readyState : null,
-            rootId: root ? root.id : null,
-            windowtype: root ? root.getAttribute("windowtype") : null,
-            chromehidden: root ? root.getAttribute("chromehidden") : null,
-            hasUrlbarElement: !!(doc && doc.getElementById("urlbar")),
-            hasToolbox: !!(doc && doc.getElementById("navigator-toolbox")),
-            hasTabbrowserElement: !!(doc && doc.getElementById("tabbrowser-tabpanels")),
-            gURLBarType: typeof bwin.gURLBar,
-            gBrowserType: typeof bwin.gBrowser,
-            gDialogBoxType: typeof bwin.gDialogBox,
-            hasBrowserCommands: typeof bwin.BrowserCommands,
-          });
-        };
-
-        let waited = 0;
-        const poll = window.setInterval(() => {
-          waited += 250;
-          if (waited % 2000 === 0) {
-            snapshot("snapshot", waited);
-          }
-          if (!bwin.gURLBar && waited < 20000) {
-            return;
-          }
-          window.clearInterval(poll);
-          if (!bwin.gURLBar) {
-            snapshot("timeout", waited);
-            return;
-          }
-
-          // browser.js:4677 nulls gDialogBox when location.href !=
-          // BROWSER_CHROME_URL -- a non-null gDialogBox is the in-window
-          // modal-dialog capability. browser-commands.js:297 (openLocation)
-          // is the address-bar-focus branch, browser.js:1312
-          // (loadOneOrMoreURIs) is the multi-URI-recursion branch; both key
-          // on the same equality.
-          spike("loaded", {
-            href: bwin.location.href,
-            isStock: bwin.location.href === STOCK_CHROME_URL,
-            hasDialogBox: bwin.gDialogBox !== null && bwin.gDialogBox !== undefined,
-            hasURLBar: !!bwin.gURLBar,
-            hasTabbrowser: !!(bwin.gBrowser && bwin.gBrowser.tabs),
-            tabCount: bwin.gBrowser && bwin.gBrowser.tabs ? bwin.gBrowser.tabs.length : -1,
-            waited,
-          });
-
-          // The live address-bar-focus test: openLocation() takes the
-          // "not a browser window, redirect elsewhere" branch (opening a
-          // whole extra window) unless the equality above holds.
-          const tabsBefore = bwin.gBrowser.tabs.length;
-          let openLocationError = null;
-          try {
-            bwin.openLocation();
-          } catch (e) {
-            openLocationError = String(e);
-          }
-          // browser.js:1312 loadOneOrMoreURIs: when the equality fails it
-          // openDialog()s BROWSER_CHROME_URL -- i.e. recurses into whatever
-          // the compiled define names. When it holds, it loads the URIs as
-          // tabs in THIS window.
-          let multiUriError = null;
-          try {
-            bwin.loadOneOrMoreURIs("about:blank|about:logo");
-          } catch (e) {
-            multiUriError = String(e);
-          }
-          window.setTimeout(() => {
-            spike("open-location", {
-              openLocationError,
-              urlbarFocused: !!(bwin.gURLBar && bwin.gURLBar.focused),
-              multiUriError,
-              tabsBefore,
-              tabsAfterMultiUri: bwin.gBrowser ? bwin.gBrowser.tabs.length : -1,
-            });
-
-            if (spikeMode === "lastwindow" || spikeMode === "lastwindow-late") {
-              // Observation 5b: leave the browser window as the LAST window
-              // by closing the shell first, then close it.
-              spike("closing-shell-first", {});
-              window.setTimeout(() => {
-                bwin.close();
-                spike("closed-browser-last", {});
-              }, 1500);
-              window.close();
-              return;
-            }
-
-            bwin.close();
-            spike("closed-browser", {});
-            window.setTimeout(() => {
-              spike("still-alive-after-close", { shellStillHere: true });
-            }, 3000);
-          }, 1000);
-        }, 250);
-      } catch (err) {
-        spike("threw", { error: String(err) });
-      }
-      }
-    }
-    // ---- END SPIKE SCAFFOLDING -------------------------------------------
+    // GUI-01 (01-05 Task 3): NOTHING is registered here for the
+    // open-browser-window command, and that is the ratified design, not an
+    // omission. Task 1's env-gated POWERBROWSER_SPIKE_GUI01 block lived here
+    // and is removed; the Task 2 checkpoint ratified candidate A, which is
+    // `window.open(url, '_blank')` called from the Theia frontend itself
+    // (theia/extensions/tab-uris/src/browser/browser-window-command.ts).
+    //
+    // Why that needs no chrome-side code at all: this window carries no
+    // nsIBrowserDOMWindow, so nsWindowWatcher cannot divert a content
+    // window.open into a tab and falls through to
+    // nsAppStartup::CreateChromeWindow -> AppWindow::CreateNewContentWindow,
+    // which opens BROWSER_CHROME_URL -- and since patch 020 no longer
+    // overrides that define, BROWSER_CHROME_URL is now stock upstream browser
+    // chrome. No privileged code, no new Firefox-internal touchpoint, no new
+    // catalogue row, and it works with the privileged-JS development flag off
+    // because it uses no privileged surface whatsoever.
+    //
+    // PowerBrowserAPI.openBrowserWindow() remains, unused by this path: it is
+    // what candidate B (the pre-approved JSWindowActor fallback) would call,
+    // and it is what the spike drove observation 4 through.
   },
   { once: true }
 );

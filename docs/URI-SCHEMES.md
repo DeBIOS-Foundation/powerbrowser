@@ -250,6 +250,48 @@ document and the code never drift apart on what each one says.
    so without a live plugin-contributed panel this cannot be probed
    mechanically.
 
+## The browser-window destination (not a scheme)
+
+Every address above resolves to a **tab inside Theia**. There is one more
+destination a URL can be sent to, and it is deliberately not a scheme: a
+**stock Firefox browser window**, opened by the command
+
+- id: `powerbrowser.open-browser-window`
+- label: **Open Browser Window**
+
+Both strings are exactly the ones
+`theia/extensions/tab-uris/src/browser/browser-window-command.ts` exports
+(`OPEN_BROWSER_WINDOW_COMMAND_ID` and the `label` on `OPEN_BROWSER_WINDOW`),
+so this document and the code are checked against identical wording rather
+than kept as drifting copies — the same discipline the four carve-outs above
+follow. `scripts/verify-gui01-command.mjs` reads both out of that source and
+asserts them against the live frontend's own command registry.
+
+The command is reachable from the command palette and nowhere else in this
+phase: there is no menu entry, no keybinding, and no toolbar button. It takes
+an optional URL. With none, the window opens on `about:blank` and the stock
+address bar is the affordance; with one, the window opens on that URL. It is a
+**peer** of the in-Theia destinations, not a fallback below them — no opener
+priority is involved, because nothing routes to it automatically. A user (or,
+from the next phase, a web tab's own escape action) chooses it.
+
+What opens is upstream Firefox's own `browser.xhtml`, unmodified: real address
+bar, real tab strip, real in-window modal dialogs, and zero PowerBrowser
+styling. Invoking the command twice opens two such windows, which is Firefox's
+own multi-window behaviour. Closing one returns focus to the shell window and
+never quits the application, so the return half of the toggle can never
+silently become a loss of Theia state.
+
+**Accepted behaviour: a brief startup flicker.** On a cold start the platform
+opens an early blank window before any of this project's code runs. PowerBrowser's
+command-line handler claims the launch and opens the shell itself, at which
+point upstream's own default handler closes that early window rather than
+reusing it — producing a brief flicker that upstream's own comment at that
+branch calls acceptable. This is documented behaviour, not a defect to file:
+it is the direct consequence of startup-window selection living in the
+command-line handler instead of a compiled brand value, which is what keeps
+the browser window structurally reachable at all.
+
 ## What this is for
 
 `TabUriRegistry`'s exported shape (`getViewContribution`, `parseName`,

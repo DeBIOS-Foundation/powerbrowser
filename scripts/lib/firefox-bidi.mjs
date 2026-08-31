@@ -25,7 +25,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
-import { existsSync } from 'node:fs';
+import { existsSync, createWriteStream } from 'node:fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..', '..');
@@ -251,7 +251,7 @@ export async function captureScreenshot(url, outputPath, { windowSize = '800,600
  * settle past any debounce) before capturing -- the only way to actually
  * see the rendered app.
  */
-export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN } = {}) {
+export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN, stdoutPath } = {}) {
     if (!existsSync(binPath)) {
         throw new Error(
             `firefox-bidi: ${binPath} does not exist. Run the Phase 1 Firefox build first ` +
@@ -270,14 +270,34 @@ export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN } =
     // directions this session (03-02 Task 1): identical BiDi session reads
     // about:support's application-box live when it is present, and the same
     // read throws that exact error when it is absent.
+    // GUI-01 (01-05): `stdoutPath` tees the launched binary's stdout to a file
+    // so a caller can assert against the shell's own dump() sentinel channel
+    // (POWERBROWSER_SHELL_READY and friends) in the SAME session it drives
+    // over BiDi. Without it stdout is discarded, which is right for every
+    // caller that only reads the page -- but the window checks need the
+    // sentinel stream, and launching a second, differently-configured
+    // instance to get it would assert against a different process than the
+    // one under test.
+    const stdoutSink = stdoutPath ? createWriteStream(stdoutPath) : undefined;
+    // An EMPTY `url` means "launch with no URL argument at all", which is not
+    // the same launch as `about:blank`. Found live (01-05): with GUI-01's
+    // startup-window move landed, a URL on the command line opens a stock
+    // browser window IN ADDITION to the shell -- upstream's
+    // nsDefaultCommandLineHandler gates only its no-URI branch on
+    // `cmdLine.preventDefault`, and takes the URI branch regardless. So every
+    // caller passing a url gets two top-level browsing contexts, and a caller
+    // that needs to assert the shell opened ALONE must pass none.
     const child = spawn(binPath, [
         '--headless',
         '--profile', profileDir,
         `--remote-debugging-port=${port}`,
         '--remote-allow-hosts', '127.0.0.1',
         '--remote-allow-system-access',
-        url,
-    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+        ...(url ? [url] : []),
+    ], { stdio: ['ignore', stdoutSink ? 'pipe' : 'ignore', 'pipe'] });
+    if (stdoutSink) {
+        child.stdout.pipe(stdoutSink);
+    }
 
     let ws;
     let client;
@@ -297,6 +317,9 @@ export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN } =
                 }, 5000);
                 child.once('exit', () => { clearTimeout(timer); resolve(); });
             });
+        }
+        if (stdoutSink) {
+            await new Promise(resolve => stdoutSink.end(resolve));
         }
         await rm(profileDir, { recursive: true, force: true });
     };
@@ -347,7 +370,23 @@ export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN } =
             return Buffer.from(result.result.data, 'base64');
         };
 
-        return await callback({ evaluate, waitFor: (expr, opts) => waitFor(evaluate, expr, opts), screenshot });
+        // GUI-01 (01-05): the top-level browsing contexts this session can
+        // see, url and context id only. `evaluate` above is pinned to the one
+        // context found at session start, so a caller asserting that a SECOND
+        // window opened has no other way to see it -- and the chrome window
+        // wrapping it is invisible on this platform (WINDOWS.md 7), so the
+        // content context it owns is the only observable.
+        const topLevelContexts = async () => {
+            const tree = await client.send('browsingContext.getTree', {});
+            return tree.result.contexts.map(c => ({ context: c.context, url: c.url }));
+        };
+
+        return await callback({
+            evaluate,
+            waitFor: (expr, opts) => waitFor(evaluate, expr, opts),
+            screenshot,
+            topLevelContexts,
+        });
     } finally {
         if (ws && client && ws.readyState === WebSocket.OPEN) {
             try {

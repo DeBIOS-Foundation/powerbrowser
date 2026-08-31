@@ -1,6 +1,6 @@
 import { ContainerModule } from '@theia/core/shared/inversify';
 import { FrontendApplicationContribution, OpenHandler, OpenerService, WidgetManager } from '@theia/core/lib/browser';
-import { Disposable } from '@theia/core/lib/common';
+import { CommandContribution, Disposable } from '@theia/core/lib/common';
 import { ChatViewWidget } from '@theia/ai-chat-ui/lib/browser/chat-view-widget';
 import { TerminalFrontendContribution } from '@theia/terminal/lib/browser/terminal-frontend-contribution';
 import { TerminalWidget } from '@theia/terminal/lib/browser/base/terminal-widget';
@@ -9,6 +9,7 @@ import { ViewUriOpenHandler } from './view-open-handler';
 import { PowerBrowserTerminalFrontendContribution, PowerBrowserTerminalWidget } from './terminal-naming-contribution';
 import { TerminalUriOpenHandler } from './terminal-open-handler';
 import { PowerBrowserOutputOpenHandler, PowerBrowserWebviewOpenHandler } from './existing-scheme-coverage';
+import { BrowserWindowCommandContribution } from './browser-window-command';
 
 /**
  * Registers an `OpenHandler` after the app's first `OpenerService.open()`
@@ -78,6 +79,16 @@ export default new ContainerModule((bind, _unbind, isBound, rebind) => {
     // dedup, no restore machinery added (D-51 carve-out 4).
     bind(PowerBrowserWebviewOpenHandler).toSelf().inSingletonScope();
     bind(OpenHandler).toService(PowerBrowserWebviewOpenHandler);
+
+    // GUI-01 (01-05): the palette-reachable "Open Browser Window" command.
+    // Bound statically at module load for the same reason the open-handler
+    // bindings above are: `ContributionProvider.getContributions()` caches its
+    // array on first call and drops its container reference (D-50), so a
+    // `CommandContribution` bound after the command registry's first
+    // enumeration is permanently invisible -- including to the command palette,
+    // which is this command's ONLY affordance.
+    bind(BrowserWindowCommandContribution).toSelf().inSingletonScope();
+    bind(CommandContribution).toService(BrowserWindowCommandContribution);
 
     // D-27: the AI chat widget must never escape into a secondary window
     // -- the future unified tab strip has no way to model a chrome-owned

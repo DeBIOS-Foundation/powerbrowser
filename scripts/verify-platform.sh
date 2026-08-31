@@ -233,6 +233,9 @@ check_verify_branding()        { _run_app_check_mjs verify-branding.mjs; }
 check_verify_customize_inert() { _run_app_check_mjs verify-customize-inert.mjs; }
 check_verify_dev_flag_off()    { _run_app_check_mjs verify-dev-flag-off.mjs; }
 check_verify_uri_roundtrip()   { _run_app_check_mjs verify-uri-roundtrip.mjs; }
+# GUI-01 (01-05): same precondition as the four above -- it reads the LIVE
+# frontend's CommandRegistry, so it needs the Theia dev app up.
+check_gui01_command_registered() { _run_app_check_mjs verify-gui01-command.mjs; }
 
 # ============================================================================
 # SHARED HELPERS  (ported verbatim from verify-phase-05.sh, whose copies were
@@ -2840,6 +2843,127 @@ process.exit(process.exitCode || 0);
 MJSEOF
 fi
 
+# --- 01-05 (GUI-01/GUI-04): gui01-single-shell-window ----------------------
+#
+# The startup-window selection moved out of the compiled BROWSER_CHROME_URL
+# define and into PowerBrowserSingleInstanceHandler (01-SPIKE-GUI-01.md,
+# ratified at 01-05 Task 2). This check is the one that goes red if that move
+# regresses, and it asserts the two failure modes the move actually has:
+#
+#   * The handler's initial-launch branch never fires, so no shell window
+#     opens at all, or fires twice. Caught by the first-launch count.
+#   * The handler's initial-launch branch fires on a REMOTE handoff, so a
+#     second launch of the same binary opens a second shell (and, via
+#     TheiaService, a second backend). Caught by the second-launch assertion.
+#
+# It deliberately overlaps side05-second-launch-focuses on the second-launch
+# half. That check predates the move and asserts remoting works AT ALL; this
+# one asserts the moved code did not change what remoting produces. Losing
+# either would lose a distinct signal.
+#
+# What this check deliberately does NOT assert is window COMPOSITION -- "the
+# shell opened and no stock browser window opened beside it". There is no
+# signal for that on the shell's stdout, which is all this check can see.
+# 01-SPIKE-GUI-01.md observation 1 inferred it from the absence of
+# `chrome://browser/content` lines in the launch log; that inference is wrong,
+# and was an artifact of the spike's own instrumentation dumping chrome hrefs
+# itself. Measured live (01-05 Task 3): a run that demonstrably opened a stock
+# browser window logged ZERO such lines, so grepping for them here would be a
+# green assertion that can never go red. The real instrument is BiDi's
+# browsing-context tree, and the composition assertion lives in
+# gui01-browser-close-does-not-quit, which already has one open.
+#
+# The other obvious instrument -- counting X windows -- is not used either, for
+# the cause the spike recorded: this is a Wayland host, Gecko ignores the Xvfb
+# DISPLAY, and xwininfo reported 0 beside a demonstrably open window.
+#
+# Never headless, and one shared profile across both launches, for the same
+# two reasons side05's own comment gives: gfxPlatform::IsHeadless() disables
+# Firefox's native remoting protocol outright, and nsRemoteService keys
+# remoting on the profile path.
+check_gui01_single_shell_window() {
+  local bin profile result=0
+  bin="$REPO_ROOT/objdir/dist/bin/powerbrowser"
+  if [ ! -x "$bin" ]; then
+    echo "gui01-single-shell-window: FAIL -- GUI-01 -- $bin does not exist or is not executable (run the Firefox build first)" >&2
+    return 1
+  fi
+
+  profile="$(mktemp -d)"; track_temp "$profile"
+
+  local rc
+  start_shell_display "$profile"
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "gui01-single-shell-window: FAIL -- GUI-01 -- could not launch the first instance (no usable display or missing binary)" >&2
+    return "$rc"
+  fi
+  local first_log="$BROWSER_LOG"
+  local first_pid="$BROWSER_SPAWN_PID"
+  local display_to_use="$DISPLAY_IN_USE"
+
+  local deadline=$((SECONDS + 60))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    sentinel_present 'POWERBROWSER_SHELL_READY' "$first_log" && break
+    if ! kill -0 "$first_pid" 2>/dev/null; then
+      echo "gui01-single-shell-window: FAIL -- GUI-01 -- first launch exited before POWERBROWSER_SHELL_READY appeared; log:" >&2
+      cat "$first_log" >&2
+      stop_shell_display
+      return 1
+    fi
+    sleep 0.5
+  done
+  if ! sentinel_present 'POWERBROWSER_SHELL_READY' "$first_log"; then
+    echo "gui01-single-shell-window: FAIL -- GUI-01 -- POWERBROWSER_SHELL_READY did not appear within 60s; log:" >&2
+    cat "$first_log" >&2
+    stop_shell_display
+    return 1
+  fi
+
+  # Let a second shell window, if the handler wrongly opened one, finish
+  # announcing itself before concluding none did. A negative assertion taken
+  # the instant the positive one lands would pass on a race.
+  sleep 5
+
+  local ready_count
+  ready_count="$(grep -c 'POWERBROWSER_SHELL_READY' "$first_log")"
+  if [ "$ready_count" -ne 1 ]; then
+    echo "gui01-single-shell-window: FAIL -- GUI-01 -- expected exactly one POWERBROWSER_SHELL_READY on first launch, found $ready_count; log:" >&2
+    cat "$first_log" >&2
+    result=1
+  fi
+
+  # Second launch against the SAME profile: no new window anywhere. Remoting
+  # delivers the second launch's command line into the FIRST process, so a
+  # second window would announce itself on the first process's stdout, never
+  # in the second process's own (0-byte) log.
+  local second_log second_rc
+  second_log="$(mktemp)"; track_temp "$second_log"
+  timeout 30 env "DISPLAY=$display_to_use" "$bin" --profile "$profile" >"$second_log" 2>&1
+  second_rc=$?
+
+  if [ "$second_rc" -eq 124 ]; then
+    echo "gui01-single-shell-window: FAIL -- GUI-01 -- the second launch did not exit within 30s: it ran on as an independent instance instead of handing off; log:" >&2
+    cat "$second_log" >&2
+    result=1
+  fi
+
+  if ! kill -0 "$first_pid" 2>/dev/null; then
+    echo "gui01-single-shell-window: FAIL -- GUI-01 -- the first instance is no longer running after the second launch" >&2
+    result=1
+  fi
+
+  ready_count="$(grep -c 'POWERBROWSER_SHELL_READY' "$first_log")"
+  if [ "$ready_count" -ne 1 ]; then
+    echo "gui01-single-shell-window: FAIL -- GUI-01 -- expected the POWERBROWSER_SHELL_READY count to still be 1 after the second launch, found $ready_count -- a second shell window opened; log:" >&2
+    cat "$first_log" >&2
+    result=1
+  fi
+
+  stop_shell_display
+  return "$result"
+}
+
 # ============================================================================
 # THE REGISTRY
 # ============================================================================
@@ -2855,7 +2979,9 @@ fi
 #
 # Provenance of every ported label (44 rows, matching the four deleted drivers'
 # registries exactly: verify-phase-02.sh had 5, -03 had 14, -04 had 10, -05 had
-# 15). The three rows marked NEW are this plan's own additions.
+# 15). Rows marked NEW were added by this project's own plans -- 01-03 and
+# 01-04's static/build gates, and 01-05's three GUI-01 window checks -- and are
+# the only rows with no upstream provenance.
 run_own_checks() {
   # The --quick set: no build, no browser launch, no display, no network. These
   # run in BOTH modes -- --quick is a narrowing, never a different set.
@@ -2967,6 +3093,18 @@ run_own_checks() {
       "side05-no-second-backend|check_side05_no_second_backend"
       "cr01-different-profile-backend-survives|check_cr01_different_profile_backend_survives"
       "side04-token-not-in-environment|check_side04_token_not_in_environment"
+
+      # NEW (01-05): GUI-01's three window checks. All three need a built
+      # binary; the first two launch one, the third needs the live Theia dev
+      # app (and so goes through the same lazy-start wrapper the phase-02
+      # checks use). None of them opens a browser window during the shell's
+      # own startup -- 01-SPIKE-GUI-01.md observation 4 found that a window
+      # opened from inside the shell's DOMContentLoaded comes up with gURLBar
+      # permanently undefined, so a check that did would be asserting against
+      # a window upstream itself left half-initialised.
+      "gui01-single-shell-window|check_gui01_single_shell_window"
+      "gui01-browser-close-does-not-quit|node $REPO_ROOT/scripts/verify-gui01-window.mjs"
+      "gui01-command-registered|check_gui01_command_registered"
     )
   fi
 
