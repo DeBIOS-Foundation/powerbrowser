@@ -262,9 +262,10 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 | MIG-03 | Phase 1 | Complete |
 | MIG-04 | Phase 1 | Complete — closed by 01-04's build (smoke-firefox + smoke-theia PASS, six identity surfaces green on the built artifact with the positive control) |
 | GUI-01 | Phase 1 | Complete |
-| GUI-02 | Phase 1 | Pending |
+| GUI-02 | v2 | Deferred 2026-08-30 — `@theia/mini-browser` rejected at the D-22 gate on runtime surface (backend module + `vhost`), not supply chain |
 | GUI-03 | Phase 1 | Complete |
 | GUI-04 | Phase 1 | Complete |
+| SEC-01 | Phase 1 | Complete — satisfied by `theia/extensions/token-gate`; requirement recorded 2026-08-30 to anchor code that had carried only Sourcerer's decision IDs |
 | CFG-01 | Phase 2 | Pending |
 | CFG-02 | Phase 2 | Pending |
 | CFG-03 | Phase 2 | Pending |
