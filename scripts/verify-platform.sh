@@ -2980,8 +2980,9 @@ check_gui01_single_shell_window() {
 # Provenance of every ported label (44 rows, matching the four deleted drivers'
 # registries exactly: verify-phase-02.sh had 5, -03 had 14, -04 had 10, -05 had
 # 15). Rows marked NEW were added by this project's own plans -- 01-03 and
-# 01-04's static/build gates, and 01-05's three GUI-01 window checks -- and are
-# the only rows with no upstream provenance.
+# 01-04's static/build gates, 01-05's three GUI-01 window checks, and 01-06's
+# GUI-04 registry-shape pair -- and are the only rows with no upstream
+# provenance.
 run_own_checks() {
   # The --quick set: no build, no browser launch, no display, no network. These
   # run in BOTH modes -- --quick is a narrowing, never a different set.
@@ -3013,6 +3014,16 @@ run_own_checks() {
     # array would print "PASS -- all checks passed" having asserted nothing.
     "shell-csp-inline-attrs|check_shell_csp_inline_attrs"
     "shell04-log-redacts-token|check_shell04_log_redacts_token"
+
+    # NEW (01-06): GUI-04's bridge-contract assertion. Reads the TypeScript
+    # sources, never a compiled artifact, so it is honestly --quick: no build,
+    # no browser, no display, no network. The self-test is registered
+    # alongside it for the same reason every other self-test in this registry
+    # is -- a shape comparison that can only go green is not a check, and
+    # 01-05 shipped two assertions resting on a non-discriminating instrument
+    # before that was caught.
+    "gui04-registry-shape|node $REPO_ROOT/scripts/verify-registry-shape.mjs"
+    "gui04-registry-shape-self-test|node $REPO_ROOT/scripts/verify-registry-shape.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
