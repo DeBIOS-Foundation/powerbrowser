@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-07-PLAN.md
-last_updated: "2026-08-31T03:39:51.714Z"
+stopped_at: Completed 01-08-PLAN.md
+last_updated: "2026-08-31T04:39:37.729Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
   completed_phases: 1
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 7 of 7
+Plan: 2 of 8
 Status: Ready to execute
 Last activity: 2026-08-30 — Phase 01 execution started
 
@@ -64,6 +64,7 @@ Progress: [██████████] 100%
 | Phase 01 P04 | ~2h15m | 3 tasks | 5 files |
 | Phase 01 P05 | 50m | 3 tasks | 13 files |
 | Phase 01 P07 | 2h10m | 3 tasks | 12 files |
+| Phase 01 P08 | ~25min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,12 @@ Recent decisions affecting current work:
 - [Phase ?]: Diagnostics rows and the POWERBROWSER_ERROR_DIAGNOSTICS sentinel read one getFailureDetails() accessor, so the rendered surface and the machine-readable line cannot disagree
 - [Phase ?]: The two objdir-release checks are named --gate exclusions keyed on ledger entry 10 rather than deleted or narrowed
 - [Phase ?]: smoke-theia.sh is a registry row: the consolidated verifier is now a true superset of the validation strategy's full-suite command
+- [Phase ?]: 01-08: the residual-brand gate's non-zero exit is single-sourced through gateFailures(); reconciliation failures now fail the un-flagged run every registered call site invokes
+- [Phase ?]: 01-08: condition 4's unclaimed-probe walk moved above reconcile()'s post-rename early return -- a defence unreachable in the state it guards is not a defence
+- [Phase ?]: 01-08: the -PLAN.md provenance count moved 21->28 by ADDITION only (+2 driver consolidation, +5 INTERNAL-APIS.md catalogue rows); the six Sourcerer-era citations are byte-identical to the census-era set
+- [Phase ?]: 01-08: the preflight's display-surface set is DERIVED by walking the branding extension's browser directory at check time; a zero-file walk is its own failure, not a clean run
+- [Phase ?]: 01-08: verify-branding.mjs applies one shared assertDisplayForm() to both display surfaces, reading its expected values from the inventory rather than hard-coding them
+- [Phase ?]: 01-08: ledger items 15 and 16 stay OPEN -- no human was present, and no automated proxy was written for either perceptual walkthrough
 
 ### Pending Todos
 
@@ -124,6 +131,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-31T02:11:28.870Z
-Stopped at: Completed 01-07-PLAN.md
+Last session: 2026-08-31T04:39:28.279Z
+Stopped at: Completed 01-08-PLAN.md
 Resume file: None
