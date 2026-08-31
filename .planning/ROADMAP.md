@@ -54,7 +54,7 @@ Sourcerer's decision IDs as justification.)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 13/13 plans executed
+**Plans**: 14/15 plans executed
 
 Plans:
 **Wave 1**
@@ -111,7 +111,7 @@ Plans:
 
 **Wave 14** *(gap closure — the two blockers found in the verification apparatus itself)*
 
-- [ ] 01-14-PLAN.md — Close CR-A: bind `verify-shell-error-copy.mjs`'s rule (4) to a set of message-bearing bindings derived from the file under test, so a caught exception's `.message` is rejected by name as a raw exception string instead of matching the permissive `<identifier>.message` alternative, with two planted-fault self-test rows proven green under the pre-fix checker and red under the fixed one; and correct the UI-SPEC row that sanctions the shape the gate now rejects
+- [x] 01-14-PLAN.md — Close CR-A: bind `verify-shell-error-copy.mjs`'s rule (4) to a set of message-bearing bindings derived from the file under test, so a caught exception's `.message` is rejected by name as a raw exception string instead of matching the permissive `<identifier>.message` alternative, with two planted-fault self-test rows proven green under the pre-fix checker and red under the fixed one; and correct the UI-SPEC row that sanctions the shape the gate now rejects
 
 **Wave 15** *(gap closure — blocked on Wave 14 completion)*
 
@@ -227,7 +227,7 @@ than noisy.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Platform Extraction and Rename | 13/13 | In Progress|  |
+| 1. Platform Extraction and Rename | 14/15 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 0/TBD | Not started | - |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
