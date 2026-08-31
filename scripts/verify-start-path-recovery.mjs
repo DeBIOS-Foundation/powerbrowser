@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // scripts/verify-start-path-recovery.mjs
 //
-// health-gate-recovery-swaps (01-09 Task 1).
+// start-path-recovery (static) / health-gate-recovery-swaps (runtime) -- 01-09.
 //
 // The start path's recovery contract: a spawn that announces readiness, pins a
 // port, and then FAILS the health gate must not poison the rest of the browser
@@ -16,6 +16,21 @@
 // were treated as one condition, so a single transient health-gate failure
 // permanently skipped the initialisation block on every later, successful
 // respawn.
+//
+// HOW THE STATIC HALF ASSERTS (default invocation). Two facts are DERIVED
+// independently from TheiaService.sys.mjs at check time:
+//   A -- the instance field named in `_swap()`'s own early-return guard;
+//   B -- the instance field named in the guard of `_spawnAndGate`'s one-time
+//        initialisation block, located by its BODY (the block that sets the
+//        session cookie, calls the navigation helper and starts the health
+//        loop), never by a line number.
+// The assertion is A === B. Renaming the field at both sites keeps this green
+// -- correct, the invariant still holds. Re-keying the block onto anything else
+// goes red NAMING BOTH derived values. Deleting either site goes red naming
+// which derivation yielded nothing. There is no literal field name written into
+// this file for the tree to agree with. One ordering assertion rides along:
+// `_swap()` must set that field AFTER the navigation call, so a throwing swap
+// cannot leave the launch permanently marked done.
 //
 // HOW THE LOG HALF ASSERTS (--log <path>). Before matching anything, the
 // analyzer proves the sentinel prefixes it greps for are emitted BY THE CODE
@@ -38,15 +53,25 @@
 // (check_health_gate_recovery_swaps in verify-platform.sh) drives, so the
 // assertion that ships is the assertion that gets fault-proven.
 //
-// Usage:
-//   node scripts/verify-start-path-recovery.mjs --log <path> [--file <path>] [--shell-file <path>]
-//   node scripts/verify-start-path-recovery.mjs [--file <path>] [--shell-file <path>]
+// Static on purpose: both halves read source and a log, need no build, no
+// browser, no display and no network, so a regression in the recovery contract
+// costs seconds rather than a rebuild.
 //
-// Exit 0 pass, 1 fail.
+// Usage:
+//   node scripts/verify-start-path-recovery.mjs [--file <path>] [--shell-file <path>]
+//   node scripts/verify-start-path-recovery.mjs --log <path> [--file <path>] [--shell-file <path>]
+//   node scripts/verify-start-path-recovery.mjs --self-test
+//
+// Exit 0 pass, 1 fail. --self-test plants faults on both halves, requires each
+// to go red naming the drift, and requires two clean controls to go green -- a
+// self-test whose fixture is already red before any plant proves nothing about
+// the plants.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 
 const SELF = fileURLToPath(import.meta.url);
 const REPO_ROOT = join(dirname(SELF), "..");
@@ -101,6 +126,42 @@ function deriveDumpSentinels(shellSrc) {
   return found;
 }
 
+/** Derivation A: the instance field named in `_swap()`'s early-return guard. */
+function deriveSwapGuardField(src) {
+  const m = src.match(/_swap\(\)\s*\{\s*if\s*\(\s*this\.(_[A-Za-z0-9_]+)\s*\)\s*\{\s*return;/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Derivation B: the instance field named in the guard of `_spawnAndGate`'s
+ * one-time initialisation block -- located by its BODY (the block that sets the
+ * session cookie), never by a line number, so the block may move freely.
+ */
+function deriveOneTimeBlockField(src) {
+  const m = src.match(/if\s*\(([^)]*)\)\s*\{\s*PowerBrowserAPI\.setSessionCookie\(/);
+  if (!m) {
+    return { field: null, reason: "no `if (...) { PowerBrowserAPI.setSessionCookie(` block found" };
+  }
+  const body = src.slice(m.index, m.index + 1200);
+  if (!body.includes("this._swap()") || !body.includes("this._healthLoop()")) {
+    return {
+      field: null,
+      reason:
+        "the block guarding PowerBrowserAPI.setSessionCookie( no longer also calls this._swap() and " +
+        "this._healthLoop() -- the one-time initialisation block has been split, so there is nothing " +
+        "single left to key on",
+    };
+  }
+  const fieldMatch = m[1].match(/this\.(_[A-Za-z0-9_]+)/);
+  if (!fieldMatch) {
+    return {
+      field: null,
+      reason: `the one-time initialisation block's guard \`${m[1].trim()}\` names no instance field`,
+    };
+  }
+  return { field: fieldMatch[1], reason: null };
+}
+
 /**
  * The health-gate failure's log signature, derived from the `_fatal()` template
  * that writes it: its fixed leading text, up to the first interpolation. A
@@ -131,6 +192,59 @@ function assertEmitters(shellPath) {
         `the chrome bootstrap (${shellPath}) emits no \`dump(\` line beginning \`${prefix}\` -- ` +
           `this analyzer greps for it, so a match could only ever come from something other than the code under test`
       );
+    }
+  }
+}
+
+function assertStatic(supervisorPath) {
+  const raw = readSource(supervisorPath, "supervisor source");
+  if (raw === null) {
+    return;
+  }
+  const src = stripComments(raw);
+
+  const swapField = deriveSwapGuardField(src);
+  if (!swapField) {
+    fail(
+      "derivation A yielded nothing: `_swap()` has no `if (this.<field>) { return; }` early-return guard -- " +
+        "without it a swap can run twice, and there is no completion field left to compare against"
+    );
+  }
+
+  const block = deriveOneTimeBlockField(src);
+  if (!block.field) {
+    fail(`derivation B yielded nothing: ${block.reason}`);
+  }
+
+  if (swapField && block.field && swapField !== block.field) {
+    fail(
+      `the one-time initialisation block is keyed on \`this.${block.field}\` while \`_swap()\`'s own guard ` +
+        `reads \`this.${swapField}\` -- "a spawn has actually completed" and whatever \`this.${block.field}\` ` +
+        `records are two different facts, and treating them as one is the conflation that strands a launch on ` +
+        `the loading layer after a failed health gate`
+    );
+  }
+
+  // The completion field must be set AFTER the navigation returns, so a
+  // throwing swap leaves the launch retryable rather than permanently done.
+  if (swapField) {
+    const body = src.match(/_swap\(\)\s*\{[\s\S]*?\n {2}\},/);
+    if (!body) {
+      fail("could not isolate `_swap()`'s method body -- the assignment-order assertion would be vacuous");
+    } else {
+      const navIndex = body[0].indexOf("powerbrowserSwapToUrl(");
+      const setIndex = body[0].indexOf(`this.${swapField} = true`);
+      if (navIndex === -1) {
+        fail("`_swap()` no longer calls powerbrowserSwapToUrl( -- the navigation site this contract is about has moved");
+      } else if (setIndex === -1) {
+        fail(`\`_swap()\` never assigns \`this.${swapField} = true\` -- the completion field is never recorded`);
+      } else if (setIndex < navIndex) {
+        fail(
+          `\`_swap()\` sets \`this.${swapField} = true\` BEFORE calling powerbrowserSwapToUrl( -- a swap that ` +
+            `throws would leave the launch permanently marked done, reintroducing the conflation class this ` +
+            `check exists to remove`
+        );
+      }
     }
   }
 }
@@ -221,11 +335,203 @@ function assertLog(logPath, supervisorPath) {
 }
 
 // ---------------------------------------------------------------------------
+// --self-test: plant faults, require each to go red naming the drift, and
+// require clean controls to go green so every red is proven plant-caused.
+// ---------------------------------------------------------------------------
+
+/**
+ * The exact line shapes assertLog parses -- the clean control. Every log fault
+ * below is ONE mutation of this, so each red differs from the green control by
+ * exactly one thing.
+ */
+function cleanLogLines(failureText) {
+  return [
+    "POWERBROWSER_SHELL_READY chrome://powerbrowser/content/powerbrowser.xhtml",
+    `[PowerBrowserAPI] error: [TheiaService] ${failureText} 41234 never returned 200 within 3000ms.`,
+    'POWERBROWSER_BACKEND_READY {"port":41235,"pid":4242}',
+    `${SWAP_SENTINEL} http://127.0.0.1:41235/`,
+    `${DECK_SENTINEL} {"loading":"none","error":"none","diagnostics":"none","where":"swap"}`,
+    "",
+  ];
+}
+
+const SOURCE_FAULTS = [
+  {
+    name: "the one-time initialisation block re-keyed onto a different condition",
+    target: "supervisor",
+    apply: (s) => s.replace("if (!this._swapped) {", "if (!this._errorShown) {"),
+    expect: "is keyed on `this._errorShown` while `_swap()`'s own guard reads `this._swapped`",
+  },
+  {
+    name: "`_swap()`'s early-return guard removed, so derivation A yields nothing",
+    target: "supervisor",
+    apply: (s) => s.replace("  _swap() {\n    if (this._swapped) {\n      return;\n    }\n", "  _swap() {\n"),
+    expect: "derivation A yielded nothing",
+  },
+  {
+    name: "the completion field set before the navigation instead of after it",
+    target: "supervisor",
+    apply: (s) =>
+      s.replace(
+        "    this._browserElement.ownerDocument.defaultView.powerbrowserSwapToUrl(`http://127.0.0.1:${this._port}/`);\n    this._swapped = true;",
+        "    this._swapped = true;\n    this._browserElement.ownerDocument.defaultView.powerbrowserSwapToUrl(`http://127.0.0.1:${this._port}/`);"
+      ),
+    expect: "BEFORE calling powerbrowserSwapToUrl(",
+  },
+  {
+    name: "the swap sentinel renamed in the chrome bootstrap, so the emitter proof fails",
+    target: "shell",
+    apply: (s) => s.replace(`dump(\`${SWAP_SENTINEL} `, "dump(`POWERBROWSER_SHELL_NAVIGATED "),
+    expect: `emits no \`dump(\` line beginning \`${SWAP_SENTINEL}\``,
+  },
+];
+
+const LOG_FAULTS = [
+  {
+    name: "a log missing the swap sentinel",
+    apply: (lines) => lines.filter((l) => !l.startsWith(`${SWAP_SENTINEL} `)),
+    expect: `carries no ${SWAP_SENTINEL} sentinel`,
+  },
+  {
+    name: "a log missing the derived health-gate failure line",
+    apply: (lines) => lines.filter((l) => !l.includes("never returned 200")),
+    expect: "carries no health-gate failure line",
+  },
+  {
+    name: "a log whose swap deck-state reports the loading layer still displayed",
+    apply: (lines) => lines.map((l) => l.replace('"loading":"none"', '"loading":"flex"')),
+    expect: "reports the loading layer as",
+  },
+  {
+    name: "a log carrying two swap sentinels",
+    apply: (lines) => lines.flatMap((l) => (l.startsWith(`${SWAP_SENTINEL} `) ? [l, l] : [l])),
+    expect: `carries 2 ${SWAP_SENTINEL} sentinels`,
+  },
+  {
+    name: "a log in which the swap precedes the health-gate failure",
+    apply: (lines) => {
+      const failLine = lines.find((l) => l.includes("never returned 200"));
+      return [...lines.filter((l) => l !== failLine), failLine];
+    },
+    expect: "precedes the health-gate failure",
+  },
+];
+
+function runOnce(args) {
+  try {
+    const out = execFileSync(process.execPath, [SELF, ...args], { encoding: "utf8", stdio: "pipe" });
+    return { exitCode: 0, out };
+  } catch (err) {
+    return { exitCode: err.status ?? 1, out: `${err.stdout ?? ""}${err.stderr ?? ""}` };
+  }
+}
+
+function judge(name, expect, result) {
+  if (result.exitCode === 0) {
+    console.error(`  FAIL  ${name} -- planted fault did NOT go red`);
+    return false;
+  }
+  if (!result.out.includes(expect)) {
+    console.error(
+      `  FAIL  ${name} -- went red but did not name the drift (expected output to mention ${JSON.stringify(expect)})\n` +
+        result.out.replace(/^/gm, "        ")
+    );
+    return false;
+  }
+  console.log(`  ok    ${name} -- red, naming the drift`);
+  return true;
+}
+
+function runSelfTest(supervisorPath, shellPath) {
+  let supervisorSrc;
+  let shellSrc;
+  try {
+    supervisorSrc = readFileSync(supervisorPath, "utf8");
+    shellSrc = readFileSync(shellPath, "utf8");
+  } catch (err) {
+    console.error(`  FAIL  clean control -- cannot read a derivation source: ${err.message}`);
+    return false;
+  }
+  const failureText = deriveHealthFailureText(stripComments(supervisorSrc));
+  if (!failureText) {
+    console.error(
+      "  FAIL  clean control -- could not derive the health-gate failure signature from the supervisor " +
+        "source; every log row below would be built from an invented sentence"
+    );
+    return false;
+  }
+
+  const dir = mkdtempSync(join(tmpdir(), "verify-start-path-recovery-"));
+  let allOk = true;
+  try {
+    const cleanLog = join(dir, "clean.log");
+    writeFileSync(cleanLog, cleanLogLines(failureText).join("\n"));
+
+    // Clean controls FIRST: a self-test whose fixture is already red before any
+    // plant proves nothing about the plants.
+    const staticControl = runOnce(["--file", supervisorPath, "--shell-file", shellPath]);
+    if (staticControl.exitCode !== 0) {
+      console.error(
+        `  FAIL  clean control (static) -- the unmutated tree is already red:\n${staticControl.out.replace(/^/gm, "        ")}`
+      );
+      allOk = false;
+    } else {
+      console.log("  ok    clean control (static) -- green on the unmutated tree");
+    }
+    const logControl = runOnce(["--log", cleanLog, "--file", supervisorPath, "--shell-file", shellPath]);
+    if (logControl.exitCode !== 0) {
+      console.error(
+        `  FAIL  clean control (log) -- the unmutated clean log is already red:\n${logControl.out.replace(/^/gm, "        ")}`
+      );
+      allOk = false;
+    } else {
+      console.log("  ok    clean control (log) -- green on the unmutated clean log");
+    }
+
+    const supCopy = join(dir, "TheiaService.sys.mjs");
+    const shellCopy = join(dir, "powerbrowser.js");
+    for (const fault of SOURCE_FAULTS) {
+      const original = fault.target === "supervisor" ? supervisorSrc : shellSrc;
+      const mutated = fault.apply(original);
+      if (mutated === original) {
+        console.error(`  FAIL  ${fault.name} -- the fault did not apply; this self-test row proves nothing`);
+        allOk = false;
+        continue;
+      }
+      writeFileSync(supCopy, fault.target === "supervisor" ? mutated : supervisorSrc);
+      writeFileSync(shellCopy, fault.target === "shell" ? mutated : shellSrc);
+      if (!judge(fault.name, fault.expect, runOnce(["--file", supCopy, "--shell-file", shellCopy]))) {
+        allOk = false;
+      }
+    }
+
+    const clean = cleanLogLines(failureText);
+    const faultedLog = join(dir, "faulted.log");
+    for (const fault of LOG_FAULTS) {
+      const mutated = fault.apply(clean);
+      if (mutated.join("\n") === clean.join("\n")) {
+        console.error(`  FAIL  ${fault.name} -- the fault did not apply; this self-test row proves nothing`);
+        allOk = false;
+        continue;
+      }
+      writeFileSync(faultedLog, mutated.join("\n"));
+      if (!judge(fault.name, fault.expect, runOnce(["--log", faultedLog, "--file", supervisorPath, "--shell-file", shellPath]))) {
+        allOk = false;
+      }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  return allOk;
+}
+
+// ---------------------------------------------------------------------------
 
 const argv = process.argv.slice(2);
 let supervisorPath = DEFAULT_SUPERVISOR;
 let shellPath = DEFAULT_SHELL;
 let logPath = null;
+let selfTest = false;
 
 const needsValue = (i, flag) => {
   const value = argv[i + 1];
@@ -237,7 +543,9 @@ const needsValue = (i, flag) => {
 };
 
 for (let i = 0; i < argv.length; i += 1) {
-  if (argv[i] === "--file") {
+  if (argv[i] === "--self-test") {
+    selfTest = true;
+  } else if (argv[i] === "--file") {
     supervisorPath = needsValue(i, "--file");
     i += 1;
   } else if (argv[i] === "--shell-file") {
@@ -252,16 +560,29 @@ for (let i = 0; i < argv.length; i += 1) {
   }
 }
 
+if (selfTest) {
+  const faultCount = SOURCE_FAULTS.length + LOG_FAULTS.length;
+  console.log(`verify-start-path-recovery --self-test: planting ${faultCount} fault(s) plus 2 clean controls`);
+  if (runSelfTest(supervisorPath, shellPath)) {
+    console.log(`verify-start-path-recovery: PASS -- all ${faultCount + 2} self-test rows behaved as required`);
+    process.exit(0);
+  }
+  console.error("verify-start-path-recovery: FAIL -- see the self-test rows above");
+  process.exit(1);
+}
+
 assertEmitters(shellPath);
 if (logPath) {
   assertLog(logPath, supervisorPath);
+} else {
+  assertStatic(supervisorPath);
 }
 
 if (failures.length === 0) {
   console.log(
     logPath
       ? `verify-start-path-recovery: PASS -- the launch recovered from a failed health gate and swapped exactly once (${logPath})`
-      : `verify-start-path-recovery: PASS -- the swap and deck-state sentinels are emitted by ${shellPath}`
+      : `verify-start-path-recovery: PASS -- the one-time initialisation block and _swap()'s guard are keyed on the same completion field (${supervisorPath})`
   );
   process.exit(0);
 }
