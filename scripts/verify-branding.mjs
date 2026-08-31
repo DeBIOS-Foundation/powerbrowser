@@ -34,9 +34,27 @@
 //
 // Later plans extend this same file rather than adding sibling scripts.
 
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { withFirefoxPage } from './lib/firefox-bidi.mjs';
 
 const url = process.argv[2] || 'http://localhost:3000';
+
+// -- Expected values come from the inventory, not from this file (01-08) --
+// This file's own comments already argued that inventory/brand-tokens.json is
+// the third source neither the rendered value nor the checker was produced
+// from, and then hard-coded the literals anyway -- which is the same shape as
+// the bug those comments describe. They are read at run time now, so a rename
+// pass that rewrote both the JSX and this checker still fails against a source
+// it did not write.
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const EXPECT = JSON.parse(
+    readFileSync(join(REPO_ROOT, 'inventory/brand-tokens.json'), 'utf8')
+).brand_display_expectations;
+const DISPLAY_FORM = EXPECT.variants.release.brand_short_name;
+const IDENTIFIER_FORM = new RegExp(EXPECT.identifier_form);
 
 const FIND_FRONTEND_CONFIG =
     "Object.getOwnPropertySymbols(window).map(s => window[s])" +
@@ -56,6 +74,33 @@ function __getByName(container, name) {
 `;
 
 const NO_STOCK_IDENTITY = /Theia|Eclipse/i;
+
+/**
+ * The three assertions EVERY display surface must satisfy, applied through one
+ * function so a surface cannot pass by carrying fewer of them than its sibling.
+ *
+ * That is not hypothetical. Until 01-08 the About dialog check carried two
+ * assertions where the welcome check carried five, and the two it was missing
+ * were exactly the two that would have caught `<h3>PowerBrowser</h3>` rendering
+ * as user-visible product identity. The bug class was found and fixed once, on
+ * the welcome widget, and not generalised -- so it survived on the surface next
+ * to it. Fixed here, where both callers route through, so a third display
+ * surface added later inherits the assertion instead of having to remember it.
+ */
+function assertDisplayForm(surface, text) {
+    if (typeof text !== 'string') {
+        throw new Error(`${surface} textContent was never read: ${JSON.stringify(text)}`);
+    }
+    if (!text.includes(DISPLAY_FORM)) {
+        throw new Error(`${surface} textContent missing the display form ${JSON.stringify(DISPLAY_FORM)}: ${JSON.stringify(text)}`);
+    }
+    if (IDENTIFIER_FORM.test(text)) {
+        throw new Error(`${surface} textContent leaks the IDENTIFIER form ${JSON.stringify(EXPECT.identifier_form)} into a display surface: ${JSON.stringify(text)}`);
+    }
+    if (NO_STOCK_IDENTITY.test(text)) {
+        throw new Error(`${surface} textContent matched /Theia|Eclipse/i: ${JSON.stringify(text)}`);
+    }
+}
 
 // -- BRAND-05 surface: the PowerBrowser welcome widget (D-33) --
 // Not toggled through the command (AbstractViewContribution.toggleView()
@@ -81,22 +126,13 @@ async function checkWelcome({ evaluate, waitFor }) {
         }
     })()`);
 
-    // The DISPLAY form, with the space (inventory/brand-tokens.json's
-    // brand_display_expectations). Until 01-07 this expected `PowerBrowser`,
-    // the IDENTIFIER form, and the widget rendered it -- the mechanical rename
-    // had rewritten both the literal and the expectation that checks it, so
-    // they agreed and the wrong product name shipped unnoticed. That is
-    // Pitfall 1 exactly, and it is why the inventory is a third source neither
-    // side writes.
-    if (!text.includes('Power Browser')) {
-        throw new Error(`welcome widget textContent missing "Power Browser": ${JSON.stringify(text)}`);
-    }
-    if (/PowerBrowser/.test(text)) {
-        throw new Error(`welcome widget textContent leaks the IDENTIFIER form "PowerBrowser" into a display surface: ${JSON.stringify(text)}`);
-    }
-    if (NO_STOCK_IDENTITY.test(text)) {
-        throw new Error(`welcome widget textContent matched /Theia|Eclipse/i: ${JSON.stringify(text)}`);
-    }
+    // The DISPLAY form, with the space. Until 01-07 this expected the
+    // IDENTIFIER form and the widget rendered it -- the mechanical rename had
+    // rewritten both the literal and the expectation that checks it, so they
+    // agreed and the wrong product name shipped unnoticed. That is Pitfall 1
+    // exactly, and it is why the inventory is a third source neither side
+    // writes.
+    assertDisplayForm('welcome widget', text);
 
     const version = await evaluate(`(async function() {
         ${PRELUDE}
@@ -124,9 +160,13 @@ async function checkAbout({ evaluate, waitFor }) {
         "document.querySelector('.theia-aboutDialog')?.textContent || false"
     );
 
-    if (NO_STOCK_IDENTITY.test(text)) {
-        throw new Error(`about dialog textContent matched /Theia|Eclipse/i: ${JSON.stringify(text)}`);
-    }
+    // The same three assertions the welcome surface carries, through the same
+    // function -- this is the fix for the gap that let this dialog render the
+    // identifier form while the check printed a pass.
+    assertDisplayForm('about dialog', text);
+
+    // The two below have no welcome counterpart: they are specific to D-35's
+    // dropped renderExtensions()/renderHeader(), so they stay local.
     if (/@theia\//.test(text)) {
         throw new Error(`about dialog textContent matched /@theia\\//: ${JSON.stringify(text)}`);
     }
@@ -168,8 +208,8 @@ async function main() {
         // disagreed and this check was simply red for a reason that was never
         // the product's fault.
         const title = await evaluate('document.title');
-        if (title !== 'Power Browser') {
-            throw new Error(`document.title was ${JSON.stringify(title)}, expected "Power Browser"`);
+        if (title !== DISPLAY_FORM) {
+            throw new Error(`document.title was ${JSON.stringify(title)}, expected ${JSON.stringify(DISPLAY_FORM)}`);
         }
         surfacesRun.push('title');
 

@@ -31,7 +31,7 @@ export class PowerBrowserAboutDialog extends AboutDialog {
     protected renderContent(): React.ReactNode {
         return <div className='ad-container'>
             <img src={POWERBROWSER_MARK_DATA_URI} alt='' width={48} height={48} />
-            <h3>PowerBrowser</h3>
+            <h3>Power Browser</h3>
             {this.applicationInfo && <p>Version {this.applicationInfo.version}</p>}
             <p>
                 <a

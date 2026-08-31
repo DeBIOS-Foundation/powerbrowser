@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 7
+open_count: 6
 waived_count: 0
-fixed_count: 10
+fixed_count: 11
 total_count: 17
-last_updated: 2026-08-31T04:25:03.312Z
+last_updated: 2026-08-31T04:37:15.633Z
 ---
 
 # Broken Windows Ledger
@@ -31,7 +31,7 @@ last_updated: 2026-08-31T04:25:03.312Z
 | 14 | 01 | deviation | scripts/lib/firefox-bidi.mjs |  | Every withFirefoxPage caller that passes a URL launches TWO windows (the shell plus a stock browser window for the URL argument), and contexts[0] resolves to the shell's own supervised Theia frontend rather than the URL passed. Pre-existing, unrelated to 01-05's change: the four _run_app_check_mjs checks boot a dev app at localhost:3000 they then do not read. | open |  | 2026-08-31T00:39:33.163Z |  |
 | 15 | 01 | unrun-verify | .planning/phases/01-platform-extraction-and-rename/01-VALIDATION.md |  | GUI-01 manual browser-window verification not performed: 01-07 executed autonomously with no human present. Five steps outstanding (launch app; open a browser window; address bar takes keyboard focus and navigates a typed URL; an in-window modal appears; closing the window returns the shell with the app still running). Automation cannot substitute -- BiDi cannot see chrome contexts on Linux (ledger 7). | open |  | 2026-08-31T02:09:45.801Z |  |
 | 16 | 01 | unrun-verify | .planning/phases/01-platform-extraction-and-rename/01-VALIDATION.md |  | GUI-03 manual customize-bridge verification not performed: 01-07 executed autonomously with no human present. Three steps outstanding (with the dev flag on, edit customize.css and see the shell restyle without a rebuild; delete it; see the shell revert). Its automatable halves -- inertness and flag-gating -- are green (verify-customize-inert, verify-dev-flag-off); only the perceptual half is open. | open |  | 2026-08-31T02:09:45.906Z |  |
-| 17 | 01 | deviation | scripts/verify-branding-preflight.mjs |  | The preflight's display-surface list is HAND-KEPT, and that omission is exactly what let the welcome widget render the identifier form through the whole rename (fixed in 01-07 by adding the file). The list should derive the set of display surfaces from the tree rather than enumerate it; until then, any new file that renders the product name must be added here by hand or the leak class returns. | open |  | 2026-08-31T02:09:52.011Z |  |
+| 17 | 01 | deviation | scripts/verify-branding-preflight.mjs |  | The preflight's display-surface list is HAND-KEPT, and that omission is exactly what let the welcome widget render the identifier form through the whole rename (fixed in 01-07 by adding the file). The list should derive the set of display surfaces from the tree rather than enumerate it; until then, any new file that renders the product name must be added here by hand or the leak class returns. | fixed | Closed by plan 01-08 Task 2, which fixed the class rather than the site: section 6 of verify-branding-preflight.mjs now DERIVES its display-surface set by reading theia/extensions/branding/src/browser/ at check time, so it goes red when a leaking surface is added and red when that directory disappears. A zero-file walk is its own distinct failure, not a clean run. Proven both ways -- a scratch .tsx dropped into that directory was rejected by name with the script unedited, and the self-test now copies the whole directory and plants the identifier form in the About dialog copy. The walk reads the filesystem, not the git index, so unlike scan-brand-residue.mjs it also sees an unstaged new file. Residual exposure, recorded as a backstop truth rather than as a closed gap: a display surface authored OUTSIDE that directory and outside the inventory-declared variant files is still not reached by this scan and rests on code review. | 2026-08-31T02:09:52.011Z | 2026-08-31T04:37:15.633Z |
 
 ````json
 [
@@ -234,10 +234,10 @@ last_updated: 2026-08-31T04:25:03.312Z
     "file": "scripts/verify-branding-preflight.mjs",
     "line": null,
     "description": "The preflight's display-surface list is HAND-KEPT, and that omission is exactly what let the welcome widget render the identifier form through the whole rename (fixed in 01-07 by adding the file). The list should derive the set of display surfaces from the tree rather than enumerate it; until then, any new file that renders the product name must be added here by hand or the leak class returns.",
-    "status": "open",
-    "reason": "",
+    "status": "fixed",
+    "reason": "Closed by plan 01-08 Task 2, which fixed the class rather than the site: section 6 of verify-branding-preflight.mjs now DERIVES its display-surface set by reading theia/extensions/branding/src/browser/ at check time, so it goes red when a leaking surface is added and red when that directory disappears. A zero-file walk is its own distinct failure, not a clean run. Proven both ways -- a scratch .tsx dropped into that directory was rejected by name with the script unedited, and the self-test now copies the whole directory and plants the identifier form in the About dialog copy. The walk reads the filesystem, not the git index, so unlike scan-brand-residue.mjs it also sees an unstaged new file. Residual exposure, recorded as a backstop truth rather than as a closed gap: a display surface authored OUTSIDE that directory and outside the inventory-declared variant files is still not reached by this scan and rests on code review.",
     "recorded_at": "2026-08-31T02:09:52.011Z",
-    "resolved_at": null
+    "resolved_at": "2026-08-31T04:37:15.633Z"
   }
 ]
 ````

@@ -39,7 +39,7 @@
 //   node scripts/verify-branding-preflight.mjs
 //   node scripts/verify-branding-preflight.mjs --self-test
 
-import { readFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, mkdirSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -348,13 +348,46 @@ function runChecks(root) {
         );
     }
     displaySurfaces.push('theia/applications/browser/package.json');
-    // 01-07: the welcome widget renders the product name as JSX text, and it
-    // was NOT on this list -- so `<h1>PowerBrowser</h1>` sat in a display
-    // surface through the whole rename, with verify-branding.mjs renamed to
-    // expect exactly that value. Two files agreeing with each other is not a
-    // check; this list is the third source that no rename pass writes, and the
-    // omission is what let the leak through.
-    displaySurfaces.push('theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx');
+
+    // The branding extension's browser sources are DERIVED, not enumerated.
+    //
+    // 01-07 hand-appended the welcome widget here after `<h1>PowerBrowser</h1>`
+    // had sat in a display surface through the entire rename, unseen because
+    // that one path was missing from this list. 01-08 fixes the class rather
+    // than the site: a hand-kept list can only ever cover the file someone
+    // remembered, and this directory is where display surfaces are authored, so
+    // the set is read from the directory at check time. It therefore goes red
+    // when a leaking surface is ADDED and red when the directory it derives
+    // from DISAPPEARS -- neither of which an appended path can do.
+    //
+    // NOTE ON WHAT THIS SEES: this walks the FILESYSTEM, not the git index.
+    // Unlike scan-brand-residue.mjs -- which iterates `git ls-files` and is
+    // therefore blind to an unstaged new file -- a leaking surface here is
+    // caught before it is ever staged.
+    //
+    // The variant files and the Theia application manifest above stay as
+    // explicitly named files: they are specific declared paths whose source is
+    // the inventory, not a directory whose membership can grow.
+    const BRANDING_BROWSER_DIR = 'theia/extensions/branding/src/browser';
+    let brandingSources = [];
+    try {
+        brandingSources = readdirSync(join(root, BRANDING_BROWSER_DIR))
+            .filter((n) => n.endsWith('.ts') || n.endsWith('.tsx'))
+            .sort()
+            .map((n) => `${BRANDING_BROWSER_DIR}/${n}`);
+    } catch {
+        brandingSources = [];
+    }
+    if (brandingSources.length === 0) {
+        // Same non-vacuity rule this file applies to its other derived sets: a
+        // walk that yields nothing has not proven the surfaces are clean, it has
+        // proven nothing at all.
+        r.fail(
+            `${BRANDING_BROWSER_DIR}/ yielded ZERO TypeScript source files, so the display-surface leak scan ` +
+            'checked nothing. An empty derived set is a failure, not a clean run.',
+        );
+    }
+    displaySurfaces.push(...brandingSources);
     // `<` joins the space and the quote as a terminator for the same reason:
     // `PowerBrowser<` is a JSX text node closing its tag, i.e. a rendered
     // string, while `PowerBrowserWelcomeWidget` (a class name) and
@@ -457,7 +490,6 @@ function selfTest() {
             'patches/010-powerbrowser-identity.patch',
             'scripts/verify-branding-identity.mjs',
             'theia/applications/browser/package.json',
-            'theia/extensions/branding/src/browser/powerbrowser-mark.ts',
             'powerbrowser/branding/mark.svg',
             'powerbrowser/powerbrowser.desktop',
             'powerbrowser/powerbrowser-release.desktop',
@@ -472,6 +504,16 @@ function selfTest() {
                 `powerbrowser/branding/${v}/default128.png`,
             );
         }
+        // The WHOLE branding browser directory, not one remembered file from
+        // it. Section 6 now derives its display-surface set by walking this
+        // directory, so a fixture carrying a single file would exercise the
+        // derived walk vacuously -- it would have almost nothing to walk, and
+        // the plant below would land in a file the fixture does not contain.
+        const brandingDir = 'theia/extensions/branding/src/browser';
+        for (const name of readdirSync(join(REPO_ROOT, brandingDir))) {
+            if (name.endsWith('.ts') || name.endsWith('.tsx')) copy.push(`${brandingDir}/${name}`);
+        }
+
         for (const rel of copy) {
             const src = join(REPO_ROOT, rel);
             if (!existsSync(src)) continue;
@@ -521,7 +563,31 @@ function selfTest() {
             }
         }
 
-        // Second plant: an inventory with zero brand-display rows must FAIL
+        // Second plant (01-08): the identifier form as a JSX text node in the
+        // About dialog's copy. This is the same plant-and-require-red shape as
+        // the branding-term plant above, aimed at the DERIVED half of the
+        // display-surface set: the About dialog is reached only because section
+        // 6 walks the branding browser directory, never because anyone
+        // remembered to append its path. It is also the exact defect this plan
+        // closes -- `<h3>PowerBrowser</h3>` shipped as rendered display text
+        // while both guards that should have seen it stayed green.
+        writeFileSync(ftlPath, readFileSync(join(REPO_ROOT, ftlRel)));
+        const aboutRel = 'theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx';
+        const aboutPath = join(dir, aboutRel);
+        const aboutOriginal = readFileSync(aboutPath, 'utf8');
+        writeFileSync(aboutPath, aboutOriginal.replace('<h3>Power Browser</h3>', '<h3>PowerBrowser</h3>'));
+        const aboutPlanted = runChecks(dir);
+        const aboutMsg = aboutPlanted.failures.find((f) => f.includes(aboutRel) && f.includes('IDENTIFIER form'));
+        if (!aboutMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the identifier form planted as a JSX text node in ${aboutRel} was NOT rejected; the derived display-surface walk did not reach it`);
+            for (const f of aboutPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- planted the identifier form in ${aboutRel} and it was REJECTED by the DERIVED surface walk: ${aboutMsg}`);
+        }
+        writeFileSync(aboutPath, aboutOriginal);
+
+        // Third plant: an inventory with zero brand-display rows must FAIL
         // with a distinct message, never pass silently having checked nothing.
         writeFileSync(ftlPath, readFileSync(join(REPO_ROOT, ftlRel)));
         const invPath = join(dir, 'inventory/brand-tokens.json');
