@@ -32,6 +32,31 @@
 // `_swap()` must set that field AFTER the navigation call, so a throwing swap
 // cannot leave the launch permanently marked done.
 //
+// 01-11 added two more assertions to the same static half, in the same
+// derive-both-sides-and-compare terms:
+//   C -- the error layer is SINGLE-SOURCED. The supervisor's show/hide pair is
+//        located structurally (the two methods that call an
+//        `ownerDocument.defaultView.<global>(` and that guard on the SAME
+//        instance field, one setting it true and one setting it false -- the
+//        pairing is what distinguishes them from `_swap()`, which has the show
+//        shape and no partner). That yields the DECLARED error-layer API: the
+//        two window globals the supervisor is willing to reach the layer
+//        through. Independently, the bootstrap's own local binding for that
+//        element is read out of one of those globals' bodies, and the set of
+//        enclosing bootstrap functions that assign `<binding>.style.display` is
+//        collected. The assertion is set equality between the two. It goes red
+//        on an ADDITION (a third function blanks the layer, which is exactly the
+//        pre-01-11 source: the DOM went blank while the supervisor's repaint
+//        guard stayed set, and a failed Retry left a dead screen for the rest of
+//        the session) and on a REMOVAL (a hide global that stops writing it) --
+//        the property a hand-kept list can never have. No global name, function
+//        name or element id is a literal in this file.
+//   D -- `retry()`'s shape: it must clear the error state BEFORE re-entering the
+//        restart path, using the hide method derived in C, and must contain no
+//        spawn call of its own so `_restart()` stays the single spawn entry
+//        point and the shared in-flight guard keeps serializing a Retry against
+//        the health loop and the background recovery probe.
+//
 // HOW THE LOG HALF ASSERTS (--log <path>). Before matching anything, the
 // analyzer proves the sentinel prefixes it greps for are emitted BY THE CODE
 // UNDER TEST -- they must appear as `dump(` literals in powerbrowser.js -- and
@@ -283,6 +308,235 @@ function assertTerminalHandlerCoverage(supervisorSrc, shellSrc, supervisorFile, 
 }
 
 /**
+ * Every method the supervisor's exported object declares, mapped to its body.
+ * Bodies are delimited the same way `assertStatic` already isolates `_swap()`'s:
+ * from the declaration line to the object literal's own two-space `},`.
+ */
+function deriveSupervisorMethodBodies(src) {
+  const bodies = new Map();
+  for (const m of src.matchAll(/^ {2}(?:async )?([A-Za-z_$][\w$]*)\([^)]*\)\s*\{$/gm)) {
+    const rest = src.slice(m.index);
+    const end = rest.indexOf("\n  },");
+    bodies.set(m[1], end === -1 ? rest : rest.slice(0, end));
+  }
+  return bodies;
+}
+
+/**
+ * Derivation C, first half: the supervisor's DECLARED error-layer API -- the
+ * window globals it is willing to reach that layer through, plus the two methods
+ * and the guard field that identify them.
+ *
+ * Located structurally, with no name written down here for the tree to agree
+ * with: among the methods that call an `ownerDocument.defaultView.<global>(`,
+ * find the pair that guards on the SAME instance field, one with
+ * `if (this.<F>)` setting `<F> = true` and the other with `if (!this.<F>)`
+ * setting `<F> = false`. `_swap()` has the first shape and no partner for its
+ * own field, so the pairing is what disambiguates the error layer from the swap.
+ */
+function deriveErrorLayerApi(src) {
+  const candidates = [];
+  for (const [name, body] of deriveSupervisorMethodBodies(src)) {
+    const globals = [...body.matchAll(/ownerDocument\.defaultView\.([A-Za-z_$][\w$]*)\s*\(/g)].map((g) => g[1]);
+    if (globals.length === 0) {
+      continue;
+    }
+    candidates.push({
+      name,
+      globals,
+      guardTrue: body.match(/if\s*\(\s*this\.(_[A-Za-z0-9_]+)\s*\)\s*\{\s*return;/)?.[1],
+      guardFalse: body.match(/if\s*\(\s*!\s*this\.(_[A-Za-z0-9_]+)\s*\)\s*\{\s*return;/)?.[1],
+      setTrue: body.match(/this\.(_[A-Za-z0-9_]+)\s*=\s*true\b/)?.[1],
+      setFalse: body.match(/this\.(_[A-Za-z0-9_]+)\s*=\s*false\b/)?.[1],
+    });
+  }
+  if (candidates.length === 0) {
+    return { reason: "no supervisor method reaches the chrome document through `ownerDocument.defaultView.<global>(` at all" };
+  }
+  for (const show of candidates) {
+    if (!show.guardTrue || show.setTrue !== show.guardTrue) {
+      continue;
+    }
+    const hide = candidates.find(
+      (c) => c.name !== show.name && c.guardFalse === show.guardTrue && c.setFalse === show.guardTrue
+    );
+    if (!hide) {
+      continue;
+    }
+    return {
+      showMethod: show.name,
+      hideMethod: hide.name,
+      guardField: show.guardTrue,
+      showGlobal: show.globals[0],
+      hideGlobal: hide.globals[0],
+      api: new Set([...show.globals, ...hide.globals]),
+      reason: null,
+    };
+  }
+  return {
+    reason:
+      "no pair of supervisor methods shares one guard field with one setting it true and the other setting " +
+      "it false, so the show/hide pair that owns the error layer cannot be identified structurally",
+  };
+}
+
+/**
+ * Derivation C, second half: the bootstrap's own local binding for the error
+ * layer -- read out of the body of one of the globals derived above, so the
+ * element id never appears in this file.
+ *
+ * Either global will do and BOTH are tried, deliberately: deriving only from the
+ * hide global would make "the hide global stopped writing the element's
+ * visibility" a derivation dead-end rather than a set-equality red, and that
+ * removal is precisely one of the two directions this rule exists to catch.
+ */
+function deriveErrorLayerBinding(shellSrc, api) {
+  const tried = [];
+  for (const fnName of [api.showGlobal, api.hideGlobal]) {
+    if (!fnName) {
+      continue;
+    }
+    tried.push(fnName);
+    const decl = shellSrc.match(new RegExp(`function\\s+${fnName}\\s*\\([^)]*\\)\\s*\\{`));
+    if (!decl) {
+      continue;
+    }
+    const rest = shellSrc.slice(decl.index + decl[0].length);
+    const end = rest.indexOf("\n    };");
+    const body = end === -1 ? rest : rest.slice(0, end);
+    const write = body.match(/([A-Za-z_$][\w$]*)\.style\.display\s*=/);
+    if (write) {
+      return { binding: write[1], via: fnName, reason: null };
+    }
+  }
+  return {
+    binding: null,
+    via: null,
+    reason:
+      `neither of the error-layer globals the supervisor declares (${tried.join(", ")}) is a bootstrap ` +
+      `function that assigns an element's \`.style.display\` -- the layer's own binding cannot be derived, ` +
+      `so the set equality below would have nothing to compare`,
+  };
+}
+
+/**
+ * Derivation C, third half: every enclosing bootstrap function that assigns
+ * `<binding>.style.display`. The enclosing function is the nearest preceding
+ * `function <name>(` declaration; an assignment with no enclosing named function
+ * is reported by line number rather than dropped, because an anonymous writer is
+ * exactly the case this rule must not miss.
+ */
+function deriveErrorLayerVisibilityWriters(shellSrc, binding) {
+  const writers = new Set();
+  const anonymous = [];
+  for (const m of shellSrc.matchAll(new RegExp(`\\b${binding}\\.style\\.display\\s*=`, "g"))) {
+    const before = shellSrc.slice(0, m.index);
+    const decls = [...before.matchAll(/function\s+([A-Za-z_$][\w$]*)\s*\(/g)];
+    if (decls.length === 0) {
+      anonymous.push(before.split("\n").length);
+    } else {
+      writers.add(decls[decls.length - 1][1]);
+    }
+  }
+  return { writers, anonymous };
+}
+
+/**
+ * Assertion C: the error layer has exactly ONE visibility owner -- the
+ * supervisor's own show/hide pair -- asserted as set equality between two
+ * derivations that never consult each other's literals.
+ */
+function assertErrorLayerSingleSourced(src, shellSrc, shellPath) {
+  const api = deriveErrorLayerApi(src);
+  if (!api.showMethod) {
+    fail(`derivation C yielded nothing: ${api.reason} -- the set equality below would be vacuous`);
+    return null;
+  }
+
+  const { binding, reason } = deriveErrorLayerBinding(shellSrc, api);
+  if (!binding) {
+    fail(`derivation C yielded nothing: ${reason} (${shellPath})`);
+    return api;
+  }
+
+  const { writers, anonymous } = deriveErrorLayerVisibilityWriters(shellSrc, binding);
+  for (const line of anonymous) {
+    fail(
+      `the chrome bootstrap writes the error layer's visibility at line ${line} from inside no named ` +
+        `function -- an anonymous writer is invisible to the ownership rule below, which is the case it ` +
+        `must not miss`
+    );
+  }
+
+  const extra = [...writers].filter((name) => !api.api.has(name));
+  const missing = [...api.api].filter((name) => !writers.has(name));
+
+  if (extra.length > 0) {
+    fail(
+      `${extra.join(", ")} writes the error layer's visibility from outside the supervisor's own show/hide ` +
+        `pair (declared API: ${[...api.api].join(", ")}; observed writers: ${[...writers].join(", ")}) -- a ` +
+        `second owner makes the DOM and the supervisor's \`${api.guardField}\` flag disagree, which is what ` +
+        `left a failed Retry on a blank screen with no message, no Retry and no Details for the rest of the ` +
+        `session`
+    );
+  }
+  if (missing.length > 0) {
+    fail(
+      `${missing.join(", ")} no longer writes the error layer's visibility at all, yet the supervisor still ` +
+        `reaches the layer through it (declared API: ${[...api.api].join(", ")}; observed writers: ` +
+        `${[...writers].join(", ")}) -- the supervisor would believe it had hidden or shown a layer that ` +
+        `never moved`
+    );
+  }
+  return api;
+}
+
+/**
+ * Assertion D: `retry()`'s shape. The Retry control is the one caller that has
+ * just taken the message, the Retry and the Details off the user's screen, so it
+ * is the one caller that owes a repaint when the restart fails again.
+ */
+function assertRetryClearsErrorState(src, api, supervisorPath) {
+  if (!api || !api.hideMethod) {
+    return;
+  }
+  const body = deriveSupervisorMethodBodies(src).get("retry");
+  if (!body) {
+    fail(
+      `could not isolate \`retry()\`'s method body in ${supervisorPath} -- every assertion about the Retry ` +
+        `entry point would be vacuous`
+    );
+    return;
+  }
+
+  const hideIndex = body.indexOf(`this.${api.hideMethod}(`);
+  const restartIndex = body.indexOf("this._restart()");
+  if (restartIndex === -1) {
+    fail("`retry()` no longer calls `this._restart()` -- the restart path this contract is about has moved");
+  } else if (hideIndex === -1) {
+    fail(
+      `\`retry()\` never calls \`this.${api.hideMethod}()\`, so the repaint guard \`${api.guardField}\` is ` +
+        `never released: the first Retry that fails leaves the error layer hidden and every later repaint is ` +
+        `swallowed for the life of the session`
+    );
+  } else if (hideIndex > restartIndex) {
+    fail(
+      `\`retry()\` calls the restart path BEFORE clearing the error state (\`this.${api.hideMethod}()\` at ` +
+        `index ${hideIndex}, \`this._restart()\` at index ${restartIndex}) -- the restart's own failure would ` +
+        `then paint through a guard that is still set, and the clear would land after it`
+    );
+  }
+
+  if (body.includes("_spawnAndGate(")) {
+    fail(
+      "`retry()` spawns directly rather than going through `_restart()` -- `_restart()` is the single spawn " +
+        "entry point, and its shared in-flight guard is what stops a Retry from racing a second spawn against " +
+        "the health loop and the background recovery probe"
+    );
+  }
+}
+
+/**
  * The health-gate failure's log signature, derived from the `_fatal()` template
  * that writes it: its fixed leading text, up to the first interpolation. A
  * template that moved makes every log assertion below vacuous, so this failing
@@ -325,7 +579,11 @@ function assertStatic(supervisorPath, shellPath) {
 
   const shellRaw = readSource(shellPath, "chrome bootstrap source");
   if (shellRaw !== null) {
-    assertTerminalHandlerCoverage(src, stripComments(shellRaw), basename(supervisorPath), shellPath);
+    const shellSrc = stripComments(shellRaw);
+    assertTerminalHandlerCoverage(src, shellSrc, basename(supervisorPath), shellPath);
+    // 01-11: derivations C and D ride the already registered start-path-recovery
+    // row rather than minting a second one.
+    assertRetryClearsErrorState(src, assertErrorLayerSingleSourced(src, shellSrc, shellPath), supervisorPath);
   }
 
   const swapField = deriveSwapGuardField(src);
@@ -525,6 +783,58 @@ const SOURCE_FAULTS = [
     apply: (s) => s.replace(/\bTheiaService\.(?:start|retry)\([^;]*/g, "void 0"),
     expect: "the terminal-handler coverage rule found nothing to assert about",
   },
+  {
+    // 01-11, the ADDITION side of derivation C's set equality: this reproduces
+    // the pre-01-11 source exactly -- the Retry global blanking the layer behind
+    // the supervisor's back. The binding it writes is derived from the tree, not
+    // written down here.
+    name: "a third bootstrap function writing the error layer's visibility",
+    target: "shell",
+    apply: (s, ctx) => {
+      const { binding } = deriveErrorLayerBinding(stripComments(s), deriveErrorLayerApi(stripComments(ctx.supervisorSrc)));
+      return binding
+        ? s.replace(/(\n(\s*))(\w+\.retry\(\))/, (_m, lead, _indent, call) => `${lead}${binding}.style.display = "none";${lead}${call}`)
+        : s;
+    },
+    expect: "writes the error layer's visibility from outside the supervisor's own show/hide pair",
+  },
+  {
+    // 01-11, the REMOVAL side of the same set equality -- proving the rule is
+    // not one-directional. A rule that only catches additions would stay green
+    // while the supervisor believed it was hiding a layer that never moved.
+    name: "the error layer's hide global no longer writing the element's visibility",
+    target: "shell",
+    apply: (s, ctx) => {
+      const api = deriveErrorLayerApi(stripComments(ctx.supervisorSrc));
+      const { binding } = deriveErrorLayerBinding(stripComments(s), api);
+      if (!binding || !api.hideGlobal) {
+        return s;
+      }
+      return s.replace(
+        new RegExp(`(function\\s+${api.hideGlobal}\\s*\\([^)]*\\)\\s*\\{)([\\s\\S]*?)(\\n    \\};)`),
+        (_m, head, body, tail) => head + body.replace(new RegExp(`\\n\\s*${binding}\\.style\\.display\\s*=[^;]*;`), "") + tail
+      );
+    },
+    expect: "no longer writes the error layer's visibility at all",
+  },
+  {
+    // 01-11, derivation D. Deliberately an ORDER swap rather than a deletion:
+    // the deletion is already covered by the shell-error-contract analyzer, and
+    // an order swap is the failure mode a presence-only assertion would miss.
+    name: "retry() calling the restart path before clearing the error state",
+    target: "supervisor",
+    apply: (s) => {
+      const api = deriveErrorLayerApi(stripComments(s));
+      if (!api.hideMethod) {
+        return s;
+      }
+      return s.replace(
+        `    this.${api.hideMethod}();\n    await this._restart();`,
+        `    await this._restart();\n    this.${api.hideMethod}();`
+      );
+    },
+    expect: "calls the restart path BEFORE clearing the error state",
+  },
 ];
 
 const LOG_FAULTS = [
@@ -633,7 +943,9 @@ function runSelfTest(supervisorPath, shellPath) {
     const shellCopy = join(dir, "powerbrowser.js");
     for (const fault of SOURCE_FAULTS) {
       const original = fault.target === "supervisor" ? supervisorSrc : shellSrc;
-      const mutated = fault.apply(original);
+      // 01-11's rows derive the names they mutate from the OTHER source too, so
+      // no global, function or element name is a literal in this file.
+      const mutated = fault.apply(original, { supervisorSrc, shellSrc });
       if (mutated === original) {
         console.error(`  FAIL  ${fault.name} -- the fault did not apply; this self-test row proves nothing`);
         allOk = false;
@@ -723,7 +1035,7 @@ if (failures.length === 0) {
   console.log(
     logPath
       ? `verify-start-path-recovery: PASS -- the launch recovered from a failed health gate and swapped exactly once (${logPath})`
-      : `verify-start-path-recovery: PASS -- the one-time initialisation block and _swap()'s guard are keyed on the same completion field (${supervisorPath})`
+      : `verify-start-path-recovery: PASS -- the one-time initialisation block and _swap()'s guard are keyed on the same completion field, the error layer has exactly one visibility owner, and retry() clears the error state before re-entering the single spawn entry point (${supervisorPath})`
   );
   process.exit(0);
 }
