@@ -3558,8 +3558,24 @@ run_gate_mode() {
   local log
   log="$(mktemp)"; track_temp "$log"
   local rc=0
-  run_own_checks 2>&1 | tee "$log"
-  rc="${PIPESTATUS[0]}"
+  # NOT `run_own_checks 2>&1 | tee "$log"`. That pipeline hung --gate forever
+  # on any run where a check lazily started the Theia dev app, which since the
+  # consolidation is every full one. Two compounding reasons, both from the
+  # pipeline:
+  #
+  #   1. Bash runs each pipeline stage in a SUBSHELL, so theia_app_up()'s
+  #      `SERVER_PID=$!` was set in a child and the EXIT trap's cleanup() --
+  #      running in the parent -- saw it empty and never killed the app.
+  #   2. That surviving app inherited the subshell's stdout, i.e. the pipe to
+  #      `tee`, so tee never reached EOF and the pipeline never completed.
+  #
+  # The plain (non-gate) path never had either problem because it calls
+  # run_own_checks directly in this shell. Redirecting to a FILE restores that:
+  # SERVER_PID is visible to cleanup again, and a regular-file fd inherited by
+  # a background process blocks nothing. The whole log is printed below, so no
+  # output is lost -- only the live streaming, which a batch gate does not need.
+  run_own_checks > "$log" 2>&1 || rc=$?
+  cat "$log"
 
   local gate_failed=0
   local excluded_count=0
