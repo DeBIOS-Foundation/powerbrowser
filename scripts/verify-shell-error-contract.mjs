@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // scripts/verify-shell-error-contract.mjs
 //
-// shell-error-contract -- 01-11, extended by 01-12.
+// shell-error-contract -- 01-11, extended by 01-12 and 01-13.
 //
 // The error state's behavioural contract, driven against the shipped supervisor
-// and the shipped chrome bootstrap. Three scenarios, all three closing a clause
+// and the shipped chrome bootstrap. Four scenarios, all four closing a clause
 // 01-VERIFICATION.md recorded FAILED.
 //
 // (1) The REPAINT contract: a Retry that fails must put the error
@@ -45,9 +45,16 @@
 // instrumentation here is a recording `dump`, and every line it records was
 // written by the code under test.
 //
-// Scenario `two-consecutive-failing-retries-repaint`: drive a launch whose spawn
-// cannot succeed, then click Retry twice. The error-family sentinel stream must
-// read, IN ORDER:
+// Scenario `two-consecutive-failing-retries-repaint`: drive a launch on the
+// RECOVERABLE class -- the class that OFFERS Retry -- then click Retry twice.
+// 01-13 retargeted it there from the spawn-throw drive, which `_spawnAndGate`
+// classifies unrecoverable at its D-113 site: under 01-13's supervisor guard a
+// Retry against that class is a no-op by design, so the old drive would have
+// gone red for the wrong reason. The repaint contract is a statement about the
+// class the interface is willing to retry, so that is where it belongs, and the
+// unrecoverable class is covered by scenario (4) below instead. A recorded
+// classification guard stops the drive drifting silently back.
+// The error-family sentinel stream must read, IN ORDER:
 //   POWERBROWSER_SHELL_ERROR, POWERBROWSER_SHELL_ERROR_CLEARED,
 //   POWERBROWSER_SHELL_ERROR, POWERBROWSER_SHELL_ERROR_CLEARED,
 //   POWERBROWSER_SHELL_ERROR
@@ -82,6 +89,18 @@
 // negative side's zero is only meaningful because the positive side proves the
 // same drain is long enough for the probe to have run.
 //
+// (4) THE USER-DRIVEN ROUTE, 01-13 (the same failed truth 2d, re-scoped by
+// 01-REVIEW.md's CR-01). The classification gated the probe TIMER and nothing
+// else: `retry()` re-entered `_restart()` unconditionally, so the unrecoverable
+// class was re-entered by the single control the error screen offered, and every
+// such click ran `_hideError()` on the way past, nulling `_failureDetails` --
+// erasing the only evidence the user had left. Scenario
+// `unrecoverable-classification-refuses-the-retry-click` drives that exact
+// click, calling the window global DIRECTLY rather than through the button, so a
+// fix that only hid the control cannot satisfy it. It asserts zero spawns,
+// unchanged diagnostic rows, and the control absent -- three separate facts, one
+// planted fault each in --self-test.
+//
 // This is what verify-platform.sh's `check_shell03_unrecoverable_immediate_error`
 // could not see. It asserts an unrecoverable classification reaches no spawn
 // ATTEMPT within its 15-second window, and it is green because the probe's first
@@ -100,7 +119,7 @@
 //
 // Exit 0 pass, 1 fail. --self-test runs a clean control against the unmutated
 // tree FIRST (a self-test whose fixture is already red proves nothing about its
-// plants), then plants five faults and requires each to go red naming the
+// plants), then plants nine faults and requires each to go red naming the
 // drift.
 
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
@@ -124,6 +143,14 @@ const CLEARED_SENTINEL = "POWERBROWSER_SHELL_ERROR_CLEARED";
 const SCENARIO = "two-consecutive-failing-retries-repaint";
 const SCENARIO_NO_PROBE = "unrecoverable-classification-starts-no-probe";
 const SCENARIO_PROBE = "recoverable-classification-starts-the-probe";
+const SCENARIO_REFUSES = "unrecoverable-classification-refuses-the-retry-click";
+
+// The error layer's Retry control, by the id the chrome bootstrap looks it up
+// under. Scenario 4 reads the ELEMENT's own state rather than a printed line:
+// the fake `addEventListener` is a no-op, so the button's click path is not what
+// this harness drives, and the element is the only honest observation of the
+// presentation half.
+const RETRY_ELEMENT_ID = "powerbrowser-error-retry";
 
 // The expected error-family stream: paint, clear, repaint, clear, repaint.
 const EXPECTED_STREAM = [ERROR_SENTINEL, CLEARED_SENTINEL, ERROR_SENTINEL, CLEARED_SENTINEL, ERROR_SENTINEL];
@@ -144,6 +171,35 @@ const DRAIN_TURNS = 20;
 // per-scenario drain would let the negative side pass by simply not waiting,
 // which is exactly how shell03-unrecoverable-immediate-error is green and blind.
 const PROBE_DRAIN_TURNS = 60;
+
+// The two drives, extracted so a scenario names the failure CLASS it exercises
+// rather than restating the stubs. Both are used by more than one scenario, and
+// that sharing is the point: the class a scenario drives is what its vacuity
+// guards assert, so two scenarios claiming the same class must be driving the
+// same stubs.
+//
+// RECOVERABLE: the spawn succeeds and the stdin credential handshake throws.
+// `_spawnAndGate` classifies that recoverable in as many words ("a pipe write
+// failing says nothing about whether the next spawn will"), and with the give-up
+// budget at one attempt `_restart()` reaches its budget-exhausted give-up on the
+// first pass and paints with `recoverable: true`.
+const RECOVERABLE_DRIVE = (state) => ({
+  spawnProcess: () => {
+    state.countSpawn();
+    // exitCode 0 so `_reap()` has nothing to kill and needs no stub.
+    return { exitCode: 0 };
+  },
+  writeStdinLine: () => {
+    throw new Error("harness: the credential could not be handed over stdin");
+  },
+});
+
+// UNRECOVERABLE: `_resolveSidecar`'s unset-preference branch -- the one failure
+// this supervisor classifies unrecoverable before `_configDir`, `_stateFilePath`
+// or a node path exist at all.
+const UNRECOVERABLE_DRIVE = {
+  getStringPref: (key, fallback) => (key.endsWith(".backendMain") ? "" : fallback ?? ""),
+};
 
 const failures = [];
 const fail = (msg) => failures.push(msg);
@@ -376,7 +432,10 @@ async function loadShippedSources(supervisorPath, shellPath, tag, overrides = {}
   if (typeof handler !== "function") {
     throw new Error(`the chrome bootstrap at ${shellPath} registered no DOMContentLoaded handler`);
   }
-  return { recorded, sandbox, TheiaService, handler, state };
+  // `elements` is returned so a scenario can read the error deck's controls
+  // directly. See RETRY_ELEMENT_ID: the fake click listener is a no-op, so the
+  // element's own state is the only honest observation of the presentation half.
+  return { recorded, sandbox, TheiaService, handler, state, elements };
 }
 
 // --- the scenario ----------------------------------------------------------
@@ -391,7 +450,7 @@ function errorFamilyStream(recorded) {
 async function runScenario(supervisorPath, shellPath) {
   let loaded;
   try {
-    loaded = await loadShippedSources(supervisorPath, shellPath, SCENARIO);
+    loaded = await loadShippedSources(supervisorPath, shellPath, SCENARIO, RECOVERABLE_DRIVE);
   } catch (err) {
     fail(
       `the shipped sources could not be evaluated (${err.message}) -- every assertion below would be ` +
@@ -399,7 +458,7 @@ async function runScenario(supervisorPath, shellPath) {
     );
     return;
   }
-  const { recorded, sandbox, TheiaService, handler } = loaded;
+  const { recorded, sandbox, TheiaService, handler, elements } = loaded;
 
   // Firing the handler IS the drive: it calls TheiaService.start() itself, so
   // the entry point stays under test rather than under simulation.
@@ -413,6 +472,41 @@ async function runScenario(supervisorPath, shellPath) {
         JSON.stringify(recorded)
     );
     return;
+  }
+
+  // The same recorded-classification vacuity guard the other scenarios carry.
+  // 01-13 retargeted this scenario onto the RECOVERABLE class, because the
+  // repaint contract is a statement about the class that OFFERS Retry -- and
+  // under 01-13's guard a Retry against the unrecoverable class is a no-op by
+  // design, so driving that class here would go red for the wrong reason. This
+  // guard is what stops it drifting silently back.
+  const firstPayload = firstErrorPayload(recorded);
+  if (firstPayload === null || firstPayload.recoverable !== true) {
+    fail(
+      `scenario ${SCENARIO}: the drive reached the error state with recoverable=` +
+        `${JSON.stringify(firstPayload && firstPayload.recoverable)} rather than true -- the repaint ` +
+        `contract is a statement about the class that OFFERS Retry, so a drive on any other class is ` +
+        `exercising something this scenario does not name`
+    );
+    return;
+  }
+
+  // The positive control for the presentation half: this class MUST still be
+  // offered the control. Its negative twin is scenario ${SCENARIO_REFUSES}.
+  const retryElement = elements.get(RETRY_ELEMENT_ID);
+  if (!retryElement) {
+    fail(
+      `scenario ${SCENARIO}: the chrome bootstrap never looked up \`${RETRY_ELEMENT_ID}\`, so the ` +
+        `control's visibility cannot be observed at all and this assertion would pass on nothing`
+    );
+    return;
+  }
+  if (retryElement.hidden === true) {
+    fail(
+      `scenario ${SCENARIO}: the Retry control is hidden after an error state classified RECOVERABLE. ` +
+        `A transient failure the supervisor is willing to retry must still offer the user the control ` +
+        `that drives it, or the error state is permanent from the user's side whatever the supervisor thinks`
+    );
   }
 
   if (typeof sandbox.powerbrowserRetry !== "function") {
@@ -504,12 +598,7 @@ function firstErrorPayload(recorded) {
 async function runNoProbeScenario(supervisorPath, shellPath) {
   let loaded;
   try {
-    loaded = await loadShippedSources(supervisorPath, shellPath, SCENARIO_NO_PROBE, {
-      // `_resolveSidecar`'s unset-preference branch: the one failure this
-      // supervisor classifies unrecoverable before `_configDir`,
-      // `_stateFilePath` or a node path exist at all.
-      getStringPref: (key, fallback) => (key.endsWith(".backendMain") ? "" : fallback ?? ""),
-    });
+    loaded = await loadShippedSources(supervisorPath, shellPath, SCENARIO_NO_PROBE, UNRECOVERABLE_DRIVE);
   } catch (err) {
     fail(`scenario ${SCENARIO_NO_PROBE}: the shipped sources could not be evaluated (${err.message})`);
     return;
@@ -567,16 +656,7 @@ async function runNoProbeScenario(supervisorPath, shellPath) {
 async function runProbeScenario(supervisorPath, shellPath) {
   let loaded;
   try {
-    loaded = await loadShippedSources(supervisorPath, shellPath, SCENARIO_PROBE, (state) => ({
-      spawnProcess: () => {
-        state.countSpawn();
-        // exitCode 0 so `_reap()` has nothing to kill and needs no stub.
-        return { exitCode: 0 };
-      },
-      writeStdinLine: () => {
-        throw new Error("harness: the credential could not be handed over stdin");
-      },
-    }));
+    loaded = await loadShippedSources(supervisorPath, shellPath, SCENARIO_PROBE, RECOVERABLE_DRIVE);
   } catch (err) {
     fail(`scenario ${SCENARIO_PROBE}: the shipped sources could not be evaluated (${err.message})`);
     return;
@@ -613,6 +693,138 @@ async function runProbeScenario(supervisorPath, shellPath) {
         `would never disappear without a user action. (Fake sleeps resolved: ${state.sleeps} -- a zero ` +
         `here means the drain never let the probe's first interval elapse and this control is ` +
         `timing-blind rather than the code being wrong.)`
+    );
+  }
+}
+
+// --- the user-driven route (01-13) -----------------------------------------
+
+/**
+ * 01-13 (01-VERIFICATION.md's failed truth 2d, re-scoped by 01-REVIEW.md's
+ * CR-01). 01-12 gated the background recovery probe on the `recoverable`
+ * classification. It did NOT gate the user-driven route: `retry()` re-entered
+ * `_restart()` unconditionally, so on the one class the supervisor's own D-113
+ * comment calls "unrecoverable by construction ... with no retry at all" the
+ * user was looking at a live Retry control whose click re-entered the failed
+ * launch path AND -- because `retry()` called `_hideError()` first -- erased the
+ * diagnostic rows that identified the failure on the way past.
+ *
+ * This scenario drives that exact click. It calls `powerbrowserRetry()` DIRECTLY
+ * rather than through the button, which is deliberate: the refusal has to live
+ * in the SUPERVISOR, so a fix that only hid the control would still pass a check
+ * that could only reach retry through the control. The button's own state is
+ * asserted too, but as presentation, never as the authority.
+ */
+async function runRefusalScenario(supervisorPath, shellPath) {
+  let loaded;
+  try {
+    loaded = await loadShippedSources(supervisorPath, shellPath, SCENARIO_REFUSES, UNRECOVERABLE_DRIVE);
+  } catch (err) {
+    fail(`scenario ${SCENARIO_REFUSES}: the shipped sources could not be evaluated (${err.message})`);
+    return;
+  }
+  const { recorded, sandbox, TheiaService, handler, state, elements } = loaded;
+
+  handler();
+  await drain(PROBE_DRAIN_TURNS);
+
+  // Vacuity guard 1: the drive reached the error state at all.
+  const payload = firstErrorPayload(recorded);
+  if (payload === null) {
+    fail(
+      `scenario ${SCENARIO_REFUSES}: the drive never reached the error state -- no parseable ` +
+        `\`${ERROR_SENTINEL} \` line was emitted by the code under test, so every assertion below ` +
+        `would be vacuous. Recorded stream: ${JSON.stringify(recorded)}`
+    );
+    return;
+  }
+  // Vacuity guard 2: it reached the class this scenario NAMES.
+  if (payload.recoverable !== false) {
+    fail(
+      `scenario ${SCENARIO_REFUSES}: the drive reached the error state with recoverable=` +
+        `${JSON.stringify(payload.recoverable)} rather than false -- it is exercising some other ` +
+        `failure class than the unrecoverable one this scenario names, which is how a check quietly ` +
+        `stops asserting what it claims`
+    );
+    return;
+  }
+  // Vacuity guard 3: the control was actually looked up, so the visibility
+  // assertion below cannot pass because nothing was ever there to observe.
+  const retryElement = elements.get(RETRY_ELEMENT_ID);
+  if (!retryElement) {
+    fail(
+      `scenario ${SCENARIO_REFUSES}: the chrome bootstrap never looked up \`${RETRY_ELEMENT_ID}\`, so ` +
+        `the control's visibility cannot be observed and the assertion below would pass on nothing`
+    );
+    return;
+  }
+
+  if (retryElement.hidden !== true) {
+    fail(
+      `scenario ${SCENARIO_REFUSES}: the Retry control is still on screen for a failure the supervisor ` +
+        `classified unrecoverable -- \`${RETRY_ELEMENT_ID}\`.hidden is ` +
+        `${JSON.stringify(retryElement.hidden)} rather than true. A control the interface is designed to ` +
+        `refuse is worse than no control: it consumes the user's one remaining idea about what to do`
+    );
+  }
+
+  // Vacuity guard 4: an empty-to-empty rows comparison would prove nothing.
+  const rowsBefore = TheiaService.getFailureDetails();
+  if (!Array.isArray(rowsBefore) || rowsBefore.length === 0) {
+    fail(
+      `scenario ${SCENARIO_REFUSES}: TheiaService.getFailureDetails() is already empty before the Retry ` +
+        `is driven (${JSON.stringify(rowsBefore)}), so the preserved-rows comparison below would be ` +
+        `empty-to-empty and could never go red`
+    );
+    return;
+  }
+
+  if (typeof sandbox.powerbrowserRetry !== "function") {
+    fail(
+      `scenario ${SCENARIO_REFUSES}: the chrome bootstrap defines no Retry global on its own window, so ` +
+        `the user-driven route cannot be driven and this check would assert nothing`
+    );
+    return;
+  }
+
+  const recordedBeforeRetry = recorded.length;
+  sandbox.powerbrowserRetry();
+  await drain(PROBE_DRAIN_TURNS);
+
+  if (state.spawnsAfterError !== 0) {
+    fail(
+      `scenario ${SCENARIO_REFUSES}: a Retry driven against an UNRECOVERABLE error state re-entered the ` +
+        `spawn path -- the boundary's spawn was called ${state.spawnsAfterError} time(s) after the error ` +
+        `state was painted. That branch returns before \`_configDir\`, \`_stateFilePath\` and the quit ` +
+        `observer are ever assigned, so every one of those attempts starts a backend holding the ` +
+        `per-launch token against unassigned state and unobserved by quit`
+    );
+  }
+
+  const rowsAfter = TheiaService.getFailureDetails();
+  if (JSON.stringify(rowsAfter) !== JSON.stringify(rowsBefore)) {
+    fail(
+      `scenario ${SCENARIO_REFUSES}: the refused Retry destroyed the failure's diagnostic rows -- ` +
+        `TheiaService.getFailureDetails() returned ${JSON.stringify(rowsBefore)} before the call and ` +
+        `${JSON.stringify(rowsAfter)} after it. The refusal must return BEFORE \`_hideError()\`, which ` +
+        `nulls \`_failureDetails\`: a user action that did not resolve the failure must not discard the ` +
+        `only evidence the user had left to act on or report`
+    );
+  }
+
+  // The one absence assertion in this file, and legitimate only because
+  // assertEmitters() has already proved the bootstrap emits this prefix from a
+  // `dump(` call site of ITS OWN -- and because the retargeted scenario
+  // ${SCENARIO} is the positive control proving the same instrument DOES record
+  // it when the classification allows the retry through.
+  const clearedAcrossCall = recorded
+    .slice(recordedBeforeRetry)
+    .some((line) => line.startsWith(`${CLEARED_SENTINEL} `));
+  if (clearedAcrossCall) {
+    fail(
+      `scenario ${SCENARIO_REFUSES}: a \`${CLEARED_SENTINEL} \` line was emitted across a Retry the ` +
+        `supervisor must have refused -- the error layer was taken off the user's screen for a failure ` +
+        `nothing was done about, leaving no message, no Retry and no Details`
     );
   }
 }
@@ -821,13 +1033,16 @@ if (assertEmitters(shellPath)) {
   await withTimeout(SCENARIO, () => runScenario(supervisorPath, shellPath));
   await withTimeout(SCENARIO_NO_PROBE, () => runNoProbeScenario(supervisorPath, shellPath));
   await withTimeout(SCENARIO_PROBE, () => runProbeScenario(supervisorPath, shellPath));
+  await withTimeout(SCENARIO_REFUSES, () => runRefusalScenario(supervisorPath, shellPath));
 }
 
 if (failures.length === 0) {
   console.log(
     `verify-shell-error-contract: PASS -- scenario ${SCENARIO}: a failing Retry repaints the error layer, ` +
       `twice over; scenario ${SCENARIO_NO_PROBE}: an unrecoverable classification drives no spawn at all; ` +
-      `scenario ${SCENARIO_PROBE}: a recoverable one still drives at least one -- all three driven against ` +
+      `scenario ${SCENARIO_PROBE}: a recoverable one still drives at least one; scenario ` +
+      `${SCENARIO_REFUSES}: a Retry against an unrecoverable classification drives no spawn, keeps the ` +
+      `diagnostic rows and is not offered as a control -- all four driven against ` +
       `the shipped supervisor (${supervisorPath}) and the shipped chrome bootstrap (${shellPath})`
   );
   process.exit(0);
