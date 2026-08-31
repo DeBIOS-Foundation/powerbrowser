@@ -182,9 +182,31 @@ fi
 THEIA_APP_UP=0
 theia_app_up() {
   [ "$THEIA_APP_UP" -eq 1 ] && return 0
+  # The occupant may be TRANSIENT rather than stale. smoke-theia.sh boots its
+  # own backend on this port and tears it down in an EXIT trap; the port is not
+  # released the instant that script returns, and this function is called
+  # microseconds later by the very next registry row. Registering smoke-theia
+  # (01-07) turned that race into five deterministic FAILs on the first full
+  # run -- diff-theia-core plus the four _run_app_check_mjs checks -- all
+  # reporting a "stale run" that was actually the previous check still exiting.
+  #
+  # So: wait a bounded time for the port to clear before calling it stale. The
+  # guard's real purpose is preserved exactly -- an occupant that is still
+  # there after the wait is a genuinely stale server, and still a named FAIL,
+  # because a leftover backend would let every check below pass without ever
+  # proving THIS tree boots. Fixed here, in the one function all five callers
+  # route through, rather than by settling one registry row.
   if curl -sf "$APP_URL" >/dev/null 2>&1; then
-    echo "theia_app_up: FAIL -- something is already listening on $APP_URL (stale run?). Kill it and re-run." >&2
-    return 1
+    echo "theia_app_up: $APP_URL is occupied; waiting up to 30s in case a previous check is still exiting..."
+    local free_deadline=$((SECONDS + 30))
+    while curl -sf "$APP_URL" >/dev/null 2>&1; do
+      if [ "$SECONDS" -ge "$free_deadline" ]; then
+        echo "theia_app_up: FAIL -- something is still listening on $APP_URL 30s later (stale run?). Kill it and re-run." >&2
+        return 1
+      fi
+      sleep 1
+    done
+    echo "theia_app_up: $APP_URL cleared; continuing."
   fi
   echo "theia_app_up: starting theia start..."
   # The @powerbrowser/token-gate extension gates the backend on
@@ -3507,6 +3529,16 @@ extract_failed_labels() {
 # label|ledger_id|reason
 declare -a GATE_KNOWN_OPEN_EXCLUSIONS=(
   "verify-endpoints|5|Gecko resolves 3 hosts absent from the BRAND-04 allowlist once the shell actually works (127.0.0.1 the Theia sidecar, ciscobinary.openh264.org the GMP manager, and the welcome widget's own project link) -- not a code defect, needs a product/privacy decision that phase's scope explicitly excluded"
+  # 01-07: both of these read objdir-release/, i.e. a SECOND full ~47-minute
+  # release build that 01-04-PLAN.md explicitly declined to spend. Neither is a
+  # code defect and neither has ever been red for a code reason -- each fails
+  # with "objdir-release/... does not exist" and nothing else. They become
+  # runnable, unchanged, the moment a release objdir exists, which is why they
+  # stay registered rather than being deleted or narrowed. Keyed on ledger
+  # entry 10, so the exclusion stops applying the instant that entry stops
+  # being open.
+  "verify-branding-identity-release|10|reads objdir-release/dist/bin, which does not exist -- 01-04-PLAN.md declined the second ~47m release build; runnable unchanged once one exists"
+  "branding-variant-divergence|10|reads BOTH objdir/dist/bin and objdir-release/dist/bin; the release half does not exist -- same declined build as above"
 )
 
 # Before consolidation, --gate ran this script's own set and then SHELLED OUT to
