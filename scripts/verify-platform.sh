@@ -3389,6 +3389,22 @@ run_own_checks() {
     # every other self-test in this registry does.
     "shell-error-copy-no-internals|node $REPO_ROOT/scripts/verify-shell-error-copy.mjs"
     "shell-error-copy-no-internals-self-test|node $REPO_ROOT/scripts/verify-shell-error-copy.mjs --self-test"
+
+    # NEW (01-09): the start path's recovery contract, static half. Derives the
+    # instance field named in `_swap()`'s early-return guard and the one named
+    # in `_spawnAndGate`'s one-time initialisation block guard, and compares
+    # them -- neither is a literal kept in the checker, so a rename at BOTH
+    # sites stays green (the invariant holds) while a re-keying goes red naming
+    # both derived values. It reads source and a synthetic log, needs no build,
+    # no browser, no display and no network, so a regression in the recovery
+    # contract costs seconds here rather than a rebuild plus a headless launch.
+    # Its runtime counterpart is health-gate-recovery-swaps in the full set
+    # below. The self-test rides alongside it for the reason every other
+    # self-test row in this array gives -- a comparison that can only go green
+    # is not a check, and this one guards the defect 01-VERIFICATION.md caught
+    # only because a human looked.
+    "start-path-recovery|node $REPO_ROOT/scripts/verify-start-path-recovery.mjs"
+    "start-path-recovery-self-test|node $REPO_ROOT/scripts/verify-start-path-recovery.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
@@ -3485,7 +3501,9 @@ run_own_checks() {
       # first spawn announces readiness, pins a port, fails the health gate,
       # and then recovers -- which is precisely the branch 01-VERIFICATION.md
       # recorded FAILED and the reason the defect shipped green. Launches the
-      # built binary, so it is emphatically not --quick.
+      # built binary, so it is emphatically not --quick; its static half is
+      # start-path-recovery in the --quick set above, and both drive the SAME
+      # analyzer, so the assertion that ships is the one the self-test proves.
       "health-gate-recovery-swaps|check_health_gate_recovery_swaps"
 
       # NEW (01-07): the runtime half of the error-copy rewrite. Drives two
