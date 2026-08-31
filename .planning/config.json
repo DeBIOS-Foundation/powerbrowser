@@ -28,7 +28,9 @@
     "plan_bounce": true,
     "plan_bounce_passes": 2,
     "post_planning_gaps": true,
-    "use_worktrees": false
+    "use_worktrees": false,
+    "plan_review_convergence": true,
+    "_auto_chain_active": false
   },
   "plan_review": {
     "source_grounding": true
