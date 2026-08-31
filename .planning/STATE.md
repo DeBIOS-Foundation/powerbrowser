@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-09-PLAN.md
-last_updated: "2026-08-31T18:54:50.951Z"
+stopped_at: Completed 01-10-PLAN.md
+last_updated: "2026-08-31T19:08:59.610Z"
 last_activity: 2026-08-31
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 2 of 10
-Status: Ready to execute
-Last activity: 2026-08-31 — Phase 01 execution started
+Plan: 10 of 10
+Status: All plans executed — awaiting re-verification
+Last activity: 2026-08-31 — 01-10 closed the start-path error affordance (the second half of the supervisor gap)
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [█████████░] 90%
 | Phase 01 P07 | 2h10m | 3 tasks | 12 files |
 | Phase 01 P08 | ~25min | 3 tasks | 7 files |
 | Phase 01 P09 | ~1h05m | 2 tasks | 3 files |
+| Phase 01 P10 | ~40m | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,12 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-09: _spawnAndGate's parameter renamed firstSpawn -> beforeFirstSwap; keeping the old name while changing its meaning would re-encode the conflation in a name
 - [Phase ?]: 01-09: D-104's pinned-port respawn invariant preserved only after a completed swap -- before one, nothing is loaded at that origin, so re-pinning had no beneficiary and a real D-112 cost
 - [Phase ?]: 01-09: MIG-04 NOT marked complete -- the error-affordance half of the same gap is plan 01-10, and 034f857 already reverted one premature Complete
+- [Phase ?]: 01-10: one public terminal handler (reportUnexpectedFailure) with four attachment points -- four promise roots have no shared root to guard, but there is exactly one place the outcome is decided
+- [Phase ?]: 01-10: the two long-lived supervisor loops were attached too, a strict superset of the gap's missing: list -- same defect class, and leaving them would keep the bug alive on the path a mid-session outage takes
+- [Phase ?]: 01-10: no USER_MESSAGE entry minted (4 before, 4 after) -- declared/referenced equality means a new key must be referenced, which for a generic backstop means inventing a distinction the user cannot act on
+- [Phase ?]: 01-10: the leftover-reap site is guarded but deliberately NON-FATAL, a reasoned deviation from missing: item 3 -- failing a launch over a previous launch's stale pid would turn a cosmetic cleanup miss into the dead screen the guard exists to prevent
+- [Phase ?]: 01-10: the session-cookie catch RETURNS before the navigation, so a launch whose credential was never minted never reaches the backend origin (T-01-08)
+- [Phase ?]: 01-10: the terminal-handler coverage rule derives both sets from the tree (async declarations; bootstrap calls under the derived binding name) and treats an empty derivation as its own failure -- a rule with no call sites asserts nothing
 
 ### Pending Todos
 
@@ -125,6 +132,7 @@ None yet.
 - ~~[Spelling]~~ Resolved 2026-08-29: user confirmed "Sourcerer"; REQUIREMENTS.md and PROJECT.md normalized.
 - MIG-04 is NOT complete: nothing has been built (objdir/ absent). 01-03 delivered its prerequisites only; plan 01-04 owns the build. Nine verify-platform.sh checks become runnable at that point.
 - Phase 1's two manual verifications (GUI-01 browser-window toggle, 5 steps; GUI-03 visible runtime restyle, 3 steps) are UNPERFORMED -- 01-07 ran autonomously with no human. Recorded as open WINDOWS.md ledger entries.
+- WINDOWS.md 18's named residual: no registered check drives a rejection out of either long-lived supervisor loop, so those two terminal handlers rest on the source-derived coverage rule rather than on a runtime red
 
 ## Deferred Items
 
@@ -136,6 +144,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-31T18:54:44.244Z
-Stopped at: Completed 01-09-PLAN.md
+Last session: 2026-08-31T19:08:39.552Z
+Stopped at: Completed 01-10-PLAN.md
 Resume file: None
