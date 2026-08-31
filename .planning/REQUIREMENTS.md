@@ -86,9 +86,6 @@
       UI and back — Power Browser is usable as an actual browser, not only a
       Theia host
 
-- [ ] **GUI-02**: The user can open and browse web pages inside Theia as
-      tabs (URL-addressable, per the inherited URI-scheme model)
-
 - [x] **GUI-03**: The GUI customization bridge (runtime CSS layer +
       dev-flagged privileged JS) ships as a platform feature so anyone can
       restyle/re-shape the GUI at runtime via Theia extensions — "vibe code
@@ -97,6 +94,35 @@
 - [x] **GUI-04**: Nothing in v1 welds Theia to full-window presentation; the
       future unified tab strip (mirror/proxy bridge) remains landable without
       rework
+
+### Security (SEC)
+
+- [x] **SEC-01**: The Theia backend is unreachable without a per-launch
+      credential, and fails closed rather than degrading to open. Concretely:
+      no credential configured is a startup failure, not a pass-through gate;
+      a non-loopback bind is a startup failure, not a reachable backend; and
+      the check runs ahead of any framework middleware that would otherwise
+      issue its own session cookie to a rejected caller.
+
+      **Why this is a platform requirement, not a downstream one.** Power
+      Browser runs untrusted web content in the same process tree as an IDE
+      backend that has filesystem and process-spawn access. Any page the user
+      visits can issue requests at loopback. A downstream cannot be expected
+      to add a gate to a hole the platform ships, and browser-side filtering
+      (content policy, Local Network Access) would defend only the browser
+      vector while leaving every other local process — and would cost new
+      Firefox-internal touchpoints that must survive each ESR rebase. The
+      credential belongs at the resource, where it covers every vector at
+      once.
+
+      Satisfied by `theia/extensions/token-gate`, which corrects Theia's own
+      `BrowserConnectionTokenBackendContribution` (stock rejects only
+      WebSocket upgrades and opt-in routes — never a plain `GET` of the index
+      or static assets — and issues its cookie regardless). Recorded here
+      2026-08-30: the extension arrived by migration from Sourcerer and had
+      carried only that project's decision IDs (`D-98`, `SIDE-01`, `SIDE-02`)
+      as justification, so nothing in this project required it. A future
+      design may satisfy SEC-01 differently; it may not satisfy it less.
 
 ### Telemetry (TEL)
 
@@ -180,6 +206,28 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
       edits — the acceptance test for the whole milestone
 
 ## v2 Requirements (deferred)
+
+- **GUI-02**: The user can open and browse web pages inside Theia as tabs
+  (URL-addressable, per the inherited URI-scheme model). *Deferred out of
+  Phase 1 on 2026-08-30 at the D-22 package gate.* The requirement is sound;
+  the only available implementation was not. `@theia/mini-browser@1.74.1`
+  passed its supply-chain audit (same Eclipse Theia monorepo release batch as
+  the 49 `@theia/*` packages already pinned, published 17s after
+  `@theia/core@1.74.1`, no install scripts) but was rejected on **runtime
+  surface**: it declares a `backend` module and pulls `vhost` +
+  `@theia/filesystem`, which would have made it the second backend module in
+  the tree beside `token-gate` and mounted a file-serving virtual host — the
+  same pattern this project rejected as candidate C in 01-05's channel
+  analysis. Being iframe-backed, it also cannot render any origin sending
+  `X-Frame-Options: DENY`, which is most large sites.
+
+  **Do not re-propose mini-browser without addressing both.** The more
+  promising direction is a tab backed by a real `<xul:browser>` element rather
+  than an iframe — Power Browser already has Gecko, so this would sidestep
+  frame-refusal entirely and need no third-party dependency. Unverified: Theia
+  widgets live in the content process and a browser element is chrome, so the
+  bridging is real work. `TabUriRegistry`'s exported shape is asserted by
+  `verify-platform.sh --only gui04-registry-shape` and stays landable for it.
 
 - **GUI-05**: Unified tab strip where web pages and Theia editors are peers
   (chrome-owned tab model, mirror/proxy bridge)

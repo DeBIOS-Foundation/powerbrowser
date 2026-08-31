@@ -41,7 +41,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Goal**: The Power Browser platform tree exists in this repo, builds, boots, and works as an actual web browser under fixed platform identifiers — with no generator involved
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
-**Requirements**: MIG-01, MIG-02, MIG-03, MIG-04, GUI-01, GUI-02, GUI-03, GUI-04
+**Requirements**: MIG-01, MIG-02, MIG-03, MIG-04, GUI-01, GUI-03, GUI-04, SEC-01
+
+*(GUI-02 deferred to v2 on 2026-08-30 at the D-22 package gate — see REQUIREMENTS.md.
+SEC-01 added the same day to anchor `token-gate`, which had been carrying only
+Sourcerer's decision IDs as justification.)*
 **Success Criteria** (what must be TRUE):
 
   1. A committed token-classification inventory (brand / identity / frozen / coincidental) exists, and the residual-brand scan is demonstrably red on the pre-rename tree — both before any replacement runs
@@ -50,7 +54,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 5/7 plans executed
+**Plans**: 6/7 plans executed
 
 Plans:
 **Wave 1**
@@ -75,7 +79,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 01-06-PLAN.md — GUI-02: gated widget install, http/https open handler, frame-refusal carve-out, and the tab-URI registry shape assertion
+- [x] 01-06-PLAN.md — GUI-04: tab-URI registry shape assertion. *Descoped 2026-08-30: the GUI-02 portion (widget install, http/https open handler, frame-refusal carve-out) was dropped at the D-22 gate when `@theia/mini-browser` proved to carry a backend module and a `vhost` file-serving surface. GUI-02 deferred to v2; the registry-shape assertion landed and stands.*
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -191,7 +195,7 @@ than noisy.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Platform Extraction and Rename | 5/7 | In Progress|  |
+| 1. Platform Extraction and Rename | 6/7 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 0/TBD | Not started | - |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
@@ -205,7 +209,7 @@ All 31 v1 requirements map to exactly one phase each.
 
 | Phase | Requirements |
 |-------|--------------|
-| 1 | MIG-01, MIG-02, MIG-03, MIG-04, GUI-01, GUI-02, GUI-03, GUI-04 |
+| 1 | MIG-01, MIG-02, MIG-03, MIG-04, GUI-01, GUI-03, GUI-04, SEC-01 |
 | 2 | CFG-01, CFG-02, CFG-03, CFG-04, GEN-04 |
 | 3 | GEN-01, GEN-02, GEN-03 |
 | 4 | GEN-05, EXT-01, TEL-01, TEL-02, TEL-03 |
