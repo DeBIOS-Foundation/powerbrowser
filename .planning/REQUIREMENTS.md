@@ -4,19 +4,19 @@
 
 ### Migration & Debrand (MIG)
 
-- [x] **MIG-01**: Platform code is migrated from the sourcerer tree into this
+- [ ] **MIG-01**: Platform code is migrated from the sourcerer tree into this
       repo with `upstream/` re-fetched via script (never copied) and no
       objdirs copied
 
-- [x] **MIG-02**: A committed token-classification inventory (brand /
+- [ ] **MIG-02**: A committed token-classification inventory (brand /
       identity / frozen / coincidental) exists before any rename is executed
 
-- [x] **MIG-03**: All internal identifiers are renamed to fixed platform
+- [ ] **MIG-03**: All internal identifiers are renamed to fixed platform
       names — `powerbrowser/` tree, `@powerbrowser/*` extension scope,
       `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and these never
       vary per downstream
 
-- [x] **MIG-04**: The renamed tree builds and boots on Linux under Power
+- [ ] **MIG-04**: The renamed tree builds and boots on Linux under Power
       Browser branding (proven by the existing smoke tests)
       <!-- CLOSED by plan 01-04, 2026-08-30, on evidence rather than
            frontmatter. Build: `scripts/smoke-firefox.sh` PASS, 2830s
@@ -82,22 +82,22 @@
 
 ### Browser GUI (GUI)
 
-- [x] **GUI-01**: The user can toggle away from Theia to proper web-browser
+- [ ] **GUI-01**: The user can toggle away from Theia to proper web-browser
       UI and back — Power Browser is usable as an actual browser, not only a
       Theia host
 
-- [x] **GUI-03**: The GUI customization bridge (runtime CSS layer +
+- [ ] **GUI-03**: The GUI customization bridge (runtime CSS layer +
       dev-flagged privileged JS) ships as a platform feature so anyone can
       restyle/re-shape the GUI at runtime via Theia extensions — "vibe code
       your own browser" is the supported path, forking is not required
 
-- [x] **GUI-04**: Nothing in v1 welds Theia to full-window presentation; the
+- [ ] **GUI-04**: Nothing in v1 welds Theia to full-window presentation; the
       future unified tab strip (mirror/proxy bridge) remains landable without
       rework
 
 ### Security (SEC)
 
-- [x] **SEC-01**: The Theia backend is unreachable without a per-launch
+- [ ] **SEC-01**: The Theia backend is unreachable without a per-launch
       credential, and fails closed rather than degrading to open. Concretely:
       no credential configured is a startup failure, not a pass-through gate;
       a non-loopback bind is a startup failure, not a reachable backend; and
@@ -257,14 +257,14 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MIG-01 | Phase 1 | Complete |
-| MIG-02 | Phase 1 | Complete |
-| MIG-03 | Phase 1 | Complete |
+| MIG-01 | Phase 1 | Gaps Found |
+| MIG-02 | Phase 1 | Gaps Found |
+| MIG-03 | Phase 1 | Gaps Found |
 | MIG-04 | Phase 1 | Complete — closed by 01-04's build (smoke-firefox + smoke-theia PASS, six identity surfaces green on the built artifact with the positive control) |
-| GUI-01 | Phase 1 | Complete |
+| GUI-01 | Phase 1 | Gaps Found |
 | GUI-02 | v2 | Deferred 2026-08-30 — `@theia/mini-browser` rejected at the D-22 gate on runtime surface (backend module + `vhost`), not supply chain |
-| GUI-03 | Phase 1 | Complete |
-| GUI-04 | Phase 1 | Complete |
+| GUI-03 | Phase 1 | Gaps Found |
+| GUI-04 | Phase 1 | Gaps Found |
 | SEC-01 | Phase 1 | Complete — satisfied by `theia/extensions/token-gate`; requirement recorded 2026-08-30 to anchor code that had carried only Sourcerer's decision IDs |
 | CFG-01 | Phase 2 | Pending |
 | CFG-02 | Phase 2 | Pending |
