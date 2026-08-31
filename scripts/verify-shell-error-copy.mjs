@@ -16,7 +16,9 @@
 //   1. the USER_MESSAGE table's declared keys and their string values;
 //   2. every `USER_MESSAGE.<key>` reference in the file;
 //   3. every `message:` property value in the file;
-//   4. every `this._showError(...)` call's first argument.
+//   4. every `this._showError(...)` call's first argument, checked against a
+//      set of message-bearing bindings ALSO derived from the file -- see the
+//      note on rule (4) below.
 //
 // and then compares those derived sets. A hand-kept list of forbidden strings
 // can only ever agree with the tree it was written from; these comparisons go
@@ -25,6 +27,18 @@
 // referenced. The leak test itself is a SHAPE test -- an all-caps underscored
 // token of four or more characters, or a dotted key of three or more segments
 // -- so a failure path added next year is covered without touching this file.
+//
+// RULE (4), and why 01-14 rewrote it. It used to accept any `<x>.message`
+// argument, on the stated grounds that checks (1)-(3) "prove" such a value is
+// table-derived. They do not: they constrain `message:` PROPERTY DECLARATION
+// sites and say nothing about the identifier bound at a CALL site. A caught
+// exception's `.message` -- the runtime's own text, carrying paths, ports and
+// errno strings, and the exact shape this rule exists to catch -- matched that
+// alternative and sailed through into full-screen user-facing copy. Rule (4)
+// now binds to `messageBearingBindings()`, a set DERIVED from the file under
+// test; every other `<x>.message` is rejected by name. A rename of a binding,
+// an added call site or a removed one changes what the checker COMPUTES rather
+// than requiring this file to be edited.
 //
 // Static on purpose: it reads the source, needs no build, no browser and no
 // display, and therefore belongs in --quick where a leak costs seconds rather
@@ -36,9 +50,9 @@
 //   node scripts/verify-shell-error-copy.mjs [--file <path>]
 //   node scripts/verify-shell-error-copy.mjs --self-test
 //
-// Exit 0 pass, 1 fail. --self-test plants six faults in a temporary copy and
-// requires each to go red naming the drift; a check that can only go green is
-// not a check.
+// Exit 0 pass, 1 fail. --self-test plants every fault in the FAULTS array below
+// into a temporary copy and requires each to go red naming the drift; a check
+// that can only go green is not a check.
 
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -86,6 +100,107 @@ function parseUserMessageTable(src) {
     entries.set(m[1], JSON.parse(m[2]));
   }
   return { entries, raw: block[0] };
+}
+
+/**
+ * The text between the brace at `open` and its match, or null if unbalanced.
+ * The source is comment-stripped before it gets here, and this file's only
+ * brace-bearing strings are template interpolations, whose braces are balanced.
+ */
+function braceBody(src, open) {
+  let depth = 0;
+  for (let i = open; i < src.length; i += 1) {
+    if (src[i] === "{") {
+      depth += 1;
+    } else if (src[i] === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return src.slice(open + 1, i);
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Every `catch (<name>)` binding name in the file under test. Used ONLY to pick
+ * which rejection message rule (4) prints -- it never widens the accept set.
+ *
+ * ponytail: file-scoped, not block-scoped. A caught exception's identifier is a
+ * raw exception object wherever it appears in this file, so block-scope
+ * tracking would buy a parser this check does not need. Upgrade to block scope
+ * only if a real false positive appears -- i.e. a binding that is a catch
+ * parameter in one method and a legitimate message-bearing binding in another.
+ */
+function catchParamNames(src) {
+  const names = new Set();
+  for (const m of src.matchAll(/catch\s*\(\s*([A-Za-z_$][\w$]*)\s*\)/g)) {
+    names.add(m[1]);
+  }
+  return names;
+}
+
+/**
+ * The set of local binding names whose value is known to carry a
+ * table-validated `message:` field. Two initializer shapes, both live in
+ * TheiaService.sys.mjs:
+ *
+ *   (a) an object literal containing a `message:` property (`failed`);
+ *   (b) a `this.<method>(` call, optionally awaited, where <method>'s body has
+ *       at least one `return` object literal whose `message:` is set to a
+ *       DECLARED `USER_MESSAGE.<key>` (`resolved`, `result`).
+ *
+ * Shape (a) does not re-validate the property value it finds, and that short
+ * form is sound only because check (2) above already fails the whole run if ANY
+ * `message:` site in this file is something other than `USER_MESSAGE.<declared
+ * key>` or `null`. Weakening check (2) would hollow this out from underneath --
+ * shape (a) would then accept a binding holding an ad-hoc string.
+ *
+ * A method whose every `return` sets `message: null` does NOT qualify: a
+ * binding whose `.message` is always null would paint nothing, which is a
+ * different defect and must not be waved through here.
+ */
+function messageBearingBindings(src, table) {
+  const bearing = new Set();
+
+  // (a) object-literal initializer.
+  for (const m of src.matchAll(/(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*\{/g)) {
+    const body = braceBody(src, m.index + m[0].length - 1);
+    if (body !== null && /(?:^|[^\w.$])message:/.test(body)) {
+      bearing.add(m[1]);
+    }
+  }
+
+  // (b) `this.<method>()` initializer, resolved through the method's own body.
+  const declared = new Set(table.entries.keys());
+  for (const m of src.matchAll(
+    /(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?this\.([A-Za-z_$][\w$]*)\(/g
+  )) {
+    const [, binding, method] = m;
+    const decl = src.match(
+      new RegExp(`^\\s*(?:async\\s+)?${method}\\s*\\([^)]*\\)\\s*\\{`, "m")
+    );
+    if (!decl) {
+      continue;
+    }
+    const body = braceBody(src, decl.index + decl[0].length - 1);
+    if (body === null) {
+      continue;
+    }
+    for (const ret of body.matchAll(/return\s*\{/g)) {
+      const literal = braceBody(body, ret.index + ret[0].length - 1);
+      if (literal === null) {
+        continue;
+      }
+      const prop = literal.match(/(?:^|[^\w.$])message:\s*USER_MESSAGE\.([A-Za-z_$][\w$]*)/);
+      if (prop && declared.has(prop[1])) {
+        bearing.add(binding);
+        break;
+      }
+    }
+  }
+
+  return bearing;
 }
 
 function check(targetPath) {
@@ -179,14 +294,42 @@ function check(targetPath) {
   }
 
   // --- (4) every _showError() call takes a table-derived message ----------
+  // The accept set is DERIVED from this same file (see messageBearingBindings);
+  // nothing below is a hand-kept list of identifier names.
+  const bearing = messageBearingBindings(src, table);
+  const caught = catchParamNames(src);
+
   let callSites = 0;
   for (const m of src.matchAll(/this\._showError\(\s*([^,]+?)\s*,/g)) {
     callSites += 1;
     const arg = m[1].trim();
-    if (!/^(?:USER_MESSAGE\.[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*\.message)$/.test(arg)) {
+    if (/^USER_MESSAGE\.[A-Za-z_$][\w$]*$/.test(arg)) {
+      continue;
+    }
+    const dotted = arg.match(/^([A-Za-z_$][\w$]*)\.message$/);
+    if (!dotted) {
       fail(
         `this._showError() is called with \`${arg}\` as its message -- only a USER_MESSAGE entry ` +
-          `or a result object's \`.message\` (which the checks above prove is one) may paint the error layer`
+          `or a message-bearing binding's \`.message\` may paint the error layer`
+      );
+      continue;
+    }
+    const name = dotted[1];
+    if (caught.has(name)) {
+      fail(
+        `this._showError() is called with \`${arg}\` as its message, and \`${name}\` is a ` +
+          `\`catch\` parameter in this file -- a caught exception's \`.message\` is a raw exception ` +
+          `string written by the runtime, carrying paths, ports and errno text. It belongs in a ` +
+          `diagnostics field row, never in the user-facing error layer`
+      );
+      continue;
+    }
+    if (!bearing.has(name)) {
+      fail(
+        `this._showError() is called with \`${arg}\` as its message, but \`${name}\` is not a ` +
+          `message-bearing binding -- no object literal and no \`this.<method>()\` return in this ` +
+          `file gives \`${name}\` a table-validated \`message:\` field, so nothing here proves what ` +
+          `it would paint`
       );
     }
   }
