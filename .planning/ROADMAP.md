@@ -54,7 +54,7 @@ Sourcerer's decision IDs as justification.)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 10 plans — 8 executed, 2 gap closure pending (01-09, 01-10: the supervisor's health-gate recovery and start-path error affordance)
+**Plans**: 9/10 plans executed — 8 executed, 2 gap closure pending (01-09, 01-10: the supervisor's health-gate recovery and start-path error affordance)
 
 Plans:
 **Wave 1**
@@ -91,7 +91,7 @@ Plans:
 
 **Wave 9** *(gap closure — blocked on Wave 8 completion)*
 
-- [ ] 01-09-PLAN.md — Close the state-gating half of the supervisor gap: re-key the one-time cookie/navigate/health-loop block onto the completion field so a transient health-gate failure still reaches the interface, behind a registered planted-fault check observed red before the fix
+- [x] 01-09-PLAN.md — Close the state-gating half of the supervisor gap: re-key the one-time cookie/navigate/health-loop block onto the completion field so a transient health-gate failure still reaches the interface, behind a registered planted-fault check observed red before the fix
 
 **Wave 10** *(gap closure — blocked on Wave 9 completion)*
 
@@ -207,7 +207,7 @@ than noisy.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Platform Extraction and Rename | 8/8 | In Progress|  |
+| 1. Platform Extraction and Rename | 9/10 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 0/TBD | Not started | - |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
