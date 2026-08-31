@@ -102,6 +102,17 @@ document.addEventListener(
     window.powerbrowserShowError = function powerbrowserShowError(detail) {
       const { reason, recoverable } = detail;
       errorMessageElement.textContent = reason;
+      // 01-13: the classification reaches the CONTROL. A failure the supervisor
+      // has classified unrecoverable is not offered a Retry, because a control
+      // the interface is designed to refuse is worse than no control -- it
+      // consumes the user's one remaining idea about what to do. This is
+      // PRESENTATION only: the refusal itself lives in TheiaService.retry(),
+      // which is what a caller reaching powerbrowserRetry() without the button
+      // hits, and the DOM is never read back as authority. Written at the SHOW
+      // site only -- one writer for one fact, and this function always runs
+      // before the layer is visible again, so powerbrowserHideError needs no
+      // reset that could drift out of step with it.
+      errorRetryButton.hidden = !recoverable;
       errorElement.style.display = "flex";
       dump(`POWERBROWSER_SHELL_ERROR ${JSON.stringify({ reason, recoverable })}\n`);
       dump(`POWERBROWSER_ERROR_DIAGNOSTICS ${JSON.stringify({ rows: TheiaService.getFailureDetails() })}\n`);

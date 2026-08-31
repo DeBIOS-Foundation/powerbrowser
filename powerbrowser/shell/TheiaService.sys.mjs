@@ -103,6 +103,15 @@ export const TheiaService = {
   _restartInFlight: false,
   _recoveryProbeActive: false,
 
+  // 01-13: the classification of the error state CURRENTLY on screen -- true,
+  // false, or null when there is no error state at all. Written and cleared at
+  // exactly the two sites `_errorShown` is, by the same latch, so it has
+  // `_errorShown`'s lifetime and can never describe a different failure than the
+  // one painted. Read in exactly one place, `retry()`, which is the point: the
+  // classification has to reach the SUPERVISOR's own retry entry point, not just
+  // the control, or a caller that never touched the button bypasses it.
+  _errorRecoverable: null,
+
   // 01-07: the diagnostic identifiers the user-facing message deliberately
   // does NOT carry -- an array of [label, value] pairs belonging to the
   // failure that put the shell into the current error state, or null when
@@ -951,8 +960,29 @@ export const TheiaService = {
    * it and let the next `_showError()` start a second one. `_hideError()`
    * early-returns when `_errorShown` is false, so the health loop's and
    * `start()`'s own `_restart()` calls are unaffected by this.
+   *
+   * 01-13 (the same failed truth 2d, re-scoped by 01-REVIEW.md's CR-01): the
+   * classification guard below is the SUPERVISOR half of the retry gate, and it
+   * is the half that actually refuses. 01-12 gated the background probe timer on
+   * `recoverable`; this entry point was still unconditional, so the one class
+   * D-113 calls "unrecoverable by construction ... with no retry at all" was
+   * re-entered by the single control the error screen offered. The bootstrap
+   * hides that control (`errorRetryButton.hidden`), but that is PRESENTATION:
+   * `powerbrowserRetry()` is a window global any chrome-privileged caller can
+   * invoke without ever touching the button, and a rendered state is never
+   * authority. Both routes are refused here, on the same terms.
+   *
+   * The guard's ORDERING is the second half of the fix and is load-bearing:
+   * returning BEFORE `_hideError()` is what stops a refused click erasing
+   * `_failureDetails`. A user action that did not itself resolve the failure must
+   * not discard the diagnostic rows that identified it -- those rows are the only
+   * thing the user has left to act on or to report.
    */
   async retry() {
+    if (this._errorRecoverable !== true) {
+      this._pushLog("Retry refused: the failure currently on screen was classified unrecoverable, so the restart path is not re-entered and the diagnostics rows are kept.");
+      return;
+    }
     this._hideError();
     await this._restart();
   },
@@ -1071,6 +1101,18 @@ export const TheiaService = {
    * would be a second source of truth for one fact -- the shape of the defect,
    * not its fix.
    *
+   * 01-13: `_errorRecoverable` is written here, and it is NOT the second source
+   * of truth the paragraph above rejects. That rejected shape was a separate
+   * "sidecar resolved" boolean duplicating a fact this method already receives,
+   * derived independently and free to disagree with it. This field duplicates
+   * nothing. `recoverable` is a parameter with no lifetime past this call, and
+   * `retry()` runs in a LATER TURN, driven by a user click, with no access to it
+   * -- there was no way for the classification to reach the user-driven route at
+   * all. The field stores the CURRENT ERROR STATE's classification with exactly
+   * `_errorShown`'s lifetime: written inside the same false-to-true latch,
+   * cleared at the same one site in `_hideError`, so the two can never describe
+   * different failures.
+   *
    * Neither this, the chrome layer's sentinel, nor a detail row may ever
    * include the per-launch token: `message` is a static literal, and every
    * detail value goes through the same `this._token` redaction `_pushLog`
@@ -1081,6 +1123,11 @@ export const TheiaService = {
       return;
     }
     this._errorShown = true;
+    // 01-13: inside the latch, so the stored classification always describes the
+    // failure that is actually PAINTED. A later `_showError` swallowed by the
+    // guard above must not overwrite it, or the message on screen and the
+    // classification `retry()` reads would be describing different failures.
+    this._errorRecoverable = recoverable === true;
     this._failureDetails = (details || []).map(([label, value]) => {
       const text = String(value);
       return [label, this._token ? text.replaceAll(this._token, "[redacted]") : text];
@@ -1099,6 +1146,7 @@ export const TheiaService = {
     }
     this._errorShown = false;
     this._failureDetails = null;
+    this._errorRecoverable = null;
     this._stopRecoveryProbe();
     this._browserElement.ownerDocument.defaultView.powerbrowserHideError();
   },
