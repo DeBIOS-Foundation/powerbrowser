@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-11-PLAN.md
-last_updated: "2026-08-31T20:39:18.290Z"
+stopped_at: Completed 01-12-PLAN.md
+last_updated: "2026-08-31T20:55:09.159Z"
 last_activity: 2026-08-31
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 2 of 12
+Plan: 3 of 12
 Status: Ready to execute
 Last activity: 2026-08-31 — Phase 01 execution started
 
-Progress: [█████████░] 92%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Progress: [█████████░] 92%
 | Phase 01 P09 | ~1h05m | 2 tasks | 3 files |
 | Phase 01 P10 | ~40m | 3 tasks | 6 files |
 | Phase 01 P11 | ~35min | 2 tasks | 6 files |
+| Phase 01 P12 | ~30min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -123,6 +124,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-11: the analyzer EVALUATES both shipped files (ChromeUtils-faked import + node:vm sandbox that is its own window) rather than re-implementing either; the drive is the bootstrap's own DOMContentLoaded handler
 - [Phase ?]: 01-11: deriveErrorLayerBinding tries the SHOW global before the HIDE global -- deriving only from hide made the plan's own removal-side fault a derivation dead-end instead of a set-equality red
 - [Phase ?]: 01-11: WINDOWS.md ledger item 15 stays OPEN -- a Node-level contract check over shipped source is not a human clicking Retry in a real window
+- [Phase ?]: The recovery-probe gate is the recoverable flag _showError already receives, not a new sidecar-resolved boolean: a second source of truth for one fact is the defect's shape, not its fix
+- [Phase ?]: A two-directional gate needs a registered positive control with its own planted fault, or 'stop doing X everywhere' passes the negative half
+- [Phase ?]: Probe instrumentation is causal (spawns after the code-under-test's own error sentinel), not temporal: an immediately-resolving fake sleep makes the probe a pure microtask loop the harness cannot interleave with
 
 ### Pending Todos
 
@@ -149,6 +153,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-31T20:39:09.446Z
-Stopped at: Completed 01-11-PLAN.md
+Last session: 2026-08-31T20:55:01.732Z
+Stopped at: Completed 01-12-PLAN.md
 Resume file: None
