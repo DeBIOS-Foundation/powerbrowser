@@ -109,6 +109,14 @@ Plans:
 
 - [x] 01-13-PLAN.md — Close the user-driven half of truth 2d: carry the `recoverable` classification into `retry()` itself and onto the Retry control, so the class the supervisor calls unrecoverable is not re-entered by the one affordance the error screen offers and a click can no longer erase the failure's diagnostic rows; realign the copy for that class, and register a scenario that drives the Retry click on the unrecoverable branch
 
+**Wave 14** *(gap closure — the two blockers found in the verification apparatus itself)*
+
+- [ ] 01-14-PLAN.md — Close CR-A: bind `verify-shell-error-copy.mjs`'s rule (4) to a set of message-bearing bindings derived from the file under test, so a caught exception's `.message` is rejected by name as a raw exception string instead of matching the permissive `<identifier>.message` alternative, with two planted-fault self-test rows proven green under the pre-fix checker and red under the fixed one; and correct the UI-SPEC row that sanctions the shape the gate now rejects
+
+**Wave 15** *(gap closure — blocked on Wave 14 completion)*
+
+- [ ] 01-15-PLAN.md — Close CR-B: give `scan-brand-residue.mjs` an `--extra-root <dir>` mode that walks a filesystem root outside the git index under the same inventory filters, and have `rebase-upstream.sh` pass `$UPSTREAM_DIR` to the post-replay invocation so the scan can finally read the tree the replay just rewrote; three hermetic self-test rows (clean control, planted token, missing root) prove it can go red without needing the 1.1 GB clone; plus the CI-workflow decision, the BUILD.md failure point, and deferred-items row 9
+
 **UI hint**: yes
 **Research**: recommended — ~1,090 occurrences across five case-variant forms and six coupled reference formats (jar.mn, components.conf, moz.build, patch content, verifier regex); the classification inventory needs its own deep pass. Highest-risk phase; plan-review-convergence applies. *(Research completed 2026-08-30: the real migrating surface measured 755 occurrences across 69 files; GUI-01 and GUI-02 found to be net-new work, not migration.)*
 
