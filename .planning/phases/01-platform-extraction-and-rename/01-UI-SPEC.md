@@ -312,7 +312,7 @@ E6 GUI-02 web tabs (`nav`+`media`+`list-collection`), E7 welcome/about branding 
 | loading | E2 error layer | ✅ covered | Error layer paints at `z-index: 2` above the loading layer; Retry returns control to the loading layer rather than showing an in-flight state of its own |
 | error | E2 error layer | ✅ covered | Two-part plain-language copy (what failed + next step) per `## Copywriting Contract`, with Retry and Details as on-screen affordances; internal identifiers forbidden in the string |
 | overflow | E2 error message | ✅ covered | `max-width: 40em` with centred text — a long message wraps inside the layer instead of running edge to edge |
-| long-text | E2 error message | ✅ covered | Long `err.message`-derived copy wraps at `max-width: 40em`; never truncated or ellipsised — the full next-step sentence must remain visible |
+| long-text | E2 error message | ✅ covered | The message is always a fixed `USER_MESSAGE` literal from the table in `TheiaService.sys.mjs`; the longest of those wraps at `max-width: 40em` and is never truncated or ellipsised, so the full next-step sentence stays visible. A caught exception's `.message` is **not** a source of this copy — it is a diagnostics field row per `## Copywriting Contract`, and `shell-error-copy-no-internals` now rejects a `this._showError()` call that passes one |
 | empty | E3 diagnostics | ✅ covered | Only reachable from the error deck, at which point the failing error's field rows exist; an empty log well renders as an empty bordered well, not a collapsed layout |
 | populated | E3 diagnostics | ✅ covered | Field rows at the 4px row gap and the monospace log well per the declared spacing scale (16px layer gap, 16px well padding) |
 | partial | E3 diagnostics | ✅ covered | Rows render only for identifiers present on the current failure (pref key, sentinel, port, timeout, `err.message`); absent identifiers produce no empty-labelled rows |
@@ -395,3 +395,5 @@ block at `1.74.1` alongside the other 49, or the workspace resolves a mismatched
 | GUI-01 / GUI-02 contracts | 01-RESEARCH.md Findings 1 and 2; CONTEXT.md D-19, D-20 |
 | `@theia/mini-browser` gate | 01-RESEARCH.md *Package Legitimacy Audit*; CONTEXT.md D-22 |
 | Deferred (not specified here) | Real logo, custom homepage/search, `[colors]` in `configuration.toml` |
+
+Plan 01-14 corrected the `long-text` state row for the E2 error message in `## UI Considerations`, which described the painted message as `err.message`-derived copy and so contradicted `## Copywriting Contract`. Recorded as prose rather than as a table row because this file's row count is itself an asserted constant, and because the row's own identifying string is grep-asserted to appear exactly once.
