@@ -54,7 +54,7 @@ Sourcerer's decision IDs as justification.)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 8/8 plans executed — 7 executed, 1 gap closure pending
+**Plans**: 10 plans — 8 executed, 2 gap closure pending (01-09, 01-10: the supervisor's health-gate recovery and start-path error affordance)
 
 Plans:
 **Wave 1**
@@ -88,6 +88,14 @@ Plans:
 **Wave 8** *(gap closure — blocked on Wave 7 completion)*
 
 - [x] 01-08-PLAN.md — Close the two FAILED must-have truths from verification: make the registered residual-brand gate able to fail on an unclaimed occurrence and reconcile its census, and render the display form in the About dialog behind a tree-derived surface guard
+
+**Wave 9** *(gap closure — blocked on Wave 8 completion)*
+
+- [ ] 01-09-PLAN.md — Close the state-gating half of the supervisor gap: re-key the one-time cookie/navigate/health-loop block onto the completion field so a transient health-gate failure still reaches the interface, behind a registered planted-fault check observed red before the fix
+
+**Wave 10** *(gap closure — blocked on Wave 9 completion)*
+
+- [ ] 01-10-PLAN.md — Close the error-affordance half: one terminal handler on all four fire-and-forget entry points onto the supervisor, the three named throw sites guarded with the classified-result shape, and a tree-derived terminal-handler coverage rule
 
 **UI hint**: yes
 **Research**: recommended — ~1,090 occurrences across five case-variant forms and six coupled reference formats (jar.mn, components.conf, moz.build, patch content, verifier regex); the classification inventory needs its own deep pass. Highest-risk phase; plan-review-convergence applies. *(Research completed 2026-08-30: the real migrating surface measured 755 occurrences across 69 files; GUI-01 and GUI-02 found to be net-new work, not migration.)*
