@@ -1550,6 +1550,31 @@ EOF
     result=1
   fi
 
+  # 01-10 Task 2: the failure must carry its OWN classification into the
+  # diagnostics layer, not fall to the generic terminal-handler backstop. The
+  # assertion above proves an error paints AT ALL; this one proves the painted
+  # error belongs to the step that actually failed. Neither subsumes the other,
+  # and both are kept: strip the guard from the settings-folder step and this
+  # row reverts to the backstop's own label while the assertions above stay
+  # green.
+  local rows failed_step
+  rows="$(error_diagnostics_rows "$BROWSER_LOG")"
+  if [ -z "$rows" ]; then
+    echo "start-failure-shows-error: FAIL -- MIG-04 -- the error state announced no diagnostics rows at all; every identifier the sentence drops would be lost" >&2
+    result=1
+  else
+    failed_step="$(printf '%s\n' "$rows" | awk -F'\t' '$1 == "Failed step" { print $2 }' | head -1)"
+    if [ -z "$failed_step" ]; then
+      echo "start-failure-shows-error: FAIL -- MIG-04 -- the error state announced no 'Failed step' row; rows: $(tr '\n' ',' <<<"$rows")" >&2
+      result=1
+    elif ! grep -Fq 'settings folder' <<<"$failed_step"; then
+      echo "start-failure-shows-error: FAIL -- MIG-04 -- the failing settings-folder step did not name itself in its diagnostics rows (Failed step = '$failed_step'); the failure fell to the generic backstop instead of carrying its own classification" >&2
+      result=1
+    else
+      echo "start-failure-shows-error: rows[$(tr '\n' ',' <<<"$rows")]"
+    fi
+  fi
+
   # Positive control, the same one check_shell03_budget_exhausted_error carries:
   # a deck-state sentinel that reported "none" unconditionally, or a
   # getComputedStyle read that does not work headless, must not be able to

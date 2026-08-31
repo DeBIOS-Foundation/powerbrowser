@@ -138,11 +138,36 @@ function deriveSwapGuardField(src) {
  * session cookie), never by a line number, so the block may move freely.
  */
 function deriveOneTimeBlockField(src) {
-  const m = src.match(/if\s*\(([^)]*)\)\s*\{\s*PowerBrowserAPI\.setSessionCookie\(/);
-  if (!m) {
-    return { field: null, reason: "no `if (...) { PowerBrowserAPI.setSessionCookie(` block found" };
+  const cookieIndex = src.indexOf("PowerBrowserAPI.setSessionCookie(");
+  if (cookieIndex === -1) {
+    return { field: null, reason: "no `PowerBrowserAPI.setSessionCookie(` call found" };
   }
-  const body = src.slice(m.index, m.index + 1200);
+  // The guard is the LAST `if (...) {` before the cookie call, not necessarily
+  // the one lexically adjacent to it: 01-10 wrapped that call in its own
+  // try/catch, so a `try {` now sits between the two. Only whitespace and that
+  // one construct may intervene -- anything else means the cookie call is no
+  // longer the first statement of the block this contract is about, and that is
+  // reported rather than tolerated.
+  const before = src.slice(0, cookieIndex);
+  const guardRe = /if\s*\(([^)]*)\)\s*\{/g;
+  let m = null;
+  for (let hit = guardRe.exec(before); hit !== null; hit = guardRe.exec(before)) {
+    m = hit;
+  }
+  if (!m) {
+    return { field: null, reason: "no `if (...) {` guard precedes the PowerBrowserAPI.setSessionCookie( call" };
+  }
+  const gap = src.slice(m.index + m[0].length, cookieIndex);
+  if (!/^\s*(?:try\s*\{\s*)?$/.test(gap)) {
+    return {
+      field: null,
+      reason:
+        "the PowerBrowserAPI.setSessionCookie( call is no longer the first statement of the block that " +
+        `guards it (intervening source: ${JSON.stringify(gap.trim().slice(0, 60))}) -- the one-time ` +
+        "initialisation block can no longer be located by its body",
+    };
+  }
+  const body = src.slice(m.index, m.index + 2400);
   if (!body.includes("this._swap()") || !body.includes("this._healthLoop()")) {
     return {
       field: null,
