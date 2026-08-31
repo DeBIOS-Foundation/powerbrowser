@@ -87,13 +87,33 @@
 // An excepted site is REPORTED with its count on every run, never hidden, and
 // the flag is dropped from the gate once 01-03 lands.
 //
+// -- `--extra-root <dir>` is how the gate reaches a tree git cannot see --
+//
+// The file set above comes from `git ls-files`. A rebase replays the patch
+// stack onto `upstream/`, which `.gitignore` excludes, so `git ls-files` cannot
+// name a single byte of it. Without this mode the post-replay invocation in
+// `scripts/rebase-upstream.sh` re-scanned exactly the same tracked files the
+// pre-replay one already scanned -- a gate placed at precisely the right call
+// site that could not see the tree at that call site, green by construction and
+// unable to go red for its stated cause (plan 01-15, closing 01-VERIFICATION.md
+// gap CR-B).
+//
+// `--extra-root <dir>` adds a SECOND file set, walked from the filesystem under
+// the same `scope.exclude` and `scope.binary_extensions` filters the tracked
+// path applies -- one filter definition, two file-set sources, never a second
+// weaker ruleset. It is additive: the tracked-tree scan always runs and is never
+// replaced. It never follows a symlink and never descends `.git`. An absent,
+// unreadable or empty root is a hard FAIL, never a skip: a skip-when-absent mode
+// would reproduce CR-B in a new shape.
+//
 // Usage:
 //   node scripts/scan-brand-residue.mjs [--reconcile] [--scope-chain <name>]
 //                                       [--except-hand-write]
+//                                       [--extra-root <dir>]
 //                                       [--report <path>] [--self-test]
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -252,20 +272,83 @@ export function claimOccurrences(text, rows, file) {
 // Scope
 // ---------------------------------------------------------------------------
 
+/**
+ * The one scope filter, shared by both file-set sources: the `git ls-files`
+ * path below and the `--extra-root` walk beneath it. It is extracted rather
+ * than restated so the extra root cannot become a second, weaker ruleset --
+ * one filter definition, two callers.
+ */
+export function inScanScope(inv, relPath) {
+  const exclude = inv.scope?.exclude ?? [];
+  const binary = inv.scope?.binary_extensions ?? [];
+  return !exclude.some((x) => relPath === x || relPath.startsWith(x)) &&
+    !binary.some((ext) => relPath.toLowerCase().endsWith(ext));
+}
+
 export function scopeFiles(inv, { chainFiles = null } = {}) {
   const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: REPO_ROOT, encoding: 'utf8' })
     .split('\0')
     .filter(Boolean);
-  const exclude = inv.scope?.exclude ?? [];
-  const binary = inv.scope?.binary_extensions ?? [];
-  let files = tracked.filter((p) =>
-    !exclude.some((x) => p === x || p.startsWith(x)) &&
-    !binary.some((ext) => p.toLowerCase().endsWith(ext)));
+  let files = tracked.filter((p) => inScanScope(inv, p));
   if (chainFiles) {
     const want = new Set(chainFiles);
     files = files.filter((p) => want.has(p));
   }
   return files.sort();
+}
+
+/**
+ * The second file-set source: a filesystem walk under a caller-supplied root
+ * OUTSIDE the git index, returning paths relative to `root` so the result drops
+ * straight into the existing `scan(inv, { root, files })` call. That function
+ * already takes both parameters, so this is a second file set for the one
+ * scanner, not a second scanner.
+ *
+ * Two structural exclusions, both with mechanical reasons specific to this tree:
+ *
+ *   - Never follow a symbolic link. `upstream/powerbrowser` is a real symlink
+ *     back into this repo's own `powerbrowser/` directory (`rebase-upstream.sh`
+ *     asserts exactly that resolution), so a link-following walk would rescan
+ *     this repo's tree through a second path and could recurse.
+ *   - Never descend a directory named `.git`. A rebased upstream checkout
+ *     carries a multi-gigabyte object store whose packfiles are not source.
+ *
+ * Content-based exclusion is NOT hand-kept here. `inv.scope.exclude`'s entries
+ * are repo-relative and none of them exists under a Gecko checkout, so applying
+ * them verbatim to extra-root-relative paths is inert there rather than harmful
+ * -- that is intended. Any content-based exclusion a real rebase turns out to
+ * need belongs in `inventory/brand-tokens.json`, which is the derived source
+ * both file-set paths already read, never as a literal in this walker.
+ *
+ * Throws naming the path when the root is absent or is not a directory. It does
+ * NOT return an empty array in that case: a silent skip is CR-B in a new shape.
+ */
+export function extraRootFiles(inv, root) {
+  let st;
+  try {
+    st = statSync(root);
+  } catch {
+    throw new Error(`--extra-root ${root} does not exist or cannot be read -- an unreadable extra root is not a clean tree, and skipping it would make this pass green by construction`);
+  }
+  if (!st.isDirectory()) {
+    throw new Error(`--extra-root ${root} exists but is not a directory -- the mode walks a directory tree, and it will not silently pass on a path it cannot walk`);
+  }
+
+  const out = [];
+  const walk = (absDir, relDir) => {
+    for (const dirent of readdirSync(absDir, { withFileTypes: true })) {
+      if (dirent.isSymbolicLink()) continue;
+      const rel = relDir ? `${relDir}/${dirent.name}` : dirent.name;
+      if (dirent.isDirectory()) {
+        if (dirent.name === '.git') continue;
+        walk(join(absDir, dirent.name), rel);
+      } else if (dirent.isFile() && inScanScope(inv, rel)) {
+        out.push(rel);
+      }
+    }
+  };
+  walk(root, '');
+  return out.sort();
 }
 
 /**
@@ -817,6 +900,12 @@ function main(argv) {
     console.error('scan-brand-residue: FAIL -- --report requires a path');
     return 2;
   }
+  const extraRootIdx = argv.indexOf('--extra-root');
+  const extraRootArg = extraRootIdx === -1 ? null : argv[extraRootIdx + 1];
+  if (extraRootIdx !== -1 && !extraRootArg) {
+    console.error('scan-brand-residue: FAIL -- --extra-root requires a directory');
+    return 2;
+  }
   const exceptHandWrite = argv.includes('--except-hand-write');
   const wantReconcile = argv.includes('--reconcile');
 
@@ -880,11 +969,54 @@ function main(argv) {
   // reached when renameable offenses exist, in which case the gate had already
   // failed on the first reason.
   const gate = gateFailures(offenses, rec, { chain });
+
+  // The --extra-root pass. It joins the SAME gate reasons and the same single
+  // exit below -- the tracked-tree scan above always ran and is never replaced.
+  //
+  // It runs offenses and unclaimed residue probes, and deliberately does NOT
+  // call reconcile() or groundTruth(). Those implement D-17's census of THIS
+  // repo's own migrating tree; applied to a foreign Gecko checkout the
+  // arithmetic cannot close, so reusing them would make this pass permanently
+  // red for a reason that has nothing to do with residual brand strings -- and
+  // a permanently-red gate is a gate that gets switched off. The probes still
+  // run for the reason reconciliation condition 4 exists: they are the
+  // independent detector that catches a case variant the boundary matcher
+  // missed, which over an unowned tree is the likelier failure.
+  let extraSummary = '';
+  if (extraRootArg) {
+    const extraRoot = resolve(extraRootArg);
+    let extraFiles = null;
+    try {
+      extraFiles = extraRootFiles(inv, extraRoot);
+    } catch (err) {
+      gate.push(err.message);
+    }
+    if (extraFiles && extraFiles.length === 0) {
+      gate.push(`the --extra-root file set is empty for ${extraRoot} -- an empty file set is not a clean tree, it is a scan that ran over nothing`);
+    } else if (extraFiles) {
+      const extra = scan(inv, { root: extraRoot, files: extraFiles });
+      const extraOffenses = offensesOf(extra);
+      for (const o of extraOffenses) {
+        console.error(`  ${join(extraRoot, o.file)}:${o.line}: ${o.row.token}`);
+      }
+      for (const u of extra.unclaimedProbes) {
+        console.error(`  ${join(extraRoot, u.file)}:${u.line}: "${u.text}" matched probe "${u.probe}" but no inventory row claimed it`);
+      }
+      if (extraOffenses.length !== 0) {
+        gate.push(`${extraOffenses.length} residual brand occurrence(s) across ${new Set(extraOffenses.map((o) => o.file)).size} file(s) under --extra-root ${extraRoot}`);
+      }
+      if (extra.unclaimedProbes.length !== 0) {
+        gate.push(`${extra.unclaimedProbes.length} unclaimed residue-probe hit(s) under --extra-root ${extraRoot} -- a form no inventory row claimed`);
+      }
+      extraSummary = `, plus ${extraFiles.length} file(s) under --extra-root ${extraRoot}`;
+    }
+  }
+
   if (gate.length !== 0) {
     for (const reason of gate) console.error(`scan-brand-residue: FAIL -- ${reason}`);
     return 1;
   }
-  console.log(`scan-brand-residue: PASS -- no residual brand occurrence in ${result.files.length} scanned file(s)${chain ? ` for chain "${chain}"` : ''}${exceptHandWrite ? ' (excepting the hand-write surfaces named above)' : ''}`);
+  console.log(`scan-brand-residue: PASS -- no residual brand occurrence in ${result.files.length} scanned file(s)${extraSummary}${chain ? ` for chain "${chain}"` : ''}${exceptHandWrite ? ' (excepting the hand-write surfaces named above)' : ''}`);
   return 0;
 }
 
