@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-13-PLAN.md
-last_updated: "2026-08-31T22:56:07.877Z"
+stopped_at: Completed 01-14-PLAN.md
+last_updated: "2026-08-31T23:07:15.522Z"
 last_activity: 2026-08-31
 last_activity_desc: Completed plan 01-13 (gap closure — user-driven Retry gate)
 progress:
   total_phases: 1
-  completed_phases: 1
+  completed_phases: 0
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 13 of 13
-Status: All plans executed — ready for phase verification
-Last activity: 2026-08-31 — Completed plan 01-13 (gap closure — user-driven Retry gate)
+Plan: 2 of 15
+Status: Ready to execute
+Last activity: 2026-08-31 — Phase 01 execution started
 
-Progress: [██████████] 100%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ Progress: [██████████] 100%
 | Phase 01 P11 | ~35min | 2 tasks | 6 files |
 | Phase 01 P12 | ~30min | 3 tasks | 5 files |
 | Phase 01 P13 | 15min | 3 tasks | 6 files |
+| Phase 01 P14 | ~6min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -133,6 +134,11 @@ Recent decisions affecting current work:
 - [Phase ?]: two-consecutive-failing-retries-repaint retargeted onto the recoverable class rather than retired; the unrecoverable class moved to the new scenario, and the two assert the gate in both directions
 - [Phase ?]: Minted USER_MESSAGE.couldNotStartUnrecoverable where 01-10 declined to mint a key: here the distinction IS the action, because one screen offers Retry and the other does not
 - [Phase ?]: POWERBROWSER_DECK_STATE gained no key for the Retry control's visibility — the named place a future tier-3 launch-level check would add one, rather than scaffolding for a check nobody is writing
+- [Phase ?]: 01-14: rule (4)'s accept set is DERIVED from two initializer shapes (object literal; this.<method>() return carrying a declared USER_MESSAGE key) -- a name list could only ever agree with the tree it was copied from
+- [Phase ?]: 01-14: catchParamNames is file-scoped and never widens the accept set -- it only selects which rejection message prints, so block-scope tracking would buy a parser the check does not need
+- [Phase ?]: 01-14: a method whose every return sets message: null does NOT qualify as message-bearing -- a binding that always paints nothing is a different defect, not a licence
+- [Phase ?]: 01-14: each new fault row is proven GREEN under a scratch copy of the pre-fix checker and RED under the fixed one -- a row red under both is not evidence that the named hole was closed
+- [Phase ?]: 01-14: the 01-UI-SPEC provenance entry is prose, not a table row -- the file's 104-row count and the corrected row's identifying string are both grep-asserted, so a row would have broken two acceptance criteria
 
 ### Pending Todos
 
@@ -159,6 +165,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-31T21:52:35.714Z
-Stopped at: Completed 01-13-PLAN.md
+Last session: 2026-08-31T23:06:57.488Z
+Stopped at: Completed 01-14-PLAN.md
 Resume file: None
