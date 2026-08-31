@@ -348,7 +348,20 @@ function runChecks(root) {
         );
     }
     displaySurfaces.push('theia/applications/browser/package.json');
-    const leak = new RegExp(`${exp.identifier_form}[ "]`);
+    // 01-07: the welcome widget renders the product name as JSX text, and it
+    // was NOT on this list -- so `<h1>PowerBrowser</h1>` sat in a display
+    // surface through the whole rename, with verify-branding.mjs renamed to
+    // expect exactly that value. Two files agreeing with each other is not a
+    // check; this list is the third source that no rename pass writes, and the
+    // omission is what let the leak through.
+    displaySurfaces.push('theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx');
+    // `<` joins the space and the quote as a terminator for the same reason:
+    // `PowerBrowser<` is a JSX text node closing its tag, i.e. a rendered
+    // string, while `PowerBrowserWelcomeWidget` (a class name) and
+    // `PowerBrowserAPI` remain untouched because the next character is a
+    // letter. The identifier form's legitimate uses all continue into an
+    // identifier; its illegitimate ones all end.
+    const leak = new RegExp(`${exp.identifier_form}[ "<]`);
     for (const rel of displaySurfaces) {
         const text = readText(root, rel);
         if (text === null) continue;

@@ -60,7 +60,14 @@ export class PowerBrowserWelcomeWidget extends ReactWidget {
     protected render(): React.ReactNode {
         return <div className='gs-container'>
             <img src={POWERBROWSER_MARK_DATA_URI} alt='' width={64} height={64} />
-            <h1>PowerBrowser</h1>
+            {/* The DISPLAY form, with the space. `PowerBrowser` is the
+                identifier form (class names, the chrome: package, the API
+                object) and inventory/brand-tokens.json records it as the value
+                that must never appear in a display string. This heading was
+                the identifier form until 01-07 -- exactly what a token-boundary
+                rename produces -- and verify-branding.mjs had been renamed to
+                expect it, so the two agreed and neither noticed. */}
+            <h1>Power Browser</h1>
             {this.version && <p>Version {this.version}</p>}
             <p>
                 <a href={POWERBROWSER_REPO_URL} onClick={this.openRepo}>{POWERBROWSER_REPO_URL}</a>

@@ -81,8 +81,18 @@ async function checkWelcome({ evaluate, waitFor }) {
         }
     })()`);
 
-    if (!text.includes('PowerBrowser')) {
-        throw new Error(`welcome widget textContent missing "PowerBrowser": ${JSON.stringify(text)}`);
+    // The DISPLAY form, with the space (inventory/brand-tokens.json's
+    // brand_display_expectations). Until 01-07 this expected `PowerBrowser`,
+    // the IDENTIFIER form, and the widget rendered it -- the mechanical rename
+    // had rewritten both the literal and the expectation that checks it, so
+    // they agreed and the wrong product name shipped unnoticed. That is
+    // Pitfall 1 exactly, and it is why the inventory is a third source neither
+    // side writes.
+    if (!text.includes('Power Browser')) {
+        throw new Error(`welcome widget textContent missing "Power Browser": ${JSON.stringify(text)}`);
+    }
+    if (/PowerBrowser/.test(text)) {
+        throw new Error(`welcome widget textContent leaks the IDENTIFIER form "PowerBrowser" into a display surface: ${JSON.stringify(text)}`);
     }
     if (NO_STOCK_IDENTITY.test(text)) {
         throw new Error(`welcome widget textContent matched /Theia|Eclipse/i: ${JSON.stringify(text)}`);
@@ -148,9 +158,18 @@ async function main() {
     const result = await withFirefoxPage(url, async ({ evaluate, waitFor }) => {
         await waitFor('window.theia && window.theia.container ? true : false');
 
+        // The DISPLAY form, with the space. Theia derives document.title from
+        // `applicationName` in theia/applications/browser/package.json, which
+        // the inventory's brand_display_expectations pins to the release
+        // brand_short_name `Power Browser` -- and verify-branding-preflight.mjs
+        // asserts that pinning. This expectation said `PowerBrowser` until
+        // 01-07: the rename had rewritten it to the identifier form while the
+        // package.json literal was hand-written correctly, so the two
+        // disagreed and this check was simply red for a reason that was never
+        // the product's fault.
         const title = await evaluate('document.title');
-        if (title !== 'PowerBrowser') {
-            throw new Error(`document.title was ${JSON.stringify(title)}, expected "PowerBrowser"`);
+        if (title !== 'Power Browser') {
+            throw new Error(`document.title was ${JSON.stringify(title)}, expected "Power Browser"`);
         }
         surfacesRun.push('title');
 
