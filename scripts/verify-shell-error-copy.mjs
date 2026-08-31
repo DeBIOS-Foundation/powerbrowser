@@ -249,6 +249,28 @@ const FAULTS = [
       ),
     expect: "this._showError() is called with",
   },
+  // 01-14 (CR-A). The two rows below plant the shape rule (4) exists to catch
+  // and, before 01-14, could not: an `<identifier>.message` argument whose
+  // identifier proves nothing. Both mutate the ONE direct `USER_MESSAGE.*`
+  // call site, which is the substitution 01-VERIFICATION.md's missing[] names.
+  {
+    name: "_showError() called with a caught exception's .message",
+    apply: (s) =>
+      s.replace(
+        "this._showError(USER_MESSAGE.couldNotStart, /* recoverable */ true, [",
+        "this._showError(err.message, /* recoverable */ true, ["
+      ),
+    expect: "raw exception string",
+  },
+  {
+    name: "_showError() called with an unknown identifier's .message",
+    apply: (s) =>
+      s.replace(
+        "this._showError(USER_MESSAGE.couldNotStart, /* recoverable */ true, [",
+        "this._showError(stray.message, /* recoverable */ true, ["
+      ),
+    expect: "stray.message",
+  },
 ];
 
 function runSelfTest(targetPath) {
