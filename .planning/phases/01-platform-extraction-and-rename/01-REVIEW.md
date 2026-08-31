@@ -1,687 +1,462 @@
 ---
 phase: 01-platform-extraction-and-rename
-reviewed: 2026-08-31T19:20:59Z
+reviewed: 2026-08-31T00:00:00Z
 depth: standard
-files_reviewed: 47
+files_reviewed: 5
 files_reviewed_list:
-  - .github/workflows/rebase-upstream.yml
-  - .mozconfig
-  - CLAUDE.md
-  - docs/BUILD.md
-  - docs/CUSTOMIZE.md
-  - docs/URI-SCHEMES.md
-  - inventory/brand-tokens.json
-  - patches/010-powerbrowser-identity.patch
-  - patches/020-powerbrowser-shell.patch
-  - powerbrowser/INTERNAL-APIS.md
-  - powerbrowser/branding/dev/configure.sh
-  - powerbrowser/branding/dev/content/aboutDialog.css
-  - powerbrowser/branding/dev/locales/en-US/brand.ftl
-  - powerbrowser/branding/dev/locales/en-US/brand.properties
-  - powerbrowser/branding/mark.svg
-  - powerbrowser/branding/release/configure.sh
-  - powerbrowser/branding/release/content/aboutDialog.css
-  - powerbrowser/branding/release/locales/en-US/brand.ftl
-  - powerbrowser/branding/release/locales/en-US/brand.properties
-  - powerbrowser/endpoint-allowlist.json
-  - powerbrowser/powerbrowser-release.desktop
-  - powerbrowser/powerbrowser.desktop
-  - powerbrowser/shell/PowerBrowserAPI.sys.mjs
   - powerbrowser/shell/TheiaService.sys.mjs
-  - powerbrowser/shell/moz.build
-  - powerbrowser/shell/powerbrowser.css
   - powerbrowser/shell/powerbrowser.js
-  - scripts/check-internals-boundary.sh
-  - scripts/lib/firefox-bidi.mjs
-  - scripts/rebase-upstream.sh
-  - scripts/rename-brand.mjs
-  - scripts/scan-brand-residue.mjs
-  - scripts/verify-branding-identity.mjs
-  - scripts/verify-branding-preflight.mjs
-  - scripts/verify-branding.mjs
-  - scripts/verify-gui01-command.mjs
-  - scripts/verify-gui01-window.mjs
   - scripts/verify-platform.sh
-  - scripts/verify-shell-error-copy.mjs
+  - scripts/verify-shell-error-contract.mjs
   - scripts/verify-start-path-recovery.mjs
-  - theia/applications/browser/package.json
-  - theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx
-  - theia/extensions/branding/src/browser/powerbrowser-mark.ts
-  - theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx
-  - theia/extensions/tab-uris/src/browser/browser-window-command.ts
-  - theia/extensions/tab-uris/src/browser/tab-uris-frontend-module.ts
-  - theia/extensions/token-gate/src/node/powerbrowser-env.ts
 findings:
-  critical: 3
-  warning: 14
+  critical: 1
+  warning: 5
   info: 6
-  total: 23
+  total: 12
 status: issues_found
 ---
 
-# Phase 1: Code Review Report
+# Phase 01: Code Review Report
 
-**Reviewed:** 2026-08-31T19:20:59Z
+**Reviewed:** 2026-08-31
 **Depth:** standard
-**Files Reviewed:** 47
+**Files Reviewed:** 5
 **Status:** issues_found
 
 ## Summary
 
-The supervisor (`TheiaService.sys.mjs`), the anti-corruption boundary
-(`PowerBrowserAPI.sys.mjs`), the chrome bootstrap (`powerbrowser.js`), and the
-verification harness were read in full. The branding literals, patches, desktop
-entries, docs, and the workflow were read and cross-checked against
-`inventory/brand-tokens.json`. `scripts/verify-platform.sh --quick` was run: all
-22 registered quick checks are green, and every self-test row goes red on its
-plant. The static gates work.
+Scope is `git diff e49dd38..HEAD` over the five files touched by gap-closure plans 01-11 and
+01-12 (~1500 insertions, mostly the two analyzers).
 
-They do not, however, cover the thing that is actually broken. Phases 01-09 and
-01-10 removed two ways for a launch to strand the user on the branded loading
-layer with no message, no Retry, and no Details. **A third, deterministic route
-to that same outcome is still present and is reached by the most obvious user
-action available in the error state: clicking Retry.** Two further defects sit
-on the same seam — the recovery probe is started on failure paths whose state
-`start()` deliberately never initialised, producing an unbounded spawn loop and,
-on one path, a backend with no quit observer.
+What the diff gets right, verified rather than assumed:
 
-Three findings are classified BLOCKER. The remaining fourteen WARNINGs are
-concentrated in state-machine coupling in the supervisor, harness process
-hygiene, and hardcoded developer-machine paths checked into a repo whose stated
-purpose is rebrandability.
+- Both analyzers and both `--self-test` runs are green on the current tree
+  (`start-path-recovery`: 18 rows; `shell-error-contract`: 6 rows).
+- 01-11's fix is real: `powerbrowserRetry` no longer writes `errorElement.style.display`, and
+  `retry()` calls `_hideError()` before `_restart()`. Derivation D checks the ORDER, not just
+  presence, which is the right assertion.
+- 01-12's probe gate is honest in both directions. `unrecoverable-classification-starts-no-probe`
+  and `recoverable-classification-starts-the-probe` share ONE `PROBE_DRAIN_TURNS`, and the
+  instrument is a counter on the fake boundary's spawn stub — a call the supervisor made, not a
+  line the harness printed. Fault plants 4 and 5 confirm each direction goes red. No absence
+  assertion in either new analyzer is made over an emitter the check itself writes;
+  `assertEmitters` proves both sentinel prefixes come from `dump(` sites in the file under test.
+- `_restart()` remains the single spawn entry point (derivation D's `_spawnAndGate(` check), so
+  `_restartInFlight` still serializes Retry against the health loop and the probe.
+- Derivation E is genuinely derived, not enumerated. I planted an arbitrary unrelated early
+  return (`if (!this._configDir) { return; }`) immediately before the registration and it went
+  red naming the byte offset — it is not keyed on the settings-folder branch the gap named.
+- Only two rows were appended to `verify-platform.sh`'s single registry; no sibling driver was
+  created.
 
-The verification registry is genuinely strong — derivation-not-expectation-list,
-non-vacuity assertions, planted-fault self-tests. The gap is not in check
-quality; it is that no check observes the DOM-vs-supervisor state agreement that
-CR-01 breaks, because both the sentinel stream and the supervisor's own accessors
-report the state the supervisor *believes* it is in.
-
-## Narrative Findings (AI reviewer)
+What it gets wrong: the 01-12 fix closes the timer-driven half of an unretryable-class re-entry
+and leaves the user-driven half (the Retry button) wide open, which is the one Critical below.
+Separately, both new checks assert on sentinel EMISSION rather than on the layer's resolved
+visibility, and I have two working mutants that reintroduce 01-11's exact defect class while
+both checks stay green.
 
 ## Critical Issues
 
-### CR-01: Clicking Retry permanently destroys the error layer — the user is stranded with no message, no Retry, and no Details
+### CR-01: `recoverable: false` gates the background probe but not the Retry button, so the unretryable class is still re-entered — by the user, with the same unassigned state
 
-**File:** `powerbrowser/shell/powerbrowser.js:121-124`, `powerbrowser/shell/TheiaService.sys.mjs:899-901`, `powerbrowser/shell/TheiaService.sys.mjs:1000-1012`
+**File:** `powerbrowser/shell/TheiaService.sys.mjs:143-151`, `:955-958`, `:1079-1093`;
+`powerbrowser/shell/powerbrowser.js:102-109`, `:131-137`;
+`powerbrowser/shell/powerbrowser.xhtml:39`
 
 **Issue:**
-`powerbrowserRetry()` hides the error layer by writing the DOM directly:
+01-12's own doc block (TheiaService.sys.mjs:1052-1072) states the defect precisely: for the
+`_resolveSidecar` class the supervisor "returns before `_configDir` and `_stateFilePath` exist,
+so every probe-driven respawn there was spawning against unassigned state". The gate stops the
+timer. It does not stop the user.
+
+`powerbrowserShowError` destructures `recoverable` and forwards it to the sentinel only
+(powerbrowser.js:103-106). It never touches `errorRetryButton`, which is unconditionally present
+and enabled (powerbrowser.xhtml:39; powerbrowser.css has no `[disabled]`/hidden rule for it). So
+on an unrecoverable `_resolveSidecar` failure the user is looking at a live Retry control, and
+clicking it runs `retry()` → `_hideError()` → `_restart()` → `_spawnAndGate()` with
+`_nodePath === null`, `_backendMain === "" | <nonexistent path>`, `_configDir === null`,
+`_stateFilePath === null`, and **no quit observer registered** (registration is at
+TheiaService.sys.mjs:186, after this branch's `return` at :150).
+
+Three concrete consequences, in order of severity:
+
+1. **The message promises an affordance that cannot work.** `USER_MESSAGE.nodeMissing` (:43)
+   reads "Install Node.js 22 or later, then choose Retry." `_resolveSidecar()` is called from
+   exactly one place — `start()` at :143 — and `start()` is permanently `_started`-guarded
+   (:134-138). Nothing ever re-runs the PATH search. The user can install Node 22 and press
+   Retry forever; `this._nodePath` stays null. This violates CLAUDE.md's user-facing-copy rule
+   ("ends with a next step that is a real affordance on screen") in the one direction that
+   matters — the affordance is on screen and is inert.
+2. **Retry destroys the diagnostic that identified the problem.** `_hideError()` nulls
+   `_failureDetails` (:1101); the subsequent `spawnProcess` rejection repaints with
+   `USER_MESSAGE.couldNotStart` plus `["Error", <Subprocess internal message>]`. The accurate
+   rows — `["Preference", "powerbrowser.sidecar.nodePath"]`,
+   `["Preference status", "unset, and no node was found on PATH"]` — are gone from the
+   diagnostics layer for the rest of the session. The diagnostics layer exists precisely to
+   carry what the sentence drops; one Retry click empties it.
+3. **Latent backend leak.** `_restart()` on this path can reach `spawnProcess` with no quit
+   observer registered and `writeStateFile(null, …)`. Today it cannot actually spawn
+   (`Subprocess.call({command: null})` rejects, and `environment` carries a null
+   `THEIA_CONFIG_DIR`), so no process escapes — but that is an accident of `_nodePath` being
+   null, not a guard. Any future change that gives `_spawnAndGate` a usable fallback command
+   turns this into exactly the outlive-the-browser leak derivation E was written to prevent.
+
+The `shell-error-contract` analyzer cannot see this: its `unrecoverable-classification-starts-no-probe`
+scenario asserts on `state.spawnsAfterError` and never calls `sandbox.powerbrowserRetry()`. The
+repaint scenario does click Retry, but drives the *recoverable* spawn-throws class.
+
+**Fix:** Pick one of two; do not ship neither.
+
+Option A — make the classification reach the DOM, which is where the affordance lives:
 
 ```js
-window.powerbrowserRetry = function powerbrowserRetry() {
-  errorElement.style.display = "none";          // DOM hidden
-  TheiaService.retry().catch(err => TheiaService.reportUnexpectedFailure(err));
+// powerbrowser.js
+window.powerbrowserShowError = function powerbrowserShowError(detail) {
+  const { reason, recoverable } = detail;
+  errorMessageElement.textContent = reason;
+  errorRetryButton.hidden = !recoverable;   // the affordance follows the classification
+  errorElement.style.display = "flex";
+  ...
 };
 ```
 
-It never tells the supervisor. `TheiaService._errorShown` stays `true`, and
-`_hideError()` — the only place `_errorShown` is ever reset — is called from
-exactly one site, `_restart()`'s **success** path (line 854).
-
-So on every Retry that does not succeed:
-
-1. The DOM error layer is hidden by the click handler.
-2. `retry()` → `_restart()` fails → `_showError(...)` → line 1001
-   `if (this._errorShown) { return; }` → **early return, the layer never
-   repaints.**
-
-The user is left looking at `#powerbrowser-loading` (a bare dark screen) with no
-message, no Retry control, and no Details control. That is byte-for-byte the
-user-visible outcome 01-09 and 01-10 were written to eliminate
-(01-VERIFICATION.md's FAILED must-have), reintroduced by a different route.
-
-A second, worse variant: if the background recovery probe is mid-attempt when
-Retry is clicked, `_restart()` returns immediately on the `_restartInFlight`
-guard, so the click accomplishes nothing at all *and* still hid the layer.
-
-`_startRecoveryProbe()` is idempotent, so the probe keeps running and may
-eventually recover on its own — but only after N × `recoveryProbeIntervalMs`
-(default 15 000 ms) with zero feedback and no way for the user to act. The
-supervisor's own sentinel stream and `getFailureDetails()` both report the state
-the supervisor believes it is in, which is why no registered check sees this.
-
-**Fix:** the DOM must not be written from the bootstrap. Route the hide through
-the supervisor so `_errorShown`, the recovery probe, and the DOM move as one
-fact:
+and reword `USER_MESSAGE.nodeMissing` so its next step is the one that remains on screen
+(Details / reinstall), since Retry is no longer offered for it. Add a `recoverable` guard to
+`retry()` as defence in depth:
 
 ```js
 // TheiaService.sys.mjs
 async retry() {
-  // Clears _errorShown, stops the background probe, and hides the layer
-  // through the same window global _showError paints with, so a Retry that
-  // fails can repaint. Without this the _errorShown guard in _showError()
-  // swallows every subsequent paint for the life of the session.
+  if (this._errorRecoverable === false) { return; }   // set alongside _errorShown in _showError
   this._hideError();
   await this._restart();
-},
+}
 ```
 
+Option B — make Retry honour the sentence it is advertised under, by re-running the one-shot
+resolution when it has never succeeded:
+
 ```js
-// powerbrowser.js
-window.powerbrowserRetry = function powerbrowserRetry() {
-  TheiaService.retry().catch(err => TheiaService.reportUnexpectedFailure(err));
+async retry() {
+  this._hideError();
+  if (!this._nodePath || !this._backendMain) {
+    const resolved = await this._resolveSidecar();
+    if (!resolved.ok) {
+      this._showError(resolved.message, false, resolved.details);
+      return;
+    }
+    this._configDir = this._resolveConfigDir();
+    this._stateFilePath = `${this._configDir}/sidecar-state-${this._profileStateKey()}.json`;
+    this._quitObserverOff ??= PowerBrowserAPI.onQuitGranted(() => this.stop());
+    // ...and ensureDirectory, guarded as start() guards it
+  }
+  await this._restart();
+}
+```
+
+Whichever is chosen, add the missing scenario to `verify-shell-error-contract.mjs`: drive the
+unset-`backendMain` branch (the `SCENARIO_NO_PROBE` fixture already does), then call
+`sandbox.powerbrowserRetry()` and assert `state.spawnsAfterError === 0` — the same instrument,
+the same honest counter, over the user-driven path instead of the timer-driven one.
+
+## Warnings
+
+### WR-01: derivation C's "exactly ONE visibility owner" set equality is defeated by any write that does not use the derived local binding — proven with a working mutant
+
+**File:** `scripts/verify-start-path-recovery.mjs:446-464` (`deriveErrorLayerVisibilityWriters`),
+`:410-444` (`deriveErrorLayerBinding`), `:466-514`
+
+**Issue:** `deriveErrorLayerVisibilityWriters` searches for the literal
+`` new RegExp(`\\b${binding}\\.style\\.display\\s*=`) `` — one syntactic form, through one
+identifier. The doc block (`:35-52`) claims the rule "goes red on an ADDITION (a third function
+blanks the layer, which is exactly the pre-01-11 source)". It does not, for any spelling other
+than the derived binding.
+
+Reproduced. I added this single line to `powerbrowserRetry`, which is precisely the pre-01-11
+defect written a different way:
+
+```js
+document.getElementById("powerbrowser-error").style.display = "none";
+TheiaService.retry().catch(err => TheiaService.reportUnexpectedFailure(err));
+```
+
+`verify-start-path-recovery` exits 0 and `verify-shell-error-contract` exits 0. Both remain green.
+`errorElement.hidden = true`, `errorElement.classList.add("hidden")`,
+`errorElement.style.setProperty("display", "none")` and any aliasing local are equally invisible.
+
+The second analyzer cannot compensate because its stream assertion reads the CLEARED/ERROR
+sentinels, which `powerbrowserHideError` and `powerbrowserShowError` emit unconditionally —
+independent of whether the element actually moved (see WR-02).
+
+**Fix:** Derive the element ID as well as the binding (it is right there in the initialiser) and
+match every route to it, then keep the set equality:
+
+```js
+function deriveErrorLayerBinding(shellSrc, api) {
+  // ...existing derivation of `binding`...
+  const id = shellSrc.match(new RegExp(`${binding}\\s*=\\s*document\\.getElementById\\(\\s*["']([^"']+)["']`))?.[1];
+  return { binding, id, via: fnName, reason: null };
+}
+
+// then, in deriveErrorLayerVisibilityWriters, scan for ALL of:
+//   <binding>.style.display =
+//   <binding>.hidden =
+//   <binding>.classList.
+//   <binding>.style.setProperty(
+//   document.getElementById("<id>")  ...anywhere outside the binding's own initialiser
+```
+
+Any occurrence of the element ID string outside the one initialiser is a second route by
+definition, and that single extra check closes the whole class rather than one spelling of it.
+Add a self-test row planting the `document.getElementById(...)` form specifically — it is the
+one I proved green.
+
+### WR-02: the error layer's CLEAR path emits no deck-state, so nothing anywhere observes that the layer actually became hidden — a `powerbrowserHideError` that shows the layer is green in both checks
+
+**File:** `powerbrowser/shell/powerbrowser.js:111-114`; `scripts/verify-shell-error-contract.mjs:381-402`
+
+**Issue:** `powerbrowserShowError` calls `dumpDeckState("error")` (:108) — the file's own comment
+(:34-45) calls computed style "the only assertion available on Linux that observes the chrome
+document's rendered state at all". `powerbrowserHideError` calls nothing. Consequently every
+assertion about the cleared state anywhere in the tree is an assertion about a `dump()` call
+having executed, not about the layer having moved.
+
+Reproduced. Changing one character in `powerbrowserHideError`:
+
+```js
+window.powerbrowserHideError = function powerbrowserHideError() {
+  errorElement.style.display = "flex";   // was "none"
+  dump(`POWERBROWSER_SHELL_ERROR_CLEARED ${JSON.stringify({})}\n`);
 };
 ```
 
-Add a runtime row asserting that a failing Retry emits a **second**
-`POWERBROWSER_SHELL_ERROR` sentinel (and a `POWERBROWSER_SHELL_ERROR_CLEARED`
-between the two). The existing `shell03-budget-exhausted-error` row only ever
-observes the first one, which is why this shipped green.
+`verify-start-path-recovery` exits 0 (derivation C only asks WHO writes, never WHAT) and
+`verify-shell-error-contract` exits 0 (the CLEARED sentinel still appears in the stream in the
+right position). The user-visible result is an error layer permanently pinned over a recovered,
+healthy Theia UI — with the supervisor's `_errorShown` reading false, which is the same
+two-owners-of-one-fact drift 01-11 was written to remove, arriving from the other side.
 
----
+**Fix:** Two lines, and they make WR-01's mutant fail too:
 
-### CR-02: `_showError` starts the recovery probe on paths `start()` abandoned, driving an unbounded spawn loop against never-initialised state
+```js
+// powerbrowser.js
+window.powerbrowserHideError = function powerbrowserHideError() {
+  errorElement.style.display = "none";
+  dump(`POWERBROWSER_SHELL_ERROR_CLEARED ${JSON.stringify({})}\n`);
+  dumpDeckState("error-cleared");
+};
+```
 
-**File:** `powerbrowser/shell/TheiaService.sys.mjs:134-142`, `powerbrowser/shell/TheiaService.sys.mjs:1011`, `powerbrowser/shell/TheiaService.sys.mjs:955-975`
+```js
+// verify-shell-error-contract.mjs, inside runScenario's stream walk:
+// after each ERROR sentinel, the matching deck state must report error !== "none";
+// after each CLEARED sentinel, it must report error === "none".
+// The harness's own getComputedStyle fake (el.style.display || "none") already
+// supports this — it is simply not read.
+```
+
+That turns the five presence assertions into five assertions about the fact they stand for,
+which is what the check claims to be doing.
+
+### WR-03: `_showError` latches `_errorShown` and populates `_failureDetails` before the DOM call, and starts the probe after it — a throwing paint leaves the guard set with nothing painted and no probe
+
+**File:** `powerbrowser/shell/TheiaService.sys.mjs:1079-1093` (and the mirror at `:1096-1104`)
 
 **Issue:**
-`start()`'s `_resolveSidecar()` failure branch returns at line 142, **before**
-`this._configDir` (144), `this._stateFilePath` (176), and the quit observer (181)
-are ever assigned. Its own comment states the intent explicitly:
 
-> D-113: backendMain unset/missing and an unresolvable Node ... unrecoverable by
-> construction, straight to the error state with **no retry at all**.
+```js
+this._errorShown = true;                                     // latched
+this._failureDetails = (details || []).map(...);
+this._pushLog(...);
+this._browserElement.ownerDocument.defaultView.powerbrowserShowError({...});  // can throw
+if (recoverable) { this._startRecoveryProbe(); }             // never reached if it throws
+```
 
-But `_showError()` unconditionally calls `_startRecoveryProbe()` at line 1011.
-Fifteen seconds later `_recoveryProbeLoop` calls `_restart()`, which calls
-`_spawnAndGate(true)` on a supervisor whose fields were never resolved:
+`defaultView` is null on a window being torn down, and `powerbrowserShowError` dereferences
+module-scope bindings of its own. If that call throws: the guard reads "an error is on screen"
+while nothing is on screen; `_startRecoveryProbe()` is skipped so D-115's auto-dismiss never
+starts; and the rejection reaches `reportUnexpectedFailure`, whose own `_showError` immediately
+early-returns on the latched guard (`:1080-1082`) and paints nothing. The session ends on the
+loading layer with no message, no Retry and no Details — byte for byte the outcome 01-10 and
+01-11 were both closing.
 
-- `this._backendMain` is `""` → `args[0]` is the empty string.
-- `this._nodePath` is `null` (the `nodeMissing` class) → `Subprocess.call({command: null})`.
-- `this._stateFilePath` is `null` → `IOUtils.writeJSON(null, ...)`.
+`_hideError()` has the mirror-image ordering (state cleared first, DOM call last), which is
+self-correcting only by luck: the escaping rejection reaches `reportUnexpectedFailure` with
+`_errorShown` already false, so it repaints.
 
-In the `interfaceFilesMissing` class (backendMain unset, Node resolvable) the
-spawn *succeeds* as a process: it runs `node "" --hostname 127.0.0.1 --port 0`,
-which exits immediately. `_pumpOutput` rejects, the failure is classified
-**recoverable**, and `_restart()` burns the full `giveUpAttempts` budget (6) with
-exponential backoff — then `_showError` early-returns on the `_errorShown` guard,
-the probe sleeps 15 s, and the whole cycle repeats **for the lifetime of the
-browser session**. Every one of those attempts forks a process.
-
-**Fix:** gate the probe on recoverability, and refuse to enter the spawn path
-before resolution completed.
+**Fix:** Make the effect precede the latch, or make the latch unconditional on the effect:
 
 ```js
 _showError(message, recoverable, details) {
   if (this._errorShown) { return; }
-  this._errorShown = true;
-  this._failureDetails = /* ... unchanged ... */;
+  this._failureDetails = (details || []).map(([label, value]) => { ... });
   this._pushLog(`Showing error state (recoverable=${recoverable}): ${message}`);
-  this._browserElement.ownerDocument.defaultView.powerbrowserShowError({ reason: message, recoverable });
-  // D-113: an unrecoverable resolve failure has nothing to probe for -- the
-  // sidecar was never resolved, so _restart() would spawn against unset
-  // fields. D-112's pinned-port squatter is the one unrecoverable class that
-  // CAN self-heal; give it its own explicit opt-in rather than probing every
-  // unrecoverable failure.
-  if (recoverable || this._sidecarResolved) {
-    this._startRecoveryProbe();
+  if (recoverable) { this._startRecoveryProbe(); }   // before the DOM call, not after
+  try {
+    this._browserElement.ownerDocument.defaultView.powerbrowserShowError({ reason: message, recoverable });
+    this._errorShown = true;
+  } catch (err) {
+    this._failureDetails = null;
+    this._fatal(`Failed to paint the error layer: ${err.message}`);
+    throw err;   // the guard is NOT latched, so reportUnexpectedFailure can still try
   }
-},
-```
-
-Set `this._sidecarResolved = true` immediately after `_resolveSidecar()` returns
-`ok`, and add an early return at the top of `_restart()`:
-
-```js
-if (!this._sidecarResolved) {
-  this._pushLog("Refusing to spawn: the sidecar was never resolved for this launch.");
-  return;
 }
 ```
 
----
+### WR-04: the quit-observer callback is a fifth untracked fire-and-forget promise root, and 01-12 added an unguarded throw site inside it
 
-### CR-03: A backend can be brought up with no `quit-application-granted` observer, so it is never stopped on quit and leaves no state file
+**File:** `powerbrowser/shell/TheiaService.sys.mjs:186`, `:289-292`;
+`powerbrowser/shell/PowerBrowserAPI.sys.mjs:311-315`
 
-**File:** `powerbrowser/shell/TheiaService.sys.mjs:153-181`
+**Issue:** `PowerBrowserAPI.onQuitGranted(() => this.stop())` invokes an `async` method and
+discards the promise. `reportUnexpectedFailure`'s doc block (`:960-1000`) enumerates "Four entry
+points onto this supervisor [that] are fire-and-forget promise roots with no shared root to
+guard … Every one of them routes here." This is a fifth, and it does not. The comment is now
+factually wrong about the file it documents.
+
+01-12 made this materially worse by adding a new throw site inside `stop()`:
+`this._quitObserverOff()` (`:290`) calls `Services.obs.removeObserver`, which throws
+`NS_ERROR_FAILURE` when the observer is not currently registered. Every other statement in
+`stop()` is inside a `try`; this one is not. `assertTerminalHandlerCoverage` cannot see it — it
+derives promise-returning supervisor calls from the *chrome bootstrap*, and this root is inside
+the supervisor.
+
+Related: the detach comment (`:282-288`) says "Removing an observer from inside its own
+notification is safe here." The removal is not inside the notification — `stop()` awaits
+`killProcess` and `removeStateFile` first, so the observer runs several microtask turns after
+`observe()` returned. The claim is true of a different code shape than the one written.
+
+**Fix:** Guard the throw site, and give the root a handler that does not paint an error during
+quit:
+
+```js
+// TheiaService.sys.mjs :186
+this._quitObserverOff = PowerBrowserAPI.onQuitGranted(() =>
+  this.stop().catch(err => this._fatal(`Shutdown failed after quit was granted: ${err.message}`))
+);
+
+// TheiaService.sys.mjs :289-292
+if (this._quitObserverOff) {
+  const off = this._quitObserverOff;
+  this._quitObserverOff = null;
+  try { off(); } catch { /* not registered; nothing to detach */ }
+}
+```
+
+Note the reorder: nulling before calling makes a re-entrant `stop()` unable to double-detach even
+if the call throws. Then correct the `:282-288` comment to describe the actual (post-await)
+timing.
+
+### WR-05: a rejected `_recoveryProbeLoop` leaves `_recoveryProbeActive === true`, so D-115's auto-dismiss dies silently and cannot be restarted
+
+**File:** `powerbrowser/shell/TheiaService.sys.mjs:1023-1032` (and the same shape at `:783`)
 
 **Issue:**
-`PowerBrowserAPI.onQuitGranted(() => this.stop())` is registered at line 181 —
-*after* the `ensureDirectory` try/catch that `return`s on failure (line 167).
-
-That failure is classified `recoverable: true`, so `_showError` starts the
-recovery probe (CR-02's mechanism), which calls `_restart()` → `_spawnAndGate()`.
-Nothing in `_spawnAndGate` requires `_configDir` to exist — it is only passed as
-the `THEIA_CONFIG_DIR` environment variable, and Theia creates it or tolerates
-its absence. So the spawn can genuinely succeed, pass the health gate, set the
-cookie, and swap.
-
-The result is a live, healthy, supervised backend on a launch where:
-
-- **no quit observer is registered**, so `stop()` never runs on browser quit;
-- `this._stateFilePath` is `null`, so `writeStateFile(null, ...)` throws (caught
-  and logged non-fatally at line 673) and no crash-leftover record exists for the
-  next launch's `_reapLeftover()`.
-
-The parent-death watchdog (`POWERBROWSER_SUPERVISED=1` + stdin EOF) is the only
-thing left preventing an orphan, i.e. the belt is gone and only the braces
-remain — on the exact failure class SIDE-04 exists for.
-
-**Fix:** register the quit observer before any path that can return, and derive
-the state file path before it too.
 
 ```js
-    this._configDir = this._resolveConfigDir();
-    this._stateFilePath = `${this._configDir}/sidecar-state-${this._profileStateKey()}.json`;
-    // D-105: registered BEFORE the first early-returning step. Any path that
-    // can end up with a spawned backend -- including the recovery probe
-    // re-entering after ensureDirectory failed -- must be covered, or quit
-    // leaves it running.
-    PowerBrowserAPI.onQuitGranted(() => this.stop());
-
-    try {
-      await PowerBrowserAPI.ensureDirectory(this._configDir);
-    } catch (err) {
-      /* ... unchanged ... */
-      return;
-    }
-```
-
-Also keep the unregister function `onQuitGranted` returns (currently discarded)
-so `stop()` can detach it.
-
----
-
-## Warnings
-
-### WR-01: `_showError`'s idempotency guard silently drops a *different* failure's message, recoverability, and diagnostics rows
-
-**File:** `powerbrowser/shell/TheiaService.sys.mjs:1000-1008`
-
-**Issue:** The guard is documented as covering "repeated calls for the same
-state", but it is keyed on nothing about the state — only on "an error is
-showing". A launch that first fails with a recoverable health-gate timeout
-(`didNotFinishStarting`) and later, on a subsequent attempt, hits an
-unrecoverable spawn failure (`couldNotStart`, `recoverable: false`) keeps
-painting the *first* sentence and the *first* `_failureDetails` rows forever.
-The diagnostics layer, the `POWERBROWSER_ERROR_DIAGNOSTICS` sentinel, and the
-Retry affordance all then describe a failure that is no longer the current one.
-
-**Fix:** compare before short-circuiting, and repaint on change:
-
-```js
-_showError(message, recoverable, details) {
-  const next = JSON.stringify({ message, recoverable, details });
-  if (this._errorShown && this._errorSignature === next) { return; }
-  this._errorSignature = next;
-  this._errorShown = true;
-  // ...
+_startRecoveryProbe() {
+  if (this._recoveryProbeActive) { return; }
+  this._recoveryProbeActive = true;
+  this._recoveryProbeLoop().catch(err => this.reportUnexpectedFailure(err));
 }
 ```
 
-### WR-02: `_profileStateKey()` produces an unbounded, non-injective filename component
+If `_recoveryProbeLoop()` rejects (it awaits `_restart()`, which awaits `_reap()`,
+`_spawnAndGate()` and `PowerBrowserAPI.sleep`), the flag is never cleared. `_startRecoveryProbe()`
+then refuses to start a replacement forever, and `getState()`/the diagnostics layer have no row
+for it either. The terminal handler is no help: the probe only runs inside an error state, so
+`_errorShown` is true and `reportUnexpectedFailure`'s `_showError` early-returns — nothing is
+painted and nothing is logged beyond the `_fatal` line. The user is left in an error state whose
+auto-dismiss is dead, with no indication.
 
-**File:** `powerbrowser/shell/TheiaService.sys.mjs:363-366`
-
-**Issue:** `profileDir.replace(/[^a-zA-Z0-9]+/g, "_")` embeds the *entire*
-absolute ProfD path into the state file's name. Two failure modes:
-
-1. **Length.** A profile under a long `TMPDIR` or a deeply nested path exceeds
-   `NAME_MAX` (255 bytes) once `sidecar-state-` and `.json` are added.
-   `writeStateFile` then throws, is caught non-fatally at line 673, and SIDE-04's
-   crash-leftover reaping silently stops working for that profile — the exact
-   degradation the try/catch's comment predicts, with no bound preventing it.
-2. **Collisions.** The sanitization is not injective: `/tmp/a-b` and `/tmp/a/b`
-   both map to `tmp_a_b`. Two instances under colliding profile paths share one
-   state file, which reintroduces CR-01 from `05-REVIEW.md` — the second
-   instance's startup reap verify-and-SIGTERMs the first's live backend.
-
-**Fix:** hash instead of transliterate, and keep a short readable prefix.
-
-```js
-_profileStateKey() {
-  const profileDir = PowerBrowserAPI.getProfileDir();
-  if (!profileDir) { return "default"; }
-  // Bounded and injective. The raw path is not a filename component: it has
-  // no length bound and its sanitization collides (/a-b and /a/b both become
-  // a_b), which is the shared-state-file bug CR-01 (05-REVIEW.md) fixed.
-  const digest = PowerBrowserAPI.sha256Hex(profileDir);   // add to the boundary
-  return `${profileDir.replace(/[^a-zA-Z0-9]+/g, "_").slice(-40)}-${digest.slice(0, 16)}`;
-}
-```
-
-`scripts/verify-platform.sh`'s `profile_state_key()` (line 709) mirrors this
-byte-for-byte and must be updated in the same commit.
-
-### WR-03: `readTokenFromStdin` busy-spins with no backoff and no bound on `EAGAIN`
-
-**File:** `theia/extensions/token-gate/src/node/powerbrowser-env.ts:91-103`
-
-**Issue:** The `EAGAIN` branch `continue`s without sleeping and without
-incrementing anything (`bytes.length` is unchanged because nothing was read). If
-fd 0 is non-blocking and no data ever arrives, this spins a CPU core at 100% for
-the entire startup-timeout window with nothing logged. The comment ("Retry
-rather than fail: the supervisor's own startup timeout bounds the wait either
-way") describes the *supervisor's* bound, not this loop's — this loop is
-genuinely unbounded from inside the backend process.
-
-**Fix:** bound the spin and yield between attempts.
-
-```ts
-const deadline = Date.now() + 30_000;
-// ...
-if ((err as NodeJS.ErrnoException).code === 'EAGAIN') {
-    if (Date.now() > deadline) { return undefined; }
-    // Yield rather than spin: a bare `continue` here pegs a core for the
-    // whole startup-timeout window with nothing logged.
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
-    continue;
-}
-```
-
-### WR-04: An empty stdin line yields an empty-string token, indistinguishable from a real one at this layer
-
-**File:** `theia/extensions/token-gate/src/node/powerbrowser-env.ts:107-109`
-
-**Issue:** `if (byte[0] === 0x0a) { return Buffer.from(bytes).toString('utf8'); }`
-returns `""` when the very first byte is a newline. `captured.POWERBROWSER_TOKEN`
-is then `""` rather than `undefined`, so the fail-closed decision downstream is
-made on a value that *is present but empty*. The module's own contract is that
-`undefined` fails the gate closed; `""` is a third state it does not model.
+The probe's lifecycle is 01-12's whole subject, which puts this in scope.
 
 **Fix:**
 
-```ts
-if (byte[0] === 0x0a) {
-    // An empty line is not a credential. Return undefined so the gate takes
-    // the same fail-closed path a missing line takes -- "" is a third state
-    // this module's contract does not model.
-    return bytes.length > 0 ? Buffer.from(bytes).toString('utf8') : undefined;
-}
-```
-
-### WR-05: `TheiaService` is referenced in the bootstrap 124 lines before its `const` declaration (TDZ hazard)
-
-**File:** `powerbrowser/shell/powerbrowser.js:107`, `:123`, declared at `:231`
-
-**Issue:** `powerbrowserShowError` (107) and `powerbrowserRetry` (123) both close
-over `TheiaService`, declared with `const` at line 231 in the same block. This is
-safe today only because nothing invokes those globals before the handler reaches
-231. Any future reordering — an early `_showError` from a synchronous failure, a
-listener that fires during bootstrap — throws `ReferenceError: Cannot access
-'TheiaService' before initialization` **inside the error-painting path**, which
-is the one path that must never itself fail.
-
-**Fix:** hoist the `ChromeUtils.importESModule` for `TheiaService` to sit
-alongside the `PowerBrowserAPI` import at line 22, before any global that uses it
-is defined.
-
-### WR-06: `captureScreenshot`'s SIGINT handler force-exits — the exact pattern CR-03 removed from its sibling
-
-**File:** `scripts/lib/firefox-bidi.mjs:207-209`
-
-**Issue:**
-
 ```js
-sigintHandler = () => {
-    cleanup().finally(() => process.exit(130));
-};
+this._recoveryProbeLoop().catch(err => {
+  this._recoveryProbeActive = false;   // the flag must never outlive the loop it names
+  this.reportUnexpectedFailure(err);
+});
 ```
 
-`withFirefoxPage`'s handler (line 340) carries a long comment explaining why
-`process.exit()` here is wrong — it races ahead of a caller's own `finally`
-teardown — and uses `process.exitCode = 130` instead. The sibling function was
-not updated. Its doc comment claims "Shares the same cleanup discipline as
-`withFirefoxPage`", which is now false.
-
-**Fix:** apply the same shape.
-
-```js
-sigintHandler = () => {
-    process.exitCode = 130;
-    cleanup();
-};
-```
-
-### WR-07: `readRuntimeIdentity` SIGKILLs the browser and removes its profile without waiting for exit
-
-**File:** `scripts/verify-branding-identity.mjs:405-411`
-
-**Issue:**
-
-```js
-} finally {
-    if (child && child.exitCode === null && child.signalCode === null) {
-        child.kill('SIGKILL');
-    }
-    await rm(profileDir, { recursive: true, force: true });
-}
-```
-
-No `await` on the child's exit before `rm`. A SIGKILLed Firefox's child processes
-(content processes, the Theia backend) can still be writing into `profileDir`
-while it is being removed, producing intermittent `ENOTEMPTY`/`ENOENT` and a
-partially-deleted directory. `firefox-bidi.mjs`'s `cleanup()` gets this right
-(SIGTERM, await exit with a 5 s SIGKILL escalation, then `rm`); this harness in
-the same repo does not.
-
-**Fix:** reuse the SIGTERM → await → SIGKILL → `rm` sequence from
-`firefox-bidi.mjs:311-324`, or extract it as a shared helper.
-
-### WR-08: The About dialog's repo link is a fake button with no keyboard handler
-
-**File:** `theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx:37-42`
-
-**Issue:**
-
-```tsx
-<a role='button' tabIndex={0}
-   onClick={() => this.windowService.openNewWindow(POWERBROWSER_REPO_URL, { external: true })}>
-```
-
-`role='button'` plus `tabIndex={0}` makes it focusable and announces it as a
-button, but there is no `onKeyDown`, so Enter and Space do nothing. A keyboard or
-screen-reader user can reach it and cannot activate it. The sibling welcome
-widget (`powerbrowser-welcome-widget.tsx:73`) gets this right by using a real
-`href` with an `onClick` that calls `preventDefault()`.
-
-**Fix:** match the welcome widget's shape.
-
-```tsx
-<a href={POWERBROWSER_REPO_URL}
-   onClick={(e: React.SyntheticEvent) => {
-       e.preventDefault();
-       this.windowService.openNewWindow(POWERBROWSER_REPO_URL, { external: true });
-   }}>
-    {POWERBROWSER_REPO_URL}
-</a>
-```
-
-### WR-09: Workspace trust is disabled and the app ships a development-mode bundle
-
-**File:** `theia/applications/browser/package.json:16`, `:83`
-
-**Issue:** Two settings in the shipping application package:
-
-- `"security.workspace.trust.enabled": false` removes the trust prompt entirely.
-  Any workspace the user opens runs its `.vscode/tasks.json`, debug adapters, and
-  installed VS Code extensions with no gate — on a backend that
-  `powerbrowser-env.ts`'s own header describes as having "arbitrary file access
-  and a terminal". Combined with `VSX_REGISTRY_URL=https://open-vsx.org` this is
-  a meaningful attack surface with no in-tree rationale (JSON carries no comment,
-  and no doc explains the choice).
-- `"build": "yarn -s rebuild && theia build --app-target=browser --mode development"`
-  builds the default target unminified, with development React and full source
-  maps.
-
-**Fix:** if trust must stay off for Phase 1, record the decision in
-`.planning/` and add a `$comment` sibling key naming it; otherwise remove the
-override and let Theia's default apply. Add a `build:production` script with
-`--mode production` for the release objdir path.
-
-### WR-10: Developer-machine absolute paths checked into the repo
-
-**File:** `powerbrowser/powerbrowser.desktop:3`, `:4`; `powerbrowser/powerbrowser-release.desktop:3`, `:4`; `inventory/brand-tokens.json` (`brand_display_expectations.repo_root`)
-
-**Issue:** All four `.desktop` `Exec=`/`Icon=` values and the inventory's
-`repo_root` hardcode `/home/chris/coding/Power-Browser`. `powerbrowser/shell/moz.build`
-takes explicit care to avoid exactly this ("so the sidecar prefs carry an
-absolute dev-tree path with **no hardcoded user path checked into the repo**"),
-and the whole point of Phase 2 is that `configuration.toml` + `brand/` are the
-only rebrand inputs. A single-developer home directory baked into five tracked
-files contradicts both.
-
-**Fix:** treat the `.desktop` files the way `moz.build` treats the sidecar prefs
-— emit them at build time with the repo root substituted, or ship them with a
-`@REPO_ROOT@` token and a documented install step. Derive `repo_root` in the
-inventory consumers from `REPO_ROOT` (already computed in
-`scan-brand-residue.mjs:101`) rather than storing it.
-
-### WR-11: Live comment points at `scripts/verify-phase-05.sh`, a script CLAUDE.md forbids from existing
-
-**File:** `powerbrowser/shell/powerbrowser.css:27`
-
-**Issue:**
-
-```
- * scripts/verify-phase-05.sh's shell-csp-inline-attrs check fails if you do.
-```
-
-That file does not exist (`ls scripts/verify-phase-*` → no match) and CLAUDE.md
-states it "must not come back". The check is now the
-`shell-csp-inline-attrs` row in `scripts/verify-platform.sh`. A reader following
-this comment finds nothing and may reasonably conclude the guard is gone.
-
-**Fix:** `scripts/verify-platform.sh --only shell-csp-inline-attrs`.
-
-### WR-12: The internals catalogue is keyed on line numbers only, and never checks that the row describes the right API
-
-**File:** `scripts/check-internals-boundary.sh:190-221`
-
-**Issue:** `check_catalogue_consistency` asserts only that some line in
-`INTERNAL-APIS.md` matches `PowerBrowserAPI\.sys\.mjs:<n>` for each occurrence
-line `n`. Two consequences:
-
-1. Inserting a line near the top of `PowerBrowserAPI.sys.mjs` shifts every
-   occurrence number, so the check fails wholesale on an unrelated edit — the
-   catalogue is maintained by line arithmetic rather than by content.
-2. A row can be *present at the right line number while describing a completely
-   different API*. Since it never compares the pattern or the method name, a
-   moved touchpoint that happens to land on a catalogued line number passes.
-
-The self-test's mutation is `grep -v "$victim"` where `$victim` is
-`PowerBrowserAPI.sys.mjs:71` — unescaped, so the `.` are regex wildcards and the
-mutation can remove more lines than intended.
-
-**Fix:** key on the touchpoint rather than the line. Have
-`catalogue_occurrence_lines` also emit the matched pattern and the enclosing
-method name, and require the catalogue row to name both:
-
-```sh
-if ! grep -Fq "${base}:${line_no} ${pattern}" "$catalogue"; then
-```
-
-and use `grep -Fv -- "$victim"` in the self-test.
-
-### WR-13: Probe indices are computed against `toLowerCase()` output but tested against an array indexed by the original text
-
-**File:** `scripts/scan-brand-residue.mjs:324-335`
-
-**Issue:**
-
-```js
-const lower = text.toLowerCase();
-const starts = lineIndex(text);
-// ...
-let i = lower.indexOf(needle);
-while (i !== -1) {
-  if (!taken[i]) { /* report as unclaimed */ }
-```
-
-`taken` and `starts` are indexed against `text`; `i` is an offset into `lower`.
-`String.prototype.toLowerCase` is not length-preserving for all inputs (U+0130
-LATIN CAPITAL LETTER I WITH DOT ABOVE lowercases to two code units, among
-others). One such character anywhere earlier in a scanned file shifts every
-subsequent probe offset, so condition 4 — the one detector the header calls "the
-one that catches this file being wrong" — reports the wrong `file:line` or reads
-the wrong `taken[]` slot and misses a genuine unclaimed hit.
-
-**Fix:** do the case-insensitive search without changing offsets.
-
-```js
-// Case-insensitive search that preserves offsets into `text`: toLowerCase()
-// is not length-preserving (U+0130 lowercases to two code units), and `taken`
-// and `starts` are both indexed against `text`.
-const probeRe = new RegExp(probe.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-for (let m = probeRe.exec(text); m !== null; m = probeRe.exec(text)) {
-  if (!taken[m.index]) {
-    unclaimedProbes.push({ file, line: lineOf(starts, m.index), probe, text: m[0] });
-  }
-}
-```
-
-### WR-14: The permanent brand gate excludes the two files most likely to contain a real leak
-
-**File:** `inventory/brand-tokens.json` (`scope.exclude`)
-
-**Issue:** `scope.exclude` is
-`[".planning/", "inventory/", "scripts/scan-brand-residue.mjs", "scripts/rename-brand.mjs"]`.
-The two excluded scripts contain the old brand token in prose and in fixtures.
-Nothing verifies that every occurrence in those two files is a *legitimate*
-machinery use — a genuine leak introduced there is invisible to the gate CLAUDE.md
-calls permanent. `git grep` confirms both files currently carry the literal.
-
-**Fix:** replace the whole-file exclusion with the same site-scoped mechanism
-`hand_write` already uses, or move the fixture strings into
-`inventory/brand-tokens.json` (already excluded, and already declared as the one
-place the token may be spelled) and have the two scripts read them from there —
-which also removes the last hardcoded token literal from executable code.
+Apply the same shape at `:783` for `_healthLoop` (`this._healthy = false;` in the catch), and
+consider a `probeActive` row in `getState()` so the diagnostics layer can show it.
 
 ## Info
 
-### IN-01: `verify-gui01-command.mjs` reads the first `label:` in the source file
+### IN-01: `verify-shell-error-contract.mjs`'s fault plants are hand-kept, indentation-exact source literals
 
-**File:** `scripts/verify-gui01-command.mjs:73`
+**File:** `scripts/verify-shell-error-contract.mjs:624-690`
+**Issue:** Every `SOURCE_FAULTS` row mutates by exact string, e.g.
+`"    this._hideError();\n    await this._restart();"` and
+`"    if (recoverable) {\n      this._startRecoveryProbe();\n    }"`. These are expectations of
+the tree's *formatting*, which CLAUDE.md's derive-and-compare rule is aimed at. They fail loudly
+via the `mutated === original` check rather than silently, so this is not a soundness defect —
+but a prettier run turns all five rows into a maintenance stop.
+**Fix:** Take the same `ctx` approach `verify-start-path-recovery.mjs`'s new rows now use
+(`fault.apply(original, { supervisorSrc, shellSrc })`) and derive the method and field names
+from the tree, or anchor on a regex tolerant of whitespace.
 
-**Issue:** `/label:\s*'([^']+)'/.exec(text)` takes the first match in
-`browser-window-command.ts`. Adding a second `Command` constant above
-`OPEN_BROWSER_WINDOW` silently repoints the assertion at the wrong label.
-**Fix:** anchor on the constant: `/OPEN_BROWSER_WINDOW[^}]*label:\s*'([^']+)'/`.
+### IN-02: `withTimeout` neither clears its timer nor cancels the losing scenario
 
-### IN-02: `rename-brand.mjs` silently ignores `--scope-chain` when `--scope-files` is also given, then reports the chain anyway
+**File:** `scripts/verify-shell-error-contract.mjs:808-818`
+**Issue:** Three 20-second `setTimeout` handles are created and never cleared; only the explicit
+`process.exit()` at the bottom keeps the process from lingering. More importantly, a timed-out
+scenario is not cancelled — it keeps running and can `fail()` after the verdict has been formed,
+producing a report that names a scenario the harness already gave up on.
+**Fix:** `const t = setTimeout(...); await Promise.race([...]); clearTimeout(t);` and pass an
+abort flag the scenario checks at its own await points.
 
-**File:** `scripts/rename-brand.mjs:341`, `:349`
+### IN-03: `globalThis.ChromeUtils` is installed by `loadShippedSources` and never restored
 
-**Issue:** `run()` resolves `files ?? scopeFiles(...)`, so `files` wins and
-`chain` is discarded — but line 349 still prints `for chain "${chain}"`. The
-output claims a scope the run did not use. **Fix:** reject the combination in
-`main()` the way `verify-platform.sh` rejects `--gate --quick`.
+**File:** `scripts/verify-shell-error-contract.mjs:314`
+**Issue:** Three scenarios in one process share one global, each overwriting it before its own
+`import()`. Correct today only because every supervisor module instance captures the API at
+top-level evaluation. A supervisor that ever imported lazily would silently bind to a later
+scenario's fake, and the failure would look like a code defect.
+**Fix:** Save and restore around each load, or set it once from a per-scenario dispatch keyed on
+the cache-busting tag.
 
-### IN-03: `verify-branding.mjs`'s coverage guard is unreachable
+### IN-04: the chrome bootstrap references `TheiaService` above its `const` declaration
 
-**File:** `scripts/verify-branding.mjs:242-249`
+**File:** `powerbrowser/shell/powerbrowser.js:107`, `:132`, declared at `:240`
+**Issue:** Pre-existing, outside the diff. `powerbrowserShowError` and `powerbrowserRetry` are
+installed on `window` at :102/:131 and close over a `const` in the same block scope declared at
+:240. Unreachable today (both are only invoked after `TheiaService.start()` at :255), but the
+TDZ `ReferenceError` would be thrown from inside the error-paint path — the one path that must
+never throw, and the one WR-03 shows latches a guard before it.
+**Fix:** Move the `ChromeUtils.importESModule(... TheiaService.sys.mjs)` above the
+`window.powerbrowser*` assignments. Nothing in the SHELL-05 ordering contract depends on its
+current position — only the `dump()` at :20 does.
 
-**Issue:** Every `surfacesRun.push()` is preceded by a throwing assertion inside
-the same sequential callback, so any surface that "silently never ran" already
-threw and rejected `main()`. `missing.length > 0` can never be true. **Fix:**
-either move the pushes into the individual `check*` functions' own successful
-returns (so a swallowed internal catch is detectable), or delete the guard rather
-than leave a check that cannot fire.
+### IN-05: `_hideError()` nulls `_failureDetails`, so a successful Retry erases the last failure's diagnostics entirely
 
-### IN-04: `verify-platform.sh` dispatches registry commands via unquoted expansion
+**File:** `powerbrowser/shell/TheiaService.sys.mjs:1101`
+**Issue:** The diagnostics layer exists to keep what the user-facing sentence drops. Once
+`retry()` clears the error state, `getFailureDetails()` returns `[]` and the diagnostics layer
+renders only the steady-state rows. If the retry succeeds, the identifiers of the failure that
+prompted it are unrecoverable from the UI. The ring buffer still has the `_fatal` line, so
+nothing is lost from the log — but the rendered surface loses it.
+**Fix:** Keep a `_lastFailureDetails` alongside, or have `_hideError()` prepend a
+`["Last cleared failure", ...]` marker rather than nulling.
 
-**File:** `scripts/verify-platform.sh` (runner, `setsid $cmd &`)
+### IN-06: derivation E's window scan is a raw `\breturn\b` regex over source text
 
-**Issue:** `setsid $cmd &` relies on word-splitting to turn
-`node /abs/path/script.mjs --flag` into an argv, and is therefore also subject to
-pathname expansion. It is correct only because CLAUDE.md hard rule 4 forbids a
-space in the repo path and no registry entry contains a glob character. **Fix:**
-store the command as a bash array per row, or `set -f` around the dispatch.
+**File:** `scripts/verify-start-path-recovery.mjs:706`
+**Issue:** `body.slice(windowStart, windowEnd).search(/\breturn\b/)` runs over comment-stripped
+but otherwise raw source. `stripComments` (`:143-149`) deliberately does not strip trailing `//`
+comments, so a trailing comment containing the bare word `return`, a string literal containing
+it, or a legitimate `return` inside a nested arrow/callback placed in that window all produce a
+false red. The window is currently two statements wide, so the risk is small — but a gate that
+goes red on correct code is a gate that gets bypassed.
+**Fix:** Either restrict the match to statement position (`/^\s*return\b/m`) or note the
+limitation in the failure message so the reader knows to check for a nested function before
+rearranging `start()`.
 
-### IN-05: `freePort()` has a TOCTOU window
+---
 
-**File:** `scripts/lib/firefox-bidi.mjs:43-52`
-
-**Issue:** The socket is closed before Firefox is spawned, so another process can
-take the port. Manifests as an intermittent harness failure. **Fix:** retry the
-launch once on a BiDi-listen failure, or pass `--remote-debugging-port=0` and
-parse the port from the listening line (already parsed by `BIDI_LINE_RE`).
-
-### IN-06: `is_comment_line` only recognises leading `//` and `*`, so a trailing comment is a false positive
-
-**File:** `scripts/check-internals-boundary.sh:69-76`
-
-**Issue:** `const x = 1; // reaches Services.prefs` is flagged as an offense.
-Harmless today (the guard is green), but it pushes future authors toward
-rewording comments rather than fixing code. **Fix:** strip a trailing `//` run
-before pattern matching, guarding against `//` inside a string.
+_Reviewed: 2026-08-31_
+_Reviewer: Claude (gsd-code-reviewer)_
+_Depth: standard_
