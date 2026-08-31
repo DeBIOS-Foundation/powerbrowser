@@ -113,9 +113,14 @@ document.addEventListener(
       dump(`POWERBROWSER_SHELL_ERROR_CLEARED ${JSON.stringify({})}\n`);
     };
 
+    // 01-10: the Retry control's own supervisor call is a fire-and-forget
+    // promise root too, so it carries the SAME terminal handler the start call
+    // below does. A Retry whose restart path rejects must not be silent either
+    // -- that would hide the error layer (this function's first line) and
+    // never bring it back, which is strictly worse than not offering Retry.
     window.powerbrowserRetry = function powerbrowserRetry() {
       errorElement.style.display = "none";
-      TheiaService.retry();
+      TheiaService.retry().catch(err => TheiaService.reportUnexpectedFailure(err));
     };
 
     errorRetryButton.addEventListener("click", () => {
@@ -228,7 +233,17 @@ document.addEventListener(
     // will create a session against the shell window.
     PowerBrowserAPI.notifyStartupFinished(window);
 
-    TheiaService.start(browserElement);
+    // 01-10: the terminal handler. This call is fire-and-forget by design (the
+    // shell must paint before any backend work, SHELL-05), which makes it a
+    // promise ROOT: without a handler here a rejection anywhere in the start
+    // path became an unhandled promise rejection in chrome and the user was
+    // left on the branded loading layer with no message, no Retry and no
+    // Details. It routes to the supervisor's own single terminal handler
+    // rather than painting anything from here on purpose -- every user-facing
+    // sentence lives in TheiaService's USER_MESSAGE table, which is the file
+    // shell-error-copy-no-internals derives its check surface from; copy
+    // authored in this bootstrap would ship outside every check that exists.
+    TheiaService.start(browserElement).catch(err => TheiaService.reportUnexpectedFailure(err));
 
     // D-118: the diagnostics layer's reserved global chord, immune to a
     // focused content <browser> swallowing it -- the XUL <keyset>/<key

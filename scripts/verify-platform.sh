@@ -1445,6 +1445,135 @@ check_shell_diagnostics_rows_populated() {
   return "$result"
 }
 
+# --- 01-10: start-failure-shows-error --------------------------------------
+#
+# The error-affordance half of 01-VERIFICATION.md's one FAILED must-have, and
+# the failure mode no check above can reach: a REAL throw ESCAPING the
+# supervisor's start path. Every launch check in this file drives a failure
+# that already has a classified result and a `_showError` route; none of them
+# drives a rejection that leaves `TheiaService.start()` altogether. Before
+# 01-10 that rejection had nowhere to go -- `powerbrowser.js` called
+# `TheiaService.start(browserElement)` with no `await` and no terminal handler,
+# so the rejection became an unhandled promise rejection in chrome and the user
+# was left looking at the branded loading layer with no message, no Retry and
+# no Details: the identical user-visible outcome the state-gating defect 01-09
+# fixed produced.
+#
+# THE PLANT makes the settings-folder creation step fail while everything
+# before it succeeds, so the rejection originates INSIDE the start path rather
+# than at the earlier sidecar-resolution step -- that step already has a
+# classified failure path (shell03-unrecoverable-immediate-error drives it) and
+# exercising it here would prove nothing about escapes. A regular FILE is
+# planted at exactly the path `TheiaService._resolveConfigDir()` derives from
+# the config-home environment variable, so `PowerBrowserAPI.ensureDirectory`
+# (IOUtils.makeDirectory) cannot create a directory there and throws.
+#
+# Both planted directories are mktemp -d paths registered with track_temp
+# (T-01-10) -- never a repo file, never a path outside the temp root.
+check_start_failure_shows_error() {
+  local stub_dir poison_home user_js result=0
+  stub_dir="$(mktemp -d)"; track_temp "$stub_dir"
+  # Exists only so the sidecar-resolution step's existence check passes. On the
+  # path under test it is never spawned at all -- the settings-folder fault
+  # fires first -- so all it has to do is stay alive if anything ever does
+  # reach it.
+  cat > "$stub_dir/main.js" <<'EOF'
+setInterval(() => {}, 60000);
+EOF
+
+  poison_home="$(mktemp -d)"; track_temp "$poison_home"
+  # THE FAULT: a regular file where the settings folder must be created.
+  printf 'not a directory\n' > "$poison_home/powerbrowser"
+
+  user_js="$(mktemp)"; track_temp "$user_js"
+  # A recovery-probe interval far beyond this check's own deadline: the error
+  # state must be observed as the start path left it, not after a background
+  # respawn has had a chance to churn it.
+  cat > "$user_js" <<EOF
+user_pref("powerbrowser.sidecar.backendMain", "$stub_dir/main.js");
+user_pref("powerbrowser.sidecar.startupTimeoutMs", 3000);
+user_pref("powerbrowser.sidecar.giveUpAttempts", 1);
+user_pref("powerbrowser.sidecar.recoveryProbeIntervalMs", 600000);
+EOF
+
+  export VERIFY05_USER_JS_PROFILE="$user_js"
+  export VERIFY05_XDG_CONFIG_HOME="$poison_home"
+  start_shell
+  local start_rc=$?
+  unset VERIFY05_USER_JS_PROFILE
+  unset VERIFY05_XDG_CONFIG_HOME
+  if [ "$start_rc" -ne 0 ]; then
+    echo "start-failure-shows-error: FAIL -- MIG-04 -- could not launch the built binary" >&2
+    return 1
+  fi
+
+  local deadline=$((SECONDS + 30))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    sentinel_present 'POWERBROWSER_SHELL_ERROR ' "$BROWSER_LOG" && break
+    if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
+      echo "start-failure-shows-error: FAIL -- MIG-04 -- browser exited before the error sentinel appeared; log:" >&2
+      cat "$BROWSER_LOG" >&2
+      stop_shell
+      return 1
+    fi
+    sleep 0.25
+  done
+
+  if ! sentinel_present 'POWERBROWSER_SHELL_ERROR ' "$BROWSER_LOG"; then
+    echo "start-failure-shows-error: FAIL -- MIG-04 -- a throw out of the start path produced NO error state within 30s: the rejection was swallowed and the user is looking at the loading layer with no message, no Retry and no Details; log:" >&2
+    cat "$BROWSER_LOG" >&2
+    stop_shell
+    return 1
+  fi
+
+  # Exactly once -- `_showError`'s `_errorShown` guard holds for this path too.
+  local error_sentinel_count
+  error_sentinel_count="$(grep -c 'POWERBROWSER_SHELL_ERROR ' "$BROWSER_LOG")"
+  if [ "$error_sentinel_count" -ne 1 ]; then
+    echo "start-failure-shows-error: FAIL -- MIG-04 -- expected exactly one POWERBROWSER_SHELL_ERROR sentinel, found $error_sentinel_count" >&2
+    result=1
+  fi
+
+  # The same anchored shape check_shell03_budget_exhausted_error applies, so an
+  # added key on this path is caught here exactly as it is there.
+  if ! grep -qE '^POWERBROWSER_SHELL_ERROR \{"reason":"[^"]*","recoverable":(true|false)\}$' "$BROWSER_LOG"; then
+    echo "start-failure-shows-error: FAIL -- MIG-04 -- POWERBROWSER_SHELL_ERROR sentinel JSON does not match the expected {reason, recoverable} shape" >&2
+    result=1
+  fi
+
+  # The copywriting contract's cheapest positive assertion: the sentence a user
+  # is now reading names the product in its display form.
+  local reason
+  reason="$(error_sentinel_reason "$BROWSER_LOG")"
+  if ! grep -Fq 'Power Browser' <<<"$reason"; then
+    echo "start-failure-shows-error: FAIL -- MIG-04 -- the painted sentence does not name the product: '$reason'" >&2
+    result=1
+  fi
+
+  # Positive control, the same one check_shell03_budget_exhausted_error carries:
+  # a deck-state sentinel that reported "none" unconditionally, or a
+  # getComputedStyle read that does not work headless, must not be able to
+  # satisfy this check forever.
+  local deck_error_line
+  deck_error_line="$(sed -E 's/^\[PowerBrowserAPI\] [a-z]+: //' "$BROWSER_LOG" | grep -E '^POWERBROWSER_DECK_STATE .*"where":"error"' | head -1)"
+  if [ -z "$deck_error_line" ]; then
+    echo "start-failure-shows-error: FAIL -- MIG-04 -- no POWERBROWSER_DECK_STATE sentinel accompanied the error sentinel" >&2
+    result=1
+  elif grep -q '"error":"none"' <<<"$deck_error_line"; then
+    echo "start-failure-shows-error: FAIL -- MIG-04 -- the error layer reports display:none while its own error sentinel was just written: $deck_error_line" >&2
+    result=1
+  fi
+
+  if [ "$result" -ne 0 ]; then
+    cat "$BROWSER_LOG" >&2
+  else
+    echo "start-failure-shows-error: painted '$reason'"
+  fi
+
+  stop_shell
+  return "$result"
+}
+
 # --- Task 2 (05-03): shell04-diagnostics-with-backend-down -----------------
 #
 # SHELL-04's risky edge (this plan's flagged_assumption): the diagnostics
@@ -3505,6 +3634,17 @@ run_own_checks() {
       # start-path-recovery in the --quick set above, and both drive the SAME
       # analyzer, so the assertion that ships is the one the self-test proves.
       "health-gate-recovery-swaps|check_health_gate_recovery_swaps"
+
+      # NEW (01-10): the other half of the same FAILED must-have -- a REAL
+      # throw ESCAPING the start path. The row above drives a launch that
+      # RECOVERS; this one drives a launch that cannot, and requires the error
+      # layer to paint rather than the rejection to vanish. Launches the built
+      # binary with a poisoned config home, so it is emphatically not --quick;
+      # its static counterpart is start-path-recovery's terminal-handler
+      # coverage rule in the --quick set above. Observed RED before the
+      # supervisor's terminal handler existed (01-10-SUMMARY.md records the
+      # output verbatim), which is the only reason it is known to discriminate.
+      "start-failure-shows-error|check_start_failure_shows_error"
 
       # NEW (01-07): the runtime half of the error-copy rewrite. Drives two
       # different real failure paths in the built binary and asserts that the

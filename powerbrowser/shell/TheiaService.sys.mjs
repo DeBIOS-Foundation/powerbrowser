@@ -670,8 +670,11 @@ export const TheiaService = {
       // Fire-and-forget: the loop runs for the lifetime of this browser
       // session, checking _shuttingDown at every await point rather than
       // needing a cancelable timer handle (Task 3's stop() just flips
-      // that flag).
-      this._healthLoop();
+      // that flag). 01-10: fire-and-forget is a promise ROOT, so it carries
+      // the same terminal handler the bootstrap's own entry points do -- a
+      // rejection here is a mid-session outage, and swallowing it strands the
+      // user exactly as swallowing a start-path rejection did.
+      this._healthLoop().catch(err => this.reportUnexpectedFailure(err));
     } else {
       this._pushLog(`Recovered on port ${this._port}, pid ${this._pid}.`);
     }
@@ -834,6 +837,48 @@ export const TheiaService = {
   },
 
   /**
+   * 01-10: the ONE terminal-failure handler, and the only new member of this
+   * object's public surface -- public because the chrome bootstrap attaches it.
+   *
+   * Four entry points onto this supervisor are fire-and-forget promise roots
+   * with no shared root to guard: the bootstrap's `start()` call, the Retry
+   * control's `retry()` call, and the two long-lived loops started without an
+   * await (`_healthLoop()` in `_spawnAndGate`'s one-time block and
+   * `_recoveryProbeLoop()` in `_startRecoveryProbe`). Every one of them routes
+   * here, so there are four attachments but exactly ONE place the outcome is
+   * decided. Before this existed, a rejection escaping any of them became an
+   * unhandled promise rejection in chrome and the user was left on the branded
+   * loading layer with no message, no Retry and no Details -- the identical
+   * user-visible outcome as the state-gating defect 01-09 removed
+   * (01-VERIFICATION.md's one FAILED must-have).
+   *
+   * This is a BACKSTOP for rejections that escape, never a timeout on the
+   * loading layer: it can only run once a promise has actually rejected, so a
+   * slow but succeeding start can never paint an error state here.
+   *
+   * The painted sentence is a direct `USER_MESSAGE.couldNotStart` reference --
+   * static, product-named, already carrying Retry and Details as its next step
+   * -- and never derived text. No new table entry is minted: an unclassified
+   * escape is exactly the case that sentence exists for, and a new key would
+   * have to invent a distinction the user cannot act on. Everything the
+   * sentence drops (the rejection's own text, the failing step) goes to
+   * `_fatal()` and to the diagnostics rows, read through the single
+   * `getFailureDetails()` accessor, so nothing is lost.
+   */
+  reportUnexpectedFailure(err) {
+    const text = err && err.message ? err.message : String(err);
+    this._fatal(`Unhandled failure escaped the supervisor: ${text}`);
+    // No guard on `_browserElement`: `start()` assigns it synchronously before
+    // its first await, so no rejection can reach here with it unset. A guard
+    // whose true branch is unreachable would be untestable and is deliberately
+    // not written.
+    this._showError(USER_MESSAGE.couldNotStart, /* recoverable */ true, [
+      ["Failed step", "starting the interface"],
+      ["Error", text],
+    ]);
+  },
+
+  /**
    * D-115: a slow background probe, started when the error state is
    * entered (`_showError`) and stopped when it clears (`_hideError`). Fires
    * no sooner than `powerbrowser.sidecar.recoveryProbeIntervalMs` after
@@ -860,8 +905,9 @@ export const TheiaService = {
     }
     this._recoveryProbeActive = true;
     // Fire-and-forget, same convention as _healthLoop() -- lives for as
-    // long as _recoveryProbeActive stays true, checked at every await point.
-    this._recoveryProbeLoop();
+    // long as _recoveryProbeActive stays true, checked at every await point --
+    // and, 01-10, carrying the same one terminal handler for the same reason.
+    this._recoveryProbeLoop().catch(err => this.reportUnexpectedFailure(err));
   },
 
   _stopRecoveryProbe() {
