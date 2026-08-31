@@ -1122,6 +1122,104 @@ EOF
   return "$result"
 }
 
+# --- 01-09: health-gate-recovery-swaps -------------------------------------
+#
+# The branch 01-VERIFICATION.md recorded FAILED, which no happy-path smoke test
+# reaches: the FIRST spawn announces readiness (so the supervisor pins a port)
+# and then never passes the health gate. Every check above either succeeds on
+# its first spawn or fails on it terminally; none of them drives a launch that
+# fails the gate and then recovers, which is exactly why the conflation between
+# "a port has been pinned" and "a spawn has actually completed" shipped.
+#
+# The plant is a wrapper backend that counts its own invocations in a marker
+# file: invocation 1 binds the requested port, announces readiness, and answers
+# 503 to everything while staying alive (so the failure classifies as the
+# health-probe timeout, not as a crash); invocation 2+ answers 200. The marker
+# count is asserted here, OUTSIDE the analyzer, so a wrong analyzer cannot also
+# excuse a fixture that never fired.
+check_health_gate_recovery_swaps() {
+  local wrap_dir marker user_js result=0
+  wrap_dir="$(mktemp -d)"; track_temp "$wrap_dir"
+  marker="$wrap_dir/count"
+  echo 0 > "$marker"
+  cat > "$wrap_dir/main.js" <<EOF
+const fs = require('fs');
+const http = require('http');
+const marker = '$marker';
+const n = parseInt(fs.readFileSync(marker, 'utf8'), 10) + 1;
+fs.writeFileSync(marker, String(n));
+
+const argv = process.argv;
+const flag = argv.indexOf('--port');
+const port = flag === -1 ? 0 : parseInt(argv[flag + 1], 10);
+
+// Invocation 1 is the plant. Readiness announces, so the supervisor pins the
+// port; the health probe can never pass; and the output stream never ends, so
+// this classifies as the health-probe timeout the gap describes rather than as
+// a crash. Invocation 2+ is a healthy backend.
+const status = n === 1 ? 503 : 200;
+const server = http.createServer((req, res) => {
+  res.writeHead(status, { 'Content-Type': 'text/plain' });
+  res.end('powerbrowser-verification-stub');
+});
+// Bind 127.0.0.1 EXPLICITLY on both branches (T-01-02): a stub that answers 200
+// to every request must never be reachable off-host.
+server.listen(port, '127.0.0.1', () => {
+  console.log('POWERBROWSER_BACKEND_READY ' + JSON.stringify({ port: server.address().port, pid: process.pid }));
+});
+EOF
+
+  user_js="$(mktemp)"; track_temp "$user_js"
+  cat > "$user_js" <<EOF
+user_pref("powerbrowser.sidecar.backendMain", "$wrap_dir/main.js");
+user_pref("powerbrowser.sidecar.startupTimeoutMs", 3000);
+user_pref("powerbrowser.sidecar.giveUpAttempts", 4);
+user_pref("powerbrowser.sidecar.healthIntervalSteadyMs", 30000);
+EOF
+
+  export VERIFY05_USER_JS_PROFILE="$user_js"
+  start_shell
+  local start_rc=$?
+  unset VERIFY05_USER_JS_PROFILE
+  if [ "$start_rc" -ne 0 ]; then
+    echo "health-gate-recovery-swaps: FAIL -- could not launch the built binary" >&2
+    return 1
+  fi
+
+  local deadline=$((SECONDS + 60))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    sentinel_present 'POWERBROWSER_SHELL_SWAP ' "$BROWSER_LOG" && break
+    if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
+      echo "health-gate-recovery-swaps: FAIL -- browser exited before the swap sentinel appeared; log:" >&2
+      cat "$BROWSER_LOG" >&2
+      stop_shell
+      return 1
+    fi
+    sleep 0.5
+  done
+
+  # The fixture's own proof, held outside the analyzer: without at least two
+  # invocations the plant never forced a respawn and every assertion below
+  # would be about a launch that never entered the recovery branch.
+  local attempts
+  attempts="$(cat "$marker" 2>/dev/null || echo 0)"
+  if [ "$attempts" -lt 2 ]; then
+    echo "health-gate-recovery-swaps: FAIL -- the backend stub was invoked $attempts time(s); the planted health-gate failure never forced a respawn, so this run proves nothing; log:" >&2
+    cat "$BROWSER_LOG" >&2
+    stop_shell
+    return 1
+  fi
+
+  if ! node "$REPO_ROOT/scripts/verify-start-path-recovery.mjs" --log "$BROWSER_LOG"; then
+    echo "health-gate-recovery-swaps: FAIL -- see the analyzer failures above; log:" >&2
+    cat "$BROWSER_LOG" >&2
+    result=1
+  fi
+
+  stop_shell
+  return "$result"
+}
+
 # --- 01-07: shell-diagnostics-rows-populated -------------------------------
 #
 # The runtime half of the error-copy rewrite. verify-shell-error-copy.mjs is
@@ -3380,6 +3478,15 @@ run_own_checks() {
       "shell03-budget-exhausted-error|check_shell03_budget_exhausted_error"
       "shell03-auto-dismiss-on-selfheal|check_shell03_auto_dismiss_on_selfheal"
       "shell04-diagnostics-with-backend-down|check_shell04_diagnostics_with_backend_down"
+
+      # NEW (01-09): the start path's recovery contract, driven on the FAILING
+      # branch. Every other launch check here either succeeds on its first
+      # spawn or fails on it terminally; none of them drives a launch whose
+      # first spawn announces readiness, pins a port, fails the health gate,
+      # and then recovers -- which is precisely the branch 01-VERIFICATION.md
+      # recorded FAILED and the reason the defect shipped green. Launches the
+      # built binary, so it is emphatically not --quick.
+      "health-gate-recovery-swaps|check_health_gate_recovery_swaps"
 
       # NEW (01-07): the runtime half of the error-copy rewrite. Drives two
       # different real failure paths in the built binary and asserts that the
