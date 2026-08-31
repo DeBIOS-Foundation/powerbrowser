@@ -3559,6 +3559,32 @@ run_own_checks() {
     # only because a human looked.
     "start-path-recovery|node $REPO_ROOT/scripts/verify-start-path-recovery.mjs"
     "start-path-recovery-self-test|node $REPO_ROOT/scripts/verify-start-path-recovery.mjs --self-test"
+
+    # NEW (01-11): the error state's REPAINT contract, closing
+    # 01-VERIFICATION.md's failed truth 2c. What it drives: a launch whose spawn
+    # cannot succeed, followed by two consecutive failing Retry clicks, and it
+    # requires the error-family sentinel stream to read paint, clear, repaint,
+    # clear, repaint -- five PRESENCE assertions, never an absence assertion.
+    # The two source files are not re-implemented and not text-transformed: the
+    # supervisor is imported with ChromeUtils faked and the chrome bootstrap is
+    # evaluated in a node:vm sandbox that is also its own window, so the drive
+    # goes through the bootstrap's own DOMContentLoaded handler and every
+    # sentinel it reads comes from a dump( call site in the file under test
+    # (proven before any scenario runs).
+    #
+    # Honestly --quick: it evaluates source in-process with no build, no
+    # browser, no display and no network, and finishes in well under a second.
+    # It has NO runtime counterpart in the full set and deliberately claims
+    # none: its perceptual half -- a human clicking Retry in a real window and
+    # seeing the layer come back -- stays on the WINDOWS.md human record,
+    # because chrome-context Marionette is platform-blocked on Linux (ledger
+    # item 7), which is the same fallback 05-02-SUMMARY.md already recorded for
+    # the Retry button. The self-test rides alongside for the reason every other
+    # self-test row in this array gives, and with particular force here: this
+    # defect survived three full verification runs precisely because the
+    # registered checks could not go red on it.
+    "shell-error-contract|node $REPO_ROOT/scripts/verify-shell-error-contract.mjs"
+    "shell-error-contract-self-test|node $REPO_ROOT/scripts/verify-shell-error-contract.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then

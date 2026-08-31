@@ -116,10 +116,19 @@ document.addEventListener(
     // 01-10: the Retry control's own supervisor call is a fire-and-forget
     // promise root too, so it carries the SAME terminal handler the start call
     // below does. A Retry whose restart path rejects must not be silent either
-    // -- that would hide the error layer (this function's first line) and
-    // never bring it back, which is strictly worse than not offering Retry.
+    // -- that would leave the error layer hidden and never bring it back, which
+    // is strictly worse than not offering Retry.
+    //
+    // 01-11 (01-VERIFICATION.md's failed truth 2c): hiding the layer is the
+    // SUPERVISOR's to do, through powerbrowserHideError above, and this function
+    // no longer writes the element's visibility itself. It used to, and that made
+    // two owners of one fact: the DOM went blank here while TheiaService's
+    // `_errorShown` repaint guard stayed set, so the first Retry that failed left
+    // a blank window with no message, no Retry and no Details for the rest of the
+    // session. TheiaService.retry() now calls its own `_hideError()`, which is
+    // the single route to this element's `display` and also stops the stale
+    // background recovery probe -- so the two representations cannot drift apart.
     window.powerbrowserRetry = function powerbrowserRetry() {
-      errorElement.style.display = "none";
       TheiaService.retry().catch(err => TheiaService.reportUnexpectedFailure(err));
     };
 

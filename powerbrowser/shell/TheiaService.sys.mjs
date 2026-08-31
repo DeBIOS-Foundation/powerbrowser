@@ -895,8 +895,23 @@ export const TheiaService = {
    * itself and `_recoveryProbe()`, so a second Retry click (or a Retry
    * racing the background probe) while a spawn is already in flight is a
    * no-op, never a second spawn.
+   *
+   * 01-11 (01-VERIFICATION.md's failed truth 2c): the error state is cleared
+   * HERE, before re-entering `_restart()`, and deliberately not inside
+   * `_restart()` itself. `retry()` is the one caller that has just taken the
+   * message, the Retry and the Details off the user's screen, so it is the one
+   * caller that owes a repaint if the restart fails again -- and without this
+   * call `_errorShown` stays true and `_showError`'s guard swallows every later
+   * repaint for the life of the session. Clearing from inside `_restart()`
+   * instead would be wrong for a different reason: `_restart()` is also the
+   * background recovery probe's own re-entry point, and `_hideError()` calls
+   * `_stopRecoveryProbe()`, so it would tear down the probe loop that is calling
+   * it and let the next `_showError()` start a second one. `_hideError()`
+   * early-returns when `_errorShown` is false, so the health loop's and
+   * `start()`'s own `_restart()` calls are unaffected by this.
    */
   async retry() {
+    this._hideError();
     await this._restart();
   },
 
