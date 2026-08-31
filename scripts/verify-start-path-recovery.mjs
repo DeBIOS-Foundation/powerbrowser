@@ -68,7 +68,7 @@
 // the plants.
 
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, basename } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -188,6 +188,101 @@ function deriveOneTimeBlockField(src) {
 }
 
 /**
+ * Derivation: every method the supervisor declares with the `async` keyword.
+ * Each one returns a promise, so each one is a promise ROOT when it is called
+ * without an await -- which is what the chrome bootstrap does by design
+ * (SHELL-05: the shell must paint before any backend work).
+ */
+function deriveAsyncMethods(supervisorSrc) {
+  const found = new Set();
+  for (const m of supervisorSrc.matchAll(/^\s*async\s+([A-Za-z_$][\w$]*)\s*\(/gm)) {
+    found.add(m[1]);
+  }
+  return found;
+}
+
+/**
+ * Derivation: the local binding the chrome bootstrap imports the supervisor
+ * under, read from its own `ChromeUtils.importESModule` statement rather than
+ * written down here -- renaming the binding must not need an edit to this file.
+ * `supervisorFile` is the supervisor's own basename, so both sides of the match
+ * come from the invocation's arguments.
+ */
+function deriveSupervisorBinding(shellSrc, supervisorFile) {
+  const escaped = supervisorFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = shellSrc.match(
+    new RegExp(`const\\s*\\{\\s*([A-Za-z_$][\\w$]*)\\s*\\}\\s*=\\s*ChromeUtils\\.importESModule\\(\\s*["'][^"']*${escaped}["']`)
+  );
+  return m ? m[1] : null;
+}
+
+/**
+ * 01-10's terminal-handler coverage contract, and the static half of the
+ * gap 01-VERIFICATION.md caught: EVERY call in the chrome bootstrap to a
+ * promise-returning supervisor method must carry a terminal handler on the same
+ * statement. Both sides are set derivations from the tree -- A from the
+ * supervisor's own `async` declarations, B from the bootstrap's calls filtered
+ * by A -- so adding a promise-returning method and calling it unhandled goes
+ * red, while renaming an existing one stays green because both sides move
+ * together. No method list is kept here for the tree to agree with.
+ *
+ * A rule that finds no call sites asserts nothing, which is how this class of
+ * check silently stops working, so an empty derivation on either side is itself
+ * a named failure rather than a quiet pass.
+ */
+function assertTerminalHandlerCoverage(supervisorSrc, shellSrc, supervisorFile, shellPath) {
+  const asyncMethods = deriveAsyncMethods(supervisorSrc);
+  if (asyncMethods.size === 0) {
+    fail(
+      "derivation A yielded nothing: the supervisor declares no `async` method at all, so the " +
+        "terminal-handler coverage rule below would have nothing to look for and would pass vacuously"
+    );
+    return;
+  }
+
+  const binding = deriveSupervisorBinding(shellSrc, supervisorFile);
+  if (!binding) {
+    fail(
+      `could not find the chrome bootstrap's \`ChromeUtils.importESModule(... ${supervisorFile})\` statement ` +
+        `in ${shellPath} -- the supervisor's local binding is derived from it, so the coverage rule below ` +
+        `would have no object to look for`
+    );
+    return;
+  }
+
+  const callRe = new RegExp(`\\b${binding}\\.([A-Za-z_$][\\w$]*)\\s*\\(`, "g");
+  let callSites = 0;
+  for (const m of shellSrc.matchAll(callRe)) {
+    if (!asyncMethods.has(m[1])) {
+      continue;
+    }
+    callSites += 1;
+    // The statement this call belongs to: from the call itself to the next
+    // statement terminator. A terminal handler attached anywhere in it counts;
+    // one attached to a DIFFERENT statement does not.
+    const rest = shellSrc.slice(m.index);
+    const end = rest.indexOf(";");
+    const statement = end === -1 ? rest : rest.slice(0, end);
+    if (!statement.includes(".catch(")) {
+      fail(
+        `\`${binding}.${m[1]}(\` is called in the chrome bootstrap with no terminal handler on the same ` +
+          `statement -- \`${m[1]}\` is declared async, so this is a promise ROOT and a rejection escaping it ` +
+          `becomes an unhandled promise rejection in chrome: the user is left on the loading layer with no ` +
+          `message, no Retry and no Details`
+      );
+    }
+  }
+
+  if (callSites === 0) {
+    fail(
+      `the chrome bootstrap (${shellPath}) calls no promise-returning method on \`${binding}\` at all -- ` +
+        `the terminal-handler coverage rule found nothing to assert about, which is how this check silently ` +
+        `stops working rather than a clean result`
+    );
+  }
+}
+
+/**
  * The health-gate failure's log signature, derived from the `_fatal()` template
  * that writes it: its fixed leading text, up to the first interpolation. A
  * template that moved makes every log assertion below vacuous, so this failing
@@ -221,12 +316,17 @@ function assertEmitters(shellPath) {
   }
 }
 
-function assertStatic(supervisorPath) {
+function assertStatic(supervisorPath, shellPath) {
   const raw = readSource(supervisorPath, "supervisor source");
   if (raw === null) {
     return;
   }
   const src = stripComments(raw);
+
+  const shellRaw = readSource(shellPath, "chrome bootstrap source");
+  if (shellRaw !== null) {
+    assertTerminalHandlerCoverage(src, stripComments(shellRaw), basename(supervisorPath), shellPath);
+  }
 
   const swapField = deriveSwapGuardField(src);
   if (!swapField) {
@@ -408,6 +508,22 @@ const SOURCE_FAULTS = [
     target: "shell",
     apply: (s) => s.replace(`dump(\`${SWAP_SENTINEL} `, "dump(`POWERBROWSER_SHELL_NAVIGATED "),
     expect: `emits no \`dump(\` line beginning \`${SWAP_SENTINEL}\``,
+  },
+  {
+    // 01-10: the terminal-handler coverage rule. Strip the handler from ONE
+    // bootstrap call and the rule must name that call site.
+    name: "a terminal handler stripped from one of the bootstrap's supervisor calls",
+    target: "shell",
+    apply: (s) => s.replace(/(\bTheiaService\.start\([^)]*\))\.catch\([^;]*/, "$1"),
+    expect: "is called in the chrome bootstrap with no terminal handler on the same statement",
+  },
+  {
+    // ...and the vacuity guard: with no such call left, the rule finds nothing
+    // to assert about, which must be a named failure rather than a clean run.
+    name: "every promise-returning supervisor call removed from the bootstrap, so the rule is vacuous",
+    target: "shell",
+    apply: (s) => s.replace(/\bTheiaService\.(?:start|retry)\([^;]*/g, "void 0"),
+    expect: "the terminal-handler coverage rule found nothing to assert about",
   },
 ];
 
@@ -600,7 +716,7 @@ assertEmitters(shellPath);
 if (logPath) {
   assertLog(logPath, supervisorPath);
 } else {
-  assertStatic(supervisorPath);
+  assertStatic(supervisorPath, shellPath);
 }
 
 if (failures.length === 0) {
