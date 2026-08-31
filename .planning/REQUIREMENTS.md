@@ -4,14 +4,14 @@
 
 ### Migration & Debrand (MIG)
 
-- [ ] **MIG-01**: Platform code is migrated from the sourcerer tree into this
+- [x] **MIG-01**: Platform code is migrated from the sourcerer tree into this
       repo with `upstream/` re-fetched via script (never copied) and no
       objdirs copied
 
-- [ ] **MIG-02**: A committed token-classification inventory (brand /
+- [x] **MIG-02**: A committed token-classification inventory (brand /
       identity / frozen / coincidental) exists before any rename is executed
 
-- [ ] **MIG-03**: All internal identifiers are renamed to fixed platform
+- [x] **MIG-03**: All internal identifiers are renamed to fixed platform
       names — `powerbrowser/` tree, `@powerbrowser/*` extension scope,
       `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and these never
       vary per downstream
@@ -257,9 +257,9 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MIG-01 | Phase 1 | Gaps Found |
-| MIG-02 | Phase 1 | Gaps Found |
-| MIG-03 | Phase 1 | Gaps Found |
+| MIG-01 | Phase 1 | Complete |
+| MIG-02 | Phase 1 | Complete |
+| MIG-03 | Phase 1 | Complete |
 | MIG-04 | Phase 1 | Complete — closed by 01-04's build (smoke-firefox + smoke-theia PASS, six identity surfaces green on the built artifact with the positive control) |
 | GUI-01 | Phase 1 | Gaps Found |
 | GUI-02 | v2 | Deferred 2026-08-30 — `@theia/mini-browser` rejected at the D-22 gate on runtime surface (backend module + `vhost`), not supply chain |

@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-14-PLAN.md
-last_updated: "2026-08-31T23:07:15.522Z"
+stopped_at: Completed 01-15-PLAN.md
+last_updated: "2026-08-31T23:19:22.874Z"
 last_activity: 2026-08-31
-last_activity_desc: Completed plan 01-13 (gap closure — user-driven Retry gate)
+last_activity_desc: Completed plan 01-15 (gap closure — CR-B, the rebase scan's extra root)
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 15
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 2 of 15
-Status: Ready to execute
-Last activity: 2026-08-31 — Phase 01 execution started
+Plan: 15 of 15
+Status: All plans executed — awaiting verification
+Last activity: 2026-08-31 — Completed plan 01-15 (gap closure — CR-B, the rebase scan's extra root)
 
-Progress: [█████████░] 93%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ Progress: [█████████░] 93%
 | Phase 01 P12 | ~30min | 3 tasks | 5 files |
 | Phase 01 P13 | 15min | 3 tasks | 6 files |
 | Phase 01 P14 | ~6min | 2 tasks | 2 files |
+| Phase 01 P15 | ~35min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -139,6 +140,11 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-14: a method whose every return sets message: null does NOT qualify as message-bearing -- a binding that always paints nothing is a different defect, not a licence
 - [Phase ?]: 01-14: each new fault row is proven GREEN under a scratch copy of the pre-fix checker and RED under the fixed one -- a row red under both is not evidence that the named hole was closed
 - [Phase ?]: 01-14: the 01-UI-SPEC provenance entry is prose, not a table row -- the file's 104-row count and the corrected row's identifying string are both grep-asserted, so a row would have broken two acceptance criteria
+- [Phase ?]: 01-15: the extra-root pass runs offences and unclaimed probes but NOT reconcile()/groundTruth() -- D-17's census counts this repo's own migrating tree and cannot close over a foreign checkout
+- [Phase ?]: 01-15: one inScanScope() predicate, two file-set sources (git ls-files; a caller-supplied root) -- the extra root is add-alongside, never a second weaker ruleset
+- [Phase ?]: 01-15: symlinks are skipped structurally -- upstream/powerbrowser links back into this repo's powerbrowser/, so a link-following walk would rescan this tree through a second path
+- [Phase ?]: 01-15 [Rule 2]: an unrecognized argument now exits 2 -- the pre-fix script dropped unknown flags silently, so a mistyped --extra-root reported PASS over 109 tracked files, CR-B's own failure class one keystroke away
+- [Phase ?]: 01-15: the backstop truth was MEASURED, not deferred -- 55s over 463,930 files against the live 5.6 GB upstream/, exit 0, upstream diff empty afterwards
 
 ### Pending Todos
 
@@ -165,6 +171,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-31T23:06:57.488Z
-Stopped at: Completed 01-14-PLAN.md
+Last session: 2026-08-31T23:19:02.893Z
+Stopped at: Completed 01-15-PLAN.md
 Resume file: None
