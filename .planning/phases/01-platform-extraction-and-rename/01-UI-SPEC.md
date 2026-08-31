@@ -201,10 +201,10 @@ leak forward with a new prefix. Required rewrites:
 |---|---|
 | `sourcerer.sidecar.backendMain is unset -- cannot locate the Theia backend entry file.` | **"Power Browser can't find its interface files. This build looks incomplete — reinstall, or open Details for the missing path."** |
 | `sourcerer.sidecar.backendMain (${path}) does not exist -- ...` | same string as above (the path goes to Details) |
-| `Could not resolve a Node executable -- set sourcerer.sidecar.nodePath or add node to PATH.` | **"Power Browser needs Node.js and couldn't find it. Install Node.js 22 or later, then choose Retry."** |
-| `Failed to spawn the backend: ${err.message}` | **"Power Browser couldn't start its interface. Choose Retry, or open Details to see the error."** |
-| `Failed to hand the backend its token over stdin: ${err.message}` | same string as above |
-| `Backend output stream ended before announcing readiness: ${err.message}` | same string as above |
+| `Could not resolve a Node executable -- set sourcerer.sidecar.nodePath or add node to PATH.` | **"Power Browser needs Node.js and couldn't find it. Install Node.js 22 or later and open Power Browser again, or open Details for where it looked."** (01-13: reworded. Reachable only from `_resolveSidecar`, which is always classified unrecoverable, so the screen it paints has no Retry control on it.) |
+| `Failed to spawn the backend: ${err.message}` | **"Power Browser couldn't start its interface, and retrying won't change the result. Close Power Browser and open it again, or open Details to see the error."** (01-13: `USER_MESSAGE.couldNotStartUnrecoverable`, minted for the two `recoverable: false` sites in `_spawnAndGate` — the D-113 spawn-throw and the D-112 pinned-port conflict.) |
+| `Failed to hand the backend its token over stdin: ${err.message}` | **"Power Browser couldn't start its interface. Choose Retry, or open Details to see the error."** (`USER_MESSAGE.couldNotStart` — this site is classified recoverable, so Retry is on the screen and naming it is correct.) |
+| `Backend output stream ended before announcing readiness: ${err.message}` | same string as the stdin row above, except D-112's pinned-port conflict, which is classified unrecoverable and takes `couldNotStartUnrecoverable` |
 | `Backend did not announce SOURCERER_BACKEND_READY within ${ms}ms.` | **"Power Browser's interface didn't finish starting. Choose Retry, or open Details if this keeps happening."** |
 | `Health probe on port ${port} never returned 200 within ${ms}ms.` | same string as above |
 | `Shutting down.` | keep verbatim — not an error surface |
@@ -213,6 +213,15 @@ Rules the executor applies: every user-facing string names the product as **"Pow
 states the problem in plain language, and ends with a next step that is a real affordance on
 screen (Retry or Details). Every dropped identifier — pref key, sentinel, port, timeout,
 `err.message` — is added to the diagnostics field rows so nothing is lost.
+
+**The rule 01-13's gap taught, added to the list above:** the stated next step and the set of
+controls rendered for that classification are **one fact and change together**. A failure the
+supervisor classifies unrecoverable is not offered a Retry control, so no message reachable from an
+unrecoverable call site may name Retry as the next step — for that class the on-screen affordance is
+Details, and Details alone. This is why `couldNotStart` split into two entries: the distinction the
+new key carries is not a distinction of cause (which the user cannot act on and which 01-10 rightly
+declined to mint a key for) but a distinction of *which controls exist on the screen the sentence is
+printed on*, which is the one thing the sentence has to be right about.
 
 ⚠ **Planner judgment call.** This rewrite is 9 strings inside files the rename already edits,
 but it is *behaviour* change inside a mechanical-rename phase. If the planner scopes it out,

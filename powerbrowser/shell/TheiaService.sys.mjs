@@ -40,8 +40,18 @@ const HEALTH_PATH = "/powerbrowser/health";
  */
 const USER_MESSAGE = {
   interfaceFilesMissing: "Power Browser can't find its interface files. This build looks incomplete — reinstall, or open Details for the missing path.",
-  nodeMissing: "Power Browser needs Node.js and couldn't find it. Install Node.js 22 or later, then choose Retry.",
+  nodeMissing: "Power Browser needs Node.js and couldn't find it. Install Node.js 22 or later and open Power Browser again, or open Details for where it looked.",
   couldNotStart: "Power Browser couldn't start its interface. Choose Retry, or open Details to see the error.",
+  // 01-13: the one place a SECOND `couldNotStart` sentence is warranted, and the
+  // one place 01-10 declined to mint a key. 01-10's reasoning was that a new key
+  // would have to invent a distinction the user cannot act on -- still correct
+  // for `reportUnexpectedFailure`'s own case, which is why that comment stays.
+  // Here the distinction IS the action: 01-13 hides the Retry control for the
+  // unrecoverable class, so one screen offers Retry and the other does not, and
+  // the stated next step and the rendered controls are one fact. Reachable only
+  // from `_spawnAndGate`'s two `recoverable: false` returns -- the spawn-throw
+  // D-113 site and the D-112 pinned-port-conflict site.
+  couldNotStartUnrecoverable: "Power Browser couldn't start its interface, and retrying won't change the result. Close Power Browser and open it again, or open Details to see the error.",
   didNotFinishStarting: "Power Browser's interface didn't finish starting. Choose Retry, or open Details if this keeps happening.",
 };
 
@@ -595,7 +605,7 @@ export const TheiaService = {
       return {
         ok: false,
         recoverable: false,
-        message: USER_MESSAGE.couldNotStart,
+        message: USER_MESSAGE.couldNotStartUnrecoverable,
         details: [
           ["Failed step", "spawning the backend process"],
           ["Error", err.message],
@@ -665,7 +675,7 @@ export const TheiaService = {
         return {
           ok: false,
           recoverable: false,
-          message: USER_MESSAGE.couldNotStart,
+          message: USER_MESSAGE.couldNotStartUnrecoverable,
           details: [
             ["Failed step", "reattaching to the port this session is pinned to"],
             ["Pinned port", this._port],
