@@ -1,90 +1,76 @@
 ---
 phase: 01-platform-extraction-and-rename
-verified: 2026-08-31T20:05:00Z
+verified: 2026-08-31T21:15:00Z
 status: gaps_found
-score: 6/9 must-haves verified (1 newly closed, 3 new failures found this pass, 2 partial — human halves still open)
+score: 8/11 must-haves verified (2 newly closed, 1 gap still open under a different mechanism, 2 partial — human halves still open)
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
-  previous_score: 6/8
+  previous_score: 6/9
   gaps_closed:
-    - "The backend supervisor recovers from a transient health-gate failure without leaving the user on a permanent, unrecoverable loading screen with a healthy backend and no error affordance — closed by 01-09 (re-keyed _spawnAndGate's one-time block, _restart()'s port choice, and _swap()'s completion assignment onto this._swapped) and 01-10 (reportUnexpectedFailure terminal handler on all four fire-and-forget entry points; the three named unguarded throw sites guarded)"
-  gaps_remaining: []
+    - "2c — a failing Retry no longer permanently disables the error layer: retry() calls _hideError() before _restart(); powerbrowserRetry no longer writes errorElement.style.display. Independently confirmed by direct reading of powerbrowser.js:131-133 and TheiaService.sys.mjs:955-957, and by scripts/verify-platform.sh --quick (shell-error-contract: PASS, 6/6 self-test rows)."
+    - "2e — the quit observer and _stateFilePath are now established immediately after _configDir (TheiaService.sys.mjs:153/170/186), ahead of the settings-folder try/catch (196-211) that 2e named. Independently confirmed by direct reading and by the ordering dump in 01-12-SUMMARY.md, cross-checked against the live file."
+  gaps_remaining:
+    - "2d (re-scoped by CR-01) — _showError's background-probe timer is now correctly gated on recoverable (TheiaService.sys.mjs:1088-1090, confirmed), but nothing gates the user-driven route to the identical unretryable class: retry() (955-957) and the Retry button (powerbrowser.xhtml:39, no disabled/hidden attribute; powerbrowser.js:135-137, unconditional click listener) run unconditionally regardless of the recoverable classification _showError was given. A user who clicks Retry after an unrecoverable _resolveSidecar failure re-enters _restart()/_spawnAndGate() against _configDir=null, _stateFilePath=null and no registered quit observer, and _hideError() (1096-1103) unconditionally nulls _failureDetails, erasing the original diagnostic rows on every such click. This is the same defect CLASS 2d was opened to close (an unrecoverable classification not actually preventing re-entry into the failed launch path) reached by a different route than the one 01-12 closed."
   regressions: []
 gaps:
-  - truth: "Clicking Retry on the error layer does not permanently disable the error layer for the rest of the browser session — a failed Retry must still be able to repaint an error state on a subsequent failure. This is the same user-visible symptom class ('boots, and works as an actual web browser' clause; dead loading/blank screen, no message, no Retry, no Details) that 01-09/01-10 were scoped to eliminate, reached by a third, still-open route."
+  - truth: "An unrecoverable failure classification (recoverable: false) actually prevents re-entry into the failed launch path — not just the background timer, but every route the UI offers, including the Retry button."
     status: failed
     reason: >
-      Independently confirmed by reading powerbrowser/shell/powerbrowser.js and
-      powerbrowser/shell/TheiaService.sys.mjs directly — not merely cited from 01-REVIEW.md's CR-01,
-      which was produced against the identical post-01-10 tree and reaches the same conclusion.
-      window.powerbrowserRetry (powerbrowser.js:121-124) writes the DOM directly
-      (`errorElement.style.display = "none"`) and calls `TheiaService.retry()`. `retry()`
-      (TheiaService.sys.mjs:899-901) is `async retry() { await this._restart(); }` — it never calls
-      `_hideError()`. `_hideError()` (line 1015) is the ONLY site that clears `_errorShown`, and the
-      only caller of `_hideError()` is `_restart()`'s success path (line 854, "successful spawn calls
-      `_hideError`"). So on every Retry click whose restart does not succeed: (1) the DOM error layer
-      is hidden by the click handler; (2) `_restart()` fails and, on give-up, calls `_showError(...)`
-      again; (3) `_showError` (line 1000-1004) reads `if (this._errorShown) { return; }` and early-
-      returns, because `_errorShown` was never reset. The error layer never repaints: no message, no
-      Retry control, no Details control, on a screen the click handler already blanked. Because
-      `_hideError()` also never ran, `_stopRecoveryProbe()` never ran either, so the background probe
-      from the ORIGINAL failure is still active and may eventually recover the launch on its own after
-      N x recoveryProbeIntervalMs (15000ms default) — but with zero on-screen feedback and no user
-      affordance in the meantime, and never if the underlying condition does not clear on its own.
-      This is not a hypothetical: clicking Retry while a genuinely transient condition (e.g. the
-      token-gate race 01-UI-SPEC and the supervisor's own comments name elsewhere) is still resolving
-      is the single most likely user action in the error state, and it reaches this path on the very
-      first failed retry, no unusual timing required. Filed by 01-10 itself as deferred-items.md item
-      7 ("same defect class as this plan ... pre-existing since 05-02 and outside 01-10's named
-      scope"), i.e. known and explicitly not fixed, not deferred to any later ROADMAP phase (Phase
-      2-7's goals are all about the configuration-manifest generator and its emitters; none covers
-      backend-supervisor error recovery).
+      Independently confirmed by direct reading of powerbrowser.js and TheiaService.sys.mjs, not
+      merely cited from 01-REVIEW.md's CR-01 (produced against the identical post-01-12 tree and
+      reaching the same conclusion). 01-12 correctly closed the TIMER half of this gap: `_showError`
+      (TheiaService.sys.mjs:1079-1092) now reads `if (recoverable) { this._startRecoveryProbe(); }`
+      -- confirmed present, and confirmed exercised by the registered
+      `unrecoverable-classification-starts-no-probe` / `recoverable-classification-starts-the-probe`
+      scenario pair (`scripts/verify-platform.sh --quick` → PASS). But the USER-driven half was never
+      touched: `powerbrowserShowError` (powerbrowser.js:102-109) destructures `{ reason, recoverable }`
+      and forwards `recoverable` to the `POWERBROWSER_SHELL_ERROR` sentinel dump only (line 106) — it
+      never reads or writes `errorRetryButton`. The XHTML markup
+      (`powerbrowser.xhtml:39`, confirmed by direct read) carries no `disabled`/`hidden` attribute on
+      that button, and `powerbrowser.css` (confirmed by grep) has no rule that hides or disables
+      `#powerbrowser-error-retry`. The click listener (`powerbrowser.js:135-137`) is unconditional.
+      `TheiaService.retry()` (`:955-958`, confirmed) is `async retry() { this._hideError(); await
+      this._restart(); }` — no check of any recoverable/recorded classification anywhere in its body.
+      So on the ONE class the supervisor's own D-113 comment (TheiaService.sys.mjs:145-148, confirmed)
+      calls "unrecoverable by construction ... with no retry at all" -- the `_resolveSidecar()` failure
+      branch that returns at line 150, before `_configDir` (153), `_stateFilePath` (170) or the quit
+      observer (186) are ever assigned -- the user is looking at a live, enabled Retry control
+      (`USER_MESSAGE.nodeMissing` even names it as the next step: "Install Node.js 22 or later, then
+      choose Retry"), and clicking it: (1) calls `_hideError()`, which unconditionally nulls
+      `_failureDetails` (TheiaService.sys.mjs:1099, confirmed) -- the diagnostic rows that identified
+      the actual problem (`["Preference", "powerbrowser.sidecar.nodePath"]`,
+      `["Preference status", "unset, and no node was found on PATH"]`) are gone from the diagnostics
+      layer for the rest of the session, replaced on the next paint by a generic
+      `USER_MESSAGE.couldNotStart` plus a raw spawn-error string; (2) re-enters `_restart()` →
+      `_spawnAndGate()` (TheiaService.sys.mjs:532 onward, confirmed) with `this._nodePath` still null
+      (nothing between the failed `_resolveSidecar()` call and this retry ever re-resolves it --
+      `_resolveSidecar()` is only ever called once, from `start()`, which is permanently
+      `_started`-guarded) and `this._configDir`/`this._stateFilePath` still unset, and with no quit
+      observer registered (`PowerBrowserAPI.onQuitGranted` never reached, since `start()` returned
+      before line 186 on this branch). `PowerBrowserAPI.spawnProcess` (confirmed,
+      `PowerBrowserAPI.sys.mjs:193-201`) passes `command: this._nodePath` straight into
+      `Subprocess.call`, which today rejects on a null command -- so no process currently escapes,
+      but that is an accident of `_nodePath` being null on this specific branch, not a guard the code
+      enforces, exactly as 01-REVIEW.md's CR-01 states. `deferred-items.md` item 7 and WINDOWS.md
+      ledger 20 both record 2c/2d/2e as fully "fixed" / "RESOLVED" -- accurate for the specific
+      mechanisms those plans targeted, but the ledger's own "fixed" disposition for 2d is not
+      accurate against the phase goal's "works as an actual web browser" clause once the Retry button
+      is included, since the identical unretryable-class re-entry the gate exists to prevent remains
+      reachable by the single UI control the error screen offers.
     artifacts:
       - path: "powerbrowser/shell/powerbrowser.js"
-        issue: "Line 122: errorElement.style.display = \"none\" writes the DOM directly instead of routing through the supervisor's _hideError(), so the DOM and TheiaService._errorShown fall out of agreement on every failed Retry."
+        issue: "powerbrowserShowError (102-109) forwards `recoverable` to the sentinel only; it never disables/hides errorRetryButton. The click listener (135-137) is unconditional."
       - path: "powerbrowser/shell/TheiaService.sys.mjs"
-        issue: "retry() (899-901) never calls _hideError() before re-entering _restart(); _showError()'s _errorShown guard (1000-1004) then swallows every repaint for the life of the browser session once a Retry has failed once."
+        issue: "retry() (955-958) contains no recoverable/last-classification check before calling _hideError()/_restart(); _hideError() (1096-1103) unconditionally nulls _failureDetails, destroying the diagnostics for the failure that led to the error state on every Retry click regardless of outcome."
+      - path: "powerbrowser/shell/powerbrowser.xhtml"
+        issue: "Line 39: #powerbrowser-error-retry carries no disabled/hidden attribute and is not conditionally rendered."
     missing:
-      - "Route the DOM hide through the supervisor: retry() should call this._hideError() (clearing _errorShown, stopping the stale recovery probe, and hiding the DOM through the same window global _showError paints with) before re-entering _restart(), and powerbrowser.js's powerbrowserRetry should stop writing errorElement.style.display directly."
-      - "A registered check asserting that a FAILING Retry emits a second POWERBROWSER_SHELL_ERROR sentinel (with a POWERBROWSER_SHELL_ERROR_CLEARED between the two) — the existing shell03-budget-exhausted-error row only ever observes the first sentinel, which is why this shipped green through 01-08/01-09/01-10's full verification runs."
-  - truth: "_showError does not start the background recovery probe for an unrecoverable failure classification, so a launch whose sidecar was never resolved (start()'s _resolveSidecar() failure branch, recoverable: false) does not drive an unbounded respawn loop against instance fields (_configDir, _stateFilePath) that were never assigned."
-    status: failed
-    reason: >
-      Independently confirmed by direct reading (01-REVIEW.md's CR-02, produced against the identical
-      tree, reaches the same conclusion). `start()`'s `_resolveSidecar()` failure branch
-      (TheiaService.sys.mjs:134-142) calls `this._showError(resolved.message, /* recoverable */ false,
-      resolved.details)` and returns at line 141 — before `_configDir` (144), `_stateFilePath` (176)
-      and `PowerBrowserAPI.onQuitGranted` (181) are ever assigned. `_showError` (1000-1012) calls
-      `this._startRecoveryProbe()` unconditionally, with no check of the `recoverable` parameter it
-      was just passed — 01-09/01-10 touched the completion-field keying and the three named throw
-      sites but did not add this gate. Fifteen seconds later the probe's `_restart()` call spawns
-      against a supervisor whose `_configDir`/`_stateFilePath` were never resolved. This is unchanged
-      by 01-09/01-10, whose stated scope was the state-gating conflation and the three named unguarded
-      throws — not the sidecar-resolution failure path's own probe-gating.
-    artifacts:
-      - path: "powerbrowser/shell/TheiaService.sys.mjs"
-        issue: "_showError (1000-1012) calls _startRecoveryProbe() unconditionally; the D-113 comment at start()'s _resolveSidecar() failure branch (136-139) states this class is 'unrecoverable by construction ... with no retry at all', which the code does not enforce."
-    missing:
-      - "Gate _startRecoveryProbe() in _showError on the recoverable flag (or an explicit this._sidecarResolved flag set only after _resolveSidecar() returns ok), so an unrecoverable resolve failure genuinely gets no retry."
-  - truth: "The quit observer (onQuitGranted) and the state-file path are established before any code path that can result in a spawned, healthy backend, so quit always stops a backend this launch started and a crash leaves a reapable state-file record."
-    status: failed
-    reason: >
-      Independently confirmed by direct reading (01-REVIEW.md's CR-03, produced against the identical
-      tree). `PowerBrowserAPI.onQuitGranted(() => this.stop())` is registered at line 181 -- after the
-      settings-folder ensureDirectory try/catch (153-168), which can return at line 167 on failure.
-      That failure is classified recoverable: true, so (via the CR-02 mechanism above) _startRecoveryProbe()
-      still runs and can drive a spawn that passes the health gate and swaps -- a live, healthy,
-      supervised backend on a launch that never registered a quit observer and never set
-      _stateFilePath, so stop() never runs on quit and no crash-leftover record exists for
-      _reapLeftover() on the next launch. Unchanged by 01-09/01-10, whose scope did not include
-      reordering this registration.
-    artifacts:
-      - path: "powerbrowser/shell/TheiaService.sys.mjs"
-        issue: "onQuitGranted (181) and _stateFilePath's assignment (176) both sit after the settings-folder try/catch's return path (167-168), so a spawn reached via that recoverable path's recovery probe is unobserved by quit and unreapable by a later launch."
-    missing:
-      - "Move _stateFilePath's derivation and PowerBrowserAPI.onQuitGranted's registration ahead of the settings-folder ensureDirectory try/catch, and retain the unregister function onQuitGranted returns so stop() can detach it."
+      - "Gate the Retry affordance itself on the classification, not only the background timer -- e.g. powerbrowserShowError sets errorRetryButton.hidden = !recoverable (Option A in 01-REVIEW.md's CR-01), plus a defence-in-depth guard in retry() itself (e.g. an _errorRecoverable field set alongside _errorShown in _showError, checked at the top of retry())."
+      - "Reword USER_MESSAGE.nodeMissing (and any other unrecoverable-class message) so its stated next step matches whatever affordance actually remains on screen once Retry is hidden for that class."
+      - "A registered scenario in scripts/verify-shell-error-contract.mjs that drives the unrecoverable branch and then calls sandbox.powerbrowserRetry(), asserting state.spawnsAfterError === 0 across that call -- the same instrument 01-12 built, applied to the user-driven path instead of only the timer-driven one. 01-REVIEW.md's CR-01 names this exact scenario and instrument."
+      - "Update WINDOWS.md ledger 20's disposition and deferred-items.md item 7 once this is actually closed -- both currently read 'fixed'/'RESOLVED' for the class this gap reopens under a different route."
 deferred:
   - truth: "GUI-02 — open and browse web pages inside Theia as URL-addressable tabs"
     addressed_in: "v2 (not a numbered roadmap phase yet)"
@@ -92,10 +78,13 @@ deferred:
 human_verification:
   - test: "GUI-01 — launch the app, toggle to the browser window, confirm the address bar takes keyboard focus and navigates a typed URL, confirm an in-window modal appears, close the window and confirm the shell returns with the app still running"
     expected: "All five steps succeed; the toggle behaves as a real browser window with no Theia chrome"
-    why_human: "BiDi cannot see chrome contexts on Linux and chrome-context Marionette is platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15) — unchanged by 01-09/01-10, neither of which touches this surface."
+    why_human: "BiDi cannot see chrome contexts on Linux and chrome-context Marionette is platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15) — unchanged by 01-11/01-12."
   - test: "GUI-03 — with the dev flag on, edit customize.css and confirm the shell visibly restyles without a rebuild; delete it and confirm the shell reverts"
     expected: "The runtime CSS layer visibly applies and un-applies without any rebuild"
-    why_human: "Perceptual/visual outcome; the automated checks only prove inertness and flag-gating, not the visible-restyle claim. Still open (ledger item 16) — unchanged by 01-09/01-10."
+    why_human: "Perceptual/visual outcome; the automated checks only prove inertness and flag-gating, not the visible-restyle claim. Still open (ledger item 16) — unchanged by 01-11/01-12."
+  - test: "The two tier-3 regression confirmations named by WINDOWS.md ledger item 19 (shell03-budget-exhausted-error, shell03-auto-dismiss-on-selfheal) re-run against a repackaged binary"
+    expected: "Neither check moves, since neither clicks Retry -- the run exists to prove that, per 01-11-SUMMARY.md's own deferral"
+    why_human: "Requires a ./mach build faster repackage and a running binary; explicitly deferred to the phase gate by 01-11-SUMMARY.md itself, not run by this verification pass"
 ---
 
 # Phase 1: Platform Extraction and Rename Verification Report
@@ -103,97 +92,104 @@ human_verification:
 **Phase Goal:** The Power Browser platform tree exists in this repo, builds, boots, and works as an
 actual web browser under fixed platform identifiers — with no generator involved
 
-**Verified:** 2026-08-31T20:05:00Z
+**Verified:** 2026-08-31T21:15:00Z
 **Status:** gaps_found
-**Re-verification:** Yes — after gap-closure plans 01-09 and 01-10, and against a fresh code review
+**Re-verification:** Yes — after gap-closure plans 01-11 and 01-12, and against a fresh code review
 (01-REVIEW.md) run on the resulting tree
 
 **Scope note:** Requirements verified against REQUIREMENTS.md: MIG-01, MIG-02, MIG-03, MIG-04,
 GUI-01, GUI-03, GUI-04, SEC-01. GUI-02 remains deferred to v2 (D-22 gate, 01-06) — not scored here,
 not orphaned.
 
-## Disposition of the Prior Gap (closed, independently re-verified against the live tree)
+## Disposition of the Prior Gaps (independently re-verified against the live tree, not taken from either SUMMARY)
 
-### The health-gate state-conflation and the three unguarded throw sites — CLOSED
+### 2c — a failing Retry permanently disabling the error layer — CLOSED
 
-Prior finding (01-VERIFICATION.md, previous pass): `_spawnAndGate`'s one-time cookie/navigate/
-health-loop block was keyed on `firstSpawn`/`this._port === null`, conflating "a port has been
-pinned" with "a spawn has actually completed" — a transient health-gate failure followed by any
-successful respawn permanently skipped that block, and `powerbrowser.js:231`'s un-awaited, uncaught
-`TheiaService.start()` call left three throw sites capable of becoming silent unhandled rejections
-with the identical dead-screen symptom.
+Prior finding: `powerbrowserRetry` hid the DOM directly and `retry()` never cleared `_errorShown`, so
+the first failing Retry left the error layer permanently blank for the session.
 
-Independently re-verified by direct reading, not by re-running the shipped self-tests alone:
+Independently re-verified by direct reading:
 
-- `grep -n "_swapped" powerbrowser/shell/TheiaService.sys.mjs` shows the field used at the one-time
-  block's guard (line 701, `if (!this._swapped)`), `_restart()`'s per-attempt argument (line 852,
-  `this._spawnAndGate(!this._swapped)`), and `_swap()`'s guard/assignment (lines 1173/1177), with the
-  assignment on a later line than the `powerbrowserSwapToUrl` call it guards.
-- `powerbrowser.js:246` reads `TheiaService.start(browserElement).catch(err =>
-  TheiaService.reportUnexpectedFailure(err));` — the previously-uncaught entry point now has a
-  terminal handler.
-- `grep -n reportUnexpectedFailure` across both files shows five call sites: the declaration
-  (TheiaService.sys.mjs:932), the health loop and recovery-probe loop attachments
-  (TheiaService.sys.mjs:741, 974), and the start call and the Retry call in powerbrowser.js (123, 246)
-  — all four fire-and-forget entry points route to the one handler.
-- The three named throw sites (settings-folder creation, leftover reap, session-cookie minting) are
-  each inside a `try {`/`catch` in the current source (TheiaService.sys.mjs:153-168, 200-204,
-  confirmed by direct read); the leftover-reap site is deliberately non-fatal, recorded as a reasoned
-  deviation in 01-10-SUMMARY.md.
-- `scripts/verify-platform.sh --quick` → exit 0, 22/22 PASS, including `start-path-recovery`,
-  `start-path-recovery-self-test` (13 self-test rows, all behaving as required),
-  `shell-error-copy-no-internals`, and `shell-error-copy-no-internals-self-test`.
-- `node scripts/verify-start-path-recovery.mjs` (static mode) → PASS against the working tree
-  independently, not only inside the `--quick` run.
+- `powerbrowser/shell/TheiaService.sys.mjs:955-958` — `async retry() { this._hideError();
+  await this._restart(); }`. `_hideError()` clears `_errorShown` before `_restart()` runs.
+- `powerbrowser/shell/powerbrowser.js:131-133` — `powerbrowserRetry`'s only statement is the guarded
+  `TheiaService.retry()` call; grep confirms zero occurrences of `errorElement.style.display` inside
+  its body.
+- `scripts/verify-platform.sh --quick` → `shell-error-contract: PASS` (scenario
+  `two-consecutive-failing-retries-repaint` exercises exactly this: two consecutive failing retries,
+  each repainting) and `shell-error-contract-self-test: PASS` (6/6 rows, including a planted fault
+  that removes `_hideError()`'s guard-clear specifically).
 
-**Verdict: VERIFIED — this specific gap is genuinely closed.** Plan 01-09's and 01-10's own claims
-hold up under independent reading and independent command execution.
+**Verdict: VERIFIED — genuinely closed**, for the mechanism 2c named (a failing Retry that DOES
+re-enter `_restart()`).
 
-## New Findings This Pass (not part of 01-09/01-10's scope; discovered by 01-REVIEW.md and
-independently confirmed by direct source reading rather than trusted from its narrative)
+### 2e — quit observer / state-file path ordering — CLOSED for the branch it named
 
-A code review committed after 01-09/01-10 (`01-REVIEW.md`, `01-VERIFICATION.md`'s sibling artifact
-for this pass) reports three new BLOCKER findings against the identical post-gap-closure tree. Per
-the verification brief, each was independently re-derived from source before being accepted:
+Prior finding: `PowerBrowserAPI.onQuitGranted` and `_stateFilePath` were registered after the
+settings-folder `ensureDirectory` try/catch, a recoverable-classified branch that can still return
+and leave a probe-driven spawn unobserved by quit.
 
-**CR-01 — a failed Retry permanently disables the error layer.** `powerbrowser.js:121-124`'s
-`powerbrowserRetry()` hides the DOM directly (`errorElement.style.display = "none"`) and calls
-`TheiaService.retry()` (TheiaService.sys.mjs:899-901), which is `await this._restart();` and never
-calls `_hideError()`. `_hideError()` (line 1015) is the only site that clears `_errorShown`, and its
-only caller is `_restart()`'s **success** path (line 854). So a Retry that does not succeed leaves
-`_errorShown` true while the DOM has already been blanked by the click handler; the next time
-`_showError` runs, its `if (this._errorShown) { return; }` guard (line 1001) swallows the repaint —
-byte-for-byte the same user-visible outcome ("dead screen, no message, no Retry, no Details") that
-01-09/01-10 were scoped to eliminate, reached via a third route neither plan's acceptance criteria
-cover. **This is explicitly acknowledged, not merely alleged**: 01-10-SUMMARY.md itself records it as
-`deferred-items.md` item 7, filed during 01-10's own execution and named "same defect class as this
-plan... pre-existing since 05-02 and outside 01-10's named scope," with disposition "a follow-up plan;
-needs a runtime check that drives two consecutive failing retries." It was not deferred to any later
-ROADMAP phase — Phase 2 through 7's goals are entirely about the configuration-manifest generator and
-its emitters, none of which touches backend-supervisor error recovery — so Step 9b's later-phase
-deferral filter does not apply and this stays a live gap against Phase 1's own goal wording.
+Independently re-verified by direct reading:
 
-**CR-02 — the recovery probe starts on an unrecoverable resolve failure, against unresolved state.**
-`start()`'s `_resolveSidecar()` failure branch (134-142) is explicitly commented "unrecoverable by
-construction ... with no retry at all" (D-113) and returns before `_configDir` (144),
-`_stateFilePath` (176) are ever assigned. `_showError` (1000-1012) calls `_startRecoveryProbe()`
-unconditionally — it does not inspect the `recoverable` parameter it was just passed. 01-09/01-10 did
-not touch this call; their scope was the completion-field keying and the three throw sites named in
-the prior verification's `missing:` list, not this probe-gating decision. Unaddressed and unmentioned
-in either plan's SUMMARY.
+- `TheiaService.sys.mjs:153` (`_configDir`), `:170` (`_stateFilePath`), `:186` (`onQuitGranted`) all
+  precede the settings-folder try/catch at `:196-211` — confirmed by line-order read, not grep count
+  alone.
+- `stop()` (`:253-293`) retains and detaches `_quitObserverOff` after the process is signalled and
+  the state file removed.
+- `scripts/verify-platform.sh --quick` → `start-path-recovery: PASS`, `start-path-recovery-self-test:
+  PASS` (18/18 rows, including derivation E's tree-derived early-return window).
 
-**CR-03 — the quit observer is registered after a return path that can result in a spawned backend.**
-`PowerBrowserAPI.onQuitGranted(() => this.stop())` (181) sits after the settings-folder
-`ensureDirectory` try/catch (153-168), which 01-10 itself guarded and classified `recoverable: true`
-— meaning (via CR-02's mechanism) the recovery probe still runs and can drive a spawn to a healthy,
-swapped state on a launch that never registered a quit observer and never derived `_stateFilePath`.
-Unaddressed by 01-10, whose settings-folder fix (Site 1 in 01-10's Task 2) closed the "silent
-rejection" half of that path but did not reorder `onQuitGranted`/`_stateFilePath` ahead of it.
+**Verdict: VERIFIED for the settings-folder branch this truth named.** See the Gaps section below,
+however: the SAME underlying guarantee ("no path that can reach a spawn lacks a quit observer") is
+still violated by a different, user-driven route — the `_resolveSidecar()` failure branch, which
+returns even earlier than the settings-folder branch (line 150, before line 153) by design, and is
+reachable via a Retry click regardless of that design intent (see the CR-01 gap below, consequence
+3 — "latent backend leak", currently inert only because `_nodePath` is null on that branch, not
+because anything gates it).
 
-None of the three is a stub or a debt marker; all three are logic/control-flow defects in code that
-is present, wired, and covered by passing checks that do not happen to exercise these branches — the
-same class of gap the previous verification pass found (a check observing the state the supervisor
-*believes* it is in, not the DOM-vs-supervisor agreement or the probe-gating decision itself).
+## New Finding This Pass — CR-01, independently re-derived from source (not new; a related route through the same defect class 2d/2e were opened to close)
+
+A code review run against the post-01-11/01-12 tree (`01-REVIEW.md`) reports one Critical finding.
+Per the verification brief, it was independently re-derived from source before being accepted, not
+taken on the review's narrative:
+
+**`recoverable: false` gates the background probe timer but not the Retry button**, so the one class
+the supervisor's own D-113 comment calls "unrecoverable by construction ... with no retry at all" is
+still re-entered — by the user, with the same unassigned state (`_configDir`, `_stateFilePath`, no
+quit observer) the settings-folder fix (2e) was written to prevent on its own branch.
+
+Confirmed line-by-line (see the `gaps:` frontmatter entry above for the full derivation):
+
+- `powerbrowserShowError` (`powerbrowser.js:102-109`) forwards `recoverable` to a `dump()` sentinel
+  only; it never touches `errorRetryButton`.
+- `powerbrowser.xhtml:39` — the button carries no `disabled`/`hidden` attribute; `powerbrowser.css`
+  has no rule that hides or disables it.
+- `errorRetryButton`'s click listener (`powerbrowser.js:135-137`) is unconditional.
+- `TheiaService.retry()` (`:955-958`) contains no check of the classification anywhere in its body.
+- `_hideError()` (`:1096-1103`) unconditionally nulls `_failureDetails` — every Retry click, whether
+  the classification was recoverable or not, destroys the diagnostic rows that identified the actual
+  failure.
+
+**This means truth 2d, as stated in the phase goal's own terms ("an unrecoverable classification
+gets no retry"), is not fully closed.** 01-12's fix is real and correctly closes the TIMER-driven
+half (confirmed: `_showError` at `:1079-1092` reads `if (recoverable) { this._startRecoveryProbe();
+}`, and the registered `unrecoverable-classification-starts-no-probe` /
+`recoverable-classification-starts-the-probe` scenario pair proves the gate discriminates rather
+than failing everything). But the USER-driven half — the single affordance the error screen actually
+offers — was not addressed by either 01-11 or 01-12, and is not exercised by any registered check:
+`verify-shell-error-contract.mjs`'s unrecoverable scenario asserts `state.spawnsAfterError === 0`
+without ever calling `sandbox.powerbrowserRetry()`.
+
+WINDOWS.md ledger 20 and `deferred-items.md` item 7 both record this class "fixed"/"RESOLVED" — an
+accurate account of the specific mechanisms 01-11 and 01-12 targeted, but not of the phase goal's
+"works as an actual web browser" clause once the Retry button is in scope, since the defect class
+(an unrecoverable classification failing to actually prevent re-entry into the failed launch path)
+remains live via that route.
+
+None of this is a stub or a debt marker (`grep -E "TBD|FIXME|XXX"` over the four touched files: zero
+matches) — it is a control-flow gap in code that is present, wired, and covered by passing checks
+that do not happen to exercise this specific path, the same class of gap the last two verification
+passes have each found in a different corner of the same supervisor.
 
 ## Goal Achievement
 
@@ -201,50 +197,52 @@ same class of gap the previous verification pass found (a check observing the st
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | SC1 — Token-classification inventory exists; residual scan red on pre-rename tree | ✓ VERIFIED | Regression-checked; `inventory/brand-tokens.json` intact, `scan-brand-residue: PASS` in `--quick` |
-| 2 | SC2 — Repo builds from script-refetched `upstream/`, launches branded app, passes smoke tests (happy path) | ✓ VERIFIED | Regression-checked: `objdir/dist/bin/powerbrowser` present (2.4MB, built 08-30); 01-09/01-10 both repackaged and re-ran the happy path as part of their own RED/GREEN observations |
-| 2b | The backend supervisor's state-gating conflation and the three named unguarded throw sites are closed | ✓ VERIFIED (now closed) | See "Disposition of the Prior Gap" above — independently confirmed by direct reading and by running `--quick` and the static analyzer myself |
-| 2c | A failed Retry does not permanently disable the error layer for the rest of the session | ✗ FAILED | CR-01 — see above; confirmed by direct reading of `powerbrowser.js:121-124` and `TheiaService.sys.mjs:899-901,1000-1012` |
-| 2d | The recovery probe is gated on recoverability, not started unconditionally on every `_showError` call | ✗ FAILED | CR-02 — see above; confirmed `_showError` (1000-1012) calls `_startRecoveryProbe()` with no check of `recoverable` |
-| 2e | The quit observer and state-file path are established before any path that can spawn a backend | ✗ FAILED | CR-03 — see above; confirmed `onQuitGranted` (181) sits after a returnable, recoverable-classified try/catch (153-168) |
+| 1 | SC1 — Token-classification inventory exists; residual scan red on pre-rename tree | ✓ VERIFIED | Regression-checked; `scan-brand-residue: PASS` in `--quick` |
+| 2 | SC2 — Repo builds from script-refetched `upstream/`, launches branded app, passes smoke tests (happy path) | ✓ VERIFIED | Regression-checked; unaffected by 01-11/01-12 |
+| 2b | The backend supervisor's state-gating conflation and the three named unguarded throw sites are closed | ✓ VERIFIED | Regression-checked from the prior pass; unaffected by 01-11/01-12 |
+| 2c | A failed Retry does not permanently disable the error layer for the rest of the session | ✓ VERIFIED (now closed) | See "Disposition" above — `retry()` calls `_hideError()` before `_restart()`, confirmed by direct read and `shell-error-contract: PASS` |
+| 2d | An unrecoverable failure classification actually prevents re-entry into the failed launch path (timer AND user-driven) | ✗ FAILED | CR-01 — timer half closed, Retry-button half open; confirmed by direct reading of `powerbrowser.js:102-137` and `TheiaService.sys.mjs:955-958,1079-1103` |
+| 2e | The quit observer and state-file path are established before any path that can spawn a backend | ✓ VERIFIED (for the branch named) | See "Disposition" above; residual risk on the `_resolveSidecar`-failure branch is the same CR-01 gap, currently inert (spawn with a null command rejects today) |
 | 3 | SC3 — Toggle Theia → browser UI and back; `TabUriRegistry`'s exported shape stays landable | ◐ PARTIAL | Automated half green (`gui04-registry-shape` + self-test PASS in `--quick`); perceptual half still open (ledger 15), unchanged |
 | 4 | SC4 — Runtime restyle via customize bridge | ◐ PARTIAL | Automated half green; perceptual half still open (ledger 16), unchanged |
-| 5 | SC5 — Internal identifiers fixed everywhere; every branding value is a hand-written literal | ✓ VERIFIED | Regression-checked: About dialog line 34 still reads `<h3>Power Browser</h3>`; `branding-preflight` + self-test PASS in `--quick` |
-| 6 | SEC-01 — Backend unreachable without a per-launch credential; fails closed | ✓ VERIFIED | Regression-checked: `process.exit(78)` present at 3 sites in `token-gate-backend-contribution.ts`, file untouched by 01-09/01-10 |
-| 7 | Residual brand strings can never re-enter — registered scan gate fails on an unclaimed occurrence | ✓ VERIFIED | Regression-checked: `scan-brand-residue: PASS` and `scan-brand-residue-self-test: PASS` in `--quick` |
+| 5 | SC5 — Internal identifiers fixed everywhere; every branding value is a hand-written literal | ✓ VERIFIED | Regression-checked; `branding-preflight` + self-test PASS in `--quick` |
+| 6 | SEC-01 — Backend unreachable without a per-launch credential; fails closed | ✓ VERIFIED | Regression-checked; `process.exit(78)` sites untouched by 01-11/01-12 |
+| 7 | Residual brand strings can never re-enter — registered scan gate fails on an unclaimed occurrence | ✓ VERIFIED | Regression-checked; `scan-brand-residue`/self-test PASS in `--quick` |
 
-**Score:** 6/9 fully verified (5 regression-checked + 1 newly closed), 3 new failures (2c/2d/2e), 2
-partial (human verification open).
+**Score:** 8/11 truths verified (6 regression-checked + 2 newly closed), 1 failed (2d, reopened by a
+different route than the one it was previously failed on), 2 partial (human verification open,
+unchanged).
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `powerbrowser/shell/TheiaService.sys.mjs` | Backend supervisor with correct one-time init gating, correct probe gating, and quit-observer ordering | ⚠️ PARTIALLY DEFECTIVE | The `_swapped`-keyed init block is correct (01-09) and the three named throw sites are guarded (01-10); the probe-start gating (CR-02) and the quit-observer/state-file ordering (CR-03) remain defective |
-| `powerbrowser/shell/powerbrowser.js` | Entry point with a terminal handler on every fire-and-forget supervisor call, and no DOM write that bypasses the supervisor's own state | ⚠️ PARTIALLY DEFECTIVE | The start call and the Retry call both carry `reportUnexpectedFailure` (01-10, correct); the Retry click handler still writes `errorElement.style.display` directly instead of routing through `_hideError()` (CR-01) |
-| `scripts/verify-start-path-recovery.mjs` | Recovery contract checker: static + log + self-test | ✓ VERIFIED | 13/13 self-test rows PASS; static mode PASS standalone |
-| `scripts/verify-platform.sh` | Single registry, `--quick` green | ✓ VERIFIED | 22/22 PASS |
+| `powerbrowser/shell/TheiaService.sys.mjs` | Backend supervisor with correct one-time init gating, correct probe gating, quit-observer ordering, AND a Retry path that respects the classification it was given | ⚠️ PARTIALLY DEFECTIVE | Init gating, probe-timer gating and quit-observer ordering are all now correct (confirmed); `retry()` itself still contains no classification check (CR-01) |
+| `powerbrowser/shell/powerbrowser.js` | Entry point with a terminal handler on every fire-and-forget supervisor call, no DOM write bypassing the supervisor, and a Retry affordance that reflects recoverability | ⚠️ PARTIALLY DEFECTIVE | Terminal handlers confirmed correct (01-10); DOM-bypass fixed (01-11, confirmed); `powerbrowserShowError` still never gates `errorRetryButton` on `recoverable` (CR-01) |
+| `scripts/verify-shell-error-contract.mjs` | Behavioral contract checker for the error layer and probe gate | ✓ VERIFIED (as scoped) | 6/6 self-test rows PASS; does not yet drive a Retry click on the unrecoverable branch — the gap the missing scenario above names |
+| `scripts/verify-start-path-recovery.mjs` | Recovery contract checker: static + log + self-test | ✓ VERIFIED | 18/18 self-test rows PASS |
+| `scripts/verify-platform.sh` | Single registry, `--quick` green | ✓ VERIFIED | 24/24 PASS |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|-----|-----|--------|---------|
-| `_spawnAndGate`'s one-time block / `_restart()`'s port choice / `_swap()` | `this._swapped` | shared completion field | ✓ WIRED | Confirmed at TheiaService.sys.mjs:701, 852, 1173/1177 |
-| `powerbrowser.js`'s start call and Retry call | `TheiaService.reportUnexpectedFailure` | `.catch()` | ✓ WIRED | powerbrowser.js:123, 246 |
-| `powerbrowserRetry()`'s DOM hide | `TheiaService._hideError()` / `_errorShown` | (none — direct DOM write) | ✗ NOT WIRED | powerbrowser.js:122 writes `errorElement.style.display` directly; `_errorShown` is never cleared by this path (CR-01) |
-| `_showError`'s recovery-probe start | the `recoverable` classification it was just passed | (none — unconditional call) | ✗ NOT WIRED | TheiaService.sys.mjs:1011 calls `_startRecoveryProbe()` with no gate on `recoverable` (CR-02) |
-| `start()`'s early-returning steps | `PowerBrowserAPI.onQuitGranted` registration | registration ordering | ✗ MISWIRED | `onQuitGranted` (181) sits after a returnable, recoverable-classified try/catch (153-168) that can still lead to a spawn via CR-02's mechanism (CR-03) |
+| `powerbrowserRetry()` | `TheiaService._hideError()` | `retry()` calls it first | ✓ WIRED | Confirmed at TheiaService.sys.mjs:955-957, powerbrowser.js:131-133 |
+| `_showError`'s recovery-probe TIMER start | the `recoverable` classification | `if (recoverable) { this._startRecoveryProbe(); }` | ✓ WIRED | TheiaService.sys.mjs:1088-1090, confirmed; exercised by registered scenario pair |
+| `start()`'s early-returning settings-folder branch | `PowerBrowserAPI.onQuitGranted` registration | registration ordering | ✓ WIRED | onQuitGranted (186) precedes the settings-folder try/catch (196-211) |
+| `powerbrowserShowError`'s `recoverable` argument | `errorRetryButton`'s enabled/visible state | (none) | ✗ NOT WIRED | powerbrowser.js:102-109 forwards `recoverable` to a `dump()` sentinel only; the button is never disabled or hidden (CR-01) |
+| `TheiaService.retry()` | any classification/`_errorRecoverable` check | (none) | ✗ NOT WIRED | TheiaService.sys.mjs:955-958 has no gate; every Retry click re-enters `_restart()` unconditionally (CR-01) |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Full quick verification suite (22 checks) | `scripts/verify-platform.sh --quick` | PASS, 22/22 | ✓ PASS |
-| Start-path recovery static check | `node scripts/verify-start-path-recovery.mjs` | PASS | ✓ PASS |
-| Start-path recovery self-test | `node scripts/verify-start-path-recovery.mjs --self-test` | PASS, 13/13 rows | ✓ PASS |
-| Retry-after-failed-retry repaints a second error | (no registered check exists) | not exercised by any registered check | ? SKIP — see Gaps; `shell03-budget-exhausted-error` only observes the first sentinel |
-| Recovery probe gated on `recoverable` | (no registered check exists) | not exercised | ? SKIP — see Gaps |
-| Quit observer registered before any spawnable path | (no registered check exists) | not exercised | ? SKIP — see Gaps |
+| Full quick verification suite (24 checks) | `scripts/verify-platform.sh --quick` | PASS, 24/24 | ✓ PASS |
+| Two consecutive failing retries repaint the error layer | `scripts/verify-platform.sh --only shell-error-contract` (scenario `two-consecutive-failing-retries-repaint`) | PASS | ✓ PASS |
+| Unrecoverable classification drives no timer-based spawn | `scripts/verify-platform.sh --only shell-error-contract` (scenario `unrecoverable-classification-starts-no-probe`) | PASS | ✓ PASS |
+| Recoverable classification still auto-recovers | `scripts/verify-platform.sh --only shell-error-contract` (scenario `recoverable-classification-starts-the-probe`) | PASS | ✓ PASS |
+| Retry clicked on an unrecoverable classification drives no spawn | (no registered check exists) | not exercised by any registered check | ? SKIP — see Gaps; this is the exact missing scenario CR-01 names |
+| Quit observer registered before any spawnable path (including `_resolveSidecar` failure) | (no registered check exists) | not exercised for this specific branch | ? SKIP — inert today only because `_nodePath` is null on this branch (not a guard) |
 
 ### Requirements Coverage
 
@@ -253,20 +251,35 @@ partial (human verification open).
 | MIG-01 | Script-refetched upstream, no copied objdirs | ✓ SATISFIED | Unchanged, regression-checked |
 | MIG-02 | Committed pre-rename inventory | ✓ SATISFIED | Unchanged, regression-checked |
 | MIG-03 | Identifiers fixed everywhere, cannot regress | ✓ SATISFIED | Unchanged, regression-checked |
-| MIG-04 | Renamed tree builds and boots under branding | ✗ NOT SATISFIED | Happy-path smoke tests still pass, and the specific gap 01-09/01-10 were scoped to close is genuinely closed — but three further routes to the identical "boots... works as an actual web browser" failure (CR-01/02/03) are live and unaddressed, one of them (CR-01) reachable by the single most obvious user action in the error state |
+| MIG-04 | Renamed tree builds and boots under branding | ✗ NOT SATISFIED | Happy-path smoke tests pass; 2c and the settings-folder half of 2e are genuinely closed; the "unrecoverable classification actually prevents retry" guarantee (2d) is still open via the Retry button, one of the two most obvious user actions on the error screen |
 | GUI-01 | Toggle Theia ↔ browser UI | ◐ SATISFIED (automated) / NEEDS HUMAN (perceptual) | Unchanged from prior pass |
 | GUI-03 | Runtime GUI customization bridge | ◐ SATISFIED (automated) / NEEDS HUMAN (perceptual) | Unchanged from prior pass |
 | GUI-04 | `TabUriRegistry` exported shape stays landable | ✓ SATISFIED | Unchanged, regression-checked |
 | SEC-01 | Backend fail-closed | ✓ SATISFIED | Unchanged, regression-checked |
 
-No orphaned requirements: all 8 phase-1 requirement IDs are accounted for. GUI-02 correctly absent
-(deferred to v2).
+No orphaned requirements: all 8 phase-1 requirement IDs appear in at least one of the 12 plans'
+`requirements` frontmatter. GUI-02 correctly absent (deferred to v2).
 
 ### Anti-Patterns Found
 
-None. `grep -E "TBD|FIXME|XXX"` over `TheiaService.sys.mjs` and `powerbrowser.js` returns zero
-matches. All three new gaps are logic/control-flow defects in present, wired, passing-check-covered
-code, not stubs or debt markers.
+No `TBD`/`FIXME`/`XXX` debt markers in any of the four touched files. All findings this pass are
+control-flow defects in present, wired, passing-check-covered code, not stubs.
+
+Additional findings from 01-REVIEW.md, confirmed present but classified Warning/Info by the review
+and not elevated to blocking here (they concern the *robustness of the checks themselves* or
+lower-probability edge cases, not the three named truths):
+
+| File | Finding | Severity | Impact |
+|------|---------|----------|--------|
+| `scripts/verify-start-path-recovery.mjs:446-464` | WR-01: visibility-writer derivation matches one syntactic form (`.style.display =`) only; a working mutant using `document.getElementById(...)` directly stays green | Warning | Verification-gate weakness, not a live defect in shipped code today |
+| `powerbrowser.js:111-114` | WR-02: `powerbrowserHideError` emits no deck-state dump, so nothing observes the layer actually became hidden; a working mutant that shows instead of hides stays green | Warning | Verification-gate weakness |
+| `TheiaService.sys.mjs:1079-1093` | WR-03: `_showError` latches `_errorShown` and starts the probe before the DOM call, which can throw; a throwing paint leaves the guard set with nothing painted | Warning | Low-probability (requires `defaultView` null or a `powerbrowserShowError` throw) |
+| `TheiaService.sys.mjs:186,289-292` | WR-04: `stop()`'s `_quitObserverOff()` call is outside any try/catch; `Services.obs.removeObserver` throws if not registered | Warning | Low-probability re-entrancy edge case |
+| `TheiaService.sys.mjs:1023-1032` | WR-05: a rejected `_recoveryProbeLoop` leaves `_recoveryProbeActive` permanently true, silently disabling future auto-recovery | Warning | State-transition invariant, not exercised by any registered check |
+
+These are recorded for follow-up but do not change this pass's status determination — none of them
+falsifies a currently-scored truth, per the review's own severity classification, which this
+verification independently agrees with on direct reading.
 
 ## Human Verification Required
 
@@ -277,7 +290,7 @@ navigates a typed URL; confirm an in-window modal appears; close the window and 
 returns with the app still running.
 **Expected:** All five steps succeed exactly as a stock browser window would behave.
 **Why human:** BiDi cannot see chrome contexts on Linux; chrome-context Marionette is
-platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15), unchanged by 01-09/01-10.
+platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15), unchanged by 01-11/01-12.
 
 ### 2. GUI-03 — customize bridge, visible restyle
 
@@ -285,46 +298,58 @@ platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15), unchan
 without a rebuild; delete the file and confirm the shell reverts.
 **Expected:** The runtime CSS layer applies and un-applies visibly.
 **Why human:** Perceptual outcome; automated checks only prove inertness and flag-gating, not the
-visible effect. Still open (ledger item 16), unchanged by 01-09/01-10.
+visible effect. Still open (ledger item 16), unchanged by 01-11/01-12.
+
+### 3. Tier-3 regression re-confirmation (WINDOWS.md ledger item 19)
+
+**Test:** Re-run `shell03-budget-exhausted-error` and `shell03-auto-dismiss-on-selfheal` against a
+repackaged binary (`./mach build faster` chrome-JS repackage, minutes not the full ~47–54 min build).
+**Expected:** Neither check moves, since neither clicks Retry.
+**Why human:** Requires a running repackaged binary; explicitly deferred to the phase gate by
+01-11-SUMMARY.md, not run by this static verification pass.
 
 ## Gaps Summary
 
-The one gap the prior verification pass recorded FAILED — the supervisor's state-gating conflation
-and the three named unguarded throw sites — is now genuinely closed. 01-09's and 01-10's own claims
-hold up under independent re-reading of the source and independent re-execution of the static
-checks: `this._swapped` correctly gates the one-time init block, the per-attempt port choice, and
-`_swap()`'s own completion assignment; `reportUnexpectedFailure` is attached at all four fire-and-
-forget entry points; the three named throw sites are guarded.
+Two of the three gaps the prior verification pass recorded FAILED are now genuinely closed, each
+independently re-verified against the live source rather than taken from either SUMMARY's narrative:
 
-But a code review run against the resulting tree (01-REVIEW.md) found three further defects in the
-same supervisor, all independently re-derived from source rather than trusted from the review's
-narrative, and all bearing on the identical phase-goal clause — "boots, and works as an actual web
-browser":
+1. **2c** — a failing Retry no longer permanently disables the error layer. `retry()` calls
+   `_hideError()` before `_restart()`; the chrome bootstrap no longer writes the DOM directly.
+   Confirmed by direct reading and by `shell-error-contract: PASS`.
+2. **2e** — the quit observer and `_stateFilePath` now precede the settings-folder branch this truth
+   named. Confirmed by direct reading and by `start-path-recovery: PASS`.
 
-1. **CR-01** — a failed Retry permanently disables the error layer for the rest of the session,
-   because the click handler hides the DOM directly instead of routing through the supervisor's
-   `_hideError()`, so `_errorShown` is never cleared and every subsequent `_showError` call
-   early-returns. This is the single most likely user action in the error state, and 01-10's own
-   SUMMARY names it as a known, deferred, out-of-scope item (`deferred-items.md` #7) — acknowledged,
-   not fixed, and not deferred to any later numbered ROADMAP phase.
-2. **CR-02** — the background recovery probe starts unconditionally from `_showError`, including for
-   the one failure class the supervisor's own comment calls "unrecoverable by construction... with no
-   retry at all," driving spawns against instance fields (`_configDir`, `_stateFilePath`) that were
-   never assigned.
-3. **CR-03** — the quit observer is registered after a returnable, recoverable-classified try/catch,
-   so a spawn reached via that path's recovery probe can produce a live, healthy backend with no quit
-   observer and no state-file record.
+The third, **2d**, is only PARTIALLY closed. 01-12's fix is real and correct for the mechanism it
+targeted — the background recovery-probe TIMER now honours the `recoverable` classification
+`_showError` receives, proven by a genuine two-directional gate (a registered positive control that
+would fail if the fix "stopped probing everywhere"). But a code review run against the resulting
+tree (01-REVIEW.md's CR-01), independently re-derived from source in this pass rather than trusted
+from its narrative, found that the classification never reaches the Retry button: `errorRetryButton`
+is unconditionally enabled and its click handler unconditionally re-enters `_restart()`, with no
+check anywhere in `retry()`'s body. On the exact class the supervisor's own D-113 comment calls
+"unrecoverable by construction ... with no retry at all," the user is looking at a message that
+explicitly tells them to click Retry (`USER_MESSAGE.nodeMissing`), and doing so both destroys the
+diagnostic rows that identified the real problem (`_hideError()` unconditionally nulls
+`_failureDetails`) and re-attempts a spawn against state that branch never assigned — currently inert
+only because the resulting `spawnProcess` call has a null command, not because anything in the code
+prevents it.
 
-None of the three is addressed by 01-09 or 01-10, whose scope was explicitly the specific gap the
-prior verification recorded. None is recorded as deferred to a later phase in ROADMAP.md — Phase 2
-through 7 are entirely about the configuration-manifest generator and its emitters. All three are
-therefore live gaps against this phase's own goal.
+Since 2d, as the phase goal frames it ("works as an actual web browser," which includes not leaving
+the user stuck behind a dead-end affordance), is not fully closed, and since this is reachable by the
+single most obvious action on the error screen, this pass's overall status remains **gaps_found**.
+This is not a new class of defect — it is the SAME class 01-09/01-10/01-11/01-12 have each closed one
+route of — reached by a fourth route (the Retry button) that has not yet been named a distinct plan.
+
+Neither WINDOWS.md ledger 20 nor `deferred-items.md` item 7's "fixed"/"RESOLVED" disposition should
+be read as covering this route; both were accurate for the mechanisms their respective plans
+targeted at the time they were written.
 
 Two success criteria (3 and 4) still have their perceptual halves un-performed, carried forward
 unchanged from the prior pass and from `WINDOWS.md` (ledger items 15, 16) — not newly discovered,
-not silently dropped.
+not silently dropped. WINDOWS.md ledger item 19's tier-3 regression re-confirmation also remains
+unrun, as 01-11-SUMMARY.md itself deferred it to the phase gate.
 
 ---
 
-_Verified: 2026-08-31T20:05:00Z_
+_Verified: 2026-08-31T21:15:00Z_
 _Verifier: Claude (gsd-verifier)_
