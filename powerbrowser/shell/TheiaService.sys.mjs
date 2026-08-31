@@ -427,13 +427,29 @@ export const TheiaService = {
    * error layer painted `POWERBROWSER_BACKEND_READY` and a millisecond count at
    * a user. The full diagnostic text still goes to `_fatal()` unchanged.
    *
-   * `firstSpawn: true` requests port 0 (SIDE-01) -- the only place a zero
+   * `beforeFirstSwap: true` requests port 0 (SIDE-01) -- the only place a zero
    * port appears in this file. Every later call (Task 2's restart path)
    * passes the already-pinned `this._port`, because the already-loaded
    * Theia page reconnects to the origin it was loaded from (D-104).
+   *
+   * 01-09: this parameter was named `firstSpawn` and `_restart()` computed it
+   * as `this._port === null`, which conflated "a port has been pinned" with "a
+   * spawn has actually completed". A first spawn that announced readiness (so
+   * a port WAS pinned) and then failed the health gate left every later,
+   * successful respawn taking the `else` branch -- no cookie, no navigation,
+   * no health loop -- stranding the user on the branded loading layer with a
+   * healthy backend behind it (01-VERIFICATION.md's one FAILED must-have). It
+   * is now keyed on `this._swapped`, the field that actually records
+   * completion, and named for what it means. D-104's invariant is untouched
+   * where it is load-bearing: every respawn AFTER a completed swap still
+   * targets the pinned port, because that is the only state in which a loaded
+   * page exists whose origin must hold still. Before a completed swap nothing
+   * is loaded at that origin, so re-pinning it was a constraint with no
+   * beneficiary and a real cost -- D-112 would classify a squatted pre-swap
+   * port as unrecoverable and give up immediately.
    */
-  async _spawnAndGate(firstSpawn) {
-    const port = firstSpawn ? 0 : this._port;
+  async _spawnAndGate(beforeFirstSwap) {
+    const port = beforeFirstSwap ? 0 : this._port;
     const args = [this._backendMain, "--hostname", "127.0.0.1", "--port", String(port)];
     // NO SECRET GOES IN HERE. `environment` becomes the child's
     // /proc/<pid>/environ, which is the exec-time snapshot: it is readable by
@@ -536,7 +552,7 @@ export const TheiaService = {
       };
     }
 
-    const pinnedPort = firstSpawn ? null : this._port;
+    const pinnedPort = beforeFirstSwap ? null : this._port;
     const readyPromise = this._pumpOutput(proc, pinnedPort);
     const startupTimeoutMs = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.startupTimeoutMs", 90000);
 
@@ -638,7 +654,12 @@ export const TheiaService = {
 
     this._healthy = true;
 
-    if (firstSpawn) {
+    // 01-09: keyed on `this._swapped` -- the SAME field `_swap()`'s own
+    // early-return guard reads -- so "a spawn has actually completed" is one
+    // fact with one owner. Keying this on anything that merely records a port
+    // having been pinned is the conflation that stranded a launch on the
+    // loading layer after a transient health-gate failure.
+    if (!this._swapped) {
       PowerBrowserAPI.setSessionCookie({
         host: "127.0.0.1",
         path: "/",
@@ -721,10 +742,14 @@ export const TheiaService = {
    * count. Both budget values are plain locals here, recomputed fresh on
    * every call, so a later outage always starts with a full budget.
    *
-   * Per-attempt port choice: `this._port === null` means no spawn in this
-   * browser session has EVER succeeded yet -- keep requesting port 0
-   * (SIDE-01) until one does. Once `this._port` is pinned, every later
-   * attempt here is a true D-104 respawn on that same port.
+   * Per-attempt port choice: `this._swapped === false` means no spawn in this
+   * browser session has ever COMPLETED yet -- keep requesting port 0 (SIDE-01)
+   * until one does. Once a swap has completed, every later attempt here is a
+   * true D-104 respawn on the pinned port, which is the only state in which a
+   * loaded page exists whose origin must hold still. 01-09 moved this off
+   * `this._port === null`: a port pinned by a spawn that then failed the
+   * health gate is not a spawn that succeeded, and treating it as one made
+   * every later respawn skip `_spawnAndGate`'s one-time initialisation.
    *
    * Idempotent/no-op re-entry (SHELL-03 concurrency edge): guarded by
    * `_restartInFlight`, shared with `retry()` and `_recoveryProbe()` --
@@ -757,7 +782,7 @@ export const TheiaService = {
         }
 
         attempts += 1;
-        const result = await this._spawnAndGate(this._port === null);
+        const result = await this._spawnAndGate(!this._swapped);
         if (result.ok) {
           this._hideError();
           return;
@@ -1026,13 +1051,20 @@ export const TheiaService = {
    * Hides the loading layer and navigates the browser element exactly
    * once, via powerbrowser.js's own exposed function (reached through the
    * browser element's owner window, not a Firefox-internal import).
+   *
+   * 01-09: `_swapped` is set AFTER the navigation call returns, not before it.
+   * This field is now what `_spawnAndGate`'s one-time initialisation block and
+   * `_restart()`'s per-attempt port choice are both keyed on, so a flag that
+   * could read true for a swap that threw would reintroduce the exact
+   * conflation class this file was just cleaned of. The early-return guard
+   * stays first, so the navigation still happens at most once.
    */
   _swap() {
     if (this._swapped) {
       return;
     }
-    this._swapped = true;
     this._browserElement.ownerDocument.defaultView.powerbrowserSwapToUrl(`http://127.0.0.1:${this._port}/`);
+    this._swapped = true;
   },
 
   _fatal(message) {
