@@ -1,73 +1,70 @@
 ---
 phase: 01-platform-extraction-and-rename
-verified: 2026-08-31T23:40:00Z
+verified: 2026-08-31T23:55:00Z
 status: gaps_found
-score: 8/12 must-haves verified (1 newly closed since last pass, 2 new blockers found in a code review run after the last pass, 2 partial — human halves still open)
+score: 8/12 must-haves verified (2 gate-correctness gaps closed then re-opened in a different shape by a fresh review, 2 partial — human halves still open)
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
-  previous_score: 8/11
+  previous_score: 8/12
   gaps_closed:
-    - "2d — the classification now gates BOTH the background probe timer (closed by 01-12) and the user-driven Retry route (closed by 01-13): TheiaService.retry() refuses to re-enter _restart() unless this._errorRecoverable === true, checked and returning BEFORE _hideError() so a refused click cannot null _failureDetails; powerbrowserShowError mirrors the classification onto errorRetryButton.hidden as presentation only. Independently confirmed by direct reading of TheiaService.sys.mjs:955-990,1131-1162 and powerbrowser.js:100-125, by running scripts/verify-platform.sh --quick myself (shell-error-contract: PASS naming all four scenarios including the new unrecoverable-classification-refuses-the-retry-click; shell-error-contract-self-test: PASS, 10/10 rows including the four new planted faults), and by cross-reading 01-REVIEW.md's independent re-derivation reaching the same conclusion."
-  gaps_remaining: []
+    - "The exact demonstration cases named by the prior pass's CR-A and CR-B `missing[]` lists are genuinely closed: plan 01-14 binds verify-shell-error-copy.mjs rule (4) to a derived set of message-bearing bindings and rejects `err.message`/`stray.message` at the one call site CR-A named (TheiaService.sys.mjs:1036), proven by a red-then-green discrimination control against the pre-fix checker. Plan 01-15 gives scan-brand-residue.mjs an --extra-root mode and wires rebase-upstream.sh to pass $UPSTREAM_DIR to it, proven by a discrimination control against the pre-fix script and by a live 55s/463,930-file run over the real upstream/ checkout. Both independently confirmed here by direct reading of the current tree and by running scripts/verify-platform.sh --quick (24/24 PASS)."
+  gaps_remaining:
+    - "Truth 7 (copy-safety gate cannot be defeated) — reopened as CR-03: rule (4)'s call-site enumeration regex (/this\\._showError\\(\\s*([^,]+?)\\s*,/g) requires a literal `this.` receiver and a comma after the first argument. A call site matching neither shape (no trailing comma, optional-chaining receiver, or a bound alias) is never enumerated, so it is never checked -- not rejected, simply invisible. The only completeness guard is `callSites === 0`, which does not fire when 5 of 6 sites are seen. Independently reproduced here: a copy of TheiaService.sys.mjs with an appended comma-less `this._showError(err.message)` call exits 0."
+    - "Truth 8 (residual-brand rebase gate cannot regress) — reopened as CR-01 and CR-02, both inside the --extra-root mode 01-15 just built: (a) the extra-root scan() call passes no `rows` filter, so a `coincidental`-class inventory row (a local absolute path fact about THIS checkout) can win a longest-token-first claim over a real brand-identifier row in a foreign tree and both suppress the offense AND suppress the independent unclaimed-probe detector, with no reconcile() count check behind it in that path to catch the difference; (b) `scan()`'s per-file read is wrapped in a silent `catch { continue; }` justified only for the git-ls-files source (\"a path git tracks but this checkout does not materialise\") but the extra-root file set comes from a readdirSync that just confirmed the file exists, so an unreadable file there is EACCES/EISDIR/oversize, is skipped with no failure recorded, and is still counted in the reported scanned-file total. Both independently reproduced here: an absolute-path token planted under --extra-root exits 0; a chmod-000 file carrying `chrome://sourcerer/content/x` under --extra-root exits 0 and is counted as scanned."
   regressions: []
   new_gaps_this_pass:
-    - "CR-A — verify-shell-error-copy.mjs's rule (4) admits any `<identifier>.message` as a valid _showError() argument, not only a table-validated result object's `.message`. `err.message` (a raw exception string) matches and passes all three static analyzers. Found by 01-REVIEW.md's own CR-01 (a code review run after the last verification pass, committed at 51fda7c), independently confirmed here by direct reading of the regex."
-    - "CR-B — the residual-brand scan invoked by scripts/rebase-upstream.sh after a patch replay scans `git ls-files` only, and `upstream/` is listed in `.gitignore`, so the invocation cannot see a single byte of the tree the rebase just replayed patches onto. CLAUDE.md's stated guarantee — 'an upstream rebase that reintroduces a brand token fails there rather than in a release' — does not hold for anything under `upstream/`. Found by 01-REVIEW.md's CR-02, independently confirmed here by reading scan-brand-residue.mjs's `scopeFiles()` and rebase-upstream.sh's invocation, and by the counts in 01-REVIEW.md's reproduction (109 tracked files scanned, 0 of them under `upstream/`)."
+    - "CR-01, CR-02, CR-03 (01-REVIEW.md, committed 917ff5d, this pass's HEAD) -- three Critical findings in the code shipped by 01-14/01-15 itself, each with a reproduction against the shipped script. All three independently re-confirmed by direct reading and by re-running each reproduction in this pass, not accepted on the review's narrative."
 gaps:
   - truth: "No raw internal identifier, pref key, or exception message can reach the user-facing error layer — enforced by a check that cannot be defeated (CLAUDE.md: 'shell-error-copy-no-internals enforces this by pattern, not by a list of banned strings')."
     status: failed
     reason: >
-      The enforcement mechanism itself has a hole, independently confirmed by direct reading, not
-      taken from 01-REVIEW.md's narrative. `scripts/verify-shell-error-copy.mjs:183-190`'s rule (4)
-      is the only gate between an arbitrary string and `#powerbrowser-error-message`:
-      `/^(?:USER_MESSAGE\.[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*\.message)$/`. The second alternative
-      matches ANY identifier followed by `.message` — including `err.message`, the exact shape a
-      caught exception takes. The comment beside it claims the checks above "prove" a `.message`
-      argument is safe, but those checks only prove that `message:` PROPERTY-DECLARATION sites are
-      `USER_MESSAGE` entries; they say nothing about the identifier bound at a `_showError` CALL
-      site. `TheiaService.reportUnexpectedFailure` — confirmed the ONE terminal handler for every
-      fire-and-forget promise root in the shell (four confirmed call sites: the bootstrap's start
-      call, the Retry control's retry call, and the two long-lived loops) — is exactly the kind of
-      site where a future edit could plausibly pass `err.message` instead of a `USER_MESSAGE` key,
-      and today's gate would not catch it. The current shipped tree is clean on its merits (every
-      real call site today passes a `USER_MESSAGE`-derived value, confirmed by grep), so there is no
-      live user-facing leak right now — but CLAUDE.md's own Verification section makes check honesty
-      itself a correctness property ("never assert on the absence of a log line unless you have
-      proven that line is emitted by the code under test"), and a gate that structurally cannot fire
-      on the shape it exists to catch is not verified, it is decorative.
+      01-14 correctly closed the exact shape CR-A named (an accept-side regex that admitted ANY
+      `<identifier>.message`) by deriving the accept set from the file under test. CR-03
+      (01-REVIEW.md, independently confirmed here) shows the fix did not close the class: the
+      ENUMERATION of `this._showError(` call sites — the step that decides which call sites are even
+      examined — is still a regex (`/this\._showError\(\s*([^,]+?)\s*,/g`) that requires a literal
+      `this.` receiver and a trailing comma. A call site outside that shape (no comma, `this?.`, a
+      bound alias) is not rejected, it is simply never seen; the only completeness assertion
+      (`callSites === 0`) cannot detect "5 of 6 sites parsed." Reproduced directly in this pass: a
+      copy of TheiaService.sys.mjs with an appended `try { x(); } catch (err) { this._showError(err.message) }`
+      (no trailing comma) exits 0 against `node scripts/verify-shell-error-copy.mjs --file <copy>`.
+      Today's shipped call sites all match the regex (confirmed: 5/5 parsed), so there is still no
+      live leak — but CLAUDE.md's own doctrine ("derive from the tree and compare") is violated by the
+      enumeration step itself, which is exactly the property this must-have requires.
     artifacts:
       - path: "scripts/verify-shell-error-copy.mjs"
-        issue: "Rule (4)'s regex (lines 183-190) admits any `<identifier>.message`, not only a locally-derived result object whose own `message:` field this file has validated against the USER_MESSAGE table."
+        issue: "The call-site enumeration regex at line 303 (`/this\\._showError\\(\\s*([^,]+?)\\s*,/g`) silently skips any `this._showError(` call whose shape it does not match, and the only completeness guard (`callSites === 0`) cannot detect a partial miss."
     missing:
-      - "Bind rule (4) to the set of local bindings whose object literal or return value carries a table-validated `message:` field (derived, not a name allowlist), and reject every other `<identifier>.message` shape by name, quoting the raw identifier and explaining that `err.message` is a raw exception string."
-      - "A --self-test row that plants `this._showError(err.message, ...)` in place of a `USER_MESSAGE.*` reference and requires the check to go red naming the raw-exception-string leak."
+      - "Derive the total count of `_showError(` call sites independently (e.g. every textual `_showError(` minus its one definition) and require the enumeration regex's `callSites` to equal that total, failing loudly and naming the gap when they disagree — the same set-equality discipline checks (2) and (3) in this file already use."
+      - "A --self-test row planting a comma-less or optional-chained `_showError(` call site and requiring the check to go red for 'a call site this check cannot read'."
   - truth: "The residual-brand scan is a permanent gate that fails on a brand token reintroduced by an upstream rebase (CLAUDE.md: 'wired into rebase-upstream.sh and .github/workflows/rebase-upstream.yml, so an upstream rebase that reintroduces a brand token fails there rather than in a release')."
     status: failed
     reason: >
-      Independently confirmed by direct reading, not taken from 01-REVIEW.md's narrative.
-      `scan-brand-residue.mjs:255-269` (`scopeFiles`) builds its scanned file set from
-      `execFileSync('git', ['ls-files', '-z'], ...)` with no parameter to add a filesystem root
-      outside the git index. `.gitignore:20` is `upstream/`. `scripts/rebase-upstream.sh:108` calls
-      `node scripts/scan-brand-residue.mjs` with no arguments after the patch replay. So the
-      post-replay invocation scans exactly the same git-tracked files the pre-replay invocation (and
-      the CI workflow's own step 1) already scanned — none of which is anything under `upstream/`,
-      which is precisely the tree a rebase rewrites and the tree this specific invocation exists to
-      re-check. This is the same failure class CLAUDE.md's own Verification rule 1 names: an
-      assertion that is green by construction can never go red for its stated cause. Note this does
-      NOT affect the scan's ordinary function over the repo's own tracked tree (SC1/SC5's evidence,
-      re-confirmed this pass by `scan-brand-residue: PASS` and its self-test in `--quick`) — this
-      gap is scoped specifically to the rebase-triggered re-scan of the untracked upstream checkout,
-      the one CLAUDE.md names by name as this gate's reason for existing at that call site.
+      01-15 correctly closed the exact shape CR-B named (the post-replay scan could not see anything
+      under `upstream/` at all) by adding a real `--extra-root` filesystem walk, proven live against a
+      5.6GB checkout. CR-01 and CR-02 (01-REVIEW.md, independently confirmed here) show the new mode
+      has two holes of its own, both reproduced against the shipped script: (a) the extra-root
+      `scan()` call reuses the full inventory row set including `coincidental`-class rows — a fact
+      about THIS repo's own checkout (e.g. its absolute local path) — so a longest-token-first claim
+      lets that row swallow a real brand-identifier span in a foreign tree, marking it not-an-offense
+      AND suppressing the independent unclaimed-probe detector at that index; nothing constrains this
+      in the extra-root path because `reconcile()` is deliberately not run there. Reproduced: planting
+      `MOZ_OBJDIR=/home/chris/coding/sourcerer/objdir` under a scratch `--extra-root` exits 0. (b) the
+      shared per-file `catch { continue; }` in `scan()` is justified only for the git-ls-files
+      provenance ("a path git tracks but this checkout does not materialise") but applies unconditionally
+      to the extra-root file set too, where a throw means the file is unreadable (EACCES etc), not
+      absent — so an unreadable file is skipped with no failure recorded and is still counted in the
+      reported scanned-file total. Reproduced: a chmod-000 file containing `chrome://sourcerer/content/x`
+      under `--extra-root` exits 0, reporting '1 file(s) scanned'. Both are the same failure class CR-B
+      itself was: a gate that is green by construction on the input it exists to catch.
     artifacts:
       - path: "scripts/scan-brand-residue.mjs"
-        issue: "scopeFiles() (lines 255-269) has no parameter to walk a filesystem root outside the git index; upstream/ is gitignored and therefore invisible to it."
-      - path: "scripts/rebase-upstream.sh"
-        issue: "Line 108 invokes scan-brand-residue.mjs with no extra-root argument, so the post-replay re-scan is a no-op relative to the tree the rebase just touched."
+        issue: "Line 1090's extra-root `scan(inv, { root: extraRoot, files: extraFiles })` call passes no `rows` override, so `coincidental`-class rows (checked only by `reconcile()`, which the extra-root path deliberately skips) can claim and suppress a real brand-identifier span in a foreign tree. Separately, `scan()`'s per-file `catch { continue; }` (line 391-396) is shared by both file-set sources but its justifying comment only holds for the git-ls-files source; an unreadable extra-root file is silently skipped and miscounted as scanned."
     missing:
-      - "Add an `--extra-root <dir>` (or equivalent) mode to scan-brand-residue.mjs that walks the filesystem under a caller-supplied root outside the git index, applying the same scope.exclude/binary_extensions filters, and have rebase-upstream.sh pass $UPSTREAM_DIR to the post-replay invocation."
-      - "A --self-test row that plants a brand token in a scratch directory passed as --extra-root and requires the scan to name that path."
+      - "Filter the extra-root pass's inventory rows to exclude the `coincidental` class (`rows: inv.tokens.filter((r) => r.class !== 'coincidental')`), since those rows describe facts about this checkout, not a foreign one, and a self-test row planting a coincidental-shaped token under --extra-root requiring a red."
+      - "Make the per-file catch collect and surface unreadable files (distinct from an absent file) so an unreadable extra-root file is a gate failure, not a silent, mis-counted skip — and a self-test row proving a chmod-000 file under --extra-root fails loudly."
 deferred:
   - truth: "GUI-02 — open and browse web pages inside Theia as URL-addressable tabs"
     addressed_in: "v2 (not a numbered roadmap phase yet)"
@@ -75,16 +72,16 @@ deferred:
 human_verification:
   - test: "GUI-01 — launch the app, toggle to the browser window, confirm the address bar takes keyboard focus and navigates a typed URL, confirm an in-window modal appears, close the window and confirm the shell returns with the app still running"
     expected: "All five steps succeed; the toggle behaves as a real browser window with no Theia chrome"
-    why_human: "BiDi cannot see chrome contexts on Linux and chrome-context Marionette is platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15) — unchanged by 01-13."
+    why_human: "BiDi cannot see chrome contexts on Linux and chrome-context Marionette is platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15) — unchanged by 01-14/01-15."
   - test: "GUI-03 — with the dev flag on, edit customize.css and confirm the shell visibly restyles without a rebuild; delete it and confirm the shell reverts"
     expected: "The runtime CSS layer visibly applies and un-applies without any rebuild"
-    why_human: "Perceptual/visual outcome; the automated checks only prove inertness and flag-gating, not the visible-restyle claim. Still open (ledger item 16) — unchanged by 01-13."
+    why_human: "Perceptual/visual outcome; the automated checks only prove inertness and flag-gating, not the visible-restyle claim. Still open (ledger item 16) — unchanged by 01-14/01-15."
   - test: "The two tier-3 regression confirmations named by WINDOWS.md ledger item 19 (shell03-budget-exhausted-error, shell03-auto-dismiss-on-selfheal) re-run against a repackaged binary"
-    expected: "Neither check moves, since neither clicks Retry — the run exists to prove that, per 01-11-SUMMARY.md's own deferral"
+    expected: "Neither check moves, since neither clicks Retry"
     why_human: "Requires a ./mach build faster repackage and a running binary; explicitly deferred to the phase gate, not run by this static verification pass"
   - test: "A human clicking Retry in a real launched window on an unrecoverable failure sees the control absent, and on a recoverable failure sees it present with a working restart, and confirms the diagnostics rows survive a refused click"
     expected: "Matches the node-harness-proven contract: no Retry control on the unrecoverable class, a working one on the recoverable class, diagnostics preserved either way"
-    why_human: "01-13's verify-shell-error-contract.mjs proves the supervisor/bootstrap contract and the spawn counts under Node against a faked PowerBrowserAPI — it does not prove a hidden button is actually unpainted on screen. Chrome-context Marionette is platform-blocked on Linux (ledger item 7), same residual as GUI-01/GUI-03."
+    why_human: "verify-shell-error-contract.mjs proves the supervisor/bootstrap contract under Node against a faked PowerBrowserAPI — it does not prove a hidden button is actually unpainted on screen. Chrome-context Marionette is platform-blocked on Linux (ledger item 7), same residual as GUI-01/GUI-03."
 ---
 
 # Phase 1: Platform Extraction and Rename Verification Report
@@ -92,104 +89,68 @@ human_verification:
 **Phase Goal:** The Power Browser platform tree exists in this repo, builds, boots, and works as an
 actual web browser under fixed platform identifiers — with no generator involved
 
-**Verified:** 2026-08-31T23:40:00Z
+**Verified:** 2026-08-31T23:55:00Z
 **Status:** gaps_found
-**Re-verification:** Yes — after gap-closure plan 01-13, and against a fresh code review
-(01-REVIEW.md, committed after 01-13) that found two new Blocker-tier issues in the verification
-apparatus itself
+**Re-verification:** Yes — after gap-closure plans 01-14 and 01-15, and against a fresh code review
+(01-REVIEW.md, committed after both plans landed) that found three new Critical-tier findings in the
+gap-closure code itself
 
 **Scope note:** Requirements verified against REQUIREMENTS.md: MIG-01, MIG-02, MIG-03, MIG-04,
 GUI-01, GUI-03, GUI-04, SEC-01. GUI-02 remains deferred to v2 (D-22 gate, 01-06) — not scored here,
 not orphaned.
 
-## Disposition of the Prior Gap (independently re-verified against the live tree)
+## Disposition of the Two Prior Gaps (independently re-verified against the live tree)
 
-### 2d — a Retry click re-entering the failed launch path on an unrecoverable classification — CLOSED
+### CR-A (prior pass) — the copy-safety gate's accept-side hole — DEMONSTRATION CASE CLOSED, CLASS RE-OPENED AS CR-03
 
-Prior finding (carried from the previous verification pass): 01-12 correctly gated the background
-recovery-probe TIMER on the `recoverable` classification, but `TheiaService.retry()` and the
-on-screen Retry button remained unconditional, so the single most obvious user action on the error
-screen re-entered `_restart()`/`_spawnAndGate()` against unassigned state and erased the diagnostic
-rows on the way.
+01-14 rewrote rule (4) of `scripts/verify-shell-error-copy.mjs` so the accept set for a `.message`
+argument is derived from the file under test (`messageBearingBindings`, `catchParamNames`) instead of
+matched by a permissive `<identifier>.message` regex. Independently confirmed by direct reading of the
+current file (lines 296-341) and by running `node scripts/verify-shell-error-copy.mjs --self-test`
+(8/8 rows PASS) and the discrimination control recorded in `01-14-SUMMARY.md` (both new fault rows
+GREEN under the pre-fix checker, RED under the fixed one).
 
-Independently re-verified by direct reading of the current tree (not taken from 01-13-SUMMARY.md's
-narrative):
+**But** a fresh review (`01-REVIEW.md`, committed at the current HEAD after both gap-closure plans)
+found CR-03: the ENUMERATION step that decides which `this._showError(` call sites even reach rule (4)
+is still an unproven regex (`/this\._showError\(\s*([^,]+?)\s*,/g`), requiring a literal `this.`
+receiver and a trailing comma. A call site outside that shape is never examined — not rejected, simply
+invisible — and the only completeness guard (`callSites === 0`) cannot detect a partial miss.
+Independently reproduced in this pass: appending a comma-less `this._showError(err.message)` call to a
+scratch copy of `TheiaService.sys.mjs` and running `node scripts/verify-shell-error-copy.mjs --file
+<scratch>` exits **0**. This is the same defect class CR-A was, one step removed: the checker no longer
+has a hand-kept accept-list, but its coverage of what it even looks at is still unproven.
 
-- `powerbrowser/shell/TheiaService.sys.mjs:123` — a new field `_errorRecoverable: null`.
-- `:1140` (`_showError`) — `this._errorRecoverable = recoverable === true;`, written inside the
-  same `_errorShown` false-to-true latch.
-- `:1159` (`_hideError`) — `this._errorRecoverable = null;`, cleared at the single site
-  `_errorShown` is cleared.
-- `:990-994` (`retry()`) — `if (this._errorRecoverable !== true) { this._pushLog(...); return; }`
-  BEFORE `_hideError()` is called, confirmed by reading the method body directly: the guard's
-  `return` precedes the `_hideError()`/`_restart()` calls, so a refused click cannot null
-  `_failureDetails`.
-- `powerbrowser/shell/powerbrowser.js:115` (`powerbrowserShowError`) —
-  `errorRetryButton.hidden = !recoverable;`, at the show site only.
-- `powerbrowser/shell/powerbrowser.xhtml:39` and `powerbrowser.css` — the button carries no
-  `disabled`/`hidden` HARD-CODED attribute (correct, since it is toggled dynamically), and the CSS
-  file declares no `display` property on `#powerbrowser-error-retry` that could defeat the
-  `[hidden]` UA rule (confirmed by grep — the only three rules matching that selector are
-  font/color/hover/focus-visible declarations).
-- `scripts/verify-platform.sh --quick`, run by this verification pass directly (not accepted from
-  any SUMMARY): `shell-error-contract: PASS` naming all four scenarios including the new
-  `unrecoverable-classification-refuses-the-retry-click`, and
-  `shell-error-contract-self-test: PASS` over 10 rows (9 planted faults + 1 clean control),
-  including the four new faults this plan added (guard removed from `retry()`; guard reordered
-  below `_hideError()`; the presentation mirror removed; the guard made unconditional in the
-  reverse direction).
-- `01-REVIEW.md`'s own independent re-derivation (run separately, after 01-13, by a different
-  process) reaches the identical conclusion: "The previous CR-01 is genuinely closed."
+**Verdict: the specific demonstration case named by the prior pass's `missing[]` is genuinely closed.
+The must-have itself — "enforced by a check that cannot be defeated" — remains FAILED**, because a
+different, independently reproduced input defeats it today.
 
-**Verdict: VERIFIED — genuinely closed.** Both the supervisor-side authority (`retry()`'s guard,
-returning before `_hideError()`) and the presentation mirror (`errorRetryButton.hidden`) are
-present, correctly ordered, and covered by a two-directional test (a positive control proves the
-gate does not degrade into "refuse every Retry").
+### CR-B (prior pass) — the rebase-triggered scan blind to `upstream/` — DEMONSTRATION CASE CLOSED, CLASS RE-OPENED AS CR-01/CR-02
 
-## New Findings This Pass — CR-A and CR-B, independently re-derived from source
+01-15 added `extraRootFiles()` and an `--extra-root <dir>` CLI mode to `scripts/scan-brand-residue.mjs`,
+and wired `scripts/rebase-upstream.sh` to pass `$UPSTREAM_DIR` to the post-replay invocation.
+Independently confirmed by direct reading of the current file (lines 300-352, 1078-1106) and by running
+`node scripts/scan-brand-residue.mjs --self-test` (11/11 rows PASS, including three new `--extra-root`
+rows) and by re-running the live 55-second, 463,930-file scan over the real `upstream/` checkout
+(exit 0, `git -C upstream diff --stat` empty before and after).
 
-A code review run against the tree AFTER 01-13 landed (`01-REVIEW.md`, committed at `51fda7c`,
-which is the current HEAD) found two Critical/Blocker-tier issues, both in the phase's STATIC
-GATES rather than in product code. Per this verification's brief, both were independently
-re-derived from source before being accepted, not taken on the review's narrative — see the exact
-line reads below and in the `gaps:` frontmatter.
+**But** the fresh review found two holes inside that same new mode, both independently reproduced in
+this pass: **CR-01** — the extra-root `scan()` call (line 1090) passes no `rows` filter, so
+`coincidental`-class inventory rows (facts about THIS repo's own checkout, such as its absolute local
+path) can win a longest-token-first claim over a real brand-identifier token in a foreign tree, marking
+it not-an-offense and suppressing the independent unclaimed-probe detector at the same index — with no
+`reconcile()` check behind the extra-root path to catch the difference (that omission is deliberate,
+for a different, valid reason: D-17's census cannot close over a foreign checkout). Reproduced: planting
+`MOZ_OBJDIR=/home/chris/coding/sourcerer/objdir` under a scratch `--extra-root` exits **0**. **CR-02** —
+the shared per-file `catch { continue; }` inside `scan()` (lines 391-396) is justified only for the
+git-ls-files provenance ("a path git tracks but this checkout does not materialise"); the extra-root
+file set instead comes from a `readdirSync` that just confirmed the file exists, so a throw there means
+EACCES/EISDIR/oversize — an unreadable file is silently skipped, no failure is recorded, and it is still
+counted in the reported "N file(s) scanned" total. Reproduced: a `chmod 000` file containing
+`chrome://sourcerer/content/x` under `--extra-root` exits **0**, reporting "1 file(s) under --extra-root".
 
-**CR-A — the copy-safety gate has an escape hatch.** `scripts/verify-shell-error-copy.mjs:183-190`
-is the check CLAUDE.md names as the enforcement of "no internal identifier may appear in
-user-facing text ... by pattern, not by a list of banned strings." Its rule (4) regex —
-`/^(?:USER_MESSAGE\.[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*\.message)$/` — accepts ANY
-`<identifier>.message`, which is exactly the shape of a caught exception's message
-(`err.message`). Confirmed present on the current tree by direct read of the regex; the review's
-own reproduction (a mutant painting `err.message` at `TheiaService.sys.mjs:1036`, run against all
-three static analyzers with an unmutated control) is consistent with what the regex, read cold,
-predicts. **The shipped tree is clean on its merits today** — grep confirms every current
-`_showError()` call site passes a `USER_MESSAGE.*` reference — but the gate that is supposed to
-keep it that way structurally cannot fire on the one shape most likely to appear by accident in a
-future edit to `reportUnexpectedFailure` or a similar catch-and-report site.
-
-**CR-B — the rebase-triggered residual-brand re-scan cannot see the tree it exists to check.**
-`scripts/scan-brand-residue.mjs:255-269` (`scopeFiles`) sources its file set from `git ls-files`
-only; `.gitignore:20` lists `upstream/`; `scripts/rebase-upstream.sh:108` invokes the scanner with
-no argument to add a filesystem root outside the index. Confirmed present by direct read of all
-three files. CLAUDE.md states in as many words that this gate is "wired into
-`scripts/rebase-upstream.sh` and `.github/workflows/rebase-upstream.yml`, so an upstream rebase
-that reintroduces a brand token fails there rather than in a release" — that specific guarantee
-does not hold for anything under `upstream/`, which is the one tree a rebase actually rewrites.
-The scan's ordinary function over this repo's own tracked tree (the evidence behind SC1 and SC5,
-re-confirmed by this pass's own `--quick` run) is unaffected; this gap is scoped precisely to the
-rebase call site CLAUDE.md names.
-
-**Neither finding is a stub, a debt marker, or a live product-code defect** — `grep -E
-"TBD|FIXME|XXX"` over both touched files returns zero matches, and both gates otherwise function
-exactly as designed for the inputs they are actually reachable with. They are gaps in what the
-gates PROVE relative to what CLAUDE.md and their own inline comments CLAIM they prove — the same
-class of finding the last several verification/review passes have each surfaced in a different
-corner of this codebase, this time in the checking apparatus rather than the supervisor.
-
-Both are classified BLOCKER here, consistent with 01-REVIEW.md's own severity call and with
-CLAUDE.md's Verification section making check honesty a correctness property of this repo, not a
-nicety — and consistent with this verification's brief to treat a must-have whose only proof is a
-gate that cannot fail as not verified.
+**Verdict: the specific demonstration case named by the prior pass's `missing[]` is genuinely closed.
+The must-have itself — "fails on a brand token reintroduced by an upstream rebase" — remains FAILED**,
+because two different, independently reproduced inputs defeat the very mode built to close it.
 
 ## Goal Achievement
 
@@ -198,89 +159,89 @@ gate that cannot fail as not verified.
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
 | 1 | SC1 — Token-classification inventory exists; residual scan red on pre-rename tree | ✓ VERIFIED | Regression-checked; `scan-brand-residue: PASS` + self-test PASS, run directly in `--quick` this pass |
-| 2 | SC2 — Repo builds from script-refetched `upstream/`, launches branded app, passes smoke tests (happy path) | ✓ VERIFIED | Regression-checked from 01-04's build evidence; unaffected by 01-13; not re-built this pass (47–54 min cost, per brief) |
-| 2b | The backend supervisor's state-gating conflation and the three named unguarded throw sites are closed | ✓ VERIFIED | Regression-checked; unaffected by 01-13 |
-| 2c | A failed Retry does not permanently disable the error layer for the rest of the session | ✓ VERIFIED | Regression-checked; `shell-error-contract: PASS`, confirmed by direct read of `retry()`/`_hideError()` ordering |
-| 2d | An unrecoverable failure classification actually prevents re-entry into the failed launch path (timer AND user-driven) | ✓ VERIFIED (now closed) | See "Disposition" above — closed by 01-13; confirmed by direct read + `shell-error-contract`/self-test PASS run by this pass |
-| 2e | The quit observer and state-file path are established before any path that can spawn a backend | ✓ VERIFIED | Regression-checked; `start-path-recovery: PASS` + self-test, run directly in `--quick` this pass |
-| 3 | SC3 — Toggle Theia → browser UI and back; `TabUriRegistry`'s exported shape stays landable | ◐ PARTIAL | Automated half green (`gui04-registry-shape` + self-test PASS in `--quick`, confirmed run directly); perceptual half still open (ledger 15), unchanged |
+| 2 | SC2 — Repo builds from script-refetched `upstream/`, launches branded app, passes smoke tests (happy path) | ✓ VERIFIED | Regression-checked from 01-04's build evidence; unaffected by 01-14/01-15; not re-built this pass (47–54 min cost, per brief) |
+| 2b | The backend supervisor's state-gating conflation and the three named unguarded throw sites are closed | ✓ VERIFIED | Regression-checked; unaffected by 01-14/01-15 |
+| 2c | A failed Retry does not permanently disable the error layer for the rest of the session | ✓ VERIFIED | Regression-checked; `shell-error-contract: PASS`, run directly this pass |
+| 2d | An unrecoverable failure classification actually prevents re-entry into the failed launch path (timer AND user-driven) | ✓ VERIFIED | Regression-checked; `shell-error-contract`/self-test PASS run directly this pass; unaffected by 01-14/01-15 |
+| 2e | The quit observer and state-file path are established before any path that can spawn a backend | ✓ VERIFIED | Regression-checked; `start-path-recovery: PASS` + self-test, run directly this pass |
+| 3 | SC3 — Toggle Theia → browser UI and back; `TabUriRegistry`'s exported shape stays landable | ◐ PARTIAL | Automated half green (`gui04-registry-shape` + self-test PASS, run directly); perceptual half still open (ledger 15), unchanged |
 | 4 | SC4 — Runtime restyle via customize bridge | ◐ PARTIAL | Automated half green; perceptual half still open (ledger 16), unchanged |
-| 5 | SC5 — Internal identifiers fixed everywhere; every branding value is a hand-written literal | ✓ VERIFIED | Regression-checked; `branding-preflight` + self-test PASS, confirmed run directly in `--quick` |
-| 6 | SEC-01 — Backend unreachable without a per-launch credential; fails closed | ✓ VERIFIED | Regression-checked; token-gate mechanism untouched by 01-13; the ~20 launch-lifecycle checks that would exercise this live (`side02-token-*`) remain unrun per WINDOWS.md ledger item 11 (require a built binary + display) — residual, not a regression |
-| 7 | No raw internal identifier, pref key, or exception message can reach the user-facing error layer, enforced by a gate that cannot be defeated | ✗ FAILED | CR-A — `verify-shell-error-copy.mjs`'s rule (4) admits `<identifier>.message`; confirmed by direct read of the regex. Tree is clean on merits today; the gate is not proven to keep it that way |
-| 8 | The residual-brand scan fails on a brand token reintroduced by an upstream rebase, as CLAUDE.md states | ✗ FAILED | CR-B — `scan-brand-residue.mjs`'s `scopeFiles()` reads `git ls-files` only; `upstream/` is gitignored; `rebase-upstream.sh:108` passes no extra root. Confirmed by direct read of all three files |
+| 5 | SC5 — Internal identifiers fixed everywhere; every branding value is a hand-written literal | ✓ VERIFIED | Regression-checked; `branding-preflight` + self-test PASS, run directly this pass |
+| 6 | SEC-01 — Backend unreachable without a per-launch credential; fails closed | ✓ VERIFIED | Regression-checked; token-gate mechanism untouched by 01-14/01-15; launch-lifecycle checks that would exercise this live remain unrun per WINDOWS.md ledger item 11, residual not regression |
+| 7 | No raw internal identifier, pref key, or exception message can reach the user-facing error layer, enforced by a gate that cannot be defeated | ✗ FAILED | CR-A's demonstration case closed by 01-14; CR-03 (01-REVIEW.md, independently reproduced here: a comma-less `_showError(err.message)` call site is never enumerated) defeats it again by a different shape |
+| 8 | The residual-brand scan fails on a brand token reintroduced by an upstream rebase, as CLAUDE.md states | ✗ FAILED | CR-B's demonstration case closed by 01-15's `--extra-root` mode; CR-01 and CR-02 (01-REVIEW.md, independently reproduced here: a coincidental-row swallow and a silently-skipped unreadable file) defeat the new mode itself |
 
-**Score:** 8/12 truths verified (1 newly closed since the last pass), 2 failed (new this pass,
-found by a code review that ran after the last verification and independently confirmed here), 2
-partial (human verification open, unchanged).
+**Score:** 8/12 truths verified, 2 failed (same two truths as the prior pass — the specific defect
+each names has moved, not the truth's status), 2 partial (human verification open, unchanged).
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `powerbrowser/shell/TheiaService.sys.mjs` | Backend supervisor with correct one-time init gating, correct probe gating, quit-observer ordering, AND a Retry path that respects the classification it was given (both routes) | ✓ VERIFIED | All four properties confirmed present by direct read: `_errorRecoverable` field, `retry()`'s guard before `_hideError()`, `_showError`'s probe gate, quit-observer ordering ahead of the settings-folder branch |
-| `powerbrowser/shell/powerbrowser.js` | Entry point with a terminal handler on every fire-and-forget supervisor call, no DOM write bypassing the supervisor, and a Retry affordance that reflects recoverability | ✓ VERIFIED | Terminal handlers, DOM-bypass fix, and `errorRetryButton.hidden` mirror all confirmed present by direct read |
-| `scripts/verify-shell-error-contract.mjs` | Behavioral contract checker for the error layer and probe gate, including the user-driven Retry route | ✓ VERIFIED | 4/4 scenarios + 10/10 self-test rows PASS, run directly by this pass |
-| `scripts/verify-shell-error-copy.mjs` | Static gate enforcing no raw internal identifier/exception text reaches the error layer, with no escape hatch | ✗ STUB-LIKE (defeatable) | Passes on the current clean tree, but its rule (4) regex structurally admits `err.message` — CR-A |
-| `scripts/scan-brand-residue.mjs` + `scripts/rebase-upstream.sh` | A permanent gate that also catches a brand token reintroduced by an upstream rebase | ✗ NOT WIRED (for the rebase path) | Functions correctly over the tracked tree; cannot see `upstream/` at all — CR-B |
-| `scripts/verify-platform.sh` | Single registry, `--quick` green | ✓ VERIFIED | 24/24 PASS, run directly by this pass |
+| `powerbrowser/shell/TheiaService.sys.mjs` | Backend supervisor with correct one-time init gating, correct probe gating, quit-observer ordering, AND a Retry path that respects the classification it was given | ✓ VERIFIED | Regression-checked; unaffected by 01-14/01-15 |
+| `powerbrowser/shell/powerbrowser.js` | Entry point with terminal handlers, no DOM-write bypass, Retry affordance reflecting recoverability | ✓ VERIFIED | Regression-checked |
+| `scripts/verify-shell-error-contract.mjs` | Behavioral contract checker for the error layer and probe gate | ✓ VERIFIED | 4/4 scenarios + 10/10 self-test rows PASS, run directly this pass |
+| `scripts/verify-shell-error-copy.mjs` | Static gate enforcing no raw internal identifier/exception text reaches the error layer, with no escape hatch | ✗ STUB-LIKE (defeatable, different shape) | Accept-set derivation (01-14) is sound; call-site ENUMERATION (unchanged since before 01-14) is a regex with no completeness proof — CR-03, reproduced |
+| `scripts/scan-brand-residue.mjs` + `scripts/rebase-upstream.sh` | A permanent gate that also catches a brand token reintroduced by an upstream rebase | ✗ NOT FULLY WIRED (new mode has two holes) | `--extra-root` mode (01-15) reaches `upstream/` for the first time, but its inventory-row set is unfiltered (CR-01) and its unreadable-file handling is shared with a justification that does not hold for it (CR-02), both reproduced |
+| `scripts/verify-platform.sh` | Single registry, `--quick` green | ✓ VERIFIED | 24/24 PASS, run directly this pass |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|-----|-----|--------|---------|
-| `powerbrowserRetry()` | `TheiaService.retry()`'s classification guard | direct call, no DOM bypass | ✓ WIRED | Confirmed at powerbrowser.js:135-137, TheiaService.sys.mjs:990-994 |
-| `_showError`'s classification | `errorRetryButton.hidden` | `errorRetryButton.hidden = !recoverable` at the show site | ✓ WIRED | powerbrowser.js:115, confirmed |
-| `_showError`'s classification | `_errorRecoverable` field, read by `retry()` | latch/clear pair inside `_showError`/`_hideError` | ✓ WIRED | TheiaService.sys.mjs:1140,1159,992 |
-| `rebase-upstream.sh`'s post-replay check | the actual rewritten `upstream/` tree | `scan-brand-residue.mjs` invocation | ✗ NOT WIRED | `scopeFiles()` reads `git ls-files` only; `upstream/` is gitignored; no extra-root argument passed — CR-B |
-| `_showError()` call sites | a validated `USER_MESSAGE` table entry only | rule (4) regex in `verify-shell-error-copy.mjs` | ⚠️ PARTIALLY WIRED | Gate exists and runs, but its own pattern admits a second, unsafe shape (`<identifier>.message`) — CR-A |
+| `powerbrowserRetry()` | `TheiaService.retry()`'s classification guard | direct call, no DOM bypass | ✓ WIRED | Regression-checked |
+| `_showError`'s classification | `errorRetryButton.hidden` / `_errorRecoverable` | latch/clear pair | ✓ WIRED | Regression-checked |
+| `rebase-upstream.sh`'s post-replay check | the actual rewritten `upstream/` tree | `--extra-root $UPSTREAM_DIR` → `extraRootFiles()` → `scan()` | ⚠️ PARTIALLY WIRED | Reaches the tree for the first time (closes CR-B's demonstration case) but the scan it runs there admits a coincidental-row claim (CR-01) and silently miscounts an unreadable file as scanned (CR-02) |
+| `_showError()` call sites | a validated `USER_MESSAGE` table entry only | derived accept set (rule 4) | ⚠️ PARTIALLY WIRED | The accept-side derivation is sound (closes CR-A's demonstration case), but the call-site enumeration feeding it is an unproven regex that silently drops non-matching shapes (CR-03) |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Full quick verification suite (24 checks) | `scripts/verify-platform.sh --quick` (run directly by this pass) | PASS, 24/24 | ✓ PASS |
-| Retry against an unrecoverable classification drives no spawn, keeps diagnostics, offers no control | `--only shell-error-contract` (scenario `unrecoverable-classification-refuses-the-retry-click`) | PASS | ✓ PASS |
-| Recoverable classification still honours Retry (reverse-direction control) | `--only shell-error-contract` (scenario `two-consecutive-failing-retries-repaint`, retargeted) | PASS | ✓ PASS |
-| Copy-safety gate rejects a raw exception string | (no such check exists) | not exercised — CR-A names exactly this missing assertion | ✗ FAIL (gap) |
-| Rebase-triggered brand scan sees a token planted under `upstream/` | (no such check exists) | not exercised — CR-B names exactly this missing assertion | ✗ FAIL (gap) |
+| Full quick verification suite (24 checks) | `scripts/verify-platform.sh --quick` (run directly this pass) | PASS, 24/24 | ✓ PASS |
+| Rule (4)'s tightened derivation rejects `err.message`/`stray.message` at the documented call site | `node scripts/verify-shell-error-copy.mjs --self-test` | 8/8 rows PASS | ✓ PASS |
+| `--extra-root` mode rejects a planted token, a missing root, an empty root | `node scripts/scan-brand-residue.mjs --self-test` | 11/11 rows PASS | ✓ PASS |
+| CR-03: a comma-less `_showError(err.message)` call site is enumerated and rejected | Reproduced directly this pass: scratch copy of `TheiaService.sys.mjs` with an appended comma-less call | exit **0** (should be non-zero) | ✗ FAIL (gap, reproduced) |
+| CR-01: a `coincidental`-class token under `--extra-root` is caught | Reproduced directly this pass: `MOZ_OBJDIR=/home/chris/coding/sourcerer/objdir` under a scratch `--extra-root` | exit **0** (should be non-zero) | ✗ FAIL (gap, reproduced) |
+| CR-02: an unreadable file under `--extra-root` is reported as a failure, not silently skipped | Reproduced directly this pass: `chmod 000` file containing a brand token under a scratch `--extra-root` | exit **0**, counted as "1 file(s) scanned" (should fail, naming the unreadable file) | ✗ FAIL (gap, reproduced) |
 
 ### Requirements Coverage
 
 | Requirement | Description | Status | Evidence |
 |-------------|-------------|--------|----------|
-| MIG-01 | Script-refetched upstream, no copied objdirs | ✓ SATISFIED (present state); regression-prevention gap noted | Unchanged, regression-checked. CR-B means a rebase that reintroduces a brand token into `upstream/` would not be caught by the gate CLAUDE.md names for that purpose — recorded as a gap, not a downgrade of the current tree's correctness |
+| MIG-01 | Script-refetched upstream, no copied objdirs | ✓ SATISFIED (present state); regression-prevention gap noted | Unchanged. CR-01/CR-02 mean a rebase that reintroduces a brand token — or plants one behind an unreadable file, or one that happens to share a span with a coincidental-class row — into `upstream/` is still not reliably caught by the gate CLAUDE.md names for that purpose |
 | MIG-02 | Committed pre-rename inventory | ✓ SATISFIED | Unchanged, regression-checked |
-| MIG-03 | Identifiers fixed everywhere, cannot regress | ✓ SATISFIED (present state); regression-prevention gap noted | Current tree's identifiers are correct (verified by SC1/SC5's direct evidence, not solely by the scan gate); CR-B is specifically about the "cannot regress via rebase" half of this requirement |
-| MIG-04 | Renamed tree builds and boots under branding, and works as an actual browser | ✗ NOT SATISFIED | 2d is now closed (VERIFIED); MIG-04 is blocked instead by CR-A — a browser whose error-copy safety gate can be silently defeated is not proven to "work as an actual web browser" under CLAUDE.md's own correctness bar for user-facing text |
+| MIG-03 | Identifiers fixed everywhere, cannot regress | ✓ SATISFIED (present state); regression-prevention gap noted | Current tree's identifiers are correct (SC1/SC5 direct evidence); CR-01/CR-02 are specifically about the "cannot regress via rebase" half |
+| MIG-04 | Renamed tree builds and boots under branding, and works as an actual browser | ✗ NOT SATISFIED | CR-A's demonstration case closed by 01-14, but CR-03 reopens the same correctness bar this requirement was blocked on last pass: a browser whose error-copy safety gate can be silently defeated (by a different call shape) is not proven to "work as an actual web browser" under CLAUDE.md's own bar |
 | GUI-01 | Toggle Theia ↔ browser UI | ◐ SATISFIED (automated) / NEEDS HUMAN (perceptual) | Unchanged from prior pass |
 | GUI-03 | Runtime GUI customization bridge | ◐ SATISFIED (automated) / NEEDS HUMAN (perceptual) | Unchanged from prior pass |
-| GUI-04 | `TabUriRegistry` exported shape stays landable | ✓ SATISFIED | Unchanged, regression-checked; `gui04-registry-shape` + self-test PASS, run directly |
-| SEC-01 | Backend fail-closed | ✓ SATISFIED | Unchanged, regression-checked; launch-lifecycle checks that would exercise this remain unrun (ledger 11), residual not regression |
+| GUI-04 | `TabUriRegistry` exported shape stays landable | ✓ SATISFIED | Unchanged, regression-checked |
+| SEC-01 | Backend fail-closed | ✓ SATISFIED | Unchanged, regression-checked |
 
-No orphaned requirements: all 8 phase-1 requirement IDs appear in at least one of the 13 plans'
-`requirements` frontmatter (confirmed by grep across all `01-*-PLAN.md` files). GUI-02 correctly
-absent (deferred to v2).
+No orphaned requirements: all 8 phase-1 requirement IDs appear in at least one plan's `requirements`
+frontmatter (confirmed across all `01-*-PLAN.md` files, including 01-14 and 01-15 which both carry the
+full phase requirement set per their `<planning_dispositions>`). GUI-02 correctly absent (deferred to v2).
+
+**REQUIREMENTS.md traceability table is stale, again, in the opposite direction this time.** Lines
+260-268 read MIG-01/02/03/04 and SEC-01 as flatly "Complete", which does not reflect either this pass's
+or the prior pass's gate-correctness findings. This is a documentation-currency issue, not a code gap —
+the same class of finding the prior pass noted about this same table, now recurring in a different set
+of rows. Worth a housekeeping pass once the gate-correctness class itself is actually closed rather than
+edited after each partial fix.
 
 ### Anti-Patterns Found
 
-`grep -E "TBD|FIXME|XXX"` over the six files touched by 01-13 and the two files named by CR-A/CR-B:
-zero matches. No debt markers. Both new findings this pass are gate-correctness gaps in checking
-code, not stubs or placeholders in product code.
+`grep -E "TBD|FIXME|XXX"` over the five files 01-REVIEW.md analyzed (`scripts/scan-brand-residue.mjs`,
+`scripts/verify-shell-error-copy.mjs`, `scripts/rebase-upstream.sh`,
+`.github/workflows/rebase-upstream.yml`, `docs/BUILD.md`): zero matches. No debt markers. CR-01, CR-02,
+and CR-03 are gate-correctness gaps in checking code — the same class the prior two passes each found in
+a different corner — not stubs or placeholders.
 
-Additional Warning/Info findings carried in `01-REVIEW.md` (WR-01 through WR-09, IN-01 through
-IN-13) are not elevated to blocking here, consistent with the review's own severity
-classification, which this verification independently agrees with on direct reading of the
-highest-relevance ones (WR-01/WR-02, previously reviewed; WR-03 through WR-06, new
-supervisor-lifecycle edge cases; WR-07/WR-08, gate weaknesses in `verify-branding-preflight.mjs`
-and `check-internals-boundary.sh --catalogue`). None of these falsifies a currently-scored truth —
-they are candidates for a future closure plan, not phase-goal blockers on their own.
-
-One documentation-staleness item, not a code gap: `.planning/REQUIREMENTS.md`'s own Traceability
-table (lines ~260-268) still reads "Gaps Found" for MIG-01, MIG-02, MIG-03, GUI-01, GUI-03, GUI-04
-— stale from before the 01-09 through 01-13 gap-closure sequence and not kept in sync through it.
-Worth a housekeeping pass; does not itself affect this verification's findings, which are drawn
-from the code and from `WINDOWS.md`'s ledger rather than from that table.
+`01-REVIEW.md`'s six Warning-tier findings (WR-01 through WR-06) and four Info-tier findings (IN-01
+through IN-04) are not elevated to blocking here, consistent with the review's own severity
+classification. None of them falsifies a currently-scored truth on its own; they are candidates for a
+future closure plan (WR-01/WR-02 touch the same `messageBearingBindings`/`parseUserMessageTable`
+machinery CR-03 sits in, and are worth folding into the same fix pass).
 
 ## Human Verification Required
 
@@ -291,7 +252,7 @@ navigates a typed URL; confirm an in-window modal appears; close the window and 
 returns with the app still running.
 **Expected:** All five steps succeed exactly as a stock browser window would behave.
 **Why human:** BiDi cannot see chrome contexts on Linux; chrome-context Marionette is
-platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15), unchanged by 01-13.
+platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15), unchanged.
 
 ### 2. GUI-03 — customize bridge, visible restyle
 
@@ -299,7 +260,7 @@ platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15), unchan
 without a rebuild; delete the file and confirm the shell reverts.
 **Expected:** The runtime CSS layer applies and un-applies visibly.
 **Why human:** Perceptual outcome; automated checks only prove inertness and flag-gating, not the
-visible effect. Still open (ledger item 16), unchanged by 01-13.
+visible effect. Still open (ledger item 16), unchanged.
 
 ### 3. Tier-3 regression re-confirmation (WINDOWS.md ledger item 19)
 
@@ -321,42 +282,44 @@ screen. Same platform block as items 1–2 (ledger item 7).
 
 ## Gaps Summary
 
-**One prior gap is genuinely closed.** 2d — the last item blocking the previous verification pass
-— is now closed by plan 01-13, independently re-verified against the live tree by direct reading
-of `TheiaService.sys.mjs` and `powerbrowser.js`, and by running `scripts/verify-platform.sh
---quick` directly rather than accepting the SUMMARY's claim of it. The fix reaches both the
-supervisor entry point (the authority) and the on-screen control (presentation only), and is
-proven two-directional by a registered positive control.
+**Both prior gaps' specific demonstration cases are genuinely closed.** 01-14 correctly bound rule
+(4)'s ACCEPT set to bindings derived from `TheiaService.sys.mjs`, and 01-15 correctly gave the
+residual-brand scan a real filesystem walk over `upstream/`, both independently re-verified against the
+live tree in this pass (not accepted on either SUMMARY's narrative), and both proven by a red-then-green
+discrimination control against the pre-fix code — including a live 55-second, 463,930-file run over the
+real 5.6GB `upstream/` checkout for 01-15.
 
-**Two new blockers were found by a code review that ran after the previous verification pass
-completed** (`01-REVIEW.md`, committed at the current HEAD, `51fda7c`). Both are independently
-confirmed here, not accepted on the review's narrative:
+**Neither fix closed the class of failure it was meant to close, and a fresh review found the reopened
+class in the shipped fix itself.** `01-REVIEW.md` (committed after both plans landed) found three new
+Critical findings, all independently reproduced in this pass, not accepted on the review's narrative:
 
-1. **CR-A** — the static gate enforcing CLAUDE.md's "no internal identifier in user-facing text"
-   rule has an escape hatch: its regex admits `<identifier>.message` unconditionally, which matches
-   a raw caught exception's `.message`. The shipped tree is clean on its merits today, but the gate
-   that is supposed to keep it that way cannot fire on this shape.
-2. **CR-B** — the residual-brand scan's rebase-triggered re-scan cannot see anything under
-   `upstream/`, because it scans `git ls-files` and `upstream/` is gitignored. CLAUDE.md's specific
-   claim that "an upstream rebase that reintroduces a brand token fails there rather than in a
-   release" does not hold.
+1. **CR-03** — rule (4)'s new derived accept set is sound, but the regex that ENUMERATES which call
+   sites even reach it (`this._showError(` requiring a literal receiver and a trailing comma) can miss
+   a call site silently, with no completeness proof behind it. Reproduced: a comma-less
+   `this._showError(err.message)` call exits 0.
+2. **CR-01** — the new `--extra-root` scan reuses the full inventory row set including `coincidental`
+   rows (facts about this repo's own checkout), letting one such row's longest-token-first claim
+   swallow a real brand token in a foreign tree. Reproduced: an absolute path under `--extra-root`
+   exits 0.
+3. **CR-02** — the same scan's per-file `catch { continue; }` is shared with the tracked-tree path but
+   its justification ("not materialised") does not hold for the extra-root path, where a throw means
+   unreadable; the file is silently skipped and miscounted as scanned. Reproduced: a chmod-000 file
+   carrying a brand token under `--extra-root` exits 0.
 
-Both are BLOCKER-tier because they are verification-apparatus defects CLAUDE.md's own Verification
-section treats as correctness properties, not niceties — a must-have whose only proof is a gate
-that cannot fail is not verified. Neither is a live product-code defect, a stub, or a debt marker;
-both are gaps between what a gate PROVES and what CLAUDE.md and the gate's own inline comments
-CLAIM it proves.
+All three are the same failure class the prior two verification/review passes each found in a different
+corner of this codebase: a gate placed at exactly the right call site whose own mechanics keep it green
+by construction on the specific input it exists to catch. Both truths this maps to (7 and 8) were FAILED
+in the prior pass and remain FAILED in this pass — the defect moved, the truth's status did not.
 
-Two success criteria (GUI-01, GUI-03) still have their perceptual halves un-performed, carried
-forward unchanged from the prior pass and from `WINDOWS.md` (ledger items 15, 16). WINDOWS.md
-ledger item 19's tier-3 regression re-confirmation also remains unrun, deferred to the phase gate.
+Two success criteria (GUI-01, GUI-03) still have their perceptual halves un-performed, carried forward
+unchanged from the prior pass and from `WINDOWS.md` (ledger items 15, 16). WINDOWS.md ledger item 19's
+tier-3 regression re-confirmation also remains unrun, deferred to the phase gate.
 
-Because of rule ordering (a FAILED truth outranks a closed prior gap), this pass's overall status
-is **gaps_found**, even though the specific defect the previous pass was blocked on (2d) is now
-closed. This is not a regression on 2d — it is a new, distinct finding surfaced by a review that
-ran on the same tree afterward.
+Because of rule ordering (a FAILED truth outranks closed gaps), this pass's overall status is
+**gaps_found**, unchanged from the prior pass's status, though its score composition and specific defect
+descriptions have changed.
 
 ---
 
-_Verified: 2026-08-31T23:40:00Z_
+_Verified: 2026-08-31T23:55:00Z_
 _Verifier: Claude (gsd-verifier)_
