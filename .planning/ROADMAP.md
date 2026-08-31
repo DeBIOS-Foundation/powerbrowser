@@ -54,7 +54,7 @@ Sourcerer's decision IDs as justification.)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 12 plans, 10 executed — 8 feature plans plus 4 gap-closure plans (01-09 the supervisor's health-gate recovery, 01-10 its start-path error affordance, 01-11 the failed-Retry repaint, 01-12 the probe gate and the quit-observer ordering)
+**Plans**: 11/12 plans executed, 10 executed — 8 feature plans plus 4 gap-closure plans (01-09 the supervisor's health-gate recovery, 01-10 its start-path error affordance, 01-11 the failed-Retry repaint, 01-12 the probe gate and the quit-observer ordering)
 
 Plans:
 **Wave 1**
@@ -99,7 +99,7 @@ Plans:
 
 **Wave 11** *(gap closure — blocked on Wave 10 completion)*
 
-- [ ] 01-11-PLAN.md — Close CR-01: a failing Retry repaints the error layer. Route the DOM hide through the supervisor's `_hideError()`, stop `powerbrowserRetry` writing the error element itself, and add a registered analyzer that drives two consecutive failing retries against the shipped supervisor and chrome bootstrap plus a set-equality rule giving the error layer exactly one visibility owner
+- [x] 01-11-PLAN.md — Close CR-01: a failing Retry repaints the error layer. Route the DOM hide through the supervisor's `_hideError()`, stop `powerbrowserRetry` writing the error element itself, and add a registered analyzer that drives two consecutive failing retries against the shipped supervisor and chrome bootstrap plus a set-equality rule giving the error layer exactly one visibility owner
 
 **Wave 12** *(gap closure — blocked on Wave 11 completion)*
 
@@ -215,7 +215,7 @@ than noisy.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Platform Extraction and Rename | 10/10 | In Progress|  |
+| 1. Platform Extraction and Rename | 11/12 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 0/TBD | Not started | - |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
