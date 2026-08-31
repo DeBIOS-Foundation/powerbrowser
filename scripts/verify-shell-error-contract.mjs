@@ -833,6 +833,16 @@ async function runRefusalScenario(supervisorPath, shellPath) {
 // --self-test
 // ---------------------------------------------------------------------------
 
+// 01-13's guard, matched structurally rather than by quoting its log sentence.
+// A mutation that produces an unchanged source is reported as "the fault did not
+// apply" and fails its row, so an anchor that has to be kept byte-identical to a
+// prose string is an anchor that will silently rot the next time the wording is
+// improved. These two match the guard's SHAPE -- the condition, its 6-space body,
+// and its 4-space closing brace -- so a reworded log line cannot disarm the plant.
+const RETRY_GUARD_RE = /\n {4}if \(this\._errorRecoverable !== true\) \{[\s\S]*?\n {4}\}\n/;
+const RETRY_GUARD_ORDER_RE =
+  /( {4}if \(this\._errorRecoverable !== true\) \{[\s\S]*?\n {4}\}\n)( {4}this\._hideError\(\);\n)/;
+
 const SOURCE_FAULTS = [
   {
     name: "retry() re-entering the restart path without clearing the error state",
@@ -901,6 +911,58 @@ const SOURCE_FAULTS = [
       shellSrc,
     }),
     expect: "the recovery probe never drove a spawn after a recoverable classification",
+  },
+  // --- 01-13: the user-driven route. One plant per new assertion. -----------
+  {
+    // The pre-fix shape: `retry()` re-enters `_restart()` whatever the
+    // classification, so the class D-113 calls unrecoverable by construction is
+    // re-entered by the one control the error screen offered.
+    name: "the classification guard removed from retry() entirely",
+    mutate: ({ supervisorSrc, shellSrc }) => ({
+      supervisorSrc: supervisorSrc.replace(RETRY_GUARD_RE, "\n"),
+      shellSrc,
+    }),
+    expect: "a Retry driven against an UNRECOVERABLE error state re-entered the spawn path",
+  },
+  {
+    // ORDERING, which is half the fix and would otherwise be a passenger. The
+    // guard still refuses the spawn, but `_hideError()` has already run on the
+    // way past and nulled `_failureDetails` -- so the user's click destroys the
+    // rows that identified the failure and gets nothing in return.
+    name: "the classification guard moved below the _hideError() call",
+    mutate: ({ supervisorSrc, shellSrc }) => ({
+      supervisorSrc: supervisorSrc.replace(RETRY_GUARD_ORDER_RE, "$2$1"),
+      shellSrc,
+    }),
+    expect: "the refused Retry destroyed the failure's diagnostic rows",
+  },
+  {
+    // The PRESENTATION half, asserted independently of the supervisor half. The
+    // two are separate facts about one classification: a supervisor that refuses
+    // correctly while the screen still offers the control leaves the user
+    // clicking something designed to do nothing, and a fix to one must not green
+    // the other.
+    name: "the Retry control's hidden mirror removed from powerbrowserShowError",
+    mutate: ({ supervisorSrc, shellSrc }) => ({
+      supervisorSrc,
+      shellSrc: shellSrc.replace(/\n\s*errorRetryButton\.hidden = !recoverable;/, ""),
+    }),
+    expect: "the Retry control is still on screen for a failure the supervisor classified unrecoverable",
+  },
+  {
+    // The OTHER direction, mirroring the probe gate's own reverse-direction row
+    // above and for the same reason. A "fix" that simply refused EVERY Retry
+    // satisfies all three rows above and would turn every transient failure into
+    // a permanent error state -- the user's only recovery affordance dead for the
+    // life of the session. The retargeted repaint scenario is what catches it,
+    // which is why that scenario had to move onto the recoverable class rather
+    // than be retired.
+    name: "the classification guard made unconditional, so every Retry is refused",
+    mutate: ({ supervisorSrc, shellSrc }) => ({
+      supervisorSrc: supervisorSrc.replace("if (this._errorRecoverable !== true) {", "if (true) {"),
+      shellSrc,
+    }),
+    expect: `no ${CLEARED_SENTINEL} was emitted after the first failing Retry`,
   },
 ];
 
