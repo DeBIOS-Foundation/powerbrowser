@@ -41,6 +41,17 @@ jobs:
       # introduced. Run with NO exception: plan 01-03 hand-wrote the surfaces
       # the codemod could not, so the carve-out was dropped once the bare scan
       # went green.
+      #
+      # DECIDED, plan 01-15 (closing gap CR-B): this step deliberately does NOT
+      # pass --extra-root, and that is not an oversight to be corrected later.
+      # At this point in the job no upstream tree has been cloned, and
+      # --extra-root on an absent directory is a hard failure by design -- so
+      # passing it here would fail every run for a reason unrelated to residual
+      # brand strings. The post-replay, upstream-aware scan reaches this
+      # workflow through the "Rebase onto requested tag" step below, which runs
+      # scripts/rebase-upstream.sh, which passes --extra-root "$UPSTREAM_DIR"
+      # itself. Fixing the shell script fixed the workflow; do not add a second
+      # scan step here.
       - name: Scan for residual brand strings
         run: node scripts/scan-brand-residue.mjs
 

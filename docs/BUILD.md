@@ -474,9 +474,14 @@ remote (checked via `git ls-remote` before any clone), `fetch-upstream.sh`
 failing to re-materialize `upstream/` at the new tag,
 `apply-patches.sh` failing to replay `patches/*.patch` (including D-75's
 non-vacuous per-patch assertion — a patch that applies as a silent no-op is a
-failure, by name), `check-patch-surface.sh` rejecting the replayed stack, or
-the git-excluded branding-overlay symlink (`upstream/powerbrowser`) failing to
-resolve back to this repo's `powerbrowser/` directory after the rebase.
+failure, by name), `check-patch-surface.sh` rejecting the replayed stack, the
+residual-brand scan finding a brand string in either tree it now reads — this
+repo's own tracked files, and, via `--extra-root "$UPSTREAM_DIR"`, the rebased
+`upstream/` checkout that `.gitignore` keeps out of `git ls-files` and that the
+replay has just rewritten (an absent or empty extra root is itself a failure,
+never a skip) — or the git-excluded branding-overlay symlink
+(`upstream/powerbrowser`) failing to resolve back to this repo's
+`powerbrowser/` directory after the rebase.
 
 **CI story:** `.github/workflows/rebase-upstream.yml` is `workflow_dispatch`-only
 (no `schedule:` — the ~4-weekly ESR cadence is a standing post-v4.0 operational
