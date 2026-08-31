@@ -142,7 +142,30 @@ export const TheiaService = {
     }
 
     this._configDir = this._resolveConfigDir();
-    await PowerBrowserAPI.ensureDirectory(this._configDir);
+    // 01-10: this was one of three unguarded throw sites in the start path --
+    // a rejection here left `start()` altogether and, before the terminal
+    // handler existed, vanished as an unhandled promise rejection. Guarded now,
+    // and classified the way every `_spawnAndGate` failure is, so it inherits
+    // the retry path and the diagnostics rows instead of falling to the generic
+    // backstop. Recoverable, unlike `_resolveSidecar`'s two D-113 classes: a
+    // directory that cannot be created today can be creatable once the user
+    // fixes a permission or frees space, which is exactly what Retry is for.
+    try {
+      await PowerBrowserAPI.ensureDirectory(this._configDir);
+    } catch (err) {
+      this._fatal(`Failed to create the settings directory ${this._configDir}: ${err.message}`);
+      const failed = {
+        ok: false,
+        recoverable: true,
+        message: USER_MESSAGE.couldNotStart,
+        details: [
+          ["Failed step", "creating the settings folder"],
+          ["Error", err.message],
+        ],
+      };
+      this._showError(failed.message, failed.recoverable, failed.details);
+      return;
+    }
     // CR-01 fix (05-REVIEW.md): the state file name itself carries a
     // profile-scoped suffix -- _configDir stays exactly as before (it also
     // backs THEIA_CONFIG_DIR below, unrelated to this fix and out of
@@ -162,7 +185,23 @@ export const TheiaService = {
     // state file is either signalled (verified identity) or discarded
     // (stale/absent/malformed), and either way this returns before any new
     // process exists that could be confused with the leftover.
-    await this._reapLeftover();
+    //
+    // 01-10: guarded, and DELIBERATELY NON-FATAL -- the asymmetry with the
+    // settings-folder step above is the decision, not an oversight. That step
+    // is a precondition of this launch; this one is best-effort cleanup of a
+    // PREVIOUS launch's process (`PowerBrowserAPI.signalBarePid` opens libc
+    // outside its own try, so it can throw). Failing this launch because a
+    // stale pid could not be signalled would turn a cosmetic cleanup miss into
+    // the dead screen this whole guard exists to prevent. Nothing is lost:
+    // `_reapLog` writes the outcome on the same dual channel every other reap
+    // decision uses -- the D-106 ring buffer the diagnostics layer renders,
+    // and the process's own stdout -- so a failed reap is attributable after
+    // the fact rather than invisible.
+    try {
+      await this._reapLeftover();
+    } catch (err) {
+      this._reapLog(`Leftover reap failed: ${err.message} -- best-effort cleanup of a previous launch, continuing to this launch's own spawn.`);
+    }
 
     // SHELL-03: the very first spawn attempt is folded into _restart()'s
     // own bounded give-up loop (D-103 was Phase 4's indefinite-retry
@@ -660,12 +699,37 @@ export const TheiaService = {
     // having been pinned is the conflation that stranded a launch on the
     // loading layer after a transient health-gate failure.
     if (!this._swapped) {
-      PowerBrowserAPI.setSessionCookie({
-        host: "127.0.0.1",
-        path: "/",
-        name: "POWERBROWSER_TOKEN",
-        value: this._token,
-      });
+      // 01-10: the third unguarded throw site. `setSessionCookie` fails loudly
+      // by design (a rejected cookie would otherwise become a silent 403 at the
+      // far end of the swap), and that throw used to escape `_spawnAndGate`
+      // entirely. RETURNING the classified failure rather than continuing is
+      // load-bearing: the navigation must not run for a launch whose credential
+      // was never minted, or the fail-closed backend would refuse every request
+      // and the user would land on a blank frame instead of an actionable
+      // error. The return also leaves `_swapped` false, so `_restart()`'s next
+      // attempt re-runs this whole block -- which is only true because 01-09
+      // re-keyed it onto completion. Do not reorder the cookie and the
+      // navigation (D-98, D-104).
+      try {
+        PowerBrowserAPI.setSessionCookie({
+          host: "127.0.0.1",
+          path: "/",
+          name: "POWERBROWSER_TOKEN",
+          value: this._token,
+        });
+      } catch (err) {
+        this._healthy = false;
+        this._fatal(`Failed to set the backend session cookie: ${err.message}`);
+        return {
+          ok: false,
+          recoverable: true,
+          message: USER_MESSAGE.couldNotStart,
+          details: [
+            ["Failed step", "handing the interface its credential"],
+            ["Error", err.message],
+          ],
+        };
+      }
       this._swap();
       // Fire-and-forget: the loop runs for the lifetime of this browser
       // session, checking _shuttingDown at every await point rather than
