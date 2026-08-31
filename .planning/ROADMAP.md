@@ -54,7 +54,7 @@ Sourcerer's decision IDs as justification.)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 12/12 plans executed, 10 executed — 8 feature plans plus 4 gap-closure plans (01-09 the supervisor's health-gate recovery, 01-10 its start-path error affordance, 01-11 the failed-Retry repaint, 01-12 the probe gate and the quit-observer ordering)
+**Plans**: 12/12 plans executed — 8 feature plans plus 4 gap-closure plans (01-09 the supervisor's health-gate recovery, 01-10 its start-path error affordance, 01-11 the failed-Retry repaint, 01-12 the probe gate and the quit-observer ordering)
 
 Plans:
 **Wave 1**
