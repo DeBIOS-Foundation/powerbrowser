@@ -87,11 +87,24 @@ document.addEventListener(
     // per-launch token or any credential; TheiaService's `reason` strings
     // are always static/derived-from-config text, never the token, and
     // `detail` here carries only `reason` and `recoverable`.
+    //
+    // 01-07: `reason` is now one of TheiaService's USER_MESSAGE values -- a
+    // plain-language, product-named sentence ending in an on-screen
+    // affordance -- and carries no pref key, sentinel name, port, timeout or
+    // raw exception text. Those live in the failure's detail rows, announced
+    // on their own POWERBROWSER_ERROR_DIAGNOSTICS line here and rendered as
+    // field rows by powerbrowserShowDiagnostics below. Both read the SAME
+    // TheiaService.getFailureDetails() accessor (the D-119/D-120 shape), so a
+    // row that renders is a row that was announced. The SHELL_ERROR sentinel's
+    // own {reason, recoverable} shape is unchanged and deliberately gains no
+    // key -- verify-platform.sh's shell03-budget-exhausted-error asserts it
+    // exactly.
     window.powerbrowserShowError = function powerbrowserShowError(detail) {
       const { reason, recoverable } = detail;
       errorMessageElement.textContent = reason;
       errorElement.style.display = "flex";
       dump(`POWERBROWSER_SHELL_ERROR ${JSON.stringify({ reason, recoverable })}\n`);
+      dump(`POWERBROWSER_ERROR_DIAGNOSTICS ${JSON.stringify({ rows: TheiaService.getFailureDetails() })}\n`);
       dumpDeckState("error");
     };
 
@@ -150,6 +163,15 @@ document.addEventListener(
       }
 
       diagnosticsFieldsElement.textContent = "";
+      // 01-07: the current failure's own identifiers are appended after the
+      // steady-state rows -- the pref key, the resolved path, the readiness
+      // sentinel, the health port, the elapsed timeout, the raw exception
+      // text. Every one of them was previously written into the full-screen
+      // error message; this is where they moved TO, and the whole point of the
+      // rewrite is that nothing was dropped. The list is exactly what the
+      // failing path itself supplied, so a failure with no port contributes no
+      // empty-labelled port row -- absent identifiers produce no rows at all,
+      // rather than rows reading "Port: null".
       const rows = [
         ["Port", state.port],
         ["Process ID", state.pid],
@@ -158,6 +180,7 @@ document.addEventListener(
         ["Name", identity.name],
         ["Vendor", identity.vendor],
         ["Version", identity.version],
+        ...TheiaService.getFailureDetails(),
       ];
       for (const [label, value] of rows) {
         const row = document.createElement("div");

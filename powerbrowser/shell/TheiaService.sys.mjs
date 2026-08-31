@@ -17,6 +17,34 @@ const { PowerBrowserAPI } = ChromeUtils.importESModule("chrome://powerbrowser/co
 
 const HEALTH_PATH = "/powerbrowser/health";
 
+/*
+ * 01-UI-SPEC.md "Copywriting Contract": the ONLY strings that may ever reach
+ * #powerbrowser-error-message. Every one names the product, states the problem
+ * in plain language, and ends with a next step that is a real affordance on
+ * screen (Retry or Details). No pref key, sentinel name, port, timeout or raw
+ * exception text appears here -- those are diagnostic, not actionable, and
+ * every one of them is carried instead as a labelled row in the diagnostics
+ * layer (see `details` below and `getFailureDetails()`), so nothing is lost.
+ *
+ * Several distinct failure paths deliberately collapse onto the same sentence:
+ * the distinction between "spawn() threw", "the stdin handshake failed" and
+ * "the output stream died" is not a distinction a user can act on. The
+ * diagnostics layer is what exists for it.
+ *
+ * This table is the check surface, not a convention: verify-shell-error-copy.mjs
+ * derives these values FROM THIS FILE at check time, asserts each against an
+ * internal-identifier pattern, and asserts that every `message:` site and every
+ * `_showError(` first argument in this file resolves back to it -- declared and
+ * referenced key sets compared as an equality, so an added leak, an ad-hoc
+ * literal, a stale entry and a removed one all go red.
+ */
+const USER_MESSAGE = {
+  interfaceFilesMissing: "Power Browser can't find its interface files. This build looks incomplete — reinstall, or open Details for the missing path.",
+  nodeMissing: "Power Browser needs Node.js and couldn't find it. Install Node.js 22 or later, then choose Retry.",
+  couldNotStart: "Power Browser couldn't start its interface. Choose Retry, or open Details to see the error.",
+  didNotFinishStarting: "Power Browser's interface didn't finish starting. Choose Retry, or open Details if this keeps happening.",
+};
+
 // Discretionary constants (plan 04-04 recorded_decisions) -- no pref exists
 // for these (04-03's powerbrowser-sidecar.js ships only the health/timeout/
 // grace/log-buffer prefs), so they stay literal here.
@@ -66,6 +94,17 @@ export const TheiaService = {
   _restartInFlight: false,
   _recoveryProbeActive: false,
 
+  // 01-07: the diagnostic identifiers the user-facing message deliberately
+  // does NOT carry -- an array of [label, value] pairs belonging to the
+  // failure that put the shell into the current error state, or null when
+  // there is no error state. Built by the failure path itself (only the
+  // identifiers that path actually has, so an absent port never becomes an
+  // empty-labelled row) and read by BOTH the diagnostics layer's field rows
+  // and the POWERBROWSER_ERROR_DIAGNOSTICS sentinel through the single
+  // getFailureDetails() accessor below -- the D-119/D-120 shape, so the
+  // rendered surface and the machine-readable line can never disagree.
+  _failureDetails: null,
+
   // D-106 ring buffer: bounded, in-memory, mirrored to the console as each
   // line arrives (see _pushLog / _pumpOutput below).
   _log: [],
@@ -98,7 +137,7 @@ export const TheiaService = {
       // ever happen here (this method's own one-shot resolution step, never
       // the restart path) -- unrecoverable by construction, straight to the
       // error state with no retry at all.
-      this._showError(resolved.reason, /* recoverable */ false);
+      this._showError(resolved.message, /* recoverable */ false, resolved.details);
       return;
     }
 
@@ -177,6 +216,18 @@ export const TheiaService = {
     return this._log.slice();
   },
 
+  /**
+   * 01-07: the current error state's diagnostic identifiers as [label, value]
+   * rows -- the pref key, the resolved path, the readiness sentinel, the health
+   * probe's port, the elapsed timeout, the raw exception text. Empty when there
+   * is no error state. The ONE source both the diagnostics layer's field rows
+   * and the POWERBROWSER_ERROR_DIAGNOSTICS sentinel read, so a row that renders
+   * is a row that was announced and vice versa.
+   */
+  getFailureDetails() {
+    return this._failureDetails ? this._failureDetails.map(row => row.slice()) : [];
+  },
+
   /** Current port, pid, health status and restart count. Phase 5's diagnostics page reads this too. */
   getState() {
     return {
@@ -189,34 +240,59 @@ export const TheiaService = {
 
   /**
    * Resolves the backend entry file and Node executable. Returns
-   * `{ ok, reason }` -- D-113: both failure classes here are unrecoverable
-   * (a missing pref or an unresolvable Node can never fix itself on retry),
-   * and this method is only ever called once, from start() -- never from
-   * the restart path -- so they can only ever be the first launch's give-up
-   * case.
+   * `{ ok, message, details }` -- D-113: both failure classes here are
+   * unrecoverable (a missing pref or an unresolvable Node can never fix itself
+   * on retry), and this method is only ever called once, from start() -- never
+   * from the restart path -- so they can only ever be the first launch's
+   * give-up case.
+   *
+   * 01-07: `message` is the user-facing sentence (always a USER_MESSAGE value);
+   * `details` carries the identifiers that sentence deliberately drops. The
+   * `_fatal()` line above each return keeps the FULL diagnostic text -- that is
+   * the log, not the user surface, and verify-platform.sh's own checks match on
+   * it.
    */
   async _resolveSidecar() {
     this._backendMain = PowerBrowserAPI.getStringPref("powerbrowser.sidecar.backendMain", "");
     if (!this._backendMain) {
-      const reason = "powerbrowser.sidecar.backendMain is unset -- cannot locate the Theia backend entry file.";
-      this._fatal(reason);
-      return { ok: false, reason };
+      this._fatal("powerbrowser.sidecar.backendMain is unset -- cannot locate the Theia backend entry file.");
+      return {
+        ok: false,
+        message: USER_MESSAGE.interfaceFilesMissing,
+        details: [
+          ["Preference", "powerbrowser.sidecar.backendMain"],
+          ["Preference status", "unset"],
+        ],
+      };
     }
     if (!(await PowerBrowserAPI.pathExists(this._backendMain))) {
-      const reason = `powerbrowser.sidecar.backendMain (${this._backendMain}) does not exist -- cannot locate the Theia backend entry file.`;
-      this._fatal(reason);
-      return { ok: false, reason };
+      this._fatal(`powerbrowser.sidecar.backendMain (${this._backendMain}) does not exist -- cannot locate the Theia backend entry file.`);
+      return {
+        ok: false,
+        message: USER_MESSAGE.interfaceFilesMissing,
+        details: [
+          ["Preference", "powerbrowser.sidecar.backendMain"],
+          ["Resolved path", this._backendMain],
+          ["Preference status", "set, but the path does not exist"],
+        ],
+      };
     }
 
     const configured = PowerBrowserAPI.getStringPref("powerbrowser.sidecar.nodePath", "");
     this._nodePath = configured || (await PowerBrowserAPI.pathSearch("node"));
     if (!this._nodePath) {
-      const reason = "Could not resolve a Node executable -- set powerbrowser.sidecar.nodePath or add node to PATH.";
-      this._fatal(reason);
-      return { ok: false, reason };
+      this._fatal("Could not resolve a Node executable -- set powerbrowser.sidecar.nodePath or add node to PATH.");
+      return {
+        ok: false,
+        message: USER_MESSAGE.nodeMissing,
+        details: [
+          ["Preference", "powerbrowser.sidecar.nodePath"],
+          ["Preference status", "unset, and no `node` was found on PATH"],
+        ],
+      };
     }
 
-    return { ok: true, reason: null };
+    return { ok: true, message: null, details: null };
   },
 
   _resolveConfigDir() {
@@ -337,13 +413,19 @@ export const TheiaService = {
 
   /**
    * Spawns the backend and waits for it to become healthy. Returns
-   * `{ ok, recoverable, reason }` (SHELL-03/D-113) instead of a bare
+   * `{ ok, recoverable, message, details }` (SHELL-03/D-113) instead of a bare
    * boolean, so `_restart()`/`start()` can tell an unrecoverable failure
    * (backend entry file unresolvable, spawn() itself throwing, the pinned
    * port held by another process -- D-112) from a transient one (readiness
    * stream ended, readiness timeout, health-probe timeout) without
-   * re-deriving the classification. `reason` is a short human-readable
-   * string reused verbatim as the error layer's message.
+   * re-deriving the classification.
+   *
+   * 01-07: `message` is always a USER_MESSAGE value -- the user-facing sentence
+   * the error layer paints verbatim -- and `details` carries the identifiers
+   * that sentence drops (the readiness sentinel, the port, the timeout, the raw
+   * exception text). Before 01-07 a single `reason` field was both, so the
+   * error layer painted `POWERBROWSER_BACKEND_READY` and a millisecond count at
+   * a user. The full diagnostic text still goes to `_fatal()` unchanged.
    *
    * `firstSpawn: true` requests port 0 (SIDE-01) -- the only place a zero
    * port appears in this file. Every later call (Task 2's restart path)
@@ -403,15 +485,27 @@ export const TheiaService = {
       // D-113: the spawn() call itself throwing is unrecoverable -- a
       // platform-level failure to exec at all is never going to succeed on
       // an unconditional retry.
-      const reason = `Failed to spawn the backend: ${err.message}`;
-      this._fatal(reason);
-      return { ok: false, recoverable: false, reason };
+      this._fatal(`Failed to spawn the backend: ${err.message}`);
+      return {
+        ok: false,
+        recoverable: false,
+        message: USER_MESSAGE.couldNotStart,
+        details: [
+          ["Failed step", "spawning the backend process"],
+          ["Error", err.message],
+        ],
+      };
     }
     this._proc = proc;
 
     if (this._shuttingDown) {
       await this._reap();
-      return { ok: false, recoverable: false, reason: "Shutting down." };
+      // 01-UI-SPEC.md's rewrite table: "Shutting down." is NOT an error
+      // surface and keeps its literal verbatim. It never reaches the error
+      // layer -- `_restart()` returns at its own `_shuttingDown` check before
+      // `_showError` -- so it carries no user-facing `message` at all rather
+      // than a rewritten one, and stays exactly where it was.
+      return { ok: false, recoverable: false, message: null, details: null, reason: "Shutting down." };
     }
 
     // The credential handshake (D-98), and the reason the environment object
@@ -429,10 +523,17 @@ export const TheiaService = {
       // would sit there until the startup timeout. Reap it and report instead:
       // recoverable, because a pipe write failing says nothing about whether
       // the next spawn will.
-      const reason = `Failed to hand the backend its token over stdin: ${err.message}`;
-      this._fatal(reason);
+      this._fatal(`Failed to hand the backend its token over stdin: ${err.message}`);
       await this._reap();
-      return { ok: false, recoverable: true, reason };
+      return {
+        ok: false,
+        recoverable: true,
+        message: USER_MESSAGE.couldNotStart,
+        details: [
+          ["Failed step", "handing the backend its credential over stdin"],
+          ["Error", err.message],
+        ],
+      };
     }
 
     const pinnedPort = firstSpawn ? null : this._port;
@@ -452,17 +553,44 @@ export const TheiaService = {
       // pinned port). Every other output-stream-ended rejection (a genuine
       // crash) is a transient, recoverable failure.
       if (err.recoverable === false) {
-        return { ok: false, recoverable: false, reason: err.message };
+        // D-112's pinned-port conflict. `err.message` is the full diagnostic
+        // sentence _pumpOutput already wrote through _fatal(); the ports it
+        // names go to the rows, not to the user.
+        return {
+          ok: false,
+          recoverable: false,
+          message: USER_MESSAGE.couldNotStart,
+          details: [
+            ["Failed step", "reattaching to the port this session is pinned to"],
+            ["Pinned port", this._port],
+            ["Error", err.message],
+          ],
+        };
       }
-      const reason = `Backend output stream ended before announcing readiness: ${err.message}`;
-      this._fatal(reason);
-      return { ok: false, recoverable: true, reason };
+      this._fatal(`Backend output stream ended before announcing readiness: ${err.message}`);
+      return {
+        ok: false,
+        recoverable: true,
+        message: USER_MESSAGE.couldNotStart,
+        details: [
+          ["Failed step", "waiting for the backend to announce readiness"],
+          ["Error", err.message],
+        ],
+      };
     }
 
     if (!ready) {
-      const reason = `Backend did not announce POWERBROWSER_BACKEND_READY within ${startupTimeoutMs}ms.`;
-      this._fatal(reason);
-      return { ok: false, recoverable: true, reason };
+      this._fatal(`Backend did not announce POWERBROWSER_BACKEND_READY within ${startupTimeoutMs}ms.`);
+      return {
+        ok: false,
+        recoverable: true,
+        message: USER_MESSAGE.didNotFinishStarting,
+        details: [
+          ["Failed step", "waiting for the backend's readiness announcement"],
+          ["Readiness sentinel", "POWERBROWSER_BACKEND_READY"],
+          ["Startup timeout", `${startupTimeoutMs}ms`],
+        ],
+      };
     }
 
     this._port = ready.port;
@@ -494,9 +622,18 @@ export const TheiaService = {
     const healthTimeoutMs = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.healthTimeoutMs", 4000);
     const healthy = await this._pollUntilHealthy(startupTimeoutMs, healthIntervalStartupMs, healthTimeoutMs);
     if (!healthy) {
-      const reason = `Health probe on port ${this._port} never returned 200 within ${startupTimeoutMs}ms.`;
-      this._fatal(reason);
-      return { ok: false, recoverable: true, reason };
+      this._fatal(`Health probe on port ${this._port} never returned 200 within ${startupTimeoutMs}ms.`);
+      return {
+        ok: false,
+        recoverable: true,
+        message: USER_MESSAGE.didNotFinishStarting,
+        details: [
+          ["Failed step", "health-probing the backend"],
+          ["Health probe port", this._port],
+          ["Health probe path", HEALTH_PATH],
+          ["Startup timeout", `${startupTimeoutMs}ms`],
+        ],
+      };
     }
 
     this._healthy = true;
@@ -518,7 +655,7 @@ export const TheiaService = {
       this._pushLog(`Recovered on port ${this._port}, pid ${this._pid}.`);
     }
 
-    return { ok: true, recoverable: null, reason: null };
+    return { ok: true, recoverable: null, message: null, details: null };
   },
 
   /**
@@ -632,16 +769,19 @@ export const TheiaService = {
         }
 
         if (!result.recoverable) {
-          this._pushLog(`Giving up immediately -- unrecoverable: ${result.reason}`);
-          this._showError(result.reason, false);
+          // The LOG keeps the full diagnostic detail (this is the sink
+          // verify-platform.sh's own checks read); the error layer gets the
+          // user-facing sentence and the rows.
+          this._pushLog(`Giving up immediately -- unrecoverable: ${this._detailSummary(result.details)}`);
+          this._showError(result.message, false, result.details);
           return;
         }
 
         if (attempts >= giveUpAttempts || Date.now() >= deadline) {
           this._pushLog(
-            `Giving up -- retry budget exhausted after ${attempts} attempt(s): ${result.reason}`
+            `Giving up -- retry budget exhausted after ${attempts} attempt(s): ${this._detailSummary(result.details)}`
           );
-          this._showError(result.reason, true);
+          this._showError(result.message, true, result.details);
           return;
         }
 
@@ -709,20 +849,30 @@ export const TheiaService = {
    * browser element's own location. Guarded by `_errorShown` so repeated
    * calls for the same state (e.g. the health loop giving up again while
    * already in the error state) paint once and emit one state change.
-   * `reason` is plain language naming what failed; `recoverable` is the
-   * classification carried by the triggering `_spawnAndGate`/
-   * `_resolveSidecar` result. Neither this nor the chrome layer's own
-   * sentinel may ever include the per-launch token or any credential --
-   * `reason` strings in this file are always static/derived-from-config
-   * text, never `this._token`.
+   *
+   * `message` is one of the USER_MESSAGE values and nothing else -- plain
+   * language, product-named, ending in an on-screen affordance.
+   * `recoverable` is the classification carried by the triggering
+   * `_spawnAndGate`/`_resolveSidecar` result. `details` is that result's
+   * [label, value] rows, stashed for `getFailureDetails()` -- the ONLY route
+   * by which an internal identifier reaches a surface at all.
+   *
+   * Neither this, the chrome layer's sentinel, nor a detail row may ever
+   * include the per-launch token: `message` is a static literal, and every
+   * detail value goes through the same `this._token` redaction `_pushLog`
+   * applies, since an `err.message` is ultimately derived text.
    */
-  _showError(reason, recoverable) {
+  _showError(message, recoverable, details) {
     if (this._errorShown) {
       return;
     }
     this._errorShown = true;
-    this._pushLog(`Showing error state (recoverable=${recoverable}): ${reason}`);
-    this._browserElement.ownerDocument.defaultView.powerbrowserShowError({ reason, recoverable });
+    this._failureDetails = (details || []).map(([label, value]) => {
+      const text = String(value);
+      return [label, this._token ? text.replaceAll(this._token, "[redacted]") : text];
+    });
+    this._pushLog(`Showing error state (recoverable=${recoverable}): ${message}`);
+    this._browserElement.ownerDocument.defaultView.powerbrowserShowError({ reason: message, recoverable });
     this._startRecoveryProbe();
   },
 
@@ -732,8 +882,18 @@ export const TheiaService = {
       return;
     }
     this._errorShown = false;
+    this._failureDetails = null;
     this._stopRecoveryProbe();
     this._browserElement.ownerDocument.defaultView.powerbrowserHideError();
+  },
+
+  /**
+   * One-line rendering of a failure's detail rows, for the LOG only -- the
+   * sink that keeps everything the user-facing sentence drops. Never reaches
+   * the error layer.
+   */
+  _detailSummary(details) {
+    return (details || []).map(([label, value]) => `${label}=${value}`).join("; ");
   },
 
   /** Kills the current process handle, if it's still alive, and clears it. */

@@ -1100,6 +1100,231 @@ EOF
   return "$result"
 }
 
+# --- 01-07: shell-diagnostics-rows-populated -------------------------------
+#
+# The runtime half of the error-copy rewrite. verify-shell-error-copy.mjs is
+# static and proves the DECLARED copy carries no internal identifier; this one
+# drives two genuinely different real failure paths in the built binary and
+# proves three things a static read cannot:
+#
+#   1. the string that actually painted is one of the values that script
+#      derived from the source -- ties the static table to the live surface,
+#      rather than trusting that the table is what reaches the element;
+#   2. every identifier the rewrite removed from the message is present as a
+#      labelled diagnostics row on the failure path that produced it, so
+#      nothing was lost when it stopped being user-facing;
+#   3. absent identifiers produce NO rows at all rather than empty-labelled
+#      ones -- the missing-backendMain path has no port and no timeout.
+#
+# THE DISCRIMINATOR, and why (3) is not an assertion on the absence of a line
+# this check's own instrumentation emits. Both runs read the SAME
+# POWERBROWSER_ERROR_DIAGNOSTICS emitter, and the check requires their label
+# SETS TO DIFFER. An emitter writing a constant -- the way an
+# absence-of-a-line assertion silently degrades -- makes the two sets equal and
+# goes red. So the per-run positive membership, the per-run absence, and the
+# cross-run difference are checked together, and the last one is what stops the
+# first two from passing vacuously.
+#
+# Both label sets are derived from the runs themselves; neither is a
+# hand-maintained expected list. What IS named per run is the small set of
+# identifiers that path's OLD message used to spell out, which is the actual
+# claim being made ("this moved, it was not dropped").
+
+# The user-facing sentences, read out of TheiaService.sys.mjs at check time --
+# never a copy of them kept here, which could only ever agree with itself.
+derived_user_messages() {
+  node -e '
+    const src = require("fs").readFileSync(process.argv[1], "utf8");
+    const block = src.match(/const USER_MESSAGE = \{\n([\s\S]*?)\n\};/);
+    if (!block) process.exit(3);
+    const re = /^\s*[A-Za-z_$][\w$]*:\s*("(?:[^"\\]|\\.)*")\s*,\s*$/gm;
+    let m, n = 0;
+    while ((m = re.exec(block[1])) !== null) { console.log(JSON.parse(m[1])); n++; }
+    if (n === 0) process.exit(3);
+  ' "$REPO_ROOT/powerbrowser/shell/TheiaService.sys.mjs"
+}
+
+# The reason string carried by the first POWERBROWSER_SHELL_ERROR line in <log>.
+error_sentinel_reason() {
+  sed -E 's/^\[PowerBrowserAPI\] [a-z]+: //' "$1" 2>/dev/null \
+    | grep -E '^POWERBROWSER_SHELL_ERROR \{' | head -1 \
+    | sed -E 's/^POWERBROWSER_SHELL_ERROR //' \
+    | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).reason??"")}catch{}})' 2>/dev/null
+}
+
+# The diagnostics rows of the first POWERBROWSER_ERROR_DIAGNOSTICS line in
+# <log>, as "label\tvalue" lines. Empty output means no such line.
+error_diagnostics_rows() {
+  sed -E 's/^\[PowerBrowserAPI\] [a-z]+: //' "$1" 2>/dev/null \
+    | grep -E '^POWERBROWSER_ERROR_DIAGNOSTICS \{' | head -1 \
+    | sed -E 's/^POWERBROWSER_ERROR_DIAGNOSTICS //' \
+    | node -e '
+        let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+          try {
+            const rows = JSON.parse(s).rows;
+            if (!Array.isArray(rows)) return;
+            for (const [label, value] of rows) console.log(`${label}\t${value}`);
+          } catch {}
+        })' 2>/dev/null
+}
+
+# Drives one failure path to its error state and leaves the labels in
+# DIAG_LABELS (sorted, newline-separated), the reason in DIAG_REASON and the
+# raw rows in DIAG_ROWS. $1 is a label for messages, $2 a user.js body.
+DIAG_LABELS=""
+DIAG_REASON=""
+DIAG_ROWS=""
+_drive_failure_to_error() {
+  local what="$1" user_js_body="$2" user_js
+  user_js="$(mktemp)"; track_temp "$user_js"
+  printf '%s\n' "$user_js_body" > "$user_js"
+
+  export VERIFY05_USER_JS_PROFILE="$user_js"
+  start_shell
+  local start_rc=$?
+  unset VERIFY05_USER_JS_PROFILE
+  if [ "$start_rc" -ne 0 ]; then
+    echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- could not launch the built binary for the $what run" >&2
+    return 1
+  fi
+
+  local deadline=$((SECONDS + 40))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    sentinel_present 'POWERBROWSER_ERROR_DIAGNOSTICS ' "$BROWSER_LOG" && break
+    if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
+      echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- browser exited before the $what run reached its error state; log:" >&2
+      cat "$BROWSER_LOG" >&2
+      stop_shell
+      return 1
+    fi
+    sleep 0.5
+  done
+
+  if ! sentinel_present 'POWERBROWSER_ERROR_DIAGNOSTICS ' "$BROWSER_LOG"; then
+    echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- the $what run never announced POWERBROWSER_ERROR_DIAGNOSTICS within 40s; log:" >&2
+    cat "$BROWSER_LOG" >&2
+    stop_shell
+    return 1
+  fi
+
+  DIAG_REASON="$(error_sentinel_reason "$BROWSER_LOG")"
+  DIAG_ROWS="$(error_diagnostics_rows "$BROWSER_LOG")"
+  DIAG_LABELS="$(printf '%s\n' "$DIAG_ROWS" | cut -f1 | grep -v '^$' | sort -u)"
+  stop_shell
+  return 0
+}
+
+# Asserts the current DIAG_* capture: the painted string is a derived
+# USER_MESSAGE value, carries no internal-identifier shape, and every row has a
+# label and a non-empty value.
+_assert_diag_capture() {
+  # `label`/`value` MUST be local: bash scoping is dynamic, so the `read` loop
+  # below would otherwise assign into run_own_checks()'s own `local label` --
+  # the registry runner's summary-row label -- and every summary line printed
+  # as a bare ": PASS". Caught live the first time this check ran.
+  local what="$1" messages="$2" result=0 label value
+
+  if [ -z "$DIAG_REASON" ]; then
+    echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- the $what run's error sentinel carries no reason at all" >&2
+    return 1
+  fi
+  if ! grep -Fxq "$DIAG_REASON" <<<"$messages"; then
+    echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- the $what run painted a string that is not one of the USER_MESSAGE values derived from TheiaService.sys.mjs: $DIAG_REASON" >&2
+    result=1
+  fi
+  # The same shape rule verify-shell-error-copy.mjs applies statically, applied
+  # here to the string that genuinely reached the element.
+  if grep -qE '\b[A-Z][A-Z0-9]*(_[A-Z0-9]+)+\b' <<<"$DIAG_REASON"; then
+    echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- the $what run's painted message contains an all-caps underscored internal token: $DIAG_REASON" >&2
+    result=1
+  fi
+  if grep -qE '\b[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*){2,}\b' <<<"$DIAG_REASON"; then
+    echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- the $what run's painted message contains a dotted multi-segment key: $DIAG_REASON" >&2
+    result=1
+  fi
+
+  if [ -z "$DIAG_LABELS" ]; then
+    echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- the $what run announced no diagnostics rows at all; every identifier its message dropped would be lost" >&2
+    return 1
+  fi
+  # No empty-labelled and no empty-valued row: an absent identifier must
+  # produce NO row, never a row reading "Port: null".
+  while IFS=$'\t' read -r label value; do
+    [ -z "$label$value" ] && continue
+    if [ -z "$label" ] || [ -z "$value" ] || [ "$value" = "null" ] || [ "$value" = "undefined" ]; then
+      echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- the $what run announced an empty row (label='$label', value='$value'); an absent identifier must produce no row at all" >&2
+      result=1
+    fi
+  done <<<"$DIAG_ROWS"
+
+  return "$result"
+}
+
+check_shell_diagnostics_rows_populated() {
+  local messages result=0 label
+  if ! messages="$(derived_user_messages)" || [ -z "$messages" ]; then
+    echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- could not derive the USER_MESSAGE table from TheiaService.sys.mjs; the comparison below would assert nothing" >&2
+    return 1
+  fi
+
+  # Run A -- the resolve-time failure. Its OLD message spelled out the pref key
+  # and the resolved path; both must now be rows.
+  if ! _drive_failure_to_error "missing-backendMain" \
+    'user_pref("powerbrowser.sidecar.backendMain", "/nonexistent/powerbrowser-01-07/main.js");'; then
+    return 1
+  fi
+  local a_labels="$DIAG_LABELS" a_reason="$DIAG_REASON"
+  _assert_diag_capture "missing-backendMain" "$messages" || result=1
+  for label in "Preference" "Resolved path"; do
+    if ! grep -Fxq "$label" <<<"$a_labels"; then
+      echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- the missing-backendMain run's message dropped the pref key and the resolved path, but announced no '$label' row; the identifier was lost, not moved. Rows: $(tr '\n' ',' <<<"$a_labels")" >&2
+      result=1
+    fi
+  done
+  # This path has no port and no timeout, so it must contribute neither row.
+  # Guarded against vacuity by the cross-run difference assertion below.
+  for label in "Health probe port" "Startup timeout"; do
+    if grep -Fxq "$label" <<<"$a_labels"; then
+      echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- the missing-backendMain run has no port and no timeout, but announced a '$label' row" >&2
+      result=1
+    fi
+  done
+
+  # Run B -- a backend that crashes on every spawn. A different failure class
+  # with a different identifier set: no pref key, but a raw exception text.
+  local crasher_dir
+  crasher_dir="$(mktemp -d)"; track_temp "$crasher_dir"
+  echo 'process.exit(1);' > "$crasher_dir/main.js"
+  if ! _drive_failure_to_error "crashing-backend" \
+    "$(printf 'user_pref("powerbrowser.sidecar.backendMain", "%s/main.js");\nuser_pref("powerbrowser.sidecar.giveUpAttempts", 2);' "$crasher_dir")"; then
+    return 1
+  fi
+  local b_labels="$DIAG_LABELS"
+  _assert_diag_capture "crashing-backend" "$messages" || result=1
+  for label in "Failed step" "Error"; do
+    if ! grep -Fxq "$label" <<<"$b_labels"; then
+      echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- the crashing-backend run's message dropped the underlying exception text, but announced no '$label' row. Rows: $(tr '\n' ',' <<<"$b_labels")" >&2
+      result=1
+    fi
+  done
+
+  # THE DISCRIMINATOR. Two real failure paths, one emitter: if the rows were a
+  # constant (or the emitter had stopped reflecting the failure at all), these
+  # two sets would be identical and every membership assertion above would be
+  # passing for a reason that has nothing to do with the code under test.
+  if [ "$a_labels" = "$b_labels" ]; then
+    echo "shell-diagnostics-rows-populated: FAIL -- MIG-04 -- two different failure paths announced IDENTICAL diagnostics labels ($(tr '\n' ',' <<<"$a_labels")); the rows are not derived from the failure and this check's positive assertions prove nothing" >&2
+    result=1
+  fi
+
+  # And the two paths must not merely differ in rows while painting the same
+  # sentence by accident -- record which sentence each produced.
+  echo "shell-diagnostics-rows-populated: missing-backendMain -> '$a_reason' rows[$(tr '\n' ',' <<<"$a_labels")]"
+  echo "shell-diagnostics-rows-populated: crashing-backend    -> '$DIAG_REASON' rows[$(tr '\n' ',' <<<"$b_labels")]"
+
+  return "$result"
+}
+
 # --- Task 2 (05-03): shell04-diagnostics-with-backend-down -----------------
 #
 # SHELL-04's risky edge (this plan's flagged_assumption): the diagnostics
@@ -3024,6 +3249,16 @@ run_own_checks() {
     # before that was caught.
     "gui04-registry-shape|node $REPO_ROOT/scripts/verify-registry-shape.mjs"
     "gui04-registry-shape-self-test|node $REPO_ROOT/scripts/verify-registry-shape.mjs --self-test"
+
+    # NEW (01-07): MIG-04's user-facing-copy gate. Static -- it reads
+    # TheiaService.sys.mjs, never a built artifact -- so it is honestly
+    # --quick, and that placement is the point: a leaked pref key must cost
+    # seconds here rather than a forty-minute rebuild followed by a headless
+    # launch. Its runtime counterpart is shell-diagnostics-rows-populated in
+    # the full set below. The self-test rides alongside it for the same reason
+    # every other self-test in this registry does.
+    "shell-error-copy-no-internals|node $REPO_ROOT/scripts/verify-shell-error-copy.mjs"
+    "shell-error-copy-no-internals-self-test|node $REPO_ROOT/scripts/verify-shell-error-copy.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
@@ -3100,6 +3335,14 @@ run_own_checks() {
       "shell03-budget-exhausted-error|check_shell03_budget_exhausted_error"
       "shell03-auto-dismiss-on-selfheal|check_shell03_auto_dismiss_on_selfheal"
       "shell04-diagnostics-with-backend-down|check_shell04_diagnostics_with_backend_down"
+
+      # NEW (01-07): the runtime half of the error-copy rewrite. Drives two
+      # different real failure paths in the built binary and asserts that the
+      # string which actually painted is one of the values derived from
+      # TheiaService.sys.mjs, and that every identifier the rewrite removed
+      # from that path's message reappears as a labelled diagnostics row. Needs
+      # a built binary and two headless launches, so it cannot be --quick.
+      "shell-diagnostics-rows-populated|check_shell_diagnostics_rows_populated"
       "side05-second-launch-focuses|check_side05_second_launch_focuses"
       "side05-no-second-backend|check_side05_no_second_backend"
       "cr01-different-profile-backend-survives|check_cr01_different_profile_backend_survives"
