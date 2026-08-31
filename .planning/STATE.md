@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-08-PLAN.md
-last_updated: "2026-08-31T17:23:46.477Z"
-last_activity: 2026-08-30
+stopped_at: Completed 01-09-PLAN.md
+last_updated: "2026-08-31T18:54:50.951Z"
+last_activity: 2026-08-31
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
-  completed_phases: 1
+  completed_phases: 0
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 2 of 8
+Plan: 2 of 10
 Status: Ready to execute
-Last activity: 2026-08-30 — Phase 01 execution started
+Last activity: 2026-08-31 — Phase 01 execution started
 
-Progress: [██████████] 100%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [██████████] 100%
 | Phase 01 P05 | 50m | 3 tasks | 13 files |
 | Phase 01 P07 | 2h10m | 3 tasks | 12 files |
 | Phase 01 P08 | ~25min | 3 tasks | 7 files |
+| Phase 01 P09 | ~1h05m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -106,6 +107,10 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-08: the preflight's display-surface set is DERIVED by walking the branding extension's browser directory at check time; a zero-file walk is its own failure, not a clean run
 - [Phase ?]: 01-08: verify-branding.mjs applies one shared assertDisplayForm() to both display surfaces, reading its expected values from the inventory rather than hard-coding them
 - [Phase ?]: 01-08: ledger items 15 and 16 stay OPEN -- no human was present, and no automated proxy was written for either perceptual walkthrough
+- [Phase ?]: 01-09: the one-time initialisation block and _restart()'s port choice are keyed on this._swapped -- the field _swap()'s own guard reads -- so 'port pinned' and 'spawn completed' stop being one condition
+- [Phase ?]: 01-09: _spawnAndGate's parameter renamed firstSpawn -> beforeFirstSwap; keeping the old name while changing its meaning would re-encode the conflation in a name
+- [Phase ?]: 01-09: D-104's pinned-port respawn invariant preserved only after a completed swap -- before one, nothing is loaded at that origin, so re-pinning had no beneficiary and a real D-112 cost
+- [Phase ?]: 01-09: MIG-04 NOT marked complete -- the error-affordance half of the same gap is plan 01-10, and 034f857 already reverted one premature Complete
 
 ### Pending Todos
 
@@ -131,6 +136,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-31T04:39:28.279Z
-Stopped at: Completed 01-08-PLAN.md
+Last session: 2026-08-31T18:54:44.244Z
+Stopped at: Completed 01-09-PLAN.md
 Resume file: None
