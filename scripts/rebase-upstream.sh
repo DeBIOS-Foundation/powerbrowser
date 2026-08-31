@@ -63,7 +63,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   echo "  2. rm -rf '$UPSTREAM_DIR' && TAG=$NEW_TAG '$REPO_ROOT/scripts/fetch-upstream.sh'"
   echo "  3. '$REPO_ROOT/scripts/apply-patches.sh'"
   echo "  4. '$REPO_ROOT/scripts/check-patch-surface.sh'"
-  echo "  4b. node '$REPO_ROOT/scripts/scan-brand-residue.mjs'  # D-18 permanent gate, no exception"
+  echo "  4b. node '$REPO_ROOT/scripts/scan-brand-residue.mjs' --extra-root \"\$UPSTREAM_DIR\"  # D-18 permanent gate, no exception; --extra-root reaches the replayed tree, which is git-ignored and invisible to git ls-files"
   echo "  5. TAG=$NEW_TAG '$REPO_ROOT/scripts/fetch-upstream.sh'  # re-check: fully-applied state at $NEW_TAG, not the pinned default"
   echo "  5b. readlink -f '$UPSTREAM_DIR/powerbrowser'  # must resolve to '$REPO_ROOT/powerbrowser' -- git-excluded, invisible to step 5's classifier otherwise"
   echo "  6. Operator follow-up (not run here): '$REPO_ROOT/scripts/toolchain-baseline.sh' under 'nix develop .#firefox', diffed against '$REPO_ROOT/toolchain-baseline.txt' (PITFALLS #2)"
@@ -104,9 +104,18 @@ fi
 # forbidden to touch, so --except-hand-write was dropped here the moment the
 # bare scan went green -- an exception that outlives the plan it was cut for is
 # how a gate quietly stops being one.
+#
+# --extra-root "$UPSTREAM_DIR" is the CR-B correction (plan 01-15). The scan's
+# ordinary file set is `git ls-files`, and .gitignore excludes upstream/, so
+# until this argument was passed the invocation right here -- the one whose
+# entire stated purpose is re-checking the tree the replay just rewrote -- read
+# only the same tracked files the pre-replay scan had already read, and none of
+# the replayed tree at all. --extra-root walks that tree from the filesystem
+# under the same inventory filters, and fails loudly if it is missing or empty
+# rather than skipping.
 echo "rebase-upstream: scanning for residual brand strings"
-if ! node "$REPO_ROOT/scripts/scan-brand-residue.mjs"; then
-  echo "rebase-upstream: FAIL -- scan-brand-residue.mjs found residual brand strings after the replay" >&2
+if ! node "$REPO_ROOT/scripts/scan-brand-residue.mjs" --extra-root "$UPSTREAM_DIR"; then
+  echo "rebase-upstream: FAIL -- scan-brand-residue.mjs found residual brand strings after the replay, in this repo's tracked tree or under $UPSTREAM_DIR" >&2
   exit 1
 fi
 
