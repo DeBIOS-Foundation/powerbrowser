@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-10-PLAN.md
-last_updated: "2026-08-31T20:25:38.587Z"
+stopped_at: Completed 01-11-PLAN.md
+last_updated: "2026-08-31T20:39:18.290Z"
 last_activity: 2026-08-31
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 1 of 12
-Status: Executing Phase 01
+Plan: 2 of 12
+Status: Ready to execute
 Last activity: 2026-08-31 — Phase 01 execution started
 
-Progress: [██████████] 100%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [██████████] 100%
 | Phase 01 P08 | ~25min | 3 tasks | 7 files |
 | Phase 01 P09 | ~1h05m | 2 tasks | 3 files |
 | Phase 01 P10 | ~40m | 3 tasks | 6 files |
+| Phase 01 P11 | ~35min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -118,6 +119,10 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-10: the leftover-reap site is guarded but deliberately NON-FATAL, a reasoned deviation from missing: item 3 -- failing a launch over a previous launch's stale pid would turn a cosmetic cleanup miss into the dead screen the guard exists to prevent
 - [Phase ?]: 01-10: the session-cookie catch RETURNS before the navigation, so a launch whose credential was never minted never reaches the backend origin (T-01-08)
 - [Phase ?]: 01-10: the terminal-handler coverage rule derives both sets from the tree (async declarations; bootstrap calls under the derived binding name) and treats an empty derivation as its own failure -- a rule with no call sites asserts nothing
+- [Phase ?]: 01-11: the error-state clear lives in retry(), not _restart() -- _restart() is also the recovery probe's re-entry point and _hideError() stops that probe, so clearing there would tear down the loop calling it
+- [Phase ?]: 01-11: the analyzer EVALUATES both shipped files (ChromeUtils-faked import + node:vm sandbox that is its own window) rather than re-implementing either; the drive is the bootstrap's own DOMContentLoaded handler
+- [Phase ?]: 01-11: deriveErrorLayerBinding tries the SHOW global before the HIDE global -- deriving only from hide made the plan's own removal-side fault a derivation dead-end instead of a set-equality red
+- [Phase ?]: 01-11: WINDOWS.md ledger item 15 stays OPEN -- a Node-level contract check over shipped source is not a human clicking Retry in a real window
 
 ### Pending Todos
 
@@ -144,6 +149,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-31T19:08:39.552Z
-Stopped at: Completed 01-10-PLAN.md
+Last session: 2026-08-31T20:39:09.446Z
+Stopped at: Completed 01-11-PLAN.md
 Resume file: None
