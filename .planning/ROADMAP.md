@@ -236,3 +236,38 @@ check requires every allow-dispositioned Mozilla host to be documented in this
 project's own planning record rather than only inside the allowlist file — an
 allow entry nobody had to write down is one nobody has to defend. Repointing
 them per a downstream's manifest is Phase 4's TEL-03.
+
+---
+
+## Backlog
+
+### Phase 999.1: SQL-browser-memory (BACKLOG)
+
+**Goal:** [Captured for future planning]
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Make every tab a SQL row, alongside bookmarks, sessions, and anything else that
+can live in SQL.
+
+**Not Databasise.** Databasise is a separate project and will not be in Power
+Browser. The out-of-scope line naming Databasise says nothing about whether
+this item is in scope — the two were conflated once and must not be again.
+
+**The seam that already exists.** `TabUriRegistry` gives tabs stable URI
+identity (the GUI-04 declared bridge interface). Stable tab identity is the
+property this would build on, and most browsers do not have it.
+
+**Three migrations, not one:**
+- Bookmarks / history — already SQL upstream (`places.sqlite`); expose and
+  extend rather than build
+- Sessions — `sessionstore` is compressed JSON, not SQL
+- Theia workbench layout — separate again
+- Tabs — the only layer where the schema would be net-new
+
+**Boundary to respect if this is ever planned:** ARCHITECTURE.md Anti-Pattern 6
+— if a downstream needs to change platform behaviour, the platform needs an
+extension point; adding a `[features]` flag is the bug, not the fix.
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
