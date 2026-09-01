@@ -104,7 +104,10 @@
 // weaker ruleset. It is additive: the tracked-tree scan always runs and is never
 // replaced. It never follows a symlink and never descends `.git`. An absent,
 // unreadable or empty root is a hard FAIL, never a skip: a skip-when-absent mode
-// would reproduce CR-B in a new shape.
+// would reproduce CR-B in a new shape. So is an unreadable FILE inside that root,
+// and the reported file count names files actually read rather than files walked.
+// A relative `--extra-root` argument resolves against the repo root, the same
+// base `--report` uses.
 //
 // Usage:
 //   node scripts/scan-brand-residue.mjs [--reconcile] [--scope-chain <name>]
@@ -113,7 +116,7 @@
 //                                       [--report <path>] [--self-test]
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -326,6 +329,13 @@ export function scopeFiles(inv, { chainFiles = null } = {}) {
 export function extraRootFiles(inv, root) {
   let st;
   try {
+    // IN-02 (plan 01-17): the asymmetry is deliberate and is documented rather
+    // than removed. The ROOT is checked with `statSync`, which follows a
+    // symlink, while every entry INSIDE the walk is checked with lstat
+    // semantics (`dirent.isSymbolicLink()`) and skipped when it is a link.
+    // Switching the root to `lstatSync` would make a symlinked `--extra-root` a
+    // hard failure, which no caller needs and which would be a behaviour change
+    // smuggled in under a comment-level finding.
     st = statSync(root);
   } catch {
     throw new Error(`--extra-root ${root} does not exist or cannot be read -- an unreadable extra root is not a clean tree, and skipping it would make this pass green by construction`);
@@ -373,11 +383,15 @@ export function scan(inv, { chain = null, root = REPO_ROOT, files = null, rows =
   const activeFiles = files ?? scopeFiles(inv, { chainFiles: chain ? chainOf(inv, chain).files : null });
 
   if (activeFiles.length === 0) {
-    return { empty: true, occurrences: [], unclaimedProbes: [], files: activeFiles, rows: activeRows };
+    // `unreadable` is present on this shape too. It is a different literal from
+    // the main return below, and a caller reading `.unreadable` off it must not
+    // get `undefined` and quietly conclude nothing failed to read.
+    return { empty: true, occurrences: [], unclaimedProbes: [], unreadable: [], files: activeFiles, rows: activeRows };
   }
 
   const occurrences = [];
   const unclaimedProbes = [];
+  const unreadable = [];
   const probes = inv.scope?.residue_probes ?? [];
   // A second, deliberately dumb recount: plain case-sensitive substring, no
   // rows, no boundary rule, no claim order. It is the only number in this file
@@ -391,8 +405,19 @@ export function scan(inv, { chain = null, root = REPO_ROOT, files = null, rows =
     let text;
     try {
       text = readFileSync(join(root, file), 'utf8');
-    } catch {
-      continue; // a path git tracks but this checkout does not materialise
+    } catch (err) {
+      // CR-02 (plan 01-17). This used to be a bodyless `catch { continue; }`
+      // justified as "a path git tracks but this checkout does not
+      // materialise". That justification covers ONE of this function's two
+      // file-set provenances. A `git ls-files` path that throws may indeed be
+      // a tracked path this checkout does not materialise; an extra-root path
+      // came from a `readdirSync` that had just reported it as an existing
+      // regular file, so a throw there is EACCES, EISDIR or a read past the V8
+      // string limit -- never the absent case. One justification cannot serve
+      // both, so `scan()` records the fact and leaves the POLICY to the caller,
+      // which is where the provenance is known.
+      unreadable.push({ file, reason: err.code ?? err.message });
+      continue;
     }
     const { claimed, taken } = claimOccurrences(text, activeRows, file);
     occurrences.push(...claimed);
@@ -420,7 +445,7 @@ export function scan(inv, { chain = null, root = REPO_ROOT, files = null, rows =
 
   occurrences.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.index - b.index);
   unclaimedProbes.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
-  return { empty: false, occurrences, unclaimedProbes, rawCounts, files: activeFiles, rows: activeRows };
+  return { empty: false, occurrences, unclaimedProbes, unreadable, rawCounts, files: activeFiles, rows: activeRows };
 }
 
 /**
@@ -889,6 +914,13 @@ function selfTest() {
     // effect, which is precisely why the first row is a control: without it, a
     // red in the second row could have been caused by the tracked-tree half
     // rather than by the plant.
+    //
+    // IN-04 (plan 01-17), stated so it is not rediscovered: because every
+    // CLI-spawning row below runs the full tracked-tree scan as a side effect, a
+    // DIRTY WORKING TREE can turn any of them red for a reason that has nothing
+    // to do with its plant. The clean-control row runs first precisely so such a
+    // red is attributable -- read the control's verdict before believing any row
+    // beneath it.
     const SELF = fileURLToPath(import.meta.url);
     const runCli = (...args) => {
       try {
@@ -976,6 +1008,47 @@ function selfTest() {
       console.error(`scan-brand-residue: --self-test FAIL -- ${coincidentalLabel}: exited ${rCoinc.status} and did not name both ${coincRoot} and ${coincRel}. A coincidental row is an assertion about THIS checkout, and nothing reconciles its count under --extra-root, so a token it swallows there passes the gate whose purpose is catching it. Output: ${rCoinc.out.trim()}`);
       overall = 1;
     }
+
+    // CR-02 (plan 01-17). Measured on the pre-fix script: this exact input
+    // exited 0 printing `PASS -- ... plus 1 file(s) under --extra-root` -- a
+    // file it never opened, counted as scanned.
+    //
+    // The row verifies its own precondition before asserting anything, because
+    // a plant that is not actually unreadable proves nothing while looking like
+    // proof. Stated consequence, so it is met as a decision rather than a
+    // surprise: `--self-test` run AS ROOT will go red here by design, since root
+    // can read a mode-000 file. That is the correct trade -- a silent skip is
+    // the exact failure class this plan closes three times over. This repo's CI
+    // and local development both run as a non-root user. If a root-running
+    // caller ever appears, the fix is a plant mechanism that is unreadable
+    // regardless of uid, never a skip.
+    const unreadableLabel = 'an unreadable file under --extra-root is a gate failure, not a silent skip';
+    const unreadRoot = join(tmp, 'extra-root-unreadable');
+    const unreadRel = 'leak.txt';
+    const unreadAbs = join(unreadRoot, unreadRel);
+    mkdirSync(unreadRoot);
+    writeFileSync(unreadAbs, 'chrome://sourcerer/content/x\n');
+    chmodSync(unreadAbs, 0o000);
+    let plantIsUnreadable = false;
+    try {
+      readFileSync(unreadAbs, 'utf8');
+    } catch {
+      plantIsUnreadable = true;
+    }
+    if (!plantIsUnreadable) {
+      console.error(`scan-brand-residue: --self-test FAIL -- ${unreadableLabel}: the plant at ${unreadAbs} is still readable after chmod 000, so this row could not establish its precondition and it proves nothing. This is what happens when --self-test runs as root; run it as a non-root user.`);
+      overall = 1;
+    } else {
+      const rUnread = runCli('--extra-root', unreadRoot);
+      if (rUnread.status !== 0 && rUnread.out.includes(unreadRel)) {
+        console.log(`scan-brand-residue: --self-test PASS -- ${unreadableLabel}`);
+      } else {
+        console.error(`scan-brand-residue: --self-test FAIL -- ${unreadableLabel}: exited ${rUnread.status} and did not name ${unreadRel}. A file the scanner could not open is not a file it found clean, and counting it as scanned tells the operator the gate covered it. Output: ${rUnread.out.trim()}`);
+        overall = 1;
+      }
+    }
+    // Restore the mode so the recursive cleanup below cannot fail on it.
+    chmodSync(unreadAbs, 0o644);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -1091,6 +1164,19 @@ function main(argv) {
   // failed on the first reason.
   const gate = gateFailures(offenses, rec, { chain });
 
+  // CR-02 (plan 01-17), tracked-tree policy. The split is deliberate and it is
+  // the whole reason `scan()` records rather than decides: `ENOENT` here is the
+  // documented and legitimate case -- a path git tracks which this checkout
+  // does not materialise -- and it keeps its allowance, so a sparse or partial
+  // checkout stays green. EVERY other code means a tracked file could not be
+  // read, which the old justifying comment never covered and which was silently
+  // skipped and counted as scanned. A file that could not be read is not a file
+  // that was found clean.
+  for (const u of result.unreadable ?? []) {
+    if (u.reason === 'ENOENT') continue;
+    gate.push(`${u.file} could not be read (${u.reason}) -- a file that could not be read is not a file that was found clean`);
+  }
+
   // The --extra-root pass. It joins the SAME gate reasons and the same single
   // exit below -- the tracked-tree scan above always ran and is never replaced.
   //
@@ -1105,7 +1191,12 @@ function main(argv) {
   // missed, which over an unowned tree is the likelier failure.
   let extraSummary = '';
   if (extraRootArg) {
-    const extraRoot = resolve(extraRootArg);
+    // IN-01 (plan 01-17): resolved against REPO_ROOT, the same base `--report`
+    // uses, so the CLI's two path flags do not resolve a relative argument
+    // against two different directories. Both current callers pass an absolute
+    // path, which `resolve` returns unchanged, so this is a foot-gun removal
+    // rather than a behaviour change.
+    const extraRoot = resolve(REPO_ROOT, extraRootArg);
     let extraFiles = null;
     try {
       extraFiles = extraRootFiles(inv, extraRoot);
@@ -1158,7 +1249,23 @@ function main(argv) {
       if (extra.unclaimedProbes.length !== 0) {
         gate.push(`${extra.unclaimedProbes.length} unclaimed residue-probe hit(s) under --extra-root ${extraRoot} -- a form no inventory row claimed`);
       }
-      extraSummary = `, plus ${extraFiles.length} file(s) under --extra-root ${extraRoot}`;
+      // CR-02 (plan 01-17), extra-root policy. ANY unreadable file fails here,
+      // with no reason-code allowance: this file set came from a `readdirSync`
+      // that had just reported each entry as an existing regular file, so the
+      // absent case the tracked-tree allowance exists for cannot arise. A
+      // warning, a skipped row or a silently corrected count would be CR-B in a
+      // new shape -- an invocation that cannot go red for its stated cause.
+      for (const u of extra.unreadable) {
+        console.error(`  ${join(extraRoot, u.file)}: unreadable (${u.reason})`);
+      }
+      if (extra.unreadable.length !== 0) {
+        gate.push(`${extra.unreadable.length} unreadable file(s) under --extra-root ${extraRoot} -- a file that could not be read is not a file that was found clean`);
+      }
+      // The count names files actually READ, not files walked. Reporting an
+      // unopened file as scanned tells the operator the gate covered a file it
+      // never opened, which is the half of CR-02 that is a reporting defect
+      // rather than a detection defect.
+      extraSummary = `, plus ${extraFiles.length - extra.unreadable.length} file(s) under --extra-root ${extraRoot}`;
     }
   }
 
