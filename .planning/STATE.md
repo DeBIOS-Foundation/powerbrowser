@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 02
 current_phase_name: configuration-manifest-and-generator-core
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-09-01T23:20:10.111Z"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-09-01T23:32:26.496Z"
 last_activity: 2026-09-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 27
-  completed_plans: 23
+  completed_plans: 24
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 02 (configuration-manifest-and-generator-core) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-09-01 — Phase 02 execution started
 
-Progress: [█████████░] 85%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
@@ -80,6 +80,7 @@ Progress: [█████████░] 85%
 | Phase 01 P21 | 12min | 3 tasks | 4 files |
 | Phase 02 P02 | 12m | 2 tasks | 3 files |
 | Phase 02 P01 | 30m | 3 tasks | 6 files |
+| Phase 02 P03 | 35m | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -174,6 +175,9 @@ Recent decisions affecting current work:
 - [Phase ?]: smol-toml 1.8.0 is vendored as a single self-contained CJS file, not npm-pinned: pinning would require npm ci before verify-platform.sh --quick could run at all
 - [Phase ?]: identity.display_name lives in the required (and therefore masked) [identity] table, so a downstream that omits it hard-fails rather than silently inheriting Power Browser's mark
 - [Phase ?]: The generator rejects unknown settings before any assignment; output paths come only from a frozen target array, never from a manifest value
+- [Phase 02]: Power Browser is its own downstream: the root configuration.toml is split along the mask line — optional keys are the defaults layer, required keys are the downstream layer — so byte-identity survives the merge and the project's own build exercises the same merge path a downstream will
+- [Phase 02]: The merge returns its own provenance (the defaulted dotted paths) rather than a later traversal re-deriving it; the echo sorts and prints that array
+- [Phase 02]: Arrays are leaves to both the masker and the merge: a downstream array replaces the default array so a downstream can drop an entry (D-07), pinned by the 'downstream array shorter than default' self-test case
 
 ### Pending Todos
 
@@ -200,6 +204,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-01T23:20:10.093Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-09-01T23:32:26.483Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None

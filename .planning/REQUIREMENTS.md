@@ -46,7 +46,7 @@
 - [x] **CFG-03**: Binary/basename fields are validated
       (`^[a-z][a-z0-9-]{1,31}$`) so no invalid `MOZ_APP_NAME` can be produced
 
-- [ ] **CFG-04**: Cosmetic fields fall back to Power Browser defaults with a
+- [x] **CFG-04**: Cosmetic fields fall back to Power Browser defaults with a
       visible echo at generate time; the defaults are themselves a
       `configuration.toml` (one merge code path)
 
@@ -269,7 +269,7 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 | CFG-01 | Phase 2 | Pending |
 | CFG-02 | Phase 2 | Complete |
 | CFG-03 | Phase 2 | Complete |
-| CFG-04 | Phase 2 | Pending |
+| CFG-04 | Phase 2 | Complete |
 | GEN-04 | Phase 2 | Complete |
 | GEN-01 | Phase 3 | Pending |
 | GEN-02 | Phase 3 | Pending |
