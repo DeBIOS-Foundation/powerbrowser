@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-16-PLAN.md
-last_updated: "2026-09-01T00:17:37.311Z"
+stopped_at: Completed 01-17-PLAN.md
+last_updated: "2026-09-01T00:32:27.402Z"
 last_activity: 2026-08-31
 last_activity_desc: Completed plan 01-15 (gap closure — CR-B, the rebase scan's extra root)
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 17
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 2 of 17
+Plan: 3 of 17
 Status: Ready to execute
 Last activity: 2026-08-31 — Phase 01 execution started
 
-Progress: [█████████░] 94%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ Progress: [█████████░] 94%
 | Phase 01 P14 | ~6min | 2 tasks | 2 files |
 | Phase 01 P15 | ~35min | 3 tasks | 5 files |
 | Phase 01 P16 | 25m | 2 tasks | 1 files |
+| Phase 01 P17 | ~35m | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -148,6 +149,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-15: the backstop truth was MEASURED, not deferred -- 55s over 463,930 files against the live 5.6 GB upstream/, exit 0, upstream diff empty afterwards
 - [Phase ?]: 01-16: the _showError enumeration regex stays byte-identical; the deliverable is an equality assertion against an independently derived call-site total, not a wider pattern
 - [Phase ?]: 01-16: messageBearingBindings shape (a) tests message: at depth 0 only — a nested message: means <binding>.message is undefined at runtime
+- [Phase ?]: The --extra-root residual-brand pass filters the coincidental class out of its row set and only that class; frozen rows stay applicable in a Gecko checkout.
+- [Phase ?]: scan() records unreadable files; the policy is per-caller — any unreadable file fails under --extra-root, any non-ENOENT reason fails over the tracked tree, ENOENT keeps its documented allowance.
+- [Phase ?]: The chmod-000 self-test row fails loudly when it cannot establish its precondition; --self-test run as root goes red on that row by design.
 
 ### Pending Todos
 
@@ -174,6 +178,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-01T00:17:28.488Z
-Stopped at: Completed 01-16-PLAN.md
+Last session: 2026-09-01T00:32:27.390Z
+Stopped at: Completed 01-17-PLAN.md
 Resume file: None

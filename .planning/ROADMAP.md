@@ -54,7 +54,7 @@ Sourcerer's decision IDs as justification.)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 16/17 plans executed (15 executed, 2 pending gap closure)
+**Plans**: 17/17 plans executed (15 executed, 2 pending gap closure)
 
 Plans:
 **Wave 1**
@@ -123,7 +123,7 @@ Plans:
 
 **Wave 17** *(gap closure — blocked on Wave 16 completion)*
 
-- [ ] 01-17-PLAN.md — Close CR-01 and CR-02 inside the `--extra-root` mode 01-15 built: filter the `coincidental` class out of the extra-root row set so a fact about this checkout can no longer swallow a real brand token in a foreign tree or suppress the independent probe at that index, and make `scan()` collect unreadable files so one under `--extra-root` is a gate failure naming the file rather than a silent skip still counted as scanned; two planted-fault rows proven against the pre-fix script using the review's own reproductions; plus deferred-items row 10 recording every closure and every deliberate NOT-done
+- [x] 01-17-PLAN.md — Close CR-01 and CR-02 inside the `--extra-root` mode 01-15 built: filter the `coincidental` class out of the extra-root row set so a fact about this checkout can no longer swallow a real brand token in a foreign tree or suppress the independent probe at that index, and make `scan()` collect unreadable files so one under `--extra-root` is a gate failure naming the file rather than a silent skip still counted as scanned; two planted-fault rows proven against the pre-fix script using the review's own reproductions; plus deferred-items row 10 recording every closure and every deliberate NOT-done
 
 **UI hint**: yes
 **Research**: recommended — ~1,090 occurrences across five case-variant forms and six coupled reference formats (jar.mn, components.conf, moz.build, patch content, verifier regex); the classification inventory needs its own deep pass. Highest-risk phase; plan-review-convergence applies. *(Research completed 2026-08-30: the real migrating surface measured 755 occurrences across 69 files; GUI-01 and GUI-02 found to be net-new work, not migration.)*
@@ -235,7 +235,7 @@ than noisy.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Platform Extraction and Rename | 16/17 | In Progress|  |
+| 1. Platform Extraction and Rename | 17/17 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 0/TBD | Not started | - |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
