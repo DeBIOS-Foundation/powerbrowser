@@ -30,9 +30,22 @@ on:
 jobs:
   rebase:
     runs-on: ubuntu-latest
+    # WR-09 (plan 01-18). This job clones 1.1 GB from a third-party remote and
+    # then runs this repo's scripts over the result; it reads and verifies, and
+    # pushes nothing. With no `permissions:` block it would inherit the
+    # repository-default GITHUB_TOKEN scope, which on many repos is
+    # write-capable, and actions/checkout leaves that credential in
+    # .git/config for the whole job. `contents: read` plus
+    # `persist-credentials: false` means the token is neither powerful nor
+    # present while the third-party tree is on disk.
+    timeout-minutes: 60
+    permissions:
+      contents: read
     steps:
       - name: Check out repo
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       # D-18's permanent gate, run BEFORE the rebase as well as inside it. It
       # is static and needs no build, no Nix and no upstream tree, so it costs
