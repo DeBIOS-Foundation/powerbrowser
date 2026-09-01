@@ -388,6 +388,45 @@ function runChecks(root) {
         );
     }
     displaySurfaces.push(...brandingSources);
+
+    // The shell's chrome markup is DERIVED TOO, from its packaging manifest.
+    //
+    // G-01-25: `<title>PowerBrowser</title>` sat in the shell's chrome document
+    // through the entire rename and shipped as the OS window title -- the one
+    // OS-level statement of which application owns the window. The leak pattern
+    // below already matched it exactly (`PowerBrowser<` is a text node closing
+    // its tag). The ONLY reason nothing went red is that this file was never in
+    // the read set. The fix is therefore a READ SET, not a pattern.
+    //
+    // Derived from powerbrowser/shell/jar.mn at check time -- the same
+    // manifest-derived file-set idiom scripts/verify-platform.sh's
+    // shell-csp-inline-attrs already uses -- so a second chrome document is
+    // covered the day it is packaged rather than the day someone remembers it.
+    //
+    // RESTRICTED TO MARKUP, deliberately. The same manifest also packages
+    // powerbrowser.js, PowerBrowserAPI.sys.mjs and TheiaService.sys.mjs, whose
+    // prose comments legitimately spell the identifier form followed by a space.
+    // Widening the derivation to them would manufacture a false red rather than
+    // close a hole, and a checker that cries wolf gets switched off. Markup is
+    // where user-facing chrome text is authored, which is exactly the surface
+    // class this section exists for.
+    const SHELL_DIR = 'powerbrowser/shell';
+    const shellManifest = readText(root, `${SHELL_DIR}/jar.mn`);
+    const shellMarkup = shellManifest === null
+        ? []
+        : [...shellManifest.replace(/#.*/g, '').matchAll(/\(([^)]+\.x?html)\)/g)]
+            .map((m) => `${SHELL_DIR}/${m[1]}`)
+            .sort();
+    if (shellMarkup.length === 0) {
+        // The same non-vacuity rule the branding walk above applies: a
+        // derivation that yields nothing has not proven the shell chrome is
+        // clean, it has scanned nothing at all.
+        r.fail(
+            `${SHELL_DIR}/jar.mn yielded ZERO packaged markup files, so the display-surface leak scan ` +
+            'never read the shell chrome. An empty derived set is a failure, not a clean run.',
+        );
+    }
+    displaySurfaces.push(...shellMarkup);
     // `<` joins the space and the quote as a terminator for the same reason:
     // `PowerBrowser<` is a JSX text node closing its tag, i.e. a rendered
     // string, while `PowerBrowserWelcomeWidget` (a class name) and
@@ -595,6 +634,12 @@ function selfTest() {
             'powerbrowser/powerbrowser.desktop',
             'powerbrowser/powerbrowser-release.desktop',
             'LICENSE',
+            // Section 6 derives the shell's markup set from this manifest, so
+            // the fixture needs BOTH: a fixture missing the manifest would
+            // exercise the new derived set vacuously and the plant below would
+            // land in a file the fixture does not contain.
+            'powerbrowser/shell/jar.mn',
+            'powerbrowser/shell/powerbrowser.xhtml',
         ];
         for (const v of ['dev', 'release']) {
             copy.push(
@@ -738,6 +783,31 @@ function selfTest() {
             console.log(`${NAME}: --self-test -- removed the packaging line for ${unpackagedRel} and it was REJECTED by name: ${unpackagedMsg}`);
         }
         writeFileSync(jarPath, jarOriginal);
+
+        // Fifth plant (01-19): the EXACT pre-fix state of the G-01-25 defect --
+        // the identifier form back in the shell chrome document's title, which
+        // is the literal Gecko's AppWindow hands the window manager for the
+        // window's whole lifetime. Section 6 must go red NAMING the file, the
+        // line number and the offending text. The shell markup is reached only
+        // because that set is DERIVED from powerbrowser/shell/jar.mn, never
+        // because anyone remembered to append the path -- which is precisely
+        // why this leak survived the rename.
+        const shellRel = 'powerbrowser/shell/powerbrowser.xhtml';
+        const shellPath = join(dir, shellRel);
+        const shellOriginal = readFileSync(shellPath, 'utf8');
+        writeFileSync(shellPath, shellOriginal.replace('<title>Power Browser</title>', '<title>PowerBrowser</title>'));
+        const shellPlanted = runChecks(dir);
+        const shellMsg = shellPlanted.failures.find(
+            (f) => f.includes(`${shellRel}:`) && f.includes('IDENTIFIER form') && f.includes('<title>PowerBrowser</title>'),
+        );
+        if (!shellMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the identifier form planted in ${shellRel}'s chrome document title (the pre-fix G-01-25 state) was NOT rejected naming the file and the offending line; the derived shell-markup set did not reach it`);
+            for (const f of shellPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- planted the identifier form in ${shellRel}'s title and it was REJECTED by the DERIVED shell-markup set: ${shellMsg}`);
+        }
+        writeFileSync(shellPath, shellOriginal);
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
