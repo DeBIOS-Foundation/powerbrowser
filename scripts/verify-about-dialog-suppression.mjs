@@ -535,6 +535,45 @@ function selfTest() {
             },
             names: ['MISSING PREMISE', 'about:license'],
         },
+        {
+            // The mutation removes the compound TOGETHER WITH its preceding
+            // comma rather than deleting the line: the `{` sits on that same
+            // line, so a line-delete leaves a rule with no declaration block
+            // and trips assertion 1's VACUOUS branch -- a red for the wrong
+            // reason, which proves nothing about coverage.
+            label: '(e) outbound selector deleted -- UAT G-01-3 restored in full, Terms of Use and Privacy Notice visible again',
+            plant() {
+                for (const rel of CSS_RELS) {
+                    const p = join(dir, rel);
+                    write(rel, readFileSync(p, 'utf8').replace(
+                        /,\n#bottomBox > hbox > \.bottom-link\[href\^="[^"]*"\]/,
+                        '',
+                    ));
+                }
+            },
+            names: [
+                'UNSUPPRESSED VENDOR LINK',
+                'https://www.mozilla.org/about/legal/terms/firefox/',
+                'aboutDialog.css',
+            ],
+        },
+        {
+            // A distinct failure shape from deletion: the selector still
+            // exists, still parses, and still matches the Terms of Use link,
+            // so assertions 1, 2 and 3 all stay silent and only the coverage
+            // assertion can catch the Privacy Notice link it no longer reaches.
+            label: '(f) outbound selector narrowed -- the href prefix stops reaching the Privacy Notice link',
+            plant() {
+                for (const rel of CSS_RELS) {
+                    const p = join(dir, rel);
+                    write(rel, readFileSync(p, 'utf8').replace(
+                        /(\.bottom-link\[href\^=")https:\/\/www\.mozilla\.org(")/,
+                        '$1https://www.mozilla.org/about/legal$2',
+                    ));
+                }
+            },
+            names: ['UNSUPPRESSED VENDOR LINK', 'https://www.mozilla.org/privacy/firefox/'],
+        },
     ];
 
     try {
