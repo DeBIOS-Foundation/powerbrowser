@@ -1177,6 +1177,25 @@ function main(argv) {
     gate.push(`${u.file} could not be read (${u.reason}) -- a file that could not be read is not a file that was found clean`);
   }
 
+  // WR-03 (plan 01-18). The tracked-tree PASS line used to print
+  // `result.files.length` -- files WALKED -- while the ENOENT allowance above
+  // means some of those were never opened. 01-17 corrected the extra-root
+  // summary on the stated grounds that "reporting an unopened file as scanned
+  // tells the operator the gate covered a file it never opened"; the
+  // tracked-tree branch is where that defect is actually REACHABLE, because
+  // ENOENT keeps its allowance and the run still passes. Any non-ENOENT entry
+  // has already pushed a gate reason above, so at the PASS line the subtrahend
+  // is exactly the allowed skips.
+  const scannedCount = result.files.length - (result.unreadable ?? []).length;
+  // An allowed skip is still a hole in coverage. Naming the skipped paths at
+  // --reconcile verbosity keeps a GROWING skip set visible instead of folding it
+  // into a silently shrinking number.
+  const skipped = (result.unreadable ?? []).filter((u) => u.reason === 'ENOENT');
+  if (wantReconcile && skipped.length !== 0) {
+    console.log(`scan-brand-residue: SKIPPED -- ${skipped.length} tracked path(s) this checkout does not materialise (ENOENT), walked but never opened:`);
+    for (const u of skipped) console.log(`  ${u.file}`);
+  }
+
   // The --extra-root pass. It joins the SAME gate reasons and the same single
   // exit below -- the tracked-tree scan above always ran and is never replaced.
   //
@@ -1273,7 +1292,7 @@ function main(argv) {
     for (const reason of gate) console.error(`scan-brand-residue: FAIL -- ${reason}`);
     return 1;
   }
-  console.log(`scan-brand-residue: PASS -- no residual brand occurrence in ${result.files.length} scanned file(s)${extraSummary}${chain ? ` for chain "${chain}"` : ''}${exceptHandWrite ? ' (excepting the hand-write surfaces named above)' : ''}`);
+  console.log(`scan-brand-residue: PASS -- no residual brand occurrence in ${scannedCount} scanned file(s)${extraSummary}${chain ? ` for chain "${chain}"` : ''}${exceptHandWrite ? ' (excepting the hand-write surfaces named above)' : ''}`);
   return 0;
 }
 
