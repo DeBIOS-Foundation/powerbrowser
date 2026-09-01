@@ -146,7 +146,44 @@ export function loadInventory(path = INVENTORY_PATH) {
   if (!Array.isArray(inv.tokens)) {
     throw new Error(`brand-tokens: FAIL -- ${path} has no tokens[] array`);
   }
+  assertNoProbeSwallowingRow(inv, path);
   return inv;
+}
+
+/**
+ * WR-05 (plan 01-18). The `--extra-root` row filter (see main()) excludes the
+ * `coincidental` class and ONLY that class, and its justification used to be a
+ * comment hand-enumerating the rows that happen to exist today: "`frozen` rows
+ * legitimately occur in a Gecko checkout and carry no residue probe". That is an
+ * expectation kept by hand about a file explicitly designed to grow -- exactly
+ * what CLAUDE.md's "derive from the tree and compare" rule forbids -- and adding
+ * one `frozen` row whose token contains a probe form silently reopens the defect
+ * that filter was cut for, with nothing firing.
+ *
+ * The property the filter actually depends on is derivable from the inventory:
+ * no row that is neither renameable nor already excluded may contain a residue
+ * probe. `claimOccurrences` orders rows longest-token-first and writes claimed
+ * spans into `taken[]`, so such a row would swallow the shorter brand token
+ * nested inside it AND suppress that span's independent probe hit.
+ */
+export function assertNoProbeSwallowingRow(inv, path = INVENTORY_PATH) {
+  const probeForms = (inv.scope?.residue_probes ?? []).map((p) => p.toLowerCase());
+  for (const row of inv.tokens) {
+    // Renameable rows are what the gate exists to catch; `coincidental` rows are
+    // already excluded from the --extra-root row set, which is what makes the
+    // one real probe-bearing row (this checkout's own source path) safe.
+    if (RENAMEABLE_CLASSES.includes(row.class) || row.class === 'coincidental') continue;
+    const hit = probeForms.find((p) => String(row.token).toLowerCase().includes(p));
+    if (hit) {
+      throw new Error(
+        `brand-tokens: FAIL -- ${path} row ${JSON.stringify(row.token)} is class "${row.class}" ` +
+          `(not renameable, not excluded from --extra-root) but contains the residue probe ` +
+          `"${hit}" -- longest-first claim order lets it swallow a brand token and suppress that ` +
+          `token's probe. Either classify it renameable, or exclude its class from the ` +
+          `--extra-root row set as "coincidental" already is`
+      );
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -833,6 +870,47 @@ function selfTest() {
       overall = 1;
     }
 
+    // Fixture 5b (WR-05, plan 01-18): the inventory invariant the --extra-root
+    // row filter rests on. Two loads of the SAME fixture differing ONLY by the
+    // planted row, so the throw is attributable to the plant. Written to disk
+    // and read back through loadInventory() rather than passed in-process,
+    // because "fails at LOAD" is the claim being proven.
+    const invPath = join(tmp, 'planted-inventory.json');
+    const invBase = {
+      $comment: 'scan-brand-residue.mjs --self-test inventory-invariant fixture. Never the real one.',
+      scope: { exclude: [], binary_extensions: ['.png'], residue_probes: ['sourcerer'] },
+      // The excluded class MAY carry a probe -- that is this checkout's own
+      // source path, and excluding it is what CR-01 (01-17) did.
+      tokens: [{ token: '/x/y/sourcerer', case_form: 'literal', class: 'coincidental', expected_count: 0, expected_files: [] }],
+    };
+    writeFileSync(invPath, JSON.stringify(invBase));
+    let ctlThrew = null;
+    try {
+      loadInventory(invPath);
+    } catch (err) {
+      ctlThrew = err.message;
+    }
+    if (ctlThrew !== null) {
+      console.error(`scan-brand-residue: --self-test FAIL -- the unplanted inventory control did not load: ${ctlThrew}`);
+      overall = 1;
+    } else {
+      const invPlant = structuredClone(invBase);
+      invPlant.tokens.push({ token: 'SOURCERER_APP_ID', case_form: 'upper', class: 'frozen', expected_count: 0, expected_files: [] });
+      writeFileSync(invPath, JSON.stringify(invPlant));
+      let plantThrew = null;
+      try {
+        loadInventory(invPath);
+      } catch (err) {
+        plantThrew = err.message;
+      }
+      if (plantThrew && plantThrew.includes('SOURCERER_APP_ID') && plantThrew.includes('residue probe')) {
+        console.log('scan-brand-residue: --self-test PASS -- a non-renameable, non-excluded inventory row carrying a residue probe was rejected at load, naming the row');
+      } else {
+        console.error(`scan-brand-residue: --self-test FAIL -- a frozen row containing the residue probe did NOT fail at load (got: ${plantThrew ?? '<no throw>'})`);
+        overall = 1;
+      }
+    }
+
     // Fixture 4: non-vacuity. An empty scan set is a FAIL, not a clean pass.
     const r3 = scan(SELF_TEST_INVENTORY, { root: tmp, files: [] });
     if (r3.empty) {
@@ -1247,9 +1325,16 @@ function main(argv) {
       //
       // Why nothing ELSE is excluded: `frozen` rows (`MOZ_APP_ID`,
       // `%content/branding/`, `-brand-product-name = Firefox`) legitimately
-      // occur in a Gecko checkout and carry no residue probe, so dropping them
-      // would produce claim churn without closing anything. The three
-      // renameable classes are what this gate exists to catch.
+      // occur in a Gecko checkout, so dropping them would produce claim churn
+      // without closing anything. The three renameable classes are what this
+      // gate exists to catch.
+      //
+      // WR-05 (plan 01-18): the part of that reasoning which is a PROPERTY --
+      // that no non-excluded, non-renameable row carries a residue probe -- is
+      // no longer argued here about the rows that happen to exist today. It is
+      // derived from the inventory by `assertNoProbeSwallowingRow`, which
+      // `loadInventory` runs, so adding such a row fails at load rather than
+      // silently reopening this defect.
       const extra = scan(inv, {
         root: extraRoot,
         files: extraFiles,
