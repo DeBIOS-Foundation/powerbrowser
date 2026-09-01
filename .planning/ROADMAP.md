@@ -54,7 +54,7 @@ Sourcerer's decision IDs as justification.)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 17/17 plans executed (15 executed, 2 pending gap closure)
+**Plans**: 19 plans (17 executed; 01-18 and 01-19 planned, closing UAT gaps G-01-3 and G-01-25)
 
 Plans:
 **Wave 1**
@@ -124,6 +124,14 @@ Plans:
 **Wave 17** *(gap closure — blocked on Wave 16 completion)*
 
 - [x] 01-17-PLAN.md — Close CR-01 and CR-02 inside the `--extra-root` mode 01-15 built: filter the `coincidental` class out of the extra-root row set so a fact about this checkout can no longer swallow a real brand token in a foreign tree or suppress the independent probe at that index, and make `scan()` collect unreadable files so one under `--extra-root` is a gate failure naming the file rather than a silent skip still counted as scanned; two planted-fault rows proven against the pre-fix script using the review's own reproductions; plus deferred-items row 10 recording every closure and every deliberate NOT-done
+
+**Wave 18** *(gap closure — UAT gap G-01-3, blocked on Wave 17 completion)*
+
+- [ ] 01-18-PLAN.md — Close G-01-3: package the branding `aboutDialog.css` in both variants' `content/jar.mn` so upstream's own branding-CSS hook stops 404ing silently, suppress the three stock outbound-link rows through it (including the unreported `#communityDesc`, whose vendor-labelled link targets mozilla.org), remove the `#rightBox` block that reserves space for an unshipped wordmark, and add a tree-derived, bidirectional packaging-completeness assertion to the preflight with a planted fault reproducing the dead-hook state
+
+**Wave 19** *(gap closure — UAT gap G-01-25, blocked on Wave 18 completion)*
+
+- [ ] 01-19-PLAN.md — Close G-01-25: correct the shell chrome document's `<title>` and loading wordmark to the spaced display form, correct the same-class stale identifier-form expectation latent in `_branding_variant_divergence_impl`, and derive the shell's chrome markup into the preflight's display-surface leak scan — whose existing pattern already matched both literals and simply never read the file — with a planted fault reproducing the pre-fix title
 
 **UI hint**: yes
 **Research**: recommended — ~1,090 occurrences across five case-variant forms and six coupled reference formats (jar.mn, components.conf, moz.build, patch content, verifier regex); the classification inventory needs its own deep pass. Highest-risk phase; plan-review-convergence applies. *(Research completed 2026-08-30: the real migrating surface measured 755 occurrences across 69 files; GUI-01 and GUI-02 found to be net-new work, not migration.)*
