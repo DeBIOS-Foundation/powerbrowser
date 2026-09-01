@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 01
-current_phase_name: platform-extraction-and-rename
+current_phase: 02
+current_phase_name: configuration-manifest-and-generator-core
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-09-01T23:00:06.218Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-09-01T23:08:55.203Z"
 last_activity: 2026-09-01
 last_activity_desc: Phase 01 execution started
 progress:
@@ -23,16 +23,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 01 — platform-extraction-and-rename
+**Current focus:** Phase 02 — configuration-manifest-and-generator-core
 
 ## Current Position
 
-Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 2 of 21
+Phase: 02 (configuration-manifest-and-generator-core) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-09-01 — Phase 02 planning complete
+Last activity: 2026-09-01 — Phase 02 execution started
 
-Progress: [██████████] 100%
+Progress: [████████░░] 78%
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ Progress: [██████████] 100%
 | Phase 01 P19 | 12min | 3 tasks | 4 files |
 | Phase 01 P20 | 35m | 3 tasks | 7 files |
 | Phase 01 P21 | 12min | 3 tasks | 4 files |
+| Phase 02 P02 | 12m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -167,6 +168,8 @@ Recent decisions affecting current work:
 - [Phase 01]: 01-21: #communityExperimentalDesc was SUPPRESSED, not exempted (WR-08) — an exemption list inside a gate is a hand-kept expectation that can only agree with the tree it was copied from
 - [Phase 01]: 01-21: the derived external-link set carries no host filter, so an ESR rebase adding a link to a NEW host goes red through the same comparison
 - [Phase 01]: 01-21: DISCLOSURE_HREF (must-survive, singular) stays add-alongside the derived must-be-suppressed set — opposite polarity, and merging them requires the allow/deny table the plan forbids
+- [Phase ?]: The mark's rebrand-surface home is brand/mark.svg; the ten PNG rasters stay under powerbrowser/branding/{dev,release}/ until Phase 3's icon pipeline (D-16)
+- [Phase ?]: verify-branding-preflight.mjs keeps deriving expected values from inventory/brand-tokens.json's hand-authored brand_display_expectations, never from configuration.toml — that independence is what stops the gate being a tautology (T-02-05)
 
 ### Pending Todos
 
@@ -193,6 +196,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-01T22:01:52.995Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-configuration-manifest-and-generator-core/02-CONTEXT.md
+Last session: 2026-09-01T23:08:48.613Z
+Stopped at: Completed 02-02-PLAN.md
+Resume file: None

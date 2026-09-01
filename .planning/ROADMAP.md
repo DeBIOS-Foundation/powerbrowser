@@ -158,7 +158,7 @@ Plans:
   4. Cosmetic fields left unset fall back to Power Browser defaults that are themselves a `configuration.toml` (one merge code path), with every applied default echoed at generate time
   5. Everything the generator writes lands under a single gitignored `generated/` root, nothing generated is committed, and `generate --check` fails when that output is stale
 
-**Plans**: 6 plans in 5 waves
+**Plans**: 0/6 plans executed in 5 waves
 
 Plans:
 **Wave 1**
@@ -274,7 +274,7 @@ than noisy.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Platform Extraction and Rename | 21/21 | In Progress|  |
-| 2. Configuration Manifest and Generator Core | 0/TBD | Not started | - |
+| 2. Configuration Manifest and Generator Core | 0/6 | Planned    |  |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
 | 5. Hook-Only Patches and Upstream Uptake | 0/TBD | Not started | - |
