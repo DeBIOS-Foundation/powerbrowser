@@ -92,7 +92,12 @@ if [ "$DRY_RUN" -eq 1 ]; then
   echo "  2. rm -rf '$UPSTREAM_DIR' && TAG=$NEW_TAG '$REPO_ROOT/scripts/fetch-upstream.sh'"
   echo "  3. '$REPO_ROOT/scripts/apply-patches.sh'"
   echo "  4. '$REPO_ROOT/scripts/check-patch-surface.sh'"
-  echo "  4b. node '$REPO_ROOT/scripts/scan-brand-residue.mjs' --extra-root \"\$UPSTREAM_DIR\"  # D-18 permanent gate, no exception; --extra-root reaches the replayed tree, which is git-ignored and invisible to git ls-files"
+  # WR-08 (plan 01-18): expanded, like every neighbouring line. It used to print
+  # the literal `--extra-root "$UPSTREAM_DIR"`, which pasted into a shell where
+  # that variable is unset becomes `--extra-root ""` and the scanner exits 2.
+  # This script's header says the real path is exercised locally ONLY via
+  # --dry-run, so this printed text IS the artifact under local test.
+  echo "  4b. node '$REPO_ROOT/scripts/scan-brand-residue.mjs' --extra-root '$UPSTREAM_DIR'  # D-18 permanent gate, no exception; --extra-root reaches the replayed tree, which is git-ignored and invisible to git ls-files"
   echo "  5. TAG=$NEW_TAG '$REPO_ROOT/scripts/fetch-upstream.sh'  # re-check: fully-applied state at $NEW_TAG, not the pinned default"
   echo "  5b. readlink -f '$UPSTREAM_DIR/powerbrowser'  # must resolve to '$REPO_ROOT/powerbrowser' -- git-excluded, invisible to step 5's classifier otherwise"
   echo "  6. Operator follow-up (not run here): '$REPO_ROOT/scripts/toolchain-baseline.sh' under 'nix develop .#firefox', diffed against '$REPO_ROOT/toolchain-baseline.txt' (PITFALLS #2)"
