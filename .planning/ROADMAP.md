@@ -54,7 +54,7 @@ Sourcerer's decision IDs as justification.)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 20/20 plans executed (19 executed; 01-20 planned, closing 01-VERIFICATION.md's Truth 9 — the `about:license` disclosure link 01-18's own fix suppressed)
+**Plans**: 21 plans (20 executed; 01-21 planned, closing 01-VERIFICATION.md's remaining Critical gap — the About-dialog suppression gate 01-20 registered cannot go red on the regression it exists to prevent)
 
 Plans:
 **Wave 1**
@@ -136,6 +136,10 @@ Plans:
 **Wave 20** *(gap closure — 01-VERIFICATION.md Truth 9 / 01-REVIEW.md CR-01, blocked on Wave 19 completion)*
 
 - [x] 01-20-PLAN.md — Close Truth 9: replace the About dialog's bare container suppression — which took the internal `about:license` disclosure link down with the two mozilla.org rows 01-18 was asked to remove — with an href-qualified selector in both byte-identical variants, and land the gate WR-03 asked for: a checker that derives the suppression selectors from the shipped stylesheets and the element tree from the upstream markup, fails by name when a selector reaches the licence link or matches nothing at all, and proves it can go red on four planted faults; plus deferred-items row 11 corrected to record the defect that existed rather than only the risk that might
+
+**Wave 21** *(gap closure — 01-VERIFICATION.md pass 3 / 01-REVIEW.md CR-02, blocked on Wave 20 completion)*
+
+- [ ] 01-21-PLAN.md — Close CR-02: give the About-dialog suppression gate the coverage assertion it never had — derive every external link from the upstream markup and require each to be reached by a shipped selector in each branding variant, failing by name with the href and the file — so deleting or narrowing the outbound selector goes red instead of green (reproduced at plan time: with the selector removed, restoring UAT G-01-3 in full, the current checker exits 0); plus the WR-08 closure that makes the assertion true on the shipped tree (`#communityExperimentalDesc` suppressed rather than exempted, because an exemption list is a hand-kept expectation), two planted-fault self-test rows for the deletion and narrowing mutations, and deferred-items row 11(a) scoped to renames with the G-01-25 optional item ruled on explicitly
 
 **UI hint**: yes
 **Research**: recommended — ~1,090 occurrences across five case-variant forms and six coupled reference formats (jar.mn, components.conf, moz.build, patch content, verifier regex); the classification inventory needs its own deep pass. Highest-risk phase; plan-review-convergence applies. *(Research completed 2026-08-30: the real migrating surface measured 755 occurrences across 69 files; GUI-01 and GUI-02 found to be net-new work, not migration.)*
