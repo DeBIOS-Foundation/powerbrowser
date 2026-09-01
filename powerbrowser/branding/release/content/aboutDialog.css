@@ -20,12 +20,36 @@
   }
 }
 
-#rightBox {
-  background-size: auto 44px;
-  margin-inline: 30px;
-  padding-top: 64px;
-}
+/* The wordmark-positioning block that used to sit here is removed. Every
+   declaration in it -- background sizing, inline margin, 64px top padding --
+   positioned the wordmark that upstream's own aboutDialog.css loads from
+   chrome://branding/content/about-wordmark.svg. This tree does not ship that
+   asset and this directory's jar.mn correctly does not package it. While this
+   stylesheet was itself unpackaged the block was inert; now that it loads, the
+   padding would reserve an empty 64px band above the version text for an image
+   that 404s. Phase 3's icon pipeline owns the wordmark; the block returns with
+   the asset. */
 
 #bottomBox {
   padding: 15px 10px;
+}
+
+/* Suppress the stock outbound-link rows (G-01-3). Upstream hard-codes every
+   one of these hrefs as a literal attribute in aboutDialog.xhtml, so no pref
+   can reach them; this stylesheet is the third and last entry in that file's
+   linkset, which is the hook upstream provides to branding for exactly this.
+
+   #contributeDesc   -- renders "Make a donation" and "get involved!".
+   #bottomBox > hbox -- renders "Licensing Information", "Terms of Use" and
+                        "Privacy Notice". It is the link row only; #trademark
+                        is #bottomBox's other child and stays visible.
+   #communityDesc    -- renders the community blurb. It was not in the user
+                        report; it is suppressed with the other two rather than
+                        deferred because its visible label is this product's own
+                        vendor name while its target is mozilla.org -- the
+                        reported defect in its worst instance. */
+#communityDesc,
+#contributeDesc,
+#bottomBox > hbox {
+  display: none;
 }

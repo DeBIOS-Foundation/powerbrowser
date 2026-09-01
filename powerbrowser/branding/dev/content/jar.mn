@@ -2,11 +2,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# Stub jar.mn: only re-exports the five default*.png icons this tree ships.
+# Packages what this tree ships into the branding chrome package: the five
+# default*.png icons, and aboutDialog.css -- the branding stylesheet that
+# upstream's aboutDialog.xhtml loads as the third entry of its linkset.
 # Deliberately does not reference about.png, about-logo*, about-wordmark.svg,
-# firefox-wordmark.svg, document.ico, document_pdf.svg or aboutDialog.css --
-# those are Mozilla marks or files this tree does not ship, and the surfaces
-# that consume them are out of Phase 3's scope (no chrome work).
+# firefox-wordmark.svg, document.ico or document_pdf.svg -- those are Mozilla
+# marks or assets this tree does not ship, and Phase 3's icon pipeline owns
+# the ones that will eventually be replaced.
 
 browser.jar:
 % content branding %content/branding/ contentaccessible=yes
@@ -15,3 +17,4 @@ browser.jar:
   content/branding/icon48.png                    (../default48.png)
   content/branding/icon64.png                    (../default64.png)
   content/branding/icon128.png                   (../default128.png)
+  content/branding/aboutDialog.css               (aboutDialog.css)
