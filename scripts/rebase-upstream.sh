@@ -48,6 +48,22 @@ fi
 # see it named here even if step 1 below rejects it.
 echo "rebase-upstream: target tag: $NEW_TAG"
 
+# Step 1a (WR-07, plan 01-18): the tag must be a plain tag NAME before it is
+# used as anything else. `$NEW_TAG` is interpolated into a `git ls-remote`
+# refspec, where it is a GLOB, and it used to be interpolated into a `grep`
+# pattern, where it was a BRE. `--tag '*'` satisfied both -- it listed every tag
+# and matched `refs/tags/*` as a regex -- so validation passed and the run went
+# on to `rm -rf "$UPSTREAM_DIR"` before failing inside `git clone --branch '*'`.
+# There is no command injection here (every use is quoted and `--branch`
+# consumes its value positionally); the defect is that the step meant to catch a
+# typo before a 1.1 GB clone could be satisfied by a pattern instead of a name.
+if ! [[ "$NEW_TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "rebase-upstream: FAIL -- tag '$NEW_TAG' is not a plain tag name ([A-Za-z0-9._-]+)" >&2
+  echo "  A glob or a pattern can satisfy the existence check below without naming a real tag," >&2
+  echo "  and the run would then remove '$UPSTREAM_DIR' before failing in git clone." >&2
+  exit 1
+fi
+
 # Step 1: verify the requested tag exists on the remote. Cheaper than
 # discovering a typo after a 1.1 GB clone -- run in both real and dry-run
 # modes.
