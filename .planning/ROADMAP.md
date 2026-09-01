@@ -54,7 +54,7 @@ Sourcerer's decision IDs as justification.)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 17 plans (15 executed, 2 pending gap closure)
+**Plans**: 16/17 plans executed (15 executed, 2 pending gap closure)
 
 Plans:
 **Wave 1**
@@ -119,7 +119,7 @@ Plans:
 
 **Wave 16** *(gap closure — the same green-by-construction class, re-opened one step to either side by 01-REVIEW.md)*
 
-- [ ] 01-16-PLAN.md — Close CR-03: make `verify-shell-error-copy.mjs`'s rule (4) derive the total number of `_showError(` call sites present in the file under test independently of its enumeration regex and require the two counts to be equal, so a call site the regex cannot read is a named failure instead of an invisible one; two planted-fault rows (comma-less call, optional-chained receiver) proven green under the pre-fix checker and red under the fixed one; plus WR-01 and WR-02 folded in — a `message:` nested below depth 0 no longer makes a binding message-bearing, and `parseUserMessageTable` asserts its own parse is total
+- [x] 01-16-PLAN.md — Close CR-03: make `verify-shell-error-copy.mjs`'s rule (4) derive the total number of `_showError(` call sites present in the file under test independently of its enumeration regex and require the two counts to be equal, so a call site the regex cannot read is a named failure instead of an invisible one; two planted-fault rows (comma-less call, optional-chained receiver) proven green under the pre-fix checker and red under the fixed one; plus WR-01 and WR-02 folded in — a `message:` nested below depth 0 no longer makes a binding message-bearing, and `parseUserMessageTable` asserts its own parse is total
 
 **Wave 17** *(gap closure — blocked on Wave 16 completion)*
 
@@ -235,7 +235,7 @@ than noisy.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Platform Extraction and Rename | 15/15 | In Progress|  |
+| 1. Platform Extraction and Rename | 16/17 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 0/TBD | Not started | - |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
