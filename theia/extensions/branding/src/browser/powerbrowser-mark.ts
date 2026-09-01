@@ -7,7 +7,7 @@
 // scope, and spelling the token would make this file fail that gate.
 //
 // The SVG string below is byte-identical to the single-line <svg> element in
-// `powerbrowser/branding/mark.svg`, which is the one source all ten
+// `brand/mark.svg`, which is the one source all ten
 // `branding/{dev,release}/default{16,32,48,64,128}.png` rasters are rendered
 // from. `scripts/verify-branding-preflight.mjs` asserts that equality on every
 // run: the two are the same asset expressed twice, and nothing else in the tree
