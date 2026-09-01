@@ -365,23 +365,48 @@ function check(targetPath) {
   // `callSites === 0`, which fires only when EVERY site disappears, so five
   // sites parsed out of six present was indistinguishable from a clean run.
   //
-  // So count the call sites a SECOND time with deliberately dumber patterns --
-  // no receiver, no argument capture, no comma -- and require the two counts to
-  // agree. Both run over `src`, the comment-stripped source every other
-  // derivation in this function uses: `raw` still holds eight doc-comment
-  // mentions of _showError, and counting those would make this permanently red.
+  // 01-18 (CR-01). 01-16's first attempt at that completeness guard compared
+  // two COUNTS: every textual `_showError(` minus a `definitions` term computed
+  // as `/^\s*_showError\s*\(/gm`, against the number of sites the enumeration
+  // parsed. That subtracted term is a hand-written assumption -- "a line-initial
+  // `_showError(` is the method definition" -- and a receiverless CALL written
+  // at the start of a line satisfies it just as well. Appending one raised the
+  // raw total by 1 AND `definitions` by 1, so the difference did not move while
+  // the parsed count also did not move: the two errors cancelled exactly, the
+  // assertion agreed with itself, and a caught exception's `.message` reached
+  // the error layer on a green run. A count can cancel; a POSITION cannot.
+  //
+  // So compare position SETS. Every textual `_showError(` start offset must be
+  // either the one definition or a site the enumeration below actually parsed.
+  // The definition is identified by the one thing that distinguishes it -- a
+  // body follows its parameter list -- and the file is required to have exactly
+  // one, which removes the line-initial assumption entirely.
+  //
+  // Both run over `src`, the comment-stripped source every other derivation in
+  // this function uses: `raw` still holds eight doc-comment mentions of
+  // _showError, and counting those would make this permanently red.
   //
   // The remedy for a mismatch is to write the call as
   // `this._showError(<message>, ...)`, or to teach this check the new shape --
   // NOT to widen the enumeration regex until today's sites match again. A wider
   // pattern is only a larger unproven expectation and would still be silent on
   // the next shape nobody thought of.
-  const definitions = [...src.matchAll(/^\s*_showError\s*\(/gm)].length;
-  const present = [...src.matchAll(/_showError\s*\(/g)].length - definitions;
+  const allSites = [...src.matchAll(/_showError\s*\(/g)].map((m) => m.index);
+  const defs = [...src.matchAll(/_showError\s*\([^)]*\)\s*\{/g)].map((m) => m.index);
+  if (defs.length !== 1) {
+    fail(
+      `${defs.length} \`_showError(...) {\` definition(s) found -- this check assumes exactly one; ` +
+        `with none it is asserting nothing, with two it cannot say which sites belong to which`
+    );
+  }
 
+  // The offsets the enumeration below actually reached, recorded BY the
+  // enumeration rather than by a second pattern that guesses what it reaches.
+  const parsed = new Set();
   let callSites = 0;
   for (const m of src.matchAll(/this\._showError\(\s*([^,]+?)\s*,/g)) {
     callSites += 1;
+    parsed.add(m.index + "this.".length);
     const arg = m[1].trim();
     if (/^USER_MESSAGE\.[A-Za-z_$][\w$]*$/.test(arg)) {
       continue;
@@ -419,13 +444,14 @@ function check(targetPath) {
         "check has stopped matching the code, and either way it is asserting nothing"
     );
   }
-  if (callSites !== present) {
+  const unparsed = allSites.filter((i) => !defs.includes(i) && !parsed.has(i));
+  if (unparsed.length !== 0) {
     fail(
-      `${present} \`_showError(\` call site(s) are present in this file but ${callSites} were ` +
+      `${unparsed.length} \`_showError(\` call site(s) at offset(s) ${unparsed.join(", ")} were not ` +
         `parsed -- a call site this check cannot read is a call site it is not checking, and rule ` +
         `(4) went green on sites it never saw. Write the call as ` +
         `\`this._showError(<message>, ...)\`, or teach this check the new shape; do not widen the ` +
-        `enumeration pattern until the counts happen to agree`
+        `enumeration pattern until the offsets happen to agree`
     );
   }
 }
@@ -524,6 +550,18 @@ const FAULTS = [
     name: "_showError() call site with an optional-chaining receiver is never enumerated",
     apply: (s) => `${s}\nthis?._showError(err.message, false, []);\n`,
     expect: "a call site this check cannot read",
+  },
+  // 01-18 (CR-01). A RECEIVERLESS call written at the start of a line. Under
+  // 01-16's count-based guard this row was GREEN -- verified against a scratch
+  // copy of that checker -- because the plant raised the raw `_showError(` total
+  // and the `definitions` term it was subtracted from by exactly one each, so
+  // the difference never moved. It is the row that distinguishes the position-set
+  // comparison from the counts it replaced; a count that cancels is why it
+  // exists, so it must never be rewritten to carry a `this.` receiver.
+  {
+    name: "receiverless line-initial _showError() call site is absorbed by the definition term",
+    apply: (s) => `${s}\n_showError(err.message, false, []);\n`,
+    expect: "were not parsed",
   },
   // 01-16 (WR-01, WR-02). Two sibling silent drops in this same file.
   //
