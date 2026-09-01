@@ -2,553 +2,395 @@
 phase: 01-platform-extraction-and-rename
 reviewed: 2026-08-31T00:00:00Z
 depth: standard
-files_reviewed: 49
+scope: gap-closure surface only (plans 01-18 and 01-19, diff e24f210^..HEAD)
+files_reviewed: 7
 files_reviewed_list:
-  - CLAUDE.md
-  - docs/BUILD.md
-  - docs/CUSTOMIZE.md
-  - docs/URI-SCHEMES.md
-  - .github/workflows/rebase-upstream.yml
-  - inventory/brand-tokens.json
-  - .mozconfig
-  - patches/010-powerbrowser-identity.patch
-  - patches/020-powerbrowser-shell.patch
-  - powerbrowser/branding/dev/configure.sh
   - powerbrowser/branding/dev/content/aboutDialog.css
-  - powerbrowser/branding/dev/locales/en-US/brand.ftl
-  - powerbrowser/branding/dev/locales/en-US/brand.properties
-  - powerbrowser/branding/mark.svg
-  - powerbrowser/branding/release/configure.sh
+  - powerbrowser/branding/dev/content/jar.mn
   - powerbrowser/branding/release/content/aboutDialog.css
-  - powerbrowser/branding/release/locales/en-US/brand.ftl
-  - powerbrowser/branding/release/locales/en-US/brand.properties
-  - powerbrowser/endpoint-allowlist.json
-  - powerbrowser/INTERNAL-APIS.md
-  - powerbrowser/powerbrowser.desktop
-  - powerbrowser/powerbrowser-release.desktop
-  - powerbrowser/shell/moz.build
-  - powerbrowser/shell/PowerBrowserAPI.sys.mjs
-  - powerbrowser/shell/powerbrowser.css
-  - powerbrowser/shell/powerbrowser.js
-  - powerbrowser/shell/TheiaService.sys.mjs
-  - scripts/check-internals-boundary.sh
-  - scripts/lib/firefox-bidi.mjs
-  - scripts/rebase-upstream.sh
-  - scripts/rename-brand.mjs
-  - scripts/scan-brand-residue.mjs
-  - scripts/verify-branding-identity.mjs
-  - scripts/verify-branding.mjs
+  - powerbrowser/branding/release/content/jar.mn
+  - powerbrowser/shell/powerbrowser.xhtml
   - scripts/verify-branding-preflight.mjs
-  - scripts/verify-gui01-command.mjs
-  - scripts/verify-gui01-window.mjs
   - scripts/verify-platform.sh
-  - scripts/verify-shell-error-contract.mjs
-  - scripts/verify-shell-error-copy.mjs
-  - scripts/verify-start-path-recovery.mjs
-  - theia/applications/browser/package.json
-  - theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx
-  - theia/extensions/branding/src/browser/powerbrowser-mark.ts
-  - theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx
-  - theia/extensions/tab-uris/src/browser/browser-window-command.ts
-  - theia/extensions/tab-uris/src/browser/tab-uris-frontend-module.ts
-  - theia/extensions/token-gate/src/node/powerbrowser-env.ts
 findings:
   critical: 1
-  warning: 9
-  info: 4
-  total: 14
+  warning: 8
+  info: 2
+  total: 11
 status: issues_found
 ---
 
-# Phase 01: Code Review Report
+# Phase 01: Code Review Report (gap-closure surface)
 
 **Reviewed:** 2026-08-31
 **Depth:** standard
-**Files Reviewed:** 49 (2 changed since the last review base; the remainder re-scanned)
+**Files Reviewed:** 7
 **Status:** issues_found
+
+## Scope — read this before treating the result as a phase verdict
+
+This report covers **only** the seven files changed by plans 01-18 and 01-19, the gap-closure
+run whose diff is `e24f210^..HEAD`. It **replaces** the prior full-phase `01-REVIEW.md`
+(commit `8364662`), which covered the other 17 plans. Nothing here re-reviews those 17 plans,
+and a clean line in this report is not a clean bill on Phase 01 as a whole. The earlier report
+remains readable in git history at `8364662`.
 
 ## Summary
 
-**Prior findings verified closed — not re-reported below.** Each was reproduced
-against the shipped code before being struck:
+Both gap closures do what they claim mechanically. `chrome://branding/content/aboutDialog.css`
+is now packaged by both variants (the G-01-3 404), the shell chrome document spells the display
+form in the two places that render (the G-01-25 title-bar leak), and each fix arrived with a
+gate: preflight section 9 (packaging completeness, derived from the content directory) and
+preflight section 6's shell-markup read set (derived from `powerbrowser/shell/jar.mn`). I ran
+both — `node scripts/verify-branding-preflight.mjs --self-test`, five plants, all red by name;
+`scripts/verify-platform.sh --quick`, 24 checks, all PASS. The `_branding_variant_divergence_impl`
+literal fix does preserve the dev-vs-release divergence the function exists to assert
+(`Power Browser Dev` ≠ `Power Browser`), and both mutation controls in its self-test still go
+red — verified by running `--only branding-variant-divergence-self-test`.
 
-| Prior | Verdict | Evidence |
-|---|---|---|
-| CR-01 (`--extra-root` exempts residue claimed by a `coincidental` row) | **closed** | `scan()` at `scripts/scan-brand-residue.mjs:1237` now passes `rows: inv.tokens.filter(r => r.class !== 'coincidental')`; the `--self-test` row planting the exact mozconfig reproduction goes red naming both root and file. |
-| CR-02 (unreadable file under `--extra-root` skipped silently, counted as scanned) | **closed** | `scan()` records `{file, reason}`; the extra-root caller gates on any of them; the self-test row establishes its own precondition before asserting. |
-| CR-03 (`_showError` call-site enumeration not asserted complete) | **partially closed** | The two named shapes go red, but the compensating counter opens a *new* green path — see CR-01 below — and the `.bind` shape is still unseen (WR-01). |
-| WR-01 (nested `message:` makes a binding falsely message-bearing) | **closed** | `depthZeroOnly()` at `scripts/verify-shell-error-copy.mjs:137`; fault row red. |
-| WR-02 (unparsed `USER_MESSAGE` entries dropped silently) | **partially closed** | The totality assertion exists but shares its blind spot with the parser it checks — see WR-02 below. |
+That green does not reach the semantics of what shipped, and that is where the defects are.
 
-`scripts/verify-platform.sh --quick` is green (24 rows), and both `--self-test`
-suites pass end to end. That is the ceiling of what those suites prove, and this
-pass found three inputs they do not cover.
+The one blocker is in the About-dialog suppression: `#bottomBox > hbox` is the whole link row,
+and one of the three links in it is `about:license`, not an outbound Mozilla URL. Suppressing
+it removes the product's only in-UI route to the open-source licensing disclosure — a
+consequence the file's own comment does not mention, because the comment reasons about the row
+as "the stock outbound-link rows" when a third of it is not outbound.
 
-**The headline is CR-01.** 01-16 fixed the *symptom* CR-03 named (two call
-shapes the enumeration regex could not read) by adding a second, independently
-derived count. The second count subtracts a `definitions` term computed with
-`/^\s*_showError\s*\(/gm` — a hand-written assumption that a line-initial
-`_showError(` is the method definition. A receiverless call written at line
-start is absorbed by that term, so `present` falls by exactly one at the same
-moment `callSites` fails to rise. The two errors cancel, the assertion agrees
-with itself, and a caught exception's `.message` reaches
-`#powerbrowser-error-message` on a green run. Before 01-16 that site was merely
-*unseen*; it is now *masked by the completeness check itself*, which is a worse
-state than the one the plan set out to fix.
-
-Two further inputs go green that should not: a `.bind`-aliased call site
-(WR-01), and a quoted-key `USER_MESSAGE` entry (WR-02) — the latter because the
-"deliberately dumber" second count added for WR-02 requires a bare identifier
-key, exactly as `entryRe` does. Both are `CLAUDE.md` "derive from the tree and
-compare" failures: a second derivation that shares the first's blind spot is not
-a cross-check, and a subtracted term computed by a hand-written pattern is a
-hand-kept expectation wearing a derivation's clothes.
-
-The remaining warnings are the four `rebase-upstream.sh` / workflow items that
-`deferred-items.md` row 10 records as *deliberately not done*. They are open
-defects in the tree under review, so they are carried forward here rather than
-dropped, in condensed form.
+The remaining warnings cluster into two classes. First, the CSS change is narrower than its
+comments claim: it does not stop the wordmark 404 it blames itself for, it leaves an identical
+vendor-name→mozilla.org sibling node unsuppressed, and hidden-but-`aria-describedby` text is
+still announced. Second, the new gates carry hand-kept assumptions of exactly the kind
+CLAUDE.md's verification rules forbid — the suppression selectors are an unguarded expectation
+about upstream markup, the divergence check's expectations are still literals in a check that
+never runs, and the new jar.mn parser only recognises one of the two legal jar.mn line shapes.
 
 ## Critical Issues
 
-### CR-01: the new `definitions` term absorbs a receiverless call site, so the completeness counts cancel and rule (4) goes green on a leaked exception message
+### CR-01: The About-dialog suppression also removes the `about:license` disclosure link
 
-**File:** `scripts/verify-shell-error-copy.mjs:379-380` (the two counters), with
-`scripts/verify-shell-error-copy.mjs:422-430` (the assertion they feed)
+**File:** `powerbrowser/branding/dev/content/aboutDialog.css:51-55` and
+`powerbrowser/branding/release/content/aboutDialog.css:51-55`
 
-**Issue:** `present` is computed as *(every textual `_showError(`)* minus
-*`definitions`*, where `definitions` is `[...src.matchAll(/^\s*_showError\s*\(/gm)].length`
-— every line whose first non-whitespace token is `_showError(`. That pattern
-does not describe "the method definition". It describes "a line-initial
-`_showError(`", and a **call** written without a receiver at the start of a line
-matches it just as well.
+**Issue:** The rule hides `#bottomBox > hbox` wholesale. `upstream/browser/base/content/aboutDialog.xhtml:139-143`
+shows what is in that row:
 
-The consequence is exact cancellation. Appending one receiverless call site
-raises the raw textual count by 1 **and** raises `definitions` by 1, so
-`present` is unchanged; `callSites` (which requires a literal `this.` receiver)
-is also unchanged; `callSites === present` holds; the run exits 0. The call site
-is never examined by rule (4), so its argument — here a caught exception's
-`.message`, the exact shape `CLAUDE.md`'s user-facing-copy rule and this whole
-checker exist to stop — is never rejected.
-
-Reproduced against the shipped checker (contrast case F below shows the counts
-*do* move when the plant is not absorbed):
-
-```sh
-$ cp powerbrowser/shell/TheiaService.sys.mjs /tmp/E.mjs
-$ printf '\n_showError(err.message, false, []);\n' >> /tmp/E.mjs
-$ node scripts/verify-shell-error-copy.mjs --file /tmp/E.mjs
-verify-shell-error-copy: PASS -- no internal identifier can reach the error layer (/tmp/E.mjs)
-EXIT=0
+```xhtml
+<hbox pack="center">
+  <label is="text-link" class="bottom-link" useoriginprincipal="true" href="about:license" data-l10n-id="bottomLinks-license"/>
+  <label is="text-link" class="bottom-link" href="https://www.mozilla.org/about/legal/terms/firefox/" .../>
+  <label is="text-link" class="bottom-link" href="https://www.mozilla.org/privacy/firefox/..." .../>
+</hbox>
 ```
 
-This is the same failure class as CR-03 (`a check that silently examines 5 of 6
-call sites is a check that can go green on the site it missed`), reintroduced by
-the mechanism intended to close it. It also violates `CLAUDE.md`'s verification
-rule 2 directly: the subtracted term is a hand-written pattern nothing
-constrains, so the "independently derived total" is not independent of an
-assumption about call shape.
+Two of the three are outbound mozilla.org URLs — the reported defect. The first is
+`about:license`, an internal page and the **only** in-product path to the aggregated
+open-source licence text for everything this build links. The file's comment characterises the
+whole row as "Licensing Information, Terms of Use and Privacy Notice" and suppresses it as a
+unit without noting that removing "Licensing Information" is a disclosure change rather than a
+debranding change. `#trademark` was deliberately preserved for exactly this reason; the licence
+link deserves the same treatment and did not get it. Nothing replaces it: there is no
+Power-Browser-authored licence surface in this tree, and rule 5 forbids authoring browser
+chrome, so the link is simply gone.
 
-**Fix:** compare **positions**, not counts. Position-set equality cannot cancel,
-and it removes the `definitions` heuristic entirely — the definition is
-identified by the one thing that actually distinguishes it (a body follows the
-parameter list), and the file is required to have exactly one:
+**Fix:** Suppress by target rather than by container, which is both narrower and self-documenting.
+In both variant stylesheets, replace the `#bottomBox > hbox` selector with:
 
-```js
-  // Every textual `_showError(` start offset in the comment-stripped source.
-  const allSites = [...src.matchAll(/_showError\s*\(/g)].map((m) => m.index);
-  // The definition is the one occurrence whose parameter list is followed by a
-  // body. Asserting there is EXACTLY one removes the "line-initial means
-  // definition" assumption, which a receiverless CALL also satisfies.
-  const defs = [...src.matchAll(/_showError\s*\([^)]*\)\s*\{/g)].map((m) => m.index);
-  if (defs.length !== 1) {
-    fail(
-      `${defs.length} \`_showError(...) {\` definition(s) found -- this check assumes exactly one; ` +
-        `with none it is asserting nothing, with two it cannot say which sites belong to which`
-    );
-  }
-  const parsed = new Set([...src.matchAll(/this\._showError\(/g)].map((m) => m.index + "this.".length));
-  const unparsed = allSites.filter((i) => !defs.includes(i) && !parsed.has(i));
-  if (unparsed.length !== 0) {
-    fail(
-      `${unparsed.length} \`_showError(\` call site(s) at offset(s) ${unparsed.join(", ")} were not ` +
-        `parsed -- a call site this check cannot read is a call site it is not checking. Write the ` +
-        `call as \`this._showError(<message>, ...)\`, or teach this check the new shape`
-    );
-  }
+```css
+/* Only the outbound rows. about:license is an internal page and the product's
+   only route to the aggregated open-source licence text -- it stays. */
+#bottomBox > hbox > .bottom-link[href^="https://www.mozilla.org"] {
+  display: none;
+}
 ```
 
-(Keep the existing `callSites === 0` guard; drop `definitions`/`present`.)
-
-Add a `FAULTS` row planting `\n_showError(err.message, false, []);\n` and
-expecting `were not parsed`. It must be verified GREEN against a scratch copy of
-today's checker and RED against the fixed one — otherwise the row proves nothing
-about this change, which is the same evidentiary standard rows 9-12 already
-meet.
+This keeps the row (and its `pack="center"` layout) with a single visible "Licensing
+Information" link. If the row is genuinely meant to go, the licence page needs a replacement
+affordance planned before it does — that is a decision, not a CSS detail.
 
 ## Warnings
 
-### WR-01: a `.bind`-aliased call site is invisible to **both** counters, so CR-03's third documented bypass is still open
+### WR-01: The suppressed copy is still in the dialog's accessible description
 
-**File:** `scripts/verify-shell-error-copy.mjs:379-383`
+**File:** `powerbrowser/branding/dev/content/aboutDialog.css:51-55` and
+`powerbrowser/branding/release/content/aboutDialog.css:51-55`
 
-**Issue:** Both the enumeration regex and the new completeness counter key on
-the literal text `_showError(`. `this._showError.bind(this)` contains
-`_showError.bind(` — the parenthesis is not adjacent — so the aliased method is
-counted by neither, the counts agree, and the call through the alias is never
-examined. This was case (3) of the previous CR-03 reproduction; cases (1) and
-(2) are closed, this one is not.
+**Issue:** `upstream/browser/base/content/aboutDialog.xhtml:17` puts both suppressed nodes in
+the dialog's description chain:
 
-Reproduced (exits 0):
-
-```sh
-$ printf '\nconst show = this._showError.bind(this);\nshow(err.message, false, []);\n' >> /tmp/A.mjs
-$ node scripts/verify-shell-error-copy.mjs --file /tmp/A.mjs
-verify-shell-error-copy: PASS -- ...
-EXIT=0
+```xhtml
+aria-describedby="version distribution distributionId communityDesc contributeDesc trademark"
 ```
 
-**Fix:** reject the escape rather than trying to follow it — any textual
-`_showError` **not** immediately followed by `(` is a reference that removes the
-method from this check's reach:
+Under the accessible-name-and-description algorithm, a node that is hidden but **directly
+referenced** by `aria-labelledby`/`aria-describedby` is not skipped — the referenced-node
+exception overrides the hidden-node rule. So a screen-reader user still hears the community
+blurb (whose visible label is this product's vendor name pointing at mozilla.org) and the
+donation copy that `display: none` was added to remove. The suppression is visual only, and the
+comment's rationale ("its visible label is this product's own vendor name while its target is
+mozilla.org — the reported defect in its worst instance") applies verbatim to the announced
+text.
 
-```js
-  const escapes = [...src.matchAll(/_showError(?!\s*\()/g)].map((m) => m.index);
-  if (escapes.length !== 0) {
-    fail(
-      `\`_showError\` is referenced without being called (offset(s) ${escapes.join(", ")}) -- an ` +
-        `alias, a \`.bind\`, or a property read hands the error layer to a call site this check ` +
-        `cannot see. Call it directly as \`this._showError(<message>, ...)\``
-    );
-  }
-```
+**Fix:** CSS cannot reach this; `aria-describedby` is a literal attribute in upstream markup.
+Either drop `communityDesc contributeDesc` from that attribute in the patch stack (a one-token
+hunk in the same file the suppression already depends on), or record the residual explicitly in
+the phase's deferred items so it is not mistaken for closed. Silently shipping "hidden, but
+still announced" is the worse of the two.
 
-Add a `FAULTS` row planting the two-line `.bind` snippet above.
+### WR-02: Removing the `#rightBox` block does not stop the 404 its replacement comment blames it for
 
-### WR-02: the WR-02 totality count shares `entryRe`'s exact blind spot, so a quoted-key entry is still dropped silently
+**File:** `powerbrowser/branding/dev/content/aboutDialog.css:23-31` and
+`powerbrowser/branding/release/content/aboutDialog.css:23-31`
 
-**File:** `scripts/verify-shell-error-copy.mjs:120-121` (the `declared` count),
-guard at `scripts/verify-shell-error-copy.mjs:275-285`
+**Issue:** The comment says the deleted `padding-top: 64px` "would reserve an empty 64px band
+above the version text for an image that 404s". The image request is not ours to delete —
+`upstream/browser/base/content/aboutDialog.css:32-44` sets it:
 
-**Issue:** The added count is described in its own comment as *"a second,
-deliberately dumber count of what the table DECLARES"*. It is not independent:
-`entryRe` requires `[A-Za-z_$][\w$]*` as the key, and `declared` requires
-`[A-Za-z_$][\w$]*` as the key. Every key form the parser cannot read, the
-counter also cannot see — so both are zero for the same entry, `declared ===
-entries.size` holds, and the guard never fires. Object-literal keys are legal
-as string literals, as numbers, and as computed `[expr]`, and a spread element
-`...{ ... }` is dropped by both as well.
-
-Reproduced — a declared, unreferenced, quoted-key entry carrying an internal
-all-caps sentinel passes the gate whose one job is leak-scanning declared
-user-facing strings:
-
-```sh
-$ # inserted into the table:  "quotedKey": "Backend did not announce POWERBROWSER_BACKEND_READY within 90000ms.",
-$ node scripts/verify-shell-error-copy.mjs --file /tmp/C.mjs
-verify-shell-error-copy: PASS -- ...
-EXIT=0
-```
-
-(The same input with a *bare* identifier key correctly goes red, which is what
-makes the key form — not the string content — the discriminator.)
-
-**Fix:** make the second count actually dumber — count depth-1 lines that carry
-a colon at all, regardless of key form, so a form the parser cannot read is
-still *seen*:
-
-```js
-  // Deliberately does NOT reuse entryRe's key pattern: a second count that
-  // shares the first's key grammar cannot disagree with it, and a count that
-  // cannot disagree is not a cross-check. Any depth-1 line bearing a colon
-  // counts, so a quoted, numeric, computed or spread member is visible here
-  // even though the parser above cannot read it.
-  const declared = [...block[1].matchAll(new RegExp(`^${indent}\\S.*:`, "gm"))].length;
-```
-
-Add a `FAULTS` row planting a quoted-key entry and expecting `never
-leak-scanned`.
-
-### WR-03: the tracked-tree PASS line still counts files it never opened — the reachable half of CR-02, left uncorrected
-
-**File:** `scripts/scan-brand-residue.mjs:1276` (`result.files.length`), with the
-`ENOENT` allowance at `scripts/scan-brand-residue.mjs:1175-1178`
-
-**Issue:** 01-17 corrected the *extra-root* summary to name files actually read
-(`extraFiles.length - extra.unreadable.length`, line 1268) on the stated grounds
-that *"reporting an unopened file as scanned tells the operator the gate covered
-a file it never opened"*. The tracked-tree summary was not given the same
-correction, and it is the branch where the defect is **reachable**: `ENOENT`
-keeps its allowance (correctly — a sparse checkout must stay green), so those
-files are skipped, are not gated, and are still counted.
-
-Reproduced against the shipped module:
-
-```sh
-$ node -e "import('./scripts/scan-brand-residue.mjs').then(m=>{const inv=m.loadInventory();
-    const r=m.scan(inv,{files:['README.md','does/not/exist.txt']});
-    console.log(r.files.length, JSON.stringify(r.unreadable));})"
-2 [{"file":"does/not/exist.txt","reason":"ENOENT"}]
-```
-
-so on a sparse checkout the gate prints `PASS -- no residual brand occurrence in
-N scanned file(s)` where N exceeds the number of files it opened.
-
-**Fix:**
-
-```js
-  const scannedCount = result.files.length - (result.unreadable ?? []).length;
+```css
+#rightBox {
+  background-image: url("chrome://branding/content/about-wordmark.svg");
+  background-size: 288px auto;
+  margin-top: 20px;
   ...
-  console.log(`scan-brand-residue: PASS -- no residual brand occurrence in ${scannedCount} scanned file(s)${extraSummary}...`);
+}
 ```
 
-and, since an allowed skip is still a hole in coverage, print the ENOENT list at
-`--reconcile` verbosity so a growing skip set is visible rather than folded into
-a shrinking number.
+That URL still resolves into our branding package, which correctly does not ship
+`about-wordmark.svg`, so the chrome request still 404s on every About-dialog open — before this
+change and after it. What actually changed is layout: upstream's `background-size: 288px auto`
+and `margin-top: 20px` now apply unopposed, and `margin-inline: 30px` is gone, so the version
+column loses its inset. The defect named in the comment is untouched and a small layout
+regression was taken in exchange.
 
-### WR-04: a trailing `//` comment mentioning `_showError(` makes the commit gate permanently red
+**Fix:** One declaration removes the broken request and makes the comment true, at the same
+place, in both variants:
 
-**File:** `scripts/verify-shell-error-copy.mjs:379-380`, given `stripComments`
-at `scripts/verify-shell-error-copy.mjs:90-96`
-
-**Issue:** The CR-03 comment states *"Both run over `src`, the comment-stripped
-source ... `raw` still holds eight doc-comment mentions of `_showError`, and
-counting those would make this permanently red."* `stripComments` deliberately
-does **not** strip trailing `//` comments (documented, to protect `http://`
-inside real strings), so the premise holds only for whole-line and block
-comments. A trailing comment inflates `present` without inflating `callSites`.
-
-Reproduced:
-
-```sh
-$ printf '\nconst v = 1; // calls _showError(x)\n' >> /tmp/F.mjs
-$ node scripts/verify-shell-error-copy.mjs --file /tmp/F.mjs
-verify-shell-error-copy: FAIL -- 6 `_showError(` call site(s) are present ... but 5 were parsed
-EXIT=1
+```css
+/* This tree ships no wordmark (Phase 3's icon pipeline owns it), so cancel
+   upstream's reference rather than only its positioning. */
+#rightBox {
+  background-image: none;
+  margin-inline: 30px;
+}
 ```
 
-The failure is loud, so nothing ships broken — but `shell-error-copy-no-internals`
-is a `--quick` row, i.e. the commit gate, and its remedy text explicitly tells
-the operator *not* to widen the pattern. A comment edit that turns the commit
-gate red with an instruction not to fix it is a gate people learn to route
-around. The position-set fix proposed in CR-01 has the same exposure and should
-carry the mitigation below.
+Drop `margin-inline` from that block only if losing the inset is intended.
 
-**Fix:** strip trailing `//` comments for this derivation only, protecting the
-`://` case the header names:
+### WR-03: The suppression selectors are a hand-kept expectation about upstream markup with no gate
+
+**File:** `powerbrowser/branding/dev/content/aboutDialog.css:51-55`,
+`powerbrowser/branding/release/content/aboutDialog.css:51-55`;
+`scripts/verify-platform.sh` (no corresponding check — `grep -rn aboutDialog scripts/` returns
+only `verify-branding.mjs`'s Theia dialog and the preflight's own comments)
+
+**Issue:** `#communityDesc`, `#contributeDesc` and `#bottomBox > hbox` are literals about a file
+this repo does not own. An ESR rebase that renames an id, wraps the row in another box, or moves
+the links makes every one of these rules a silent no-op: the CSS still parses, the check set
+still passes, and the mozilla.org links come back on screen with nothing red. That is precisely
+the failure mode 01-18 existed to close — a chrome resource that fails silently — reintroduced
+one layer up, and the repo already has the machinery to catch it (`scripts/rebase-upstream.sh`
+runs the static gates on every rebase).
+
+**Fix:** Add one row to the registry backed by a derived comparison: parse the selector list out
+of `powerbrowser/branding/*/content/aboutDialog.css` and require every id/selector it names to
+resolve in `upstream/browser/base/content/aboutDialog.xhtml`, failing by name on the ones that
+do not. Give it a `--self-test` that renames one id in a fixture copy of the upstream markup and
+requires the check to go red naming that id.
+
+### WR-04: The divergence check's expectations are still hand-kept, in a check that never runs
+
+**File:** `scripts/verify-platform.sh:2763-2769`, `scripts/verify-platform.sh:2812-2813`,
+`scripts/verify-platform.sh:2827`, `scripts/verify-platform.sh:3868`
+
+**Issue:** 01-19 corrected `"PowerBrowser Dev"`/`"PowerBrowser"` to `"Power Browser Dev"`/
+`"Power Browser"` in four places, but left them as literals inside the check. CLAUDE.md's
+verification rule 2 is explicit: *derive from the tree and compare; do not hand-keep an
+expectation list*. `inventory/brand-tokens.json`'s `brand_display_expectations.variants.*.brand_full_name`
+already carries both values, is hand-authored from the recorded decisions, and is what
+`verify-branding-preflight.mjs` compares against — this check could read it and stop being a
+second, drifting copy.
+
+The drift mattered because nothing could catch it. `branding-variant-divergence` reads
+`objdir-release/dist/bin/...`, which does not exist (the declined ~47m release build), and it is
+therefore excluded via ledger entry 10 at line 3868. Its self-test exercises synthesised temp
+files, so it goes green on any pair of literals that happen to be internally consistent. The
+wrong expectation could sit there indefinitely — and did. Correcting the literals restores the
+value but not the property; the next rename reproduces the same drift.
+
+**Fix:** Read the two expected values from the inventory inside the node block, e.g. pass
+`brand_display_expectations.variants.dev.brand_full_name` and `.release.brand_full_name` as two
+further argv entries from `check_branding_variant_divergence`, and have the self-test pass its
+own synthesised pair so it stays independent of the tree. The dev-vs-release **divergence**
+assertion (dev carries a suffix release does not) is the part worth keeping literal.
+
+### WR-05: The new jar.mn parser recognises only one of the two legal manifest line shapes
+
+**File:** `scripts/verify-branding-preflight.mjs:566-571`
+
+**Issue:**
 
 ```js
-  // Trailing comments are safe to drop HERE (unlike in stripComments, which
-  // must not mangle `http://127.0.0.1` inside a real string): the guard
-  // requires whitespace before `//` and rejects a preceding `:`.
-  const codeOnly = src.replace(/(^|[^:\S])\/\/.*$/gm, "$1");
+const m = raw.split('#')[0].trim().match(/^(\S+)\s+\((\S+)\)$/);
+if (m) entries.push({ destination: m[1], source: m[2] });
 ```
 
-and derive `allSites`/`parsed` from `codeOnly`.
+A jar.mn entry may legally omit the parenthesised source when destination and source paths
+coincide — and that is the dominant form in the manifests this checker is modelled on.
+`upstream/browser/branding/official/content/jar.mn` uses it for eleven of its seventeen entries,
+including, exactly:
 
-### WR-05: CR-01's row filter is justified by hand-enumerating today's inventory, and nothing derives the invariant it depends on
+```
+  content/branding/aboutDialog.css
+```
 
-**File:** `scripts/scan-brand-residue.mjs:1213-1237` (the comment and the filter)
+Such a line matches nothing here, so it lands in neither `sources`, `entries`, nor
+`packagedDestinations`. Consequences, in order of severity: (a) direction (a) reports a
+correctly packaged resource as *not packaged* and the check goes red on a good tree — and it
+would have done so if 01-18 had written the packaging line the way upstream writes it;
+(b) direction (b) never validates that source's existence; (c) the divergence comparison sees a
+truncated destination set on one side and can fire spuriously. A checker that goes red on
+correct input gets switched off, which the file's own section-6 comment already argues.
 
-**Issue:** The filter excludes exactly one class and the comment explains *"Why
-nothing ELSE is excluded: `frozen` rows (`MOZ_APP_ID`, `%content/branding/`,
-`-brand-product-name = Firefox`) legitimately occur in a Gecko checkout and
-carry no residue probe."* That reasoning is correct against
-`inventory/brand-tokens.json` **as it stands today** — I verified every
-non-renameable row and none contains `sourcerer` or `deocracy` as a substring,
-so no non-renameable row can currently win the longest-first claim over a brand
-token. It is a hand-kept expectation about a file that is explicitly designed to
-grow: adding one `frozen` or `coincidental` row whose token contains a probe
-form silently reopens CR-01 under `--extra-root`, with no reconcile behind it
-and no check that fires.
-
-`CLAUDE.md`: *"Derive from the tree and compare; do not hand-keep an expectation
-list."* The invariant this fix rests on is derivable in three lines.
-
-**Fix:** assert it at load, next to the other inventory validation:
+**Fix:** Accept both shapes and keep the non-vacuity property:
 
 ```js
-  // CR-01's row filter is only sound while no NON-renameable row can win the
-  // longest-first claim over a brand token. That is a property of the
-  // inventory, so it is derived from the inventory rather than argued in a
-  // comment about the rows that happen to exist today.
-  const probeForms = (inv.scope?.residue_probes ?? []).map((p) => p.toLowerCase());
-  for (const row of inv.tokens) {
-    if (RENAMEABLE_CLASSES.includes(row.class)) continue;
-    const hit = probeForms.find((p) => row.token.toLowerCase().includes(p));
-    if (hit && row.class !== 'coincidental') {
-      throw new Error(
-        `inventory row ${JSON.stringify(row.token)} is class "${row.class}" (not renameable) but ` +
-          `contains the residue probe "${hit}" -- longest-first claim order lets it swallow a brand ` +
-          `token and suppress that token's probe. Either classify it renameable or exclude its ` +
-          `class from the --extra-root row set as "coincidental" already is`
-      );
+const line = raw.split('#')[0].trim();
+if (!line || line.endsWith(':') || line.startsWith('%')) continue;
+const paren = line.match(/^(\S+)\s+\((\S+)\)$/);
+if (paren) entries.push({ destination: paren[1], source: paren[2] });
+else if (/^\S+$/.test(line)) entries.push({ destination: line, source: line.replace(/^content\/branding\//, '') });
+```
+
+Adjust the shorthand's source derivation to whatever this tree's convention is, but do not leave
+a legal line silently unparsed.
+
+### WR-06: The shell-markup non-vacuity guard counts manifest entries, not readable files
+
+**File:** `scripts/verify-branding-preflight.mjs:413-428` and `437-439`
+
+**Issue:** `shellMarkup` is built from `jar.mn` text alone, and the emptiness guard tests
+`shellMarkup.length === 0`. The leak loop then does:
+
+```js
+const text = readText(root, rel);
+if (text === null) continue;
+```
+
+So if `powerbrowser/shell/jar.mn` ships a markup file that has been renamed or deleted,
+`shellMarkup.length` is still 1, the guard stays green, `readText` returns null, and the scan
+reads **zero lines** while reporting a clean run — the vacuous pass the surrounding comment
+claims to have closed. The sibling idiom the comment cites does not have this hole:
+`shell-csp-inline-attrs` (`scripts/verify-platform.sh:2295-2300`) explicitly fails with
+"jar.mn ships '$rel' but ... does not exist". The copy is weaker than the original.
+
+Second, smaller gap in the same derivation: `/\(([^)]+\.x?html)\)/g` covers `.html` and `.xhtml`
+only, while the sibling covers `xhtml|html|xul|js|mjs`. A `.xul` chrome document would be
+packaged and unscanned.
+
+**Fix:**
+
+```js
+for (const rel of shellMarkup) {
+    if (!existsSync(join(root, rel))) {
+        r.fail(`${SHELL_DIR}/jar.mn packages ${rel}, but that file does not exist -- the display-surface leak scan would skip it silently`);
     }
-  }
+}
 ```
 
-### WR-06: `pipefail` + `grep -q` can report a valid tag as missing
+and widen the extension alternation to `\.(?:x?html|xul)` to match the idiom being copied.
 
-**File:** `scripts/rebase-upstream.sh:54` (with `set -euo pipefail` at line 13)
+### WR-07: Packaging completeness treats any directory entry as a chrome resource
 
-*Carried forward from the previous review — verified still present, and recorded
-as deliberately-not-done in `deferred-items.md` row 10.*
+**File:** `scripts/verify-branding-preflight.mjs:534`, `541-545`
 
-**Issue:** `grep -q` exits on first match; if `git ls-remote` has not finished
-writing it takes SIGPIPE and exits 141, `pipefail` propagates that, `if !`
-inverts it, and the script reports `tag $NEW_TAG does not exist on $REMOTE` for
-a tag that does exist — non-deterministically, at the first gate of a 40-minute
-operation.
+**Issue:** `readdirSync` is called without `withFileTypes`, and everything except `jar.mn` and
+`moz.build` is asserted to be a packaged chrome resource. A subdirectory under `content/`, a
+`README.md`, an editor backup, or a `.gitkeep` therefore produces a false
+"is a chrome resource that ... does not package" failure with no way to resolve it except adding
+a nonsense packaging line or growing the hand-kept exclusion set the comment specifically says
+it will not keep. The scope note two paragraphs above ("`powerbrowser/shell/` deliberately mixes
+chrome resources with non-chrome files, so applying the same rule there would need a hand-kept
+exclusion list") shows the author saw the hazard and then left the branding side sensitive to it
+anyway.
 
-**Fix:**
+**Fix:** Filter to regular files and to plausible chrome resource extensions, which keeps the set
+derived while removing the false-red surface:
 
-```sh
-TAG_REFS="$(git ls-remote --tags "$REMOTE" "refs/tags/$NEW_TAG" || true)"
-if ! printf '%s' "$TAG_REFS" | grep -qF -- "refs/tags/$NEW_TAG"; then
+```js
+resources = readdirSync(join(root, contentRel), { withFileTypes: true })
+    .filter((d) => d.isFile() && !CONTENT_BUILD_INPUTS.has(d.name))
+    .map((d) => d.name)
+    .sort();
 ```
 
-### WR-07: the tag is validated as a git glob **and** a BRE, so `--tag '*'` passes validation and reaches `rm -rf upstream/`
+If a subdirectory of chrome resources is ever legitimate, recurse instead of ignoring — but do
+not keep counting directories as files.
 
-**File:** `scripts/rebase-upstream.sh:54`, damage at
-`scripts/rebase-upstream.sh:76`
+### WR-08: The identical vendor-name→mozilla.org link in `#communityExperimentalDesc` is not suppressed
 
-*Carried forward — verified still present.*
+**File:** `powerbrowser/branding/dev/content/aboutDialog.css:51-55` and
+`powerbrowser/branding/release/content/aboutDialog.css:51-55`
 
-**Issue:** `$NEW_TAG` is interpolated into a `git ls-remote` refspec (glob) and
-into a `grep` BRE. `*` lists every tag and matches `refs/tags/*` as a BRE, so
-validation passes; the run then removes the upstream tree before failing inside
-`git clone --branch '*'`. A tag containing `.` also matches loosely, so a
-near-miss typo validates against a different tag — defeating the step's own
-stated purpose. No command injection: every use is quoted and `--branch`
-consumes its value positionally.
+**Issue:** `upstream/browser/base/content/aboutDialog.xhtml:120-125` carries a second copy of the
+suppressed node:
 
-**Fix:**
-
-```sh
-if ! [[ "$NEW_TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
-  echo "rebase-upstream: FAIL -- tag '$NEW_TAG' is not a plain tag name ([A-Za-z0-9._-]+)" >&2
-  exit 1
-fi
+```xhtml
+<vbox id="experimental" hidden="true">
+  <description class="text-blurb" id="communityExperimentalDesc" data-l10n-id="community-exp">
+    <label is="text-link" href="https://www.mozilla.org/?utm_source=firefox-browser..." data-l10n-name="community-exp-mozillaLink"/>
 ```
 
-then keep the `grep -qF` from WR-06.
+Same vendor-name label, same mozilla.org target — the defect the comment calls "the reported
+defect in its worst instance" — and it is not in the selector list.
+`upstream/browser/base/content/aboutDialog.js:67-76` unhides `#experimental` (and hides
+`#communityDesc` in its place) whenever `Services.appinfo.version` matches `/a\d+$/`. It is
+inert today only because `upstream/browser/config/version.txt` reads `153.1.0` with no alpha
+suffix. Any move onto a nightly-style version string re-exposes the exact link that was just
+suppressed, in the branch where the suppression is bypassed by design.
 
-### WR-08: the `--dry-run` rehearsal prints `--extra-root "$UPSTREAM_DIR"` unexpanded
+**Fix:** Add it to the same rule and say why in the comment:
 
-**File:** `scripts/rebase-upstream.sh:66`
-
-*Carried forward — verified still present.*
-
-**Issue:** Every neighbouring dry-run line expands its variable (`'$UPSTREAM_DIR'`
-on lines 63 and 68). Line 66 escapes it and prints the literal
-`--extra-root "$UPSTREAM_DIR"`; pasted into a shell where that variable is
-unset it becomes `--extra-root ""`, which the scanner rejects with exit 2. The
-script's own header states the real path is exercised locally **only** via
-`--dry-run`, so this printed text is the artifact under local test.
-
-**Fix:**
-
-```sh
-  echo "  4b. node '$REPO_ROOT/scripts/scan-brand-residue.mjs' --extra-root '$UPSTREAM_DIR'  # D-18 permanent gate, no exception"
-```
-
-### WR-09: the workflow declares no `permissions:`, no `timeout-minutes:`, and no `persist-credentials: false`
-
-**File:** `.github/workflows/rebase-upstream.yml:30-35`
-
-*Carried forward — verified still present.*
-
-**Issue:** With no `permissions:` block the job takes the repository default
-`GITHUB_TOKEN` scope, which on many repos is write-capable, and
-`actions/checkout` leaves those credentials in `.git/config` while
-`rebase-upstream.sh` performs a 1.1 GB clone of a third-party remote and
-executes repo scripts. With no `timeout-minutes` a stalled clone burns the
-runner to the 6-hour default. (The `tag` input is correctly passed through
-`env:` and quoted, so the run steps carry no script-injection.)
-
-**Fix:**
-
-```yaml
-jobs:
-  rebase:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - name: Check out repo
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
+```css
+#communityDesc,
+#communityExperimentalDesc,   /* the nightly-channel twin of the above; inert at ESR versions, live the moment the version string carries an alpha suffix */
+#contributeDesc,
 ```
 
 ## Info
 
-### IN-01: the `extraSummary` count correction is unreachable
+### IN-01: The scanner fixture still spells the identifier form as rendered text
 
-**File:** `scripts/scan-brand-residue.mjs:1268`
+**File:** `scripts/verify-platform.sh:2278`
 
-**Issue:** `extraFiles.length - extra.unreadable.length` is only ever evaluated
-on the way to the PASS line at 1276, and any non-empty `extra.unreadable` has
-already pushed a gate reason at 1265, which returns 1 before that line prints.
-The subtrahend is therefore always zero. The eight-line comment above it claims
-the expression closes *"the half of CR-02 that is a reporting defect"*; it
-cannot, because the reporting path is unreachable in the only state the
-correction would matter. (The genuine reporting defect is on the tracked-tree
-side — WR-03.)
+**Issue:** The `shell-csp-inline-attrs` self-test fixture contains
+`<div id="powerbrowser-loading">PowerBrowser</div>`. It is a fixture reproducing pre-fix markup,
+so it is not shipped and not user-facing — but with 01-19 landed it is the last rendered-text
+spelling of the compact form in the tree, and `scripts/` is outside the preflight's display
+surface set (recorded deliberately in `9112503`). The risk is copy-back: it reads as the shell's
+markup and would reintroduce the leak if pasted.
 
-**Fix:** keep the expression (it is correct if the extra-root policy is ever
-relaxed) but shorten the comment to say the subtraction is defensive and
-currently unreachable, so the next reader does not credit it with a fix it does
-not perform.
+**Fix:** Change the fixture line to `Power Browser` — it is decoy content for an inline-attribute
+scan and nothing about the fixture's purpose depends on the string — or add a one-line comment
+marking it as a deliberate pre-fix reproduction.
 
-### IN-02: the tracked-tree unreadable gate now hard-fails on `EISDIR`, which a submodule would trigger
+### IN-02: Nothing asserts the two variant stylesheets stay identical
 
-**File:** `scripts/scan-brand-residue.mjs:1175-1178`
+**File:** `powerbrowser/branding/dev/content/aboutDialog.css`,
+`powerbrowser/branding/release/content/aboutDialog.css`,
+`scripts/verify-branding-preflight.mjs:597-612`
 
-**Issue:** Only `ENOENT` keeps its allowance. `git ls-files` lists a gitlink
-(submodule) path as a tracked entry; `readFileSync` on it throws `EISDIR`, which
-now becomes a gate failure of the permanent brand gate for a reason unrelated to
-residual brand strings. No gitlinks and no tracked symlinks exist today
-(`git ls-files -s` shows no mode `160000` or `120000` entries), so this is
-latent.
+**Issue:** The two files are byte-identical and the divergence comment at 609 states that is by
+design, but section 9(c) compares only the set of packaged **destination names**. Content
+divergence, and a manifest that packages the right destination from a different source, both
+pass. `branding-variant-divergence` compares `brand.properties` and the titlebar pref only. So
+an edit applied to one variant's stylesheet and not the other — the exact "fix one variant,
+forget the other" risk 9(c) names — is undetected.
 
-**Fix:** filter gitlinks out of the tracked file set in `scopeFiles` (`git
-ls-files -s`, drop mode `160000`), or add `EISDIR` to the allowance with a
-comment naming submodules as the reason.
-
-### IN-03: `depthZeroOnly` and `braceBody` count braces and brackets inside string literals
-
-**File:** `scripts/verify-shell-error-copy.mjs:137-150`
-
-**Issue:** Both walk characters with no string/template awareness. A depth-0
-property whose value is a string containing an unmatched `[` or `}` shifts the
-depth for everything after it — an unmatched `}` drives depth negative, after
-which no character is ever emitted again and the binding silently stops being
-recognised as message-bearing. `braceBody` carries a note that the file's only
-brace-bearing strings are balanced template interpolations; `depthZeroOnly`
-inherits that assumption for brackets too, where it is not stated. Fails loud
-today (a false rejection, not a false accept).
-
-**Fix:** state the assumption in `depthZeroOnly`'s doc comment as `braceBody`
-does, or skip quoted spans in both walkers.
-
-### IN-04: `FAULTS` hand-keeps exact copy literals from the file under test
-
-**File:** `scripts/verify-shell-error-copy.mjs:437-555`
-
-**Issue:** Rows key off exact sentences and exact key names. A copy reword makes
-`mutated === original` and the row reports *"the fault did not apply; this
-self-test row proves nothing"* — fail-loud, so this is drift friction rather
-than a defeatable gate. Recorded as deliberately-not-done in `deferred-items.md`
-row 10; noted here only so the count is honest.
-
-**Fix:** none required. If taken, derive the substitution target from
-`parseUserMessageTable` (mutate the first declared entry by key) so a copy edit
-does not require editing the self-test.
+**Fix:** In 9(c), compare `destination → sha256(source contents)` maps rather than destination
+sets, excluding the entries whose divergence is deliberate. That keeps the check derived and
+makes it catch the case its own comment describes.
 
 ---
 
-*Reviewed: 2026-08-31*
-*Reviewer: Claude (gsd-code-reviewer)*
-*Depth: standard*
+_Reviewed: 2026-08-31_
+_Reviewer: Claude (gsd-code-reviewer)_
+_Depth: standard_
