@@ -18,11 +18,25 @@
 // check for the other:
 //
 //   over-reach   a selector removes content it must not (the defect above).
-//   under-reach  a selector matches nothing at all. Upstream owns
-//                aboutDialog.xhtml and rewrites it on every ESR rebase; an id
-//                rename turns every suppression selector into a silent no-op.
-//                The CSS still parses, nothing errors, and mozilla.org links
-//                reappear inside a Power-Browser-branded dialog.
+//   under-reach  a vendor link is left on screen. This has two shapes, and a
+//                check for one is not a check for the other:
+//                  (i)  the selector matches nothing at all. Upstream owns
+//                       aboutDialog.xhtml and rewrites it on every ESR rebase;
+//                       an id rename turns every suppression selector into a
+//                       silent no-op. The CSS still parses and nothing errors.
+//                  (ii) the selector is DELETED outright, or NARROWED so it no
+//                       longer reaches a link it used to. Nothing is stale --
+//                       what remains still parses and still matches real
+//                       elements -- so the staleness assertion stays silent
+//                       while the vendor link renders. Shape (ii) went
+//                       uncovered when this file first shipped: deleting the
+//                       outbound bottom-link selector restored UAT G-01-3 in
+//                       full and still exited 0. Found by 01-REVIEW.md CR-02
+//                       and reproduced independently by 01-VERIFICATION.md's
+//                       third pass; closed by the UNSUPPRESSED VENDOR LINK
+//                       coverage assertion, which derives every external link
+//                       from the markup and requires each to be reached by a
+//                       shipped selector in every branding variant.
 //
 // BOTH SIDES ARE DERIVED AT CHECK TIME (CLAUDE.md verification rule 2). The
 // left side is whatever selectors the shipped stylesheets actually declare
@@ -295,6 +309,22 @@ export function runChecks(root) {
         return rep;
     }
 
+    // Assertion 5, premise half: the set of EXTERNAL destinations this dialog
+    // offers, DERIVED from the markup rather than declared here. Every one of
+    // them must be reached by a shipped suppression selector. There is no host
+    // filter and no allowlist -- the set is every http/https destination the
+    // dialog carries, so an ESR rebase that adds a link to a NEW host is caught
+    // by the same comparison rather than slipping past a mozilla.org test.
+    const external = elements.filter((e) => e.href !== null && /^https?:/i.test(e.href));
+    if (external.length === 0) {
+        rep.fail(
+            `VACUOUS: ${MARKUP_REL} carries ${links.length} href-bearing element(s) and ZERO with an ` +
+            `http/https destination. Coverage over an empty set proves nothing -- every external link ` +
+            `would report as covered because there is no external link to cover. The outbound rows have ` +
+            `moved or been factored into an included file; re-derive the subject rather than re-asserting.`,
+        );
+    }
+
     // Assertion 4, premise half: the disclosure link must exist upstream. If it
     // is gone, the check's subject is gone and the result is a FAIL, not a pass.
     const disclosure = elements.filter((e) => e.href === DISCLOSURE_HREF);
@@ -365,6 +395,32 @@ export function runChecks(root) {
                 }
             }
         }
+
+        // Assertion 5: coverage. Every external link the markup offers must be
+        // reached by at least one selector THIS variant ships -- on the element
+        // itself or on any element of its ancestor chain, since hiding an
+        // ancestor hides the link just as completely. This is the direction
+        // assertions 3 and 4 cannot see: a selector that was DELETED, or
+        // NARROWED so it no longer reaches a link it used to, still parses and
+        // still matches a real element, so every other assertion stays silent
+        // while the vendor link renders. Evaluated per variant rather than over
+        // a union of both stylesheets: a link covered in dev but not in release
+        // is a real defect, and only the per-variant form has a file to name.
+        for (const el of external) {
+            let covered = false;
+            for (let node = el; node && !covered; node = node.parent) {
+                if (parsed.some((sel) => matches(sel, node))) covered = true;
+            }
+            if (covered) continue;
+            rep.fail(
+                `UNSUPPRESSED VENDOR LINK: ${describe(el)} in ${MARKUP_REL} is reached by NO suppression ` +
+                `selector in ${rel}. The link renders inside a Power-Browser-branded dialog, offering an ` +
+                `outbound destination this product does not own. Suppress it by adding a selector, or ` +
+                `record the decision to leave it visible -- never scope this assertion around it with an ` +
+                `exemption list, which would be a hand-kept expectation that can only agree with the tree ` +
+                `it was copied from.`,
+            );
+        }
     }
 
     return rep;
@@ -376,7 +432,7 @@ export function runChecks(root) {
 // REPO_ROOT, so this row needs no `upstream/` clone and belongs in --quick.
 //
 // The fixture's stylesheets are the REAL shipped files, copied. Its markup is
-// authored -- a minimal mirror of upstream's three suppressed structures --
+// authored -- a minimal mirror of upstream's four suppressed structures --
 // because --quick must not depend on the git-ignored 1.1 GB clone. That is a
 // real ceiling and it is recorded in deferred-items.md row 11: fixture drift
 // can only weaken this self-test, never the gate, because the registered
@@ -386,6 +442,13 @@ function fixtureMarkup() {
 <!-- Authored fault-planting fixture, not an expectation. -->
 <window id="aboutDialog">
   <html:div id="aboutDialogContainer">
+    <vbox id="experimental" hidden="true">
+      <description class="text-blurb" id="warningDesc"/>
+      <description class="text-blurb" id="communityExperimentalDesc">
+        <label is="text-link" href="https://www.mozilla.org/"/>
+        <label is="text-link" useoriginprincipal="true" href="about:credits"/>
+      </description>
+    </vbox>
     <description class="text-blurb" id="communityDesc">
       <label is="text-link" href="https://www.mozilla.org/"/>
       <label is="text-link" useoriginprincipal="true" href="about:credits"/>
@@ -525,5 +588,5 @@ if (result.failures.length > 0) {
     for (const f of result.failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log(`${NAME}: PASS -- every shipped suppression selector matches upstream markup and none reaches the ${DISCLOSURE_HREF} disclosure link`);
+console.log(`${NAME}: PASS -- every shipped suppression selector matches upstream markup, every external link in that markup is reached by a shipped selector in every branding variant, and none reaches the ${DISCLOSURE_HREF} disclosure link`);
 process.exit(0);

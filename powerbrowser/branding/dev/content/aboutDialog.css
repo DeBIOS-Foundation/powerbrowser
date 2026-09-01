@@ -45,6 +45,15 @@
                       deferred because its visible label is this product's own
                       vendor name while its target is mozilla.org -- the
                       reported defect in its worst instance.
+   #communityExperimentalDesc -- the same blurb in its experimental-channel
+                      form. It renders inside upstream's
+                      <vbox id="experimental" hidden="true"> and is unhidden by
+                      upstream's own channel logic, so its mozilla.org link is
+                      dormant at the current ESR channel rather than absent. It
+                      is suppressed rather than exempted because an exemption
+                      list inside the checker would be a hand-kept expectation
+                      that can only ever agree with the tree it was copied from
+                      (01-REVIEW.md WR-08, CR-02).
 
    The bottom row is MIXED, not outbound, and that is why the third entry is
    qualified by href rather than naming the container. #bottomBox's link row
@@ -61,6 +70,7 @@
    (01-VERIFICATION.md Truth 9, 01-REVIEW.md CR-01); the qualified form and
    scripts/verify-about-dialog-suppression.mjs together keep that closed. */
 #communityDesc,
+#communityExperimentalDesc,
 #contributeDesc,
 #bottomBox > hbox > .bottom-link[href^="https://www.mozilla.org"] {
   display: none;
