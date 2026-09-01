@@ -22,6 +22,14 @@ objdir/
 objdir-release/
 .mozbuild/
 
+# Generator output (GEN-04, D-16)
+# scripts/generate.mjs writes every derived build surface here. Nothing under
+# this directory is ever committed -- the tracked hand-written files under
+# powerbrowser/ remain what the build consumes (D-01), and generated/ exists
+# only to be compared against them. Root-anchored so it cannot also swallow a
+# directory named generated/ nested somewhere else in the tree.
+/generated/
+
 # Logs
 *.log
 npm-debug.log*
