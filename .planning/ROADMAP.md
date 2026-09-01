@@ -161,11 +161,25 @@ Plans:
 **Plans**: 6 plans in 5 waves
 
 Plans:
+**Wave 1**
+
 - [ ] 02-01-PLAN.md — Tracer: vendor the TOML parser behind a legitimacy checkpoint, then carry one manifest key through parse, schema, validation, emitter and writer to a byte-identical dev `configure.sh`
 - [ ] 02-02-PLAN.md — Move the mark to `brand/` and carry `verify-branding-preflight.mjs` with it, without touching its expectation source (parallel with 02-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 02-03-PLAN.md — Mask the defaults layer before the merge, merge recursively with array-replace, and echo every applied default in sorted order
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 02-04-PLAN.md — Expand to all five build surfaces from one frozen target table, and make `--check` honest about stale, absent and cluttered output
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 02-05-PLAN.md — The byte-identity gate: emit to a temp dir, set-compare the target list, seven planted faults, two registry rows
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 02-06-PLAN.md — Complete the generator's nine-fault self-test, register all four rows plus three CI steps, then rewrite the `configure.sh` header now that the proof is green
 
 ### Phase 3: Firefox Branding Emitter and Icon Pipeline
