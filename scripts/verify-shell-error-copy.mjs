@@ -117,8 +117,20 @@ function parseUserMessageTable(src) {
   // leak-scans it, and to check (3), which iterates the parsed entries. That is
   // a user-facing string silently escaping the one gate that scans user-facing
   // strings -- the same silent-drop class as CR-03, in another function.
+  //
+  // 01-18 (WR-02). This count deliberately does NOT reuse `entryRe`'s key
+  // pattern. It used to, and that made it not a cross-check at all: every key
+  // form the parser could not read the counter could not see either, so both
+  // were zero for the same entry and the guard below never fired. A quoted key
+  // -- legal JavaScript, and the likeliest form a copy edit reaches for -- was
+  // declared, never leak-scanned, and passed. Any line at the table's own
+  // depth-1 indentation that bears a colon at all counts here, whatever its key
+  // form, so a quoted, numeric or computed member is SEEN even though the parser
+  // above cannot read it. (A depth-1 spread element carries no colon and is
+  // still invisible to both; that is a smaller hole, and closing it needs a
+  // parser rather than a second pattern.)
   const indent = block[1].match(/^[ \t]+/)?.[0] ?? "  ";
-  const declared = [...block[1].matchAll(new RegExp(`^${indent}[A-Za-z_$][\\w$]*\\s*:`, "gm"))].length;
+  const declared = [...block[1].matchAll(new RegExp(`^${indent}\\S.*:`, "gm"))].length;
   return { entries, declared, raw: block[0] };
 }
 
@@ -606,6 +618,19 @@ const FAULTS = [
     apply: (s) =>
       `${s}\nconst nestedOnly = {\n  details: [\n    {\n      message: USER_MESSAGE.couldNotStart,\n    },\n  ],\n};\nthis._showError(nestedOnly.message, false, []);\n`,
     expect: "is not a message-bearing binding",
+  },
+  // 01-18 (WR-02). The quoted-key form, which 01-16's counter shared a blind
+  // spot with: its key grammar was `entryRe`'s key grammar, so the two could
+  // never disagree. Unreferenced for the same reason the row below is -- it must
+  // be able to go red ONLY on the totality assertion.
+  {
+    name: "quoted-key USER_MESSAGE entry is invisible to both the parser and its counter",
+    apply: (s) =>
+      s.replace(
+        "const USER_MESSAGE = {\n",
+        'const USER_MESSAGE = {\n  "quotedKey": "Power Browser has an entry with a quoted key.",\n'
+      ),
+    expect: "never leak-scanned",
   },
   {
     name: "USER_MESSAGE entry the parser cannot read is dropped silently",
