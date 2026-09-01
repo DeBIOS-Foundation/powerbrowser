@@ -1,336 +1,428 @@
 ---
 phase: 01-platform-extraction-and-rename
-reviewed: 2026-08-31T23:26:51Z
+reviewed: 2026-08-31T00:00:00Z
 depth: standard
-files_reviewed: 5
+files_reviewed: 49
 files_reviewed_list:
-  - .github/workflows/rebase-upstream.yml
+  - CLAUDE.md
   - docs/BUILD.md
+  - docs/CUSTOMIZE.md
+  - docs/URI-SCHEMES.md
+  - .github/workflows/rebase-upstream.yml
+  - inventory/brand-tokens.json
+  - .mozconfig
+  - patches/010-powerbrowser-identity.patch
+  - patches/020-powerbrowser-shell.patch
+  - powerbrowser/branding/dev/configure.sh
+  - powerbrowser/branding/dev/content/aboutDialog.css
+  - powerbrowser/branding/dev/locales/en-US/brand.ftl
+  - powerbrowser/branding/dev/locales/en-US/brand.properties
+  - powerbrowser/branding/mark.svg
+  - powerbrowser/branding/release/configure.sh
+  - powerbrowser/branding/release/content/aboutDialog.css
+  - powerbrowser/branding/release/locales/en-US/brand.ftl
+  - powerbrowser/branding/release/locales/en-US/brand.properties
+  - powerbrowser/endpoint-allowlist.json
+  - powerbrowser/INTERNAL-APIS.md
+  - powerbrowser/powerbrowser.desktop
+  - powerbrowser/powerbrowser-release.desktop
+  - powerbrowser/shell/moz.build
+  - powerbrowser/shell/PowerBrowserAPI.sys.mjs
+  - powerbrowser/shell/powerbrowser.css
+  - powerbrowser/shell/powerbrowser.js
+  - powerbrowser/shell/TheiaService.sys.mjs
+  - scripts/check-internals-boundary.sh
+  - scripts/lib/firefox-bidi.mjs
   - scripts/rebase-upstream.sh
+  - scripts/rename-brand.mjs
   - scripts/scan-brand-residue.mjs
+  - scripts/verify-branding-identity.mjs
+  - scripts/verify-branding.mjs
+  - scripts/verify-branding-preflight.mjs
+  - scripts/verify-gui01-command.mjs
+  - scripts/verify-gui01-window.mjs
+  - scripts/verify-platform.sh
+  - scripts/verify-shell-error-contract.mjs
   - scripts/verify-shell-error-copy.mjs
+  - scripts/verify-start-path-recovery.mjs
+  - theia/applications/browser/package.json
+  - theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx
+  - theia/extensions/branding/src/browser/powerbrowser-mark.ts
+  - theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx
+  - theia/extensions/tab-uris/src/browser/browser-window-command.ts
+  - theia/extensions/tab-uris/src/browser/tab-uris-frontend-module.ts
+  - theia/extensions/token-gate/src/node/powerbrowser-env.ts
 findings:
-  critical: 3
-  warning: 6
+  critical: 1
+  warning: 9
   info: 4
-  total: 13
+  total: 14
 status: issues_found
 ---
 
 # Phase 01: Code Review Report
 
-**Reviewed:** 2026-08-31T23:26:51Z
+**Reviewed:** 2026-08-31
 **Depth:** standard
-**Files Reviewed:** 5
+**Files Reviewed:** 49 (2 changed since the last review base; the remainder re-scanned)
 **Status:** issues_found
-
-> **This report supersedes the prior 01-REVIEW.md.** That review's CR-01
-> (shell-error-copy rule-4 derivation) and CR-02 (brand-residue scan blind to
-> `upstream/` during a rebase) were closed by plans 01-14 and 01-15. This is a
-> fresh adversarial pass over the five files changed since `53b95b1`, and the
-> old findings are not carried forward — the numbering below is new.
 
 ## Summary
 
-Both gap-closure changes do what their plans claim at the level the plans
-tested: `--extra-root` reaches a tree `git ls-files` cannot name, and rule (4)
-no longer accepts an arbitrary `<x>.message`. Both, however, closed the exact
-demonstration case named in `01-VERIFICATION.md`'s `missing[]` and left the
-*class* of failure open one step to either side. Three of those are provable
-green-by-construction paths, reproduced against the shipped code:
+**Prior findings verified closed — not re-reported below.** Each was reproduced
+against the shipped code before being struck:
 
-- a brand-bearing absolute path planted under `--extra-root` exits **0**
-  (CR-01), because the `coincidental` row that claims it is only kept honest by
-  `reconcile()`, which the extra-root pass deliberately does not run;
-- an unreadable file under `--extra-root` is silently skipped, counted in the
-  summary as scanned, and exits **0** (CR-02) — the same shape as CR-B, one
-  level down from the root check that was hardened;
-- a `_showError` call site whose first argument is not followed by a comma, or
-  whose receiver is not a literal `this.`, is never enumerated by rule (4) at
-  all and exits **0** (CR-03) — CR-A re-opened for any call shape the regex
-  does not happen to match.
+| Prior | Verdict | Evidence |
+|---|---|---|
+| CR-01 (`--extra-root` exempts residue claimed by a `coincidental` row) | **closed** | `scan()` at `scripts/scan-brand-residue.mjs:1237` now passes `rows: inv.tokens.filter(r => r.class !== 'coincidental')`; the `--self-test` row planting the exact mozconfig reproduction goes red naming both root and file. |
+| CR-02 (unreadable file under `--extra-root` skipped silently, counted as scanned) | **closed** | `scan()` records `{file, reason}`; the extra-root caller gates on any of them; the self-test row establishes its own precondition before asserting. |
+| CR-03 (`_showError` call-site enumeration not asserted complete) | **partially closed** | The two named shapes go red, but the compensating counter opens a *new* green path — see CR-01 below — and the `.bind` shape is still unseen (WR-01). |
+| WR-01 (nested `message:` makes a binding falsely message-bearing) | **closed** | `depthZeroOnly()` at `scripts/verify-shell-error-copy.mjs:137`; fault row red. |
+| WR-02 (unparsed `USER_MESSAGE` entries dropped silently) | **partially closed** | The totality assertion exists but shares its blind spot with the parser it checks — see WR-02 below. |
 
-CR-03 is the one that most directly contradicts this project's own verification
-doctrine (`CLAUDE.md`: *derive from the tree and compare*). The checker derives
-the *accept set* from the tree, which was the 01-14 fix, but still enumerates
-the *call sites* with a regex whose completeness nothing asserts. A check that
-silently examines 5 of 6 call sites is a check that can go green on the site it
-missed.
+`scripts/verify-platform.sh --quick` is green (24 rows), and both `--self-test`
+suites pass end to end. That is the ceiling of what those suites prove, and this
+pass found three inputs they do not cover.
 
-The shell and workflow changes are smaller and correct in substance; the
-findings there are a `pipefail`/`grep -q` race, loose tag validation, an
-unexpanded variable in the dry-run rehearsal text, and missing workflow
-hardening.
+**The headline is CR-01.** 01-16 fixed the *symptom* CR-03 named (two call
+shapes the enumeration regex could not read) by adding a second, independently
+derived count. The second count subtracts a `definitions` term computed with
+`/^\s*_showError\s*\(/gm` — a hand-written assumption that a line-initial
+`_showError(` is the method definition. A receiverless call written at line
+start is absorbed by that term, so `present` falls by exactly one at the same
+moment `callSites` fails to rise. The two errors cancel, the assertion agrees
+with itself, and a caught exception's `.message` reaches
+`#powerbrowser-error-message` on a green run. Before 01-16 that site was merely
+*unseen*; it is now *masked by the completeness check itself*, which is a worse
+state than the one the plan set out to fix.
+
+Two further inputs go green that should not: a `.bind`-aliased call site
+(WR-01), and a quoted-key `USER_MESSAGE` entry (WR-02) — the latter because the
+"deliberately dumber" second count added for WR-02 requires a bare identifier
+key, exactly as `entryRe` does. Both are `CLAUDE.md` "derive from the tree and
+compare" failures: a second derivation that shares the first's blind spot is not
+a cross-check, and a subtracted term computed by a hand-written pattern is a
+hand-kept expectation wearing a derivation's clothes.
+
+The remaining warnings are the four `rebase-upstream.sh` / workflow items that
+`deferred-items.md` row 10 records as *deliberately not done*. They are open
+defects in the tree under review, so they are carried forward here rather than
+dropped, in condensed form.
 
 ## Critical Issues
 
-### CR-01: `--extra-root` silently exempts brand residue claimed by a `coincidental` row
+### CR-01: the new `definitions` term absorbs a receiverless call site, so the completeness counts cancel and rule (4) goes green on a leaked exception message
 
-**File:** `scripts/scan-brand-residue.mjs:1090` (the extra-root `scan()` call), with
-`scripts/scan-brand-residue.mjs:1068-1077` (the comment justifying skipping `reconcile()`)
+**File:** `scripts/verify-shell-error-copy.mjs:379-380` (the two counters), with
+`scripts/verify-shell-error-copy.mjs:422-430` (the assertion they feed)
 
-**Issue:** The extra-root pass reuses the full inventory row set, including the
-`coincidental` row `"/home/chris/coding/sourcerer"` (`expected_count: 0`). In
-`claimOccurrences`, longest-token-first ordering makes that 28-character row win
-over the `lower/sourcerer` `brand-identifier` row, marks the whole span in
-`taken[]`, and classifies the occurrence as `coincidental` — so it is **not** an
-offense (`offensesOf` filters to `RENAMEABLE_CLASSES`) **and** the `sourcerer`
-residue probe at that index is suppressed because `taken[i]` is set.
+**Issue:** `present` is computed as *(every textual `_showError(`)* minus
+*`definitions`*, where `definitions` is `[...src.matchAll(/^\s*_showError\s*\(/gm)].length`
+— every line whose first non-whitespace token is `_showError(`. That pattern
+does not describe "the method definition". It describes "a line-initial
+`_showError(`", and a **call** written without a receiver at the start of a line
+matches it just as well.
 
-In the tracked-tree pass this is safe only because `reconcile()` condition 2
-asserts `observed === expected_count === 0` for that row. The extra-root pass
-deliberately does not call `reconcile()` (for the stated and correct reason that
-D-17's census cannot close over a foreign Gecko checkout), so nothing at all
-constrains it there. Net effect: the single most likely brand residue in a
-replayed tree — an absolute objdir/source path baked into a mozconfig, a patch
-header, a generated build file — passes the gate whose entire purpose is
-catching it.
+The consequence is exact cancellation. Appending one receiverless call site
+raises the raw textual count by 1 **and** raises `definitions` by 1, so
+`present` is unchanged; `callSites` (which requires a literal `this.` receiver)
+is also unchanged; `callSites === present` holds; the run exits 0. The call site
+is never examined by rule (4), so its argument — here a caught exception's
+`.message`, the exact shape `CLAUDE.md`'s user-facing-copy rule and this whole
+checker exist to stop — is never rejected.
 
-Reproduced against the shipped script:
+Reproduced against the shipped checker (contrast case F below shows the counts
+*do* move when the plant is not absorbed):
 
-```
-$ mkdir -p /tmp/er1 && printf 'MOZ_OBJDIR=/home/chris/coding/sourcerer/objdir\n' > /tmp/er1/mozconfig
-$ node scripts/scan-brand-residue.mjs --extra-root /tmp/er1
-scan-brand-residue: PASS -- no residual brand occurrence in 109 scanned file(s), plus 1 file(s) under --extra-root /tmp/er1
+```sh
+$ cp powerbrowser/shell/TheiaService.sys.mjs /tmp/E.mjs
+$ printf '\n_showError(err.message, false, []);\n' >> /tmp/E.mjs
+$ node scripts/verify-shell-error-copy.mjs --file /tmp/E.mjs
+verify-shell-error-copy: PASS -- no internal identifier can reach the error layer (/tmp/E.mjs)
 EXIT=0
 ```
 
-**Fix:** `coincidental` rows are facts about *this* repo's checkout, not about a
-foreign tree, and the `scan()` signature already takes a `rows` override — so
-this is a one-argument change that keeps `frozen` rows (`MOZ_APP_ID`,
-`%content/branding/`, `-brand-product-name = Firefox`) applicable, since those
-legitimately occur in a Gecko checkout and carry no residue probe:
+This is the same failure class as CR-03 (`a check that silently examines 5 of 6
+call sites is a check that can go green on the site it missed`), reintroduced by
+the mechanism intended to close it. It also violates `CLAUDE.md`'s verification
+rule 2 directly: the subtracted term is a hand-written pattern nothing
+constrains, so the "independently derived total" is not independent of an
+assumption about call shape.
+
+**Fix:** compare **positions**, not counts. Position-set equality cannot cancel,
+and it removes the `definitions` heuristic entirely — the definition is
+identified by the one thing that actually distinguishes it (a body follows the
+parameter list), and the file is required to have exactly one:
 
 ```js
-      const extra = scan(inv, {
-        root: extraRoot,
-        files: extraFiles,
-        // `coincidental` rows describe THIS checkout (a local absolute path, a
-        // hex colour). Applying them to a foreign tree lets a longest-first
-        // claim swallow a real brand token AND suppress condition 4's probe,
-        // with no reconcile() count check behind it to catch the difference.
-        rows: inv.tokens.filter((r) => r.class !== 'coincidental'),
-      });
-```
-
-Add a self-test row alongside fixtures 7-9 planting exactly the path above under
-a scratch extra root and requiring a red that names it.
-
-### CR-02: an unreadable file under `--extra-root` is skipped silently and counted as scanned
-
-**File:** `scripts/scan-brand-residue.mjs:391-396` (the `catch { continue; }` in `scan()`),
-surfaced by `scripts/scan-brand-residue.mjs:1104` (`extraSummary`)
-
-**Issue:** `scan()`'s per-file read is wrapped in `try { ... } catch { continue; }`,
-justified by the comment *"a path git tracks but this checkout does not
-materialise"*. That justification holds only for the `git ls-files` source. Every
-path in the `--extra-root` set came from a `readdirSync` that just reported it as
-an existing regular file, so a throw there means EACCES, EISDIR, or a file past
-the V8 string limit — never "not materialised". The file is skipped, no failure
-is recorded, and `extraSummary` still reports it in the `N file(s) under
---extra-root` count, so the operator is told a file was scanned that was never
-read.
-
-`extraRootFiles` fails loudly on an absent or unreadable *root* precisely because
-"a skip-when-absent mode would reproduce CR-B in a new shape" — the same argument
-applies one level down and was not carried there.
-
-Reproduced against the shipped script:
-
-```
-$ mkdir -p /tmp/er2 && printf 'chrome://sourcerer/content/x\n' > /tmp/er2/leak.txt && chmod 000 /tmp/er2/leak.txt
-$ node scripts/scan-brand-residue.mjs --extra-root /tmp/er2
-scan-brand-residue: PASS -- no residual brand occurrence in 109 scanned file(s), plus 1 file(s) under --extra-root /tmp/er2
-EXIT=0
-```
-
-**Fix:** make the skip conditional on the file set's provenance and surface the
-skips. Minimal shape — collect them rather than discarding them:
-
-```js
-export function scan(inv, { chain = null, root = REPO_ROOT, files = null, rows = null } = {}) {
-  ...
-  const unreadable = [];
-  for (const file of activeFiles) {
-    let text;
-    try {
-      text = readFileSync(join(root, file), 'utf8');
-    } catch (err) {
-      unreadable.push({ file, reason: err.code ?? err.message });
-      continue;
-    }
-    ...
-  }
-  return { empty: false, occurrences, unclaimedProbes, unreadable, rawCounts, files: activeFiles, rows: activeRows };
-}
-```
-
-then in `main()`'s extra-root block:
-
-```js
-      if (extra.unreadable.length !== 0) {
-        for (const u of extra.unreadable) console.error(`  ${join(extraRoot, u.file)}: unreadable (${u.reason})`);
-        gate.push(`${extra.unreadable.length} unreadable file(s) under --extra-root ${extraRoot} -- a file that could not be read is not a file that was found clean`);
-      }
-```
-
-and report `extraFiles.length - extra.unreadable.length` in `extraSummary` so the
-count names files actually read.
-
-### CR-03: rule (4) does not enumerate all `_showError` call sites, and nothing asserts that it does
-
-**File:** `scripts/verify-shell-error-copy.mjs:303` (the call-site regex),
-`scripts/verify-shell-error-copy.mjs:336-341` (the only completeness guard)
-
-**Issue:** 01-14 correctly replaced the "any `<x>.message` is fine" accept rule
-with a set derived from the file. It left the *enumeration* of call sites as
-`/this\._showError\(\s*([^,]+?)\s*,/g`, which requires (a) a literal `this.`
-receiver and (b) a comma after the first argument. A call site that matches
-neither is not rejected — it is never seen. The only completeness assertion is
-`callSites === 0`, which fires only if *every* call site disappears, so 5 sites
-parsed out of 6 present is indistinguishable from a clean run.
-
-This violates `CLAUDE.md`'s rule that a check must derive its expectation from
-the tree and compare, and it re-opens CR-A for any call shape outside the regex.
-All three of these appended to a copy of `TheiaService.sys.mjs` exit **0**:
-
-```js
-// (1) no comma after the first argument, and no later comma in the file
-try { x(); } catch (err) { this._showError(err.message) }
-
-// (2) optional-chaining receiver
-try { x(); } catch (err) { this?._showError(err.message, false, []); }
-
-// (3) bound alias
-const show = this._showError.bind(this); show(err.message, false, []);
-```
-
-```
-$ node scripts/verify-shell-error-copy.mjs --file /tmp/sec2/TheiaService.sys.mjs
-verify-shell-error-copy: PASS -- no internal identifier can reach the error layer (...)
-EXIT=0
-```
-
-(Today the real file parses 5 of 5 sites, so the check is currently complete —
-that is luck about comma placement, not an invariant the check holds.)
-
-**Fix:** derive the total independently and require equality, which is the same
-set-equality discipline checks (2) and (3) already use:
-
-```js
-  // Every textual `_showError(` in the file, minus its one definition. If the
-  // argument regex below parses fewer than this, a call site exists that this
-  // check never examined -- which is exactly how a leak ships green.
-  const definitions = (src.match(/^\s*_showError\s*\(/gm) ?? []).length;
-  const present = (src.match(/_showError\s*\(/g) ?? []).length - definitions;
-  ...
-  if (callSites !== present) {
+  // Every textual `_showError(` start offset in the comment-stripped source.
+  const allSites = [...src.matchAll(/_showError\s*\(/g)].map((m) => m.index);
+  // The definition is the one occurrence whose parameter list is followed by a
+  // body. Asserting there is EXACTLY one removes the "line-initial means
+  // definition" assumption, which a receiverless CALL also satisfies.
+  const defs = [...src.matchAll(/_showError\s*\([^)]*\)\s*\{/g)].map((m) => m.index);
+  if (defs.length !== 1) {
     fail(
-      `${present} \`_showError(\` call site(s) are present but only ${callSites} could be parsed -- ` +
-        `a call site this check cannot read is a call site it is not checking; make the call shape ` +
-        `\`this._showError(<arg>, ...)\` or teach this check the new shape`
+      `${defs.length} \`_showError(...) {\` definition(s) found -- this check assumes exactly one; ` +
+        `with none it is asserting nothing, with two it cannot say which sites belong to which`
+    );
+  }
+  const parsed = new Set([...src.matchAll(/this\._showError\(/g)].map((m) => m.index + "this.".length));
+  const unparsed = allSites.filter((i) => !defs.includes(i) && !parsed.has(i));
+  if (unparsed.length !== 0) {
+    fail(
+      `${unparsed.length} \`_showError(\` call site(s) at offset(s) ${unparsed.join(", ")} were not ` +
+        `parsed -- a call site this check cannot read is a call site it is not checking. Write the ` +
+        `call as \`this._showError(<message>, ...)\`, or teach this check the new shape`
     );
   }
 ```
 
-Add two `FAULTS` rows for it: one appending a comma-less call, one appending an
-optional-chained call, each expecting the new message.
+(Keep the existing `callSites === 0` guard; drop `definitions`/`present`.)
+
+Add a `FAULTS` row planting `\n_showError(err.message, false, []);\n` and
+expecting `were not parsed`. It must be verified GREEN against a scratch copy of
+today's checker and RED against the fixed one — otherwise the row proves nothing
+about this change, which is the same evidentiary standard rows 9-12 already
+meet.
 
 ## Warnings
 
-### WR-01: `messageBearingBindings` shape (a) accepts a nested `message:`, so a binding whose `.message` is `undefined` passes
+### WR-01: a `.bind`-aliased call site is invisible to **both** counters, so CR-03's third documented bypass is still open
 
-**File:** `scripts/verify-shell-error-copy.mjs:167-172`
+**File:** `scripts/verify-shell-error-copy.mjs:379-383`
 
-**Issue:** Shape (a) tests `/(?:^|[^\w.$])message:/` against the *entire* brace
-body of the initializer, at any nesting depth. A `message:` buried in a nested
-object or array element marks the outer binding as message-bearing, even though
-`<binding>.message` is `undefined` at runtime. The file's own doc comment states
-the opposite intent — *"A method whose every return sets `message: null` does NOT
-qualify: a binding whose `.message` is always null would paint nothing, which is
-a different defect and must not be waved through here."* The nested case is that
-defect, and it is waved through. Reproduced (exits 0):
+**Issue:** Both the enumeration regex and the new completeness counter key on
+the literal text `_showError(`. `this._showError.bind(this)` contains
+`_showError.bind(` — the parenthesis is not adjacent — so the aliased method is
+counted by neither, the counts agree, and the call through the alias is never
+examined. This was case (3) of the previous CR-03 reproduction; cases (1) and
+(2) are closed, this one is not.
 
-```js
-const wrap = {
-  details: [{
-    message: USER_MESSAGE.couldNotStart,
-  }],
-};
-this._showError(wrap.message, false, []);
+Reproduced (exits 0):
+
+```sh
+$ printf '\nconst show = this._showError.bind(this);\nshow(err.message, false, []);\n' >> /tmp/A.mjs
+$ node scripts/verify-shell-error-copy.mjs --file /tmp/A.mjs
+verify-shell-error-copy: PASS -- ...
+EXIT=0
 ```
 
-**Fix:** scan only depth-1 properties of the literal. Reuse `braceBody` to strip
-nested braces/brackets before the test:
+**Fix:** reject the escape rather than trying to follow it — any textual
+`_showError` **not** immediately followed by `(` is a reference that removes the
+method from this check's reach:
 
 ```js
-    const body = braceBody(src, m.index + m[0].length - 1);
-    if (body !== null && /(?:^|[^\w.$])message:/.test(topLevelOnly(body))) {
-      bearing.add(m[1]);
-    }
-```
-
-where `topLevelOnly` drops any span at depth > 0. Add a `FAULTS` row planting the
-nested shape above.
-
-### WR-02: `parseUserMessageTable` silently drops table entries its regex cannot parse
-
-**File:** `scripts/verify-shell-error-copy.mjs:97-101`
-
-**Issue:** `entryRe` matches only `key: "double-quoted single-line string",`. An
-entry written as a template literal, with single quotes, as a concatenation, or
-wrapped across two lines is not added to `entries` — with no error. Consequences
-split by whether the key is referenced: a *referenced* unparsed key goes red at
-check (2) (fail-safe), but a *declared-and-unreferenced* unparsed key is invisible
-to check (1) (never leak-scanned) **and** to check (3) (which iterates
-`entries.keys()`). No `FAULTS` row covers an unparsed entry.
-
-**Fix:** assert the parse is total — count top-level `key:` lines in the table
-block and require equality:
-
-```js
-  const declaredLines = (block[1].match(/^\s{2}[A-Za-z_$][\w$]*:/gm) ?? []).length;
-  if (entries.size !== declaredLines) {
-    return { entries, raw: block[0], unparsed: declaredLines - entries.size };
+  const escapes = [...src.matchAll(/_showError(?!\s*\()/g)].map((m) => m.index);
+  if (escapes.length !== 0) {
+    fail(
+      `\`_showError\` is referenced without being called (offset(s) ${escapes.join(", ")}) -- an ` +
+        `alias, a \`.bind\`, or a property read hands the error layer to a call site this check ` +
+        `cannot see. Call it directly as \`this._showError(<message>, ...)\``
+    );
   }
 ```
 
-and `fail()` on a non-zero `unparsed`, naming the count.
+Add a `FAULTS` row planting the two-line `.bind` snippet above.
 
-### WR-03: `pipefail` + `grep -q` can report a valid tag as missing
+### WR-02: the WR-02 totality count shares `entryRe`'s exact blind spot, so a quoted-key entry is still dropped silently
+
+**File:** `scripts/verify-shell-error-copy.mjs:120-121` (the `declared` count),
+guard at `scripts/verify-shell-error-copy.mjs:275-285`
+
+**Issue:** The added count is described in its own comment as *"a second,
+deliberately dumber count of what the table DECLARES"*. It is not independent:
+`entryRe` requires `[A-Za-z_$][\w$]*` as the key, and `declared` requires
+`[A-Za-z_$][\w$]*` as the key. Every key form the parser cannot read, the
+counter also cannot see — so both are zero for the same entry, `declared ===
+entries.size` holds, and the guard never fires. Object-literal keys are legal
+as string literals, as numbers, and as computed `[expr]`, and a spread element
+`...{ ... }` is dropped by both as well.
+
+Reproduced — a declared, unreferenced, quoted-key entry carrying an internal
+all-caps sentinel passes the gate whose one job is leak-scanning declared
+user-facing strings:
+
+```sh
+$ # inserted into the table:  "quotedKey": "Backend did not announce POWERBROWSER_BACKEND_READY within 90000ms.",
+$ node scripts/verify-shell-error-copy.mjs --file /tmp/C.mjs
+verify-shell-error-copy: PASS -- ...
+EXIT=0
+```
+
+(The same input with a *bare* identifier key correctly goes red, which is what
+makes the key form — not the string content — the discriminator.)
+
+**Fix:** make the second count actually dumber — count depth-1 lines that carry
+a colon at all, regardless of key form, so a form the parser cannot read is
+still *seen*:
+
+```js
+  // Deliberately does NOT reuse entryRe's key pattern: a second count that
+  // shares the first's key grammar cannot disagree with it, and a count that
+  // cannot disagree is not a cross-check. Any depth-1 line bearing a colon
+  // counts, so a quoted, numeric, computed or spread member is visible here
+  // even though the parser above cannot read it.
+  const declared = [...block[1].matchAll(new RegExp(`^${indent}\\S.*:`, "gm"))].length;
+```
+
+Add a `FAULTS` row planting a quoted-key entry and expecting `never
+leak-scanned`.
+
+### WR-03: the tracked-tree PASS line still counts files it never opened — the reachable half of CR-02, left uncorrected
+
+**File:** `scripts/scan-brand-residue.mjs:1276` (`result.files.length`), with the
+`ENOENT` allowance at `scripts/scan-brand-residue.mjs:1175-1178`
+
+**Issue:** 01-17 corrected the *extra-root* summary to name files actually read
+(`extraFiles.length - extra.unreadable.length`, line 1268) on the stated grounds
+that *"reporting an unopened file as scanned tells the operator the gate covered
+a file it never opened"*. The tracked-tree summary was not given the same
+correction, and it is the branch where the defect is **reachable**: `ENOENT`
+keeps its allowance (correctly — a sparse checkout must stay green), so those
+files are skipped, are not gated, and are still counted.
+
+Reproduced against the shipped module:
+
+```sh
+$ node -e "import('./scripts/scan-brand-residue.mjs').then(m=>{const inv=m.loadInventory();
+    const r=m.scan(inv,{files:['README.md','does/not/exist.txt']});
+    console.log(r.files.length, JSON.stringify(r.unreadable));})"
+2 [{"file":"does/not/exist.txt","reason":"ENOENT"}]
+```
+
+so on a sparse checkout the gate prints `PASS -- no residual brand occurrence in
+N scanned file(s)` where N exceeds the number of files it opened.
+
+**Fix:**
+
+```js
+  const scannedCount = result.files.length - (result.unreadable ?? []).length;
+  ...
+  console.log(`scan-brand-residue: PASS -- no residual brand occurrence in ${scannedCount} scanned file(s)${extraSummary}...`);
+```
+
+and, since an allowed skip is still a hole in coverage, print the ENOENT list at
+`--reconcile` verbosity so a growing skip set is visible rather than folded into
+a shrinking number.
+
+### WR-04: a trailing `//` comment mentioning `_showError(` makes the commit gate permanently red
+
+**File:** `scripts/verify-shell-error-copy.mjs:379-380`, given `stripComments`
+at `scripts/verify-shell-error-copy.mjs:90-96`
+
+**Issue:** The CR-03 comment states *"Both run over `src`, the comment-stripped
+source ... `raw` still holds eight doc-comment mentions of `_showError`, and
+counting those would make this permanently red."* `stripComments` deliberately
+does **not** strip trailing `//` comments (documented, to protect `http://`
+inside real strings), so the premise holds only for whole-line and block
+comments. A trailing comment inflates `present` without inflating `callSites`.
+
+Reproduced:
+
+```sh
+$ printf '\nconst v = 1; // calls _showError(x)\n' >> /tmp/F.mjs
+$ node scripts/verify-shell-error-copy.mjs --file /tmp/F.mjs
+verify-shell-error-copy: FAIL -- 6 `_showError(` call site(s) are present ... but 5 were parsed
+EXIT=1
+```
+
+The failure is loud, so nothing ships broken — but `shell-error-copy-no-internals`
+is a `--quick` row, i.e. the commit gate, and its remedy text explicitly tells
+the operator *not* to widen the pattern. A comment edit that turns the commit
+gate red with an instruction not to fix it is a gate people learn to route
+around. The position-set fix proposed in CR-01 has the same exposure and should
+carry the mitigation below.
+
+**Fix:** strip trailing `//` comments for this derivation only, protecting the
+`://` case the header names:
+
+```js
+  // Trailing comments are safe to drop HERE (unlike in stripComments, which
+  // must not mangle `http://127.0.0.1` inside a real string): the guard
+  // requires whitespace before `//` and rejects a preceding `:`.
+  const codeOnly = src.replace(/(^|[^:\S])\/\/.*$/gm, "$1");
+```
+
+and derive `allSites`/`parsed` from `codeOnly`.
+
+### WR-05: CR-01's row filter is justified by hand-enumerating today's inventory, and nothing derives the invariant it depends on
+
+**File:** `scripts/scan-brand-residue.mjs:1213-1237` (the comment and the filter)
+
+**Issue:** The filter excludes exactly one class and the comment explains *"Why
+nothing ELSE is excluded: `frozen` rows (`MOZ_APP_ID`, `%content/branding/`,
+`-brand-product-name = Firefox`) legitimately occur in a Gecko checkout and
+carry no residue probe."* That reasoning is correct against
+`inventory/brand-tokens.json` **as it stands today** — I verified every
+non-renameable row and none contains `sourcerer` or `deocracy` as a substring,
+so no non-renameable row can currently win the longest-first claim over a brand
+token. It is a hand-kept expectation about a file that is explicitly designed to
+grow: adding one `frozen` or `coincidental` row whose token contains a probe
+form silently reopens CR-01 under `--extra-root`, with no reconcile behind it
+and no check that fires.
+
+`CLAUDE.md`: *"Derive from the tree and compare; do not hand-keep an expectation
+list."* The invariant this fix rests on is derivable in three lines.
+
+**Fix:** assert it at load, next to the other inventory validation:
+
+```js
+  // CR-01's row filter is only sound while no NON-renameable row can win the
+  // longest-first claim over a brand token. That is a property of the
+  // inventory, so it is derived from the inventory rather than argued in a
+  // comment about the rows that happen to exist today.
+  const probeForms = (inv.scope?.residue_probes ?? []).map((p) => p.toLowerCase());
+  for (const row of inv.tokens) {
+    if (RENAMEABLE_CLASSES.includes(row.class)) continue;
+    const hit = probeForms.find((p) => row.token.toLowerCase().includes(p));
+    if (hit && row.class !== 'coincidental') {
+      throw new Error(
+        `inventory row ${JSON.stringify(row.token)} is class "${row.class}" (not renameable) but ` +
+          `contains the residue probe "${hit}" -- longest-first claim order lets it swallow a brand ` +
+          `token and suppress that token's probe. Either classify it renameable or exclude its ` +
+          `class from the --extra-root row set as "coincidental" already is`
+      );
+    }
+  }
+```
+
+### WR-06: `pipefail` + `grep -q` can report a valid tag as missing
 
 **File:** `scripts/rebase-upstream.sh:54` (with `set -euo pipefail` at line 13)
 
-**Issue:** `grep -q` exits as soon as it matches. If `git ls-remote` has not
-finished writing, it takes SIGPIPE and exits 141; `pipefail` propagates that as
-the pipeline status, the `if !` inverts it, and the script prints
-`FAIL -- tag $NEW_TAG does not exist on $REMOTE` for a tag that does exist. The
-output here is small so the race is narrow, but the failure is non-deterministic
-and its message points the operator at the wrong cause — a bad property for the
-first gate in a 40-minute operation.
+*Carried forward from the previous review — verified still present, and recorded
+as deliberately-not-done in `deferred-items.md` row 10.*
 
-**Fix:** take the pipe out of the conditional:
+**Issue:** `grep -q` exits on first match; if `git ls-remote` has not finished
+writing it takes SIGPIPE and exits 141, `pipefail` propagates that, `if !`
+inverts it, and the script reports `tag $NEW_TAG does not exist on $REMOTE` for
+a tag that does exist — non-deterministically, at the first gate of a 40-minute
+operation.
+
+**Fix:**
 
 ```sh
 TAG_REFS="$(git ls-remote --tags "$REMOTE" "refs/tags/$NEW_TAG" || true)"
 if ! printf '%s' "$TAG_REFS" | grep -qF -- "refs/tags/$NEW_TAG"; then
 ```
 
-### WR-04: tag validation treats `$NEW_TAG` as a glob and a regex, so `--tag '*'` passes it
+### WR-07: the tag is validated as a git glob **and** a BRE, so `--tag '*'` passes validation and reaches `rm -rf upstream/`
 
-**File:** `scripts/rebase-upstream.sh:54`
+**File:** `scripts/rebase-upstream.sh:54`, damage at
+`scripts/rebase-upstream.sh:76`
 
-**Issue:** `$NEW_TAG` is interpolated into a `git ls-remote` refspec (glob-matched
-by git) *and* into a `grep` basic regular expression. `--tag '*'` lists every tag
-and matches the BRE `refs/tags/*` (a literal `refs/tags` followed by zero or more
-`/`), so validation passes; the run then proceeds to `rm -rf upstream/` and fails
-much later inside `git clone --branch '*'`. A tag containing `.` also matches
-loosely, so a near-miss typo can validate against a different tag. The step's
-stated purpose — *"Cheaper than discovering a typo after a 1.1 GB clone"* — is
-what this defeats. No command injection: every use is quoted and `--branch`
+*Carried forward — verified still present.*
+
+**Issue:** `$NEW_TAG` is interpolated into a `git ls-remote` refspec (glob) and
+into a `grep` BRE. `*` lists every tag and matches `refs/tags/*` as a BRE, so
+validation passes; the run then removes the upstream tree before failing inside
+`git clone --branch '*'`. A tag containing `.` also matches loosely, so a
+near-miss typo validates against a different tag — defeating the step's own
+stated purpose. No command injection: every use is quoted and `--branch`
 consumes its value positionally.
 
-**Fix:** validate the shape before using it as a pattern:
+**Fix:**
 
 ```sh
 if ! [[ "$NEW_TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
@@ -339,39 +431,40 @@ if ! [[ "$NEW_TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
 fi
 ```
 
-then keep the `grep -qF` from WR-03.
+then keep the `grep -qF` from WR-06.
 
-### WR-05: the `--dry-run` rehearsal prints `--extra-root "$UPSTREAM_DIR"` unexpanded
+### WR-08: the `--dry-run` rehearsal prints `--extra-root "$UPSTREAM_DIR"` unexpanded
 
 **File:** `scripts/rebase-upstream.sh:66`
 
-**Issue:** Every other dry-run line expands the variable (`'$REPO_ROOT/...'`,
-line 63's `rm -rf '$UPSTREAM_DIR'`, line 68's `readlink -f '$UPSTREAM_DIR/...'`).
-Line 66 escapes it (`\"\$UPSTREAM_DIR\"`) and prints the literal text
-`--extra-root "$UPSTREAM_DIR"`. Pasted into a shell where that variable is unset,
-it becomes `--extra-root ""`, which the scanner rejects with exit 2. Since the
-script's header states the real path is exercised locally **only** via
-`--dry-run`, this printed text is the artifact under local test, and it is the
-one line of it that does not work.
+*Carried forward — verified still present.*
+
+**Issue:** Every neighbouring dry-run line expands its variable (`'$UPSTREAM_DIR'`
+on lines 63 and 68). Line 66 escapes it and prints the literal
+`--extra-root "$UPSTREAM_DIR"`; pasted into a shell where that variable is
+unset it becomes `--extra-root ""`, which the scanner rejects with exit 2. The
+script's own header states the real path is exercised locally **only** via
+`--dry-run`, so this printed text is the artifact under local test.
 
 **Fix:**
 
 ```sh
-  echo "  4b. node '$REPO_ROOT/scripts/scan-brand-residue.mjs' --extra-root '$UPSTREAM_DIR'  # D-18 permanent gate, no exception; --extra-root reaches the replayed tree, which is git-ignored and invisible to git ls-files"
+  echo "  4b. node '$REPO_ROOT/scripts/scan-brand-residue.mjs' --extra-root '$UPSTREAM_DIR'  # D-18 permanent gate, no exception"
 ```
 
-### WR-06: the workflow declares no `permissions:` and no `timeout-minutes:`
+### WR-09: the workflow declares no `permissions:`, no `timeout-minutes:`, and no `persist-credentials: false`
 
-**File:** `.github/workflows/rebase-upstream.yml:30-33`
+**File:** `.github/workflows/rebase-upstream.yml:30-35`
 
-**Issue:** With no `permissions:` block the job receives the repository's default
-`GITHUB_TOKEN` scope, which on many repos is still write-capable. This job only
-reads the repo and clones a public remote, and `actions/checkout` leaves those
-credentials in `.git/config` for the duration — including while
-`scripts/rebase-upstream.sh` runs a 1.1 GB clone and executes repo scripts. There
-is also no `timeout-minutes`, so a stalled clone burns the runner to the 6-hour
-default. (The `tag` input is correctly passed through `env:` and quoted, so there
-is no script-injection issue in the run steps.)
+*Carried forward — verified still present.*
+
+**Issue:** With no `permissions:` block the job takes the repository default
+`GITHUB_TOKEN` scope, which on many repos is write-capable, and
+`actions/checkout` leaves those credentials in `.git/config` while
+`rebase-upstream.sh` performs a 1.1 GB clone of a third-party remote and
+executes repo scripts. With no `timeout-minutes` a stalled clone burns the
+runner to the 6-hour default. (The `tag` input is correctly passed through
+`env:` and quoted, so the run steps carry no script-injection.)
 
 **Fix:**
 
@@ -391,61 +484,71 @@ jobs:
 
 ## Info
 
-### IN-01: `--extra-root` resolves against `cwd`, `--report` against `REPO_ROOT`
+### IN-01: the `extraSummary` count correction is unreachable
 
-**File:** `scripts/scan-brand-residue.mjs:1047` vs `scripts/scan-brand-residue.mjs:1080`
+**File:** `scripts/scan-brand-residue.mjs:1268`
 
-**Issue:** `resolve(REPO_ROOT, reportPath)` versus `resolve(extraRootArg)`. Two
-path flags on one CLI resolve relative arguments against two different bases.
-Both current call sites pass an absolute path, so nothing is broken today.
+**Issue:** `extraFiles.length - extra.unreadable.length` is only ever evaluated
+on the way to the PASS line at 1276, and any non-empty `extra.unreadable` has
+already pushed a gate reason at 1265, which returns 1 before that line prints.
+The subtrahend is therefore always zero. The eight-line comment above it claims
+the expression closes *"the half of CR-02 that is a reporting defect"*; it
+cannot, because the reporting path is unreachable in the only state the
+correction would matter. (The genuine reporting defect is on the tracked-tree
+side — WR-03.)
 
-**Fix:** use `resolve(REPO_ROOT, extraRootArg)` and say so in the usage block, or
-require an absolute path and reject a relative one by name.
+**Fix:** keep the expression (it is correct if the extra-root policy is ever
+relaxed) but shorten the comment to say the subtraction is defensive and
+currently unreachable, so the next reader does not credit it with a fix it does
+not perform.
 
-### IN-02: the extra-root walk never follows a symlink, but `statSync` on the root does
+### IN-02: the tracked-tree unreadable gate now hard-fails on `EISDIR`, which a submodule would trigger
 
-**File:** `scripts/scan-brand-residue.mjs:329-336`
+**File:** `scripts/scan-brand-residue.mjs:1175-1178`
 
-**Issue:** The walk uses `dirent.isSymbolicLink()` (lstat semantics) and skips
-links, per the documented reason. The root itself is checked with `statSync`,
-which follows links — so a symlinked `--extra-root` is walked while every
-symlink inside it is skipped. Harmless for `upstream/`, but the two halves state
-different rules.
+**Issue:** Only `ENOENT` keeps its allowance. `git ls-files` lists a gitlink
+(submodule) path as a tracked entry; `readFileSync` on it throws `EISDIR`, which
+now becomes a gate failure of the permanent brand gate for a reason unrelated to
+residual brand strings. No gitlinks and no tracked symlinks exist today
+(`git ls-files -s` shows no mode `160000` or `120000` entries), so this is
+latent.
 
-**Fix:** use `lstatSync` for the root, or document that the root may be a link
-while its contents may not.
+**Fix:** filter gitlinks out of the tracked file set in `scopeFiles` (`git
+ls-files -s`, drop mode `160000`), or add `EISDIR` to the allowance with a
+comment naming submodules as the reason.
 
-### IN-03: `FAULTS` hand-keeps exact copy literals from the file under test
+### IN-03: `depthZeroOnly` and `braceBody` count braces and brackets inside string literals
 
-**File:** `scripts/verify-shell-error-copy.mjs:348-417`
+**File:** `scripts/verify-shell-error-copy.mjs:137-150`
 
-**Issue:** Rows key off exact sentences ("Power Browser's interface didn't finish
-starting.") and exact key names (`nodeMissing`, `couldNotStart`). Rewording the
-user-facing copy makes `mutated === original` and the row reports
-`the fault did not apply; this self-test row proves nothing` — fail-loud, so this
-is drift friction rather than a vacuous check.
+**Issue:** Both walk characters with no string/template awareness. A depth-0
+property whose value is a string containing an unmatched `[` or `}` shifts the
+depth for everything after it — an unmatched `}` drives depth negative, after
+which no character is ever emitted again and the binding silently stops being
+recognised as message-bearing. `braceBody` carries a note that the file's only
+brace-bearing strings are balanced template interpolations; `depthZeroOnly`
+inherits that assumption for brackets too, where it is not stated. Fails loud
+today (a false rejection, not a false accept).
 
-**Fix:** derive the substitution targets from `parseUserMessageTable` (e.g. mutate
-the first declared entry by key) so a copy edit does not require editing the
-self-test.
+**Fix:** state the assumption in `depthZeroOnly`'s doc comment as `braceBody`
+does, or skip quoted spans in both walkers.
 
-### IN-04: `--self-test` now depends on the real working tree being clean
+### IN-04: `FAULTS` hand-keeps exact copy literals from the file under test
 
-**File:** `scripts/scan-brand-residue.mjs:879-950`
+**File:** `scripts/verify-shell-error-copy.mjs:437-555`
 
-**Issue:** Fixtures 7-9 and the typo guard spawn the real CLI four times, and each
-child also runs the full tracked-tree scan. A dirty tree turns the
-`--extra-root over a clean scratch root is a PASS control` row red. The control
-row exists precisely so that red is attributable, so the behaviour is correct —
-but `scan-brand-residue-self-test` is registered in `verify-platform.sh` and now
-costs four extra full-tree scans and inherits the gate's own preconditions.
+**Issue:** Rows key off exact sentences and exact key names. A copy reword makes
+`mutated === original` and the row reports *"the fault did not apply; this
+self-test row proves nothing"* — fail-loud, so this is drift friction rather
+than a defeatable gate. Recorded as deliberately-not-done in `deferred-items.md`
+row 10; noted here only so the count is honest.
 
-**Fix:** none required. Worth a line in the self-test header noting that the row
-ordering makes a dirty-tree failure attributable, and that the control must be
-read first.
+**Fix:** none required. If taken, derive the substitution target from
+`parseUserMessageTable` (mutate the first declared entry by key) so a copy edit
+does not require editing the self-test.
 
 ---
 
-_Reviewed: 2026-08-31T23:26:51Z_
-_Reviewer: Claude (gsd-code-reviewer)_
-_Depth: standard_
+*Reviewed: 2026-08-31*
+*Reviewer: Claude (gsd-code-reviewer)*
+*Depth: standard*
