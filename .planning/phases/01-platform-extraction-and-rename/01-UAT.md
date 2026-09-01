@@ -1,14 +1,18 @@
 ---
-status: diagnosed
+status: testing
 phase: 01-platform-extraction-and-rename
-source: [01-01-SUMMARY.md, 01-02-SUMMARY.md, 01-03-SUMMARY.md, 01-04-SUMMARY.md, 01-05-SUMMARY.md, 01-06-SUMMARY.md, 01-07-SUMMARY.md, 01-08-SUMMARY.md, 01-09-SUMMARY.md, 01-10-SUMMARY.md, 01-11-SUMMARY.md, 01-12-SUMMARY.md, 01-13-SUMMARY.md, 01-14-SUMMARY.md, 01-15-SUMMARY.md, 01-16-SUMMARY.md, 01-17-SUMMARY.md]
+source: [01-01-SUMMARY.md, 01-02-SUMMARY.md, 01-03-SUMMARY.md, 01-04-SUMMARY.md, 01-05-SUMMARY.md, 01-06-SUMMARY.md, 01-07-SUMMARY.md, 01-08-SUMMARY.md, 01-09-SUMMARY.md, 01-10-SUMMARY.md, 01-11-SUMMARY.md, 01-12-SUMMARY.md, 01-13-SUMMARY.md, 01-14-SUMMARY.md, 01-15-SUMMARY.md, 01-16-SUMMARY.md, 01-17-SUMMARY.md, 01-VERIFICATION.md]
 started: 2026-09-01T01:17:53Z
-updated: 2026-09-01T01:17:53Z
+updated: 2026-09-01T20:49:47Z
 ---
 
 ## Current Test
 
-[testing complete]
+number: 42
+name: Tier-3 regression re-confirmation on a repackaged binary
+expected: |
+  Re-run shell03-budget-exhausted-error and shell03-auto-dismiss-on-selfheal against a repackaged binary; neither check moves.
+awaiting: user response
 
 ## Tests
 
@@ -251,12 +255,22 @@ result: pass
 source: automated
 coverage_id: 01-13/D4
 
+### 42. Tier-3 regression re-confirmation on a repackaged binary
+expected: Re-run `shell03-budget-exhausted-error` and `shell03-auto-dismiss-on-selfheal` against a repackaged binary (`./mach build faster`). Neither check moves, since neither clicks Retry (WINDOWS.md ledger item 19).
+result: [pending]
+source: 01-VERIFICATION.md (re-verification 2026-09-01, human_verification item 1)
+
+### 43. About-dialog backstop on a repackaged binary
+expected: The repackaged binary's About dialog renders "Licensing Information" as the only visible bottom-row link; clicking it opens the aggregated open-source licence text; no Terms of Use, Privacy Notice, community, contribute, or experimental-community row is present, including the newly suppressed `#communityExperimentalDesc` row (01-21 backstop truth, MIG-04).
+result: [pending]
+source: 01-VERIFICATION.md (re-verification 2026-09-01, human_verification item 2)
+
 ## Summary
 
-total: 41
+total: 43
 passed: 40
 issues: 1
-pending: 0
+pending: 2
 skipped: 0
 gaps: 2  # G-01-3 (test 3 issue), G-01-25 (observed during testing against automated test 25)
 
