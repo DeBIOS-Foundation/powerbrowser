@@ -5,23 +5,28 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT IS NOT, YET. This is the tracer slice (plan 02-01): ONE target, the
-// dev variant's configure.sh, whose bytes are compared against the file
-// plan 01-03 wrote by hand. Four more targets and the two-layer defaults merge
-// arrive in plans 02-03 and 02-04. Resist adding a second emitter here before
-// then -- the whole point of proving one path end to end is that nine more
-// layers are not committed on top of an unproven one.
+// WHAT IT IS NOT, YET. This is still one target, the dev variant's
+// configure.sh, whose bytes are compared against the file plan 01-03 wrote by
+// hand. Four more targets arrive in plan 02-04. Resist adding a second emitter
+// here before then -- the whole point of proving one path end to end is that
+// nine more layers are not committed on top of an unproven one.
 //
 // WHY THE PIPELINE ORDER IS LOAD-BEARING. Parse, then reject unknown settings,
-// then validate, then emit, then write -- in that order and no other:
+// then mask, then merge, then validate, then emit, then write -- in that order
+// and no other:
 //
 //  * Unknown-setting rejection runs BEFORE anything is merged or assigned. A
 //    merge over an unchecked document assigns by computed key, and a reserved
 //    key name reaches the prototype chain that way. Rejecting first means such
 //    a name never reaches an assignment at all.
-//  * It also runs before the required-setting check, so a misspelled section
-//    header is reported as the misspelling it is, rather than as five separate
-//    complaints about the correctly-spelled settings it shadowed.
+//  * Masking runs BEFORE the merge and on the defaults layer OBJECT, never on
+//    the merged result. The two orderings agree on the wholly-absent case and
+//    disagree on the PARTIAL case -- a downstream that sets some identity keys
+//    and omits others -- and the partial case is the one that actually ships.
+//  * Unknown-setting rejection also runs before the required-setting check, so
+//    a misspelled section header is reported as the misspelling it is, rather
+//    than as five separate complaints about the correctly-spelled settings it
+//    shadowed.
 //  * Nothing is written under generated/ until every check has passed. A failed
 //    run leaves the output tree exactly as it found it.
 //
@@ -47,7 +52,7 @@
 // Usage:
 //   node scripts/generate.mjs
 //   node scripts/generate.mjs --check       (arrives in plan 02-04)
-//   node scripts/generate.mjs --self-test   (arrives in plan 02-06)
+//   node scripts/generate.mjs --self-test
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -106,10 +111,19 @@ function settingOf(path) {
 
 // --- 1. parse ---------------------------------------------------------------
 
-function loadManifest() {
+/**
+ * Parse ONE layer. The path is a parameter rather than a constant because the
+ * pipeline takes two layers -- the repo-root manifest, and a downstream
+ * manifest that overlays it. In Phase 2 the only caller that supplies a
+ * downstream path is --self-test; PB_CONFIG_DIR is CFG-05 and arrives in
+ * Phase 7. The downstream parameter is therefore NOT dead code awaiting a
+ * caller: it is the merge's only Phase-2 coverage, and deleting it would
+ * delete the merge's tests along with it.
+ */
+function loadLayer(path) {
     let text;
     try {
-        text = readFileSync(MANIFEST_PATH, 'utf8');
+        text = readFileSync(path, 'utf8');
     } catch {
         console.error(`${NAME}: FAIL -- ${MANIFEST_NAME} was not found at the top of the project.`);
         console.error(`  ${MANIFEST_NAME} holds every brand setting and the project cannot be generated without it.`);
@@ -187,7 +201,137 @@ function rejectUnknown(leaves, refused) {
     return failures;
 }
 
-// --- 3. validate, collecting every failure before exiting -------------------
+// --- 3. mask the defaults layer, then merge the downstream layer over it ----
+
+/**
+ * Every dotted path the schema marks required. This list is DERIVED from the
+ * schema's `required` flag and is not a second list: D-06's "one schema table
+ * consumed by both the masker and the validator" is satisfied by reading that
+ * flag, and a required key added to the schema is masked the moment it is
+ * added, with no edit here.
+ *
+ * An array is a leaf to the masker exactly as it is to the merge, so no
+ * `variants[]` path is consulted. None of them is required today. If one ever
+ * becomes required, the masker has to learn to descend into each element --
+ * validate() carries the same assumption in its `path.includes('[]')` skip.
+ */
+function requiredPathsOf(schemaKeys) {
+    return Object.entries(schemaKeys).filter(([, spec]) => spec.required).map(([path]) => path);
+}
+
+/**
+ * Copy a layer keeping only the leaves whose required-ness matches `keepRequired`.
+ * Tables that end up empty are dropped rather than left as empty sections, so a
+ * masked layer has no `identity` key at all rather than an `identity` holding
+ * nothing -- an empty table would still merge, and would still be a table the
+ * downstream's own table has to win against.
+ */
+function projectLayer(layer, prefix, required, keepRequired) {
+    const out = Object.create(null);
+    for (const key of Object.keys(layer)) {
+        if (RESERVED_NAMES.includes(key)) continue;
+        const path = prefix ? `${prefix}.${key}` : key;
+        const value = layer[key];
+        if (isTable(value)) {
+            const sub = projectLayer(value, path, required, keepRequired);
+            if (Object.keys(sub).length > 0) out[key] = sub;
+        } else if (required.includes(path) === keepRequired) {
+            out[key] = value;
+        }
+    }
+    return out;
+}
+
+/**
+ * D-06. Strip every schema-required key path out of the defaults layer, so no
+ * downstream can inherit one.
+ *
+ * WHAT THIS PREVENTS. Without it, "the repo-root manifest IS the defaults
+ * layer" means a downstream that omits [identity] silently ships under Power
+ * Browser's mark, and one that omits [legal] silently ships Power Browser's
+ * copyright holder and trademark notice. Removal is per key path and not per
+ * table, so omitting three keys out of five behaves exactly like omitting the
+ * whole table.
+ *
+ * The call site passes the defaults layer OBJECT and appears before the
+ * mergeLayers call. Moving it after the merge would still catch a wholly
+ * absent table and would silently stop catching the partial case.
+ */
+function maskDefaults(defaultsLayer, schemaKeys) {
+    return projectLayer(defaultsLayer, '', requiredPathsOf(schemaKeys), false);
+}
+
+/**
+ * The complement of the mask: the required keys alone.
+ *
+ * WHY POWER BROWSER IS ITS OWN DOWNSTREAM. Phase 2 has no second manifest, but
+ * the merge must still have exactly one code path rather than a fast path and a
+ * real one. So the root manifest is split along the mask line: its optional
+ * keys are the defaults layer, its required keys are the downstream layer.
+ * Their union is the manifest, which is why byte-identity survives; and the
+ * split is what makes this project's own build exercise the same merge a
+ * downstream will, instead of leaving it exercised only by its own test.
+ */
+function requiredLayer(layer, schemaKeys) {
+    return projectLayer(layer, '', requiredPathsOf(schemaKeys), true);
+}
+
+const EMPTY_LAYER = Object.freeze(Object.create(null));
+
+/**
+ * Recursive, key-level merge of a downstream layer over a defaults layer.
+ * Returns the resolved value AND the dotted paths whose value came from the
+ * defaults layer. The provenance comes OUT of the merge rather than being
+ * re-derived by a later traversal: a second traversal is a second source of
+ * truth about the same fact, and it can disagree with the merge.
+ *
+ * A leaf present in the downstream layer wins and is never recorded, even when
+ * its value equals the default -- an equal value is still a value the
+ * downstream stated.
+ */
+function mergeLayers(defaults, downstream) {
+    const defaulted = [];
+    const value = mergeInto(defaults, downstream, '', defaulted);
+    return { value, defaulted };
+}
+
+function mergeInto(defaults, downstream, prefix, defaulted) {
+    // A null-prototype accumulator, and the reserved names skipped by name.
+    // Unknown-setting rejection has already refused those names, so this is
+    // belt and braces (D-12) -- but this becomes a real trust boundary in
+    // Phase 7 and it costs three lines.
+    const out = Object.create(null);
+    for (const key of new Set([...Object.keys(defaults), ...Object.keys(downstream)])) {
+        if (RESERVED_NAMES.includes(key)) continue;
+        const path = prefix ? `${prefix}.${key}` : key;
+        const fromDefaults = defaults[key];
+        const setDownstream = Object.hasOwn(downstream, key);
+
+        if (isTable(fromDefaults) && isTable(downstream[key])) {
+            out[key] = mergeInto(fromDefaults, downstream[key], path, defaulted);
+        } else if (setDownstream) {
+            // D-07. An array is a LEAF: a downstream array replaces the whole
+            // default array and the two are never joined end to end. That is
+            // deliberate and it is the only way a downstream can DROP a default
+            // entry -- joining them makes dropping impossible. Every
+            // off-the-shelf deep-merge library joins arrays by default, so a
+            // reviewer's instinct is to "fix" this; the self-test case named
+            // 'downstream array shorter than default' is what goes red.
+            out[key] = downstream[key];
+        } else if (isTable(fromDefaults)) {
+            // The table is absent downstream entirely. Descend against an empty
+            // layer anyway, so what gets recorded is the LEAF paths inside it
+            // rather than the table's own path.
+            out[key] = mergeInto(fromDefaults, EMPTY_LAYER, path, defaulted);
+        } else {
+            out[key] = fromDefaults;
+            defaulted.push(path);
+        }
+    }
+    return out;
+}
+
+// --- 4. validate, collecting every failure before exiting -------------------
 
 function readPath(doc, path) {
     let node = doc;
@@ -309,17 +453,45 @@ function writeTargets(config) {
     return written;
 }
 
+// --- the pipeline ------------------------------------------------------------
+
+/**
+ * Parse both layers, reject unknown settings in either, mask, merge, validate.
+ *
+ * RETURNS rather than exits on a validation failure, because --self-test has to
+ * read the failures a planted fault produced. Only the two conditions a
+ * self-test can never provoke -- a missing file and an unparseable one -- still
+ * exit from inside loadLayer.
+ */
+function resolveConfig(defaultsPath, downstreamPath) {
+    const defaultsLayer = loadLayer(defaultsPath);
+    const downstreamLayer = downstreamPath === undefined
+        ? requiredLayer(defaultsLayer, SCHEMA_KEYS)
+        : loadLayer(downstreamPath);
+
+    const leaves = [];
+    const refused = [];
+    collectLeaves(defaultsLayer, '', leaves, refused);
+    collectLeaves(downstreamLayer, '', leaves, refused);
+    const unknown = [...new Set(rejectUnknown(leaves, refused))];
+    if (unknown.length > 0) return { failures: unknown, config: undefined, defaulted: [] };
+
+    const masked = maskDefaults(defaultsLayer, SCHEMA_KEYS);
+    const { value: config, defaulted } = mergeLayers(masked, downstreamLayer);
+
+    const mergedLeaves = [];
+    collectLeaves(config, '', mergedLeaves, []);
+    return { failures: validate(config, mergedLeaves), config, defaulted };
+}
+
 // --- run --------------------------------------------------------------------
 
-const doc = loadManifest();
+const { failures, config, defaulted } = resolveConfig(MANIFEST_PATH, undefined);
+report(failures);
 
-const leaves = [];
-const refused = [];
-collectLeaves(doc, '', leaves, refused);
-
-report(rejectUnknown(leaves, refused));
-report(validate(doc, leaves));
-
-const count = writeTargets(doc);
-console.log(`${NAME}: PASS -- ${count} file(s) written under generated/ from ${MANIFEST_NAME}`);
+const count = writeTargets(config);
+console.log(
+    `${NAME}: PASS -- ${count} file(s) written under generated/ from ${MANIFEST_NAME}, `
+    + `${defaulted.length} default(s) applied`,
+);
 process.exit(0);
