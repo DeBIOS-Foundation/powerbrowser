@@ -1,18 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 01-platform-extraction-and-rename
 source: [01-01-SUMMARY.md, 01-02-SUMMARY.md, 01-03-SUMMARY.md, 01-04-SUMMARY.md, 01-05-SUMMARY.md, 01-06-SUMMARY.md, 01-07-SUMMARY.md, 01-08-SUMMARY.md, 01-09-SUMMARY.md, 01-10-SUMMARY.md, 01-11-SUMMARY.md, 01-12-SUMMARY.md, 01-13-SUMMARY.md, 01-14-SUMMARY.md, 01-15-SUMMARY.md, 01-16-SUMMARY.md, 01-17-SUMMARY.md, 01-VERIFICATION.md]
 started: 2026-09-01T01:17:53Z
-updated: 2026-09-01T20:49:47Z
+updated: 2026-09-01T21:12:00Z
 ---
 
 ## Current Test
 
-number: 42
-name: Tier-3 regression re-confirmation on a repackaged binary
-expected: |
-  Re-run shell03-budget-exhausted-error and shell03-auto-dismiss-on-selfheal against a repackaged binary; neither check moves.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -26,9 +22,9 @@ result: pass
 
 ### 3. About Dialog Display Literal
 expected: The About dialog names the product "Power Browser" (display form with a space). No "powerbrowser" identifier form, no Sourcerer or Mozilla naming, appears in the dialog's user-facing text.
-result: issue
-reported: "In the firefox about it looks good but I would get rid of these links — Make a donation / get involved! / Licensing Information / Terms of Use / Privacy Notice (screenshot: About Power Browser Dev dialog)"
-severity: minor
+result: pass
+history: "Originally reported as an issue (severity minor): 'In the firefox about it looks good but I would get rid of these links — Make a donation / get involved! / Licensing Information / Terms of Use / Privacy Notice'. Tracked as G-01-3, closed by 01-18-PLAN.md, re-verified live on the repackaged binary by test 43 (2026-09-01)."
+resolved_by: 01-18-PLAN.md
 
 ### 4. Desktop Entries and Icons
 expected: Both desktop entries resolve inside this repo and their Icon= targets exist on disk as real image files.
@@ -257,28 +253,32 @@ coverage_id: 01-13/D4
 
 ### 42. Tier-3 regression re-confirmation on a repackaged binary
 expected: Re-run `shell03-budget-exhausted-error` and `shell03-auto-dismiss-on-selfheal` against a repackaged binary (`./mach build faster`). Neither check moves, since neither clicks Retry (WINDOWS.md ledger item 19).
-result: [pending]
+result: pass
+note: "Repackaged 2026-09-01 via `MOZCONFIG=../.mozconfig ./mach build faster` (17s); packaged chrome confirmed live (branding aboutDialog.css symlinked to source). Both checks re-run against the repackaged binary: shell03-budget-exhausted-error PASS, shell03-auto-dismiss-on-selfheal PASS. Neither moved."
 source: 01-VERIFICATION.md (re-verification 2026-09-01, human_verification item 1)
 
 ### 43. About-dialog backstop on a repackaged binary
 expected: The repackaged binary's About dialog renders "Licensing Information" as the only visible bottom-row link; clicking it opens the aggregated open-source licence text; no Terms of Use, Privacy Notice, community, contribute, or experimental-community row is present, including the newly suppressed `#communityExperimentalDesc` row (01-21 backstop truth, MIG-04).
-result: [pending]
+result: pass
+note: "Confirmed by user 2026-09-01 against the repackaged binary: Licensing Information is the only visible bottom-row link, it opens the aggregated licence text, and no Terms of Use / Privacy Notice / community / contribute / experimental-community row remains."
 source: 01-VERIFICATION.md (re-verification 2026-09-01, human_verification item 2)
 
 ## Summary
 
 total: 43
-passed: 40
-issues: 1
-pending: 2
+passed: 43
+issues: 0
+pending: 0
 skipped: 0
-gaps: 2  # G-01-3 (test 3 issue), G-01-25 (observed during testing against automated test 25)
+gaps: 0 open  # G-01-3 resolved by 01-18, G-01-25 resolved by 01-19
 
 ## Gaps
 
 - gap_id: G-01-3
   truth: "The About dialog carries only Power Browser user-facing text; no stock Mozilla outbound-link row (Make a donation / get involved! / Licensing Information / Terms of Use / Privacy Notice) survives in the rebranded dialog"
-  status: failed
+  status: resolved
+  resolved_by: 01-18-PLAN.md
+  resolved_at: 2026-09-01
   reason: "User reported: naming is correct (About Power Browser Dev, DeBIOS Foundation) but the stock Mozilla community/donation and licensing/terms/privacy links are still present and should be removed"
   severity: minor
   test: 3
@@ -296,7 +296,9 @@ gaps: 2  # G-01-3 (test 3 issue), G-01-25 (observed during testing against autom
 
 - gap_id: G-01-25
   truth: "The display name reads 'Power Browser' with a space on every user-facing surface and the identifier form never leaks into a display string (01-03 D2)"
-  status: failed
+  status: resolved
+  resolved_by: 01-19-PLAN.md
+  resolved_at: 2026-09-01
   reason: "Observed during live UAT (screenshot, 2026-09-01): the Theia shell main window title bar reads 'PowerBrowser' — identifier form, no space. Likely the Theia frontend applicationName rather than Gecko branding, so the tree-side automated check did not catch it."
   severity: major
   test: 25
