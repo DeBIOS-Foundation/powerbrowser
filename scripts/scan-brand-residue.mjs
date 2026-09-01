@@ -948,6 +948,34 @@ function selfTest() {
       console.error(`scan-brand-residue: --self-test FAIL -- ${typoLabel}: exited ${rTypo.status} (expected 2) and did not name the argument. Output: ${rTypo.out.trim()}`);
       overall = 1;
     }
+
+    // CR-01 (plan 01-17). The plant is 01-REVIEW.md's literal reproduction: a
+    // mozconfig-shaped assignment whose objdir path embeds this checkout's own
+    // absolute source path, which is the `coincidental` row that used to claim
+    // the whole span and exempt the `brand-identifier` token inside it.
+    // Measured on the pre-fix script: this exact input exited 0 printing
+    // `PASS -- ... plus 1 file(s) under --extra-root`.
+    //
+    // This row has no control of its own on purpose: the clean-root row above
+    // already establishes that a token-free scratch root exits 0, so a red here
+    // is attributable to the plant. That control must keep running BEFORE this
+    // row -- do not reorder them.
+    //
+    // Spelling a real inventory token in this file is safe and is this file's
+    // established practice: `inventory/brand-tokens.json`'s `scope.exclude`
+    // lists `scripts/scan-brand-residue.mjs` for exactly that reason.
+    const coincidentalLabel = '--extra-root does not exempt a brand token claimed by a coincidental-class row';
+    const coincRoot = join(tmp, 'extra-root-coincidental');
+    const coincRel = 'mozconfig';
+    mkdirSync(coincRoot);
+    writeFileSync(join(coincRoot, coincRel), 'MOZ_OBJDIR=/home/chris/coding/sourcerer/objdir\n');
+    const rCoinc = runCli('--extra-root', coincRoot);
+    if (rCoinc.status !== 0 && rCoinc.out.includes(coincRoot) && rCoinc.out.includes(coincRel)) {
+      console.log(`scan-brand-residue: --self-test PASS -- ${coincidentalLabel}`);
+    } else {
+      console.error(`scan-brand-residue: --self-test FAIL -- ${coincidentalLabel}: exited ${rCoinc.status} and did not name both ${coincRoot} and ${coincRel}. A coincidental row is an assertion about THIS checkout, and nothing reconciles its count under --extra-root, so a token it swallows there passes the gate whose purpose is catching it. Output: ${rCoinc.out.trim()}`);
+      overall = 1;
+    }
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -1087,7 +1115,36 @@ function main(argv) {
     if (extraFiles && extraFiles.length === 0) {
       gate.push(`the --extra-root file set is empty for ${extraRoot} -- an empty file set is not a clean tree, it is a scan that ran over nothing`);
     } else if (extraFiles) {
-      const extra = scan(inv, { root: extraRoot, files: extraFiles });
+      // CR-01 (plan 01-17): the row set this pass scans with EXCLUDES the
+      // `coincidental` class, and only that class.
+      //
+      // Why it must be excluded here: a `coincidental` row is an assertion
+      // about THIS checkout -- a local absolute source path and two hex colour
+      // literals -- and is meaningless as a claim about a foreign tree.
+      // Applied there it is worse than inert. `claimOccurrences` orders rows
+      // longest-token-first, so the 28-character local-path row wins over the
+      // shorter `brand-identifier` row nested inside it, writes the whole span
+      // into `taken[]`, and classifies the occurrence `coincidental` -- which
+      // `offensesOf` does not count as an offence AND which suppresses the
+      // independent residue probe at that same index, because a claimed span
+      // is a written `taken[]` entry. Over the tracked tree that is safe only
+      // because `reconcile()` condition 2 asserts the row's observed count is
+      // zero; this pass deliberately does not run `reconcile()` (see above), so
+      // nothing constrains it here at all. The single likeliest residue in a
+      // replayed tree -- an absolute source or objdir path baked into a
+      // mozconfig, a patch header or a generated build file -- is exactly the
+      // shape that exempts.
+      //
+      // Why nothing ELSE is excluded: `frozen` rows (`MOZ_APP_ID`,
+      // `%content/branding/`, `-brand-product-name = Firefox`) legitimately
+      // occur in a Gecko checkout and carry no residue probe, so dropping them
+      // would produce claim churn without closing anything. The three
+      // renameable classes are what this gate exists to catch.
+      const extra = scan(inv, {
+        root: extraRoot,
+        files: extraFiles,
+        rows: inv.tokens.filter((r) => r.class !== 'coincidental'),
+      });
       const extraOffenses = offensesOf(extra);
       for (const o of extraOffenses) {
         console.error(`  ${join(extraRoot, o.file)}:${o.line}: ${o.row.token}`);
