@@ -459,35 +459,35 @@ function runChecks(root) {
 
     // --- 7. the mark and its Theia twin --------------------------------------
     //
-    // powerbrowser/branding/mark.svg is the source all ten rasters derive from;
+    // brand/mark.svg is the source all ten rasters derive from;
     // powerbrowser-mark.ts carries the same markup inline as a data URI for the
     // tab-strip favicon. Nothing else in the tree would notice them drifting --
     // the module keeps compiling and the window icon and the favicon just
     // quietly stop being the same mark.
-    const markSvg = readText(root, 'powerbrowser/branding/mark.svg');
+    const markSvg = readText(root, 'brand/mark.svg');
     const markTs = readText(root, 'theia/extensions/branding/src/browser/powerbrowser-mark.ts');
     if (markSvg === null) {
-        r.fail('powerbrowser/branding/mark.svg does not exist -- the ten rasters have no declared source');
+        r.fail('brand/mark.svg does not exist -- the ten rasters have no declared source');
     } else if (markTs === null) {
         r.fail('theia/extensions/branding/src/browser/powerbrowser-mark.ts does not exist');
     } else {
         const svgLine = markSvg.split('\n').find((l) => l.startsWith('<svg'));
         const tsMatch = markTs.match(/POWERBROWSER_MARK_SVG = `([\s\S]*?)`;/);
         if (!svgLine) {
-            r.fail('powerbrowser/branding/mark.svg has no single-line <svg> element to compare against');
+            r.fail('brand/mark.svg has no single-line <svg> element to compare against');
         } else if (!tsMatch) {
             r.fail('powerbrowser-mark.ts does not export a POWERBROWSER_MARK_SVG template literal');
         } else if (tsMatch[1].trim() !== svgLine.trim()) {
             r.fail(
-                'powerbrowser/branding/mark.svg and powerbrowser-mark.ts\'s POWERBROWSER_MARK_SVG have DRIFTED. They are ' +
+                'brand/mark.svg and powerbrowser-mark.ts\'s POWERBROWSER_MARK_SVG have DRIFTED. They are ' +
                 'the same asset expressed twice; the window icon and the tab-strip favicon must be the same mark.',
             );
         }
         if (!/viewBox="0 0 128 128"/.test(markSvg)) {
-            r.fail('powerbrowser/branding/mark.svg is not square (viewBox must be "0 0 128 128") -- Gecko\'s icon slots are square and a non-square source silently reintroduces the magic render sizes');
+            r.fail('brand/mark.svg is not square (viewBox must be "0 0 128 128") -- Gecko\'s icon slots are square and a non-square source silently reintroduces the magic render sizes');
         }
         if (!/prefers-color-scheme: dark/.test(markSvg)) {
-            r.fail('powerbrowser/branding/mark.svg has lost its prefers-color-scheme dual fill -- a single-fill mark is invisible on one of the two tab-strip themes');
+            r.fail('brand/mark.svg has lost its prefers-color-scheme dual fill -- a single-fill mark is invisible on one of the two tab-strip themes');
         }
     }
 
@@ -630,7 +630,7 @@ function selfTest() {
             'patches/010-powerbrowser-identity.patch',
             'scripts/verify-branding-identity.mjs',
             'theia/applications/browser/package.json',
-            'powerbrowser/branding/mark.svg',
+            'brand/mark.svg',
             'powerbrowser/powerbrowser.desktop',
             'powerbrowser/powerbrowser-release.desktop',
             'LICENSE',
