@@ -471,6 +471,107 @@ function runChecks(root) {
         }
     }
 
+    // --- 9. every branding chrome resource is actually packaged --------------
+    //
+    // The class fix for G-01-3. `content/aboutDialog.css` sat in both branding
+    // content directories from 01-03 onward while neither `content/jar.mn`
+    // named it, so `chrome://branding/content/aboutDialog.css` -- referenced by
+    // upstream's own aboutDialog.xhtml linkset -- 404'd silently for the file's
+    // whole life. Nothing was red. The stylesheet's restyle never applied and
+    // the stock link rows it could have suppressed stayed on screen. That was
+    // not a typo; it was a resource with no packaging line and no gate that
+    // could notice one was missing.
+    //
+    // THE SET IS READ FROM THE DIRECTORY at check time, never kept here. A
+    // literal list of expected resources could only ever agree with the tree it
+    // was copied from, which is precisely the defect: the file was present and
+    // the manifest was the thing that had forgotten it.
+    //
+    // SCOPE. Only the branding content directories. `powerbrowser/shell/`
+    // deliberately mixes chrome resources with non-chrome files
+    // (`components.conf`, the sidecar script), so applying the same rule there
+    // would need a hand-kept exclusion list -- which is the thing this repo's
+    // verification rules forbid, and the thing that fails open.
+    const CONTENT_BUILD_INPUTS = new Set(['jar.mn', 'moz.build']);
+    const packagedDestinations = {};
+    for (const [variantName, variant] of Object.entries(exp.variants || {})) {
+        const contentRel = `${variant.branding_dir}/content`;
+        let resources;
+        try {
+            resources = readdirSync(join(root, contentRel))
+                .filter((n) => !CONTENT_BUILD_INPUTS.has(n))
+                .sort();
+        } catch {
+            r.fail(`${contentRel}/ does not exist, so the ${variantName} branding chrome package's payload could not be checked at all`);
+            continue;
+        }
+        if (resources.length === 0) {
+            // The same non-vacuity rule this file applies to its other derived
+            // sets: a walk that found nothing has proven nothing.
+            r.fail(
+                `${contentRel}/ yielded ZERO chrome resources, so the packaging-completeness check verified nothing. ` +
+                'An empty derived set is a failure, not a clean run.',
+            );
+            continue;
+        }
+        const manifestRel = `${contentRel}/jar.mn`;
+        const manifest = readText(root, manifestRel);
+        if (manifest === null) {
+            r.fail(`${manifestRel} does not exist, so ${resources.length} chrome resource(s) in ${contentRel}/ ship nowhere`);
+            continue;
+        }
+        // A packaging line is `<destination> (<source>)`, once `#` comments are
+        // stripped. `browser.jar:` and the `% content branding %...` package
+        // registration carry no parenthesised source and are skipped by shape.
+        const entries = [];
+        for (const raw of manifest.split('\n')) {
+            const m = raw.split('#')[0].trim().match(/^(\S+)\s+\((\S+)\)$/);
+            if (m) entries.push({ destination: m[1], source: m[2] });
+        }
+        packagedDestinations[variantName] = new Set(entries.map((e) => e.destination));
+        const sources = new Set(entries.map((e) => e.source));
+
+        // (a) ADDITION direction -- the G-01-3 defect itself.
+        for (const res of resources) {
+            if (!sources.has(res)) {
+                r.fail(
+                    `${contentRel}/${res} is a chrome resource that ${manifestRel} does not package. ` +
+                    'It will not ship, and every chrome:// reference to it will 404 SILENTLY -- which is exactly ' +
+                    'how the branding aboutDialog.css stayed dead from 01-03 to 01-18. Add a packaging line.',
+                );
+            }
+        }
+
+        // (b) REMOVAL direction -- a manifest naming a file that is gone.
+        for (const e of entries) {
+            if (!existsSync(join(root, contentRel, e.source))) {
+                r.fail(
+                    `${manifestRel} packages ${JSON.stringify(e.source)} into ${JSON.stringify(e.destination)}, but that ` +
+                    `source does not exist relative to ${contentRel}/. Deleting a shipped resource must not stay green.`,
+                );
+            }
+        }
+    }
+
+    // (c) DIVERGENCE direction -- fix one variant, forget the other. A live
+    // risk here because every branding change in this tree is written twice.
+    const packagedVariants = Object.keys(packagedDestinations).sort();
+    for (let i = 1; i < packagedVariants.length; i++) {
+        const a = packagedVariants[0];
+        const b = packagedVariants[i];
+        const setA = packagedDestinations[a];
+        const setB = packagedDestinations[b];
+        const onlyA = [...setA].filter((d) => !setB.has(d)).sort();
+        const onlyB = [...setB].filter((d) => !setA.has(d)).sort();
+        if (onlyA.length || onlyB.length) {
+            r.fail(
+                `the ${a} and ${b} branding manifests package DIFFERENT destination sets -- ` +
+                `only in ${a}: ${JSON.stringify(onlyA)}; only in ${b}: ${JSON.stringify(onlyB)}. ` +
+                'The two variants are byte-identical by design; a one-sided packaging fix is a half fix.',
+            );
+        }
+    }
+
     return r;
 }
 
@@ -501,6 +602,16 @@ function selfTest() {
                 `powerbrowser/branding/${v}/locales/en-US/brand.properties`,
                 `powerbrowser/branding/${v}/configure.sh`,
                 `powerbrowser/branding/${v}/content/aboutDialog.css`,
+                // Section 9 reads the content directory and then requires every
+                // manifest source to resolve, so the fixture needs the manifest
+                // AND all five icons it reaches through `../`. Without them the
+                // removal direction would be red on the UNMUTATED control and a
+                // red after the plant below would prove nothing.
+                `powerbrowser/branding/${v}/content/jar.mn`,
+                `powerbrowser/branding/${v}/default16.png`,
+                `powerbrowser/branding/${v}/default32.png`,
+                `powerbrowser/branding/${v}/default48.png`,
+                `powerbrowser/branding/${v}/default64.png`,
                 `powerbrowser/branding/${v}/default128.png`,
             );
         }
@@ -602,6 +713,31 @@ function selfTest() {
         } else {
             console.log(`${NAME}: --self-test -- an emptied brand-display row set was REJECTED: ${emptyMsg}`);
         }
+
+        // Fourth plant (01-18): the EXACT pre-fix state of the G-01-3 defect --
+        // delete the aboutDialog.css packaging line from the dev manifest, so a
+        // chrome resource sits in the content directory with nothing shipping
+        // it. Section 9 must go red NAMING the unpackaged file; a red that only
+        // says something is wrong would not have told anyone which file 404'd.
+        writeFileSync(invPath, readFileSync(join(REPO_ROOT, 'inventory/brand-tokens.json')));
+        const jarRel = 'powerbrowser/branding/dev/content/jar.mn';
+        const unpackagedRel = 'powerbrowser/branding/dev/content/aboutDialog.css';
+        const jarPath = join(dir, jarRel);
+        const jarOriginal = readFileSync(jarPath, 'utf8');
+        writeFileSync(
+            jarPath,
+            jarOriginal.split('\n').filter((l) => !/\(aboutDialog\.css\)\s*$/.test(l)).join('\n'),
+        );
+        const unpackaged = runChecks(dir);
+        const unpackagedMsg = unpackaged.failures.find((f) => f.includes(unpackagedRel) && f.includes('does not package'));
+        if (!unpackagedMsg) {
+            console.error(`${NAME}: --self-test FAIL -- a chrome resource with no packaging line (${unpackagedRel}, the pre-fix G-01-3 state) was NOT rejected by name`);
+            for (const f of unpackaged.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- removed the packaging line for ${unpackagedRel} and it was REJECTED by name: ${unpackagedMsg}`);
+        }
+        writeFileSync(jarPath, jarOriginal);
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
