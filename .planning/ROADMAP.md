@@ -54,7 +54,7 @@ Sourcerer's decision IDs as justification.)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 15/15 plans executed
+**Plans**: 17 plans (15 executed, 2 pending gap closure)
 
 Plans:
 **Wave 1**
@@ -116,6 +116,14 @@ Plans:
 **Wave 15** *(gap closure — blocked on Wave 14 completion)*
 
 - [x] 01-15-PLAN.md — Close CR-B: give `scan-brand-residue.mjs` an `--extra-root <dir>` mode that walks a filesystem root outside the git index under the same inventory filters, and have `rebase-upstream.sh` pass `$UPSTREAM_DIR` to the post-replay invocation so the scan can finally read the tree the replay just rewrote; three hermetic self-test rows (clean control, planted token, missing root) prove it can go red without needing the 1.1 GB clone; plus the CI-workflow decision, the BUILD.md failure point, and deferred-items row 9
+
+**Wave 16** *(gap closure — the same green-by-construction class, re-opened one step to either side by 01-REVIEW.md)*
+
+- [ ] 01-16-PLAN.md — Close CR-03: make `verify-shell-error-copy.mjs`'s rule (4) derive the total number of `_showError(` call sites present in the file under test independently of its enumeration regex and require the two counts to be equal, so a call site the regex cannot read is a named failure instead of an invisible one; two planted-fault rows (comma-less call, optional-chained receiver) proven green under the pre-fix checker and red under the fixed one; plus WR-01 and WR-02 folded in — a `message:` nested below depth 0 no longer makes a binding message-bearing, and `parseUserMessageTable` asserts its own parse is total
+
+**Wave 17** *(gap closure — blocked on Wave 16 completion)*
+
+- [ ] 01-17-PLAN.md — Close CR-01 and CR-02 inside the `--extra-root` mode 01-15 built: filter the `coincidental` class out of the extra-root row set so a fact about this checkout can no longer swallow a real brand token in a foreign tree or suppress the independent probe at that index, and make `scan()` collect unreadable files so one under `--extra-root` is a gate failure naming the file rather than a silent skip still counted as scanned; two planted-fault rows proven against the pre-fix script using the review's own reproductions; plus deferred-items row 10 recording every closure and every deliberate NOT-done
 
 **UI hint**: yes
 **Research**: recommended — ~1,090 occurrences across five case-variant forms and six coupled reference formats (jar.mn, components.conf, moz.build, patch content, verifier regex); the classification inventory needs its own deep pass. Highest-risk phase; plan-review-convergence applies. *(Research completed 2026-08-30: the real migrating surface measured 755 occurrences across 69 files; GUI-01 and GUI-02 found to be net-new work, not migration.)*
