@@ -5,11 +5,11 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT IS NOT, YET. This is still one target, the dev variant's
-// configure.sh, whose bytes are compared against the file plan 01-03 wrote by
-// hand. Four more targets arrive in plan 02-04. Resist adding a second emitter
-// here before then -- the whole point of proving one path end to end is that
-// nine more layers are not committed on top of an unproven one.
+// WHAT IT COVERS. Five targets, each byte-identical to the file Phase 1 wrote
+// by hand: the two branding configure.sh files, .mozconfig, and the two
+// .desktop files. That byte-identity IS the phase's acceptance test, which is
+// why no emitter here is allowed to reformat, reorder or "tidy" what it
+// reproduces. The Theia and packaging surfaces are Phase 3 (GEN-03).
 //
 // WHY THE PIPELINE ORDER IS LOAD-BEARING. Parse, then reject unknown settings,
 // then mask, then merge, then validate, then emit, then write -- in that order
@@ -51,7 +51,7 @@
 //
 // Usage:
 //   node scripts/generate.mjs
-//   node scripts/generate.mjs --check       (arrives in plan 02-04)
+//   node scripts/generate.mjs --check
 //   node scripts/generate.mjs --self-test
 
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -391,17 +391,23 @@ function report(failures) {
 // --- 4. emit and write ------------------------------------------------------
 
 /**
- * The dev variant's configure.sh, line for line against the file plan 01-03
- * wrote by hand. Lines 1-3 are the Mozilla Public License boilerplate: a
- * source-file licence notice, literal emitter text, not a rebrand input.
- * Lines 5-7 are that file's hand-written comment reproduced verbatim -- D-03 is
- * explicit that these bytes come across first and the comment is only rewritten
- * in plan 02-06, after the byte-identity check is green.
+ * A branding configure.sh, line for line against the files plan 01-03 wrote by
+ * hand. Lines 1-3 are the Mozilla Public License boilerplate: a source-file
+ * licence notice, literal emitter text, not a rebrand input. Lines 5-7 are
+ * those files' hand-written comment reproduced verbatim -- D-03 is explicit
+ * that these bytes come across first and the comment is only rewritten in plan
+ * 02-06, after the byte-identity check is green.
+ *
+ * ONE emitter serves BOTH variants. The dev and release files differ in exactly
+ * one line, and that difference is entirely the variant's name_suffix -- the
+ * release variant's is empty, which is what yields the shorter display name. If
+ * the two emitted files ever differ by anything else, the emitter is wrong, not
+ * the variant, and a second emitter would be the wrong repair.
  *
  * Joined with a literal newline, never the platform line-ending constant, which
  * would emit CRLF on a Windows host and break byte-identity.
  */
-function emitDevConfigureSh(config, variant) {
+function emitConfigureSh(config, variant) {
     const lines = [
         '# This Source Code Form is subject to the terms of the Mozilla Public',
         '# License, v. 2.0. If a copy of the MPL was not distributed with this',
@@ -416,16 +422,135 @@ function emitDevConfigureSh(config, variant) {
 }
 
 /**
- * Every output path lives here and nowhere else. No value out of
+ * The root .mozconfig, eleven lines against the file Phase 1 wrote by hand.
+ *
+ * FOUR VALUES come from the manifest: the --with-app-basename argument, the
+ * --with-distribution-id argument, the exported MOZ_APP_REMOTINGNAME, and --
+ * inside the two shell-default expansions on lines 1 and 10 -- the variant's
+ * objdir and branding_dir.
+ *
+ * WHY THE DEV VARIANT, ALWAYS. There is one .mozconfig, and the two expansions
+ * spell out what the build falls back on when POWERBROWSER_OBJDIR and
+ * POWERBROWSER_BRANDING are unset. Those fallbacks are the DEV defaults; a
+ * release build sets the two environment variables. So this emitter takes the
+ * dev variant not as a default that could reasonably be parameterised, but
+ * because dev IS what an unset environment means here.
+ *
+ * WHY THE ENVIRONMENT VARIABLE NAMES STAY LITERAL. POWERBROWSER_OBJDIR and
+ * POWERBROWSER_BRANDING are read by scripts and by the developer's shell, not
+ * written by this phase; renaming them is not a rebrand operation and no
+ * manifest key selects them. Their VALUES are configurable; their NAMES are
+ * part of the build's interface.
+ *
+ * WHY SIX LINES ARE LITERAL TEXT (research assumption A3, and a recorded
+ * decision rather than an oversight). Lines 2-5 and 8-9 are toolchain and
+ * feature flags -- the application selection, the updater, the wasm sandbox,
+ * the libclang path, the crash reporter, the compiler cache. None of them is a
+ * rebrand input: changing a brand never changes whether the crash reporter is
+ * built. Promoting one to a [build] key later is purely additive -- one schema
+ * entry and one emitter line -- so the cheap direction is to leave them literal
+ * until a downstream actually needs to differ.
+ *
+ * Built by concatenation rather than by template interpolation on the two
+ * expansion lines: `${...}` inside a JS template literal is JS interpolation,
+ * and the shell-default syntax has to survive to the emitted bytes intact.
+ */
+function emitMozconfig(config, variant) {
+    const lines = [
+        'mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/../${POWERBROWSER_OBJDIR:-' + variant.objdir + '}',
+        'ac_add_options --enable-application=browser',
+        'ac_add_options --disable-updater',
+        'ac_add_options --without-wasm-sandboxed-libraries',
+        'ac_add_options --with-libclang-path="$LIBCLANG_PATH"',
+        `ac_add_options --with-app-basename=${config.identity.app_basename}`,
+        `ac_add_options --with-distribution-id=${config.identity.distribution_id}`,
+        'ac_add_options --disable-crashreporter',
+        'ac_add_options --with-ccache=sccache',
+        'ac_add_options --with-branding=${POWERBROWSER_BRANDING:-' + variant.branding_dir + '}',
+        `mk_add_options "export MOZ_APP_REMOTINGNAME=${config.identity.remoting_name}"`,
+    ];
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * A freedesktop .desktop entry, nine lines against the files Phase 1 wrote by
+ * hand. One emitter, both variants; the dev and release files differ in exactly
+ * three lines and all three differences come from the variant.
+ *
+ * THE ABSOLUTE PATHS ARE DERIVED, NOT CONFIGURED (D-04). A desktop entry must
+ * name an absolute executable, so Exec and Icon carry the repo root -- but the
+ * root comes from REPO_ROOT, which this file derives from its OWN location, not
+ * from the working directory and not from a manifest key. Putting a host path
+ * in configuration.toml would make the manifest machine-specific, which is the
+ * one thing D-04 forbids; deriving it from process.cwd() would make the emitted
+ * bytes depend on where the generator was invoked from.
+ *
+ * The header, Terminal, Type, Categories and the MimeType list are freedesktop
+ * platform constants, not rebrand inputs, and are emitted literally.
+ */
+function emitDesktopEntry(config, variant) {
+    const exec = join(REPO_ROOT, variant.objdir, 'dist/bin', config.identity.binary_name);
+    const icon = join(REPO_ROOT, variant.branding_dir, 'default128.png');
+    const lines = [
+        '[Desktop Entry]',
+        `Name=${config.identity.display_name}${variant.name_suffix}`,
+        `Exec=${exec} %u`,
+        `Icon=${icon}`,
+        'Terminal=false',
+        'Type=Application',
+        'Categories=Development;IDE;',
+        `StartupWMClass=${config.identity.remoting_name}`,
+        'MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/vnd.mozilla.xul+xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;',
+    ];
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * Every output path lives here and nowhere else, and the default run, --check
+ * and plan 02-05's byte-identity gate all iterate this one array.
+ *
+ * BOTH PATHS IN EVERY ENTRY ARE STRING LITERALS. No value out of
  * configuration.toml is ever joined into a write path -- a variant carries
- * branding_dir and objdir as emitted CONTENT, never as a write target.
+ * branding_dir and objdir as emitted CONTENT, never as a write target. That is
+ * structurally what stops a config key directing a write outside generated/
+ * (T-02-02, GEN-04), and it is why the variant schema carries no
+ * output-filename key at all: there is nowhere for one to be honoured.
+ *
+ * The two generated .desktop filenames are FIXED platform identifiers in Phase
+ * 2. Naming a downstream's installed desktop entry after its own binary is
+ * GEN-03 and belongs to Phase 3's packaging surfaces; doing it here would mean
+ * a manifest value chose a filename, which is exactly the property above.
  */
 const TARGETS = Object.freeze([
+    Object.freeze({
+        generated: '.mozconfig',
+        tracked: '.mozconfig',
+        variant: 'dev',
+        emit: emitMozconfig,
+    }),
     Object.freeze({
         generated: 'branding/dev/configure.sh',
         tracked: 'powerbrowser/branding/dev/configure.sh',
         variant: 'dev',
-        emit: emitDevConfigureSh,
+        emit: emitConfigureSh,
+    }),
+    Object.freeze({
+        generated: 'branding/release/configure.sh',
+        tracked: 'powerbrowser/branding/release/configure.sh',
+        variant: 'release',
+        emit: emitConfigureSh,
+    }),
+    Object.freeze({
+        generated: 'powerbrowser.desktop',
+        tracked: 'powerbrowser/powerbrowser.desktop',
+        variant: 'dev',
+        emit: emitDesktopEntry,
+    }),
+    Object.freeze({
+        generated: 'powerbrowser-release.desktop',
+        tracked: 'powerbrowser/powerbrowser-release.desktop',
+        variant: 'release',
+        emit: emitDesktopEntry,
     }),
 ]);
 
