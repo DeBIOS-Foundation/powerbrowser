@@ -847,7 +847,9 @@ D-14 names five faults; two more are worth adding from the pitfalls above:
 | A5 | Vendoring a built bundle under `scripts/lib/` is acceptable despite `.gitignore`'s note that the directory holds "hand-written source, not build output" | Standard Stack | Low. That comment exists to explain why `theia/**/lib/` is anchored, not to state a policy about the directory's contents. Worth a one-line confirmation from the user if the planner wants certainty |
 | A6 | `smol-toml@1.8.0` was discovered from training knowledge, then confirmed against the npm registry and by unpacking the tarball — **not** from official documentation or Context7 | Standard Stack | See A2. Registry existence alone is not proof of legitimacy; the sha256 + human checkpoint is what closes this |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Resolution note (plan-phase): Q1 vendoring → locked D-13 and plan 02-01; Q2 section list → `[theia]` section in plan 02-01; Q3 variant shape → `[[variants]]` in plan 02-01; Q4 `--check` leftover files → set-equality check in plan 02-04 Task 2.
 
 1. **Should the plan re-raise the hand-written-subset-parser option with the user?**
    - What we know: D-13 locks in "exactly one TOML parser dependency". Vendoring satisfies it.
