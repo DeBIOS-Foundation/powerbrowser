@@ -40,6 +40,13 @@
 // an added call site or a removed one changes what the checker COMPUTES rather
 // than requiring this file to be edited.
 //
+// RULE (4) therefore checks TWO things. That every ENUMERATED call site takes a
+// table-derived message (01-14), and -- since 01-16, CR-03 -- that the
+// ENUMERATION ITSELF IS COMPLETE: the number of `_showError(` call sites the
+// enumeration regex parsed is compared against a second, independently derived
+// total, and a disagreement is a loud failure. An accept rule applied to a
+// silently incomplete set of sites can go green on the one site it never saw.
+//
 // Static on purpose: it reads the source, needs no build, no browser and no
 // display, and therefore belongs in --quick where a leak costs seconds rather
 // than a forty-minute rebuild. Its runtime counterpart is verify-platform.sh's
@@ -299,6 +306,28 @@ function check(targetPath) {
   const bearing = messageBearingBindings(src, table);
   const caught = catchParamNames(src);
 
+  // 01-16 (CR-03). 01-14 derived the ACCEPT set from the tree but left the step
+  // BEFORE it -- the set of SITES that accept rule is applied to -- as an
+  // unproven regex. The enumeration pattern below requires a literal `this.`
+  // receiver AND a comma after the first argument; a call site matching neither
+  // is not rejected, it is never seen. The only completeness guard was
+  // `callSites === 0`, which fires only when EVERY site disappears, so five
+  // sites parsed out of six present was indistinguishable from a clean run.
+  //
+  // So count the call sites a SECOND time with deliberately dumber patterns --
+  // no receiver, no argument capture, no comma -- and require the two counts to
+  // agree. Both run over `src`, the comment-stripped source every other
+  // derivation in this function uses: `raw` still holds eight doc-comment
+  // mentions of _showError, and counting those would make this permanently red.
+  //
+  // The remedy for a mismatch is to write the call as
+  // `this._showError(<message>, ...)`, or to teach this check the new shape --
+  // NOT to widen the enumeration regex until today's sites match again. A wider
+  // pattern is only a larger unproven expectation and would still be silent on
+  // the next shape nobody thought of.
+  const definitions = [...src.matchAll(/^\s*_showError\s*\(/gm)].length;
+  const present = [...src.matchAll(/_showError\s*\(/g)].length - definitions;
+
   let callSites = 0;
   for (const m of src.matchAll(/this\._showError\(\s*([^,]+?)\s*,/g)) {
     callSites += 1;
@@ -337,6 +366,15 @@ function check(targetPath) {
     fail(
       "no `this._showError(` call site found -- either the error layer is unreachable or this " +
         "check has stopped matching the code, and either way it is asserting nothing"
+    );
+  }
+  if (callSites !== present) {
+    fail(
+      `${present} \`_showError(\` call site(s) are present in this file but ${callSites} were ` +
+        `parsed -- a call site this check cannot read is a call site it is not checking, and rule ` +
+        `(4) went green on sites it never saw. Write the call as ` +
+        `\`this._showError(<message>, ...)\`, or teach this check the new shape; do not widen the ` +
+        `enumeration pattern until the counts happen to agree`
     );
   }
 }
@@ -413,6 +451,28 @@ const FAULTS = [
         "this._showError(stray.message, /* recoverable */ true, ["
       ),
     expect: "stray.message",
+  },
+  // 01-16 (CR-03). Both rows plant a call site the enumeration regex CANNOT
+  // read, which before this plan was not a rejection but an absence: the site
+  // was never examined and the run exited 0. Both APPEND rather than substitute,
+  // because the defect is about call shapes the file does not currently contain.
+  //
+  // The comma-less row's text must be the LAST content in the mutated source and
+  // must contain no comma after its `this._showError(`: the enumeration's
+  // `[^,]+?` capture excludes commas but DOES match newlines, so a later comma
+  // anywhere in the file would let the regex match across the plant and mask the
+  // fault. Neither snippet may introduce a `message:` property or a
+  // `USER_MESSAGE.<key>` reference, or it would trip check (2) or (3) instead
+  // and the row would be red for the wrong reason.
+  {
+    name: "_showError() call site with no trailing comma is never enumerated",
+    apply: (s) => `${s}\nthis._showError(err.message)\n`,
+    expect: "a call site this check cannot read",
+  },
+  {
+    name: "_showError() call site with an optional-chaining receiver is never enumerated",
+    apply: (s) => `${s}\nthis?._showError(err.message, false, []);\n`,
+    expect: "a call site this check cannot read",
   },
 ];
 
