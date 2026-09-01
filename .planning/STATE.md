@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-17-PLAN.md
-last_updated: "2026-09-01T00:32:27.402Z"
+stopped_at: Completed 01-18-PLAN.md
+last_updated: "2026-09-01T03:32:45.537Z"
 last_activity: 2026-08-31
 last_activity_desc: Completed plan 01-15 (gap closure — CR-B, the rebase scan's extra root)
 progress:
   total_phases: 1
-  completed_phases: 1
-  total_plans: 17
-  completed_plans: 17
+  completed_phases: 0
+  total_plans: 19
+  completed_plans: 18
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 3 of 17
+Plan: 2 of 19
 Status: Ready to execute
 Last activity: 2026-08-31 — Phase 01 execution started
 
-Progress: [██████████] 100%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -74,6 +74,7 @@ Progress: [██████████] 100%
 | Phase 01 P15 | ~35min | 3 tasks | 5 files |
 | Phase 01 P16 | 25m | 2 tasks | 1 files |
 | Phase 01 P17 | ~35m | 3 tasks | 2 files |
+| Phase 01 P18 | 18min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -152,6 +153,9 @@ Recent decisions affecting current work:
 - [Phase ?]: The --extra-root residual-brand pass filters the coincidental class out of its row set and only that class; frozen rows stay applicable in a Gecko checkout.
 - [Phase ?]: scan() records unreadable files; the policy is per-caller — any unreadable file fails under --extra-root, any non-ENOENT reason fails over the tracked tree, ENOENT keeps its documented allowance.
 - [Phase ?]: The chmod-000 self-test row fails loudly when it cannot establish its precondition; --self-test run as root goes red on that row by design.
+- [Phase ?]: 01-18: About-dialog stock link rows are suppressed by branding CSS (#communityDesc, #contributeDesc, #bottomBox > hbox), not deleted from the DOM — no Gecko patch; deletion is a follow-up only if UAT rejects hidden-not-removed
+- [Phase ?]: 01-18: the wordmark-positioning block is removed from both branding aboutDialog.css files because about-wordmark.svg is unshipped; Phase 3's icon pipeline restores it with the asset
+- [Phase ?]: 01-18: branding chrome-resource packaging completeness is asserted from a directory read at check time in three directions (unpackaged resource, missing source, variant divergence), riding the two branding-preflight rows already in --quick
 
 ### Pending Todos
 
@@ -178,6 +182,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-01T00:32:27.390Z
-Stopped at: Completed 01-17-PLAN.md
+Last session: 2026-09-01T03:32:26.078Z
+Stopped at: Completed 01-18-PLAN.md
 Resume file: None

@@ -54,7 +54,7 @@ Sourcerer's decision IDs as justification.)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 19 plans (17 executed; 01-18 and 01-19 planned, closing UAT gaps G-01-3 and G-01-25)
+**Plans**: 18/19 plans executed (17 executed; 01-18 and 01-19 planned, closing UAT gaps G-01-3 and G-01-25)
 
 Plans:
 **Wave 1**
@@ -127,7 +127,7 @@ Plans:
 
 **Wave 18** *(gap closure — UAT gap G-01-3, blocked on Wave 17 completion)*
 
-- [ ] 01-18-PLAN.md — Close G-01-3: package the branding `aboutDialog.css` in both variants' `content/jar.mn` so upstream's own branding-CSS hook stops 404ing silently, suppress the three stock outbound-link rows through it (including the unreported `#communityDesc`, whose vendor-labelled link targets mozilla.org), remove the `#rightBox` block that reserves space for an unshipped wordmark, and add a tree-derived, bidirectional packaging-completeness assertion to the preflight with a planted fault reproducing the dead-hook state
+- [x] 01-18-PLAN.md — Close G-01-3: package the branding `aboutDialog.css` in both variants' `content/jar.mn` so upstream's own branding-CSS hook stops 404ing silently, suppress the three stock outbound-link rows through it (including the unreported `#communityDesc`, whose vendor-labelled link targets mozilla.org), remove the `#rightBox` block that reserves space for an unshipped wordmark, and add a tree-derived, bidirectional packaging-completeness assertion to the preflight with a planted fault reproducing the dead-hook state
 
 **Wave 19** *(gap closure — UAT gap G-01-25, blocked on Wave 18 completion)*
 
@@ -243,7 +243,7 @@ than noisy.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Platform Extraction and Rename | 17/17 | In Progress|  |
+| 1. Platform Extraction and Rename | 18/19 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 0/TBD | Not started | - |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
