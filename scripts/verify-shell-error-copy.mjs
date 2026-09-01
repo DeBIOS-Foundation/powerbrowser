@@ -403,8 +403,20 @@ function check(targetPath) {
   // NOT to widen the enumeration regex until today's sites match again. A wider
   // pattern is only a larger unproven expectation and would still be silent on
   // the next shape nobody thought of.
-  const allSites = [...src.matchAll(/_showError\s*\(/g)].map((m) => m.index);
-  const defs = [...src.matchAll(/_showError\s*\([^)]*\)\s*\{/g)].map((m) => m.index);
+  //
+  // 01-18 (WR-04). Every derivation in THIS block runs over `codeOnly` rather
+  // than `src`. `stripComments` deliberately leaves trailing `//` comments in
+  // place, because this file holds `http://127.0.0.1` and `https://open-vsx.org`
+  // inside real strings and a naive strip would mangle them; the consequence was
+  // that one trailing comment mentioning `_showError(` -- a doc edit, not a code
+  // edit -- turned the COMMIT GATE red with a remedy line telling the operator
+  // not to widen the pattern. A gate that goes red on a comment and forbids its
+  // own fix is a gate people route around. Trailing comments are safe to drop
+  // here specifically: the guard requires whitespace immediately before the
+  // `//`, which `http://` and `https://` do not have.
+  const codeOnly = src.replace(/(^|[^:\S])\/\/.*$/gm, "$1");
+  const allSites = [...codeOnly.matchAll(/_showError\s*\(/g)].map((m) => m.index);
+  const defs = [...codeOnly.matchAll(/_showError\s*\([^)]*\)\s*\{/g)].map((m) => m.index);
   if (defs.length !== 1) {
     fail(
       `${defs.length} \`_showError(...) {\` definition(s) found -- this check assumes exactly one; ` +
@@ -420,7 +432,7 @@ function check(targetPath) {
   // problem, not a regex one), reject the escape: any textual `_showError` that
   // is not immediately being called is a reference that removes the method from
   // this check's reach.
-  const escapes = [...src.matchAll(/_showError(?!\s*\()/g)].map((m) => m.index);
+  const escapes = [...codeOnly.matchAll(/_showError(?!\s*\()/g)].map((m) => m.index);
   if (escapes.length !== 0) {
     fail(
       `\`_showError\` is referenced without being called (offset(s) ${escapes.join(", ")}) -- an ` +
@@ -433,7 +445,7 @@ function check(targetPath) {
   // enumeration rather than by a second pattern that guesses what it reaches.
   const parsed = new Set();
   let callSites = 0;
-  for (const m of src.matchAll(/this\._showError\(\s*([^,]+?)\s*,/g)) {
+  for (const m of codeOnly.matchAll(/this\._showError\(\s*([^,]+?)\s*,/g)) {
     callSites += 1;
     parsed.add(m.index + "this.".length);
     const arg = m[1].trim();
