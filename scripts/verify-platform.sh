@@ -3586,6 +3586,20 @@ run_own_checks() {
     # registered checks could not go red on it.
     "shell-error-contract|node $REPO_ROOT/scripts/verify-shell-error-contract.mjs"
     "shell-error-contract-self-test|node $REPO_ROOT/scripts/verify-shell-error-contract.mjs --self-test"
+
+    # NEW (01-20): the About dialog's suppression-selector gate, hermetic half.
+    # Honestly --quick because the self-test's fixture is a mkdtemp directory
+    # carrying its own authored markup: no build, no browser, no display, no
+    # network, and NO `upstream/` clone. Its non-hermetic counterpart --
+    # about-dialog-suppression, which reads the real upstream markup -- is in
+    # the full set below, in the RE-TIERED block, for exactly that dependency.
+    # The self-test rides here for the reason every other self-test row in this
+    # array gives, and with the same particular force as shell-error-contract:
+    # the defect this check closes (a container-wide rule that hid the internal
+    # about:license disclosure along with the two mozilla.org links) shipped in
+    # 01-18 and survived because nothing was comparing the shipped selectors
+    # against the document they target.
+    "about-dialog-suppression-self-test|node $REPO_ROOT/scripts/verify-about-dialog-suppression.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
@@ -3632,6 +3646,24 @@ run_own_checks() {
       # What changed is which tier honestly describes their prerequisites.
       "desktop-entry-quick|check_desktop_entry_quick"
       "apply-patches-self-test|bash $REPO_ROOT/scripts/apply-patches.sh --self-test"
+
+      # NEW (01-20), and RE-TIERED for the same reason as apply-patches-self-test
+      # above, not excused. This row reads
+      # upstream/browser/base/content/aboutDialog.xhtml -- the same git-ignored
+      # 1.1 GB clone, absent on a fresh checkout -- so it cannot honestly claim
+      # --quick's promises. It is the half of the About-dialog gate that
+      # compares the shipped suppression selectors against the REAL upstream
+      # markup rather than an authored fixture, which is what makes it the gate;
+      # about-dialog-suppression-self-test in the --quick array proves the
+      # instrument discriminates.
+      #
+      # It FAILS rather than SKIPS when the clone is absent: the script names
+      # the missing path and scripts/fetch-upstream.sh and exits 1. A check that
+      # goes green because it could not find its own subject is the
+      # green-by-construction shape deferred-items.md rows 4, 9 and 10 record.
+      # It still runs in every full run, and `--only about-dialog-suppression`
+      # reaches it.
+      "about-dialog-suppression|node $REPO_ROOT/scripts/verify-about-dialog-suppression.mjs"
 
       # from verify-phase-03.sh -- branding-variant-divergence reads from BOTH
       # objdir/dist/bin and objdir-release/dist/bin, so it needs a full dev AND
