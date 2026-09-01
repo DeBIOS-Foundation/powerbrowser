@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-20-PLAN.md
-last_updated: "2026-09-01T18:49:26.372Z"
+stopped_at: Completed 01-21-PLAN.md
+last_updated: "2026-09-01T20:41:27.186Z"
 last_activity: 2026-09-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
   completed_phases: 1
   total_plans: 21
-  completed_plans: 20
+  completed_plans: 21
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 2 of 20
+Plan: 2 of 21
 Status: Ready to execute
 Last activity: 2026-09-01 — Phase 01 execution started
 
@@ -77,6 +77,7 @@ Progress: [██████████] 100%
 | Phase 01 P18 | 18min | 3 tasks | 6 files |
 | Phase 01 P19 | 12min | 3 tasks | 4 files |
 | Phase 01 P20 | 35m | 3 tasks | 7 files |
+| Phase 01 P21 | 12min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -162,6 +163,10 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-19: the preflight's shell-markup surface set is derived from powerbrowser/shell/jar.mn at check time and restricted to .xhtml/.html, because packaged .js/.mjs prose comments legitimately spell the identifier form
 - [Phase ?]: 01-19: a stale expectation inside a checker is the same defect class as a leaking shipped literal and is fixed in the same plan, not deferred
 - [Phase ?]: About-dialog debranding suppresses the two mozilla.org bottom links by href prefix, not the whole container, so the internal about:license disclosure survives; about:credits stays suppressed as vendor content.
+- [Phase 01]: 01-21: About-dialog link coverage is evaluated PER STYLESHEET VARIANT, not over a union of both — a union passes a link covered in dev but not release, and has no file to name in the failure
+- [Phase 01]: 01-21: #communityExperimentalDesc was SUPPRESSED, not exempted (WR-08) — an exemption list inside a gate is a hand-kept expectation that can only agree with the tree it was copied from
+- [Phase 01]: 01-21: the derived external-link set carries no host filter, so an ESR rebase adding a link to a NEW host goes red through the same comparison
+- [Phase 01]: 01-21: DISCLOSURE_HREF (must-survive, singular) stays add-alongside the derived must-be-suppressed set — opposite polarity, and merging them requires the allow/deny table the plan forbids
 
 ### Pending Todos
 
@@ -188,6 +193,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-01T17:55:03.358Z
-Stopped at: Completed 01-20-PLAN.md
+Last session: 2026-09-01T20:41:14.056Z
+Stopped at: Completed 01-21-PLAN.md
 Resume file: None
