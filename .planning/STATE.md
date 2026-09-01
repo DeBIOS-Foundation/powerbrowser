@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-19-PLAN.md
-last_updated: "2026-09-01T06:02:42.256Z"
-last_activity: 2026-08-31
-last_activity_desc: Completed plan 01-15 (gap closure — CR-B, the rebase scan's extra root)
+stopped_at: Completed 01-20-PLAN.md
+last_updated: "2026-09-01T17:55:03.370Z"
+last_activity: 2026-09-01
+last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 1
   completed_phases: 1
   total_plans: 20
-  completed_plans: 19
+  completed_plans: 20
 ---
 
 # Project State
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 3 of 19
+Plan: 2 of 20
 Status: Ready to execute
-Last activity: 2026-08-31 — Phase 01 execution started
+Last activity: 2026-09-01 — Phase 01 execution started
 
 Progress: [██████████] 100%
 
@@ -76,6 +76,7 @@ Progress: [██████████] 100%
 | Phase 01 P17 | ~35m | 3 tasks | 2 files |
 | Phase 01 P18 | 18min | 3 tasks | 6 files |
 | Phase 01 P19 | 12min | 3 tasks | 4 files |
+| Phase 01 P20 | 35m | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -160,6 +161,7 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-19: the shell chrome document's <title> is the single literal Gecko hands the window manager — no runtime writer on the chain, so one edit is the whole title-bar fix
 - [Phase ?]: 01-19: the preflight's shell-markup surface set is derived from powerbrowser/shell/jar.mn at check time and restricted to .xhtml/.html, because packaged .js/.mjs prose comments legitimately spell the identifier form
 - [Phase ?]: 01-19: a stale expectation inside a checker is the same defect class as a leaking shipped literal and is fixed in the same plan, not deferred
+- [Phase ?]: About-dialog debranding suppresses the two mozilla.org bottom links by href prefix, not the whole container, so the internal about:license disclosure survives; about:credits stays suppressed as vendor content.
 
 ### Pending Todos
 
@@ -186,6 +188,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-01T03:38:04.363Z
-Stopped at: Completed 01-19-PLAN.md
+Last session: 2026-09-01T17:55:03.358Z
+Stopped at: Completed 01-20-PLAN.md
 Resume file: None

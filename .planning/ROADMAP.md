@@ -54,7 +54,7 @@ Sourcerer's decision IDs as justification.)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 20 plans (19 executed; 01-20 planned, closing 01-VERIFICATION.md's Truth 9 — the `about:license` disclosure link 01-18's own fix suppressed)
+**Plans**: 20/20 plans executed (19 executed; 01-20 planned, closing 01-VERIFICATION.md's Truth 9 — the `about:license` disclosure link 01-18's own fix suppressed)
 
 Plans:
 **Wave 1**
@@ -135,7 +135,7 @@ Plans:
 
 **Wave 20** *(gap closure — 01-VERIFICATION.md Truth 9 / 01-REVIEW.md CR-01, blocked on Wave 19 completion)*
 
-- [ ] 01-20-PLAN.md — Close Truth 9: replace the About dialog's bare container suppression — which took the internal `about:license` disclosure link down with the two mozilla.org rows 01-18 was asked to remove — with an href-qualified selector in both byte-identical variants, and land the gate WR-03 asked for: a checker that derives the suppression selectors from the shipped stylesheets and the element tree from the upstream markup, fails by name when a selector reaches the licence link or matches nothing at all, and proves it can go red on four planted faults; plus deferred-items row 11 corrected to record the defect that existed rather than only the risk that might
+- [x] 01-20-PLAN.md — Close Truth 9: replace the About dialog's bare container suppression — which took the internal `about:license` disclosure link down with the two mozilla.org rows 01-18 was asked to remove — with an href-qualified selector in both byte-identical variants, and land the gate WR-03 asked for: a checker that derives the suppression selectors from the shipped stylesheets and the element tree from the upstream markup, fails by name when a selector reaches the licence link or matches nothing at all, and proves it can go red on four planted faults; plus deferred-items row 11 corrected to record the defect that existed rather than only the risk that might
 
 **UI hint**: yes
 **Research**: recommended — ~1,090 occurrences across five case-variant forms and six coupled reference formats (jar.mn, components.conf, moz.build, patch content, verifier regex); the classification inventory needs its own deep pass. Highest-risk phase; plan-review-convergence applies. *(Research completed 2026-08-30: the real migrating surface measured 755 occurrences across 69 files; GUI-01 and GUI-02 found to be net-new work, not migration.)*
@@ -247,7 +247,7 @@ than noisy.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Platform Extraction and Rename | 19/19 | In Progress|  |
+| 1. Platform Extraction and Rename | 20/20 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 0/TBD | Not started | - |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
