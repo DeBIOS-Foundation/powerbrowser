@@ -51,7 +51,20 @@ echo "rebase-upstream: target tag: $NEW_TAG"
 # Step 1: verify the requested tag exists on the remote. Cheaper than
 # discovering a typo after a 1.1 GB clone -- run in both real and dry-run
 # modes.
-if ! git ls-remote --tags "$REMOTE" "refs/tags/$NEW_TAG" | grep -q "refs/tags/$NEW_TAG"; then
+#
+# WR-06 (plan 01-18): the ls-remote output is captured FIRST and matched
+# second, rather than piped into `grep -q`. `grep -q` exits on its first match,
+# and if `git ls-remote` has not finished writing by then it takes SIGPIPE and
+# exits 141; `set -o pipefail` propagates that as the pipeline's status, `if !`
+# inverts it, and the script reports a tag that exists as missing --
+# non-deterministically, at the first gate of a 40-minute operation. `|| true`
+# keeps the capture from tripping `set -e`: a genuinely absent tag is an empty
+# capture, which the match below rejects with the message it deserves.
+#
+# `-F` (WR-07) matches the ref as a literal, not as a BRE, so a `.` in a tag
+# name cannot match a near-miss neighbour and report a typo as valid.
+TAG_REFS="$(git ls-remote --tags "$REMOTE" "refs/tags/$NEW_TAG" || true)"
+if ! printf '%s' "$TAG_REFS" | grep -qF -- "refs/tags/$NEW_TAG"; then
   echo "rebase-upstream: FAIL -- tag $NEW_TAG does not exist on $REMOTE" >&2
   echo "  Check the exact tag name: git ls-remote --tags $REMOTE | grep $NEW_TAG" >&2
   exit 1
