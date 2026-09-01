@@ -158,13 +158,13 @@ Plans:
   4. Cosmetic fields left unset fall back to Power Browser defaults that are themselves a `configuration.toml` (one merge code path), with every applied default echoed at generate time
   5. Everything the generator writes lands under a single gitignored `generated/` root, nothing generated is committed, and `generate --check` fails when that output is stale
 
-**Plans**: 0/6 plans executed in 5 waves
+**Plans**: 2/6 plans executed in 5 waves
 
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Tracer: vendor the TOML parser behind a legitimacy checkpoint, then carry one manifest key through parse, schema, validation, emitter and writer to a byte-identical dev `configure.sh`
-- [ ] 02-02-PLAN.md — Move the mark to `brand/` and carry `verify-branding-preflight.mjs` with it, without touching its expectation source (parallel with 02-01)
+- [x] 02-01-PLAN.md — Tracer: vendor the TOML parser behind a legitimacy checkpoint, then carry one manifest key through parse, schema, validation, emitter and writer to a byte-identical dev `configure.sh`
+- [x] 02-02-PLAN.md — Move the mark to `brand/` and carry `verify-branding-preflight.mjs` with it, without touching its expectation source (parallel with 02-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -274,7 +274,7 @@ than noisy.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Platform Extraction and Rename | 21/21 | In Progress|  |
-| 2. Configuration Manifest and Generator Core | 0/6 | Planned    |  |
+| 2. Configuration Manifest and Generator Core | 2/6 | In Progress|  |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
 | 5. Hook-Only Patches and Upstream Uptake | 0/TBD | Not started | - |

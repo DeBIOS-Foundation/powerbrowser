@@ -39,11 +39,11 @@
 - [ ] **CFG-01**: A downstream author can define their entire brand in
       `configuration.toml` + a `brand/` assets folder and touch no other file
 
-- [ ] **CFG-02**: Identity fields (vendor, app basename, binary name,
+- [x] **CFG-02**: Identity fields (vendor, app basename, binary name,
       remoting name) and legal fields are required — generation hard-fails
       with a clear message when any is unset
 
-- [ ] **CFG-03**: Binary/basename fields are validated
+- [x] **CFG-03**: Binary/basename fields are validated
       (`^[a-z][a-z0-9-]{1,31}$`) so no invalid `MOZ_APP_NAME` can be produced
 
 - [ ] **CFG-04**: Cosmetic fields fall back to Power Browser defaults with a
@@ -73,7 +73,7 @@
       are generated and schema-complete with builds verified when those
       packaging hosts land
 
-- [ ] **GEN-04**: Generated output is never committed (single gitignored
+- [x] **GEN-04**: Generated output is never committed (single gitignored
       `generated/` root) and `generate --check` verifies freshness in CI
 
 - [ ] **GEN-05**: Theia-side branding (welcome tab, about dialog, product
@@ -267,10 +267,10 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 | GUI-04 | Phase 1 | Gaps Found |
 | SEC-01 | Phase 1 | Complete — satisfied by `theia/extensions/token-gate`; requirement recorded 2026-08-30 to anchor code that had carried only Sourcerer's decision IDs |
 | CFG-01 | Phase 2 | Pending |
-| CFG-02 | Phase 2 | Pending |
-| CFG-03 | Phase 2 | Pending |
+| CFG-02 | Phase 2 | Complete |
+| CFG-03 | Phase 2 | Complete |
 | CFG-04 | Phase 2 | Pending |
-| GEN-04 | Phase 2 | Pending |
+| GEN-04 | Phase 2 | Complete |
 | GEN-01 | Phase 3 | Pending |
 | GEN-02 | Phase 3 | Pending |
 | GEN-03 | Phase 3 | Pending |

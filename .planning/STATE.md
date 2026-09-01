@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 02
 current_phase_name: configuration-manifest-and-generator-core
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-09-01T23:08:55.203Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-09-01T23:20:10.111Z"
 last_activity: 2026-09-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 27
-  completed_plans: 21
+  completed_plans: 23
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 02 (configuration-manifest-and-generator-core) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-09-01 — Phase 02 execution started
 
-Progress: [████████░░] 78%
+Progress: [█████████░] 85%
 
 ## Performance Metrics
 
@@ -79,6 +79,7 @@ Progress: [████████░░] 78%
 | Phase 01 P20 | 35m | 3 tasks | 7 files |
 | Phase 01 P21 | 12min | 3 tasks | 4 files |
 | Phase 02 P02 | 12m | 2 tasks | 3 files |
+| Phase 02 P01 | 30m | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -170,6 +171,9 @@ Recent decisions affecting current work:
 - [Phase 01]: 01-21: DISCLOSURE_HREF (must-survive, singular) stays add-alongside the derived must-be-suppressed set — opposite polarity, and merging them requires the allow/deny table the plan forbids
 - [Phase ?]: The mark's rebrand-surface home is brand/mark.svg; the ten PNG rasters stay under powerbrowser/branding/{dev,release}/ until Phase 3's icon pipeline (D-16)
 - [Phase ?]: verify-branding-preflight.mjs keeps deriving expected values from inventory/brand-tokens.json's hand-authored brand_display_expectations, never from configuration.toml — that independence is what stops the gate being a tautology (T-02-05)
+- [Phase ?]: smol-toml 1.8.0 is vendored as a single self-contained CJS file, not npm-pinned: pinning would require npm ci before verify-platform.sh --quick could run at all
+- [Phase ?]: identity.display_name lives in the required (and therefore masked) [identity] table, so a downstream that omits it hard-fails rather than silently inheriting Power Browser's mark
+- [Phase ?]: The generator rejects unknown settings before any assignment; output paths come only from a frozen target array, never from a manifest value
 
 ### Pending Todos
 
@@ -196,6 +200,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-01T23:08:48.613Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-09-01T23:20:10.093Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None
