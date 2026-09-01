@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 01-platform-extraction-and-rename
 source: [01-01-SUMMARY.md, 01-02-SUMMARY.md, 01-03-SUMMARY.md, 01-04-SUMMARY.md, 01-05-SUMMARY.md, 01-06-SUMMARY.md, 01-07-SUMMARY.md, 01-08-SUMMARY.md, 01-09-SUMMARY.md, 01-10-SUMMARY.md, 01-11-SUMMARY.md, 01-12-SUMMARY.md, 01-13-SUMMARY.md, 01-14-SUMMARY.md, 01-15-SUMMARY.md, 01-16-SUMMARY.md, 01-17-SUMMARY.md]
 started: 2026-09-01T01:17:53Z
@@ -268,8 +268,17 @@ gaps: 2  # G-01-3 (test 3 issue), G-01-25 (observed during testing against autom
   reason: "User reported: naming is correct (About Power Browser Dev, DeBIOS Foundation) but the stock Mozilla community/donation and licensing/terms/privacy links are still present and should be removed"
   severity: minor
   test: 3
-  artifacts: []  # Filled by diagnosis
-  missing: []    # Filled by diagnosis
+  root_cause: "AND-gate of two conditions: (1) upstream aboutDialog.xhtml hard-codes all the link rows as literal hrefs (contributeDesc lines 131-133, bottomBox hbox 139-142; plus unreported communityDesc 127-130 whose 'DeBIOS Foundation'-labelled link navigates to mozilla.org) — no pref consulted, so firefox-branding.js cannot suppress them; (2) the branding suppression channel is inert: chrome://branding/content/aboutDialog.css is referenced by the dialog but powerbrowser/branding/{dev,release}/content/jar.mn are stale stubs packaging only icon PNGs, so the existing aboutDialog.css never ships (silent chrome 404, confirmed in built tree)."
+  artifacts:
+    - path: "powerbrowser/branding/dev/content/jar.mn"
+      issue: "stub omits aboutDialog.css from the chrome package (same in release/) — the branding CSS hook is dead"
+    - path: "powerbrowser/branding/dev/content/aboutDialog.css"
+      issue: "exists and carries the intended restyle but never loads; contains no link-suppression rules (same in release/)"
+  missing:
+    - "Add content/branding/aboutDialog.css to both jar.mn files (fixes the dead hook; the intended dark restyle finally applies)"
+    - "Append '#contributeDesc, #bottomBox > hbox { display: none; }' to both aboutDialog.css files; decide whether #communityDesc hides too"
+    - "Add a --quick assertion that chrome://branding/content/aboutDialog.css is packaged (silent 404 masked the dead CSS)"
+  debug_session: .planning/debug/about-dialog-stock-links.md
 
 - gap_id: G-01-25
   truth: "The display name reads 'Power Browser' with a space on every user-facing surface and the identifier form never leaks into a display string (01-03 D2)"
@@ -277,8 +286,16 @@ gaps: 2  # G-01-3 (test 3 issue), G-01-25 (observed during testing against autom
   reason: "Observed during live UAT (screenshot, 2026-09-01): the Theia shell main window title bar reads 'PowerBrowser' — identifier form, no space. Likely the Theia frontend applicationName rather than Gecko branding, so the tree-side automated check did not catch it."
   severity: major
   test: 25
-  artifacts: []  # Filled by diagnosis
-  missing: []    # Filled by diagnosis
+  root_cause: "powerbrowser/shell/powerbrowser.xhtml:30 hard-codes <title>PowerBrowser</title> (identifier form); line 36's loading wordmark repeats it. No runtime writer corrects it, and Theia's correct document.title ('Power Browser', applicationName is already right) stays inside the remote <xul:browser>. verify-branding-identity.mjs's enumerated surface set does not include the shell XHTML, and scan-brand-residue hunts old-brand tokens only, so no gate covers new-brand display-form leaks in shell chrome."
+  artifacts:
+    - path: "powerbrowser/shell/powerbrowser.xhtml"
+      issue: "line 30 <title> and line 36 loading wordmark use identifier form 'PowerBrowser' in user-facing display strings"
+    - path: "scripts/verify-branding-identity.mjs"
+      issue: "not wrong, but its read set has no coverage of shell chrome display strings — why the leak went undetected"
+  missing:
+    - "Correct both literals in powerbrowser.xhtml to 'Power Browser' (in-tree shell file; no Theia fork, no Gecko patch)"
+    - "Optionally add a verify-platform.sh registry row asserting the display form in shell chrome user-facing text nodes, with --self-test"
+  debug_session: .planning/debug/shell-title-identifier-form.md
 
 ## Notes
 
