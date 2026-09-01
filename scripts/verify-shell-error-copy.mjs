@@ -106,7 +106,47 @@ function parseUserMessageTable(src) {
   while ((m = entryRe.exec(block[1])) !== null) {
     entries.set(m[1], JSON.parse(m[2]));
   }
-  return { entries, raw: block[0] };
+  // WR-02 (01-16). A second, deliberately dumber count of what the table
+  // DECLARES: every line at the table's own depth-1 indentation whose first
+  // token is an identifier followed by a colon. `entryRe` above accepts only a
+  // double-quoted, single-line, comma-terminated string, so an entry written as
+  // a template literal, with single quotes, as a concatenation, or wrapped over
+  // two lines is dropped with NO error. The consequences split badly: a
+  // REFERENCED unparsed key still goes red at check (2), but a
+  // DECLARED-AND-UNREFERENCED one is invisible to check (1), which never
+  // leak-scans it, and to check (3), which iterates the parsed entries. That is
+  // a user-facing string silently escaping the one gate that scans user-facing
+  // strings -- the same silent-drop class as CR-03, in another function.
+  const indent = block[1].match(/^[ \t]+/)?.[0] ?? "  ";
+  const declared = [...block[1].matchAll(new RegExp(`^${indent}[A-Za-z_$][\\w$]*\\s*:`, "gm"))].length;
+  return { entries, declared, raw: block[0] };
+}
+
+/**
+ * The given object-literal body with every span nested inside a `{` or a `[`
+ * removed, so a property test applies at depth 0 only.
+ *
+ * WR-01 (01-16). `messageBearingBindings` shape (a) used to test for `message:`
+ * anywhere in the body at any nesting depth, so a `message:` buried in a
+ * sub-object or an array element marked the OUTER binding as message-bearing --
+ * and `<binding>.message` is `undefined` at runtime in exactly that case. A
+ * binding whose `.message` would paint nothing must not be waved through here;
+ * the doc comment below already says so about `message: null`, and the nested
+ * case is the same defect arriving by another route.
+ */
+function depthZeroOnly(body) {
+  let depth = 0;
+  let out = "";
+  for (const ch of body) {
+    if (ch === "{" || ch === "[") {
+      depth += 1;
+    } else if (ch === "}" || ch === "]") {
+      depth -= 1;
+    } else if (depth === 0) {
+      out += ch;
+    }
+  }
+  return out;
 }
 
 /**
@@ -173,7 +213,7 @@ function messageBearingBindings(src, table) {
   // (a) object-literal initializer.
   for (const m of src.matchAll(/(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*\{/g)) {
     const body = braceBody(src, m.index + m[0].length - 1);
-    if (body !== null && /(?:^|[^\w.$])message:/.test(body)) {
+    if (body !== null && /(?:^|[^\w.$])message:/.test(depthZeroOnly(body))) {
       bearing.add(m[1]);
     }
   }
@@ -230,6 +270,17 @@ function check(targetPath) {
   }
   if (table.entries.size === 0) {
     fail("the USER_MESSAGE table is empty -- a table with no strings asserts nothing");
+    return;
+  }
+  if (table.declared !== table.entries.size) {
+    // WR-02 (01-16). Return, like the two guards above: with an incomplete
+    // table, checks (1) through (4) are all reasoning about a partial set and
+    // their output would be misleading noise on top of the real failure.
+    fail(
+      `the USER_MESSAGE table declares ${table.declared} entries but only ${table.entries.size} ` +
+        `could be parsed -- a declared entry this parser cannot read is a user-facing string that ` +
+        `is never leak-scanned. Write it as a double-quoted, single-line string ending in a comma`
+    );
     return;
   }
 
@@ -473,6 +524,33 @@ const FAULTS = [
     name: "_showError() call site with an optional-chaining receiver is never enumerated",
     apply: (s) => `${s}\nthis?._showError(err.message, false, []);\n`,
     expect: "a call site this check cannot read",
+  },
+  // 01-16 (WR-01, WR-02). Two sibling silent drops in this same file.
+  //
+  // The WR-01 row's appended call site HAS a trailing comma, so it is enumerated
+  // and both of CR-03's counts rise together: this row must go red on the
+  // depth-0 rule, not on the call-site equality assertion. Its nested `message:`
+  // sits on its own comma-terminated line so that check (2) reads it as a clean
+  // `USER_MESSAGE.<declared key>` and does not fire first.
+  //
+  // The WR-02 row's key is deliberately UNREFERENCED: an unreferenced key cannot
+  // trip check (2) or check (3), so the row can only go red on the new totality
+  // assertion. That is what makes it evidence for this change rather than for a
+  // check that already existed.
+  {
+    name: "nested message: makes a binding falsely message-bearing",
+    apply: (s) =>
+      `${s}\nconst nestedOnly = {\n  details: [\n    {\n      message: USER_MESSAGE.couldNotStart,\n    },\n  ],\n};\nthis._showError(nestedOnly.message, false, []);\n`,
+    expect: "is not a message-bearing binding",
+  },
+  {
+    name: "USER_MESSAGE entry the parser cannot read is dropped silently",
+    apply: (s) =>
+      s.replace(
+        "const USER_MESSAGE = {\n",
+        "const USER_MESSAGE = {\n  unreadableEntry: `Power Browser has an entry this parser cannot read.`,\n"
+      ),
+    expect: "never leak-scanned",
   },
 ];
 
