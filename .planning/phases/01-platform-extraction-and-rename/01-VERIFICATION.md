@@ -1,66 +1,109 @@
 ---
 phase: 01-platform-extraction-and-rename
-verified: 2026-08-31T23:59:00Z
+verified: 2026-09-01T12:00:00Z
 status: gaps_found
-score: 12/13 must-haves verified (1 prior gap genuinely closed this pass; 1 new blocker found by a fresh review after two UAT-driven gap-closure plans landed)
+score: 12/13 must-haves verified (Truth 9's original over-reach half genuinely closed by 01-20; a
+  narrower but Critical-tier coverage gap in the check that was supposed to guard this exact
+  surface is independently reproduced this pass and stays open)
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
-  previous_score: 9/12
+  previous_score: 12/13
   gaps_closed:
-    - "Truth 7 (copy-safety gate for _showError cannot be defeated) — genuinely fixed since the last verification pass. 01-REVIEW-FIX.md's CR-01 fix replaced the count-based completeness guard with a position-set comparison (allSites/defs/parsed by construction), and its WR-01 fix added an `escapes` check rejecting any `_showError` not immediately followed by `(`. Independently reproduced in THIS pass, not accepted on the fix report's narrative: appending a receiverless `_showError(err.message, false, []);` to a scratch copy of the shipped `TheiaService.sys.mjs` now exits 1 (\"1 `_showError(` call site(s) ... were not parsed\"); a `.bind`-aliased call site (`const show = this._showError.bind(this); show(err.message, ...)`) now exits 1 (\"`_showError` is referenced without being called\"). Both were exit-0 escapes in the prior pass. `--self-test` now carries 15/15 rows, including both new fault rows, all green."
+    - "Truth 9 (about:license suppressed alongside the Mozilla links) — genuinely closed for the
+      over-reach direction it names. Read directly this pass: powerbrowser/branding/{dev,release}/content/aboutDialog.css
+      now ships `#bottomBox > hbox > .bottom-link[href^=\"https://www.mozilla.org\"]` in place of
+      the bare `#bottomBox > hbox` container selector; both variants remain byte-identical (`cmp`
+      clean, reproduced). Ran `node scripts/verify-about-dialog-suppression.mjs` directly against
+      the current tree: exit 0. Ran `--self-test`: 4/4 planted faults (internal-link suppression,
+      stale selector, empty selector set, missing premise) each independently reproduced as RED,
+      naming the drift, plus a green control. `about:license` is confirmed unreachable by any
+      shipped selector; both mozilla.org links are confirmed currently suppressed."
   gaps_remaining: []
   regressions: []
   new_gaps_this_pass:
-    - "CR-01 (about:license suppressed alongside the Mozilla links) — not a regression of anything scored in the prior pass. It is a NEW defect introduced by plan 01-18 (which ran after the prior verification pass, to close a UAT-found gap, G-01-3) and caught by a fresh code review (01-REVIEW.md, committed after 01-18/01-19 both landed) that this pass independently reproduced against the current tree by reading the shipped CSS and the upstream markup it targets."
+    - "CR-02 (the About-dialog suppression gate has no coverage assertion) — not a regression of
+      anything scored in the prior pass; it is a defect in the NEW verification artifact plan
+      01-20 built specifically to close Truth 9, found by a fresh code review (01-REVIEW.md pass
+      2, committed at HEAD after 01-20 landed) and independently reproduced against the current
+      tree in this pass rather than accepted on the review's narrative."
 gaps:
-  - truth: "Debranding the About dialog must not remove the user's access to a legitimate, internal product affordance — specifically, the aggregated open-source licence text at `about:license`, the product's only in-UI route to it — while suppressing the stock Mozilla-destined outbound links (donate/get-involved/terms/privacy) that are the actual reported defect (UAT gap G-01-3)."
+  - truth: "The registered check built to close Truth 9 (`scripts/verify-about-dialog-suppression.mjs`,
+      registry rows `about-dialog-suppression` / `about-dialog-suppression-self-test`) must fail
+      by name if the About dialog's Mozilla-outbound links (the original reported defect, UAT
+      G-01-3) are ever un-suppressed again — not only if `about:license` is suppressed."
     status: failed
     reason: >
-      `powerbrowser/branding/{dev,release}/content/aboutDialog.css` (both variants, byte-identical)
-      suppresses `#bottomBox > hbox` wholesale via `display: none`. `upstream/browser/base/content/aboutDialog.xhtml:138-143`
-      shows that container's three children: `about:license` (an internal, `useoriginprincipal="true"`
-      page — the ONLY in-product route to the aggregated open-source licence text for everything this
-      build links), then two outbound `https://www.mozilla.org/...` links (terms, privacy). Two of the
-      three are the reported defect; the first is not. The rule hides all three as one unit, so the
-      licence disclosure link disappears as a side effect of removing the Mozilla-branded ones, and
-      nothing replaces it — there is no Power-Browser-authored licence surface in this tree, and
-      CLAUDE.md's rule 5 forbids authoring one (custom browser chrome).
+      `runChecks()` in `scripts/verify-about-dialog-suppression.mjs` performs exactly four
+      assertions: (1) non-vacuity of the derived selector/link sets, (2) every derived selector
+      parses under the supported grammar, (3) staleness — every derived selector matches at least
+      one element in the upstream markup, (4) over-reach — no derived selector reaches
+      `about:license` or any of its ancestors. Nothing derives the set of outbound mozilla.org
+      links from the markup and requires each one to be reached by a shipped selector. The check
+      has no notion of coverage.
 
-      Read directly in this pass, not accepted on 01-REVIEW.md's or 01-18-SUMMARY's narrative:
-      `powerbrowser/branding/release/content/aboutDialog.css` lines 51-55 read exactly
-      `#communityDesc, #contributeDesc, #bottomBox > hbox { display: none; }` in the current tree
-      (dev variant is byte-identical, confirmed), and `upstream/browser/base/content/aboutDialog.xhtml`
-      lines 138-143 confirm `#bottomBox > hbox` is the single container wrapping all three
-      `<label is="text-link" class="bottom-link">` rows, `about:license` first. No selector in the
-      shipped stylesheet distinguishes the internal link from the two outbound ones.
+      Independently reproduced in this pass (not accepted on 01-REVIEW.md's narrative): a scratch
+      copy of the shipped tree with the `#bottomBox > hbox > .bottom-link[href^="https://www.mozilla.org"]`
+      selector deleted entirely (only `#communityDesc, #contributeDesc` remain) — i.e. the exact
+      UAT G-01-3 defect (Terms of Use and Privacy Notice links visible again inside a
+      Power-Browser-branded dialog) fully restored — still exits **0**:
+      `verify-about-dialog-suppression: PASS -- every shipped suppression selector matches
+      upstream markup and none reaches the about:license disclosure link`. The surviving selectors
+      (`#communityDesc`, `#contributeDesc`) are still non-stale (they match real elements) and
+      still don't reach `about:license`, so assertions 1-4 all pass having examined a tree that no
+      longer suppresses either vendor link.
 
-      This was introduced by plan 01-18 (commit `e24f210`, "fix"), whose own SUMMARY frontmatter
-      claims `requirements-completed: [MIG-03, MIG-04]` — i.e. this plan is the one both requirements'
-      completion rests on for the About-dialog surface — and it is exactly the kind of "actual web
-      browser" regression the phase goal and CLAUDE.md's licence-visibility framing both name.
-      `deferred-items.md` row 11 records the "hidden, not removed" design choice and the risk that a
-      future ESR rebase could silently un-hide the rows, but it does NOT record that the current
-      selector removes a legitimate link TODAY, so this defect is undocumented as well as unfixed.
-      Neither `scripts/verify-branding-preflight.mjs` (which asserts packaging completeness, not
-      selector correctness — confirmed by reading section 9) nor any other registered check asserts
-      that the suppression selectors target only outbound links; 01-REVIEW.md's WR-03 independently
-      makes the same point about the selectors having no gate at all.
+      This is a Critical-tier finding independently confirmed, not merely 01-REVIEW.md's CR-02
+      accepted on narrative. `deferred-items.md` row 11(a), rewritten by 01-20's own Task 3, claims
+      "the original row's OTHER concern... is now covered too" for the staleness case (an ESR
+      rebase renaming a container id) — that claim is accurate for renames, but the row does not
+      mention, and the checker does not cover, the simpler case of a selector being deleted or
+      narrowed outright while the rest of the tree stays syntactically valid. So the corrected
+      record itself still overstates the coverage this gate provides.
+
+      The CURRENT shipped tree is not defective — both mozilla.org links are suppressed today,
+      confirmed by direct read of the CSS and by running the checker against the unmutated tree —
+      so this gap is about durability of the fix, not the fix's current state. But the entire
+      reason 01-20 exists is "so the current defect cannot be reintroduced silently" (01-20 PLAN's
+      own must_haves truth 2) and 01-REVIEW.md's WR-03 (the precedent this plan cites) asked for
+      exactly this kind of derived-and-compared regression protection. A check that cannot go red
+      on the regression it was purpose-built to prevent does not meet that bar, even though the
+      narrower literal wording of 01-20's must-have (fails when a selector reaches `about:license`)
+      is met.
     artifacts:
-      - path: "powerbrowser/branding/dev/content/aboutDialog.css"
-        issue: "Lines 51-55: `#bottomBox > hbox { display: none; }` hides the entire link row, including `about:license` at index 0, not only the two `https://www.mozilla.org/...` rows at index 1-2."
-      - path: "powerbrowser/branding/release/content/aboutDialog.css"
-        issue: "Byte-identical to dev; same defect."
+      - path: "scripts/verify-about-dialog-suppression.mjs"
+        issue: "runChecks() (lines ~272-364) has no fifth assertion deriving the outbound
+          mozilla.org link set from the markup and requiring each to be reached by a shipped
+          selector; only over-reach (assertion 4) and staleness (assertion 3) are covered."
     missing:
-      - "Replace the container selector with a target selector, e.g. `#bottomBox > hbox > .bottom-link[href^=\"https://www.mozilla.org\"] { display: none; }`, which keeps the row's `pack=\"center\"` layout with only the internal `about:license` link visible, and update the file's comment (which currently mischaracterises the row as entirely outbound) to say why the internal link stays."
-      - "A registered check (or a self-test row on the existing branding-preflight registry entry) asserting that the shipped suppression selectors never match `about:license`'s label, so a future edit to this file cannot silently regress it — WR-03 in 01-REVIEW.md proposes the same fix independently."
-      - "A pass over `deferred-items.md` row 11 correcting it: it should record that the CURRENT selector removes a legitimate disclosure link, not only that a future ESR rebase might."
+      - "A fifth assertion in runChecks(), after the per-file loop: derive every external
+        (http/https) link element from the parsed upstream markup and require each to be matched
+        by at least one shipped suppression selector, failing by name (link description + file)
+        for any that is not covered — 01-REVIEW.md's CR-02 proposes the exact patch."
+      - "A --self-test row (e.g. deleting the mozilla.org selector from the fixture, leaving
+        #communityDesc/#contributeDesc) that must go RED naming the surviving unsuppressed
+        mozilla.org href, proving the new assertion actually gates rather than being green by
+        construction."
+      - "deferred-items.md row 11(a)'s claim that 'the original row's OTHER concern... is now
+        covered too' should be scoped to the rename/staleness case only, not read as full
+        regression coverage, until the fifth assertion lands."
 deferred: []
+behavior_unverified_items: []
 human_verification:
-  - test: "Re-run `shell03-budget-exhausted-error` and `shell03-auto-dismiss-on-selfheal` against a repackaged binary (WINDOWS.md ledger item 19, still `open`)."
-    expected: "Neither check moves, since neither clicks Retry — 01-11's error-layer visibility change is not expected to affect either scenario."
-    why_human: "Requires a `./mach build faster` repackage and a running binary; explicitly deferred to the phase gate, not run by this static verification pass, and not covered by the live UAT session (01-UAT.md's 41 tests do not include these two)."
+  - test: "Re-run `shell03-budget-exhausted-error` and `shell03-auto-dismiss-on-selfheal` against a
+      repackaged binary (WINDOWS.md ledger item 19, still `open`)."
+    expected: "Neither check moves, since neither clicks Retry."
+    why_human: "Requires a `./mach build faster` repackage and a running binary; explicitly
+      deferred to the phase gate, not run by this static verification pass."
+  - test: "A repackaged binary's About dialog renders 'Licensing Information' as the only visible
+      bottom-row link, and clicking it opens the aggregated open-source licence text; no Terms of
+      Use or Privacy Notice row is present (01-20 PLAN's backstop truth, MIG-04 boot-failure edge)."
+    expected: "One visible link, correctly labelled, correctly routed."
+    why_human: "Needs `./mach build faster` (minutes, not the ~47-54 min full build) and a launched
+      binary. 01-20-SUMMARY records this explicitly as `human_needed`, not a silent pass. The
+      static gate proves the selector cannot reach the licence link in upstream's markup; it does
+      not prove the pixels. Not run in this pass per the phase-gate cost instruction."
 ---
 
 # Phase 1: Platform Extraction and Rename Verification Report
@@ -68,15 +111,19 @@ human_verification:
 **Phase Goal:** The Power Browser platform tree exists in this repo, builds, boots, and works as an
 actual web browser under fixed platform identifiers — with no generator involved
 
-**Verified:** 2026-08-31T23:59:00Z
+**Verified:** 2026-09-01T12:00:00Z
 **Status:** gaps_found
-**Re-verification:** Yes — against the state after live UAT (01-UAT.md, 40/41 pass, 2 gaps: G-01-3,
-G-01-25), the two gap-closure plans that followed (01-18, 01-19), and a fresh code review committed
-after both landed (01-REVIEW.md, `ddbc8f4`) that found a new Critical-tier defect in 01-18's own fix.
+**Re-verification:** Yes — third pass. Prior pass (2026-08-31, score 12/13) found Truth 9 (the
+About dialog's `about:license` link suppressed alongside the reported Mozilla-outbound links)
+FAILED. Plan 01-20 was written and executed specifically to close that gap. A code review
+(01-REVIEW.md, cumulative, pass 2 committed at HEAD `de88cce`) confirms 01-20's fix (CR-01) but
+finds a new Critical-tier defect (CR-02) in the check 01-20 registered to guard the fix. This pass
+independently reproduces both the fix and the new defect against the current tree — neither is
+accepted on narrative.
 
 **Scope note:** Requirements verified against REQUIREMENTS.md: MIG-01, MIG-02, MIG-03, MIG-04,
 GUI-01, GUI-03, GUI-04, SEC-01. GUI-02 remains deferred to v2 (D-22 gate) — not scored here, not
-orphaned (it appears in 01-06's plan frontmatter, the deferral is recorded, nothing is missing).
+orphaned.
 
 ## Goal Achievement
 
@@ -84,65 +131,57 @@ orphaned (it appears in 01-06's plan frontmatter, the deferral is recorded, noth
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | SC1 — Token-classification inventory exists; residual scan red on pre-rename tree | ✓ VERIFIED | Regression-checked; `scan-brand-residue: PASS` + self-test, run directly this pass via `--quick` |
-| 2 | SC2 — Repo builds from script-refetched `upstream/`, launches branded app, passes smoke tests | ✓ VERIFIED | Historical build evidence (01-04) unaffected by 01-16 through 01-19; UAT tests 1, 35 pass; not rebuilt this pass (cost, per instruction) |
-| 2b | Backend supervisor's state-gating conflation and unguarded throw sites closed | ✓ VERIFIED | Regression-checked; files unaffected by 01-16 through 01-19 |
-| 2c | A failed Retry does not permanently disable the error layer for the rest of the session | ✓ VERIFIED | `shell-error-contract: PASS`, run directly this pass; UAT test 9 pass (live, user-confirmed) |
-| 2d | An unrecoverable failure classification prevents re-entry into the failed launch path | ✓ VERIFIED | `shell-error-contract`/self-test PASS run directly; UAT test 8 pass (live, user-confirmed) |
-| 2e | Quit observer and state-file path established before any backend-spawning path | ✓ VERIFIED | `start-path-recovery: PASS` + self-test, run directly this pass; UAT test 10 pass |
-| 3 | SC3 — Toggle Theia → browser UI and back; `TabUriRegistry`'s exported shape stays landable | ✓ VERIFIED | `gui04-registry-shape` + self-test PASS, run directly; UAT test 2 pass — 5-step walkthrough (address bar focus, in-window modal, close-returns-to-shell) live-confirmed by the user 2026-09-01 |
-| 4 | SC4 — Runtime restyle via customize bridge, no fork | ✓ VERIFIED | `theia/extensions/customize/*` present and wired; UAT test 6 pass — "red outline+top-panel rule appeared within ~1s of write, reverted on delete. Both halves confirmed by user." |
-| 5 | SC5 — Internal identifiers fixed everywhere; every branding value is a hand-written literal | ✓ VERIFIED | `branding-preflight` + self-test PASS, run directly; UAT tests 24-27 pass; G-01-25 (title-bar identifier leak, found by UAT) closed by 01-19 and regression-checked here |
-| 6 | SEC-01 — Backend unreachable without a per-launch credential; fails closed | ✓ VERIFIED | Regression-checked; UAT tests 34, 37 pass |
-| 7 | No raw internal identifier, pref key, or exception message can reach the user-facing error layer, enforced by a gate that cannot be defeated | ✓ VERIFIED (newly closed this pass) | Independently reproduced against the shipped checker: the receiverless-call shape and the `.bind`-alias shape (both FAILED as recently as the prior verification pass) now each exit 1 by name; `--self-test` 15/15 rows PASS including both new fault rows |
-| 8 | The residual-brand scan fails on a brand token reintroduced by an upstream rebase | ✓ VERIFIED | Regression-checked; `scan-brand-residue-self-test` PASS, unaffected by 01-18/01-19 |
-| 9 | Debranding the About dialog must not remove a legitimate internal disclosure (`about:license`) while suppressing the reported Mozilla-outbound links | ✗ FAILED | `#bottomBox > hbox { display: none; }` in both variant stylesheets hides all three children of that container, including `about:license` at index 0 — read directly against the shipped CSS and the upstream markup it targets in this pass |
+| 1 | SC1 — Token-classification inventory exists; residual scan red on pre-rename tree | ✓ VERIFIED | Regression-checked; `scan-brand-residue: PASS` (110 files), run directly this pass |
+| 2 | SC2 — Repo builds from script-refetched `upstream/`, launches branded app, passes smoke tests | ✓ VERIFIED | Historical build evidence (01-04) unaffected by 01-20; not rebuilt this pass (cost, per instruction) |
+| 2b-2e | Backend supervisor error-layer contract truths (state-gating, quit-observer ordering, retry classification) | ✓ VERIFIED | Regression-checked; `shell-error-contract`, `start-path-recovery` + self-tests PASS, run directly; files unaffected by 01-20 |
+| 3 | SC3 — Toggle Theia → browser UI and back; `TabUriRegistry`'s exported shape stays landable | ✓ VERIFIED | `gui04-registry-shape` + self-test PASS, run directly; unaffected by 01-20 |
+| 4 | SC4 — Runtime restyle via customize bridge, no fork | ✓ VERIFIED | Regression-checked; unaffected by 01-20 |
+| 5 | SC5 — Internal identifiers fixed everywhere; every branding value is a hand-written literal | ✓ VERIFIED | `branding-preflight` + self-test PASS, run directly; unaffected by 01-20 |
+| 6 | SEC-01 — Backend unreachable without a per-launch credential; fails closed | ✓ VERIFIED | Regression-checked; unaffected by 01-20 |
+| 7 | No raw internal identifier can reach the user-facing error layer, gate cannot be defeated | ✓ VERIFIED | `shell-error-copy-no-internals` + self-test PASS (15/15 rows), run directly; unaffected by 01-20 |
+| 8 | The residual-brand scan fails on a brand token reintroduced by an upstream rebase | ✓ VERIFIED | Regression-checked; `scan-brand-residue-self-test` PASS |
+| 9a | The About dialog's `about:license` disclosure link is NOT suppressed by the debranding rule (over-reach direction) | ✓ VERIFIED (newly closed) | `powerbrowser/branding/{dev,release}/content/aboutDialog.css` now ships `#bottomBox > hbox > .bottom-link[href^="https://www.mozilla.org"]` in place of the bare container selector; read directly this pass. `verify-about-dialog-suppression` exits 0 against the current tree; `--self-test` fault (a) (restoring the pre-fix selector) independently reproduced as RED naming `about:license` |
+| 9b | The About dialog's Mozilla-outbound links (Terms/Privacy, UAT G-01-3) stay suppressed TODAY | ✓ VERIFIED (current state) | Read directly: the qualified selector matches both mozilla.org hrefs in `upstream/browser/base/content/aboutDialog.xhtml`; neither renders |
+| 9c | A registered check fails by name if the Mozilla-outbound suppression (9b) is ever removed or narrowed | ✗ FAILED (new gap) | Independently reproduced: deleting the mozilla.org selector entirely from a scratch copy of the shipped tree — fully restoring the original G-01-3 defect — still exits 0 from `verify-about-dialog-suppression.mjs`. `runChecks()` has no coverage assertion; see CR-02 and the Gaps Summary below |
 
-**Score:** 12/13 truths verified (1 flipped from FAILED to VERIFIED this pass — the old copy-safety
-gate defeat, closed for real; 1 new FAILED — a different defect, introduced by the gap-closure work
-that ran after the prior verification pass, found by a fresh review, independently reproduced here).
+**Score:** 12/13 truths verified (Truth 9 is split into three sub-truths this pass to separate the
+over-reach direction that 01-20 fixed from the coverage/regression-reintroduction direction that
+01-20's own check does not gate; 9a and 9b hold, 9c fails).
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `powerbrowser/shell/TheiaService.sys.mjs`, `powerbrowser.js` | Supervisor with correct init gating, quit-observer ordering, classification-respecting Retry | ✓ VERIFIED | Regression-checked; unaffected by 01-16 through 01-19 |
-| `scripts/verify-shell-error-contract.mjs` | Behavioral contract checker for the error layer and probe gate | ✓ VERIFIED | 4/4 scenarios + 10/10 self-test rows PASS, run directly |
-| `scripts/verify-shell-error-copy.mjs` | Static gate enforcing no raw internal identifier/exception text reaches the error layer | ✓ VERIFIED | Both previously-defeating shapes (receiverless call, `.bind` alias) now rejected by name; 15/15 self-test rows PASS |
-| `scripts/scan-brand-residue.mjs` + `scripts/rebase-upstream.sh` | A permanent gate that catches a brand token reintroduced by an upstream rebase | ✓ VERIFIED | Regression-checked; unaffected by 01-18/01-19 |
-| `scripts/verify-registry-shape.mjs`, `theia/extensions/tab-uris/src/browser/tab-uri-registry.ts` | `TabUriRegistry`'s exported shape stays asserted and landable | ✓ VERIFIED | File exists at the expected path; `gui04-registry-shape` + self-test PASS |
-| `theia/extensions/customize/src/browser/{customize-css-contribution,customize-privileged-js-contribution,customize-frontend-module}.ts` | Runtime CSS layer + dev-flagged privileged JS bridge | ✓ VERIFIED | Present, compiled to `lib/`, wired into `customize-frontend-module`; live-confirmed by UAT test 6 |
-| `powerbrowser/shell/powerbrowser.xhtml` | Shell chrome document; title bar and loading wordmark in display form, no identifier leak | ✓ VERIFIED | `<title>Power Browser</title>` and `#powerbrowser-loading` both read the spaced form; regression-checked via `branding-preflight`'s section-6 derivation |
-| `powerbrowser/branding/{dev,release}/content/aboutDialog.css` | Suppresses only the reported stock Mozilla-destined link rows, preserving the internal `about:license` disclosure | ✗ DEFECTIVE | Packaging is correct (loads via `jar.mn`, both variants byte-identical) but the suppression selector `#bottomBox > hbox` is broader than the file's own comment claims — it removes `about:license` alongside the two Mozilla links (Truth 9) |
-| `scripts/verify-branding-preflight.mjs` | Packaging-completeness gate for branding chrome resources; shell-markup display-surface leak scan | ✓ VERIFIED (packaging) / ⚠️ does not cover selector correctness | Section 9 (packaging) and section 6 (leak scan) both self-test clean; neither asserts that a suppression selector targets only the intended link class — this is exactly the gap Truth 9 exploits, independently named by 01-REVIEW.md's WR-03 |
-| `scripts/verify-platform.sh` | Single registry, `--quick` green | ✓ VERIFIED | 24/24 PASS, run directly this pass (3.1s wall) |
+| `powerbrowser/branding/{dev,release}/content/aboutDialog.css` | Suppresses only the reported stock Mozilla-destined link rows, preserving the internal `about:license` disclosure | ✓ VERIFIED (current state) | Read directly; selector qualified by `href^="https://www.mozilla.org"`; both variants byte-identical (`cmp` clean, reproduced) |
+| `scripts/verify-about-dialog-suppression.mjs` | Derived-both-sides gate over the About dialog's suppression selectors, with a planted-fault `--self-test` | ⚠️ INCOMPLETE GATE | Over-reach (assertion 4) and staleness (assertion 3) are real and independently reproduced as working. No coverage assertion exists — the gate cannot detect the exact regression (G-01-3) it exists to prevent, independently reproduced this pass |
+| `scripts/verify-platform.sh` registry rows `about-dialog-suppression`, `about-dialog-suppression-self-test` | Reachable via `--only`; `--quick` stays green, one row longer (25) | ✓ VERIFIED | `git diff --stat d3a43ff..10dc32d -- scripts/verify-platform.sh` = 32 insertions, 0 deletions (no existing row removed); `--quick` run directly this pass: 25/25 PASS; `--only about-dialog-suppression` and `--only about-dialog-suppression-self-test` both run directly and PASS |
+| `.planning/phases/01-platform-extraction-and-rename/deferred-items.md` row 11 | Corrected to record the defect that existed, not only a future risk | ✓ VERIFIED (with a caveat) | Read directly; row 11(a) now states the defect was live, names 01-VERIFICATION.md Truth 9 and 01-REVIEW.md CR-01, and records the closure. Its claim that the ESR-rebase risk is "now covered too" is accurate for renames but does not disclose the coverage gap (9c/CR-02) — see missing item above |
+| `.planning/WINDOWS.md` ledger rows 15, 16 | Moved from `open` to resolved, citing UAT evidence | ✓ VERIFIED | Read directly; both rows now read `fixed`, citing 01-UAT.md tests 2 and 6 and the 2026-09-01 confirmation; row 19 still `open` as intended |
+| `.planning/REQUIREMENTS.md` line 19 | MIG-04 checklist ticked to `[x]` | ✓ VERIFIED | Read directly: `- [x] **MIG-04**...`; `git diff` scope matches the plan's stated single-line change |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|-----|-----|--------|---------|
-| `powerbrowserRetry()` | `TheiaService.retry()`'s classification guard | direct call, no DOM bypass | ✓ WIRED | Regression-checked |
-| `_showError()` call sites | a validated `USER_MESSAGE` table entry only | position-set completeness (`allSites`/`defs`/`parsed`) + `escapes` rejection | ✓ WIRED | Both previously-open escapes now rejected by name, reproduced this pass |
-| `rebase-upstream.sh`'s post-replay check | the rewritten `upstream/` tree | `--extra-root $UPSTREAM_DIR` → `extraRootFiles()` → `scan()` | ✓ WIRED | Regression-checked (unaffected by 01-18/01-19) |
-| `powerbrowser/branding/*/content/jar.mn` | `aboutDialog.css` | packaging manifest entry | ✓ WIRED | Symlinked into `objdir/dist/bin/...`, confirmed by 01-18-SUMMARY's `cmp`; packaging-completeness self-test PASS |
-| `aboutDialog.css`'s suppression selector | upstream's actual DOM structure (`#bottomBox > hbox`'s three children) | CSS selector matching by container rather than by link target | ✗ MISWIRED | The selector matches at the wrong granularity: it reaches `about:license` (index 0) as well as the two intended targets (index 1-2), because nothing narrows the match to `.bottom-link[href^="https://www.mozilla.org"]` |
-| `powerbrowser/shell/jar.mn` | `verify-branding-preflight.mjs` section 6's shell-markup leak scan | manifest read at check time | ✓ WIRED | Regression-checked; this is the derivation 01-19 added to close G-01-25 |
+| `powerbrowser/branding/*/content/aboutDialog.css` suppression selector | upstream's actual DOM (`#bottomBox`'s three children) | href-qualified CSS selector matching, checked by `verify-about-dialog-suppression.mjs` | ✓ WIRED (for over-reach and staleness) / ✗ NOT WIRED (for coverage) | The selector correctly spares `about:license` today and the checker catches over-reach and staleness regressions; it does not catch a coverage regression (selector deleted/narrowed), independently reproduced |
+| `scripts/verify-about-dialog-suppression.mjs` | `scripts/verify-platform.sh` registry | two rows (`about-dialog-suppression`, `-self-test`), reached via `--only` | ✓ WIRED | Both run directly this pass, both PASS; no sibling driver created (single 32-insertion diff) |
+| `powerbrowser/branding/*/content/jar.mn` | `aboutDialog.css` | packaging manifest entry | ✓ WIRED | Regression-checked; unaffected by 01-20 |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Full quick verification suite (24 checks) | `bash scripts/verify-platform.sh --quick` (run directly this pass) | PASS, 24/24, 3.1s | ✓ PASS |
-| `shell-error-copy-no-internals --self-test` | `node scripts/verify-shell-error-copy.mjs --self-test` | 15/15 rows PASS, including both previously-defeating rows | ✓ PASS |
-| Receiverless line-initial `_showError(err.message, ...)` is rejected | Reproduced this pass: scratch copy of `TheiaService.sys.mjs` + appended call | exit **1**, names the offset | ✓ PASS (gap closed) |
-| `.bind`-aliased `_showError` call site is rejected | Reproduced this pass: scratch copy + `const show = this._showError.bind(this); show(err.message, ...)` | exit **1**, "referenced without being called" | ✓ PASS (gap closed) |
-| `#bottomBox > hbox` selector matches `about:license` as well as the two Mozilla links | Read directly against `powerbrowser/branding/release/content/aboutDialog.css:51-55` and `upstream/browser/base/content/aboutDialog.xhtml:138-143` | Selector matches the container; `about:license` is its first child | ✗ FAIL (new gap, this pass) |
-| `--gate` (full registry + WINDOWS.md known-open exclusions) | `bash scripts/verify-platform.sh --gate` | Not completed — the command produced no output for 5+ minutes and, per its own source (`smoke-firefox.sh` in the registry), reaches the incremental `./mach build` path. Terminated rather than risk the ~47-54 min full build the phase brief explicitly says not to run. | ? SKIP (cost) |
+| Full quick verification suite (25 checks) | `bash scripts/verify-platform.sh --quick` (run directly this pass) | PASS, 25/25 | ✓ PASS |
+| `verify-about-dialog-suppression --self-test` | `node scripts/verify-about-dialog-suppression.mjs --self-test` (run directly this pass) | Green control + 4/4 planted faults RED, each naming the drift | ✓ PASS |
+| `verify-about-dialog-suppression` against the unmutated shipped tree | `node scripts/verify-about-dialog-suppression.mjs` | exit 0 | ✓ PASS |
+| Coverage regression: mozilla.org suppression selector deleted entirely from a scratch copy (restores G-01-3 in full) | Reproduced this pass: copied script + both stylesheets + upstream markup into a scratch root, deleted the third selector, ran the checker against the mutated root | exit **0** — "PASS -- every shipped suppression selector matches upstream markup and none reaches the about:license disclosure link" | ✗ FAIL (CR-02, independently confirmed) |
+| `node scripts/scan-brand-residue.mjs` with the new script staged | Run directly this pass | PASS, 110 files scanned, exit 0 | ✓ PASS |
+| `--gate` (full registry + WINDOWS.md exclusions) | `bash scripts/verify-platform.sh --gate` | Not run — reaches the incremental `./mach build` path (~47-54 min); explicitly out of scope per instruction | ? SKIP (cost) |
 
 ### Probe Execution
 
-Not applicable — this phase has no `scripts/*/tests/probe-*.sh` convention; its verification driver is
-`scripts/verify-platform.sh`, covered above.
+Not applicable — this phase has no `scripts/*/tests/probe-*.sh` convention; its verification driver
+is `scripts/verify-platform.sh`, covered above.
 
 ### Requirements Coverage
 
@@ -150,98 +189,109 @@ Not applicable — this phase has no `scripts/*/tests/probe-*.sh` convention; it
 |-------------|-------------|--------|----------|
 | MIG-01 | Script-refetched upstream, no copied objdirs | ✓ SATISFIED | Regression-checked; `fetch-upstream-self-test` PASS |
 | MIG-02 | Committed pre-rename inventory | ✓ SATISFIED | Regression-checked |
-| MIG-03 | Identifiers fixed everywhere, cannot regress | ✓ SATISFIED | G-01-25 (title-bar leak) closed by 01-19, regression-checked; Truth 9's defect is a disclosure-link regression, not an identifier-naming one, so it does not itself un-satisfy MIG-03's literal text |
-| MIG-04 | Renamed tree builds and boots, works as an actual browser | ◐ SATISFIED (narrow build/boot text) / gap open at the phase-goal level | Build+boot+branding-identity evidence from 01-04 stands (UAT test 35 pass); but Truth 9 (About-dialog licence-link removal) is a real, unfixed defect in a browser surface that the SAME two requirements' completion (`requirements-completed: [MIG-03, MIG-04]`, per 01-18-SUMMARY) rests on for this file. See REQUIREMENTS.md discrepancy note below. |
-| GUI-01 | Toggle Theia ↔ browser UI | ✓ SATISFIED | Automated (`gui04-registry-shape`) + human (UAT test 2, live, user-confirmed 2026-09-01) — though WINDOWS.md ledger item 15 is still marked `open`, a documentation-currency lag behind the UAT evidence, not a functional gap |
-| GUI-03 | Runtime GUI customization bridge | ✓ SATISFIED | Automated + human (UAT test 6, live, user-confirmed) — WINDOWS.md ledger item 16 similarly stale |
-| GUI-04 | `TabUriRegistry` exported shape stays landable | ✓ SATISFIED | Regression-checked |
-| SEC-01 | Backend fail-closed | ✓ SATISFIED | Regression-checked |
+| MIG-03 | Identifiers fixed everywhere, cannot regress | ✓ SATISFIED | Unaffected by 01-20's surface (About-dialog links, not identifier naming) |
+| MIG-04 | Renamed tree builds and boots, works as an actual browser | ◐ SATISFIED (build/boot text) / gap open at phase-goal narrative level | Build+boot evidence from 01-04 stands. The About-dialog licence-disclosure defect that partially blocked this requirement is fixed for its current state (9a/9b), but the check meant to keep it fixed durably has a Critical-tier coverage hole (9c) that this same plan's SUMMARY claims against MIG-04. REQUIREMENTS.md line 19 is now correctly ticked `[x]`, matching the traceability table — that documentation-currency issue from the prior pass is resolved. |
+| GUI-01 | Toggle Theia ↔ browser UI | ✓ SATISFIED | Regression-checked; unaffected by 01-20 |
+| GUI-03 | Runtime GUI customization bridge | ✓ SATISFIED | Regression-checked; unaffected by 01-20 |
+| GUI-04 | `TabUriRegistry` exported shape stays landable | ✓ SATISFIED | Regression-checked; unaffected by 01-20 |
+| SEC-01 | Backend fail-closed | ✓ SATISFIED | Regression-checked; unaffected by 01-20 |
 
-**No orphaned requirements.** All 8 phase-1 requirement IDs (MIG-01/02/03/04, GUI-01/03/04, SEC-01)
-appear in at least one plan's `requirements` frontmatter across all 19 `01-*-PLAN.md` files, confirmed
-by direct grep this pass. GUI-02 correctly appears only in 01-06 and is recorded as deferred to v2 at
-the D-22 gate — not orphaned, not scored here.
-
-**REQUIREMENTS.md MIG-04 checkbox/traceability discrepancy — resolved, both halves read directly this
-pass:**
-- Line 19's checklist entry is `- [ ] **MIG-04**...`, unticked.
-- The SAME line's inline HTML comment states MIG-04 was "CLOSED by plan 01-04, 2026-08-30, on evidence
-  rather than frontmatter," and recites the actual evidence (smoke-firefox PASS at 2830s, smoke-theia
-  PASS, six branding-identity surfaces green on the built artifact with a positive control) — real,
-  substantive closure evidence, not an assertion.
-- Line 263's traceability table reads `MIG-04 | Phase 1 | Complete — closed by 01-04's build...`.
-- **Determination: the traceability table (line 263) is correct; the checklist checkbox (line 19) is
-  stale and was never ticked when the inline comment was added.** This is the same class of
-  documentation-currency defect as the WINDOWS.md ledger items above — real work is genuinely done,
-  the tracking artifact recording it was not fully updated. It is not a functional gap and does not
-  affect this report's score, but the checkbox should be corrected to `[x]` to stop this exact
-  discrepancy from being re-litigated at the next verification pass.
+**No orphaned requirements.** 01-20's frontmatter declares MIG-03 and MIG-04; both already appear in
+the phase's requirement set. All 8 phase-1 requirement IDs remain accounted for.
 
 ### Anti-Patterns Found
 
-`grep -E "TBD|FIXME|XXX|TODO|HACK|PLACEHOLDER"` over the seven files touched by 01-18/01-19 (both
-`aboutDialog.css` variants, both `jar.mn` variants, `powerbrowser.xhtml`, `verify-branding-preflight.mjs`,
-`verify-platform.sh`): zero matches. No debt markers.
+`grep -E "TBD|FIXME|XXX|TODO|HACK|PLACEHOLDER"` over the four files 01-20 modified (both
+`aboutDialog.css` variants, `scripts/verify-about-dialog-suppression.mjs`,
+`scripts/verify-platform.sh`): zero matches. No debt markers.
 
-Truth 9 (the `about:license` suppression) is a **selector-scope defect in shipped product logic**, not
-a stub or placeholder — the CSS is fully implemented and does exactly what it says, but what it says
-(suppress the whole container) is broader than what was asked (suppress the outbound rows).
+`verify-about-dialog-suppression.mjs`'s CR-02 gap (missing coverage assertion) is a **logic gap in
+shipped verification tooling**, not a stub or placeholder — the four assertions it does make are
+fully implemented and each independently reproduced as working for what they check. What it does
+not check (coverage of the outbound links) is simply absent, not stubbed.
 
-01-REVIEW.md's remaining Warning-tier findings (WR-01 through WR-08) and Info-tier findings (IN-01,
-IN-02) are not elevated to blocking here, consistent with the review's own severity classification.
-WR-03 (no gate over the suppression selectors' correctness) is the direct cause of Truth 9 going
-undetected and is worth folding into the same closure plan as CR-01, but it is a hardening
-recommendation rather than an independent blocker.
+01-REVIEW.md's remaining Warning-tier findings for this surface (WR-01, WR-02, WR-04 through
+WR-13) and Info-tier findings (IN-01 through IN-04) are not elevated to blocking here, consistent
+with the review's own severity classification and this project's convention of scoring only
+Critical-tier findings as gaps. WR-08 (the `#communityExperimentalDesc` mozilla.org link, dormant
+at the current ESR version string) is a distinct, pre-existing scope question about G-01-3's
+original boundary, not part of Truth 9's reopened scope, and is not elevated here.
 
 ## Human Verification Required
 
 ### 1. Tier-3 regression re-confirmation (WINDOWS.md ledger item 19)
 
 **Test:** Re-run `shell03-budget-exhausted-error` and `shell03-auto-dismiss-on-selfheal` against a
-repackaged binary (`./mach build faster`, minutes not the full ~47-54 min build).
+repackaged binary.
 **Expected:** Neither check moves, since neither clicks Retry.
-**Why human:** Requires a running repackaged binary; explicitly deferred to the phase gate, not run
-by this static verification pass and not among 01-UAT.md's 41 tests.
+**Why human:** Requires a running repackaged binary; explicitly deferred to the phase gate.
+
+### 2. About-dialog backstop truth (01-20 PLAN's `verification: backstop` item)
+
+**Test:** In a repackaged binary, open the About dialog and confirm `Licensing Information` is the
+only visible bottom-row link, that it opens the aggregated open-source licence text, and that no
+Terms of Use or Privacy Notice row is present.
+**Expected:** One visible, correctly-routed link.
+**Why human:** Needs `./mach build faster` and a launched binary; the static gate proves selector
+logic against markup, not rendered pixels. 01-20-SUMMARY already records this as `human_needed`.
 
 ## Gaps Summary
 
-**The prior verification pass's blocking gap is genuinely closed.** The `_showError()` copy-safety
-gate's completeness check — defeated twice more since the phase started (CR-A closed by 01-14, CR-03's
-two named shapes closed by 01-16, then the completeness COUNT itself found defeatable by a receiverless
-call and a `.bind` alias, per the prior verification pass) — is fixed by 01-REVIEW-FIX.md's structural
-rewrite: a position-set comparison that cannot cancel the way a difference-of-counts check can, plus an
-explicit `escapes` rejection for any `_showError` not immediately followed by `(`. Both previously
-open shapes were independently reproduced against the shipped checker in THIS pass and both now exit 1.
+**Truth 9's original defect — `about:license` suppressed alongside the reported Mozilla-outbound
+links — is genuinely fixed.** Read directly this pass against the shipped CSS: the container
+selector `#bottomBox > hbox` became `#bottomBox > hbox > .bottom-link[href^="https://www.mozilla.org"]`
+in both byte-identical variants. `verify-about-dialog-suppression.mjs` exits 0 against the current
+tree, and its `--self-test` independently reproduces all four planted faults as RED, including the
+fault that restores the exact pre-fix selector and requires it to name `about:license`. This is not
+accepted on 01-20-SUMMARY's or 01-REVIEW.md's narrative — both the CSS and the checker were run
+directly in this pass.
 
-**Between that verification pass and this one, a live UAT session ran and found two real gaps** (G-01-3:
-stock Mozilla About-dialog links; G-01-25: shell window title bar leaking the compact identifier form),
-**both closed by dedicated plans (01-18, 01-19) with genuine, regression-checked fixes** — the title-bar
-correction and its detection-gap closure (deriving the leak scan's file set from `powerbrowser/shell/jar.mn`
-rather than a hand-kept path) are sound and verified directly in this pass.
+**But the check plan 01-20 registered to guard this exact surface has a Critical-tier hole, and it
+is real: it cannot detect the regression it exists to prevent.** `runChecks()` asserts non-vacuity,
+grammar validity, staleness (a selector matching nothing), and over-reach (a selector reaching
+`about:license`). It never asserts that the outbound mozilla.org links are actually suppressed. I
+independently reproduced this: taking a scratch copy of the current, correctly-fixed tree and
+deleting the mozilla.org selector entirely (restoring the original UAT G-01-3 defect — both vendor
+links visible again inside a Power-Browser-branded dialog) still produces
+`verify-about-dialog-suppression: PASS`, exit 0, and `bash scripts/verify-platform.sh --only
+about-dialog-suppression` would report the same false PASS. The surviving `#communityDesc`/
+`#contributeDesc` selectors keep assertions 1-3 satisfied, and nothing reaches `about:license` so
+assertion 4 stays silent too.
 
-**But 01-18's fix for G-01-3 introduced a new defect, found by a fresh code review after both
-gap-closure plans landed, and independently reproduced here.** `#bottomBox > hbox { display: none; }`
-suppresses the whole three-link row instead of only the two Mozilla-destined ones, taking
-`about:license` — the product's only in-UI route to its aggregated open-source licence text — down
-with it. This is not a hypothetical: the CSS in the tree right now, read directly against the upstream
-markup it targets, confirms the selector cannot distinguish the internal link from the outbound ones.
-Nothing in the registered check set catches this (branding-preflight asserts packaging completeness,
-not selector correctness), and `deferred-items.md` row 11 documents the "hidden not removed" design
-choice without recording that the CURRENT selector already removes more than it should.
+This matters for three reasons specific to this project. First, 01-20's own objective states the
+check exists "so the current defect cannot be reintroduced silently" — for the over-reach direction
+that promise holds, but the plan's broader framing (closing UAT gap G-01-3's regression risk, cited
+against MIG-03/MIG-04) is only half kept. Second, CLAUDE.md's verification philosophy is explicit
+that a registered check must "derive from the tree and compare" rather than assert on a narrow,
+hand-picked condition — a check that only watches one of two ways the same CSS rule can go wrong is
+the same failure shape the project's own rule 1 (never assert on the absence of something you
+haven't proven is emitted) warns against, applied to the positive case: never claim a regression
+gate that only watches one of two symmetric failure modes. Third, `deferred-items.md` row 11(a),
+rewritten by this same plan's Task 3, states the row's ESR-rebase risk is "now covered too" — true
+for renames, silent about deletions/narrowings — so the corrected record itself does not disclose
+the gap this pass found.
 
-Because this is a Critical-tier, reproduced, unfixed defect in a user-facing browser surface — one
-whose closure this same plan claims against MIG-03 and MIG-04 in its own SUMMARY frontmatter — the
-overall status stays **gaps_found**, even though the score improved (9/12 → 12/13, with the ratio
-shift reflecting one closed gap and one new, differently-shaped one added to the denominator).
+The current shipped tree is not defective: both mozilla.org links are suppressed today and
+`about:license` is reachable today, confirmed by direct reads and a direct checker run. This is a
+durability gap in the regression-prevention mechanism, not a live user-facing defect — but it is
+exactly the kind of gap this project's verification philosophy treats as a blocker, because the
+entire reason a phase-gate check exists is to make a future regression impossible to ship silently,
+and this one currently cannot.
 
-One human-verification item remains open and unrun: the tier-3 regression re-confirmation named by
-WINDOWS.md ledger item 19. Ledger items 15 and 16 (GUI-01 and GUI-03 perceptual walkthroughs) are
-functionally resolved — 01-UAT.md records live, user-confirmed passes for both on 2026-09-01 — but the
-ledger rows themselves are still marked `open`, a documentation-currency lag rather than an open
-functional question; recommend updating WINDOWS.md alongside the REQUIREMENTS.md MIG-04 checkbox noted
-above.
+Because this is a Critical-tier, independently reproduced, unfixed defect in the verification
+artifact this same plan claims closes MIG-03/MIG-04's regression-reintroduction edge, the overall
+status stays **gaps_found**. The score holds at 12/13 (Truth 9 is now split into 9a/9b/9c to
+separate what closed from what didn't; 9a and 9b hold, 9c fails, netting the same one-truth gap as
+the prior pass, now differently shaped and with a proposed fix already drafted in 01-REVIEW.md's
+CR-02).
+
+Two human-verification items remain open and unrun: the tier-3 regression re-confirmation (WINDOWS.md
+ledger item 19) and the About-dialog backstop truth from 01-20's own PLAN (a repackaged binary's
+rendered pixels). Neither changes the gaps_found status, since a gaps_found status takes precedence
+over human_needed in the decision tree, but both should be run at the phase gate alongside the
+CR-02 fix.
 
 ---
 
-_Verified: 2026-08-31T23:59:00Z_
+_Verified: 2026-09-01T12:00:00Z_
 _Verifier: Claude (gsd-verifier)_
