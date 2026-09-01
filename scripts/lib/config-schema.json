@@ -1,0 +1,88 @@
+{
+  "$comment": "THE ONE SCHEMA TABLE for configuration.toml, and the single source of truth for three consumers in scripts/generate.mjs: the unknown-key check, the defaults masker, and the validator. None of those three carries its own key list -- a second list is a second thing to forget to update, and the failure mode is a key that validates against one list while being rejected by another. `required: true` IS the mask list (D-06): a required setting is one a downstream manifest must state for itself and can never silently inherit from this project's defaults layer, because inheriting it would mean shipping this project's identity under someone else's name. Keys are dotted paths; an element of an array of tables is addressed with an empty-bracket segment, for example `variants[].id`. WHAT THIS FILE IS NOT: configuration.toml is NOT an expectation source for scripts/verify-branding-preflight.mjs. That gate reads its expected values from inventory/brand-tokens.json's hand-authored brand_display_expectations block and must continue to. If the preflight ever read the manifest that the generator also writes from, it would be comparing one pass's output against the same pass's input and would agree with itself no matter how wrong both were.",
+  "keys": {
+    "product.vendor_machine": {
+      "type": "string",
+      "required": true,
+      "regex": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "regex_help": "the machine vendor becomes part of the profile directory path, so it may contain no space and no slash; letters, digits, dots, underscores and hyphens only, starting with a letter or digit",
+      "regex_example": "AcmeWorks"
+    },
+    "product.vendor_display": {
+      "type": "string",
+      "required": true
+    },
+    "product.description": {
+      "type": "string",
+      "required": false
+    },
+    "product.homepage": {
+      "type": "string",
+      "required": false
+    },
+    "identity.display_name": {
+      "type": "string",
+      "required": true
+    },
+    "identity.app_basename": {
+      "type": "string",
+      "required": true,
+      "regex": "^[a-z][a-z0-9-]{1,31}$",
+      "regex_help": "lowercase letters, digits and hyphens only; 2 to 32 characters; must start with a letter",
+      "regex_example": "acme-browser"
+    },
+    "identity.binary_name": {
+      "type": "string",
+      "required": true,
+      "regex": "^[a-z][a-z0-9-]{1,31}$",
+      "regex_help": "lowercase letters, digits and hyphens only; 2 to 32 characters; must start with a letter",
+      "regex_example": "acme-browser"
+    },
+    "identity.remoting_name": {
+      "type": "string",
+      "required": true,
+      "regex": "^[a-z][a-z0-9-]{1,31}$",
+      "regex_help": "lowercase letters, digits and hyphens only; 2 to 32 characters; must start with a letter",
+      "regex_example": "acme-browser"
+    },
+    "identity.distribution_id": {
+      "type": "string",
+      "required": true,
+      "regex": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+$",
+      "regex_help": "lowercase reverse-domain form, for example org.example",
+      "regex_example": "org.acmeworks"
+    },
+    "legal.license": {
+      "type": "string",
+      "required": true
+    },
+    "legal.copyright_holder": {
+      "type": "string",
+      "required": true
+    },
+    "legal.trademark_notice": {
+      "type": "string",
+      "required": true
+    },
+    "theia.default_theme": {
+      "type": "string",
+      "required": false
+    },
+    "variants[].id": {
+      "type": "string",
+      "required": false
+    },
+    "variants[].name_suffix": {
+      "type": "string",
+      "required": false
+    },
+    "variants[].branding_dir": {
+      "type": "string",
+      "required": false
+    },
+    "variants[].objdir": {
+      "type": "string",
+      "required": false
+    }
+  }
+}

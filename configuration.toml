@@ -1,0 +1,67 @@
+# Power Browser -- the rebrand manifest.
+#
+# CFG-01: this file and brand/ are the ONLY two inputs a downstream rebrand
+# edits. Change a value here, run `node scripts/generate.mjs`, and the derived
+# build surfaces are rewritten under generated/. No other file in the tree is
+# touched to change the brand.
+#
+# This file is also the DEFAULTS layer (D-05): a downstream's own manifest
+# overlays it in Phase 7, so every value below is both Power Browser's brand
+# and the fallback a partial downstream manifest inherits.
+#
+# No machine-specific value belongs here. The repo root is derived at generate
+# time from the generator's own location (D-04); it is not a setting.
+#
+# Two placement notes, both load-bearing:
+#
+#  1. display_name sits under [identity], not under [product]. Every key under
+#     [identity] is required, and a required key is one a downstream cannot
+#     silently inherit -- omitting it is a hard failure rather than a quiet
+#     fallback. display_name is the value that reaches MOZ_APP_DISPLAYNAME, so
+#     a downstream that forgot it would otherwise ship this project's mark in
+#     its own window title. Putting it in the required table is what stops that.
+#
+#  2. The vendor is TWO settings, never one. vendor_machine is lowercased and
+#     concatenated into the profile directory path with no space stripping, so
+#     the display form would produce a path containing a space -- against this
+#     repo's hard rule that its path carries no space. Collapsing the two either
+#     puts a space in the profile path or ships a vendor string that is not the
+#     foundation's name. Keep them distinct.
+
+[product]
+vendor_machine = "DeBIOS"
+vendor_display = "DeBIOS Foundation"
+description = "A rebrandable browser platform: a Gecko shell hosting an Eclipse Theia sidecar as its default GUI."
+homepage = "https://powerbrowser.org"
+
+[identity]
+display_name = "Power Browser"
+app_basename = "powerbrowser"
+binary_name = "powerbrowser"
+remoting_name = "powerbrowser"
+distribution_id = "org.debios"
+
+[legal]
+license = "PolyForm Noncommercial 1.0.0"
+copyright_holder = "DeBIOS Foundation"
+trademark_notice = "Power Browser is a trademark of DeBIOS Foundation."
+
+[theia]
+default_theme = "dark"
+
+# Build variants. A variant carries no output path: every output path lives in
+# the generator's frozen target table, so no value in this file can direct a
+# write. branding_dir and objdir below are emitted as CONTENT, never used as a
+# write target.
+
+[[variants]]
+id = "dev"
+name_suffix = " Dev"
+branding_dir = "powerbrowser/branding/dev"
+objdir = "objdir"
+
+[[variants]]
+id = "release"
+name_suffix = ""
+branding_dir = "powerbrowser/branding/release"
+objdir = "objdir-release"
