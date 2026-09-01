@@ -400,6 +400,23 @@ function check(targetPath) {
     );
   }
 
+  // 01-18 (WR-01). Everything above keys on the literal text `_showError(`.
+  // `this._showError.bind(this)` writes `_showError.bind(` -- the parenthesis is
+  // not adjacent -- so an aliased method is in NEITHER the site set nor the
+  // parsed set, the position sets agree, and every call made through the alias
+  // is invisible. Rather than trying to follow the alias (which is a dataflow
+  // problem, not a regex one), reject the escape: any textual `_showError` that
+  // is not immediately being called is a reference that removes the method from
+  // this check's reach.
+  const escapes = [...src.matchAll(/_showError(?!\s*\()/g)].map((m) => m.index);
+  if (escapes.length !== 0) {
+    fail(
+      `\`_showError\` is referenced without being called (offset(s) ${escapes.join(", ")}) -- an ` +
+        `alias, a \`.bind\`, or a property read hands the error layer to a call site this check ` +
+        `cannot see. Call it directly as \`this._showError(<message>, ...)\``
+    );
+  }
+
   // The offsets the enumeration below actually reached, recorded BY the
   // enumeration rather than by a second pattern that guesses what it reaches.
   const parsed = new Set();
@@ -562,6 +579,15 @@ const FAULTS = [
     name: "receiverless line-initial _showError() call site is absorbed by the definition term",
     apply: (s) => `${s}\n_showError(err.message, false, []);\n`,
     expect: "were not parsed",
+  },
+  // 01-18 (WR-01). CR-03's third documented bypass, still open after 01-16: an
+  // aliased method is counted by neither derivation because `_showError.bind(`
+  // has no adjacent parenthesis, so the two position sets agree while the call
+  // through the alias is never examined.
+  {
+    name: "_showError aliased through .bind is invisible to every derivation",
+    apply: (s) => `${s}\nconst show = this._showError.bind(this);\nshow(err.message, false, []);\n`,
+    expect: "referenced without being called",
   },
   // 01-16 (WR-01, WR-02). Two sibling silent drops in this same file.
   //
