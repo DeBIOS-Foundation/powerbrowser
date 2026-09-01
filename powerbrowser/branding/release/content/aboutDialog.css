@@ -39,17 +39,29 @@
    can reach them; this stylesheet is the third and last entry in that file's
    linkset, which is the hook upstream provides to branding for exactly this.
 
-   #contributeDesc   -- renders "Make a donation" and "get involved!".
-   #bottomBox > hbox -- renders "Licensing Information", "Terms of Use" and
-                        "Privacy Notice". It is the link row only; #trademark
-                        is #bottomBox's other child and stays visible.
-   #communityDesc    -- renders the community blurb. It was not in the user
-                        report; it is suppressed with the other two rather than
-                        deferred because its visible label is this product's own
-                        vendor name while its target is mozilla.org -- the
-                        reported defect in its worst instance. */
+   #contributeDesc -- renders "Make a donation" and "get involved!".
+   #communityDesc  -- renders the community blurb. It was not in the user
+                      report; it is suppressed with the others rather than
+                      deferred because its visible label is this product's own
+                      vendor name while its target is mozilla.org -- the
+                      reported defect in its worst instance.
+
+   The bottom row is MIXED, not outbound, and that is why the third entry is
+   qualified by href rather than naming the container. #bottomBox's link row
+   holds three children: "Licensing Information", whose href is the internal
+   about:license, and "Terms of Use" and "Privacy Notice", both destined for
+   https://www.mozilla.org. Only the two mozilla.org-destined children are
+   suppressed. The licence link STAYS VISIBLE: it is this product's only in-UI
+   route to its aggregated open-source licence text, and a build that ships
+   MPL-covered and third-party code with no such route has no surface on which
+   to discharge that disclosure. The row keeps its pack="center" layout with
+   one visible child. #trademark is #bottomBox's other child and is untouched.
+
+   A container-wide rule here took the licence link down with the vendor ones
+   (01-VERIFICATION.md Truth 9, 01-REVIEW.md CR-01); the qualified form and
+   scripts/verify-about-dialog-suppression.mjs together keep that closed. */
 #communityDesc,
 #contributeDesc,
-#bottomBox > hbox {
+#bottomBox > hbox > .bottom-link[href^="https://www.mozilla.org"] {
   display: none;
 }
