@@ -1,88 +1,66 @@
 ---
 phase: 01-platform-extraction-and-rename
-verified: 2026-08-31T23:55:00Z
+verified: 2026-08-31T23:59:00Z
 status: gaps_found
-score: 9/12 must-haves verified (1 gap closed for real this pass, 1 gap reopened in a different shape by a fresh review and independently reproduced, 2 partial — human halves still open)
+score: 12/13 must-haves verified (1 prior gap genuinely closed this pass; 1 new blocker found by a fresh review after two UAT-driven gap-closure plans landed)
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
-  previous_score: 8/12
+  previous_score: 9/12
   gaps_closed:
-    - "Truth 8 (residual-brand rebase gate cannot regress) — CR-01 (coincidental-row exemption under --extra-root) and CR-02 (unreadable file silently skipped and miscounted as scanned) are both genuinely fixed by 01-17. Independently reproduced in this pass, not accepted on the SUMMARY's narrative: `MOZ_OBJDIR=/home/chris/coding/sourcerer/objdir` planted under a scratch --extra-root now exits 1 naming the file; a chmod-000 file carrying a brand token under --extra-root now exits 1 reporting '1 unreadable file(s)'. Both were exit-0 escapes in the prior pass."
-  gaps_remaining:
-    - "Truth 7 (copy-safety gate cannot be defeated) — 01-16 closed the exact two shapes CR-03 named (comma-less call, optional-chaining receiver) with a second, independently-derived call-site count. A fresh review (01-REVIEW.md, committed after 01-16/01-17 landed) found the new count itself is defeatable: it computes `definitions` as every line-initial `_showError(` occurrence and subtracts it from the raw total to get `present`, then asserts `callSites === present`. A CALL site written without a receiver at the start of a line matches the same `definitions` pattern, so appending one raises the raw count AND `definitions` together, leaving `present` unchanged while `callSites` (which requires `this.`) also stays unchanged -- the two counts agree with each other while the call site is never examined. Independently reproduced in this pass against the shipped checker: a copy of TheiaService.sys.mjs with an appended receiverless `_showError(err.message, false, []);` exits 0. A second, separate escape (WR-01, also reproduced this pass) shows a `.bind`-aliased call site (`this._showError.bind(this)`) is invisible to both counters because neither matches `_showError.bind(` as an occurrence of `_showError(`; a call through that alias with `err.message` also exits 0."
+    - "Truth 7 (copy-safety gate for _showError cannot be defeated) — genuinely fixed since the last verification pass. 01-REVIEW-FIX.md's CR-01 fix replaced the count-based completeness guard with a position-set comparison (allSites/defs/parsed by construction), and its WR-01 fix added an `escapes` check rejecting any `_showError` not immediately followed by `(`. Independently reproduced in THIS pass, not accepted on the fix report's narrative: appending a receiverless `_showError(err.message, false, []);` to a scratch copy of the shipped `TheiaService.sys.mjs` now exits 1 (\"1 `_showError(` call site(s) ... were not parsed\"); a `.bind`-aliased call site (`const show = this._showError.bind(this); show(err.message, ...)`) now exits 1 (\"`_showError` is referenced without being called\"). Both were exit-0 escapes in the prior pass. `--self-test` now carries 15/15 rows, including both new fault rows, all green."
+  gaps_remaining: []
   regressions: []
   new_gaps_this_pass:
-    - "None net-new: CR-01/WR-01 (01-REVIEW.md, this pass's HEAD) are a reopening of the same must-have (Truth 7) that was already FAILED in the prior verification pass, in a different specific shape, exactly as Truth 7 itself predicted would keep happening absent a structural fix. Independently re-confirmed here by direct reading of scripts/verify-shell-error-copy.mjs:379-380/422-430 and by re-running both reproductions against the shipped checker."
+    - "CR-01 (about:license suppressed alongside the Mozilla links) — not a regression of anything scored in the prior pass. It is a NEW defect introduced by plan 01-18 (which ran after the prior verification pass, to close a UAT-found gap, G-01-3) and caught by a fresh code review (01-REVIEW.md, committed after 01-18/01-19 both landed) that this pass independently reproduced against the current tree by reading the shipped CSS and the upstream markup it targets."
 gaps:
-  - truth: "No raw internal identifier, pref key, or exception message can reach the user-facing error layer — enforced by a check that cannot be defeated (CLAUDE.md: 'shell-error-copy-no-internals enforces this by pattern, not by a list of banned strings')."
+  - truth: "Debranding the About dialog must not remove the user's access to a legitimate, internal product affordance — specifically, the aggregated open-source licence text at `about:license`, the product's only in-UI route to it — while suppressing the stock Mozilla-destined outbound links (donate/get-involved/terms/privacy) that are the actual reported defect (UAT gap G-01-3)."
     status: failed
     reason: >
-      01-16 correctly closed the exact two shapes CR-03 named (a comma-less `this._showError(x)`
-      call and an optional-chaining `this?._showError(x)` call) by adding a second, independently
-      derived call-site count and asserting it equals the enumeration regex's count. Both new
-      `--self-test` rows for those shapes are present (12 rows total, all green) and both go red
-      against a scratch copy of the pre-01-16 checker. That part of the fix is genuine.
+      `powerbrowser/branding/{dev,release}/content/aboutDialog.css` (both variants, byte-identical)
+      suppresses `#bottomBox > hbox` wholesale via `display: none`. `upstream/browser/base/content/aboutDialog.xhtml:138-143`
+      shows that container's three children: `about:license` (an internal, `useoriginprincipal="true"`
+      page — the ONLY in-product route to the aggregated open-source licence text for everything this
+      build links), then two outbound `https://www.mozilla.org/...` links (terms, privacy). Two of the
+      three are the reported defect; the first is not. The rule hides all three as one unit, so the
+      licence disclosure link disappears as a side effect of removing the Mozilla-branded ones, and
+      nothing replaces it — there is no Power-Browser-authored licence surface in this tree, and
+      CLAUDE.md's rule 5 forbids authoring one (custom browser chrome).
 
-      But the new count itself has a blind spot the review found and this pass reproduced directly:
-      `present` is computed as (every textual `_showError(`) minus `definitions`, where `definitions`
-      is every line whose first non-whitespace token is `_showError(`
-      (`/^\s*_showError\s*\(/gm`). That pattern does not identify "the method definition" — it
-      identifies "a line-initial `_showError(`", and a bare CALL written at the start of a line
-      matches it exactly as well as the definition does. Appending such a call raises the raw
-      textual count by 1 and raises `definitions` by 1 in the same edit, so `present` (their
-      difference) is unchanged; `callSites` (which requires a literal `this.` receiver, unaffected
-      by a receiverless call) is also unchanged; `callSites === present` still holds; the run exits
-      0. The call site is never examined by rule (4), so its argument — reproduced here as a caught
-      exception's `.message`, the exact shape this whole checker exists to stop — is never rejected.
+      Read directly in this pass, not accepted on 01-REVIEW.md's or 01-18-SUMMARY's narrative:
+      `powerbrowser/branding/release/content/aboutDialog.css` lines 51-55 read exactly
+      `#communityDesc, #contributeDesc, #bottomBox > hbox { display: none; }` in the current tree
+      (dev variant is byte-identical, confirmed), and `upstream/browser/base/content/aboutDialog.xhtml`
+      lines 138-143 confirm `#bottomBox > hbox` is the single container wrapping all three
+      `<label is="text-link" class="bottom-link">` rows, `about:license` first. No selector in the
+      shipped stylesheet distinguishes the internal link from the two outbound ones.
 
-      Reproduced directly in this pass against the shipped checker:
-        cp powerbrowser/shell/TheiaService.sys.mjs /tmp/E.mjs
-        printf '\n_showError(err.message, false, []);\n' >> /tmp/E.mjs
-        node scripts/verify-shell-error-copy.mjs --file /tmp/E.mjs
-        => "verify-shell-error-copy: PASS -- no internal identifier can reach the error layer"; EXIT=0
-
-      A second, separate escape (WR-01 in 01-REVIEW.md, also reproduced here) shows a `.bind`-aliased
-      call site is invisible to BOTH counters, since neither matches `_showError.bind(` as an
-      occurrence of `_showError(`:
-        printf '\nconst show = this._showError.bind(this);\nshow(err.message, false, []);\n' >> /tmp/A.mjs
-        node scripts/verify-shell-error-copy.mjs --file /tmp/A.mjs
-        => PASS; EXIT=0
-
-      None of the 12 planted `--self-test` rows cover either shape (confirmed: `--self-test` output
-      lists 12 rows, none named for a receiverless or `.bind`-aliased call), so the self-test itself
-      does not catch its own checker's blind spot. Today's 5 shipped call sites in
-      TheiaService.sys.mjs all use `this._showError(` with a trailing comma, so there is still no
-      LIVE leak in the shipped product — but this is the third consecutive verification/review pass
-      to find a new way to defeat the same gate (CR-A closed by 01-14, CR-03's two named shapes
-      closed by 01-16, this shape open now), which is exactly the pattern CLAUDE.md's "derive from
-      the tree and compare" rule exists to prevent: a hand-written pattern about call SHAPE
-      (`definitions`) is not a derivation, it is an assumption, and it keeps having new counter-examples.
+      This was introduced by plan 01-18 (commit `e24f210`, "fix"), whose own SUMMARY frontmatter
+      claims `requirements-completed: [MIG-03, MIG-04]` — i.e. this plan is the one both requirements'
+      completion rests on for the About-dialog surface — and it is exactly the kind of "actual web
+      browser" regression the phase goal and CLAUDE.md's licence-visibility framing both name.
+      `deferred-items.md` row 11 records the "hidden, not removed" design choice and the risk that a
+      future ESR rebase could silently un-hide the rows, but it does NOT record that the current
+      selector removes a legitimate link TODAY, so this defect is undocumented as well as unfixed.
+      Neither `scripts/verify-branding-preflight.mjs` (which asserts packaging completeness, not
+      selector correctness — confirmed by reading section 9) nor any other registered check asserts
+      that the suppression selectors target only outbound links; 01-REVIEW.md's WR-03 independently
+      makes the same point about the selectors having no gate at all.
     artifacts:
-      - path: "scripts/verify-shell-error-copy.mjs"
-        issue: "Lines 379-380: `definitions = [...src.matchAll(/^\\s*_showError\\s*\\(/gm)].length` and `present = total - definitions` cancel exactly when a receiverless call site is appended, because the same regex that is meant to identify the one definition also matches a line-initial call. Separately, both the enumeration regex (line ~383) and this new count key on the literal substring `_showError(`, so `this._showError.bind(this)` — `_showError.bind(` — is counted by neither and the call through the alias is unexamined."
+      - path: "powerbrowser/branding/dev/content/aboutDialog.css"
+        issue: "Lines 51-55: `#bottomBox > hbox { display: none; }` hides the entire link row, including `about:license` at index 0, not only the two `https://www.mozilla.org/...` rows at index 1-2."
+      - path: "powerbrowser/branding/release/content/aboutDialog.css"
+        issue: "Byte-identical to dev; same defect."
     missing:
-      - "Replace the count-based completeness check with a position-set check that cannot cancel: collect every textual `_showError(` occurrence's offset in the comment-stripped source, separately identify the ONE definition by requiring its parameter list be followed by a `{` (a property no call site has), and require every remaining occurrence to be present in the enumeration regex's matched-offset set — failing loudly and naming the unparsed offset(s) when it is not. Drop the `definitions`/`present` subtraction entirely; a set-membership check cannot exhibit the cancel-in-tandem failure a difference-of-counts check can."
-      - "Reject any textual `_showError` not immediately followed by `(` (i.e. `/_showError(?!\\s*\\()/g`) as an escape this check cannot examine — this closes the `.bind` alias (and any other property-read escape) by refusing it rather than trying to follow it through the alias."
-      - "Two new `--self-test` FAULTS rows: a receiverless line-initial call (`_showError(err.message, false, []);`) and a `.bind`-aliased call, each verified GREEN against a scratch copy of today's shipped checker (restored from git) and RED against the fixed one — the same discrimination-control standard the existing 12 rows already meet."
-deferred:
-  - truth: "GUI-02 — open and browse web pages inside Theia as URL-addressable tabs"
-    addressed_in: "v2 (not a numbered roadmap phase yet)"
-    evidence: "ROADMAP.md / REQUIREMENTS.md: 'GUI-02 deferred to v2 on 2026-08-30 at the D-22 gate' — pre-existing deferral, unaffected by this pass"
+      - "Replace the container selector with a target selector, e.g. `#bottomBox > hbox > .bottom-link[href^=\"https://www.mozilla.org\"] { display: none; }`, which keeps the row's `pack=\"center\"` layout with only the internal `about:license` link visible, and update the file's comment (which currently mischaracterises the row as entirely outbound) to say why the internal link stays."
+      - "A registered check (or a self-test row on the existing branding-preflight registry entry) asserting that the shipped suppression selectors never match `about:license`'s label, so a future edit to this file cannot silently regress it — WR-03 in 01-REVIEW.md proposes the same fix independently."
+      - "A pass over `deferred-items.md` row 11 correcting it: it should record that the CURRENT selector removes a legitimate disclosure link, not only that a future ESR rebase might."
+deferred: []
 human_verification:
-  - test: "GUI-01 — launch the app, toggle to the browser window, confirm the address bar takes keyboard focus and navigates a typed URL, confirm an in-window modal appears, close the window and confirm the shell returns with the app still running"
-    expected: "All five steps succeed; the toggle behaves as a real browser window with no Theia chrome"
-    why_human: "BiDi cannot see chrome contexts on Linux and chrome-context Marionette is platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15) — unchanged by 01-16/01-17."
-  - test: "GUI-03 — with the dev flag on, edit customize.css and confirm the shell visibly restyles without a rebuild; delete it and confirm the shell reverts"
-    expected: "The runtime CSS layer visibly applies and un-applies without any rebuild"
-    why_human: "Perceptual/visual outcome; the automated checks only prove inertness and flag-gating, not the visible-restyle claim. Still open (ledger item 16) — unchanged by 01-16/01-17."
-  - test: "The two tier-3 regression confirmations named by WINDOWS.md ledger item 19 (shell03-budget-exhausted-error, shell03-auto-dismiss-on-selfheal) re-run against a repackaged binary"
-    expected: "Neither check moves, since neither clicks Retry"
-    why_human: "Requires a ./mach build faster repackage and a running binary; explicitly deferred to the phase gate, not run by this static verification pass"
-  - test: "A human clicking Retry in a real launched window on an unrecoverable failure sees the control absent, and on a recoverable failure sees it present with a working restart, and confirms the diagnostics rows survive a refused click"
-    expected: "Matches the node-harness-proven contract: no Retry control on the unrecoverable class, a working one on the recoverable class, diagnostics preserved either way"
-    why_human: "verify-shell-error-contract.mjs proves the supervisor/bootstrap contract under Node against a faked PowerBrowserAPI — it does not prove a hidden button is actually unpainted on screen. Chrome-context Marionette is platform-blocked on Linux (ledger item 7), same residual as GUI-01/GUI-03."
+  - test: "Re-run `shell03-budget-exhausted-error` and `shell03-auto-dismiss-on-selfheal` against a repackaged binary (WINDOWS.md ledger item 19, still `open`)."
+    expected: "Neither check moves, since neither clicks Retry — 01-11's error-layer visibility change is not expected to affect either scenario."
+    why_human: "Requires a `./mach build faster` repackage and a running binary; explicitly deferred to the phase gate, not run by this static verification pass, and not covered by the live UAT session (01-UAT.md's 41 tests do not include these two)."
 ---
 
 # Phase 1: Platform Extraction and Rename Verification Report
@@ -90,16 +68,15 @@ human_verification:
 **Phase Goal:** The Power Browser platform tree exists in this repo, builds, boots, and works as an
 actual web browser under fixed platform identifiers — with no generator involved
 
-**Verified:** 2026-08-31T23:55:00Z
+**Verified:** 2026-08-31T23:59:00Z
 **Status:** gaps_found
-**Re-verification:** Yes — after gap-closure plans 01-16 and 01-17, and against a fresh code review
-(01-REVIEW.md, committed after both plans landed) that found one new Critical-tier finding (plus two
-sibling Warnings, one of which — WR-01 — bears directly on the same must-have) in the gap-closure
-code itself.
+**Re-verification:** Yes — against the state after live UAT (01-UAT.md, 40/41 pass, 2 gaps: G-01-3,
+G-01-25), the two gap-closure plans that followed (01-18, 01-19), and a fresh code review committed
+after both landed (01-REVIEW.md, `ddbc8f4`) that found a new Critical-tier defect in 01-18's own fix.
 
 **Scope note:** Requirements verified against REQUIREMENTS.md: MIG-01, MIG-02, MIG-03, MIG-04,
-GUI-01, GUI-03, GUI-04, SEC-01. GUI-02 remains deferred to v2 (D-22 gate, 01-06) — not scored here,
-not orphaned.
+GUI-01, GUI-03, GUI-04, SEC-01. GUI-02 remains deferred to v2 (D-22 gate) — not scored here, not
+orphaned (it appears in 01-06's plan frontmatter, the deferral is recorded, nothing is missing).
 
 ## Goal Achievement
 
@@ -107,173 +84,164 @@ not orphaned.
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | SC1 — Token-classification inventory exists; residual scan red on pre-rename tree | ✓ VERIFIED | Regression-checked; `scan-brand-residue: PASS` + self-test PASS, run directly in `--quick` this pass |
-| 2 | SC2 — Repo builds from script-refetched `upstream/`, launches branded app, passes smoke tests (happy path) | ✓ VERIFIED | Regression-checked from 01-04's build evidence; unaffected by 01-16/01-17; not re-built this pass (47–54 min cost, per brief) |
-| 2b | The backend supervisor's state-gating conflation and the three named unguarded throw sites are closed | ✓ VERIFIED | Regression-checked; unaffected by 01-16/01-17 (files not in either plan's `files_modified`) |
-| 2c | A failed Retry does not permanently disable the error layer for the rest of the session | ✓ VERIFIED | Regression-checked; `shell-error-contract: PASS`, run directly this pass |
-| 2d | An unrecoverable failure classification actually prevents re-entry into the failed launch path (timer AND user-driven) | ✓ VERIFIED | Regression-checked; `shell-error-contract`/self-test PASS run directly this pass |
-| 2e | The quit observer and state-file path are established before any path that can spawn a backend | ✓ VERIFIED | Regression-checked; `start-path-recovery: PASS` + self-test, run directly this pass |
-| 3 | SC3 — Toggle Theia → browser UI and back; `TabUriRegistry`'s exported shape stays landable | ◐ PARTIAL | Automated half green (`gui04-registry-shape` + self-test PASS, run directly); perceptual half still open (ledger 15), unchanged |
-| 4 | SC4 — Runtime restyle via customize bridge | ◐ PARTIAL | Automated half green; perceptual half still open (ledger 16), unchanged |
-| 5 | SC5 — Internal identifiers fixed everywhere; every branding value is a hand-written literal | ✓ VERIFIED | Regression-checked; `branding-preflight` + self-test PASS, run directly this pass |
-| 6 | SEC-01 — Backend unreachable without a per-launch credential; fails closed | ✓ VERIFIED | Regression-checked; token-gate mechanism untouched by 01-16/01-17 |
-| 7 | No raw internal identifier, pref key, or exception message can reach the user-facing error layer, enforced by a gate that cannot be defeated | ✗ FAILED | CR-03's two named shapes closed by 01-16, but the new completeness count itself cancels on a receiverless call (CR-01, 01-REVIEW.md, reproduced here) and a `.bind` alias is invisible to both counters (WR-01, reproduced here) |
-| 8 | The residual-brand scan fails on a brand token reintroduced by an upstream rebase, as CLAUDE.md states | ✓ VERIFIED | 01-17 closed both prior escapes for real: a coincidental-row-claimed token and a silently-skipped unreadable file each now exit 1, reproduced independently against the shipped script in this pass |
+| 1 | SC1 — Token-classification inventory exists; residual scan red on pre-rename tree | ✓ VERIFIED | Regression-checked; `scan-brand-residue: PASS` + self-test, run directly this pass via `--quick` |
+| 2 | SC2 — Repo builds from script-refetched `upstream/`, launches branded app, passes smoke tests | ✓ VERIFIED | Historical build evidence (01-04) unaffected by 01-16 through 01-19; UAT tests 1, 35 pass; not rebuilt this pass (cost, per instruction) |
+| 2b | Backend supervisor's state-gating conflation and unguarded throw sites closed | ✓ VERIFIED | Regression-checked; files unaffected by 01-16 through 01-19 |
+| 2c | A failed Retry does not permanently disable the error layer for the rest of the session | ✓ VERIFIED | `shell-error-contract: PASS`, run directly this pass; UAT test 9 pass (live, user-confirmed) |
+| 2d | An unrecoverable failure classification prevents re-entry into the failed launch path | ✓ VERIFIED | `shell-error-contract`/self-test PASS run directly; UAT test 8 pass (live, user-confirmed) |
+| 2e | Quit observer and state-file path established before any backend-spawning path | ✓ VERIFIED | `start-path-recovery: PASS` + self-test, run directly this pass; UAT test 10 pass |
+| 3 | SC3 — Toggle Theia → browser UI and back; `TabUriRegistry`'s exported shape stays landable | ✓ VERIFIED | `gui04-registry-shape` + self-test PASS, run directly; UAT test 2 pass — 5-step walkthrough (address bar focus, in-window modal, close-returns-to-shell) live-confirmed by the user 2026-09-01 |
+| 4 | SC4 — Runtime restyle via customize bridge, no fork | ✓ VERIFIED | `theia/extensions/customize/*` present and wired; UAT test 6 pass — "red outline+top-panel rule appeared within ~1s of write, reverted on delete. Both halves confirmed by user." |
+| 5 | SC5 — Internal identifiers fixed everywhere; every branding value is a hand-written literal | ✓ VERIFIED | `branding-preflight` + self-test PASS, run directly; UAT tests 24-27 pass; G-01-25 (title-bar identifier leak, found by UAT) closed by 01-19 and regression-checked here |
+| 6 | SEC-01 — Backend unreachable without a per-launch credential; fails closed | ✓ VERIFIED | Regression-checked; UAT tests 34, 37 pass |
+| 7 | No raw internal identifier, pref key, or exception message can reach the user-facing error layer, enforced by a gate that cannot be defeated | ✓ VERIFIED (newly closed this pass) | Independently reproduced against the shipped checker: the receiverless-call shape and the `.bind`-alias shape (both FAILED as recently as the prior verification pass) now each exit 1 by name; `--self-test` 15/15 rows PASS including both new fault rows |
+| 8 | The residual-brand scan fails on a brand token reintroduced by an upstream rebase | ✓ VERIFIED | Regression-checked; `scan-brand-residue-self-test` PASS, unaffected by 01-18/01-19 |
+| 9 | Debranding the About dialog must not remove a legitimate internal disclosure (`about:license`) while suppressing the reported Mozilla-outbound links | ✗ FAILED | `#bottomBox > hbox { display: none; }` in both variant stylesheets hides all three children of that container, including `about:license` at index 0 — read directly against the shipped CSS and the upstream markup it targets in this pass |
 
-**Score:** 9/12 truths verified (1 flipped from FAILED to VERIFIED this pass; 1 remains FAILED, reopened
-in a different shape by a fresh review; 2 remain PARTIAL — automated half green, perceptual half
-unchanged).
+**Score:** 12/13 truths verified (1 flipped from FAILED to VERIFIED this pass — the old copy-safety
+gate defeat, closed for real; 1 new FAILED — a different defect, introduced by the gap-closure work
+that ran after the prior verification pass, found by a fresh review, independently reproduced here).
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `powerbrowser/shell/TheiaService.sys.mjs` | Backend supervisor with correct one-time init gating, correct probe gating, quit-observer ordering, AND a Retry path that respects the classification it was given | ✓ VERIFIED | Regression-checked; unaffected by 01-16/01-17; confirmed not in either plan's `files_modified` |
-| `powerbrowser/shell/powerbrowser.js` | Entry point with terminal handlers, no DOM-write bypass, Retry affordance reflecting recoverability | ✓ VERIFIED | Regression-checked |
-| `scripts/verify-shell-error-contract.mjs` | Behavioral contract checker for the error layer and probe gate | ✓ VERIFIED | 4/4 scenarios + 10/10 self-test rows PASS, run directly this pass |
-| `scripts/verify-shell-error-copy.mjs` | Static gate enforcing no raw internal identifier/exception text reaches the error layer, with no escape hatch | ✗ STUB-LIKE (defeatable, third shape found) | Accept-set derivation (01-14) and the two CR-03 shapes (01-16) are sound; the new completeness COUNT the fix added is itself defeatable by a receiverless call (cancels with `definitions`) and a `.bind` alias (invisible to both counters) — reproduced |
-| `scripts/scan-brand-residue.mjs` + `scripts/rebase-upstream.sh` | A permanent gate that also catches a brand token reintroduced by an upstream rebase | ✓ VERIFIED | `--extra-root` mode (01-15/01-17) now correctly rejects a coincidental-row-claimed token and an unreadable file carrying a token — both reproduced as exit 1 against the shipped script in this pass |
-| `scripts/verify-platform.sh` | Single registry, `--quick` green | ✓ VERIFIED | 24/24 PASS, run directly this pass |
+| `powerbrowser/shell/TheiaService.sys.mjs`, `powerbrowser.js` | Supervisor with correct init gating, quit-observer ordering, classification-respecting Retry | ✓ VERIFIED | Regression-checked; unaffected by 01-16 through 01-19 |
+| `scripts/verify-shell-error-contract.mjs` | Behavioral contract checker for the error layer and probe gate | ✓ VERIFIED | 4/4 scenarios + 10/10 self-test rows PASS, run directly |
+| `scripts/verify-shell-error-copy.mjs` | Static gate enforcing no raw internal identifier/exception text reaches the error layer | ✓ VERIFIED | Both previously-defeating shapes (receiverless call, `.bind` alias) now rejected by name; 15/15 self-test rows PASS |
+| `scripts/scan-brand-residue.mjs` + `scripts/rebase-upstream.sh` | A permanent gate that catches a brand token reintroduced by an upstream rebase | ✓ VERIFIED | Regression-checked; unaffected by 01-18/01-19 |
+| `scripts/verify-registry-shape.mjs`, `theia/extensions/tab-uris/src/browser/tab-uri-registry.ts` | `TabUriRegistry`'s exported shape stays asserted and landable | ✓ VERIFIED | File exists at the expected path; `gui04-registry-shape` + self-test PASS |
+| `theia/extensions/customize/src/browser/{customize-css-contribution,customize-privileged-js-contribution,customize-frontend-module}.ts` | Runtime CSS layer + dev-flagged privileged JS bridge | ✓ VERIFIED | Present, compiled to `lib/`, wired into `customize-frontend-module`; live-confirmed by UAT test 6 |
+| `powerbrowser/shell/powerbrowser.xhtml` | Shell chrome document; title bar and loading wordmark in display form, no identifier leak | ✓ VERIFIED | `<title>Power Browser</title>` and `#powerbrowser-loading` both read the spaced form; regression-checked via `branding-preflight`'s section-6 derivation |
+| `powerbrowser/branding/{dev,release}/content/aboutDialog.css` | Suppresses only the reported stock Mozilla-destined link rows, preserving the internal `about:license` disclosure | ✗ DEFECTIVE | Packaging is correct (loads via `jar.mn`, both variants byte-identical) but the suppression selector `#bottomBox > hbox` is broader than the file's own comment claims — it removes `about:license` alongside the two Mozilla links (Truth 9) |
+| `scripts/verify-branding-preflight.mjs` | Packaging-completeness gate for branding chrome resources; shell-markup display-surface leak scan | ✓ VERIFIED (packaging) / ⚠️ does not cover selector correctness | Section 9 (packaging) and section 6 (leak scan) both self-test clean; neither asserts that a suppression selector targets only the intended link class — this is exactly the gap Truth 9 exploits, independently named by 01-REVIEW.md's WR-03 |
+| `scripts/verify-platform.sh` | Single registry, `--quick` green | ✓ VERIFIED | 24/24 PASS, run directly this pass (3.1s wall) |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|-----|-----|--------|---------|
 | `powerbrowserRetry()` | `TheiaService.retry()`'s classification guard | direct call, no DOM bypass | ✓ WIRED | Regression-checked |
-| `_showError`'s classification | `errorRetryButton.hidden` / `_errorRecoverable` | latch/clear pair | ✓ WIRED | Regression-checked |
-| `rebase-upstream.sh`'s post-replay check | the actual rewritten `upstream/` tree | `--extra-root $UPSTREAM_DIR` → `extraRootFiles()` → `scan()` | ✓ WIRED | Reaches the tree, filters `coincidental` rows out of the extra-root row set, and now fails on an unreadable file — all three reproduced this pass |
-| `_showError()` call sites | a validated `USER_MESSAGE` table entry only | derived accept set (rule 4) + a second, independently derived call-site count | ⚠️ PARTIALLY WIRED | The accept-side derivation is sound; the two CR-03 shapes are closed; the completeness COUNT protecting the enumeration step is itself defeatable by a receiverless call and a `.bind` alias — reproduced this pass |
+| `_showError()` call sites | a validated `USER_MESSAGE` table entry only | position-set completeness (`allSites`/`defs`/`parsed`) + `escapes` rejection | ✓ WIRED | Both previously-open escapes now rejected by name, reproduced this pass |
+| `rebase-upstream.sh`'s post-replay check | the rewritten `upstream/` tree | `--extra-root $UPSTREAM_DIR` → `extraRootFiles()` → `scan()` | ✓ WIRED | Regression-checked (unaffected by 01-18/01-19) |
+| `powerbrowser/branding/*/content/jar.mn` | `aboutDialog.css` | packaging manifest entry | ✓ WIRED | Symlinked into `objdir/dist/bin/...`, confirmed by 01-18-SUMMARY's `cmp`; packaging-completeness self-test PASS |
+| `aboutDialog.css`'s suppression selector | upstream's actual DOM structure (`#bottomBox > hbox`'s three children) | CSS selector matching by container rather than by link target | ✗ MISWIRED | The selector matches at the wrong granularity: it reaches `about:license` (index 0) as well as the two intended targets (index 1-2), because nothing narrows the match to `.bottom-link[href^="https://www.mozilla.org"]` |
+| `powerbrowser/shell/jar.mn` | `verify-branding-preflight.mjs` section 6's shell-markup leak scan | manifest read at check time | ✓ WIRED | Regression-checked; this is the derivation 01-19 added to close G-01-25 |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Full quick verification suite (24 checks) | `scripts/verify-platform.sh --quick` (run directly this pass) | PASS, 24/24 | ✓ PASS |
-| `shell-error-copy-no-internals --self-test` | `node scripts/verify-shell-error-copy.mjs --self-test` | 12/12 rows PASS | ✓ PASS (but does not cover the two shapes below) |
-| `scan-brand-residue --self-test` | `node scripts/scan-brand-residue.mjs --self-test` | run via `--quick`; PASS | ✓ PASS |
-| CR-01 (this pass): a receiverless, line-initial `_showError(err.message, ...)` call is enumerated and rejected | Reproduced directly this pass: scratch copy of `TheiaService.sys.mjs` with an appended receiverless call | exit **0** (should be non-zero) | ✗ FAIL (gap, reproduced) |
-| WR-01: a `.bind`-aliased `_showError` call site with `err.message` is enumerated and rejected | Reproduced directly this pass: scratch copy with `const show = this._showError.bind(this); show(err.message, ...)` | exit **0** (should be non-zero) | ✗ FAIL (gap, reproduced) |
-| Prior-pass CR-01 (coincidental-row exemption under `--extra-root`) is now caught | Reproduced directly this pass: `MOZ_OBJDIR=/home/chris/coding/sourcerer/objdir` under a scratch `--extra-root` | exit **1**, names the file and token | ✓ PASS (gap closed) |
-| Prior-pass CR-02 (unreadable file silently skipped under `--extra-root`) is now caught | Reproduced directly this pass: `chmod 000` file containing a brand token under a scratch `--extra-root` | exit **1**, "1 unreadable file(s) under --extra-root ... FAIL" | ✓ PASS (gap closed) |
+| Full quick verification suite (24 checks) | `bash scripts/verify-platform.sh --quick` (run directly this pass) | PASS, 24/24, 3.1s | ✓ PASS |
+| `shell-error-copy-no-internals --self-test` | `node scripts/verify-shell-error-copy.mjs --self-test` | 15/15 rows PASS, including both previously-defeating rows | ✓ PASS |
+| Receiverless line-initial `_showError(err.message, ...)` is rejected | Reproduced this pass: scratch copy of `TheiaService.sys.mjs` + appended call | exit **1**, names the offset | ✓ PASS (gap closed) |
+| `.bind`-aliased `_showError` call site is rejected | Reproduced this pass: scratch copy + `const show = this._showError.bind(this); show(err.message, ...)` | exit **1**, "referenced without being called" | ✓ PASS (gap closed) |
+| `#bottomBox > hbox` selector matches `about:license` as well as the two Mozilla links | Read directly against `powerbrowser/branding/release/content/aboutDialog.css:51-55` and `upstream/browser/base/content/aboutDialog.xhtml:138-143` | Selector matches the container; `about:license` is its first child | ✗ FAIL (new gap, this pass) |
+| `--gate` (full registry + WINDOWS.md known-open exclusions) | `bash scripts/verify-platform.sh --gate` | Not completed — the command produced no output for 5+ minutes and, per its own source (`smoke-firefox.sh` in the registry), reaches the incremental `./mach build` path. Terminated rather than risk the ~47-54 min full build the phase brief explicitly says not to run. | ? SKIP (cost) |
+
+### Probe Execution
+
+Not applicable — this phase has no `scripts/*/tests/probe-*.sh` convention; its verification driver is
+`scripts/verify-platform.sh`, covered above.
 
 ### Requirements Coverage
 
 | Requirement | Description | Status | Evidence |
 |-------------|-------------|--------|----------|
-| MIG-01 | Script-refetched upstream, no copied objdirs | ✓ SATISFIED (present state); regression-prevention gap now closed | The `--extra-root` gate that catches a rebase-reintroduced brand token is now genuinely sound (Truth 8 flipped to VERIFIED this pass) |
-| MIG-02 | Committed pre-rename inventory | ✓ SATISFIED | Unchanged, regression-checked |
-| MIG-03 | Identifiers fixed everywhere, cannot regress | ✓ SATISFIED (present state); rebase-regression half now closed, copy-safety half still open | Truth 8 closed; Truth 7 (copy-safety gate) still open, see below |
-| MIG-04 | Renamed tree builds and boots under branding, and works as an actual browser | ✗ NOT SATISFIED | Truth 7 still FAILED: a browser whose user-facing error layer's leak-prevention gate can be silently defeated (by a receiverless call or a `.bind` alias, both reproduced this pass) is not proven to "work as an actual web browser" under CLAUDE.md's own bar |
-| GUI-01 | Toggle Theia ↔ browser UI | ◐ SATISFIED (automated) / NEEDS HUMAN (perceptual) | Unchanged from prior pass |
-| GUI-03 | Runtime GUI customization bridge | ◐ SATISFIED (automated) / NEEDS HUMAN (perceptual) | Unchanged from prior pass |
-| GUI-04 | `TabUriRegistry` exported shape stays landable | ✓ SATISFIED | Unchanged, regression-checked |
-| SEC-01 | Backend fail-closed | ✓ SATISFIED | Unchanged, regression-checked |
+| MIG-01 | Script-refetched upstream, no copied objdirs | ✓ SATISFIED | Regression-checked; `fetch-upstream-self-test` PASS |
+| MIG-02 | Committed pre-rename inventory | ✓ SATISFIED | Regression-checked |
+| MIG-03 | Identifiers fixed everywhere, cannot regress | ✓ SATISFIED | G-01-25 (title-bar leak) closed by 01-19, regression-checked; Truth 9's defect is a disclosure-link regression, not an identifier-naming one, so it does not itself un-satisfy MIG-03's literal text |
+| MIG-04 | Renamed tree builds and boots, works as an actual browser | ◐ SATISFIED (narrow build/boot text) / gap open at the phase-goal level | Build+boot+branding-identity evidence from 01-04 stands (UAT test 35 pass); but Truth 9 (About-dialog licence-link removal) is a real, unfixed defect in a browser surface that the SAME two requirements' completion (`requirements-completed: [MIG-03, MIG-04]`, per 01-18-SUMMARY) rests on for this file. See REQUIREMENTS.md discrepancy note below. |
+| GUI-01 | Toggle Theia ↔ browser UI | ✓ SATISFIED | Automated (`gui04-registry-shape`) + human (UAT test 2, live, user-confirmed 2026-09-01) — though WINDOWS.md ledger item 15 is still marked `open`, a documentation-currency lag behind the UAT evidence, not a functional gap |
+| GUI-03 | Runtime GUI customization bridge | ✓ SATISFIED | Automated + human (UAT test 6, live, user-confirmed) — WINDOWS.md ledger item 16 similarly stale |
+| GUI-04 | `TabUriRegistry` exported shape stays landable | ✓ SATISFIED | Regression-checked |
+| SEC-01 | Backend fail-closed | ✓ SATISFIED | Regression-checked |
 
-No orphaned requirements: all 8 phase-1 requirement IDs appear in at least one plan's `requirements`
-frontmatter (confirmed across all `01-*-PLAN.md` files, including 01-16 and 01-17 which both carry the
-full phase requirement set). GUI-02 correctly absent (deferred to v2).
+**No orphaned requirements.** All 8 phase-1 requirement IDs (MIG-01/02/03/04, GUI-01/03/04, SEC-01)
+appear in at least one plan's `requirements` frontmatter across all 19 `01-*-PLAN.md` files, confirmed
+by direct grep this pass. GUI-02 correctly appears only in 01-06 and is recorded as deferred to v2 at
+the D-22 gate — not orphaned, not scored here.
 
-REQUIREMENTS.md's traceability table (lines 260-268) still reads MIG-01/02/03/04 and SEC-01 as flatly
-"Complete" while the top-of-file checklist correctly leaves MIG-04 and SEC-01 unchecked with an inline
-note explaining the evidence basis — this pre-existing documentation-currency mismatch is unchanged by
-01-16/01-17 and is not itself a code gap; it is the same finding the prior two verification passes
-already recorded for a different set of rows.
+**REQUIREMENTS.md MIG-04 checkbox/traceability discrepancy — resolved, both halves read directly this
+pass:**
+- Line 19's checklist entry is `- [ ] **MIG-04**...`, unticked.
+- The SAME line's inline HTML comment states MIG-04 was "CLOSED by plan 01-04, 2026-08-30, on evidence
+  rather than frontmatter," and recites the actual evidence (smoke-firefox PASS at 2830s, smoke-theia
+  PASS, six branding-identity surfaces green on the built artifact with a positive control) — real,
+  substantive closure evidence, not an assertion.
+- Line 263's traceability table reads `MIG-04 | Phase 1 | Complete — closed by 01-04's build...`.
+- **Determination: the traceability table (line 263) is correct; the checklist checkbox (line 19) is
+  stale and was never ticked when the inline comment was added.** This is the same class of
+  documentation-currency defect as the WINDOWS.md ledger items above — real work is genuinely done,
+  the tracking artifact recording it was not fully updated. It is not a functional gap and does not
+  affect this report's score, but the checkbox should be corrected to `[x]` to stop this exact
+  discrepancy from being re-litigated at the next verification pass.
 
 ### Anti-Patterns Found
 
-`grep -E "TBD|FIXME|XXX|TODO|HACK|PLACEHOLDER"` over both files touched by 01-16/01-17
-(`scripts/verify-shell-error-copy.mjs`, `scripts/scan-brand-residue.mjs`): zero matches. No debt
-markers. CR-01 (this pass) and WR-01 are gate-correctness gaps in checking code — a hand-written
-pattern about call shape that is not truly independent of the shape it is meant to cross-check — not
-stubs or placeholders.
+`grep -E "TBD|FIXME|XXX|TODO|HACK|PLACEHOLDER"` over the seven files touched by 01-18/01-19 (both
+`aboutDialog.css` variants, both `jar.mn` variants, `powerbrowser.xhtml`, `verify-branding-preflight.mjs`,
+`verify-platform.sh`): zero matches. No debt markers.
 
-`01-REVIEW.md`'s remaining Warning-tier findings (WR-02 through WR-09) and Info-tier findings (IN-01
-through IN-04) are not elevated to blocking here, consistent with the review's own severity
-classification, except WR-01 which is folded into Truth 7's gap above because it is the same class
-of escape (an unexamined `_showError` call site) as CR-01, reproduced independently in this pass.
-WR-02 (a quoted-key `USER_MESSAGE` entry drops silently) touches the same file and would be worth
-folding into the same closure plan; it was independently reproduced by 01-REVIEW.md but is Warning,
-not Critical, tier and is not required to close Truth 7's FAILED status.
+Truth 9 (the `about:license` suppression) is a **selector-scope defect in shipped product logic**, not
+a stub or placeholder — the CSS is fully implemented and does exactly what it says, but what it says
+(suppress the whole container) is broader than what was asked (suppress the outbound rows).
+
+01-REVIEW.md's remaining Warning-tier findings (WR-01 through WR-08) and Info-tier findings (IN-01,
+IN-02) are not elevated to blocking here, consistent with the review's own severity classification.
+WR-03 (no gate over the suppression selectors' correctness) is the direct cause of Truth 9 going
+undetected and is worth folding into the same closure plan as CR-01, but it is a hardening
+recommendation rather than an independent blocker.
 
 ## Human Verification Required
 
-### 1. GUI-01 — browser-window toggle, full perceptual walkthrough
-
-**Test:** Launch the app; open a browser window; confirm the address bar takes keyboard focus and
-navigates a typed URL; confirm an in-window modal appears; close the window and confirm the shell
-returns with the app still running.
-**Expected:** All five steps succeed exactly as a stock browser window would behave.
-**Why human:** BiDi cannot see chrome contexts on Linux; chrome-context Marionette is
-platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15), unchanged.
-
-### 2. GUI-03 — customize bridge, visible restyle
-
-**Test:** With the dev flag on, edit `customize.css` and confirm the shell visibly restyles
-without a rebuild; delete the file and confirm the shell reverts.
-**Expected:** The runtime CSS layer applies and un-applies visibly.
-**Why human:** Perceptual outcome; automated checks only prove inertness and flag-gating, not the
-visible effect. Still open (ledger item 16), unchanged.
-
-### 3. Tier-3 regression re-confirmation (WINDOWS.md ledger item 19)
+### 1. Tier-3 regression re-confirmation (WINDOWS.md ledger item 19)
 
 **Test:** Re-run `shell03-budget-exhausted-error` and `shell03-auto-dismiss-on-selfheal` against a
-repackaged binary (`./mach build faster` chrome-JS repackage, minutes not the full ~47–54 min build).
+repackaged binary (`./mach build faster`, minutes not the full ~47-54 min build).
 **Expected:** Neither check moves, since neither clicks Retry.
 **Why human:** Requires a running repackaged binary; explicitly deferred to the phase gate, not run
-by this static verification pass.
-
-### 4. Perceptual confirmation of the 01-13 Retry gate
-
-**Test:** Launch the app with the backend entry preference unset (drives the unrecoverable
-`nodeMissing` classification); confirm Details shows the diagnostic rows and no Retry control is
-present. Separately, drive a recoverable failure and confirm Retry is present and functional.
-**Expected:** Matches the node-harness-proven contract exactly.
-**Why human:** `verify-shell-error-contract.mjs` proves the supervisor/bootstrap contract under
-Node against a faked `PowerBrowserAPI`; it does not prove a hidden button is actually unpainted on
-screen. Same platform block as items 1–2 (ledger item 7).
+by this static verification pass and not among 01-UAT.md's 41 tests.
 
 ## Gaps Summary
 
-**Truth 8 is genuinely closed this pass.** 01-17's `--extra-root` gate hardening is sound: the
-`coincidental`-class row exemption is fixed with a stated, correct filter, and the unreadable-file
-skip is fixed by collecting `{file, reason}` for every read failure and gating on it under
-`--extra-root`. Both prior escape reproductions from the last verification pass now exit 1, and both
-were re-run directly against the shipped script in this pass rather than accepted on 01-17-SUMMARY's
-narrative.
+**The prior verification pass's blocking gap is genuinely closed.** The `_showError()` copy-safety
+gate's completeness check — defeated twice more since the phase started (CR-A closed by 01-14, CR-03's
+two named shapes closed by 01-16, then the completeness COUNT itself found defeatable by a receiverless
+call and a `.bind` alias, per the prior verification pass) — is fixed by 01-REVIEW-FIX.md's structural
+rewrite: a position-set comparison that cannot cancel the way a difference-of-counts check can, plus an
+explicit `escapes` rejection for any `_showError` not immediately followed by `(`. Both previously
+open shapes were independently reproduced against the shipped checker in THIS pass and both now exit 1.
 
-**Truth 7 is not closed, for the third time in a row, in a new shape.** 01-16 correctly closed CR-03's
-two named call shapes (a comma-less call, an optional-chaining receiver) by adding a second,
-independently derived call-site count and asserting equality with the enumeration regex's count. A
-fresh code review (01-REVIEW.md, committed after 01-16 and 01-17 both landed) found the new count
-itself is not independent of the shape it is meant to cross-check: its `definitions` term
-(`/^\s*_showError\s*\(/gm`, "a line-initial `_showError(`") is meant to identify the one method
-definition but also matches a bare CALL written at the start of a line, so appending such a call moves
-both the raw total and `definitions` together, leaving the derived `present` unchanged and the
-assertion agreeing with itself. This pass independently reproduced that exact input against the
-shipped checker (`_showError(err.message, false, []);` appended to a scratch copy of
-`TheiaService.sys.mjs`, exit 0) and a second, separate escape (a `.bind`-aliased call site, invisible
-to both counters because neither matches `_showError.bind(` as an occurrence of `_showError(`, also
-exit 0). Neither shape is among the 12 rows the checker's own `--self-test` plants, so the self-test
-does not catch its own checker's blind spot.
+**Between that verification pass and this one, a live UAT session ran and found two real gaps** (G-01-3:
+stock Mozilla About-dialog links; G-01-25: shell window title bar leaking the compact identifier form),
+**both closed by dedicated plans (01-18, 01-19) with genuine, regression-checked fixes** — the title-bar
+correction and its detection-gap closure (deriving the leak scan's file set from `powerbrowser/shell/jar.mn`
+rather than a hand-kept path) are sound and verified directly in this pass.
 
-Today's shipped call sites in `TheiaService.sys.mjs` all use `this._showError(` with a trailing comma
-(confirmed 5/5 parsed), so there is no live leak in the product today. But this is the pattern
-CLAUDE.md's "derive from the tree and compare; do not hand-keep an expectation list" rule exists to
-prevent, recurring a third time in the same file: CR-A (an accept-side regex admitting any
-`<x>.message`) closed by 01-14; CR-03's two named enumeration shapes closed by 01-16; this shape
-(a hand-written pattern about call SHAPE, not a true independent derivation) open now. The review's
-proposed fix — compare a POSITION SET rather than a difference of two counts, since a set-membership
-check cannot exhibit the cancel-in-tandem failure a subtraction can — is recorded verbatim in this
-report's `gaps` frontmatter for the next closure plan.
+**But 01-18's fix for G-01-3 introduced a new defect, found by a fresh code review after both
+gap-closure plans landed, and independently reproduced here.** `#bottomBox > hbox { display: none; }`
+suppresses the whole three-link row instead of only the two Mozilla-destined ones, taking
+`about:license` — the product's only in-UI route to its aggregated open-source licence text — down
+with it. This is not a hypothetical: the CSS in the tree right now, read directly against the upstream
+markup it targets, confirms the selector cannot distinguish the internal link from the outbound ones.
+Nothing in the registered check set catches this (branding-preflight asserts packaging completeness,
+not selector correctness), and `deferred-items.md` row 11 documents the "hidden not removed" design
+choice without recording that the CURRENT selector already removes more than it should.
 
-Because a FAILED truth outranks a closed gap in the status decision tree, this pass's overall status
-remains **gaps_found**, though the score improved from 8/12 to 9/12 and one of the prior pass's two
-gaps (Truth 8) is genuinely resolved. Two success criteria (GUI-01, GUI-03) still have their
-perceptual halves un-performed, carried forward unchanged from the prior pass and from `WINDOWS.md`
-(ledger items 15, 16). WINDOWS.md ledger item 19's tier-3 regression re-confirmation also remains
-unrun, deferred to the phase gate.
+Because this is a Critical-tier, reproduced, unfixed defect in a user-facing browser surface — one
+whose closure this same plan claims against MIG-03 and MIG-04 in its own SUMMARY frontmatter — the
+overall status stays **gaps_found**, even though the score improved (9/12 → 12/13, with the ratio
+shift reflecting one closed gap and one new, differently-shaped one added to the denominator).
+
+One human-verification item remains open and unrun: the tier-3 regression re-confirmation named by
+WINDOWS.md ledger item 19. Ledger items 15 and 16 (GUI-01 and GUI-03 perceptual walkthroughs) are
+functionally resolved — 01-UAT.md records live, user-confirmed passes for both on 2026-09-01 — but the
+ledger rows themselves are still marked `open`, a documentation-currency lag rather than an open
+functional question; recommend updating WINDOWS.md alongside the REQUIREMENTS.md MIG-04 checkbox noted
+above.
 
 ---
 
-_Verified: 2026-08-31T23:55:00Z_
+_Verified: 2026-08-31T23:59:00Z_
 _Verifier: Claude (gsd-verifier)_
