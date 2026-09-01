@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: platform-extraction-and-rename
 status: executing
-stopped_at: Completed 01-18-PLAN.md
-last_updated: "2026-09-01T03:32:45.537Z"
+stopped_at: Completed 01-19-PLAN.md
+last_updated: "2026-09-01T03:38:14.448Z"
 last_activity: 2026-08-31
 last_activity_desc: Completed plan 01-15 (gap closure — CR-B, the rebase scan's extra root)
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 19
-  completed_plans: 18
+  completed_plans: 19
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (platform-extraction-and-rename) — EXECUTING
-Plan: 2 of 19
+Plan: 3 of 19
 Status: Ready to execute
 Last activity: 2026-08-31 — Phase 01 execution started
 
-Progress: [██████████] 95%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -75,6 +75,7 @@ Progress: [██████████] 95%
 | Phase 01 P16 | 25m | 2 tasks | 1 files |
 | Phase 01 P17 | ~35m | 3 tasks | 2 files |
 | Phase 01 P18 | 18min | 3 tasks | 6 files |
+| Phase 01 P19 | 12min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -156,6 +157,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-18: About-dialog stock link rows are suppressed by branding CSS (#communityDesc, #contributeDesc, #bottomBox > hbox), not deleted from the DOM — no Gecko patch; deletion is a follow-up only if UAT rejects hidden-not-removed
 - [Phase ?]: 01-18: the wordmark-positioning block is removed from both branding aboutDialog.css files because about-wordmark.svg is unshipped; Phase 3's icon pipeline restores it with the asset
 - [Phase ?]: 01-18: branding chrome-resource packaging completeness is asserted from a directory read at check time in three directions (unpackaged resource, missing source, variant divergence), riding the two branding-preflight rows already in --quick
+- [Phase ?]: 01-19: the shell chrome document's <title> is the single literal Gecko hands the window manager — no runtime writer on the chain, so one edit is the whole title-bar fix
+- [Phase ?]: 01-19: the preflight's shell-markup surface set is derived from powerbrowser/shell/jar.mn at check time and restricted to .xhtml/.html, because packaged .js/.mjs prose comments legitimately spell the identifier form
+- [Phase ?]: 01-19: a stale expectation inside a checker is the same defect class as a leaking shipped literal and is fixed in the same plan, not deferred
 
 ### Pending Todos
 
@@ -182,6 +186,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-01T03:32:26.078Z
-Stopped at: Completed 01-18-PLAN.md
+Last session: 2026-09-01T03:38:04.363Z
+Stopped at: Completed 01-19-PLAN.md
 Resume file: None

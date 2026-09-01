@@ -54,7 +54,7 @@ Sourcerer's decision IDs as justification.)*
   4. A user can restyle and re-shape the GUI at runtime through a Theia extension using the customize bridge (runtime CSS layer + dev-flagged privileged JS), without forking the platform
   5. Internal identifiers resolve everywhere in their fixed platform form — `powerbrowser/` tree, `@powerbrowser/*` scope, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and every branding value in the tree is a hand-written literal, not a generated one
 
-**Plans**: 18/19 plans executed (17 executed; 01-18 and 01-19 planned, closing UAT gaps G-01-3 and G-01-25)
+**Plans**: 19/19 plans executed (17 executed; 01-18 and 01-19 planned, closing UAT gaps G-01-3 and G-01-25)
 
 Plans:
 **Wave 1**
@@ -131,7 +131,7 @@ Plans:
 
 **Wave 19** *(gap closure — UAT gap G-01-25, blocked on Wave 18 completion)*
 
-- [ ] 01-19-PLAN.md — Close G-01-25: correct the shell chrome document's `<title>` and loading wordmark to the spaced display form, correct the same-class stale identifier-form expectation latent in `_branding_variant_divergence_impl`, and derive the shell's chrome markup into the preflight's display-surface leak scan — whose existing pattern already matched both literals and simply never read the file — with a planted fault reproducing the pre-fix title
+- [x] 01-19-PLAN.md — Close G-01-25: correct the shell chrome document's `<title>` and loading wordmark to the spaced display form, correct the same-class stale identifier-form expectation latent in `_branding_variant_divergence_impl`, and derive the shell's chrome markup into the preflight's display-surface leak scan — whose existing pattern already matched both literals and simply never read the file — with a planted fault reproducing the pre-fix title
 
 **UI hint**: yes
 **Research**: recommended — ~1,090 occurrences across five case-variant forms and six coupled reference formats (jar.mn, components.conf, moz.build, patch content, verifier regex); the classification inventory needs its own deep pass. Highest-risk phase; plan-review-convergence applies. *(Research completed 2026-08-30: the real migrating surface measured 755 occurrences across 69 files; GUI-01 and GUI-02 found to be net-new work, not migration.)*
@@ -243,7 +243,7 @@ than noisy.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Platform Extraction and Rename | 18/19 | In Progress|  |
+| 1. Platform Extraction and Rename | 19/19 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 0/TBD | Not started | - |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
