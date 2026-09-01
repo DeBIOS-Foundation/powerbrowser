@@ -2,69 +2,70 @@
 phase: 01-platform-extraction-and-rename
 verified: 2026-08-31T23:55:00Z
 status: gaps_found
-score: 8/12 must-haves verified (2 gate-correctness gaps closed then re-opened in a different shape by a fresh review, 2 partial — human halves still open)
+score: 9/12 must-haves verified (1 gap closed for real this pass, 1 gap reopened in a different shape by a fresh review and independently reproduced, 2 partial — human halves still open)
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
   previous_score: 8/12
   gaps_closed:
-    - "The exact demonstration cases named by the prior pass's CR-A and CR-B `missing[]` lists are genuinely closed: plan 01-14 binds verify-shell-error-copy.mjs rule (4) to a derived set of message-bearing bindings and rejects `err.message`/`stray.message` at the one call site CR-A named (TheiaService.sys.mjs:1036), proven by a red-then-green discrimination control against the pre-fix checker. Plan 01-15 gives scan-brand-residue.mjs an --extra-root mode and wires rebase-upstream.sh to pass $UPSTREAM_DIR to it, proven by a discrimination control against the pre-fix script and by a live 55s/463,930-file run over the real upstream/ checkout. Both independently confirmed here by direct reading of the current tree and by running scripts/verify-platform.sh --quick (24/24 PASS)."
+    - "Truth 8 (residual-brand rebase gate cannot regress) — CR-01 (coincidental-row exemption under --extra-root) and CR-02 (unreadable file silently skipped and miscounted as scanned) are both genuinely fixed by 01-17. Independently reproduced in this pass, not accepted on the SUMMARY's narrative: `MOZ_OBJDIR=/home/chris/coding/sourcerer/objdir` planted under a scratch --extra-root now exits 1 naming the file; a chmod-000 file carrying a brand token under --extra-root now exits 1 reporting '1 unreadable file(s)'. Both were exit-0 escapes in the prior pass."
   gaps_remaining:
-    - "Truth 7 (copy-safety gate cannot be defeated) — reopened as CR-03: rule (4)'s call-site enumeration regex (/this\\._showError\\(\\s*([^,]+?)\\s*,/g) requires a literal `this.` receiver and a comma after the first argument. A call site matching neither shape (no trailing comma, optional-chaining receiver, or a bound alias) is never enumerated, so it is never checked -- not rejected, simply invisible. The only completeness guard is `callSites === 0`, which does not fire when 5 of 6 sites are seen. Independently reproduced here: a copy of TheiaService.sys.mjs with an appended comma-less `this._showError(err.message)` call exits 0."
-    - "Truth 8 (residual-brand rebase gate cannot regress) — reopened as CR-01 and CR-02, both inside the --extra-root mode 01-15 just built: (a) the extra-root scan() call passes no `rows` filter, so a `coincidental`-class inventory row (a local absolute path fact about THIS checkout) can win a longest-token-first claim over a real brand-identifier row in a foreign tree and both suppress the offense AND suppress the independent unclaimed-probe detector, with no reconcile() count check behind it in that path to catch the difference; (b) `scan()`'s per-file read is wrapped in a silent `catch { continue; }` justified only for the git-ls-files source (\"a path git tracks but this checkout does not materialise\") but the extra-root file set comes from a readdirSync that just confirmed the file exists, so an unreadable file there is EACCES/EISDIR/oversize, is skipped with no failure recorded, and is still counted in the reported scanned-file total. Both independently reproduced here: an absolute-path token planted under --extra-root exits 0; a chmod-000 file carrying `chrome://sourcerer/content/x` under --extra-root exits 0 and is counted as scanned."
+    - "Truth 7 (copy-safety gate cannot be defeated) — 01-16 closed the exact two shapes CR-03 named (comma-less call, optional-chaining receiver) with a second, independently-derived call-site count. A fresh review (01-REVIEW.md, committed after 01-16/01-17 landed) found the new count itself is defeatable: it computes `definitions` as every line-initial `_showError(` occurrence and subtracts it from the raw total to get `present`, then asserts `callSites === present`. A CALL site written without a receiver at the start of a line matches the same `definitions` pattern, so appending one raises the raw count AND `definitions` together, leaving `present` unchanged while `callSites` (which requires `this.`) also stays unchanged -- the two counts agree with each other while the call site is never examined. Independently reproduced in this pass against the shipped checker: a copy of TheiaService.sys.mjs with an appended receiverless `_showError(err.message, false, []);` exits 0. A second, separate escape (WR-01, also reproduced this pass) shows a `.bind`-aliased call site (`this._showError.bind(this)`) is invisible to both counters because neither matches `_showError.bind(` as an occurrence of `_showError(`; a call through that alias with `err.message` also exits 0."
   regressions: []
   new_gaps_this_pass:
-    - "CR-01, CR-02, CR-03 (01-REVIEW.md, committed 917ff5d, this pass's HEAD) -- three Critical findings in the code shipped by 01-14/01-15 itself, each with a reproduction against the shipped script. All three independently re-confirmed by direct reading and by re-running each reproduction in this pass, not accepted on the review's narrative."
+    - "None net-new: CR-01/WR-01 (01-REVIEW.md, this pass's HEAD) are a reopening of the same must-have (Truth 7) that was already FAILED in the prior verification pass, in a different specific shape, exactly as Truth 7 itself predicted would keep happening absent a structural fix. Independently re-confirmed here by direct reading of scripts/verify-shell-error-copy.mjs:379-380/422-430 and by re-running both reproductions against the shipped checker."
 gaps:
   - truth: "No raw internal identifier, pref key, or exception message can reach the user-facing error layer — enforced by a check that cannot be defeated (CLAUDE.md: 'shell-error-copy-no-internals enforces this by pattern, not by a list of banned strings')."
     status: failed
     reason: >
-      01-14 correctly closed the exact shape CR-A named (an accept-side regex that admitted ANY
-      `<identifier>.message`) by deriving the accept set from the file under test. CR-03
-      (01-REVIEW.md, independently confirmed here) shows the fix did not close the class: the
-      ENUMERATION of `this._showError(` call sites — the step that decides which call sites are even
-      examined — is still a regex (`/this\._showError\(\s*([^,]+?)\s*,/g`) that requires a literal
-      `this.` receiver and a trailing comma. A call site outside that shape (no comma, `this?.`, a
-      bound alias) is not rejected, it is simply never seen; the only completeness assertion
-      (`callSites === 0`) cannot detect "5 of 6 sites parsed." Reproduced directly in this pass: a
-      copy of TheiaService.sys.mjs with an appended `try { x(); } catch (err) { this._showError(err.message) }`
-      (no trailing comma) exits 0 against `node scripts/verify-shell-error-copy.mjs --file <copy>`.
-      Today's shipped call sites all match the regex (confirmed: 5/5 parsed), so there is still no
-      live leak — but CLAUDE.md's own doctrine ("derive from the tree and compare") is violated by the
-      enumeration step itself, which is exactly the property this must-have requires.
+      01-16 correctly closed the exact two shapes CR-03 named (a comma-less `this._showError(x)`
+      call and an optional-chaining `this?._showError(x)` call) by adding a second, independently
+      derived call-site count and asserting it equals the enumeration regex's count. Both new
+      `--self-test` rows for those shapes are present (12 rows total, all green) and both go red
+      against a scratch copy of the pre-01-16 checker. That part of the fix is genuine.
+
+      But the new count itself has a blind spot the review found and this pass reproduced directly:
+      `present` is computed as (every textual `_showError(`) minus `definitions`, where `definitions`
+      is every line whose first non-whitespace token is `_showError(`
+      (`/^\s*_showError\s*\(/gm`). That pattern does not identify "the method definition" — it
+      identifies "a line-initial `_showError(`", and a bare CALL written at the start of a line
+      matches it exactly as well as the definition does. Appending such a call raises the raw
+      textual count by 1 and raises `definitions` by 1 in the same edit, so `present` (their
+      difference) is unchanged; `callSites` (which requires a literal `this.` receiver, unaffected
+      by a receiverless call) is also unchanged; `callSites === present` still holds; the run exits
+      0. The call site is never examined by rule (4), so its argument — reproduced here as a caught
+      exception's `.message`, the exact shape this whole checker exists to stop — is never rejected.
+
+      Reproduced directly in this pass against the shipped checker:
+        cp powerbrowser/shell/TheiaService.sys.mjs /tmp/E.mjs
+        printf '\n_showError(err.message, false, []);\n' >> /tmp/E.mjs
+        node scripts/verify-shell-error-copy.mjs --file /tmp/E.mjs
+        => "verify-shell-error-copy: PASS -- no internal identifier can reach the error layer"; EXIT=0
+
+      A second, separate escape (WR-01 in 01-REVIEW.md, also reproduced here) shows a `.bind`-aliased
+      call site is invisible to BOTH counters, since neither matches `_showError.bind(` as an
+      occurrence of `_showError(`:
+        printf '\nconst show = this._showError.bind(this);\nshow(err.message, false, []);\n' >> /tmp/A.mjs
+        node scripts/verify-shell-error-copy.mjs --file /tmp/A.mjs
+        => PASS; EXIT=0
+
+      None of the 12 planted `--self-test` rows cover either shape (confirmed: `--self-test` output
+      lists 12 rows, none named for a receiverless or `.bind`-aliased call), so the self-test itself
+      does not catch its own checker's blind spot. Today's 5 shipped call sites in
+      TheiaService.sys.mjs all use `this._showError(` with a trailing comma, so there is still no
+      LIVE leak in the shipped product — but this is the third consecutive verification/review pass
+      to find a new way to defeat the same gate (CR-A closed by 01-14, CR-03's two named shapes
+      closed by 01-16, this shape open now), which is exactly the pattern CLAUDE.md's "derive from
+      the tree and compare" rule exists to prevent: a hand-written pattern about call SHAPE
+      (`definitions`) is not a derivation, it is an assumption, and it keeps having new counter-examples.
     artifacts:
       - path: "scripts/verify-shell-error-copy.mjs"
-        issue: "The call-site enumeration regex at line 303 (`/this\\._showError\\(\\s*([^,]+?)\\s*,/g`) silently skips any `this._showError(` call whose shape it does not match, and the only completeness guard (`callSites === 0`) cannot detect a partial miss."
+        issue: "Lines 379-380: `definitions = [...src.matchAll(/^\\s*_showError\\s*\\(/gm)].length` and `present = total - definitions` cancel exactly when a receiverless call site is appended, because the same regex that is meant to identify the one definition also matches a line-initial call. Separately, both the enumeration regex (line ~383) and this new count key on the literal substring `_showError(`, so `this._showError.bind(this)` — `_showError.bind(` — is counted by neither and the call through the alias is unexamined."
     missing:
-      - "Derive the total count of `_showError(` call sites independently (e.g. every textual `_showError(` minus its one definition) and require the enumeration regex's `callSites` to equal that total, failing loudly and naming the gap when they disagree — the same set-equality discipline checks (2) and (3) in this file already use."
-      - "A --self-test row planting a comma-less or optional-chained `_showError(` call site and requiring the check to go red for 'a call site this check cannot read'."
-  - truth: "The residual-brand scan is a permanent gate that fails on a brand token reintroduced by an upstream rebase (CLAUDE.md: 'wired into rebase-upstream.sh and .github/workflows/rebase-upstream.yml, so an upstream rebase that reintroduces a brand token fails there rather than in a release')."
-    status: failed
-    reason: >
-      01-15 correctly closed the exact shape CR-B named (the post-replay scan could not see anything
-      under `upstream/` at all) by adding a real `--extra-root` filesystem walk, proven live against a
-      5.6GB checkout. CR-01 and CR-02 (01-REVIEW.md, independently confirmed here) show the new mode
-      has two holes of its own, both reproduced against the shipped script: (a) the extra-root
-      `scan()` call reuses the full inventory row set including `coincidental`-class rows — a fact
-      about THIS repo's own checkout (e.g. its absolute local path) — so a longest-token-first claim
-      lets that row swallow a real brand-identifier span in a foreign tree, marking it not-an-offense
-      AND suppressing the independent unclaimed-probe detector at that index; nothing constrains this
-      in the extra-root path because `reconcile()` is deliberately not run there. Reproduced: planting
-      `MOZ_OBJDIR=/home/chris/coding/sourcerer/objdir` under a scratch `--extra-root` exits 0. (b) the
-      shared per-file `catch { continue; }` in `scan()` is justified only for the git-ls-files
-      provenance ("a path git tracks but this checkout does not materialise") but applies unconditionally
-      to the extra-root file set too, where a throw means the file is unreadable (EACCES etc), not
-      absent — so an unreadable file is skipped with no failure recorded and is still counted in the
-      reported scanned-file total. Reproduced: a chmod-000 file containing `chrome://sourcerer/content/x`
-      under `--extra-root` exits 0, reporting '1 file(s) scanned'. Both are the same failure class CR-B
-      itself was: a gate that is green by construction on the input it exists to catch.
-    artifacts:
-      - path: "scripts/scan-brand-residue.mjs"
-        issue: "Line 1090's extra-root `scan(inv, { root: extraRoot, files: extraFiles })` call passes no `rows` override, so `coincidental`-class rows (checked only by `reconcile()`, which the extra-root path deliberately skips) can claim and suppress a real brand-identifier span in a foreign tree. Separately, `scan()`'s per-file `catch { continue; }` (line 391-396) is shared by both file-set sources but its justifying comment only holds for the git-ls-files source; an unreadable extra-root file is silently skipped and miscounted as scanned."
-    missing:
-      - "Filter the extra-root pass's inventory rows to exclude the `coincidental` class (`rows: inv.tokens.filter((r) => r.class !== 'coincidental')`), since those rows describe facts about this checkout, not a foreign one, and a self-test row planting a coincidental-shaped token under --extra-root requiring a red."
-      - "Make the per-file catch collect and surface unreadable files (distinct from an absent file) so an unreadable extra-root file is a gate failure, not a silent, mis-counted skip — and a self-test row proving a chmod-000 file under --extra-root fails loudly."
+      - "Replace the count-based completeness check with a position-set check that cannot cancel: collect every textual `_showError(` occurrence's offset in the comment-stripped source, separately identify the ONE definition by requiring its parameter list be followed by a `{` (a property no call site has), and require every remaining occurrence to be present in the enumeration regex's matched-offset set — failing loudly and naming the unparsed offset(s) when it is not. Drop the `definitions`/`present` subtraction entirely; a set-membership check cannot exhibit the cancel-in-tandem failure a difference-of-counts check can."
+      - "Reject any textual `_showError` not immediately followed by `(` (i.e. `/_showError(?!\\s*\\()/g`) as an escape this check cannot examine — this closes the `.bind` alias (and any other property-read escape) by refusing it rather than trying to follow it through the alias."
+      - "Two new `--self-test` FAULTS rows: a receiverless line-initial call (`_showError(err.message, false, []);`) and a `.bind`-aliased call, each verified GREEN against a scratch copy of today's shipped checker (restored from git) and RED against the fixed one — the same discrimination-control standard the existing 12 rows already meet."
 deferred:
   - truth: "GUI-02 — open and browse web pages inside Theia as URL-addressable tabs"
     addressed_in: "v2 (not a numbered roadmap phase yet)"
@@ -72,10 +73,10 @@ deferred:
 human_verification:
   - test: "GUI-01 — launch the app, toggle to the browser window, confirm the address bar takes keyboard focus and navigates a typed URL, confirm an in-window modal appears, close the window and confirm the shell returns with the app still running"
     expected: "All five steps succeed; the toggle behaves as a real browser window with no Theia chrome"
-    why_human: "BiDi cannot see chrome contexts on Linux and chrome-context Marionette is platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15) — unchanged by 01-14/01-15."
+    why_human: "BiDi cannot see chrome contexts on Linux and chrome-context Marionette is platform-blocked (WINDOWS.md ledger item 7). Still open (ledger item 15) — unchanged by 01-16/01-17."
   - test: "GUI-03 — with the dev flag on, edit customize.css and confirm the shell visibly restyles without a rebuild; delete it and confirm the shell reverts"
     expected: "The runtime CSS layer visibly applies and un-applies without any rebuild"
-    why_human: "Perceptual/visual outcome; the automated checks only prove inertness and flag-gating, not the visible-restyle claim. Still open (ledger item 16) — unchanged by 01-14/01-15."
+    why_human: "Perceptual/visual outcome; the automated checks only prove inertness and flag-gating, not the visible-restyle claim. Still open (ledger item 16) — unchanged by 01-16/01-17."
   - test: "The two tier-3 regression confirmations named by WINDOWS.md ledger item 19 (shell03-budget-exhausted-error, shell03-auto-dismiss-on-selfheal) re-run against a repackaged binary"
     expected: "Neither check moves, since neither clicks Retry"
     why_human: "Requires a ./mach build faster repackage and a running binary; explicitly deferred to the phase gate, not run by this static verification pass"
@@ -91,66 +92,14 @@ actual web browser under fixed platform identifiers — with no generator involv
 
 **Verified:** 2026-08-31T23:55:00Z
 **Status:** gaps_found
-**Re-verification:** Yes — after gap-closure plans 01-14 and 01-15, and against a fresh code review
-(01-REVIEW.md, committed after both plans landed) that found three new Critical-tier findings in the
-gap-closure code itself
+**Re-verification:** Yes — after gap-closure plans 01-16 and 01-17, and against a fresh code review
+(01-REVIEW.md, committed after both plans landed) that found one new Critical-tier finding (plus two
+sibling Warnings, one of which — WR-01 — bears directly on the same must-have) in the gap-closure
+code itself.
 
 **Scope note:** Requirements verified against REQUIREMENTS.md: MIG-01, MIG-02, MIG-03, MIG-04,
 GUI-01, GUI-03, GUI-04, SEC-01. GUI-02 remains deferred to v2 (D-22 gate, 01-06) — not scored here,
 not orphaned.
-
-## Disposition of the Two Prior Gaps (independently re-verified against the live tree)
-
-### CR-A (prior pass) — the copy-safety gate's accept-side hole — DEMONSTRATION CASE CLOSED, CLASS RE-OPENED AS CR-03
-
-01-14 rewrote rule (4) of `scripts/verify-shell-error-copy.mjs` so the accept set for a `.message`
-argument is derived from the file under test (`messageBearingBindings`, `catchParamNames`) instead of
-matched by a permissive `<identifier>.message` regex. Independently confirmed by direct reading of the
-current file (lines 296-341) and by running `node scripts/verify-shell-error-copy.mjs --self-test`
-(8/8 rows PASS) and the discrimination control recorded in `01-14-SUMMARY.md` (both new fault rows
-GREEN under the pre-fix checker, RED under the fixed one).
-
-**But** a fresh review (`01-REVIEW.md`, committed at the current HEAD after both gap-closure plans)
-found CR-03: the ENUMERATION step that decides which `this._showError(` call sites even reach rule (4)
-is still an unproven regex (`/this\._showError\(\s*([^,]+?)\s*,/g`), requiring a literal `this.`
-receiver and a trailing comma. A call site outside that shape is never examined — not rejected, simply
-invisible — and the only completeness guard (`callSites === 0`) cannot detect a partial miss.
-Independently reproduced in this pass: appending a comma-less `this._showError(err.message)` call to a
-scratch copy of `TheiaService.sys.mjs` and running `node scripts/verify-shell-error-copy.mjs --file
-<scratch>` exits **0**. This is the same defect class CR-A was, one step removed: the checker no longer
-has a hand-kept accept-list, but its coverage of what it even looks at is still unproven.
-
-**Verdict: the specific demonstration case named by the prior pass's `missing[]` is genuinely closed.
-The must-have itself — "enforced by a check that cannot be defeated" — remains FAILED**, because a
-different, independently reproduced input defeats it today.
-
-### CR-B (prior pass) — the rebase-triggered scan blind to `upstream/` — DEMONSTRATION CASE CLOSED, CLASS RE-OPENED AS CR-01/CR-02
-
-01-15 added `extraRootFiles()` and an `--extra-root <dir>` CLI mode to `scripts/scan-brand-residue.mjs`,
-and wired `scripts/rebase-upstream.sh` to pass `$UPSTREAM_DIR` to the post-replay invocation.
-Independently confirmed by direct reading of the current file (lines 300-352, 1078-1106) and by running
-`node scripts/scan-brand-residue.mjs --self-test` (11/11 rows PASS, including three new `--extra-root`
-rows) and by re-running the live 55-second, 463,930-file scan over the real `upstream/` checkout
-(exit 0, `git -C upstream diff --stat` empty before and after).
-
-**But** the fresh review found two holes inside that same new mode, both independently reproduced in
-this pass: **CR-01** — the extra-root `scan()` call (line 1090) passes no `rows` filter, so
-`coincidental`-class inventory rows (facts about THIS repo's own checkout, such as its absolute local
-path) can win a longest-token-first claim over a real brand-identifier token in a foreign tree, marking
-it not-an-offense and suppressing the independent unclaimed-probe detector at the same index — with no
-`reconcile()` check behind the extra-root path to catch the difference (that omission is deliberate,
-for a different, valid reason: D-17's census cannot close over a foreign checkout). Reproduced: planting
-`MOZ_OBJDIR=/home/chris/coding/sourcerer/objdir` under a scratch `--extra-root` exits **0**. **CR-02** —
-the shared per-file `catch { continue; }` inside `scan()` (lines 391-396) is justified only for the
-git-ls-files provenance ("a path git tracks but this checkout does not materialise"); the extra-root
-file set instead comes from a `readdirSync` that just confirmed the file exists, so a throw there means
-EACCES/EISDIR/oversize — an unreadable file is silently skipped, no failure is recorded, and it is still
-counted in the reported "N file(s) scanned" total. Reproduced: a `chmod 000` file containing
-`chrome://sourcerer/content/x` under `--extra-root` exits **0**, reporting "1 file(s) under --extra-root".
-
-**Verdict: the specific demonstration case named by the prior pass's `missing[]` is genuinely closed.
-The must-have itself — "fails on a brand token reintroduced by an upstream rebase" — remains FAILED**,
-because two different, independently reproduced inputs defeat the very mode built to close it.
 
 ## Goal Achievement
 
@@ -159,30 +108,31 @@ because two different, independently reproduced inputs defeat the very mode buil
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
 | 1 | SC1 — Token-classification inventory exists; residual scan red on pre-rename tree | ✓ VERIFIED | Regression-checked; `scan-brand-residue: PASS` + self-test PASS, run directly in `--quick` this pass |
-| 2 | SC2 — Repo builds from script-refetched `upstream/`, launches branded app, passes smoke tests (happy path) | ✓ VERIFIED | Regression-checked from 01-04's build evidence; unaffected by 01-14/01-15; not re-built this pass (47–54 min cost, per brief) |
-| 2b | The backend supervisor's state-gating conflation and the three named unguarded throw sites are closed | ✓ VERIFIED | Regression-checked; unaffected by 01-14/01-15 |
+| 2 | SC2 — Repo builds from script-refetched `upstream/`, launches branded app, passes smoke tests (happy path) | ✓ VERIFIED | Regression-checked from 01-04's build evidence; unaffected by 01-16/01-17; not re-built this pass (47–54 min cost, per brief) |
+| 2b | The backend supervisor's state-gating conflation and the three named unguarded throw sites are closed | ✓ VERIFIED | Regression-checked; unaffected by 01-16/01-17 (files not in either plan's `files_modified`) |
 | 2c | A failed Retry does not permanently disable the error layer for the rest of the session | ✓ VERIFIED | Regression-checked; `shell-error-contract: PASS`, run directly this pass |
-| 2d | An unrecoverable failure classification actually prevents re-entry into the failed launch path (timer AND user-driven) | ✓ VERIFIED | Regression-checked; `shell-error-contract`/self-test PASS run directly this pass; unaffected by 01-14/01-15 |
+| 2d | An unrecoverable failure classification actually prevents re-entry into the failed launch path (timer AND user-driven) | ✓ VERIFIED | Regression-checked; `shell-error-contract`/self-test PASS run directly this pass |
 | 2e | The quit observer and state-file path are established before any path that can spawn a backend | ✓ VERIFIED | Regression-checked; `start-path-recovery: PASS` + self-test, run directly this pass |
 | 3 | SC3 — Toggle Theia → browser UI and back; `TabUriRegistry`'s exported shape stays landable | ◐ PARTIAL | Automated half green (`gui04-registry-shape` + self-test PASS, run directly); perceptual half still open (ledger 15), unchanged |
 | 4 | SC4 — Runtime restyle via customize bridge | ◐ PARTIAL | Automated half green; perceptual half still open (ledger 16), unchanged |
 | 5 | SC5 — Internal identifiers fixed everywhere; every branding value is a hand-written literal | ✓ VERIFIED | Regression-checked; `branding-preflight` + self-test PASS, run directly this pass |
-| 6 | SEC-01 — Backend unreachable without a per-launch credential; fails closed | ✓ VERIFIED | Regression-checked; token-gate mechanism untouched by 01-14/01-15; launch-lifecycle checks that would exercise this live remain unrun per WINDOWS.md ledger item 11, residual not regression |
-| 7 | No raw internal identifier, pref key, or exception message can reach the user-facing error layer, enforced by a gate that cannot be defeated | ✗ FAILED | CR-A's demonstration case closed by 01-14; CR-03 (01-REVIEW.md, independently reproduced here: a comma-less `_showError(err.message)` call site is never enumerated) defeats it again by a different shape |
-| 8 | The residual-brand scan fails on a brand token reintroduced by an upstream rebase, as CLAUDE.md states | ✗ FAILED | CR-B's demonstration case closed by 01-15's `--extra-root` mode; CR-01 and CR-02 (01-REVIEW.md, independently reproduced here: a coincidental-row swallow and a silently-skipped unreadable file) defeat the new mode itself |
+| 6 | SEC-01 — Backend unreachable without a per-launch credential; fails closed | ✓ VERIFIED | Regression-checked; token-gate mechanism untouched by 01-16/01-17 |
+| 7 | No raw internal identifier, pref key, or exception message can reach the user-facing error layer, enforced by a gate that cannot be defeated | ✗ FAILED | CR-03's two named shapes closed by 01-16, but the new completeness count itself cancels on a receiverless call (CR-01, 01-REVIEW.md, reproduced here) and a `.bind` alias is invisible to both counters (WR-01, reproduced here) |
+| 8 | The residual-brand scan fails on a brand token reintroduced by an upstream rebase, as CLAUDE.md states | ✓ VERIFIED | 01-17 closed both prior escapes for real: a coincidental-row-claimed token and a silently-skipped unreadable file each now exit 1, reproduced independently against the shipped script in this pass |
 
-**Score:** 8/12 truths verified, 2 failed (same two truths as the prior pass — the specific defect
-each names has moved, not the truth's status), 2 partial (human verification open, unchanged).
+**Score:** 9/12 truths verified (1 flipped from FAILED to VERIFIED this pass; 1 remains FAILED, reopened
+in a different shape by a fresh review; 2 remain PARTIAL — automated half green, perceptual half
+unchanged).
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `powerbrowser/shell/TheiaService.sys.mjs` | Backend supervisor with correct one-time init gating, correct probe gating, quit-observer ordering, AND a Retry path that respects the classification it was given | ✓ VERIFIED | Regression-checked; unaffected by 01-14/01-15 |
+| `powerbrowser/shell/TheiaService.sys.mjs` | Backend supervisor with correct one-time init gating, correct probe gating, quit-observer ordering, AND a Retry path that respects the classification it was given | ✓ VERIFIED | Regression-checked; unaffected by 01-16/01-17; confirmed not in either plan's `files_modified` |
 | `powerbrowser/shell/powerbrowser.js` | Entry point with terminal handlers, no DOM-write bypass, Retry affordance reflecting recoverability | ✓ VERIFIED | Regression-checked |
 | `scripts/verify-shell-error-contract.mjs` | Behavioral contract checker for the error layer and probe gate | ✓ VERIFIED | 4/4 scenarios + 10/10 self-test rows PASS, run directly this pass |
-| `scripts/verify-shell-error-copy.mjs` | Static gate enforcing no raw internal identifier/exception text reaches the error layer, with no escape hatch | ✗ STUB-LIKE (defeatable, different shape) | Accept-set derivation (01-14) is sound; call-site ENUMERATION (unchanged since before 01-14) is a regex with no completeness proof — CR-03, reproduced |
-| `scripts/scan-brand-residue.mjs` + `scripts/rebase-upstream.sh` | A permanent gate that also catches a brand token reintroduced by an upstream rebase | ✗ NOT FULLY WIRED (new mode has two holes) | `--extra-root` mode (01-15) reaches `upstream/` for the first time, but its inventory-row set is unfiltered (CR-01) and its unreadable-file handling is shared with a justification that does not hold for it (CR-02), both reproduced |
+| `scripts/verify-shell-error-copy.mjs` | Static gate enforcing no raw internal identifier/exception text reaches the error layer, with no escape hatch | ✗ STUB-LIKE (defeatable, third shape found) | Accept-set derivation (01-14) and the two CR-03 shapes (01-16) are sound; the new completeness COUNT the fix added is itself defeatable by a receiverless call (cancels with `definitions`) and a `.bind` alias (invisible to both counters) — reproduced |
+| `scripts/scan-brand-residue.mjs` + `scripts/rebase-upstream.sh` | A permanent gate that also catches a brand token reintroduced by an upstream rebase | ✓ VERIFIED | `--extra-root` mode (01-15/01-17) now correctly rejects a coincidental-row-claimed token and an unreadable file carrying a token — both reproduced as exit 1 against the shipped script in this pass |
 | `scripts/verify-platform.sh` | Single registry, `--quick` green | ✓ VERIFIED | 24/24 PASS, run directly this pass |
 
 ### Key Link Verification
@@ -191,57 +141,59 @@ each names has moved, not the truth's status), 2 partial (human verification ope
 |------|-----|-----|--------|---------|
 | `powerbrowserRetry()` | `TheiaService.retry()`'s classification guard | direct call, no DOM bypass | ✓ WIRED | Regression-checked |
 | `_showError`'s classification | `errorRetryButton.hidden` / `_errorRecoverable` | latch/clear pair | ✓ WIRED | Regression-checked |
-| `rebase-upstream.sh`'s post-replay check | the actual rewritten `upstream/` tree | `--extra-root $UPSTREAM_DIR` → `extraRootFiles()` → `scan()` | ⚠️ PARTIALLY WIRED | Reaches the tree for the first time (closes CR-B's demonstration case) but the scan it runs there admits a coincidental-row claim (CR-01) and silently miscounts an unreadable file as scanned (CR-02) |
-| `_showError()` call sites | a validated `USER_MESSAGE` table entry only | derived accept set (rule 4) | ⚠️ PARTIALLY WIRED | The accept-side derivation is sound (closes CR-A's demonstration case), but the call-site enumeration feeding it is an unproven regex that silently drops non-matching shapes (CR-03) |
+| `rebase-upstream.sh`'s post-replay check | the actual rewritten `upstream/` tree | `--extra-root $UPSTREAM_DIR` → `extraRootFiles()` → `scan()` | ✓ WIRED | Reaches the tree, filters `coincidental` rows out of the extra-root row set, and now fails on an unreadable file — all three reproduced this pass |
+| `_showError()` call sites | a validated `USER_MESSAGE` table entry only | derived accept set (rule 4) + a second, independently derived call-site count | ⚠️ PARTIALLY WIRED | The accept-side derivation is sound; the two CR-03 shapes are closed; the completeness COUNT protecting the enumeration step is itself defeatable by a receiverless call and a `.bind` alias — reproduced this pass |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
 | Full quick verification suite (24 checks) | `scripts/verify-platform.sh --quick` (run directly this pass) | PASS, 24/24 | ✓ PASS |
-| Rule (4)'s tightened derivation rejects `err.message`/`stray.message` at the documented call site | `node scripts/verify-shell-error-copy.mjs --self-test` | 8/8 rows PASS | ✓ PASS |
-| `--extra-root` mode rejects a planted token, a missing root, an empty root | `node scripts/scan-brand-residue.mjs --self-test` | 11/11 rows PASS | ✓ PASS |
-| CR-03: a comma-less `_showError(err.message)` call site is enumerated and rejected | Reproduced directly this pass: scratch copy of `TheiaService.sys.mjs` with an appended comma-less call | exit **0** (should be non-zero) | ✗ FAIL (gap, reproduced) |
-| CR-01: a `coincidental`-class token under `--extra-root` is caught | Reproduced directly this pass: `MOZ_OBJDIR=/home/chris/coding/sourcerer/objdir` under a scratch `--extra-root` | exit **0** (should be non-zero) | ✗ FAIL (gap, reproduced) |
-| CR-02: an unreadable file under `--extra-root` is reported as a failure, not silently skipped | Reproduced directly this pass: `chmod 000` file containing a brand token under a scratch `--extra-root` | exit **0**, counted as "1 file(s) scanned" (should fail, naming the unreadable file) | ✗ FAIL (gap, reproduced) |
+| `shell-error-copy-no-internals --self-test` | `node scripts/verify-shell-error-copy.mjs --self-test` | 12/12 rows PASS | ✓ PASS (but does not cover the two shapes below) |
+| `scan-brand-residue --self-test` | `node scripts/scan-brand-residue.mjs --self-test` | run via `--quick`; PASS | ✓ PASS |
+| CR-01 (this pass): a receiverless, line-initial `_showError(err.message, ...)` call is enumerated and rejected | Reproduced directly this pass: scratch copy of `TheiaService.sys.mjs` with an appended receiverless call | exit **0** (should be non-zero) | ✗ FAIL (gap, reproduced) |
+| WR-01: a `.bind`-aliased `_showError` call site with `err.message` is enumerated and rejected | Reproduced directly this pass: scratch copy with `const show = this._showError.bind(this); show(err.message, ...)` | exit **0** (should be non-zero) | ✗ FAIL (gap, reproduced) |
+| Prior-pass CR-01 (coincidental-row exemption under `--extra-root`) is now caught | Reproduced directly this pass: `MOZ_OBJDIR=/home/chris/coding/sourcerer/objdir` under a scratch `--extra-root` | exit **1**, names the file and token | ✓ PASS (gap closed) |
+| Prior-pass CR-02 (unreadable file silently skipped under `--extra-root`) is now caught | Reproduced directly this pass: `chmod 000` file containing a brand token under a scratch `--extra-root` | exit **1**, "1 unreadable file(s) under --extra-root ... FAIL" | ✓ PASS (gap closed) |
 
 ### Requirements Coverage
 
 | Requirement | Description | Status | Evidence |
 |-------------|-------------|--------|----------|
-| MIG-01 | Script-refetched upstream, no copied objdirs | ✓ SATISFIED (present state); regression-prevention gap noted | Unchanged. CR-01/CR-02 mean a rebase that reintroduces a brand token — or plants one behind an unreadable file, or one that happens to share a span with a coincidental-class row — into `upstream/` is still not reliably caught by the gate CLAUDE.md names for that purpose |
+| MIG-01 | Script-refetched upstream, no copied objdirs | ✓ SATISFIED (present state); regression-prevention gap now closed | The `--extra-root` gate that catches a rebase-reintroduced brand token is now genuinely sound (Truth 8 flipped to VERIFIED this pass) |
 | MIG-02 | Committed pre-rename inventory | ✓ SATISFIED | Unchanged, regression-checked |
-| MIG-03 | Identifiers fixed everywhere, cannot regress | ✓ SATISFIED (present state); regression-prevention gap noted | Current tree's identifiers are correct (SC1/SC5 direct evidence); CR-01/CR-02 are specifically about the "cannot regress via rebase" half |
-| MIG-04 | Renamed tree builds and boots under branding, and works as an actual browser | ✗ NOT SATISFIED | CR-A's demonstration case closed by 01-14, but CR-03 reopens the same correctness bar this requirement was blocked on last pass: a browser whose error-copy safety gate can be silently defeated (by a different call shape) is not proven to "work as an actual web browser" under CLAUDE.md's own bar |
+| MIG-03 | Identifiers fixed everywhere, cannot regress | ✓ SATISFIED (present state); rebase-regression half now closed, copy-safety half still open | Truth 8 closed; Truth 7 (copy-safety gate) still open, see below |
+| MIG-04 | Renamed tree builds and boots under branding, and works as an actual browser | ✗ NOT SATISFIED | Truth 7 still FAILED: a browser whose user-facing error layer's leak-prevention gate can be silently defeated (by a receiverless call or a `.bind` alias, both reproduced this pass) is not proven to "work as an actual web browser" under CLAUDE.md's own bar |
 | GUI-01 | Toggle Theia ↔ browser UI | ◐ SATISFIED (automated) / NEEDS HUMAN (perceptual) | Unchanged from prior pass |
 | GUI-03 | Runtime GUI customization bridge | ◐ SATISFIED (automated) / NEEDS HUMAN (perceptual) | Unchanged from prior pass |
 | GUI-04 | `TabUriRegistry` exported shape stays landable | ✓ SATISFIED | Unchanged, regression-checked |
 | SEC-01 | Backend fail-closed | ✓ SATISFIED | Unchanged, regression-checked |
 
 No orphaned requirements: all 8 phase-1 requirement IDs appear in at least one plan's `requirements`
-frontmatter (confirmed across all `01-*-PLAN.md` files, including 01-14 and 01-15 which both carry the
-full phase requirement set per their `<planning_dispositions>`). GUI-02 correctly absent (deferred to v2).
+frontmatter (confirmed across all `01-*-PLAN.md` files, including 01-16 and 01-17 which both carry the
+full phase requirement set). GUI-02 correctly absent (deferred to v2).
 
-**REQUIREMENTS.md traceability table is stale, again, in the opposite direction this time.** Lines
-260-268 read MIG-01/02/03/04 and SEC-01 as flatly "Complete", which does not reflect either this pass's
-or the prior pass's gate-correctness findings. This is a documentation-currency issue, not a code gap —
-the same class of finding the prior pass noted about this same table, now recurring in a different set
-of rows. Worth a housekeeping pass once the gate-correctness class itself is actually closed rather than
-edited after each partial fix.
+REQUIREMENTS.md's traceability table (lines 260-268) still reads MIG-01/02/03/04 and SEC-01 as flatly
+"Complete" while the top-of-file checklist correctly leaves MIG-04 and SEC-01 unchecked with an inline
+note explaining the evidence basis — this pre-existing documentation-currency mismatch is unchanged by
+01-16/01-17 and is not itself a code gap; it is the same finding the prior two verification passes
+already recorded for a different set of rows.
 
 ### Anti-Patterns Found
 
-`grep -E "TBD|FIXME|XXX"` over the five files 01-REVIEW.md analyzed (`scripts/scan-brand-residue.mjs`,
-`scripts/verify-shell-error-copy.mjs`, `scripts/rebase-upstream.sh`,
-`.github/workflows/rebase-upstream.yml`, `docs/BUILD.md`): zero matches. No debt markers. CR-01, CR-02,
-and CR-03 are gate-correctness gaps in checking code — the same class the prior two passes each found in
-a different corner — not stubs or placeholders.
+`grep -E "TBD|FIXME|XXX|TODO|HACK|PLACEHOLDER"` over both files touched by 01-16/01-17
+(`scripts/verify-shell-error-copy.mjs`, `scripts/scan-brand-residue.mjs`): zero matches. No debt
+markers. CR-01 (this pass) and WR-01 are gate-correctness gaps in checking code — a hand-written
+pattern about call shape that is not truly independent of the shape it is meant to cross-check — not
+stubs or placeholders.
 
-`01-REVIEW.md`'s six Warning-tier findings (WR-01 through WR-06) and four Info-tier findings (IN-01
+`01-REVIEW.md`'s remaining Warning-tier findings (WR-02 through WR-09) and Info-tier findings (IN-01
 through IN-04) are not elevated to blocking here, consistent with the review's own severity
-classification. None of them falsifies a currently-scored truth on its own; they are candidates for a
-future closure plan (WR-01/WR-02 touch the same `messageBearingBindings`/`parseUserMessageTable`
-machinery CR-03 sits in, and are worth folding into the same fix pass).
+classification, except WR-01 which is folded into Truth 7's gap above because it is the same class
+of escape (an unexamined `_showError` call site) as CR-01, reproduced independently in this pass.
+WR-02 (a quoted-key `USER_MESSAGE` entry drops silently) touches the same file and would be worth
+folding into the same closure plan; it was independently reproduced by 01-REVIEW.md but is Warning,
+not Critical, tier and is not required to close Truth 7's FAILED status.
 
 ## Human Verification Required
 
@@ -282,42 +234,44 @@ screen. Same platform block as items 1–2 (ledger item 7).
 
 ## Gaps Summary
 
-**Both prior gaps' specific demonstration cases are genuinely closed.** 01-14 correctly bound rule
-(4)'s ACCEPT set to bindings derived from `TheiaService.sys.mjs`, and 01-15 correctly gave the
-residual-brand scan a real filesystem walk over `upstream/`, both independently re-verified against the
-live tree in this pass (not accepted on either SUMMARY's narrative), and both proven by a red-then-green
-discrimination control against the pre-fix code — including a live 55-second, 463,930-file run over the
-real 5.6GB `upstream/` checkout for 01-15.
+**Truth 8 is genuinely closed this pass.** 01-17's `--extra-root` gate hardening is sound: the
+`coincidental`-class row exemption is fixed with a stated, correct filter, and the unreadable-file
+skip is fixed by collecting `{file, reason}` for every read failure and gating on it under
+`--extra-root`. Both prior escape reproductions from the last verification pass now exit 1, and both
+were re-run directly against the shipped script in this pass rather than accepted on 01-17-SUMMARY's
+narrative.
 
-**Neither fix closed the class of failure it was meant to close, and a fresh review found the reopened
-class in the shipped fix itself.** `01-REVIEW.md` (committed after both plans landed) found three new
-Critical findings, all independently reproduced in this pass, not accepted on the review's narrative:
+**Truth 7 is not closed, for the third time in a row, in a new shape.** 01-16 correctly closed CR-03's
+two named call shapes (a comma-less call, an optional-chaining receiver) by adding a second,
+independently derived call-site count and asserting equality with the enumeration regex's count. A
+fresh code review (01-REVIEW.md, committed after 01-16 and 01-17 both landed) found the new count
+itself is not independent of the shape it is meant to cross-check: its `definitions` term
+(`/^\s*_showError\s*\(/gm`, "a line-initial `_showError(`") is meant to identify the one method
+definition but also matches a bare CALL written at the start of a line, so appending such a call moves
+both the raw total and `definitions` together, leaving the derived `present` unchanged and the
+assertion agreeing with itself. This pass independently reproduced that exact input against the
+shipped checker (`_showError(err.message, false, []);` appended to a scratch copy of
+`TheiaService.sys.mjs`, exit 0) and a second, separate escape (a `.bind`-aliased call site, invisible
+to both counters because neither matches `_showError.bind(` as an occurrence of `_showError(`, also
+exit 0). Neither shape is among the 12 rows the checker's own `--self-test` plants, so the self-test
+does not catch its own checker's blind spot.
 
-1. **CR-03** — rule (4)'s new derived accept set is sound, but the regex that ENUMERATES which call
-   sites even reach it (`this._showError(` requiring a literal receiver and a trailing comma) can miss
-   a call site silently, with no completeness proof behind it. Reproduced: a comma-less
-   `this._showError(err.message)` call exits 0.
-2. **CR-01** — the new `--extra-root` scan reuses the full inventory row set including `coincidental`
-   rows (facts about this repo's own checkout), letting one such row's longest-token-first claim
-   swallow a real brand token in a foreign tree. Reproduced: an absolute path under `--extra-root`
-   exits 0.
-3. **CR-02** — the same scan's per-file `catch { continue; }` is shared with the tracked-tree path but
-   its justification ("not materialised") does not hold for the extra-root path, where a throw means
-   unreadable; the file is silently skipped and miscounted as scanned. Reproduced: a chmod-000 file
-   carrying a brand token under `--extra-root` exits 0.
+Today's shipped call sites in `TheiaService.sys.mjs` all use `this._showError(` with a trailing comma
+(confirmed 5/5 parsed), so there is no live leak in the product today. But this is the pattern
+CLAUDE.md's "derive from the tree and compare; do not hand-keep an expectation list" rule exists to
+prevent, recurring a third time in the same file: CR-A (an accept-side regex admitting any
+`<x>.message`) closed by 01-14; CR-03's two named enumeration shapes closed by 01-16; this shape
+(a hand-written pattern about call SHAPE, not a true independent derivation) open now. The review's
+proposed fix — compare a POSITION SET rather than a difference of two counts, since a set-membership
+check cannot exhibit the cancel-in-tandem failure a subtraction can — is recorded verbatim in this
+report's `gaps` frontmatter for the next closure plan.
 
-All three are the same failure class the prior two verification/review passes each found in a different
-corner of this codebase: a gate placed at exactly the right call site whose own mechanics keep it green
-by construction on the specific input it exists to catch. Both truths this maps to (7 and 8) were FAILED
-in the prior pass and remain FAILED in this pass — the defect moved, the truth's status did not.
-
-Two success criteria (GUI-01, GUI-03) still have their perceptual halves un-performed, carried forward
-unchanged from the prior pass and from `WINDOWS.md` (ledger items 15, 16). WINDOWS.md ledger item 19's
-tier-3 regression re-confirmation also remains unrun, deferred to the phase gate.
-
-Because of rule ordering (a FAILED truth outranks closed gaps), this pass's overall status is
-**gaps_found**, unchanged from the prior pass's status, though its score composition and specific defect
-descriptions have changed.
+Because a FAILED truth outranks a closed gap in the status decision tree, this pass's overall status
+remains **gaps_found**, though the score improved from 8/12 to 9/12 and one of the prior pass's two
+gaps (Truth 8) is genuinely resolved. Two success criteria (GUI-01, GUI-03) still have their
+perceptual halves un-performed, carried forward unchanged from the prior pass and from `WINDOWS.md`
+(ledger items 15, 16). WINDOWS.md ledger item 19's tier-3 regression re-confirmation also remains
+unrun, deferred to the phase gate.
 
 ---
 
