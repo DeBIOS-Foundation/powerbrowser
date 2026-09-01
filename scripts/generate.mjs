@@ -54,7 +54,8 @@
 //   node scripts/generate.mjs --check       (arrives in plan 02-04)
 //   node scripts/generate.mjs --self-test
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -78,14 +79,10 @@ for (const a of args) {
         process.exit(1);
     }
 }
-if (args.includes('--check')) {
-    console.log(`${NAME}: --check arrives in plan 02-04; nothing was compared`);
-    process.exit(0);
-}
-if (args.includes('--self-test')) {
-    console.log(`${NAME}: --self-test arrives in plan 02-06; nothing was planted`);
-    process.exit(0);
-}
+// Both flags are dispatched at the BOTTOM of this file, not here. --check has
+// to echo the applied defaults on its way past (D-08), and --self-test has to
+// run the same pipeline the default invocation runs; neither can act before
+// that pipeline is defined.
 
 // --- the schema, and the names refused outright -----------------------------
 
@@ -484,10 +481,146 @@ function resolveConfig(defaultsPath, downstreamPath) {
     return { failures: validate(config, mergedLeaves), config, defaulted };
 }
 
+/**
+ * D-08. One line per inherited default, on stderr, on EVERY run -- so a
+ * downstream is told exactly which of this project's values it is shipping
+ * rather than having to diff two manifests to find out.
+ *
+ * Nothing is printed for a setting the downstream stated: the merge only
+ * recorded the ones it defaulted, so this is a sort and a loop and not a
+ * filter. Dotted key paths are unique, so the sort has no ties and needs no
+ * tiebreaker. Values are rendered with JSON.stringify, which quotes a string,
+ * makes an empty one visible, and puts an array on one line.
+ *
+ * stderr, because stdout carries the single PASS line every registered gate in
+ * this repo reports through.
+ */
+function echoDefaults(defaulted, config) {
+    for (const path of [...defaulted].sort()) {
+        console.error(`${NAME}: default applied -- ${path} = ${JSON.stringify(readPath(config, path))}`);
+    }
+}
+
+// --- self-test: planted faults that must each go red ------------------------
+
+/** Every required setting, stated. The three fixtures below each break one thing. */
+const FIXTURE_BASE = [
+    '[product]',
+    'vendor_machine = "AcmeWorks"',
+    'vendor_display = "Acme Works"',
+    '',
+    '[identity]',
+    'display_name = "Acme Browser"',
+    'app_basename = "acme-browser"',
+    'binary_name = "acme-browser"',
+    'remoting_name = "acme-browser"',
+    'distribution_id = "org.acmeworks"',
+    '',
+    '[legal]',
+    'license = "MIT"',
+    'copyright_holder = "Acme Works"',
+    'trademark_notice = "Acme Browser is a trademark of Acme Works."',
+    '',
+].join('\n');
+
+/**
+ * Proves the mask, the unset rule and array-replace actually discriminate,
+ * rather than merely being intended. A check that can only go green is not a
+ * check.
+ */
+function selfTest() {
+    // A planted-fault result measured against an already-red baseline says
+    // nothing about the fault, so establish the baseline first and bail if the
+    // unmodified manifest is the thing that is broken.
+    const baseline = resolveConfig(MANIFEST_PATH, undefined);
+    if (baseline.failures.length > 0) {
+        console.error(`${NAME}: --self-test FAIL -- the unmodified ${MANIFEST_NAME} is already red, so the planted-fault results below would mean nothing:`);
+        baseline.failures.forEach(f => console.error(`  - ${f}`));
+        return 1;
+    }
+
+    const clean = readFileSync(MANIFEST_PATH, 'utf8');
+
+    const cases = [
+        {
+            // D-10. A whitespace-only value is not a value.
+            name: 'whitespace identity value',
+            toml: FIXTURE_BASE.replace('remoting_name = "acme-browser"', 'remoting_name = "   "'),
+            expect: 'identity.remoting_name',
+        },
+        {
+            // THE case that pins the mask ORDERING. The defaults layer carries
+            // binary_name, so if the mask were moved after the merge this
+            // downstream would silently inherit it and the case would go green.
+            // A self-test whose only identity fault is a wholly missing table
+            // cannot catch that.
+            name: 'partial identity table',
+            toml: FIXTURE_BASE.replace('binary_name = "acme-browser"\n', ''),
+            expect: 'identity.binary_name',
+        },
+        {
+            // D-07. Goes red if array-replace is ever turned into joining the
+            // two arrays end to end.
+            name: 'downstream array shorter than default',
+            toml: `${FIXTURE_BASE}\n[[variants]]\nid = "dev"\n`,
+            holds: 'one variant, not three',
+            resolved: c => Array.isArray(c.variants) && c.variants.length === 1,
+        },
+    ];
+
+    const dir = mkdtempSync(join(tmpdir(), 'generate-self-test-'));
+    let failed = 0;
+    try {
+        cases.forEach((testCase, index) => {
+            // A fixture identical to the clean manifest plants nothing and its
+            // result would be vacuous.
+            if (testCase.toml === clean) {
+                console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' plants a fixture identical to ${MANIFEST_NAME}; the case proves nothing`);
+                failed++;
+                return;
+            }
+            const fixturePath = join(dir, `case-${index}.toml`);
+            writeFileSync(fixturePath, testCase.toml, 'utf8');
+            const { failures, config } = resolveConfig(MANIFEST_PATH, fixturePath);
+
+            if (testCase.expect !== undefined) {
+                if (failures.some(f => f.includes(testCase.expect))) {
+                    console.log(`  ok  ${testCase.name} -> red, naming '${testCase.expect}'`);
+                } else {
+                    console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' did not go red naming '${testCase.expect}'; got: ${failures.join(' | ') || '(no failures at all)'}`);
+                    failed++;
+                }
+                return;
+            }
+
+            if (failures.length === 0 && testCase.resolved(config)) {
+                console.log(`  ok  ${testCase.name} -> resolved to ${testCase.holds}`);
+            } else {
+                console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' did not resolve to ${testCase.holds}; failures: ${failures.join(' | ') || '(none)'}`);
+                failed++;
+            }
+        });
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+
+    if (failed > 0) return 1;
+    console.log(`${NAME}: --self-test PASS -- ${cases.length} planted faults all behaved as pinned`);
+    return 0;
+}
+
 // --- run --------------------------------------------------------------------
+
+if (args.includes('--self-test')) process.exit(selfTest());
 
 const { failures, config, defaulted } = resolveConfig(MANIFEST_PATH, undefined);
 report(failures);
+echoDefaults(defaulted, config);
+
+if (args.includes('--check')) {
+    console.log(`${NAME}: --check compares generated/ against the tracked files in plan 02-04; ${defaulted.length} default(s) applied, nothing was compared`);
+    process.exit(0);
+}
 
 const count = writeTargets(config);
 console.log(
