@@ -16,7 +16,7 @@
       `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/` — and these never
       vary per downstream
 
-- [ ] **MIG-04**: The renamed tree builds and boots on Linux under Power
+- [x] **MIG-04**: The renamed tree builds and boots on Linux under Power
       Browser branding (proven by the existing smoke tests)
       <!-- CLOSED by plan 01-04, 2026-08-30, on evidence rather than
            frontmatter. Build: `scripts/smoke-firefox.sh` PASS, 2830s
