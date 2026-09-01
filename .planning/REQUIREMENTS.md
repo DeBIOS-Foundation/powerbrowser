@@ -82,16 +82,16 @@
 
 ### Browser GUI (GUI)
 
-- [ ] **GUI-01**: The user can toggle away from Theia to proper web-browser
+- [x] **GUI-01**: The user can toggle away from Theia to proper web-browser
       UI and back — Power Browser is usable as an actual browser, not only a
       Theia host
 
-- [ ] **GUI-03**: The GUI customization bridge (runtime CSS layer +
+- [x] **GUI-03**: The GUI customization bridge (runtime CSS layer +
       dev-flagged privileged JS) ships as a platform feature so anyone can
       restyle/re-shape the GUI at runtime via Theia extensions — "vibe code
       your own browser" is the supported path, forking is not required
 
-- [ ] **GUI-04**: Nothing in v1 welds Theia to full-window presentation; the
+- [x] **GUI-04**: Nothing in v1 welds Theia to full-window presentation; the
       future unified tab strip (mirror/proxy bridge) remains landable without
       rework
 
@@ -261,10 +261,10 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 | MIG-02 | Phase 1 | Complete |
 | MIG-03 | Phase 1 | Complete |
 | MIG-04 | Phase 1 | Complete — closed by 01-04's build (smoke-firefox + smoke-theia PASS, six identity surfaces green on the built artifact with the positive control) |
-| GUI-01 | Phase 1 | Gaps Found |
+| GUI-01 | Phase 1 | Complete |
 | GUI-02 | v2 | Deferred 2026-08-30 — `@theia/mini-browser` rejected at the D-22 gate on runtime surface (backend module + `vhost`), not supply chain |
-| GUI-03 | Phase 1 | Gaps Found |
-| GUI-04 | Phase 1 | Gaps Found |
+| GUI-03 | Phase 1 | Complete |
+| GUI-04 | Phase 1 | Complete |
 | SEC-01 | Phase 1 | Complete — satisfied by `theia/extensions/token-gate`; requirement recorded 2026-08-30 to anchor code that had carried only Sourcerer's decision IDs |
 | CFG-01 | Phase 2 | Pending |
 | CFG-02 | Phase 2 | Pending |
