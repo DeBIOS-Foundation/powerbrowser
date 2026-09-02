@@ -3600,6 +3600,32 @@ run_own_checks() {
     # 01-18 and survived because nothing was comparing the shipped selectors
     # against the document they target.
     "about-dialog-suppression-self-test|node $REPO_ROOT/scripts/verify-about-dialog-suppression.mjs --self-test"
+
+    # NEW (02-05): GEN-04's byte-identity gate -- what scripts/generate.mjs
+    # emits from configuration.toml is byte-for-byte the five build surfaces
+    # Phase 1 wrote by hand (.mozconfig, both branding configure.sh files, both
+    # .desktop files), plus the assertion that generated/ is git-ignored and
+    # tracked-empty. This is Phase 2's acceptance test made mechanical, and it
+    # is the reason CLAUDE.md forbade a generator in Phase 1: those five
+    # hand-written files are the INDEPENDENT comparand, and they are never
+    # edited to make this row green.
+    #
+    # Honestly --quick, and deliberately so on a point that is easy to get
+    # wrong: it emits its comparand into its own mkdtemp directory and never
+    # reads generated/, which is git-ignored and therefore ABSENT on every
+    # fresh clone and every CI runner. A row that read generated/ would be red
+    # on a tree with no defect, and a gate that is red for a non-defect is a
+    # gate its readers learn to skip. Whether generated/ itself is stale is a
+    # different question with its own instrument, `generate.mjs --check`. No
+    # build, no browser, no display, no network.
+    #
+    # The self-test rides alongside for the reason every other self-test row in
+    # this array gives: it plants a one-byte drift in each of the five emitters
+    # and requires each to go red naming that file, plus a surplus target and a
+    # missing one, and it refuses to report at all when the unmodified tree is
+    # already red. A byte comparison that nobody has seen go red is not a check.
+    "generated-byte-identity|node $REPO_ROOT/scripts/verify-generated-identity.mjs"
+    "generated-byte-identity-self-test|node $REPO_ROOT/scripts/verify-generated-identity.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then

@@ -208,7 +208,116 @@ function checkGeneratedIsNotTracked() {
     return failures;
 }
 
+// --- self-test: planted faults that must each go red ------------------------
+
+/**
+ * Did this case's mutation actually change anything the check can see?
+ *
+ * A planted fault that did not land makes its case VACUOUS, and a vacuous case
+ * that prints `ok` is worse than no case at all -- it is a green line asserting
+ * nothing, which is precisely the failure this whole file exists to prevent one
+ * level up. The comparison is against the real table on every axis the check
+ * reads: the entry count, each entry's tracked path, and each emitter's actual
+ * OUTPUT for the resolved config. That last one is what catches a drift wrapper
+ * whose anchor drifted and which now returns the unmodified string.
+ */
+function mutationLanded(targets, config) {
+    if (targets.length !== TARGETS.length) return true;
+    return targets.some((target, i) => {
+        const original = TARGETS[i];
+        if (target.tracked !== original.tracked || target.variant !== original.variant) return true;
+        const variant = variantOf(config, target.variant);
+        if (variant === undefined) return false;
+        return target.emit(config, variant) !== original.emit(config, variant);
+    });
+}
+
+/** A copy of the frozen table with one entry's emitter wrapped to drift by one byte. */
+function withDriftAt(index) {
+    return TARGETS.map((target, i) => (
+        i === index
+            ? { ...target, emit: (config, variant) => `${target.emit(config, variant)}\n` }
+            : target
+    ));
+}
+
+/**
+ * Proves the comparison discriminates before it is trusted. A check that can
+ * only go green is not a check -- CLAUDE.md's verification rules say so, and
+ * 01-05 shipped two assertions resting on a non-discriminating instrument
+ * before that was caught.
+ *
+ * The faults are planted in the TABLE, never on disk. Those five tracked files
+ * are the independent comparand this phase's acceptance test rests on, and a
+ * self-test that edited one of them -- even temporarily, even restoring it
+ * afterwards -- would be one interrupted run away from corrupting the very
+ * thing it is proving against.
+ */
+function selfTest() {
+    const { failures: configFailures, config } = resolveConfig();
+    if (configFailures.length > 0) {
+        console.error(`${NAME}: --self-test FAIL -- configuration.toml does not pass its own checks, so nothing below could mean anything:`);
+        configFailures.forEach(f => console.error(`  ${f}`));
+        return 1;
+    }
+
+    // A planted-fault result measured against an already-red baseline says
+    // nothing about the fault. Establish the baseline first and bail if the
+    // unmodified tree is the thing that is broken.
+    const baseline = compareAgainstTracked(TARGETS, config);
+    if (baseline.length > 0) {
+        console.error(`${NAME}: --self-test FAIL -- the unmodified tree is already red, so the planted-fault results below would be meaningless:`);
+        baseline.forEach(f => console.error(`  ${f}`));
+        return 1;
+    }
+
+    const surplus = { ...TARGETS[0], generated: 'planted-surplus.mozconfig', tracked: 'powerbrowser/planted-surplus.mozconfig' };
+
+    const cases = Object.freeze([
+        ...TARGETS.map((target, i) => ({
+            name: `one-byte drift in the emitter for ${target.tracked}`,
+            targets: withDriftAt(i),
+            expect: target.tracked,
+        })),
+        {
+            name: 'a sixth target emitting a file nobody declared',
+            targets: [...TARGETS, surplus],
+            expect: surplus.tracked,
+        },
+        {
+            name: 'a declared file whose target was deleted',
+            targets: TARGETS.slice(1),
+            expect: TARGETS[0].tracked,
+        },
+    ]);
+
+    let failed = 0;
+    for (const testCase of cases) {
+        if (!mutationLanded(testCase.targets, config)) {
+            console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' changed nothing the check can see; the case is vacuous and the anchor it edits has drifted`);
+            failed++;
+            continue;
+        }
+        const failures = compareAgainstTracked(testCase.targets, config);
+        // CONTAINS the expected path, not merely non-empty: a failure naming
+        // some other file would prove the check goes red, not that it goes red
+        // on the thing that actually drifted.
+        if (failures.some(f => f.includes(testCase.expect))) {
+            console.log(`  ok  ${testCase.name} -> red, naming '${testCase.expect}'`);
+        } else {
+            console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' did not go red naming '${testCase.expect}'; got: ${failures.join(' | ') || '(no failures at all)'}`);
+            failed++;
+        }
+    }
+
+    if (failed > 0) return 1;
+    console.log(`${NAME}: --self-test PASS -- ${cases.length} planted faults all went red naming the drift`);
+    return 0;
+}
+
 function main() {
+    if (process.argv.includes('--self-test')) return selfTest();
+
     const { failures: configFailures, config } = resolveConfig();
     if (configFailures.length > 0) {
         console.error(`${NAME}: FAIL -- configuration.toml does not pass its own checks, so nothing could be generated to compare:`);
