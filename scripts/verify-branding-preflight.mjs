@@ -88,6 +88,20 @@ function countOccurrences(haystack, needle) {
     return haystack.split(needle).length - 1;
 }
 
+/**
+ * An inventory value made safe to interpolate into a RegExp source.
+ *
+ * Every value this file reads comes out of inventory/brand-tokens.json, which
+ * is hand-authored and, for identifier_form, entirely unconstrained. Dropped
+ * into a pattern raw, a `.` is a wildcard that makes an assertion pass on a
+ * value that is not the declared one -- and a `(` or `[` throws SyntaxError at
+ * construction, uncaught, out of a gate. A check that can pass on the wrong
+ * value is the tautology this whole file exists to prevent.
+ */
+function escapeForRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // `-brand-full-name = Power Browser Dev` -> "Power Browser Dev"
 function ftlTerm(text, term) {
     const m = text.match(new RegExp(`^${term}\\s*=\\s*(.*)$`, 'm'));
@@ -290,7 +304,13 @@ function runChecks(root) {
             );
         }
         // The machine-side vendor, read back from application.ini's Vendor=.
-        if (!new RegExp(`stockControl \\? 'Mozilla' : '${exp.vendor_machine}'`).test(identity)) {
+        // A LITERAL comparison, not a pattern. Built as a RegExp this
+        // interpolated an inventory value whose own schema permits `.`, `-`
+        // and `_`, so a vendor of `Ac.e` became the wildcard `Ac.e` and matched
+        // `Acme` -- the assertion passing on a vendor string that is not the
+        // declared one, which is the exact tautology this file exists to
+        // prevent. Nothing here needed pattern semantics in the first place.
+        if (!identity.includes(`stockControl ? 'Mozilla' : '${exp.vendor_machine}'`)) {
             r.fail(
                 `${identityPath} does not expect the machine-side vendor ${JSON.stringify(exp.vendor_machine)}. ` +
                 'The version surface concatenates vendor and basename, so a wrong value here is a wrong `--version` string.',
@@ -433,7 +453,12 @@ function runChecks(root) {
     // `PowerBrowserAPI` remain untouched because the next character is a
     // letter. The identifier form's legitimate uses all continue into an
     // identifier; its illegitimate ones all end.
-    const leak = new RegExp(`${exp.identifier_form}[ "<]`);
+    // ESCAPED before interpolation. identifier_form is unconstrained in the
+    // inventory, so a value carrying `(`, `[` or `+` either changed the match
+    // semantics silently or threw SyntaxError at construction, uncaught. This
+    // one genuinely needs pattern semantics for the `[ "<]` terminator class,
+    // so escaping is the fix rather than a literal comparison.
+    const leak = new RegExp(`${escapeForRegExp(exp.identifier_form)}[ "<]`);
     for (const rel of displaySurfaces) {
         const text = readText(root, rel);
         if (text === null) continue;
