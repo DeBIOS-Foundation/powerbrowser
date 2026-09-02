@@ -36,7 +36,7 @@
 
 ### Configuration Manifest (CFG)
 
-- [ ] **CFG-01**: A downstream author can define their entire brand in
+- [x] **CFG-01**: A downstream author can define their entire brand in
       `configuration.toml` + a `brand/` assets folder and touch no other file
 
 - [x] **CFG-02**: Identity fields (vendor, app basename, binary name,
@@ -266,7 +266,7 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 | GUI-03 | Phase 1 | Gaps Found |
 | GUI-04 | Phase 1 | Gaps Found |
 | SEC-01 | Phase 1 | Complete — satisfied by `theia/extensions/token-gate`; requirement recorded 2026-08-30 to anchor code that had carried only Sourcerer's decision IDs |
-| CFG-01 | Phase 2 | Pending |
+| CFG-01 | Phase 2 | Complete |
 | CFG-02 | Phase 2 | Complete |
 | CFG-03 | Phase 2 | Complete |
 | CFG-04 | Phase 2 | Complete |

@@ -1,19 +1,20 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
 current_phase: 02
 current_phase_name: configuration-manifest-and-generator-core
 status: executing
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-09-02T00:02:43.864Z"
+stopped_at: Completed 02-05-PLAN.md
+last_updated: "2026-09-02T00:18:40.719Z"
 last_activity: 2026-09-01
 last_activity_desc: Phase 01 execution started
+state_head: c25fb75075c2f7cc4dc1b3308994963a1792cb8e
 progress:
-  total_phases: 2
+  total_phases: 7
   completed_phases: 1
   total_plans: 27
-  completed_plans: 25
+  completed_plans: 26
+milestone_name: milestone
 ---
 
 # Project State
@@ -28,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 02 (configuration-manifest-and-generator-core) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-09-01 — Phase 02 execution started
 
@@ -82,6 +83,7 @@ Progress: [█████████░] 93%
 | Phase 02 P01 | 30m | 3 tasks | 6 files |
 | Phase 02 P03 | 35m | 2 tasks | 1 files |
 | Phase 02 P04 | 30m | 2 tasks | 1 files |
+| Phase 02 P05 | 25m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -182,6 +184,9 @@ Recent decisions affecting current work:
 - [Phase ?]: The frozen target table holds string literals for both the generated and the tracked path of all five surfaces; a variant contributes objdir and branding_dir as emitted CONTENT only, so no config key can direct a write (GEN-04, T-02-02)
 - [Phase ?]: One emitter per file FORMAT parameterised by variant, not one per output file — the dev/release differences are entirely the variant's name_suffix, and a second emitter is how two files that must differ in one line drift in others
 - [Phase ?]: The check mode emits into a unique mkdtemp removed in a finally and never writes under generated/; it reports fresh, stale, absent and leftover as four distinct outcomes, with set equality run in both directions so a removed emitter cannot leave its output behind
+- [Phase 02]: 02-05: the byte-identity gate emits into mkdtemp and compares against the TRACKED files, never git-ignored generated/ — a gate red on a fresh clone for a non-defect is a gate its readers learn to skip
+- [Phase 02]: 02-05: git check-ignore must be asked about 'generated/' with the trailing slash; .gitignore's directory-only pattern does not match a bare path when the directory is absent
+- [Phase 02]: 02-05: CFG-01 marked complete — 02-04 deferred it pending this plan's registry row, which is now green
 
 ### Pending Todos
 
@@ -208,6 +213,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-02T00:02:43.838Z
-Stopped at: Completed 02-04-PLAN.md
+Last session: 2026-09-02T00:17:19.794Z
+Stopped at: Completed 02-05-PLAN.md
 Resume file: None
