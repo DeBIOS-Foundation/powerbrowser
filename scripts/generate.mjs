@@ -428,10 +428,20 @@ function report(failures) {
 /**
  * A branding configure.sh, line for line against the files plan 01-03 wrote by
  * hand. Lines 1-3 are the Mozilla Public License boilerplate: a source-file
- * licence notice, literal emitter text, not a rebrand input. Lines 5-7 are
- * those files' hand-written comment reproduced verbatim -- D-03 is explicit
- * that these bytes come across first and the comment is only rewritten in plan
- * 02-06, after the byte-identity check is green.
+ * licence notice, literal emitter text, not a rebrand input.
+ *
+ * Lines 5-7 are D-03 STEP 2, done in plan 02-06 and not before. Until then
+ * they reproduced verbatim the comment those files carried when they were
+ * hand-written, because the byte-identity check had to be established GREEN
+ * against the original bytes first: a comment rewritten ahead of the proof
+ * would have left nothing independent to compare against. That proof was run
+ * and recorded green at commit 94c47d1, and only then did these three lines
+ * and the two tracked files change together in one commit. The header they now
+ * carry is instructions, not description -- it names the file to edit instead,
+ * the command to re-run, and the registry label that reddens on a
+ * disagreement. If the emitter and either tracked file ever diverge, the
+ * emitter is what changes; the tracked files are the comparand and are never
+ * edited to make a check green.
  *
  * ONE emitter serves BOTH variants. The dev and release files differ in exactly
  * one line, and that difference is entirely the variant's name_suffix -- the
@@ -448,9 +458,9 @@ function emitConfigureSh(config, variant) {
         '# License, v. 2.0. If a copy of the MPL was not distributed with this',
         '# file, You can obtain one at http://mozilla.org/MPL/2.0/.',
         '',
-        '# A COMPILED define, hand-written (plan 01-03). A typo here costs a full',
-        '# tier-3 rebuild (~40 min), which is why scripts/verify-branding-preflight.mjs',
-        '# cross-checks it against the inventory before the build rather than after.',
+        '# Generated from configuration.toml by scripts/generate.mjs -- do not edit here.',
+        '# To change it, edit configuration.toml and run: node scripts/generate.mjs',
+        '# A disagreement reddens: scripts/verify-platform.sh --only generated-byte-identity',
         `MOZ_APP_DISPLAYNAME="${config.identity.display_name}${variant.name_suffix}"`,
     ];
     return lines.join('\n') + '\n';
