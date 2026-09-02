@@ -79,6 +79,11 @@ established against the original bytes first.
 
 ## What shipped
 
+> **Corrected 2026-09-02 (Phase 2 UAT, test 8).** The table reached nine cases in this plan and
+> stands at **twelve** today: the WR-08 review fix added three `[[variants]]` cases (missing required
+> setting, duplicate id, unused id). Every "nine" below is the count as this plan closed, not the
+> current one. Verify with: `node scripts/generate.mjs --self-test`.
+
 **`scripts/generate.mjs` — the fault table, three to nine.** Six new cases:
 
 | Case | What it plants | What it requires |

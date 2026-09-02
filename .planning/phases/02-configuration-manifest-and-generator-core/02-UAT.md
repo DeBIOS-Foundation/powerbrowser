@@ -112,6 +112,22 @@ blocked: 0
     - "Correct 02-04-SUMMARY.md's claim that emitted bytes do not depend on where the generator was invoked from."
   debug_session: "diagnosed inline during UAT — root cause reproduced and confirmed by direct command execution, no debug agent required"
 
+- gap_id: G-02-12
+  truth: "A gate that checks the tracked .desktop entries catches one that is wrong for the checkout it is in"
+  status: failed
+  reason: "Found while fixing G-02-11: verify-branding-preflight PASSES at a relocated clone while blessing Exec=/home/chris/coding/Power-Browser/objdir/dist/bin/powerbrowser %u, a path that does not exist there."
+  severity: major
+  test: 11
+  root_cause: "scripts/verify-branding-preflight.mjs:256,260 builds wantExec/wantIcon from exp.repo_root, which is the hand-authored absolute literal at inventory/brand-tokens.json:105. The tracked .desktop files contain that same literal, so both sides of the comparison read the same stale string and the check is a tautology with respect to location. It can never catch a desktop entry that is wrong for the actual checkout -- which is Pitfall 4, the exact failure the row exists to prevent (the entry silently does nothing when clicked). This is the MIRROR of G-02-11: byte-identity is a false POSITIVE everywhere but this machine, preflight is a false NEGATIVE everywhere including where the file is broken. Any fix must address both directions or it leaves one of them standing."
+  artifacts:
+    - path: "scripts/verify-branding-preflight.mjs"
+      issue: "wantExec/wantIcon derived from a hand-kept absolute path rather than from where the repo actually is"
+    - path: "inventory/brand-tokens.json"
+      issue: "repo_root at line 105 is a machine fact hand-kept in the expectation source; CLAUDE.md forbids hand-kept expectation lists"
+  missing:
+    - "Decide whether repo_root becomes live-derived (restores the Pitfall-4 check, but then a tracked .desktop is honestly red at any other checkout) or whether the tracked entries stop carrying an absolute path at all."
+  debug_session: "found during G-02-11 remediation; reproduced live at a relocated clone"
+
 ## Documentation Drift (not code gaps)
 
 - test: 4
@@ -122,3 +138,56 @@ blocked: 0
   file: ".planning/phases/02-configuration-manifest-and-generator-core/02-06-SUMMARY.md"
   says: "nine --self-test cases"
   actual: "twelve — three [[variants]] cases were added by the WR-08 review fix"
+
+## Design Panel — G-02-11 (17 agents, 3 proposals x 4 adversarial lenses, 2026-09-02)
+
+Ranked by fatal-count then total score. Full transcript:
+`.claude/projects/-home-chris-coding-Power-Browser/2a3112ca-4094-429d-bace-15504273c76e/subagents/workflows/wf_ac31bcb2-d5e/journal.jsonl`
+
+**1. Quotient out the checkout root — 0 fatal, 2 serious, avg 7.3. RECOMMENDED.**
+`Buffer.compare` still runs FIRST and still decides. Only once it has failed may a fallback ask a
+single question: are these the same bytes at a different absolute root? A helper splits the
+generator's OWN output on the root it just emitted at, turning the emitted bytes into literal
+fragments with a hole wherever an absolute path went; the fragments are escaped into an anchored
+regex and matched against the tracked bytes. The captured string must not span a line, must be
+identical at every hole, and must be absolute. Otherwise the plain byte failure stands. No path is
+written down anywhere.
+
+  - **SERIOUS (hides-drift), and it must be closed in the same change.** Whenever every absolute
+    path in a file shares a leading segment, the decomposition is under-determined and a drift that
+    DROPS that segment is absorbed into the hole. The auditor executed the proposed helper against a
+    post-Phase-3 shape (`Icon=` moved under `objdir/dist/bin/`, which ROADMAP.md:194 makes the
+    natural way to satisfy Phase 3 criterion 2) and got a GREEN gate on an emitter that had stopped
+    honouring the variant's objdir — a launcher naming a non-existent binary would ship green.
+    Three-line closure, verified against every case, to run before the regex:
+      `const after = fixed.slice(1);`
+      `const seg = /^\/[^/\n]+/.exec(after[0])?.[0];`
+      `if (seg !== undefined && after.every(f => f.startsWith(seg))) return null;`
+    It fails safe: a shared-prefix file loses the relaxation and goes red on a clone — a false red
+    rather than a hidden green.
+  - **SERIOUS (honesty).** The claim is restated in only one of three places that carry it. All
+    three must move in the same commit: the module docblock at `verify-generated-identity.mjs:3-5`
+    (still says "byte-for-byte", now false at any checkout but one); the registry comment at
+    `verify-platform.sh:3623-3626` (says every planted case must go red — after this change one
+    registered case must stay GREEN); and the `GENERATED_BANNER` in the tracked files, which the
+    auditor ranked last and would leave, since a hand-edited root still reddens `--quick` on the
+    preflight row — the banner is wrong about WHICH row, not about the fact.
+  - Two further notes worth carrying: the proposed PASS line would print the author's absolute home
+    directory on a CI runner, which is in tension with the no-internals copy rule this same file
+    cites; and the helper as proposed ACCEPTS a space-bearing root, which CLAUDE.md hard rule 4
+    forbids and nothing else in the tree catches.
+
+**2. Emitter-as-stencil (sentinel-split) — 0 fatal, avg lower.** Same family; its PASS line was
+found to print a false statement on exactly the machines the change exists to serve.
+
+**3. Probe-emit root discovery (parameterise-root) — 0 fatal.** Threads an explicit root through
+`emitDesktopEntry`/`assertUnderRepo`. Audited flaw: it silently retires the only mechanised
+assertion on the emitted desktop root, and its three new self-test fixtures are themselves
+hard-wired to this checkout through the one variable that changes on a clone.
+
+**NOT AUDITED — evaluate before choosing.** A fourth option was raised after the panel launched and
+never went through it: have the tracked `.desktop` files carry a PLACEHOLDER token substituted at
+install time. That keeps exact byte comparison with no normalisation logic at all and would also
+dissolve G-02-12, at the cost of the tracked entry no longer being directly usable and of
+preflight losing its ability to check a real absolute path (Pitfall 4). It should be scored against
+option 1 before implementation, not assumed better or worse.

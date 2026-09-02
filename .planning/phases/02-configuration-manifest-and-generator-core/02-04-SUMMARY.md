@@ -107,7 +107,12 @@ Four outcomes, each with its own message:
 |-------|-----------|
 | fresh | exit 0, one PASS line counting the files compared |
 | stale / missing | exit 1, each path on its own indented line with the first differing line number |
-| `generated/` absent | exit 1, its own single message; the five target paths are **not** listed |
+| `generated/` absent | exit 0 with a `--check SKIP` message; the five target paths are **not** listed |
+
+> **Corrected 2026-09-02 (Phase 2 UAT, test 4).** As shipped in this plan the absent case exited 1.
+> 02-REVIEW-FIX.md:98 later changed it to an exit-0 SKIP, because a gate red on every fresh clone for a
+> non-defect is a gate its readers learn to skip. The row above states the behavior that ships today;
+> `scripts/generate.mjs:961-981` carries the reasoning.
 | leftover file | exit 1 naming it, via set equality run in both directions |
 
 The absent case is separated deliberately (Pitfall 1): `generated/` is git-ignored, so every fresh
