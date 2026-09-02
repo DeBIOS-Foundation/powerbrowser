@@ -158,7 +158,7 @@ Plans:
   4. Cosmetic fields left unset fall back to Power Browser defaults that are themselves a `configuration.toml` (one merge code path), with every applied default echoed at generate time
   5. Everything the generator writes lands under a single gitignored `generated/` root, nothing generated is committed, and `generate --check` fails when that output is stale
 
-**Plans**: 6/6 plans executed in 5 waves
+**Plans**: 9 plans — 6/6 executed in 5 waves, plus 3 gap-closure plans (02-07..02-09) in 3 further waves, closing G-02-11 and G-02-12 from `02-UAT.md`
 
 Plans:
 **Wave 1**
@@ -181,6 +181,18 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 02-06-PLAN.md — Complete the generator's nine-fault self-test, register all four rows plus three CI steps, then rewrite the `configure.sh` header now that the proof is green
+
+**Wave 6** *(gap closure — G-02-11, G-02-12)*
+
+- [ ] 02-07-PLAN.md — Score the never-audited placeholder design against the quotient design on the panel's four lenses, and ratify one at a blocking checkpoint (one-way door)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 02-08-PLAN.md — Tracer: one relocated checkout, both gates honest — close the false RED and the false GREEN in one slice, add a self-test case at a different repo root, and move the honesty claim everywhere it is written down
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 02-09-PLAN.md — Correct the one documentation claim still standing and make `02-VERIFICATION.md` name the two gaps it reported as absent
 
 ### Phase 3: Firefox Branding Emitter and Icon Pipeline
 
