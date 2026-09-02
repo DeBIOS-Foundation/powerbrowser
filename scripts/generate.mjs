@@ -234,9 +234,14 @@ function rejectUnknown(leaves, refused) {
  * added, with no edit here.
  *
  * An array is a leaf to the masker exactly as it is to the merge, so no
- * `variants[]` path is consulted. None of them is required today. If one ever
- * becomes required, the masker has to learn to descend into each element --
- * validate() carries the same assumption in its `path.includes('[]')` skip.
+ * `variants[]` path is consulted here even though all four are now required.
+ * That is deliberate and it is not the same question. The mask decides whether
+ * a downstream may INHERIT a setting; the required check decides whether a
+ * section a downstream DID write is complete. A downstream that states no
+ * [[variants]] at all inherits this project's two, which is the intended
+ * fallback -- a variant is a build arrangement, not an identity. A downstream
+ * that states one and leaves out its objdir is incomplete, and that is what
+ * validateVariantElements refuses.
  */
 function requiredPathsOf(schemaKeys) {
     return Object.entries(schemaKeys).filter(([, spec]) => spec.required).map(([path]) => path);
@@ -379,6 +384,52 @@ function isUnset(value) {
     return value === undefined || (typeof value === 'string' && value.trim() === '');
 }
 
+const VARIANT_PREFIX = 'variants[].';
+
+/**
+ * The required-setting check for the elements of an array of tables.
+ *
+ * WHY IT IS A SECOND LOOP. The scalar loop above addresses a setting by a
+ * dotted path through ONE document; `variants[].objdir` is not one setting, it
+ * is one per element, and readPath cannot address any of them. Without this
+ * loop every `variants[].*` key was unreachable by the required check whatever
+ * its `required` flag said -- a `[[variants]]` section carrying nothing but an
+ * id resolved with ZERO failures, emitted the literal string `undefined` into
+ * .mozconfig and configure.sh, and then threw out of path.join.
+ *
+ * PRESENCE, NOT isUnset. The release variant's name_suffix is deliberately the
+ * empty string -- that empty suffix is the whole reason the release display
+ * name is shorter than the dev one -- so a trim-to-empty test would reject the
+ * shipping manifest. What must be stated is the KEY; whether its value may be
+ * blank is the `regex` in the schema's business, and name_suffix's is the one
+ * that admits the empty string.
+ */
+function validateVariantElements(doc) {
+    const failures = [];
+    const variants = readPath(doc, 'variants');
+    if (!Array.isArray(variants)) return failures;
+
+    for (const [index, variant] of variants.entries()) {
+        for (const [path, spec] of Object.entries(SCHEMA_KEYS)) {
+            if (!path.startsWith(VARIANT_PREFIX) || !spec.required) continue;
+            const key = path.slice(VARIANT_PREFIX.length);
+            if (isTable(variant) && variant[key] !== undefined) continue;
+            failures.push(
+                `the ${ordinal(index + 1)} [[variants]] section (id ${JSON.stringify(variant?.id ?? '')}): `
+                + `${key} ${UNSET_MARK} Open ${MANIFEST_NAME}, find that [[variants]] section, and give `
+                + `${key} a value. Then run: ${RERUN}`,
+            );
+        }
+    }
+    return failures;
+}
+
+/** 1 -> "1st". Plain enough for a message that has to name one section of several. */
+function ordinal(n) {
+    const suffix = (n % 100 >= 11 && n % 100 <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th');
+    return `${n}${suffix}`;
+}
+
 function validate(doc, leaves) {
     const failures = [];
     const reportedUnset = new Set();
@@ -393,6 +444,8 @@ function validate(doc, leaves) {
             );
         }
     }
+
+    failures.push(...validateVariantElements(doc));
 
     for (const { path, value } of leaves) {
         const spec = SCHEMA_KEYS[path];
@@ -940,6 +993,20 @@ const FIXTURE_BASE = [
     '',
 ].join('\n');
 
+/**
+ * ONE complete build variant, stated. Written out once because two cases below
+ * need it -- one whole, one with a single setting removed -- and a second copy
+ * would let the two drift into testing different things.
+ */
+const FIXTURE_VARIANT = [
+    '[[variants]]',
+    'id = "dev"',
+    'name_suffix = " Dev"',
+    'branding_dir = "powerbrowser/branding/dev"',
+    'objdir = "objdir"',
+    '',
+].join('\n');
+
 /** Does `text` carry `needle`, which is either a literal or a pattern? */
 function carries(text, needle) {
     return needle instanceof RegExp ? needle.test(text) : text.includes(needle);
@@ -1143,10 +1210,29 @@ function selfTest() {
         {
             // D-07. Goes red if array-replace is ever turned into joining the
             // two arrays end to end.
+            //
+            // THE ONE ELEMENT IS COMPLETE, and that matters. This case used to
+            // declare `id = "dev"` and nothing else, which made it pin two
+            // claims at once: that a short array replaces a long one, and --
+            // silently -- that an INCOMPLETE variant resolves successfully. The
+            // second is a defect, and pinning it as the contract is what let a
+            // partial [[variants]] table emit the literal string `undefined`
+            // and then throw. Replacement is what this case exists to prove;
+            // the case below is what proves incompleteness is refused.
             name: 'downstream array shorter than default',
-            toml: `${FIXTURE_BASE}\n[[variants]]\nid = "dev"\n`,
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}`,
             holds: 'one variant, not three',
             resolved: c => Array.isArray(c.variants) && c.variants.length === 1,
+        },
+        {
+            // CR-03. A [[variants]] section missing one of its four settings.
+            // Every variants[] key is required PER ELEMENT, and readPath cannot
+            // address an element, so without validateVariantElements this
+            // fixture resolved with zero failures and the emitters carried the
+            // missing value straight through as `undefined`.
+            name: 'variant missing a required setting',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT.replace('objdir = "objdir"\n', '')}`,
+            expect: 'objdir',
         },
         {
             // CFG-02's core. A required setting is one a downstream must state
@@ -1312,4 +1398,27 @@ function main() {
     return 0;
 }
 
-if (IS_MAIN) process.exit(main());
+/**
+ * THE LAST LINE OF THE COPY RULE. Every failure this file raises deliberately
+ * goes through report(), which prints plain language and a next step -- but an
+ * uncaught throw bypasses all of it and Node prints a stack trace carrying `at`
+ * frames, `node:` module specifiers and this machine's path to the project.
+ * That is exactly the three-marker set INTERNAL_MARKERS forbids, and until this
+ * catch existed the self-test could not see it, because no case drove an
+ * emitter to the point of throwing.
+ *
+ * The error object is deliberately not printed. There is nothing in it a reader
+ * can act on that the manifest-shaped advice below does not already say better.
+ */
+if (IS_MAIN) {
+    let code;
+    try {
+        code = main();
+    } catch {
+        console.error(`${NAME}: FAIL -- the project could not be generated from ${MANIFEST_NAME}.`);
+        console.error(`  Check that every setting in ${MANIFEST_NAME} has a value, and that every [[variants]] section is complete.`);
+        console.error(`  Next step: correct ${MANIFEST_NAME}, then run: ${RERUN}`);
+        code = 1;
+    }
+    process.exit(code);
+}
