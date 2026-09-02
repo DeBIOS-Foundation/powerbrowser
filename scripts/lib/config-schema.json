@@ -93,11 +93,17 @@
     },
     "variants[].branding_dir": {
       "type": "string",
-      "required": false
+      "required": false,
+      "regex": "^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$",
+      "regex_help": "a folder path inside the project, written relative to it, with no leading slash and no '..' step; letters, digits, dots, underscores, hyphens and slashes only",
+      "regex_example": "powerbrowser/branding/dev"
     },
     "variants[].objdir": {
       "type": "string",
-      "required": false
+      "required": false,
+      "regex": "^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$",
+      "regex_help": "a folder path inside the project, written relative to it, with no leading slash and no '..' step; letters, digits, dots, underscores, hyphens and slashes only",
+      "regex_example": "objdir"
     }
   }
 }
