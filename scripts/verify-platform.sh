@@ -3626,6 +3626,38 @@ run_own_checks() {
     # already red. A byte comparison that nobody has seen go red is not a check.
     "generated-byte-identity|node $REPO_ROOT/scripts/verify-generated-identity.mjs"
     "generated-byte-identity-self-test|node $REPO_ROOT/scripts/verify-generated-identity.mjs --self-test"
+
+    # NEW (02-06): the generator's own two rows, completing the four this phase
+    # registers. They assert something DIFFERENT from the pair above, which is
+    # why both pairs exist rather than one.
+    #
+    # generate-check asserts IDEMPOTENCE, and only that. On a tree where the
+    # generator has already run -- which is the only tree this row ever sees,
+    # since a run with no generated/ reports the absent-directory outcome and
+    # not a mismatch -- the honest claim is that a second run produces the same
+    # bytes as the first. Anything stronger would be a claim about a tree this
+    # row cannot observe. Whether the emitted bytes match the five HAND-WRITTEN
+    # files is the separate question generated-byte-identity answers, and it
+    # answers it without needing a prior generate at all.
+    #
+    # generate-self-test rides alongside for the reason every other self-test
+    # row in this array gives, and here it carries more weight than most: nine
+    # planted faults -- a missing required key, an invalid basename, a
+    # misspelled section header, a whitespace-only value, a short downstream
+    # array, a stale generated file, an absent generated directory, a
+    # malformed manifest -- each required to go red NAMING the drift, plus a
+    # cross-cutting assertion that no case's output carries a stack frame, a
+    # module specifier, or this machine's path to the project. Every one of the
+    # generator's failure messages is user-facing copy under CLAUDE.md's
+    # no-internals rule, and this row is what enforces that rule by pattern
+    # rather than by a reviewer's memory.
+    #
+    # Both are honestly --quick. The generator reads configuration.toml and a
+    # JSON schema and writes under generated/; the self-test emits into mkdtemp
+    # directories and spawns one short-lived node child. No build, no browser,
+    # no display, no network.
+    "generate-check|node $REPO_ROOT/scripts/generate.mjs --check"
+    "generate-self-test|node $REPO_ROOT/scripts/generate.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
