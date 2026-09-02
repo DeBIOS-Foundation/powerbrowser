@@ -196,7 +196,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- [tooling/minor] Declare bundled WebExtensions in `configuration.toml` — EXT-02, the WebExtension sibling of EXT-01. Mechanism is platform work; the curated list stays data (REQUIREMENTS.md:243 bars the set itself from the tree). Not scheduled.
 
 ### Blockers/Concerns
 
