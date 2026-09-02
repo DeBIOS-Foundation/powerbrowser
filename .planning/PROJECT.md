@@ -84,14 +84,16 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] `configuration.toml` + `brand/` assets folder exist at repo root and are
+      the only files touched for a rebrand — Validated in Phase 2: Configuration
+      Manifest and Generator Core (CFG-01..04, GEN-04; generator reproduces the five
+      Phase 1 hand-written build surfaces byte-for-byte, gated by
+      `generated-byte-identity` in `scripts/verify-platform.sh --quick`)
 
 ### Active
 
 - [ ] Platform code migrated from sourcerer and debranded: `powerbrowser/`
       tree, `@powerbrowser/*` extension scope, `PowerBrowserAPI.sys.mjs`
-- [ ] `configuration.toml` + `brand/` assets folder exist at repo root and are
-      the only files touched for a rebrand
 - [ ] Build-time generator materializes all branding surfaces (Firefox
       branding dir, desktop files, installer name, icons, Theia welcome/about)
       from `configuration.toml`
@@ -136,4 +138,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-29 after initialization*
+*Last updated: 2026-09-01 after Phase 2 (Configuration Manifest and Generator Core) completion — generator core, byte-identity gate, four new `--quick` rows*
