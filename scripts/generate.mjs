@@ -424,6 +424,47 @@ function validateVariantElements(doc) {
     return failures;
 }
 
+/**
+ * The three ways a `[[variants]]` id can be wrong without anything noticing.
+ *
+ * variantById is a `find`, so it takes the FIRST match and says nothing about
+ * the rest. That silence covered three distinct mistakes: a variant with no id
+ * at all is unreachable dead configuration; two variants sharing an id resolve
+ * to the first, so a downstream that edits the second gets no effect and no
+ * message; and a typo'd `id = "relase"` surfaced only as the missing-variant
+ * error for "release", sending the reader to ADD a section rather than fix a
+ * letter. All three are reported here, by the id involved.
+ *
+ * The set of ids the project actually builds is DERIVED from the frozen target
+ * table rather than written out, so adding a target adds it here with no edit.
+ */
+function validateVariantIds(doc) {
+    const failures = [];
+    const variants = readPath(doc, 'variants');
+    if (!Array.isArray(variants)) return failures;
+
+    const ids = variants.map(v => (isTable(v) ? v.id : undefined));
+
+    for (const id of new Set(ids.filter((id, i) => id !== undefined && ids.indexOf(id) !== i))) {
+        failures.push(
+            `two or more [[variants]] sections both use the id ${JSON.stringify(id)}, and only the first is `
+            + `ever used. Give each variant its own id in ${MANIFEST_NAME}, then run: ${RERUN}`,
+        );
+    }
+
+    const built = [...new Set(TARGETS.map(t => t.variant))];
+    for (const id of ids) {
+        if (id === undefined || built.includes(id)) continue;
+        failures.push(
+            `the [[variants]] section with id ${JSON.stringify(id)} is never used; this project builds `
+            + `${built.map(b => JSON.stringify(b)).join(' and ')}. Check the spelling in ${MANIFEST_NAME}, `
+            + `then run: ${RERUN}`,
+        );
+    }
+
+    return failures;
+}
+
 /** 1 -> "1st". Plain enough for a message that has to name one section of several. */
 function ordinal(n) {
     const suffix = (n % 100 >= 11 && n % 100 <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th');
@@ -446,6 +487,7 @@ function validate(doc, leaves) {
     }
 
     failures.push(...validateVariantElements(doc));
+    failures.push(...validateVariantIds(doc));
 
     for (const { path, value } of leaves) {
         const spec = SCHEMA_KEYS[path];
@@ -1313,6 +1355,22 @@ function selfTest() {
             name: 'variant missing a required setting',
             toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT.replace('objdir = "objdir"\n', '')}`,
             expect: 'objdir',
+        },
+        {
+            // WR-08. variantById is a find, so the second of two variants
+            // sharing an id was silently unreachable -- a downstream editing it
+            // got no effect and no message.
+            name: 'two variants sharing one id',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_VARIANT}`,
+            expect: 'both use the id "dev"',
+        },
+        {
+            // WR-08. A typo'd id used to surface only as the missing-variant
+            // error for the id it was meant to be, sending the reader to ADD a
+            // section rather than fix a letter.
+            name: 'variant with an id nothing builds',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT.replace('id = "dev"', 'id = "relase"')}`,
+            expect: 'is never used',
         },
         {
             // CFG-02's core. A required setting is one a downstream must state
