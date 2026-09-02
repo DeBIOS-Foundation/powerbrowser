@@ -3631,14 +3631,22 @@ run_own_checks() {
     # registers. They assert something DIFFERENT from the pair above, which is
     # why both pairs exist rather than one.
     #
-    # generate-check asserts IDEMPOTENCE, and only that. On a tree where the
-    # generator has already run -- which is the only tree this row ever sees,
-    # since a run with no generated/ reports the absent-directory outcome and
-    # not a mismatch -- the honest claim is that a second run produces the same
-    # bytes as the first. Anything stronger would be a claim about a tree this
-    # row cannot observe. Whether the emitted bytes match the five HAND-WRITTEN
-    # files is the separate question generated-byte-identity answers, and it
-    # answers it without needing a prior generate at all.
+    # generate-check asserts IDEMPOTENCE, and only that: on a tree where the
+    # generator has already run, a second run produces the same bytes as the
+    # first. Anything stronger would be a claim about a tree this row cannot
+    # observe. Whether the emitted bytes match the five HAND-WRITTEN files is
+    # the separate question generated-byte-identity answers, and it answers it
+    # without needing a prior generate at all.
+    #
+    # ON A TREE WITH NO generated/, THIS ROW SKIPS AND PASSES. generated/ is
+    # git-ignored, so that is the state of every fresh clone -- and a tree that
+    # has never generated cannot disagree with itself, which is the only thing
+    # this row claims. It used to exit 1 there while printing "This is not a
+    # mismatch", which put --quick, the documented commit gate, in a FAIL state
+    # on every fresh clone. Nothing goes unchecked as a result: the emitters
+    # are gated by generated-byte-identity above, which reads nothing under
+    # generated/ at all. The generator's own --self-test pins both halves --
+    # the skip message and its zero exit.
     #
     # generate-self-test rides alongside for the reason every other self-test
     # row in this array gives, and here it carries more weight than most: nine
