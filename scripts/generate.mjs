@@ -519,6 +519,29 @@ function assertEmittable(path, value) {
     return value;
 }
 
+/**
+ * The "this file is derived" banner, carried by EVERY generated target.
+ *
+ * ONE constant, not one per emitter. It went in as three lines on configure.sh
+ * alone, which left .mozconfig and the two .desktop files equally derived,
+ * equally hand-editable and equally silent about it -- and a reader could no
+ * longer tell generated from hand-written by opening the file, which is the
+ * banner's whole purpose. A shared constant is also what stops the five files
+ * drifting into four wordings.
+ *
+ * `#` is a comment in all three formats: mozconfig is shell, configure.sh is
+ * shell, and freedesktop permits comment lines in a .desktop file including
+ * ahead of the first group header. The two .desktop parsers in this repo find
+ * their keys by prefix rather than by line number, so a leading comment block
+ * moves nothing they read.
+ */
+const GENERATED_BANNER = Object.freeze([
+    '# Generated from configuration.toml by scripts/generate.mjs -- do not edit here.',
+    '# To change it: edit configuration.toml, run: node scripts/generate.mjs, then copy the',
+    '# matching file out of generated/ over this one. Phase 2 does not write it in place.',
+    '# A disagreement reddens: scripts/verify-platform.sh --only generated-byte-identity',
+]);
+
 /** The dotted path a reader opens to fix a value inside one [[variants]] section. */
 function variantPath(variant, key) {
     return `the [[variants]] section with id ${JSON.stringify(variant?.id ?? '')}: ${key}`;
@@ -587,10 +610,7 @@ function emitConfigureSh(config, variant) {
         '# License, v. 2.0. If a copy of the MPL was not distributed with this',
         '# file, You can obtain one at http://mozilla.org/MPL/2.0/.',
         '',
-        '# Generated from configuration.toml by scripts/generate.mjs -- do not edit here.',
-        '# To change it: edit configuration.toml, run: node scripts/generate.mjs, then copy the',
-        '# matching file out of generated/ over this one. Phase 2 does not write it in place.',
-        '# A disagreement reddens: scripts/verify-platform.sh --only generated-byte-identity',
+        ...GENERATED_BANNER,
         // Both halves pass the sink guard. This line is a double-quoted shell
         // assignment in a file the Gecko build sources, so an unchecked value
         // here executes at build time; see assertEmittable.
@@ -601,7 +621,8 @@ function emitConfigureSh(config, variant) {
 }
 
 /**
- * The root .mozconfig, eleven lines against the file Phase 1 wrote by hand.
+ * The root .mozconfig: the shared generated-from banner, a blank line, then
+ * eleven lines against the file Phase 1 wrote by hand.
  *
  * FOUR VALUES come from the manifest: the --with-app-basename argument, the
  * --with-distribution-id argument, the exported MOZ_APP_REMOTINGNAME, and --
@@ -640,6 +661,8 @@ function emitMozconfig(config, variant) {
     const objdir = assertEmittable(variantPath(variant, 'objdir'), variant.objdir);
     const brandingDir = assertEmittable(variantPath(variant, 'branding_dir'), variant.branding_dir);
     const lines = [
+        ...GENERATED_BANNER,
+        '',
         'mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/../${POWERBROWSER_OBJDIR:-' + objdir + '}',
         'ac_add_options --enable-application=browser',
         'ac_add_options --disable-updater',
@@ -656,9 +679,10 @@ function emitMozconfig(config, variant) {
 }
 
 /**
- * A freedesktop .desktop entry, nine lines against the files Phase 1 wrote by
- * hand. One emitter, both variants; the dev and release files differ in exactly
- * three lines and all three differences come from the variant.
+ * A freedesktop .desktop entry: the shared generated-from banner, then nine
+ * lines against the files Phase 1 wrote by hand. One emitter, both variants;
+ * the dev and release files differ in exactly three lines and all three
+ * differences come from the variant.
  *
  * THE ABSOLUTE PATHS ARE DERIVED, NOT CONFIGURED (D-04). A desktop entry must
  * name an absolute executable, so Exec and Icon carry the repo root -- but the
@@ -687,6 +711,7 @@ function emitDesktopEntry(config, variant) {
         'default128.png',
     );
     const lines = [
+        ...GENERATED_BANNER,
         '[Desktop Entry]',
         `Name=${assertEmittable('identity.display_name', config.identity.display_name)}`
         + `${assertEmittable(variantPath(variant, 'name_suffix'), variant.name_suffix)}`,
