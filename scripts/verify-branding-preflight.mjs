@@ -514,6 +514,63 @@ function runChecks(root) {
         if (!/prefers-color-scheme: dark/.test(markSvg)) {
             r.fail('brand/mark.svg has lost its prefers-color-scheme dual fill -- a single-fill mark is invisible on one of the two tab-strip themes');
         }
+
+        // WHICH THEME EACH SURFACE FOLLOWS, asserted per surface.
+        //
+        // The dual fill above is correct for the FAVICON, which is OS chrome,
+        // and wrong for the two in-shell surfaces, which sit on the Theia
+        // theme's own background: prefers-color-scheme inside a data-URI <img>
+        // follows the OS, so on a light-mode OS those two drew #1a1a1a on a
+        // #1a1a1a-family background and the mark vanished. Asserting only that
+        // the dual fill is preserved -- which is all this section used to do --
+        // locked that defect in.
+        if (!/export function powerBrowserMarkInline\b/.test(markTs)) {
+            r.fail('powerbrowser-mark.ts no longer exports powerBrowserMarkInline -- the in-shell surfaces have no theme-correct mark and fall back to the OS-driven one, which is invisible on one OS/theme combination');
+        } else if (!/currentColor/.test(markTs)) {
+            r.fail('powerbrowser-mark.ts\'s inline mark no longer resolves its fill through currentColor, so it stops following the Theia theme');
+        }
+
+        // The split, from the consumer side, asserted FROM BOTH DIRECTIONS.
+        //
+        // The positive half alone does not discriminate, and that was found by
+        // planting the fault rather than by reasoning about it: swapping a
+        // render site back to the OS-driven variant leaves the import of the
+        // theme-correct one in place, so "the file mentions the right name"
+        // stays true while the rendered mark is wrong. The forbidden name is
+        // what actually goes red, because a file that renders one variant has
+        // no reason to name the other at all.
+        const OS_THEMED = 'POWERBROWSER_MARK_DATA_URI';
+        const THEIA_THEMED = 'powerBrowserMarkInline';
+        const MARK_CONSUMERS = [
+            {
+                rel: 'theia/extensions/branding/src/browser/powerbrowser-favicon-contribution.ts',
+                wants: OS_THEMED, forbids: THEIA_THEMED,
+                why: 'the favicon is OS chrome and follows the OS theme, which is what the dual fill is for',
+            },
+            {
+                rel: 'theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx',
+                wants: THEIA_THEMED, forbids: OS_THEMED,
+                why: 'it renders on the Theia shell background and must follow the THEIA theme -- the OS-driven mark is invisible there on a light-mode OS',
+            },
+            {
+                rel: 'theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx',
+                wants: THEIA_THEMED, forbids: OS_THEMED,
+                why: 'it renders on the Theia shell background and must follow the THEIA theme -- the OS-driven mark is invisible there on a light-mode OS',
+            },
+        ];
+        for (const consumer of MARK_CONSUMERS) {
+            const text = readText(root, consumer.rel);
+            if (text === null) {
+                r.fail(`${consumer.rel} does not exist -- a declared consumer of the mark is missing`);
+                continue;
+            }
+            if (!text.includes(consumer.wants)) {
+                r.fail(`${consumer.rel} does not use ${consumer.wants}: ${consumer.why}`);
+            }
+            if (text.includes(consumer.forbids)) {
+                r.fail(`${consumer.rel} uses ${consumer.forbids}, which follows the wrong theme for it: ${consumer.why}`);
+            }
+        }
     }
 
     // --- 8. no Mozilla brand colour under our branding directory -------------

@@ -1,7 +1,7 @@
 import * as React from '@theia/core/shared/react';
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { AboutDialog, AboutDialogProps, ABOUT_CONTENT_CLASS } from '@theia/core/lib/browser/about-dialog';
-import { POWERBROWSER_MARK_DATA_URI } from './powerbrowser-mark';
+import { powerBrowserMarkInline } from './powerbrowser-mark';
 import { POWERBROWSER_REPO_URL } from './powerbrowser-welcome-widget';
 
 // D-35: `render()` is overridden entirely -- not just the title -- because
@@ -30,7 +30,11 @@ export class PowerBrowserAboutDialog extends AboutDialog {
     // criterion 1).
     protected renderContent(): React.ReactNode {
         return <div className='ad-container'>
-            <img src={POWERBROWSER_MARK_DATA_URI} alt='' width={48} height={48} />
+            {/* INLINE, not an <img> -- see the same note in
+                powerbrowser-welcome-widget.tsx. currentColor needs the SVG
+                to be part of this document. */}
+            {/* eslint-disable-next-line react/no-danger */}
+            <span dangerouslySetInnerHTML={{ __html: powerBrowserMarkInline(48) }} />
             <h3>Power Browser</h3>
             {this.applicationInfo && <p>Version {this.applicationInfo.version}</p>}
             <p>

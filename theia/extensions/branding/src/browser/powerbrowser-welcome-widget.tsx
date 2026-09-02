@@ -3,7 +3,7 @@ import { injectable, inject, postConstruct } from '@theia/core/shared/inversify'
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { ApplicationServer } from '@theia/core/lib/common/application-protocol';
 import { WindowService } from '@theia/core/lib/browser/window/window-service';
-import { POWERBROWSER_MARK_DATA_URI } from './powerbrowser-mark';
+import { powerBrowserMarkInline } from './powerbrowser-mark';
 
 // D-33: `@powerbrowser/branding` ships its own welcome widget rather than
 // subclassing `@theia/getting-started`'s `GettingStartedWidget` (D-24).
@@ -59,7 +59,14 @@ export class PowerBrowserWelcomeWidget extends ReactWidget {
     // repo link only -- no invented marketing copy or tagline.
     protected render(): React.ReactNode {
         return <div className='gs-container'>
-            <img src={POWERBROWSER_MARK_DATA_URI} alt='' width={64} height={64} />
+            {/* INLINE, not an <img>. The mark inherits the Theia theme's
+                foreground through currentColor, and an <img> is a separate
+                document that inherits nothing -- which is how the OS-driven
+                variant came to render #1a1a1a on the shell's own dark
+                background on a light-mode OS and disappear. The markup is a
+                compile-time constant derived from POWERBROWSER_MARK_SVG. */}
+            {/* eslint-disable-next-line react/no-danger */}
+            <span dangerouslySetInnerHTML={{ __html: powerBrowserMarkInline(64) }} />
             {/* The DISPLAY form, with the space. `PowerBrowser` is the
                 identifier form (class names, the chrome: package, the API
                 object) and inventory/brand-tokens.json records it as the value
