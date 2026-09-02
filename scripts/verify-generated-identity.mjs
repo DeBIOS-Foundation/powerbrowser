@@ -186,6 +186,30 @@ function compareAgainstTracked(targets, config) {
 function checkGeneratedIsNotTracked() {
     const failures = [];
 
+    // THIS RUNS FIRST, and its failure returns rather than accumulating.
+    //
+    // Two reasons. It is the call that was NOT wrapped -- the check-ignore
+    // below exits non-zero by design and always was -- so run where git is not
+    // on PATH, or on an exported tarball with no .git, it threw ENOENT out of
+    // main() uncaught: a stack trace carrying node: frames and this machine's
+    // path to the project, the same user-facing copy rule generate.mjs
+    // enforces by pattern. And it is the call whose failure means git itself
+    // is unusable, which makes check-ignore's own non-zero exit meaningless --
+    // reporting "generated/ is not ignored by git" alongside it would name a
+    // second problem that does not exist and send the reader to .gitignore.
+    let tracked;
+    try {
+        tracked = execFileSync('git', ['ls-files', '--', OUTPUT_DIR_NAME], { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
+    } catch {
+        failures.push(`the project's version control could not be read, so whether ${OUTPUT_DIR_NAME}/ is stored with the project could not be checked. Next step: run this from a working copy of the project, with git available.`);
+        return failures;
+    }
+
+    if (tracked !== '') {
+        const names = tracked.split('\n');
+        failures.push(`git tracks ${names.length} file(s) under ${OUTPUT_DIR_NAME}/, which is generated output: ${names.join(', ')}`);
+    }
+
     try {
         // THE TRAILING SLASH IS LOAD-BEARING. .gitignore's pattern is
         // `/generated/`, which matches directories only, and `git check-ignore`
@@ -197,12 +221,6 @@ function checkGeneratedIsNotTracked() {
         execFileSync('git', ['check-ignore', '-q', '--', `${OUTPUT_DIR_NAME}/`], { cwd: REPO_ROOT, stdio: 'ignore' });
     } catch {
         failures.push(`${OUTPUT_DIR_NAME}/ is not ignored by git -- add "/${OUTPUT_DIR_NAME}/" to .gitignore, so generated files are never stored with the project`);
-    }
-
-    const tracked = execFileSync('git', ['ls-files', '--', OUTPUT_DIR_NAME], { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
-    if (tracked !== '') {
-        const names = tracked.split('\n');
-        failures.push(`git tracks ${names.length} file(s) under ${OUTPUT_DIR_NAME}/, which is generated output: ${names.join(', ')}`);
     }
 
     return failures;
