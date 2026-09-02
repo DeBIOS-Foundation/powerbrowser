@@ -2,24 +2,27 @@
 phase: 02-configuration-manifest-and-generator-core
 reviewed: 2026-09-01T00:00:00Z
 depth: standard
-files_reviewed: 11
+files_reviewed: 14
 files_reviewed_list:
-  - scripts/generate.mjs
-  - scripts/verify-generated-identity.mjs
-  - scripts/lib/config-schema.json
+  - brand/mark.svg
   - configuration.toml
-  - scripts/verify-platform.sh
-  - scripts/verify-branding-preflight.mjs
-  - powerbrowser/branding/dev/configure.sh
-  - powerbrowser/branding/release/configure.sh
   - .github/workflows/rebase-upstream.yml
   - .gitignore
+  - powerbrowser/branding/dev/configure.sh
+  - powerbrowser/branding/release/configure.sh
+  - scripts/generate.mjs
+  - scripts/lib/config-schema.json
+  - scripts/lib/toml.cjs
+  - scripts/lib/toml.LICENSE
+  - scripts/verify-branding-preflight.mjs
+  - scripts/verify-generated-identity.mjs
+  - scripts/verify-platform.sh
   - theia/extensions/branding/src/browser/powerbrowser-mark.ts
 findings:
   critical: 4
-  warning: 14
-  info: 9
-  total: 27
+  warning: 11
+  info: 5
+  total: 20
 status: issues_found
 ---
 
@@ -27,704 +30,527 @@ status: issues_found
 
 **Reviewed:** 2026-09-01
 **Depth:** standard
-**Files Reviewed:** 11
+**Files Reviewed:** 14
 **Status:** issues_found
 
 ## Summary
 
-The generator's structural defences hold where the file claims them loudest: prototype
-pollution is genuinely closed (verified empirically — `__proto__` as a key and as a table
-header are both refused, and `Object.prototype` stays clean), the mask-before-merge ordering
-is real and its self-test case does pin it, the `--check` temp-directory design does prevent
-a self-confirming comparison, and both self-test suites go red on planted faults.
+All 14 files were read. The four registered checks (`generated-byte-identity`,
+`generated-byte-identity-self-test`, `generate-check`, `generate-self-test`) were executed and are
+green on the current tree, and the vendored parser's recorded digest was recomputed and matches
+(`tail -n +23 scripts/lib/toml.cjs | sha256sum` → `195ca51f…cb8f`, 22907 bytes). The emitters are
+byte-identical to the five hand-written comparands today.
 
-The defects are in the layer the file does *not* talk about: **what happens between a
-value passing validation and that value reaching a build artifact.** The schema constrains
-five identifier-shaped settings with regexes and leaves every other string — including
-`identity.display_name`, which is required — completely unconstrained, and no emitter
-escapes anything. TOML basic strings decode `\n`, so a manifest value writes arbitrary
-lines into two files the Gecko build *sources*. Separately, every `variants[].*` key is
-schema-optional but emitter-mandatory, so a config that validates green crashes the
-generator with a raw Node stack trace after it has already half-written `generated/`.
+That is where the good news stops. The generator's entire threat model is stated in its own header
+as "no value out of configuration.toml is ever joined into a write path", and that claim is
+narrowly true and broadly misleading: values *are* joined unescaped into shell script bodies and
+into freedesktop `Exec=` lines. Four defects were reproduced by execution, not inferred:
 
-Two gate-level defects round it out, both of which the surrounding comments assert are not
-possible: `generate-check` is registered in the `--quick` commit gate and is red on every
-fresh clone (verified: exit 1), repeating verbatim the mistake the RE-TIERED block twelve
-lines below it exists to document; and the CI byte-identity step runs *before* the rebase
-it claims to guard.
+1. `identity.display_name` carries no pattern and no escaping, and lands inside a double-quoted
+   shell assignment in `configure.sh` — a file the Gecko build sources. A `"` closes the quote and
+   the rest of the value executes at build time. Verified.
+2. The same value lands unescaped in a `.desktop` file; a newline injects an arbitrary
+   `Exec=` key. Verified, with `failures: []` — the run is fully green.
+3. A `[[variants]]` element missing `objdir`/`branding_dir`/`name_suffix` passes validation with
+   zero failures, emits the literal string `undefined` into `.mozconfig` and `configure.sh`, and
+   then crashes with an uncaught `TypeError` from `path.join` on the two `.desktop` emitters —
+   printing a stack trace with `node:` specifiers, which is the exact copy rule the file's own
+   self-test claims to enforce. The self-test's `downstream array shorter than default` case pins
+   this behaviour as *correct*.
+4. The newly registered `generate-check` row puts `scripts/verify-platform.sh --quick` — the
+   documented commit gate — in a FAIL state on every fresh clone, because `generated/` is
+   git-ignored and `--check` exits 1 on an absent output tree while printing "This is not a
+   mismatch." Verified by moving `generated/` aside: `check exit=1`.
 
-## Narrative Findings (AI reviewer)
+The verification scripts themselves are well built (non-vacuity guards, derived expectation sets,
+planted-fault self-tests), and the review found no way to make any of them green on a broken tree.
+The defects are concentrated in the emit path and in gate placement, not in the comparison logic.
 
 ## Critical Issues
 
-### CR-01: Unescaped manifest values inject arbitrary lines into build-sourced files
+### CR-01: Shell command injection from `identity.display_name` into a build-sourced script
 
-**File:** `scripts/generate.mjs:455-467`, `scripts/generate.mjs:503-518`, `scripts/generate.mjs:536-551`; `scripts/lib/config-schema.json`
+**File:** `scripts/generate.mjs:464`, `scripts/lib/config-schema.json:23-26`
+**Issue:** `emitConfigureSh` interpolates `config.identity.display_name` directly inside a
+double-quoted shell assignment. The schema declares that key with `"type": "string"` and **no
+`regex`**, so any character — including `"`, `;`, `$`, backtick, newline — passes validation.
+`powerbrowser/branding/*/configure.sh` is sourced by the Gecko build system, so the injected text
+runs with the developer's (or CI runner's) privileges.
 
-**Issue:** Four settings that reach an emitter carry no `regex` in the schema:
-`identity.display_name` (required), `variants[].name_suffix`, `variants[].objdir`,
-`variants[].branding_dir`. No emitter escapes or rejects anything, and TOML basic strings
-decode `\n` and `\"`. Verified by running the real `resolveConfig` + emitters:
+Reproduced with a manifest whose only change is `display_name`:
 
-```toml
-display_name = "Acme\"\nExec=/bin/sh -c evil\nX=\""
+```
+display_name = "Acme\"; touch /tmp/pwned-by-generator; #"
 ```
 
-passes validation with zero failures and produces:
+emits, with `failures: []`:
 
 ```sh
-# generated/branding/dev/configure.sh
-MOZ_APP_DISPLAYNAME="Acme"
-Exec=/bin/sh -c evil
-X=" Dev"
+MOZ_APP_DISPLAYNAME="Acme"; touch /tmp/pwned-by-generator; # Dev"
 ```
 
-`configure.sh` is **sourced by the Gecko build**, so that is build-time command execution.
-The same value lands in the `.desktop` files as a second `Exec=` key — freedesktop takes the
-first key, so an injected `Exec=` placed before the real one silently replaces the launched
-binary.
+The same hole exists for every unpatterned string that reaches a shell context:
+`variants[].branding_dir` and `variants[].objdir` are interpolated into the `${VAR:-default}`
+expansions at `scripts/generate.mjs:505` and `:514`, and both are `required: false` with no regex
+(`config-schema.json:79-86`). `product.vendor_display` and the three `legal.*` keys are equally
+unpatterned and will hit the same class of sink as Phase 3 adds emitters.
 
-`objdir` is worse because it also escapes a shell expansion. `objdir = "../../../../etc}$(id)"`
-emits:
+This is not hypothetical-only-in-Phase-7. `configuration.toml` is the documented single rebrand
+input; a downstream editing it is the *intended* user, and CFG-05/`PB_CONFIG_DIR` makes the manifest
+an external file.
 
-```sh
-# generated/.mozconfig
-mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/../${POWERBROWSER_OBJDIR:-../../../../etc}$(id)}
+**Fix:** Escape at the sink, and constrain at the schema. Both, not either.
+
+```js
+// scripts/generate.mjs
+/** A value safe inside a double-quoted shell string. Rejects, never mangles (CFG-03). */
+function shellQuoted(path, value) {
+    if (/["`$\\\n\r]/.test(value)) {
+        // route through the same failure list validate() uses
+        throw new ConfigError(`${path} contains a character that cannot appear in a build `
+            + `setting (a quote, backslash, dollar sign, backtick or line break). `
+            + `Remove it in ${MANIFEST_NAME}, then run: ${RERUN}`);
+    }
+    return value;
+}
+// ...
+`MOZ_APP_DISPLAYNAME="${shellQuoted('identity.display_name', config.identity.display_name)}${variant.name_suffix}"`,
 ```
 
-— the `}` closes the `${...:-...}` default and `$(id)` becomes a live command substitution.
-The same value produces `Exec=/etc}$(id)/dist/bin/acme-browser` in the desktop entry, i.e.
-`join(REPO_ROOT, variant.objdir, ...)` at line 537 normalises the traversal away and yields
-an absolute path outside the repo.
-
-The file's own claim at lines 559-564 — that string-literal write paths are "structurally
-what stops a config key directing a write" — is true and is not the issue. The issue is
-that a config key directs *content* into files that are executed.
-
-**Fix:** Constrain in the schema and reject at validation time; do not escape at emit time
-(escaping is per-format and there are three formats).
+and add to `config-schema.json`, so the rejection happens in `validate()` with the rest and the
+whole failure list is reported at once:
 
 ```json
 "identity.display_name": {
-  "type": "string", "required": true,
-  "regex": "^[^\\u0000-\\u001f\"\\\\$`]{1,64}$",
-  "regex_help": "one line of plain text, 1 to 64 characters, with no quote, backslash, dollar sign or backtick",
+  "type": "string",
+  "required": true,
+  "regex": "^[A-Za-z0-9][A-Za-z0-9 .'-]{0,63}$",
+  "regex_help": "letters, digits, spaces, dots, apostrophes and hyphens only; 1 to 64 characters; must start with a letter or digit",
   "regex_example": "Acme Browser"
-},
-"variants[].name_suffix": { "type": "string", "required": false, "regex": "^[^\\u0000-\\u001f\"\\\\$`]{0,32}$", ... },
-"variants[].objdir":      { "type": "string", "required": false, "regex": "^[A-Za-z0-9][A-Za-z0-9._-]*$", ... },
-"variants[].branding_dir":{ "type": "string", "required": false, "regex": "^[A-Za-z0-9][A-Za-z0-9._/-]*$", ... }
-```
-
-`variants[].*` regexes additionally need CR-02's fix, since `validate()` currently skips
-every `[]` path in its required loop and the value loop only checks paths it finds in the
-merged document. Add a self-test case whose fixture plants a newline in `display_name` and
-requires the run to go red naming `identity.display_name`.
-
----
-
-### CR-02: Every `variants[].*` key is schema-optional but emitter-mandatory — green config, raw stack trace, half-written tree
-
-**File:** `scripts/lib/config-schema.json` (`variants[].*` all `"required": false`); `scripts/generate.mjs:503-518`, `scripts/generate.mjs:536-551`, `scripts/generate.mjs:617-632`
-
-**Issue:** Verified against the real CLI. A manifest whose `dev` variant omits `objdir`
-validates with **zero failures**, then:
-
-- `emitMozconfig` emits `MOZ_OBJDIR=@TOPSRCDIR@/../${POWERBROWSER_OBJDIR:-undefined}` and
-  `--with-branding=${POWERBROWSER_BRANDING:-undefined}`;
-- `emitConfigureSh` emits `MOZ_APP_DISPLAYNAME="Acme Browserundefined"` when `name_suffix`
-  is absent;
-- `emitDesktopEntry` throws on `join(REPO_ROOT, undefined, ...)`.
-
-The throw is uncaught. Actual output:
-
-```
-node:path:1339
-      validateString(arg, 'path');
-TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string. Received undefined
-    at join (node:path:1339:7)
-    at Object.emitDesktopEntry [as emit] (file:///…/scripts/generate.mjs:537:18)
-```
-
-That is a stack frame, a `node:` specifier, and the host path to the project — all three of
-the markers `INTERNAL_MARKERS` (lines 976-980) names, and a direct violation of CLAUDE.md's
-user-facing copy rule. The self-test cannot catch it because no case drives an emitter with
-a partial variant, which makes the `generate-self-test` registry comment's claim ("this row
-is what enforces that rule by pattern rather than by a reviewer's memory") overclaimed.
-
-Compounding it: `writeTargets` (line 617) writes target-by-target with no staging, so by the
-time it throws it has already written `.mozconfig` and both `configure.sh` files. The header
-comment's promise at lines 30-31 ("Nothing is written under `generated/` until every check
-has passed. A failed run leaves the output tree exactly as it found it") does not hold once
-a failure can originate inside the write loop.
-
-**Fix:** Two changes.
-
-1. Make the variant fields required and teach `validate()` to descend into array elements
-   (the comment at lines 236-240 already predicts this and names both call sites that carry
-   the assumption). Minimum viable version, keeping `validate`'s current shape:
-
-```js
-for (const [path, spec] of Object.entries(SCHEMA_KEYS)) {
-    if (!spec.required) continue;
-    if (path.includes('[]')) {
-        const [head, leaf] = path.split('[].');
-        (readPath(doc, head) ?? []).forEach((el, i) => {
-            if (!isUnset(el?.[leaf])) return;
-            failures.push(`${head} entry ${i + 1} does not set ${leaf}. Open ${MANIFEST_NAME}, `
-                + `find the [[${head}]] section for that entry, and give ${leaf} a value. Then run: ${RERUN}`);
-        });
-        continue;
-    }
-    …existing scalar branch…
 }
 ```
 
-2. Stage the write: emit every target into a buffer first, then write, so a failure in the
-   middle of the loop cannot leave a mixed tree.
+Apply the same treatment to `product.vendor_display`, `legal.copyright_holder`,
+`legal.trademark_notice`, `variants[].name_suffix`, `variants[].branding_dir` and
+`variants[].objdir`. Add a self-test case per sink that plants a metacharacter and requires a red.
+
+### CR-02: Desktop-entry key injection — a manifest value can override `Exec=`
+
+**File:** `scripts/generate.mjs:539-549`
+**Issue:** `emitDesktopEntry` writes `Name=${display_name}${name_suffix}` with no escaping and no
+newline rejection. A newline in `display_name` (or `name_suffix`, equally unpatterned) inserts
+arbitrary `key=value` lines into the `[Desktop Entry]` group. Reproduced:
+
+```
+display_name = "Acme\nExec=/bin/sh -c evil\nX=y"
+```
+
+produces, with `failures: []`:
+
+```
+[Desktop Entry]
+Name=Acme
+Exec=/bin/sh -c evil
+X=y Dev
+Exec=/home/chris/coding/Power-Browser/objdir/dist/bin/acme-browser %u
+...
+```
+
+The injected `Exec=` precedes the legitimate one. The freedesktop spec calls duplicate keys in a
+group invalid, but implementations differ and several take the first occurrence — this is a
+launcher that runs attacker-chosen commands on click.
+
+Separately, `variants[].objdir` flows into `join(REPO_ROOT, variant.objdir, 'dist/bin', …)` at
+line 537 with no traversal guard: `objdir = "../../../usr/bin"` produces an `Exec=` line pointing
+outside the repo entirely.
+
+**Fix:** Reject control characters in every value that reaches a `.desktop` key (same
+`shellQuoted`-style guard, extended to `\n`/`\r`/`\t`/`\0`), and constrain `variants[].objdir` and
+`variants[].branding_dir` to relative paths with no `..` segment:
+
+```json
+"variants[].objdir": {
+  "type": "string", "required": true,
+  "regex": "^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$",
+  "regex_help": "a relative path under the project with no '..' segment; letters, digits, dots, underscores, hyphens and slashes only",
+  "regex_example": "objdir"
+}
+```
+
+Then assert `resolve(join(REPO_ROOT, variant.objdir)).startsWith(REPO_ROOT + sep)` before emitting.
+
+### CR-03: A partial `[[variants]]` table validates clean, emits the literal `undefined`, then crashes
+
+**File:** `scripts/generate.mjs:503-518`, `:536-551`, `:1049-1055`, `scripts/lib/config-schema.json:71-86`
+**Issue:** All four `variants[].*` keys are `required: false`, and `validate()` skips every path
+containing `[]` (`generate.mjs:387`). A downstream that declares `[[variants]] id = "dev"` and
+nothing else therefore resolves with **zero failures**, and:
+
+- `.mozconfig` gets `MOZ_OBJDIR=@TOPSRCDIR@/../${POWERBROWSER_OBJDIR:-undefined}` and
+  `--with-branding=${POWERBROWSER_BRANDING:-undefined}`
+- both `configure.sh` files get `MOZ_APP_DISPLAYNAME="Acme Browserundefined"`
+- both `.desktop` emitters throw `TypeError: The "path" argument must be of type string. Received
+  undefined` out of `path.join`
+
+Verified by execution; the two `configure.sh` and `.mozconfig` outputs above are literal transcript.
+
+Two compounding problems:
+
+1. `main()` has no `try`/`catch`, so that `TypeError` reaches the top level and Node prints a stack
+   trace containing `at …`, `node:internal/…` frames and the absolute repo path. That is precisely
+   the three-marker set `INTERNAL_MARKERS` (`generate.mjs:976-980`) exists to forbid, and the
+   self-test cannot see it because it never drives `writeTargets` on a partial variant.
+2. `selfTest()`'s case `downstream array shorter than default` (lines 1049-1055) constructs exactly
+   this manifest and asserts it **resolves successfully**. The suite pins the defect as the
+   contract.
+
+**Fix:** Make the variant fields required and validated per element. `requiredPathsOf`/`validate`
+both currently assume no `[]` path is required — that assumption has to be lifted:
+
+```js
+// validate(): after the scalar loop
+for (const [i, v] of (readPath(doc, 'variants') ?? []).entries()) {
+    for (const [path, spec] of Object.entries(SCHEMA_KEYS)) {
+        if (!path.startsWith('variants[].') || !spec.required) continue;
+        const key = path.slice('variants[].'.length);
+        if (isUnset(v?.[key])) {
+            failures.push(`variants entry ${i + 1} (id ${JSON.stringify(v?.id ?? '')}) `
+                + `${UNSET_MARK} Open ${MANIFEST_NAME}, find that [[variants]] section, and give `
+                + `${key} a value. Then run: ${RERUN}`);
+        }
+    }
+}
+```
+
+Set `"required": true` on all four `variants[].*` keys, and rewrite the `downstream array shorter
+than default` self-test case so it asserts the array is *replaced* (D-07) using a **complete**
+one-element variant table — replacement is what that case exists to pin, not incompleteness.
+Add a new case that plants a variant missing `objdir` and requires a red naming it.
+
+### CR-04: `generate-check` makes `verify-platform.sh --quick` red on every fresh clone
+
+**File:** `scripts/verify-platform.sh:3659`, `scripts/generate.mjs:700-706`
+**Issue:** `generate-check` is registered in the unconditional (i.e. `--quick`) portion of
+`run_own_checks`' `CHECKS` array — the `if [ "$QUICK" -eq 0 ]` guard is at line 3663, *after* it —
+and nothing in `verify-platform.sh` runs the generator first. `generated/` is git-ignored
+(`.gitignore:31`), so it does not exist on a fresh clone, and `checkTargets` returns 1 for an
+absent root.
+
+Verified by moving `generated/` aside:
+
+```
+generate: FAIL -- nothing has been generated in this copy of the project yet, so there is nothing to compare.
+  The generated/ folder is not stored with the project, so a fresh copy of it starts out without one. This is not a mismatch.
+check exit=1
+```
+
+The message says "This is not a mismatch" and then exits non-zero anyway. The registration comment
+at `verify-platform.sh:3644-3648` asserts the opposite of the observed behaviour — "the only tree
+this row ever sees, since a run with no `generated/` reports the absent-directory outcome and not a
+mismatch" — but the absent-directory outcome *is* a failure exit. This is the "gate red for a
+non-defect, so its readers learn to skip it" failure mode that `verify-generated-identity.mjs`'s
+own header (lines 26-40) is built to avoid, reintroduced by a sibling row two commits later.
+
+`.github/workflows/rebase-upstream.yml` escapes it only because it runs `node scripts/generate.mjs`
+at line 95 before `--check` at line 98. The local commit gate has no such step.
+
+**Fix:** Pick one. Either make the absent-output case a PASS-with-note when the row's contract is
+idempotence-only:
+
+```js
+if (!existsSync(root)) {
+    console.log(`${NAME}: --check SKIP -- nothing has been generated in this copy of the project yet, so there is nothing to compare. Run: ${RERUN}`);
+    return 0;
+}
+```
+
+(and give `--check` a `--require-generated` flag for CI, which the workflow already satisfies), or
+register a `generate` row that runs the generator immediately ahead of `generate-check` in the
+`--quick` set. The first is smaller and keeps `--only generate-check` meaningful in both states.
+
+## Warnings
+
+### WR-01: A failing `writeTargets` leaves `generated/` half-written
+
+**File:** `scripts/generate.mjs:617-632`
+**Issue:** The file header (line 30-31) states "Nothing is written under `generated/` until every
+check has passed. A failed run leaves the output tree exactly as it found it." `writeTargets`
+violates this: the missing-variant check is inside the write loop, so a manifest declaring only the
+`dev` variant writes `TARGETS[0]` and `TARGETS[1]` and then `process.exit(1)` on `TARGETS[2]`.
+CR-03's `TypeError` has the same effect from a different direction — three files written, then a
+crash. The next `--check` then reports two stale files and two absent ones on top of the real
+problem.
+**Fix:** Resolve every variant and emit every body into memory *before* the first `writeFileSync`:
 
 ```js
 function writeTargets(config, root) {
     const pending = TARGETS.map(target => {
         const variant = variantById(config, target.variant);
-        if (variant === undefined) { …existing message…; process.exit(1); }
-        return [join(root, target.generated), target.emit(config, variant)];
+        if (variant === undefined) { /* collect failure */ }
+        return { outPath: join(root, target.generated), body: target.emit(config, variant) };
     });
-    for (const [outPath, body] of pending) {
-        mkdirSync(dirname(outPath), { recursive: true });
-        writeFileSync(outPath, body, 'utf8');
-    }
+    if (failures.length > 0) { report(failures); }   // exits before any write
+    for (const { outPath, body } of pending) { mkdirSync(dirname(outPath), { recursive: true }); writeFileSync(outPath, body, 'utf8'); }
     return pending.length;
 }
 ```
 
----
+### WR-02: The new `configure.sh` header gives an instruction that does not work
 
-### CR-03: `generate-check` is in the `--quick` commit gate and is red on every fresh clone
+**File:** `powerbrowser/branding/dev/configure.sh:5-7`, `powerbrowser/branding/release/configure.sh:5-7`
+**Issue:** The header now reads "Generated from configuration.toml by scripts/generate.mjs — do not
+edit here. To change it, edit configuration.toml and run: node scripts/generate.mjs". Following
+that instruction writes `generated/branding/dev/configure.sh` and leaves this tracked file
+unchanged, because `OUTPUT_ROOT` is `REPO_ROOT/generated` (`generate.mjs:71`) and the build still
+consumes the tracked file under D-01. A reader who changes `display_name` and re-runs the generator
+gets: no visible change, no error, and then a red `generated-byte-identity` row with no documented
+recovery path other than "do not edit this file", which is the only way to fix it.
+**Fix:** State the real procedure, e.g. `# To change it, edit configuration.toml, run: node
+scripts/generate.mjs, then copy generated/branding/dev/configure.sh over this file (Phase 2 does not
+write it in place).` — or add a `--write-tracked` mode to the generator and name it here. Either
+way the emitter string and both tracked files change in one commit, per the file's own rule.
 
-**File:** `scripts/verify-platform.sh:3659` (row), `scripts/verify-platform.sh:3630-3641` (its justifying comment)
+### WR-03: Only two of the five generated targets carry the "do not edit" header
 
-**Issue:** The row sits above the `if [ "$QUICK" -eq 0 ]` boundary at line 3663, so it runs
-under `--quick`. `generated/` is git-ignored (`.gitignore:30`), so it is absent on every
-fresh clone. Verified:
+**File:** `scripts/generate.mjs:455-467` vs `:503-518` and `:536-551`
+**Issue:** `emitConfigureSh` gained the three-line generated-from banner; `emitMozconfig` and
+`emitDesktopEntry` did not. `.mozconfig`, `powerbrowser/powerbrowser.desktop` and
+`powerbrowser/powerbrowser-release.desktop` are equally derived and equally at risk of a hand-edit
+that reddens `generated-byte-identity` with no on-file explanation. The inconsistency also means a
+reader cannot tell "generated" from "hand-written" by opening the file, which is the entire purpose
+of the banner.
+**Fix:** Add the same three comment lines to the other two emitters (`#`-prefixed for `.mozconfig`,
+`#`-prefixed for `.desktop`, which freedesktop permits) and to their tracked counterparts in the same
+commit, then re-run `--only generated-byte-identity`.
 
-```
-$ rm -rf generated && node scripts/generate.mjs --check
-generate: FAIL -- nothing has been generated in this copy of the project yet…
-exit=1
-```
+### WR-04: `verify-generated-identity.mjs` silently accepts unknown arguments
 
-A distinct, well-written message — but it still exits 1, so the row is red. The registry
-comment claims the opposite: "On a tree where the generator has already run -- which is the
-only tree this row ever sees, since a run with no generated/ reports the absent-directory
-outcome and not a mismatch". That conflates "not a mismatch" with "not a failure"; the row
-does not observe the message, only the exit code.
-
-This is the exact defect the RE-TIERED block twelve lines below it documents in its own
-words: *"registered in a deleted driver's --quick set while actually depending on something
---quick promises not to need, so `--quick` could never be green on a fresh checkout and was
-therefore useless as a commit gate."* `--quick` is the repo's stated commit gate
-(CLAUDE.md), so this breaks it for every new checkout and every worktree.
-
-**Fix:** Either move the row into the `QUICK -eq 0` block, or make the absent-directory
-outcome not a failure for gating purposes. The second is closer to the design intent, since
-the message already says "This is not a mismatch":
-
-```js
-// checkTargets, absent-root branch
-console.error(`${NAME}: SKIP -- nothing has been generated in this copy of the project yet…`);
-console.error(`  Next step: run: ${RERUN}`);
-return 0;
-```
-
-If exit 0 for an absent tree is unacceptable, add a `--check --require-generated` flag and
-register only the plain `--check` under `--quick`. Do not leave the row as-is: a red commit
-gate on a clean checkout is what this file's own comments say trains readers to skip it.
-
----
-
-### CR-04: The rebase workflow's byte-identity step runs before the rebase it claims to guard
-
-**File:** `.github/workflows/rebase-upstream.yml:71-111`
-
-**Issue:** The comment at lines 87-90 states the byte-identity step "is the step that goes
-red if an upstream rebase moved one of those five files." It is step 4 of 6; the rebase is
-step 6. Nothing re-runs it afterwards — confirmed by grepping `scripts/rebase-upstream.sh`,
-which invokes only `scan-brand-residue.mjs` (line 151) and never `generate.mjs` or
-`verify-generated-identity.mjs`. A rebase that clobbered `.mozconfig` or either
-`configure.sh` exits the job green.
-
-By this repo's own rule (CLAUDE.md: a check that cannot go red is not a check), a gate whose
-stated protective purpose is structurally unreachable is a defect, not a comment error.
-
-**Fix:** Keep the pre-rebase run (its fail-fast-on-a-dirty-tree value is real, same argument
-as the brand scan at line 68) and add a post-rebase run:
-
-```yaml
-      - name: Rebase onto requested tag
-        env:
-          REBASE_TAG: ${{ inputs.tag }}
-        run: bash scripts/rebase-upstream.sh --tag "$REBASE_TAG"
-
-      - name: Re-check byte-identity after the replay
-        run: node scripts/verify-generated-identity.mjs
-```
-
-If the intent was only ever a pre-flight, delete the claim in lines 87-90 rather than
-leaving a comment that promises coverage the job does not provide.
-
----
-
-## Warnings
-
-### WR-01: `process.exit` inside `checkTargets`' `try` skips the `finally`, leaking the temp directory
-
-**File:** `scripts/generate.mjs:700-768` (the `try`/`finally`), reached via `writeTargets` at line 624
-
-**Issue:** `writeTargets` calls `process.exit(1)` when a variant is missing. `process.exit`
-does not unwind `finally` blocks, so `rmSync(dir, …)` at line 766 never runs. Verified: a
-manifest with the `release` variant deleted leaves one `/tmp/generate-check-*` directory
-behind per invocation. The comment at lines 689-690 explicitly claims the opposite
-("Returns an exit code rather than exiting, so the temporary directory's cleanup is not
-skipped on the way out") — the claim is true of `checkTargets` itself and false of its
-callee.
-
-**Fix:** Have `writeTargets` throw a tagged error or return a failure list instead of
-exiting, and let `checkTargets`/`main` decide the exit code. CR-02's staged-write refactor
-is the natural place to do it.
-
----
-
-### WR-02: `loadLayer` reports every read failure as "configuration.toml was not found at the top of the project"
-
-**File:** `scripts/generate.mjs:146-155`
-
-**Issue:** The bare `catch` covers `ENOENT`, `EACCES`, `EISDIR` and `ELOOP` alike, and it
-hardcodes `MANIFEST_NAME` in the message even though `path` is a parameter. A downstream
-manifest (Phase 7, and today `--self-test`'s fixtures) that is unreadable produces
-"configuration.toml was not found at the top of the project" — naming the wrong file and
-the wrong problem, and offering a next step that cannot fix it.
-
-**Fix:** Distinguish the file and the reason:
+**File:** `scripts/verify-generated-identity.mjs:318-319`
+**Issue:** `main()` does `if (process.argv.includes('--self-test'))` and otherwise runs the full
+check. A typo — `--selftest`, `--self_test`, `--check` — runs the *wrong mode* and prints
+`verify-generated-identity: PASS`, so an operator believes the self-test discriminated when it never
+ran. `generate.mjs` rejects unknown arguments for exactly this reason
+(`rejectUnknownArguments`, lines 100-107); this sibling does not.
+**Fix:** Mirror the sibling:
 
 ```js
-} catch (err) {
-    const what = path === MANIFEST_PATH
-        ? `${MANIFEST_NAME} at the top of the project`
-        : 'the settings file this run was pointed at';
-    const why = err.code === 'ENOENT' ? 'could not be found' : 'could not be read';
-    console.error(`${NAME}: FAIL -- ${what} ${why}.`);
-    …
+for (const a of process.argv.slice(2)) {
+    if (a !== '--self-test') {
+        console.error(`${NAME}: FAIL -- unknown argument '${a}'`);
+        process.exit(1);
+    }
 }
 ```
 
-Keep the existing next-step line for the `MANIFEST_PATH` case only.
+### WR-05: Unguarded `git ls-files` crashes with a stack trace
 
----
-
-### WR-03: The schema is loaded and parsed at module scope with no error handling
-
-**File:** `scripts/generate.mjs:122`
-
-**Issue:** `JSON.parse(readFileSync(SCHEMA_PATH, 'utf8'))` is unguarded and runs at *import*
-time, so a missing or malformed `scripts/lib/config-schema.json` produces a raw
-`SyntaxError`/`ENOENT` stack trace carrying `node:fs`, the absolute schema path and the
-project root — the same three markers `INTERNAL_MARKERS` bans. It also takes down
-`verify-generated-identity.mjs`, which imports this file, so the gate fails with a stack
-trace rather than a message.
-
-**Fix:** Wrap it and emit the file's own copy style:
+**File:** `scripts/verify-generated-identity.mjs:202`
+**Issue:** The `git check-ignore` call above it is wrapped in `try`/`catch` because it exits
+non-zero by design; `execFileSync('git', ['ls-files', …])` is not wrapped at all. Run where `git` is
+absent from `PATH`, or on an exported tarball with no `.git`, it throws `ENOENT` /
+"not a git repository" out of `main()` uncaught — a stack trace with `node:internal` frames and the
+absolute repo path, which is the same copy-rule violation as CR-03.
+**Fix:**
 
 ```js
-let schema;
+let tracked;
 try {
-    schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf8'));
+    tracked = execFileSync('git', ['ls-files', '--', OUTPUT_DIR_NAME], { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
 } catch {
-    console.error(`${NAME}: FAIL -- the list of settings this project understands is missing or damaged.`);
-    console.error('  Next step: restore the project from a clean copy; editing configuration.toml will not help.');
-    process.exit(1);
+    failures.push(`the project's version control could not be read, so whether ${OUTPUT_DIR_NAME}/ is stored with the project could not be checked. Next step: run this from a working copy of the project.`);
+    return failures;
 }
 ```
 
----
+### WR-06: Regexes built from unescaped inventory values weaken two assertions
 
-### WR-04: The `invalid basename` case's `extra` assertion cannot go red
-
-**File:** `scripts/generate.mjs:1073-1075` with `snapshotOutputRoot` at line 888
-
-**Issue:** The case asserts "the rejected run changed what is under generated/". It cannot
-fire, for two independent reasons: (a) the case runs `resolveConfig`, which never writes
-anything under any circumstance, so no rejected run in this suite can touch `generated/`;
-and (b) `snapshotOutputRoot` compares only the sorted **file name list**, so even a run that
-rewrote every byte of all five files would compare equal. It is a green line asserting
-nothing — the exact failure mode the file's own comment at lines 216-222 of
-`verify-generated-identity.mjs` calls out one level up.
-
-**Fix:** Either make it discriminate — snapshot content digests, and drive the *writing*
-path (`main()`-equivalent) rather than `resolveConfig` — or delete the `extra` hook and stop
-claiming the property.
+**File:** `scripts/verify-branding-preflight.mjs:293`, `:436`
+**Issue:** Both build a `RegExp` by interpolating a JSON value:
 
 ```js
-function snapshotOutputRoot() {
-    if (!existsSync(OUTPUT_ROOT)) return '(absent)';
-    return filesUnder(OUTPUT_ROOT, '', []).sort()
-        .map(rel => `${rel}:${createHash('sha256').update(readFileSync(join(OUTPUT_ROOT, rel))).digest('hex')}`)
-        .join('\n');
+if (!new RegExp(`stockControl \\? 'Mozilla' : '${exp.vendor_machine}'`).test(identity)) { … }
+const leak = new RegExp(`${exp.identifier_form}[ "<]`);
+```
+
+`vendor_machine`'s own schema pattern (`config-schema.json:7`) permits `.`, `-` and `_`. A value
+like `Ac.e` becomes the wildcard pattern `Ac.e` and matches `Acme` — the assertion passes on a
+vendor string that is not the declared one, which is exactly the tautology this file was written to
+prevent. `identifier_form` is unconstrained entirely; a value containing `(`, `[` or `+` either
+changes the match semantics or throws `SyntaxError` at construction, uncaught.
+**Fix:** Escape before interpolating, or drop to a literal comparison where possible:
+
+```js
+const rx = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+if (!identity.includes(`stockControl ? 'Mozilla' : '${exp.vendor_machine}'`)) { … }
+const leak = new RegExp(`${rx(exp.identifier_form)}[ "<]`);
+```
+
+### WR-07: The vendored parser's provenance digest is never machine-verified
+
+**File:** `scripts/lib/toml.cjs:1-23`
+**Issue:** The header records `sha256 195ca51f…cb8f` over `tail -n +23`. I recomputed it and it
+matches today. Nothing in the repo checks it: `grep` across `scripts/verify-platform.sh` and every
+`scripts/*.mjs` finds a single reference to `toml.cjs` — the `import` in `generate.mjs:63`. A
+re-vendor to a different upstream version, a hand-edit to the body (which the header forbids), or a
+supply-chain substitution all pass every gate this repo has. This is the same "hand-kept expectation
+that can only ever agree with the tree it was copied from" pattern CLAUDE.md's verification section
+forbids — except here there is no comparison at all.
+
+The `tail -n +23` instruction is also coupled to the header being exactly 22 lines, which nothing
+enforces; adding one comment line silently makes the recorded command hash the wrong bytes and still
+"pass" by eye.
+**Fix:** Register a `--quick` row that derives the boundary rather than hard-coding 22:
+
+```js
+// scripts/verify-vendored-parser.mjs
+const text = readFileSync(TOML_PATH, 'utf8');
+const body = text.slice(text.indexOf('/*!'));           // derived: the upstream banner starts the body
+const want = /^\/\/\s+sha256:\s+([0-9a-f]{64})$/m.exec(text)[1];   // derived: read from the header
+const got = createHash('sha256').update(body).digest('hex');
+```
+
+then `"vendored-parser-digest|node $REPO_ROOT/scripts/verify-vendored-parser.mjs"` in the registry,
+with a `--self-test` that plants a byte in a temp copy and requires a red.
+
+### WR-08: `variants[].id` is optional, duplicates are silently accepted, first match wins
+
+**File:** `scripts/generate.mjs:602-604`, `scripts/lib/config-schema.json:71-74`
+**Issue:** `variantById` is `find(v => v.id === id)`. Three consequences, none reported:
+a variant with no `id` (permitted — `required: false`) is unreachable dead configuration; two
+variants sharing an `id` silently resolve to the first, so a downstream that edits the second gets no
+effect and no message; and a variant with an `id` matching neither `dev` nor `release` is never
+consulted at all, so a typo'd `id = "relase"` surfaces only as the missing-variant error for
+`release`, sending the reader to add a section rather than fix a letter.
+**Fix:** Make `variants[].id` required (see CR-03), and reject duplicates and orphans in `validate`:
+
+```js
+const ids = (readPath(doc, 'variants') ?? []).map(v => v?.id);
+const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
+for (const id of new Set(dupes)) {
+    failures.push(`two or more [[variants]] sections both use the id ${JSON.stringify(id)}; only the first is ever used. Give each variant its own id in ${MANIFEST_NAME}, then run: ${RERUN}`);
+}
+const used = new Set(TARGETS.map(t => t.variant));
+for (const id of ids) {
+    if (!used.has(id)) failures.push(`the [[variants]] section with id ${JSON.stringify(id)} is never used; the project builds ${[...used].join(' and ')}. Check the spelling in ${MANIFEST_NAME}, then run: ${RERUN}`);
 }
 ```
 
----
+### WR-09: Invoking the generator through a symlink is a silent no-op that exits 0
 
-### WR-05: The self-test's fixture-vacuity guard compares against the wrong anchor and can never fire
-
-**File:** `scripts/generate.mjs:1144-1147`
-
-**Issue:** `if (testCase.toml === clean)` compares a `FIXTURE_BASE`-derived fixture against
-the *real* `configuration.toml` text. Those two documents differ in every value and can
-never be equal, so the guard is dead. The failure mode it was clearly written for is a
-`.replace()` whose anchor drifted out of `FIXTURE_BASE`, leaving `testCase.toml ===
-FIXTURE_BASE` — an unmodified, fully valid fixture.
-
-**Fix:**
+**File:** `scripts/generate.mjs:93-94`
+**Issue:** `IS_MAIN` compares `resolve(process.argv[1])` — which normalises but does **not** resolve
+symlinks — against `fileURLToPath(import.meta.url)`, which Node has already realpath-resolved.
+Invoked via any symlink (`bin/generate -> ../scripts/generate.mjs`, a `nix develop` shim, a
+`node_modules/.bin` entry), the two differ, `main()` never runs, nothing is written, and the process
+exits 0. A CI step or a Makefile target wired that way reports success having generated nothing —
+and `generate-check` would then report the tree as stale for a reason nobody can locate.
+**Fix:** Realpath both sides:
 
 ```js
-if (testCase.toml === FIXTURE_BASE) {
-    complain(testCase, 'plants a fixture identical to FIXTURE_BASE; its replace() anchor has drifted and the case proves nothing');
-    return;
-}
-```
-
----
-
-### WR-06: `snapshotOutputRoot` reads the real `generated/` during `--self-test`
-
-**File:** `scripts/generate.mjs:888-890`, used at lines 1025 and 1073
-
-**Issue:** Every other planted fault in this suite is deliberately confined to a `mkdtemp`
-tree — the comments at lines 893-898 and 249-254 make that a stated rule. This one reads
-shared, mutable state outside the test's control, so a concurrent `node scripts/generate.mjs`
-(or a `verify-platform.sh` run in another worktree sharing the checkout) makes the case go
-red for a reason unrelated to the fault.
-
-**Fix:** Fold into WR-04 — drive a throwaway root and snapshot that.
-
----
-
-### WR-07: An empty or non-table `variants` array is reported as an unknown setting
-
-**File:** `scripts/generate.mjs:199-205`
-
-**Issue:** `collectLeaves` only descends into an array when `value.every(isTable) &&
-value.length > 0`. Verified: `variants = []` in the manifest produces
-
-```
-unknown setting 'variants' -- configuration.toml has no setting by that name.
-Check the spelling of the setting and of the section header above it…
-```
-
-The setting name is spelled correctly and the section header is fine, so the next step sends
-the reader hunting for a typo that does not exist — the precise anti-pattern the `unknown
-key` self-test case (lines 1078-1088) exists to prevent for a different input.
-
-**Fix:** Treat an array whose elements are not all tables as a distinct failure class:
-
-```js
-if (Array.isArray(value)) {
-    if (value.length > 0 && value.every(isTable)) {
-        for (const element of value) collectLeaves(element, `${path}[]`, leaves, refused);
-    } else {
-        malformed.push(path);   // reported as: "'variants' must be written as one or more
-                                // [[variants]] sections, each with its own settings"
-    }
-    continue;
-}
-```
-
----
-
-### WR-08: Unknown-setting failures always name `configuration.toml`, even for a downstream-layer key
-
-**File:** `scripts/generate.mjs:209-225`, called from lines 793-795
-
-**Issue:** `collectLeaves` pools leaves from both layers into one array and `rejectUnknown`
-hardcodes `MANIFEST_NAME` in both messages. Today the downstream layer is either the derived
-required-layer or a self-test fixture, so nothing is wrong on screen. In Phase 7 —
-`PB_CONFIG_DIR`, which the comment at lines 138-144 already names as the reason the parameter
-exists — a downstream's typo will tell its author to go and edit *this* project's manifest.
-
-**Fix:** Carry the source path alongside each leaf and use it in the message. Two lines in
-`collectLeaves` (`leaves.push({ path, value, from })`) and one in each `failures.push`.
-
----
-
-### WR-09: `validate()` dereferences `SCHEMA_KEYS[path]` with no guard
-
-**File:** `scripts/generate.mjs:397-400`
-
-**Issue:** `const spec = SCHEMA_KEYS[path];` then `spec.type` with no `undefined` check.
-Today the merged leaves are provably a subset of the two rejected layers, so it cannot fire
-— but the invariant lives three functions away and is not asserted anywhere. Any change to
-`mergeInto` that synthesises a key (or a schema edit that removes a path) turns this into an
-uncaught `TypeError` with the same stack-trace leak as CR-02.
-
-**Fix:**
-
-```js
-const spec = SCHEMA_KEYS[path];
-if (spec === undefined || reportedUnset.has(path)) continue;
-```
-
----
-
-### WR-10: `verify-generated-identity.mjs` runs its CLI at import time and rejects no arguments
-
-**File:** `scripts/verify-generated-identity.mjs:345`, `scripts/verify-generated-identity.mjs:319`
-
-**Issue:** `process.exit(main())` at top level, with no `IS_MAIN` guard. `generate.mjs`
-carries a 15-line comment (lines 78-94) explaining in detail why an unguarded entry point is
-a defect — importing it "would end the check before it asserted anything -- a check that
-exits green having run none of its own body" — and then the file that consumes that guard
-does not apply it to itself. Separately, `main()` checks only `process.argv.includes('--self-test')`,
-so `node scripts/verify-generated-identity.mjs --slef-test` silently runs the wrong mode and
-exits 0, whereas `generate.mjs` rejects the same typo.
-
-**Fix:** Copy both mechanisms across:
-
-```js
+import { realpathSync } from 'node:fs';
 const IS_MAIN = process.argv[1] !== undefined
-    && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (IS_MAIN) {
-    for (const a of process.argv.slice(2)) {
-        if (a !== '--self-test') { console.error(`${NAME}: FAIL -- unknown argument '${a}'`); process.exit(1); }
-    }
-    process.exit(main());
-}
+    && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url));
 ```
 
----
+(wrap in `try`/`catch` returning `false` so a nonexistent `argv[1]` does not throw).
 
-### WR-11: `checkGeneratedIsNotTracked`'s `git ls-files` call is unguarded, and `check-ignore` conflates two exit codes
+### WR-10: The mark's dual fill keys off the OS theme, not the shell theme — it is invisible in one combination
 
-**File:** `scripts/verify-generated-identity.mjs:197-207`
+**File:** `theia/extensions/branding/src/browser/powerbrowser-mark.ts:30`, `brand/mark.svg:34`
+**Issue:** The SVG fills `#1a1a1a` by default and `#fff` under `@media (prefers-color-scheme: dark)`.
+Both files' comments state that `#1a1a1a` "is the shell's dominant neutral" and that the shell has a
+"fixed dark background" (`powerbrowser-mark.ts:24`, `:26`), and `configuration.toml:50` sets
+`default_theme = "dark"`. But `prefers-color-scheme` inside a data-URI `<img>` follows the **OS**,
+not the Theia theme. The three consumers split:
 
-**Issue:** Two problems in one function.
+- `powerbrowser-favicon-contribution.ts:16` — favicon, follows the OS chrome. The dual fill is
+  correct here, and this is the case the comment reasons about.
+- `powerbrowser-about-dialog.tsx:33` and `powerbrowser-welcome-widget.tsx:62` — `<img>` on the
+  shell's fixed dark background. On a light-mode OS these render `#1a1a1a` on a `#1a1a1a`-family
+  background: the mark disappears.
 
-- Line 202: `execFileSync('git', ['ls-files', …])` has no `try`. Run outside a git work tree,
-  or on a host without `git` on `PATH`, it throws uncaught — a stack trace carrying `node:child_process`
-  and the host path, from a script whose entire purpose is a clean pass/fail verdict.
-- Lines 189-200: `git check-ignore` exits 1 for "not ignored" and 128 for an error (not a
-  repository, bad option). The `catch` treats both as "not ignored" and prints
-  `add "/generated/" to .gitignore` — advice that cannot fix a 128.
+The reasoning in both comments assumes one consumer and generalises to three. (Pre-existing; carried
+into this phase by the `powerbrowser/branding/mark.svg` → `brand/mark.svg` move, and
+`verify-branding-preflight.mjs:489` now asserts the dual fill is *preserved*, which locks the defect
+in.)
+**Fix:** Give the two in-shell consumers a theme-correct variant rather than the OS-driven one —
+either a second export whose fill is `currentColor` so it inherits the Theia theme's foreground:
 
-**Fix:**
-
-```js
-function git(args) {
-    try { return { ok: true, out: execFileSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' }) }; }
-    catch (err) { return { ok: false, status: err.status }; }
-}
-const ignored = git(['check-ignore', '-q', '--', `${OUTPUT_DIR_NAME}/`]);
-if (!ignored.ok && ignored.status === 1) failures.push(`${OUTPUT_DIR_NAME}/ is not ignored by git -- add "/${OUTPUT_DIR_NAME}/" to .gitignore…`);
-else if (!ignored.ok) failures.push('this check has to run inside a copy of the project managed by git, and could not reach it');
+```ts
+export const POWERBROWSER_MARK_SVG_INHERIT = POWERBROWSER_MARK_SVG
+    .replace(/<style>[\s\S]*?<\/style>/, '')
+    .replace(/class="a"/g, 'fill="currentColor"');
 ```
 
----
+rendered inline (not via `<img>`, which does not inherit `currentColor`), or explicitly pass the
+resolved Theia theme kind. Then extend the preflight's section 7 to assert both variants exist.
 
-### WR-12: The rebase workflow hand-rolls three checks instead of driving the one registry
+### WR-11: The rebase workflow's generator gates run only *before* the rebase, so they cannot observe what the rebase did
 
-**File:** `.github/workflows/rebase-upstream.yml:94-101`
+**File:** `.github/workflows/rebase-upstream.yml:94-101` vs `:108-111`
+**Issue:** The comment at lines 86-90 states the byte-identity step "is the step that goes red if an
+upstream rebase moved one of those five files". All three generator steps run at lines 94-101; the
+rebase runs at line 108. A gate placed before the operation it is meant to characterise reports on
+the pre-operation tree only. The stated purpose is not achieved by the step's position.
 
-**Issue:** The workflow invokes `node scripts/generate.mjs`, `… --check` and
-`node scripts/verify-generated-identity.mjs` directly. CLAUDE.md is unambiguous: "One driver,
-one registry: `scripts/verify-platform.sh`… Adding a check means appending one row to that
-registry." Two consequences, both real: the workflow is now a second place that must be
-edited when a row changes, and it silently omits both self-test rows
-(`generated-byte-identity-self-test`, `generate-self-test`) that this phase registered — so
-CI never proves the instruments discriminate.
-
-**Fix:**
-
-```yaml
-      - name: Generate the derived build surfaces
-        run: node scripts/generate.mjs
-
-      - name: Verify the generator's four registered rows
-        run: |
-          for label in generate-self-test generate-check \
-                       generated-byte-identity generated-byte-identity-self-test; do
-            bash scripts/verify-platform.sh --only "$label"
-          done
-```
-
----
-
-### WR-13: `firstDifferingLine` and `variantById` are duplicated verbatim across the two scripts
-
-**File:** `scripts/generate.mjs:659-666` / `scripts/verify-generated-identity.mjs:99-106`; `scripts/generate.mjs:602-604` / `scripts/verify-generated-identity.mjs:108`
-
-**Issue:** Two identical function bodies plus two near-identical eight-line comments, in
-files that already have an import edge (`verify-generated-identity.mjs` imports `REPO_ROOT`,
-`TARGETS` and `resolveConfig` from `generate.mjs`, specifically so that nothing is restated).
-The reasoning at lines 14-24 of `verify-generated-identity.mjs` — a hand-kept restatement can
-only ever agree with what it was copied from — applies to these two functions as directly as
-it does to the target table.
-
-**Fix:** Export both from `generate.mjs` and import them, exactly as `TARGETS` already is:
-
-```js
-export function firstDifferingLine(a, b) { … }
-export function variantById(config, id) { … }
-```
-
-then in `verify-generated-identity.mjs`:
-
-```js
-import { REPO_ROOT, TARGETS, firstDifferingLine, variantById, resolveConfig } from './generate.mjs';
-```
-
----
-
-### WR-14: The `--quick` honesty claim for `generate-check` is wrong about what it writes
-
-**File:** `scripts/verify-platform.sh:3655-3658`
-
-**Issue:** "The generator reads configuration.toml and a JSON schema and **writes under
-generated/**". Neither registered row runs the plain generator: `generate-check` emits into
-`mkdtemp` and compares, `generate-self-test` emits into `mkdtemp` trees. Nothing under
-`generated/` is written by either. This matters because a future reader deciding whether the
-row is safe under `--quick`, or whether it explains a dirty tree, will act on a false
-statement.
-
-**Fix:** Replace the sentence with what the rows actually do: "both read `configuration.toml`
-and a JSON schema, emit into `mkdtemp` directories, and write nothing under `generated/`."
-
----
+(The claim is separately dubious — the five comparands are `.mozconfig` and files under
+`powerbrowser/`, none of which live in the `upstream/` tree a rebase replays onto — but the ordering
+defect stands regardless of which claim is intended.)
+**Fix:** Either move the byte-identity step after `Rebase onto requested tag`, or add a second
+invocation there and reword the pre-rebase comment to say what it actually asserts (that the tree was
+already clean before the replay, which is a legitimate fail-fast and is exactly how the residual-brand
+scan at line 68 is justified).
 
 ## Info
 
-### IN-01: The registry comment says "nine planted faults" and then lists eight
+### IN-01: `firstDifferingLine` can report "line 0" for byte-differing files
 
-**File:** `scripts/verify-platform.sh:3644-3649`
-**Issue:** The list omits the `partial identity table` case — which is the single most
-load-bearing case in the suite (it is the only one that pins the mask-before-merge ordering).
-**Fix:** Add "a partially-stated identity table" to the enumeration.
+**File:** `scripts/generate.mjs:659-666`, `scripts/verify-generated-identity.mjs:99-106`
+**Issue:** Both copies return 0 when every `split('\n')` element is equal. `Buffer.compare` has
+already failed by then, so the only way to reach the return is a byte difference that
+`Buffer.toString('utf8')` normalises away — an invalid UTF-8 sequence replaced by U+FFFD in both.
+The operator is then told "differs, from line 0", which names no line.
+**Fix:** Return `x.length + 1` on fallthrough and have the caller print "differs, but not in any
+text line — the two files differ in bytes that are not valid text" for that value.
 
----
+### IN-02: `sectionOf`'s array-path branch is unreachable
 
-### IN-02: Self-test case message says "one variant, not three"; the manifest declares two
+**File:** `scripts/generate.mjs:126-128`
+**Issue:** `.replace('[]', '')` exists to render `variants[].id` as `[variants]`, but `sectionOf` is
+called from exactly one site (`validate`, line 391) which is guarded by
+`if (!spec.required || path.includes('[]')) continue` at line 387. No `[]` path can reach it.
+**Fix:** Drop the `.replace`, or keep it and add the array-required support CR-03 requires — the
+latter makes it live.
 
-**File:** `scripts/generate.mjs:1053`
-**Issue:** `holds: 'one variant, not three'` — `configuration.toml` has exactly two
-`[[variants]]` sections, so the message a reader sees on the green path and in the failure
-path both misstate the defaults layer.
-**Fix:** `holds: 'one variant, not the two in the defaults layer'`.
+### IN-03: `--check` and `--self-test` together silently ignore `--check`
 
----
+**File:** `scripts/generate.mjs:1201`, `:1210`
+**Issue:** `if (args.includes('--self-test')) return selfTest();` runs first, so
+`node scripts/generate.mjs --check --self-test` performs the self-test and never the freshness
+comparison, with no notice. The argument validator accepts both.
+**Fix:** Reject the combination in `rejectUnknownArguments`, the same way `verify-platform.sh:85`
+rejects `--gate` with `--quick`.
 
-### IN-03: `--check`'s non-vacuity branch is unreachable
+### IN-04: The three identifier-name schema entries are byte-duplicated
 
-**File:** `scripts/generate.mjs:716-720`
-**Issue:** `writeTargets` either returns `TARGETS.length` (5) or exits, so `fresh.length === 0`
-cannot be true while `TARGETS` is non-empty. Defensible as an assertion against a future
-empty table, but as written it is a branch no test can enter.
-**Fix:** Either leave it and note in the comment that it guards an emptied `TARGETS`, or
-assert the stronger and reachable property `fresh.length === TARGETS.length`.
+**File:** `scripts/lib/config-schema.json:27-47`
+**Issue:** `identity.app_basename`, `identity.binary_name` and `identity.remoting_name` carry the
+same `regex`, `regex_help` and `regex_example` written out three times. A future tightening (CR-01
+adds several) has to be made in three places and will be made in two.
+**Fix:** Add a sibling `"patterns"` map to the schema and let a key reference it by name
+(`"pattern_ref": "unix-identifier"`), resolved once in `generate.mjs` where `spec.regex` is read.
 
----
+### IN-05: The preflight parses another script's JavaScript with a whitespace-coupled regex
 
-### IN-04: `--check` and `--self-test` together silently ignore `--check`
-
-**File:** `scripts/generate.mjs:1198-1210`
-**Issue:** Both flags pass `rejectUnknownArguments`; `--self-test` is dispatched first and
-`--check` is discarded with no message.
-**Fix:** Reject the combination the way `verify-platform.sh:85-86` rejects `--gate --quick`.
-
----
-
-### IN-05: `extra` failures are reported under the "leaked … into what a reader sees" wording
-
-**File:** `scripts/generate.mjs:1157-1160`
-**Issue:** `extra` returns non-leak conditions too — `'the rejected run changed what is under
-generated/'` is printed as `'invalid basename' leaked the rejected run changed what is under
-generated/ into what a reader sees`, which is not a sentence and misdescribes the failure.
-**Fix:** Keep `internalsLeaked` and `extra` as separate result buckets with separate
-`complain` wordings.
-
----
-
-### IN-06: `Allowed form: ${spec.regex}` puts a raw regex in user-facing copy
-
-**File:** `scripts/generate.mjs:407-412`
-**Issue:** The message already carries `regex_help` (plain words) and `regex_example` (a
-concrete valid value), so the raw `^[a-z][a-z0-9-]{1,31}$` adds an implementation detail to
-copy that CLAUDE.md says should state "the problem in plain language" and end with a real
-affordance. Borderline against the letter of the rule (a regex is not a pref key or a raw
-exception message) but against its spirit.
-**Fix:** Drop the `Allowed form:` clause, or gate it behind a `--verbose`/diagnostics path.
-
----
-
-### IN-07: Duplicate `variants[].id` values are silently resolved first-wins
-
-**File:** `scripts/generate.mjs:602-604`; `scripts/verify-generated-identity.mjs:108`
-**Issue:** `.find()` takes the first match, so two `[[variants]]` entries with `id = "dev"`
-means the second is ignored with no diagnostic — and the two implementations would have to
-stay agreed for the byte-identity gate to remain meaningful (see WR-13).
-**Fix:** Add a validation failure for duplicate ids once WR-13 has collapsed the two lookups
-into one.
-
----
-
-### IN-08: `powerbrowser-mark.ts`'s raster path became ambiguous after the move to `brand/`
-
-**File:** `theia/extensions/branding/src/browser/powerbrowser-mark.ts:10-12`
-**Issue:** The comment now reads "`brand/mark.svg`, which is the one source all ten
-`branding/{dev,release}/default{16,32,48,64,128}.png` rasters are rendered from." The rasters
-live under `powerbrowser/branding/`, but the sentence's new first path is `brand/`, so the
-bare `branding/…` reads as a sibling of it.
-**Fix:** Spell the raster path in full: `powerbrowser/branding/{dev,release}/default{16,32,48,64,128}.png`.
-
----
-
-### IN-09: `filesUnder` treats a symlinked directory as a file and reads through it
-
-**File:** `scripts/generate.mjs:642-649`
-**Issue:** `entry.isDirectory()` is false for a symlink to a directory, so such an entry is
-pushed as a file and then `readFileSync` follows it. Not a trust boundary today (the tree is
-the developer's own), but it makes `--check`'s "extra file" report wrong for a symlinked
-subdirectory, and it becomes relevant if `generated/` is ever produced by CI from an
-untrusted source.
-**Fix:** `if (entry.isDirectory()) … else if (entry.isFile()) out.push(rel); else` report the
-entry as a non-regular file that does not belong under `generated/`.
-
----
-
-## What was checked and found sound
-
-Recorded so a later reviewer does not re-litigate it:
-
-- **Prototype pollution is genuinely closed.** Verified empirically: `__proto__ = "x"`,
-  `[__proto__]` as a table header, `constructor` and `prototype` are all refused by
-  `collectLeaves`/`rejectUnknown` before any assignment, and `Object.prototype` is unpolluted
-  after every path. The null-prototype accumulator in `mergeInto` plus the `RESERVED_NAMES`
-  skip is belt-and-braces as the comment says, not the load-bearing defence.
-- **Write-path confinement holds.** Every `generated`/`tracked` path in `TARGETS` is a string
-  literal; no manifest value reaches `join()` on a write target. (CR-01's traversal is in
-  emitted *content*, which is a different defect.)
-- **`--check`'s temp-directory design is correct** and does prevent the self-confirming
-  comparison it describes; `mkdtemp` per invocation makes concurrent runs safe.
-- **Mask-before-merge ordering is real**, and the `partial identity table` case does pin it —
-  moving `maskDefaults` after `mergeLayers` makes that case go green, which is what the
-  comment claims.
-- **Both self-test suites go red on real planted faults** (9/9 and 7/7 verified by running
-  them), and `mutationLanded`'s emitter-output comparison genuinely catches a drifted anchor.
-- **CI supply-chain hygiene is good:** `actions/checkout` pinned by SHA, `permissions:
-  contents: read`, `persist-credentials: false`, and `inputs.tag` passed through `env:` rather
-  than interpolated into the shell — no workflow injection.
-- **`.gitignore`'s `/generated/`** is correctly root-anchored, and the trailing-slash argument
-  in `checkGeneratedIsNotTracked`'s comment is accurate.
-- **`brand/mark.svg` rename** is consistent: no stale `powerbrowser/branding/mark.svg`
-  reference survives outside `.planning/`, and `verify-branding-preflight.mjs` passes.
+**File:** `scripts/verify-branding-preflight.mjs:279`
+**Issue:** `new RegExp(`\\n\\s{4}${variantId}:\\s*\\{([\\s\\S]*?)\\n\\s{4}\\},`)` depends on
+`verify-branding-identity.mjs` using exactly four-space indentation for its `VARIANTS` entries and a
+trailing comma on the closing brace. A reformat (Prettier, a nesting change) breaks the match. It
+fails closed — the `if (!block)` branch reports "no VARIANTS descriptor entry found" — so this is not
+a silent pass, but it is a red for a formatting change rather than a value change, which is the
+"trains its readers to skip it" pattern the same file argues against elsewhere.
+**Fix:** Have `verify-branding-identity.mjs` export `VARIANTS` and `import()` it here, so the
+descriptor is read as data rather than scraped as text.
 
 ---
 
