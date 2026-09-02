@@ -27,7 +27,7 @@ around one friendly config.
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Platform Extraction and Rename** - Sourcerer's platform code becomes a booting, browsable `powerbrowser/` tree with hand-written branding
-- [ ] **Phase 2: Configuration Manifest and Generator Core** - `configuration.toml` + `brand/` become the only rebrand inputs, proven byte-identical to Phase 1
+- [x] **Phase 2: Configuration Manifest and Generator Core** - `configuration.toml` + `brand/` become the only rebrand inputs, proven byte-identical to Phase 1 (completed 2026-09-01)
 - [ ] **Phase 3: Firefox Branding Emitter and Icon Pipeline** - Every Gecko-side branding surface, icon, and installer field generated from the manifest
 - [ ] **Phase 4: Theia Surface — Branding, Extensions, Telemetry** - Theia-side branding, declared extensions, and the telemetry pipeline driven by the manifest
 - [ ] **Phase 5: Hook-Only Patches and Upstream Uptake** - Patches carry no brand values; an upstream release is adopted by editing one pin
@@ -274,7 +274,7 @@ than noisy.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Platform Extraction and Rename | 21/21 | In Progress|  |
-| 2. Configuration Manifest and Generator Core | 6/6 | In Progress|  |
+| 2. Configuration Manifest and Generator Core | 6/6 | Complete    | 2026-09-01 |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
 | 5. Hook-Only Patches and Upstream Uptake | 0/TBD | Not started | - |
