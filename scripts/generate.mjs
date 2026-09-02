@@ -55,7 +55,7 @@
 //   node scripts/generate.mjs --self-test
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -89,9 +89,30 @@ const args = process.argv.slice(2);
  *
  * The comparison is between resolved absolute paths, not between argv[1] and a
  * name, so a relative invocation and an absolute one agree.
+ *
+ * BOTH SIDES ARE REALPATHED, and that is not belt and braces. `resolve`
+ * normalises a path but does not follow a symlink, while import.meta.url has
+ * ALREADY been realpath-resolved by Node. Compared with only one side resolved,
+ * any symlinked invocation -- bin/generate -> ../scripts/generate.mjs, a nix
+ * develop shim, a node_modules/.bin entry -- made the two differ, so main()
+ * never ran, nothing was written, and the process exited 0. A CI step or a
+ * Makefile target wired that way reported success having generated nothing,
+ * and generate-check then called the tree stale for a reason nobody could
+ * locate.
+ *
+ * Wrapped, returning false, because realpathSync throws on a path that is not
+ * there and a nonexistent argv[1] must not take the process down.
  */
-const IS_MAIN = process.argv[1] !== undefined
-    && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+function isEntryPoint() {
+    if (process.argv[1] === undefined) return false;
+    try {
+        return realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url));
+    } catch {
+        return false;
+    }
+}
+
+const IS_MAIN = isEntryPoint();
 
 // The argument check lives INSIDE the main guard for the same reason the two
 // flag dispatches do: an importer's own flags are not this file's, and
