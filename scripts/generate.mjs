@@ -61,7 +61,7 @@ import { fileURLToPath } from 'node:url';
 
 import { parse, TomlError } from './lib/toml.cjs';
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const NAME = 'generate';
 
 const MANIFEST_NAME = 'configuration.toml';
@@ -73,10 +73,35 @@ const RERUN = 'node scripts/generate.mjs';
 // --- argument handling ------------------------------------------------------
 
 const args = process.argv.slice(2);
-for (const a of args) {
-    if (a !== '--check' && a !== '--self-test') {
-        console.error(`${NAME}: FAIL -- unknown argument '${a}'`);
-        process.exit(1);
+
+/**
+ * True only when this file is the process entry point.
+ *
+ * WHY IT EXISTS (02-05). scripts/verify-generated-identity.mjs imports the
+ * frozen target table and the resolver from here rather than restating either,
+ * which is the whole reason that check can go red on an emitter being ADDED.
+ * Without this guard, that import would run the CLI as a side effect: it would
+ * write generated/ during a check that promises to write nothing, it would
+ * reject the IMPORTER's arguments as if they were the generator's, and its
+ * process.exit(0) would end the check before it asserted anything -- a check
+ * that exits green having run none of its own body.
+ *
+ * The comparison is between resolved absolute paths, not between argv[1] and a
+ * name, so a relative invocation and an absolute one agree.
+ */
+const IS_MAIN = process.argv[1] !== undefined
+    && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+// The argument check lives INSIDE the main guard for the same reason the two
+// flag dispatches do: an importer's own flags are not this file's, and
+// rejecting them here would make `verify-generated-identity.mjs --self-test`
+// die at import time complaining about an argument the generator never saw.
+function rejectUnknownArguments() {
+    for (const a of args) {
+        if (a !== '--check' && a !== '--self-test') {
+            console.error(`${NAME}: FAIL -- unknown argument '${a}'`);
+            process.exit(1);
+        }
     }
 }
 // Both flags are dispatched at the BOTTOM of this file, not here. --check has
@@ -521,7 +546,7 @@ function emitDesktopEntry(config, variant) {
  * GEN-03 and belongs to Phase 3's packaging surfaces; doing it here would mean
  * a manifest value chose a filename, which is exactly the property above.
  */
-const TARGETS = Object.freeze([
+export const TARGETS = Object.freeze([
     Object.freeze({
         generated: '.mozconfig',
         tracked: '.mozconfig',
@@ -723,8 +748,13 @@ function checkTargets(config) {
  * read the failures a planted fault produced. Only the two conditions a
  * self-test can never provoke -- a missing file and an unparseable one -- still
  * exit from inside loadLayer.
+ *
+ * The defaults path DEFAULTS to this repo's manifest so an importer -- 02-05's
+ * byte-identity gate -- can ask for the resolved config without being handed a
+ * fourth export naming the manifest, and without spelling that filename a
+ * second time somewhere it could drift.
  */
-function resolveConfig(defaultsPath, downstreamPath) {
+export function resolveConfig(defaultsPath = MANIFEST_PATH, downstreamPath) {
     const defaultsLayer = loadLayer(defaultsPath);
     const downstreamLayer = downstreamPath === undefined
         ? requiredLayer(defaultsLayer, SCHEMA_KEYS)
@@ -875,20 +905,28 @@ function selfTest() {
 
 // --- run --------------------------------------------------------------------
 
-if (args.includes('--self-test')) process.exit(selfTest());
+// Everything below runs ONLY when this file is the entry point. Importing it
+// parses no manifest, writes no file and exits no process -- see IS_MAIN.
+function main() {
+    rejectUnknownArguments();
 
-const { failures, config, defaulted } = resolveConfig(MANIFEST_PATH, undefined);
-report(failures);
-echoDefaults(defaulted, config);
+    if (args.includes('--self-test')) return selfTest();
 
-// The default echo above has already run, so --check reports its inherited
-// defaults exactly as a default run does (D-08). That is why this dispatch sits
-// here and not next to the argument loop at the top of the file.
-if (args.includes('--check')) process.exit(checkTargets(config));
+    const { failures, config, defaulted } = resolveConfig(MANIFEST_PATH, undefined);
+    report(failures);
+    echoDefaults(defaulted, config);
 
-const count = writeTargets(config, OUTPUT_ROOT);
-console.log(
-    `${NAME}: PASS -- ${count} file(s) written under generated/ from ${MANIFEST_NAME}, `
-    + `${defaulted.length} default(s) applied`,
-);
-process.exit(0);
+    // The default echo above has already run, so --check reports its inherited
+    // defaults exactly as a default run does (D-08). That is why this dispatch
+    // sits here and not next to the argument loop at the top of the file.
+    if (args.includes('--check')) return checkTargets(config);
+
+    const count = writeTargets(config, OUTPUT_ROOT);
+    console.log(
+        `${NAME}: PASS -- ${count} file(s) written under generated/ from ${MANIFEST_NAME}, `
+        + `${defaulted.length} default(s) applied`,
+    );
+    return 0;
+}
+
+if (IS_MAIN) process.exit(main());
