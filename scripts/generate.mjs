@@ -54,6 +54,7 @@
 //   node scripts/generate.mjs --check
 //   node scripts/generate.mjs --self-test
 
+import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -364,6 +365,15 @@ function readPath(doc, path) {
     return node;
 }
 
+/**
+ * The exact words the required-setting failure uses, named once so the
+ * self-test's `unknown key` case can assert that a MISSPELLED section header
+ * never produces this phrase. That case derives the phrase from the emitter
+ * here rather than copying it, so rewording the message below moves the
+ * assertion with it instead of quietly making the case unfalsifiable.
+ */
+const UNSET_MARK = 'is not set.';
+
 /** Unset means absent, or a string whose code-unit trim is empty. */
 function isUnset(value) {
     return value === undefined || (typeof value === 'string' && value.trim() === '');
@@ -378,7 +388,7 @@ function validate(doc, leaves) {
         if (isUnset(readPath(doc, path))) {
             reportedUnset.add(path);
             failures.push(
-                `${path} is not set. Open ${MANIFEST_NAME}, find the ${sectionOf(path)} section, and give `
+                `${path} ${UNSET_MARK} Open ${MANIFEST_NAME}, find the ${sectionOf(path)} section, and give `
                 + `${settingOf(path)} a value. Then run: ${RERUN}`,
             );
         }
@@ -668,9 +678,17 @@ function firstDifferingLine(a, b) {
  *
  * Returns an exit code rather than exiting, so the temporary directory's
  * cleanup is not skipped on the way out.
+ *
+ * `root` is a PARAMETER for the same reason writeTargets' is, and for one more:
+ * --self-test drives THIS function, not a re-implementation of it, by pointing
+ * it at a throwaway tree it is free to corrupt. The five tracked files and the
+ * real generated/ are never touched by a planted fault (02-05's rule). The
+ * reported paths keep the `generated/` prefix whatever the root is, because
+ * that prefix names the output surface a reader has to go and fix, not the
+ * directory this invocation happened to read.
  */
-function checkTargets(config) {
-    if (!existsSync(OUTPUT_ROOT)) {
+function checkTargets(config, root = OUTPUT_ROOT) {
+    if (!existsSync(root)) {
         console.error(`${NAME}: FAIL -- nothing has been generated in this copy of the project yet, so there is nothing to compare.`);
         console.error('  The generated/ folder is not stored with the project, so a fresh copy of it starts out without one. This is not a mismatch.');
         console.error(`  Next step: run: ${RERUN}`);
@@ -691,7 +709,7 @@ function checkTargets(config) {
             return 1;
         }
 
-        const onDisk = filesUnder(OUTPUT_ROOT, '', []).sort();
+        const onDisk = filesUnder(root, '', []).sort();
 
         // The two classes are collected SEPARATELY because they have different
         // next steps, and a next step that does not fix the thing it is offered
@@ -706,7 +724,7 @@ function checkTargets(config) {
                 continue;
             }
             const want = readFileSync(join(dir, rel));
-            const have = readFileSync(join(OUTPUT_ROOT, rel));
+            const have = readFileSync(join(root, rel));
             if (Buffer.compare(want, have) !== 0) {
                 const at = firstDifferingLine(have.toString('utf8'), want.toString('utf8'));
                 stale.push(`generated/${rel} -- differs, from line ${at}`);
@@ -797,7 +815,7 @@ function echoDefaults(defaulted, config) {
 
 // --- self-test: planted faults that must each go red ------------------------
 
-/** Every required setting, stated. The three fixtures below each break one thing. */
+/** Every required setting, stated. Each fixture below breaks exactly one thing. */
 const FIXTURE_BASE = [
     '[product]',
     'vendor_machine = "AcmeWorks"',
@@ -817,10 +835,167 @@ const FIXTURE_BASE = [
     '',
 ].join('\n');
 
+/** Does `text` carry `needle`, which is either a literal or a pattern? */
+function carries(text, needle) {
+    return needle instanceof RegExp ? needle.test(text) : text.includes(needle);
+}
+
 /**
- * Proves the mask, the unset rule and array-replace actually discriminate,
- * rather than merely being intended. A check that can only go green is not a
- * check.
+ * Run `fn` with console.log and console.error COLLECTED rather than printed,
+ * so a case can assert on what a caller would have seen. Three of the nine
+ * cases drive checkTargets, which reports through the console rather than by
+ * returning a failure list, and a case that could not read that report could
+ * only assert the exit code -- which is 1 for every one of the three distinct
+ * outcomes and so cannot tell them apart.
+ *
+ * Restored in a finally. A self-test that left the console swallowed on its way
+ * out would silence every case after it and the run would still say PASS.
+ */
+function capture(fn) {
+    const lines = [];
+    const [log, error] = [console.log, console.error];
+    const collect = (...parts) => { lines.push(parts.join(' ')); };
+    console.log = collect;
+    console.error = collect;
+    try {
+        fn();
+    } finally {
+        console.log = log;
+        console.error = error;
+    }
+    return lines;
+}
+
+/** Sentinel for a probe whose planted fault did not land. See BROKEN below. */
+const BROKEN = 'planted-fault instrument broken --';
+
+/**
+ * The state of generated/ as one comparable string, or the fact that it is
+ * absent. CFG-03's rule is that a rejected value is REJECTED, never quietly
+ * transformed into a passing one -- and a rejection that still emitted output
+ * would be a half-rejection. This is what lets a case assert that.
+ */
+function snapshotOutputRoot() {
+    return existsSync(OUTPUT_ROOT) ? filesUnder(OUTPUT_ROOT, '', []).sort().join('\n') : '(absent)';
+}
+
+/**
+ * Generate a whole tree into a throwaway directory, corrupt ONE byte of ONE
+ * file, and ask the freshness comparison about it. The corruption lands in a
+ * mkdtemp copy and never on the five tracked files: they are the independent
+ * comparand this phase's acceptance test rests on, and a self-test one
+ * interrupted run away from damaging them would be trading the thing proved
+ * for the proof.
+ */
+function probeStaleOutput(config) {
+    const root = mkdtempSync(join(tmpdir(), 'generate-selftest-stale-'));
+    try {
+        writeTargets(config, root);
+        const victim = join(root, TARGETS[0].generated);
+        const before = readFileSync(victim);
+        writeFileSync(victim, Buffer.concat([before, Buffer.from(' ')]));
+        // Mutation-landed guard. A drift the comparison then fails to notice is
+        // the finding; a drift that was never written is broken instrumentation
+        // reporting green, which is worse than a red.
+        if (Buffer.compare(before, readFileSync(victim)) === 0) {
+            return [`${BROKEN} the planted byte did not land in ${TARGETS[0].generated}`];
+        }
+        return capture(() => checkTargets(config, root));
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+}
+
+/**
+ * Ask the freshness comparison about a directory that is not there -- the state
+ * every fresh copy of the project and every CI runner starts in, because
+ * generated/ is git-ignored. The distinct message this must produce is the
+ * whole point: five phantom stale paths would read as five defects on a tree
+ * with none, and a gate red for a non-defect is a gate its readers skip.
+ */
+function probeAbsentOutput(config) {
+    const parent = mkdtempSync(join(tmpdir(), 'generate-selftest-absent-'));
+    try {
+        return capture(() => checkTargets(config, join(parent, 'never-generated')));
+    } finally {
+        rmSync(parent, { recursive: true, force: true });
+    }
+}
+
+/**
+ * A manifest that is not valid TOML, read by a CHILD process.
+ *
+ * It has to be a child: an unparseable layer exits from inside loadLayer rather
+ * than returning failures, because there is no document to carry on with. That
+ * is the right behaviour for the pipeline and it is precisely why this case
+ * cannot run in-process -- it would take the self-test down with it.
+ *
+ * What is asserted is the copy, not just the redness: the caught parser error's
+ * own text carries a caret diagram and parser vocabulary, and D-11 forbids
+ * showing it. This is the case that keeps that rule from resting on a
+ * reviewer's memory of it, and it is the one most likely to be quietly broken
+ * by a refactor that reaches for the caught error's own message.
+ */
+function probeMalformedManifest() {
+    const dir = mkdtempSync(join(tmpdir(), 'generate-selftest-malformed-'));
+    try {
+        const fixturePath = join(dir, MANIFEST_NAME);
+        writeFileSync(fixturePath, `${FIXTURE_BASE}\n[identity\ndisplay_name = "Acme"\n`, 'utf8');
+        const child = spawnSync(process.execPath, [
+            '--input-type=module',
+            '-e',
+            `import { resolveConfig } from ${JSON.stringify(import.meta.url)};`
+            + `resolveConfig(undefined, ${JSON.stringify(fixturePath)});`,
+        ], { encoding: 'utf8' });
+        if (child.status === 0) return [`${BROKEN} the malformed fixture parsed cleanly`];
+        return `${child.stderr}${child.stdout}`.split('\n').filter(line => line !== '');
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+/**
+ * THE CROSS-CUTTING ASSERTION, applied to every case's output rather than
+ * written as a tenth case -- because it is a property of all nine, and a case
+ * of its own would only ever check whatever fixture that case happened to use.
+ *
+ * CLAUDE.md's user-facing copy rule in executable form: no failure a reader
+ * sees may carry a stack frame, a module specifier, or this machine's path to
+ * the project. Each marker is named so a red says which one leaked.
+ */
+const INTERNAL_MARKERS = Object.freeze([
+    Object.freeze({ what: 'a stack-trace frame', found: text => /^\s+at\s/m.test(text) }),
+    Object.freeze({ what: "a 'node:' module specifier", found: text => text.includes('node:') }),
+    Object.freeze({ what: "this machine's path to the project", found: text => text.includes(REPO_ROOT) }),
+]);
+
+function internalsLeaked(output) {
+    const text = output.join('\n');
+    return INTERNAL_MARKERS.filter(marker => marker.found(text)).map(marker => marker.what);
+}
+
+/**
+ * The malformed case's extra rule, beyond the three markers above: none of the
+ * parser's own idiom may survive into the copy. Parenthesised parser vocabulary
+ * and a caret alone on a line are what the caught error's text looks like, and
+ * a leading-slash token is a host path.
+ */
+function parserIdiomLeaked(output) {
+    const text = output.join('\n');
+    const leaks = [];
+    if (/\([^)]*\b(?:token|unexpected|expected|syntax|parse|parser|EOF)\b[^)]*\)/i.test(text)) {
+        leaks.push('parser vocabulary in parentheses');
+    }
+    if (/^\s*\^+\s*$/m.test(text)) leaks.push('a caret diagram line');
+    if (/(?:^|\s)\/\S/m.test(text)) leaks.push('an absolute filesystem path');
+    return leaks;
+}
+
+/**
+ * Proves the mask, the unset rule, array-replace, the required-setting check,
+ * the value rules, the misspelled-header ordering, all three freshness outcomes
+ * and the parse-failure copy actually discriminate, rather than merely being
+ * intended. A check that can only go green is not a check.
  */
 function selfTest() {
     // A planted-fault result measured against an already-red baseline says
@@ -834,6 +1009,14 @@ function selfTest() {
     }
 
     const clean = readFileSync(MANIFEST_PATH, 'utf8');
+
+    // Taken ONCE, before any case runs, so the invalid-basename case can prove
+    // that a rejected value left the output tree exactly as it found it.
+    const outputRootBefore = snapshotOutputRoot();
+
+    // Derived from the frozen table, not written out here: a hand-kept copy of
+    // these five paths could only ever agree with the table it was copied from.
+    const everyTargetPath = TARGETS.map(t => t.generated);
 
     const cases = [
         {
@@ -860,38 +1043,133 @@ function selfTest() {
             holds: 'one variant, not three',
             resolved: c => Array.isArray(c.variants) && c.variants.length === 1,
         },
+        {
+            // CFG-02's core. A required setting is one a downstream must state
+            // for itself; omitting it is a hard failure, never a quiet
+            // fallback to this project's identity under someone else's name.
+            name: 'missing required key',
+            toml: FIXTURE_BASE.replace('display_name = "Acme Browser"\n', ''),
+            expect: 'identity.display_name',
+        },
+        {
+            // CFG-03. The value is REJECTED, never transformed into a passing
+            // one -- so the message has to state the length bounds in words,
+            // because the pattern's quantifier is not self-explanatory to a
+            // stranger, and the run has to leave generated/ untouched.
+            name: 'invalid basename',
+            toml: FIXTURE_BASE.replace('binary_name = "acme-browser"', 'binary_name = "two words"'),
+            expect: 'identity.binary_name',
+            also: [SCHEMA_KEYS['identity.binary_name'].regex_help],
+            extra: () => (snapshotOutputRoot() === outputRootBefore
+                ? []
+                : ['the rejected run changed what is under generated/']),
+        },
+        {
+            // THE case that pins the unknown-key check's position AHEAD of the
+            // merge. A misspelled table that survived to the merge would
+            // produce missing-key errors naming keys that are spelled
+            // correctly, sending the author to look in the wrong place -- so
+            // the misspelling has to be named and the missing-key phrase has to
+            // be absent. That phrase is read from the emitter, not copied.
+            name: 'unknown key',
+            toml: FIXTURE_BASE.replace('[identity]', '[identiy]'),
+            expect: 'identiy',
+            notExpect: [UNSET_MARK],
+        },
+        {
+            // D-12. One byte of one generated file changed by hand, and the
+            // freshness comparison has to name THAT file -- naming some other
+            // one would prove it can go red, not that it goes red on the thing
+            // that drifted.
+            name: 'stale generated output',
+            probe: probeStaleOutput,
+            expect: TARGETS[0].generated,
+        },
+        {
+            // The absent-directory outcome is a DISTINCT message, not five
+            // stale paths. Asserted from both sides: the message is there and
+            // no target path is, so a future collapse of the three outcomes
+            // into one goes red here.
+            name: 'absent generated directory',
+            probe: probeAbsentOutput,
+            expect: 'nothing has been generated in this copy of the project yet',
+            notExpect: everyTargetPath,
+        },
+        {
+            // D-11. Red on the manifest and the line, and free of the parser's
+            // own idiom -- see parserIdiomLeaked.
+            name: 'malformed manifest',
+            probe: probeMalformedManifest,
+            expect: MANIFEST_NAME,
+            also: [/line \d+/],
+            extra: parserIdiomLeaked,
+        },
     ];
 
     const dir = mkdtempSync(join(tmpdir(), 'generate-self-test-'));
     let failed = 0;
+    const complain = (testCase, why) => {
+        console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' ${why}`);
+        failed++;
+    };
     try {
         cases.forEach((testCase, index) => {
-            // A fixture identical to the clean manifest plants nothing and its
-            // result would be vacuous.
-            if (testCase.toml === clean) {
-                console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' plants a fixture identical to ${MANIFEST_NAME}; the case proves nothing`);
-                failed++;
+            let output;
+            let config;
+
+            if (testCase.probe !== undefined) {
+                // A probe plants its fault on a throwaway tree or in a child
+                // process and reports what a caller would have seen. Its own
+                // mutation-landed guard emits BROKEN rather than a failure, so
+                // instrument damage reads as instrument damage and can never be
+                // mistaken for the case passing.
+                output = testCase.probe(baseline.config);
+                if (output.some(line => line.includes(BROKEN))) {
+                    complain(testCase, `planted no fault at all: ${output.join(' | ')}`);
+                    return;
+                }
+            } else {
+                // A fixture identical to the clean manifest plants nothing and
+                // its result would be vacuous.
+                if (testCase.toml === clean) {
+                    complain(testCase, `plants a fixture identical to ${MANIFEST_NAME}; the case proves nothing`);
+                    return;
+                }
+                const fixturePath = join(dir, `case-${index}.toml`);
+                writeFileSync(fixturePath, testCase.toml, 'utf8');
+                const resolvedCase = resolveConfig(MANIFEST_PATH, fixturePath);
+                output = resolvedCase.failures;
+                config = resolvedCase.config;
+            }
+
+            // Cross-cutting, applied to EVERY case: nothing a reader sees may
+            // carry an internal.
+            const leaked = [...internalsLeaked(output), ...(testCase.extra?.(output) ?? [])];
+            if (leaked.length > 0) {
+                complain(testCase, `leaked ${leaked.join(', ')} into what a reader sees: ${output.join(' | ')}`);
                 return;
             }
-            const fixturePath = join(dir, `case-${index}.toml`);
-            writeFileSync(fixturePath, testCase.toml, 'utf8');
-            const { failures, config } = resolveConfig(MANIFEST_PATH, fixturePath);
 
             if (testCase.expect !== undefined) {
-                if (failures.some(f => f.includes(testCase.expect))) {
-                    console.log(`  ok  ${testCase.name} -> red, naming '${testCase.expect}'`);
-                } else {
-                    console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' did not go red naming '${testCase.expect}'; got: ${failures.join(' | ') || '(no failures at all)'}`);
-                    failed++;
+                const seen = output.join('\n');
+                const missing = [testCase.expect, ...(testCase.also ?? [])].filter(n => !carries(seen, n));
+                const present = (testCase.notExpect ?? []).filter(n => carries(seen, n));
+                if (missing.length > 0) {
+                    complain(testCase, `did not go red naming ${missing.map(String).join(' and ')}; got: ${output.join(' | ') || '(no failures at all)'}`);
+                    return;
                 }
+                if (present.length > 0) {
+                    complain(testCase, `went red naming ${present.map(String).join(' and ')}, which sends the reader to the wrong place: ${output.join(' | ')}`);
+                    return;
+                }
+                console.log(`  ok  ${testCase.name} -> red, naming '${testCase.expect}'`);
                 return;
             }
 
-            if (failures.length === 0 && testCase.resolved(config)) {
+            if (output.length === 0 && testCase.resolved(config)) {
                 console.log(`  ok  ${testCase.name} -> resolved to ${testCase.holds}`);
             } else {
-                console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' did not resolve to ${testCase.holds}; failures: ${failures.join(' | ') || '(none)'}`);
-                failed++;
+                complain(testCase, `did not resolve to ${testCase.holds}; failures: ${output.join(' | ') || '(none)'}`);
             }
         });
     } finally {
