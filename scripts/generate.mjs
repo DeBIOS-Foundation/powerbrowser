@@ -426,6 +426,52 @@ function report(failures) {
 // --- 4. emit and write ------------------------------------------------------
 
 /**
+ * Characters a manifest value may never carry into an emitted build surface.
+ *
+ * A double quote or a backslash closes or escapes its way out of the
+ * double-quoted shell assignment in configure.sh; a dollar sign or a backtick
+ * makes the shell evaluate the rest as a command, and the Gecko build SOURCES
+ * that file, so the evaluation happens with the developer's privileges. A line
+ * break ends the assignment and starts a new shell statement -- and in a
+ * freedesktop .desktop file it ends the current key and starts another, which
+ * is how a Name= value injects its own Exec= line into the group.
+ */
+const UNEMITTABLE = /["`$\\\r\n\t\0]/;
+
+/**
+ * A manifest value on its way into a shell assignment or a freedesktop key.
+ *
+ * DEFENCE IN DEPTH, NOT THE PRIMARY GUARD. The primary guard is the schema:
+ * every value that reaches a sink below carries a `regex` in
+ * config-schema.json, so a metacharacter is rejected in validate() alongside
+ * every other failure, with the whole list reported at once. This function is
+ * what stops a future schema edit that drops or loosens one of those patterns
+ * from silently reopening the sink -- the sink itself refuses.
+ *
+ * CFG-03: a bad value is REJECTED, never quietly mangled into a passing one.
+ * Escaping the metacharacter would emit a build setting whose text is not what
+ * the manifest says, which is the same class of surprise as silently
+ * normalising Unicode. It reports through report() rather than throwing, so the
+ * reader sees the same plain-language copy every other failure uses and never a
+ * stack trace.
+ */
+function assertEmittable(path, value) {
+    if (typeof value !== 'string' || UNEMITTABLE.test(value)) {
+        report([
+            `${path} cannot be written into a build setting as it stands. A brand value may not `
+            + 'contain a quote, a backslash, a dollar sign, a backtick, a tab or a line break. '
+            + `Open ${MANIFEST_NAME}, correct it, then run: ${RERUN}`,
+        ]);
+    }
+    return value;
+}
+
+/** The dotted path a reader opens to fix a value inside one [[variants]] section. */
+function variantPath(variant, key) {
+    return `the [[variants]] section with id ${JSON.stringify(variant?.id ?? '')}: ${key}`;
+}
+
+/**
  * A branding configure.sh, line for line against the files plan 01-03 wrote by
  * hand. Lines 1-3 are the Mozilla Public License boilerplate: a source-file
  * licence notice, literal emitter text, not a rebrand input.
@@ -461,7 +507,11 @@ function emitConfigureSh(config, variant) {
         '# Generated from configuration.toml by scripts/generate.mjs -- do not edit here.',
         '# To change it, edit configuration.toml and run: node scripts/generate.mjs',
         '# A disagreement reddens: scripts/verify-platform.sh --only generated-byte-identity',
-        `MOZ_APP_DISPLAYNAME="${config.identity.display_name}${variant.name_suffix}"`,
+        // Both halves pass the sink guard. This line is a double-quoted shell
+        // assignment in a file the Gecko build sources, so an unchecked value
+        // here executes at build time; see assertEmittable.
+        `MOZ_APP_DISPLAYNAME="${assertEmittable('identity.display_name', config.identity.display_name)}`
+        + `${assertEmittable(variantPath(variant, 'name_suffix'), variant.name_suffix)}"`,
     ];
     return lines.join('\n') + '\n';
 }
@@ -501,18 +551,22 @@ function emitConfigureSh(config, variant) {
  * and the shell-default syntax has to survive to the emitted bytes intact.
  */
 function emitMozconfig(config, variant) {
+    // Every manifest value on these eleven lines lands in a file the Gecko
+    // build sources, so each passes the sink guard on its way in.
+    const objdir = assertEmittable(variantPath(variant, 'objdir'), variant.objdir);
+    const brandingDir = assertEmittable(variantPath(variant, 'branding_dir'), variant.branding_dir);
     const lines = [
-        'mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/../${POWERBROWSER_OBJDIR:-' + variant.objdir + '}',
+        'mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/../${POWERBROWSER_OBJDIR:-' + objdir + '}',
         'ac_add_options --enable-application=browser',
         'ac_add_options --disable-updater',
         'ac_add_options --without-wasm-sandboxed-libraries',
         'ac_add_options --with-libclang-path="$LIBCLANG_PATH"',
-        `ac_add_options --with-app-basename=${config.identity.app_basename}`,
-        `ac_add_options --with-distribution-id=${config.identity.distribution_id}`,
+        `ac_add_options --with-app-basename=${assertEmittable('identity.app_basename', config.identity.app_basename)}`,
+        `ac_add_options --with-distribution-id=${assertEmittable('identity.distribution_id', config.identity.distribution_id)}`,
         'ac_add_options --disable-crashreporter',
         'ac_add_options --with-ccache=sccache',
-        'ac_add_options --with-branding=${POWERBROWSER_BRANDING:-' + variant.branding_dir + '}',
-        `mk_add_options "export MOZ_APP_REMOTINGNAME=${config.identity.remoting_name}"`,
+        'ac_add_options --with-branding=${POWERBROWSER_BRANDING:-' + brandingDir + '}',
+        `mk_add_options "export MOZ_APP_REMOTINGNAME=${assertEmittable('identity.remoting_name', config.identity.remoting_name)}"`,
     ];
     return lines.join('\n') + '\n';
 }
@@ -560,6 +614,13 @@ function emitDesktopEntry(config, variant) {
  * structurally what stops a config key directing a write outside generated/
  * (T-02-02, GEN-04), and it is why the variant schema carries no
  * output-filename key at all: there is nowhere for one to be honoured.
+ *
+ * THAT PROPERTY IS ABOUT WRITE PATHS AND NOTHING ELSE. It says where the bytes
+ * land, not what they say, and reading it as the whole threat model is a
+ * mistake this comment used to invite: manifest values ARE joined into the
+ * emitted CONTENT, and that content is a shell script the Gecko build sources
+ * and a launcher the desktop runs. Those sinks have their own guard --
+ * a schema pattern per key, backed by assertEmittable at each interpolation.
  *
  * The two generated .desktop filenames are FIXED platform identifiers in Phase
  * 2. Naming a downstream's installed desktop entry after its own binary is
