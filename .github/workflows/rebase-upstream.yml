@@ -81,13 +81,22 @@ jobs:
       # property worth gating, and on a fresh clone it is the only thing this
       # check can truthfully assert.
       #
-      # The byte-identity step is last and is independent of both: it emits its
-      # comparand into its own temporary directory and compares against the
-      # five files tracked in git, so it would pass even if the two steps above
-      # had never run. It is Phase 2's acceptance test -- what the generator
-      # emits from configuration.toml is byte-for-byte what Phase 1 wrote by
-      # hand -- and it is the step that goes red if an upstream rebase moved
-      # one of those five files.
+      # The byte-identity step is last of the three and is independent of both:
+      # it emits its comparand into its own temporary directory and compares
+      # against the five files tracked in git, so it would pass even if the two
+      # steps above had never run. It is Phase 2's acceptance test -- what the
+      # generator emits from configuration.toml is byte-for-byte what Phase 1
+      # wrote by hand.
+      #
+      # WHAT THESE THREE ASSERT HERE IS PRE-REPLAY CLEANLINESS, AND ONLY THAT.
+      # This comment used to claim the byte-identity step "goes red if an
+      # upstream rebase moved one of those five files"; it runs BEFORE the
+      # rebase, so it cannot observe what the rebase did. A gate placed ahead of
+      # the operation it is meant to characterise reports on the pre-operation
+      # tree. Running here is still worth it as a fail-fast -- the same
+      # justification the residual-brand scan above is given -- so the step
+      # stays and the claim is corrected. The post-replay observation is the
+      # step after the rebase below.
       #
       # No ./mach build step belongs here. Nothing this phase produces reaches
       # the compiler: every build consumer still reads the hand-written files.
@@ -109,3 +118,15 @@ jobs:
         env:
           REBASE_TAG: ${{ inputs.tag }}
         run: bash scripts/rebase-upstream.sh --tag "$REBASE_TAG"
+
+      # THE POST-REPLAY OBSERVATION. The three generator steps above run before
+      # the rebase and so report on the pre-replay tree; this is the one that
+      # can see what the replay did to the five build surfaces. It emits its
+      # comparand into a temporary directory and compares against the tracked
+      # files, so it needs no prior generate and reads nothing under generated/.
+      #
+      # The pre-replay copy of it is a fail-fast, not a duplicate: red there
+      # means the tree arrived broken, red here means the replay broke it, and
+      # those send a reader to different places.
+      - name: Re-check byte-identity after the replay
+        run: node scripts/verify-generated-identity.mjs
