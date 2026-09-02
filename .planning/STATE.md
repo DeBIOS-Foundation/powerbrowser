@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 02
 current_phase_name: configuration-manifest-and-generator-core
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-09-01T23:32:26.496Z"
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-09-02T00:02:43.864Z"
 last_activity: 2026-09-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 27
-  completed_plans: 24
+  completed_plans: 25
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 02 (configuration-manifest-and-generator-core) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-09-01 — Phase 02 execution started
 
-Progress: [█████████░] 89%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -81,6 +81,7 @@ Progress: [█████████░] 89%
 | Phase 02 P02 | 12m | 2 tasks | 3 files |
 | Phase 02 P01 | 30m | 3 tasks | 6 files |
 | Phase 02 P03 | 35m | 2 tasks | 1 files |
+| Phase 02 P04 | 30m | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -178,6 +179,9 @@ Recent decisions affecting current work:
 - [Phase 02]: Power Browser is its own downstream: the root configuration.toml is split along the mask line — optional keys are the defaults layer, required keys are the downstream layer — so byte-identity survives the merge and the project's own build exercises the same merge path a downstream will
 - [Phase 02]: The merge returns its own provenance (the defaulted dotted paths) rather than a later traversal re-deriving it; the echo sorts and prints that array
 - [Phase 02]: Arrays are leaves to both the masker and the merge: a downstream array replaces the default array so a downstream can drop an entry (D-07), pinned by the 'downstream array shorter than default' self-test case
+- [Phase ?]: The frozen target table holds string literals for both the generated and the tracked path of all five surfaces; a variant contributes objdir and branding_dir as emitted CONTENT only, so no config key can direct a write (GEN-04, T-02-02)
+- [Phase ?]: One emitter per file FORMAT parameterised by variant, not one per output file — the dev/release differences are entirely the variant's name_suffix, and a second emitter is how two files that must differ in one line drift in others
+- [Phase ?]: The check mode emits into a unique mkdtemp removed in a finally and never writes under generated/; it reports fresh, stale, absent and leftover as four distinct outcomes, with set equality run in both directions so a removed emitter cannot leave its output behind
 
 ### Pending Todos
 
@@ -204,6 +208,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-01T23:32:26.483Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-09-02T00:02:43.838Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None
