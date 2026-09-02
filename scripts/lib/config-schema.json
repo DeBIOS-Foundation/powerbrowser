@@ -10,7 +10,10 @@
     },
     "product.vendor_display": {
       "type": "string",
-      "required": true
+      "required": true,
+      "regex": "^[A-Za-z0-9][A-Za-z0-9 .'-]{0,63}$",
+      "regex_help": "letters, digits, spaces, dots, apostrophes and hyphens only; 1 to 64 characters; must start with a letter or digit",
+      "regex_example": "Acme Works"
     },
     "product.description": {
       "type": "string",
@@ -22,7 +25,10 @@
     },
     "identity.display_name": {
       "type": "string",
-      "required": true
+      "required": true,
+      "regex": "^[A-Za-z0-9][A-Za-z0-9 .'-]{0,63}$",
+      "regex_help": "letters, digits, spaces, dots, apostrophes and hyphens only; 1 to 64 characters; must start with a letter or digit",
+      "regex_example": "Acme Browser"
     },
     "identity.app_basename": {
       "type": "string",
@@ -58,11 +64,17 @@
     },
     "legal.copyright_holder": {
       "type": "string",
-      "required": true
+      "required": true,
+      "regex": "^[A-Za-z0-9][A-Za-z0-9 .'-]{0,63}$",
+      "regex_help": "letters, digits, spaces, dots, apostrophes and hyphens only; 1 to 64 characters; must start with a letter or digit",
+      "regex_example": "Acme Works"
     },
     "legal.trademark_notice": {
       "type": "string",
-      "required": true
+      "required": true,
+      "regex": "^[A-Za-z0-9][A-Za-z0-9 ,.'-]{0,191}$",
+      "regex_help": "letters, digits, spaces, commas, dots, apostrophes and hyphens only; 1 to 192 characters; must start with a letter or digit",
+      "regex_example": "Acme Browser is a trademark of Acme Works."
     },
     "theia.default_theme": {
       "type": "string",
@@ -74,7 +86,10 @@
     },
     "variants[].name_suffix": {
       "type": "string",
-      "required": false
+      "required": false,
+      "regex": "^[A-Za-z0-9 .'-]{0,31}$",
+      "regex_help": "empty, or letters, digits, spaces, dots, apostrophes and hyphens only; at most 31 characters. The release variant's suffix is deliberately empty, so the empty string is allowed here and nowhere else",
+      "regex_example": " Dev"
     },
     "variants[].branding_dir": {
       "type": "string",
