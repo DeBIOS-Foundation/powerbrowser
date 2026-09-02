@@ -54,7 +54,7 @@
 //   node scripts/generate.mjs --check
 //   node scripts/generate.mjs --self-test
 
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -558,7 +558,18 @@ function variantById(config, id) {
     return (config.variants ?? []).find(v => v.id === id);
 }
 
-function writeTargets(config) {
+/**
+ * Emit every target under `root`. The root is a PARAMETER for one reason: it is
+ * what lets --check emit a fresh comparand into a temporary directory using the
+ * same writer the default run uses. Two writers would let the checked bytes and
+ * the written bytes drift apart, and the check would then be comparing against
+ * something no run ever produces.
+ *
+ * The root is the ONLY thing a caller supplies. Every path underneath it still
+ * comes from the frozen table, so passing a different root moves the whole tree
+ * and cannot reshape it.
+ */
+function writeTargets(config, root) {
     let written = 0;
     for (const target of TARGETS) {
         const variant = variantById(config, target.variant);
@@ -567,12 +578,140 @@ function writeTargets(config) {
             console.error(`  Open ${MANIFEST_NAME}, add a [[variants]] section whose id is "${target.variant}", then run: ${RERUN}`);
             process.exit(1);
         }
-        const outPath = join(OUTPUT_ROOT, target.generated);
+        const outPath = join(root, target.generated);
         mkdirSync(dirname(outPath), { recursive: true });
         writeFileSync(outPath, target.emit(config, variant), 'utf8');
         written += 1;
     }
     return written;
+}
+
+// --- 5. --check: report whether the tree matches, and change nothing --------
+
+/**
+ * Every file under `dir`, as slash-joined paths relative to it. Recursive,
+ * because the comparison has to see a leftover at any depth -- a stale
+ * branding/dev/configure.sh from an emitter that was later removed sits two
+ * levels down, and a top-level-only listing would never notice it.
+ */
+function filesUnder(dir, prefix, out) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) filesUnder(join(dir, entry.name), rel, out);
+        else out.push(rel);
+    }
+    return out;
+}
+
+/**
+ * The 1-based number of the first line that differs, or 0 if they are equal.
+ * REPORTING AID ONLY. The assertion above is Buffer.compare -- byte-identity --
+ * and this runs only after that assertion has already failed, to say where. A
+ * line differ used as the check itself would call two files identical when they
+ * differ in trailing whitespace or in line endings, which is exactly the class
+ * of difference this phase's acceptance test is about.
+ */
+function firstDifferingLine(a, b) {
+    const x = a.split('\n');
+    const y = b.split('\n');
+    for (let i = 0; i < Math.max(x.length, y.length); i += 1) {
+        if (x[i] !== y[i]) return i + 1;
+    }
+    return 0;
+}
+
+/**
+ * Compare what is on disk against what the manifest would produce right now.
+ *
+ * WRITES NOTHING UNDER generated/, EVER. The fresh copy goes into a unique
+ * mkdtempSync directory removed in a finally. That is not tidiness: a check
+ * that regenerates in place and then compares cannot tell "was already fresh"
+ * from "I just made it fresh", and a check that cannot go red is not a check.
+ * The directory is unique per invocation rather than a fixed temporary path, so
+ * two runs at once compare against their own emission instead of overwriting
+ * each other's (T-02-12).
+ *
+ * THREE OUTCOMES, THREE MESSAGES, deliberately not one. An absent generated/ is
+ * the state every fresh copy of the project and every automated run begins in;
+ * reporting it as five stale files reads as five problems and sends the reader
+ * hunting a mismatch that does not exist.
+ *
+ * The set comparison runs in BOTH directions. A per-target loop alone sees a
+ * file that is missing or wrong but is blind to one that should no longer be
+ * there at all, so an emitter deleted later would leave its output behind
+ * forever with nothing to notice.
+ *
+ * Returns an exit code rather than exiting, so the temporary directory's
+ * cleanup is not skipped on the way out.
+ */
+function checkTargets(config) {
+    if (!existsSync(OUTPUT_ROOT)) {
+        console.error(`${NAME}: FAIL -- nothing has been generated in this copy of the project yet, so there is nothing to compare.`);
+        console.error('  The generated/ folder is not stored with the project, so a fresh copy of it starts out without one. This is not a mismatch.');
+        console.error(`  Next step: run: ${RERUN}`);
+        return 1;
+    }
+
+    const dir = mkdtempSync(join(tmpdir(), 'generate-check-'));
+    try {
+        writeTargets(config, dir);
+        const fresh = filesUnder(dir, '', []).sort();
+
+        // Non-vacuity. A comparison whose comparand is empty agrees with
+        // anything at all, so it must fail as broken instrumentation rather
+        // than report a clean diff of nothing against nothing.
+        if (fresh.length === 0) {
+            console.error(`${NAME}: FAIL -- the check produced no files of its own to compare against, so its result would mean nothing either way.`);
+            console.error(`  Next step: report this; ${MANIFEST_NAME} is not the cause and editing it will not help.`);
+            return 1;
+        }
+
+        const onDisk = filesUnder(OUTPUT_ROOT, '', []).sort();
+
+        // The two classes are collected SEPARATELY because they have different
+        // next steps, and a next step that does not fix the thing it is offered
+        // for is worse than none: regenerating replaces a file that differs, but
+        // it never removes one that should not be there.
+        const stale = [];
+        const extra = [];
+
+        for (const rel of fresh) {
+            if (!onDisk.includes(rel)) {
+                stale.push(`generated/${rel} -- is not there`);
+                continue;
+            }
+            const want = readFileSync(join(dir, rel));
+            const have = readFileSync(join(OUTPUT_ROOT, rel));
+            if (Buffer.compare(want, have) !== 0) {
+                const at = firstDifferingLine(have.toString('utf8'), want.toString('utf8'));
+                stale.push(`generated/${rel} -- differs, from line ${at}`);
+            }
+        }
+
+        for (const rel of onDisk) {
+            if (!fresh.includes(rel)) {
+                extra.push(`generated/${rel} -- is not one of the files this project generates`);
+            }
+        }
+
+        if (stale.length === 0 && extra.length === 0) {
+            console.log(`${NAME}: --check PASS -- all ${fresh.length} generated file(s) match ${MANIFEST_NAME}`);
+            return 0;
+        }
+
+        console.error(`${NAME}: FAIL -- ${stale.length + extra.length} file(s) under generated/ do not match ${MANIFEST_NAME}`);
+        for (const line of [...stale, ...extra]) console.error(`  ${line}`);
+        if (stale.length > 0) {
+            console.error(`  Next step: run: ${RERUN}`);
+            console.error(`  Anything changed by hand under generated/ is overwritten by that -- make the change in ${MANIFEST_NAME} instead.`);
+        }
+        if (extra.length > 0) {
+            console.error('  Next step for the file(s) above that this project does not generate: delete them, or move them out of generated/ if you meant to keep them.');
+        }
+        return 1;
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
 }
 
 // --- the pipeline ------------------------------------------------------------
@@ -742,12 +881,12 @@ const { failures, config, defaulted } = resolveConfig(MANIFEST_PATH, undefined);
 report(failures);
 echoDefaults(defaulted, config);
 
-if (args.includes('--check')) {
-    console.log(`${NAME}: --check compares generated/ against the tracked files in plan 02-04; ${defaulted.length} default(s) applied, nothing was compared`);
-    process.exit(0);
-}
+// The default echo above has already run, so --check reports its inherited
+// defaults exactly as a default run does (D-08). That is why this dispatch sits
+// here and not next to the argument loop at the top of the file.
+if (args.includes('--check')) process.exit(checkTargets(config));
 
-const count = writeTargets(config);
+const count = writeTargets(config, OUTPUT_ROOT);
 console.log(
     `${NAME}: PASS -- ${count} file(s) written under generated/ from ${MANIFEST_NAME}, `
     + `${defaulted.length} default(s) applied`,
