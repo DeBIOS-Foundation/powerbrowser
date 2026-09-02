@@ -57,7 +57,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parse, TomlError } from './lib/toml.cjs';
@@ -472,6 +472,27 @@ function variantPath(variant, key) {
 }
 
 /**
+ * A manifest folder path resolved against the repo root, refused if it escapes.
+ *
+ * The schema patterns for branding_dir and objdir already forbid a leading
+ * slash and a `..` segment, so this cannot fire on a validated manifest. It is
+ * here for the same reason assertEmittable is: the emitted Exec= and Icon=
+ * lines are absolute paths a desktop launcher runs, and a guard that rests on
+ * one pattern is a guard a future edit to that pattern can remove. Resolution,
+ * not string inspection -- `..` is only one of the ways a path leaves a tree.
+ */
+function assertUnderRepo(path, relative) {
+    const absolute = resolve(REPO_ROOT, relative);
+    if (absolute !== REPO_ROOT && !absolute.startsWith(REPO_ROOT + sep)) {
+        report([
+            `${path} is ${JSON.stringify(relative)}, which points outside the project folder. `
+            + `Write it as a folder path inside the project, then run: ${RERUN}`,
+        ]);
+    }
+    return absolute;
+}
+
+/**
  * A branding configure.sh, line for line against the files plan 01-03 wrote by
  * hand. Lines 1-3 are the Mozilla Public License boilerplate: a source-file
  * licence notice, literal emitter text, not a rebrand input.
@@ -588,17 +609,30 @@ function emitMozconfig(config, variant) {
  * platform constants, not rebrand inputs, and are emitted literally.
  */
 function emitDesktopEntry(config, variant) {
-    const exec = join(REPO_ROOT, variant.objdir, 'dist/bin', config.identity.binary_name);
-    const icon = join(REPO_ROOT, variant.branding_dir, 'default128.png');
+    // A .desktop group is line-oriented: a line break inside a value ends the
+    // key it belongs to and starts a new one, so an unchecked Name= can write
+    // its own Exec= line -- a launcher that runs an attacker-chosen command on
+    // click. Every value below therefore passes the sink guard, and the two
+    // folder paths are resolved and required to stay inside the project.
+    const exec = join(
+        assertUnderRepo(variantPath(variant, 'objdir'), assertEmittable(variantPath(variant, 'objdir'), variant.objdir)),
+        'dist/bin',
+        assertEmittable('identity.binary_name', config.identity.binary_name),
+    );
+    const icon = join(
+        assertUnderRepo(variantPath(variant, 'branding_dir'), assertEmittable(variantPath(variant, 'branding_dir'), variant.branding_dir)),
+        'default128.png',
+    );
     const lines = [
         '[Desktop Entry]',
-        `Name=${config.identity.display_name}${variant.name_suffix}`,
+        `Name=${assertEmittable('identity.display_name', config.identity.display_name)}`
+        + `${assertEmittable(variantPath(variant, 'name_suffix'), variant.name_suffix)}`,
         `Exec=${exec} %u`,
         `Icon=${icon}`,
         'Terminal=false',
         'Type=Application',
         'Categories=Development;IDE;',
-        `StartupWMClass=${config.identity.remoting_name}`,
+        `StartupWMClass=${assertEmittable('identity.remoting_name', config.identity.remoting_name)}`,
         'MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/vnd.mozilla.xul+xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;',
     ];
     return lines.join('\n') + '\n';
