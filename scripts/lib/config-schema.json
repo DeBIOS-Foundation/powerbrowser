@@ -82,25 +82,25 @@
     },
     "variants[].id": {
       "type": "string",
-      "required": false
+      "required": true
     },
     "variants[].name_suffix": {
       "type": "string",
-      "required": false,
+      "required": true,
       "regex": "^[A-Za-z0-9 .'-]{0,31}$",
       "regex_help": "empty, or letters, digits, spaces, dots, apostrophes and hyphens only; at most 31 characters. The release variant's suffix is deliberately empty, so the empty string is allowed here and nowhere else",
       "regex_example": " Dev"
     },
     "variants[].branding_dir": {
       "type": "string",
-      "required": false,
+      "required": true,
       "regex": "^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$",
       "regex_help": "a folder path inside the project, written relative to it, with no leading slash and no '..' step; letters, digits, dots, underscores, hyphens and slashes only",
       "regex_example": "powerbrowser/branding/dev"
     },
     "variants[].objdir": {
       "type": "string",
-      "required": false,
+      "required": true,
       "regex": "^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$",
       "regex_help": "a folder path inside the project, written relative to it, with no leading slash and no '..' step; letters, digits, dots, underscores, hyphens and slashes only",
       "regex_example": "objdir"
