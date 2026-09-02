@@ -316,6 +316,18 @@ function selfTest() {
 }
 
 function main() {
+    // A typo -- --selftest, --self_test, --check -- used to run the FULL check
+    // instead and print PASS, so an operator believed the self-test had
+    // discriminated when it never ran. generate.mjs rejects unknown arguments
+    // for exactly this reason; this sibling now does too.
+    for (const arg of process.argv.slice(2)) {
+        if (arg !== '--self-test') {
+            console.error(`${NAME}: FAIL -- unknown argument '${arg}'`);
+            console.error(`  Next step: run: node scripts/verify-generated-identity.mjs, or add --self-test to prove the comparison discriminates.`);
+            return 1;
+        }
+    }
+
     if (process.argv.includes('--self-test')) return selfTest();
 
     const { failures: configFailures, config } = resolveConfig();
