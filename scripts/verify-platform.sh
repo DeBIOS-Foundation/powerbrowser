@@ -3666,6 +3666,25 @@ run_own_checks() {
     # no display, no network.
     "generate-check|node $REPO_ROOT/scripts/generate.mjs --check"
     "generate-self-test|node $REPO_ROOT/scripts/generate.mjs --self-test"
+
+    # NEW: the vendored settings parser's provenance record, machine-checked.
+    #
+    # scripts/lib/toml.cjs's header records a sha256 and a body size and
+    # forbids hand-editing the body. Nothing read any of it: the only reference
+    # to the file anywhere outside itself was the import in generate.mjs, so a
+    # re-vendor to a different upstream version, a hand-edit, or a
+    # supply-chain substitution passed every gate this repo has. That is the
+    # hand-kept-expectation pattern CLAUDE.md forbids, minus the comparison.
+    #
+    # BOTH SIDES ARE DERIVED. The expected digest is read out of the file's own
+    # header and the actual one is computed over the file's own body, so a
+    # legitimate re-vendor updates the header and the row follows it. The body
+    # boundary is derived from the upstream banner rather than the header's
+    # `tail -n +23`, whose line count nothing enforced.
+    #
+    # Honestly --quick: one file read and one hash.
+    "vendored-parser-digest|node $REPO_ROOT/scripts/verify-vendored-parser.mjs"
+    "vendored-parser-digest-self-test|node $REPO_ROOT/scripts/verify-vendored-parser.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then

@@ -5,8 +5,16 @@
 //   Package:  smol-toml 1.8.0
 //   sha256:   195ca51fc784617d361af3697756a896518e45bec4e35976baec2dffd656cb8f
 //             That digest is of the file body BELOW this header, not of this
-//             file. A re-vendor strips the first 22 lines before checking it:
-//               tail -n +23 scripts/lib/toml.cjs | sha256sum
+//             file. The body is everything below the last line of this
+//             `//` header -- that boundary is derived, not counted. To check it:
+//               node scripts/verify-vendored-parser.mjs
+//             That check derives BOTH sides -- the expectation from the two
+//             lines above, the digest from the body -- so it follows a
+//             legitimate re-vendor and reddens on a body that changed without
+//             this record changing. It replaces a `tail -n +23` incantation
+//             coupled to this header being exactly 22 lines, which nothing
+//             enforced: one more comment line here silently hashed the wrong
+//             bytes and still passed by eye.
 //   Size:     22907 bytes of body, this header excluded
 //   Licence:  BSD-3-Clause -- full text retained at scripts/lib/toml.LICENSE
 //   Obtained: npm pack smol-toml@1.8.0
