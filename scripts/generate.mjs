@@ -763,20 +763,35 @@ function variantById(config, id) {
  * and cannot reshape it.
  */
 function writeTargets(config, root) {
-    let written = 0;
+    // EMIT EVERYTHING FIRST, WRITE NOTHING YET. The file header promises that a
+    // failed run leaves the output tree exactly as it found it, and a check
+    // inside the write loop cannot keep that promise: a manifest declaring only
+    // the dev variant used to write the first two targets and then exit on the
+    // third, and the next --check reported two stale files and two absent ones
+    // on top of the real problem. Every failure a target can raise -- a missing
+    // variant here, a rejected value inside an emitter -- is raised during this
+    // pass, while the tree is still untouched.
+    const failures = [];
+    const pending = [];
     for (const target of TARGETS) {
         const variant = variantById(config, target.variant);
         if (variant === undefined) {
-            console.error(`${NAME}: FAIL -- ${MANIFEST_NAME} declares no build variant with id "${target.variant}".`);
-            console.error(`  Open ${MANIFEST_NAME}, add a [[variants]] section whose id is "${target.variant}", then run: ${RERUN}`);
-            process.exit(1);
+            failures.push(
+                `${MANIFEST_NAME} declares no build variant with id ${JSON.stringify(target.variant)}. `
+                + `Open ${MANIFEST_NAME}, add a [[variants]] section whose id is ${JSON.stringify(target.variant)}, `
+                + `then run: ${RERUN}`,
+            );
+            continue;
         }
-        const outPath = join(root, target.generated);
-        mkdirSync(dirname(outPath), { recursive: true });
-        writeFileSync(outPath, target.emit(config, variant), 'utf8');
-        written += 1;
+        pending.push({ outPath: join(root, target.generated), body: target.emit(config, variant) });
     }
-    return written;
+    report(failures);
+
+    for (const { outPath, body } of pending) {
+        mkdirSync(dirname(outPath), { recursive: true });
+        writeFileSync(outPath, body, 'utf8');
+    }
+    return pending.length;
 }
 
 // --- 5. --check: report whether the tree matches, and change nothing --------
