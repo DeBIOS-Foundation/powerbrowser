@@ -847,10 +847,24 @@ function firstDifferingLine(a, b) {
  */
 function checkTargets(config, root = OUTPUT_ROOT) {
     if (!existsSync(root)) {
-        console.error(`${NAME}: FAIL -- nothing has been generated in this copy of the project yet, so there is nothing to compare.`);
-        console.error('  The generated/ folder is not stored with the project, so a fresh copy of it starts out without one. This is not a mismatch.');
-        console.error(`  Next step: run: ${RERUN}`);
-        return 1;
+        // NOT A FAILURE, and the message already said so while exiting 1
+        // anyway. This row's contract is IDEMPOTENCE -- that a second run
+        // produces the same bytes as the first -- and a tree that has never
+        // generated cannot disagree with itself. generated/ is git-ignored, so
+        // that is the state of every fresh clone, which made
+        // `verify-platform.sh --quick` -- the documented commit gate -- red on
+        // every fresh clone for a non-defect. A gate red for a non-defect is a
+        // gate its readers learn to skip, which is the failure mode
+        // verify-generated-identity.mjs's own header is built to avoid.
+        //
+        // Whether the emitters agree with the five hand-written files is the
+        // DIFFERENT question generated-byte-identity answers, and it answers it
+        // without needing a prior generate at all -- so nothing goes unchecked
+        // on the tree this branch reports on.
+        console.log(`${NAME}: --check SKIP -- nothing has been generated in this copy of the project yet, so there is nothing to compare.`);
+        console.log('  The generated/ folder is not stored with the project, so a fresh copy of it starts out without one. This is not a mismatch.');
+        console.log(`  To generate it, run: ${RERUN}`);
+        return 0;
     }
 
     const dir = mkdtempSync(join(tmpdir(), 'generate-check-'));
@@ -1042,6 +1056,13 @@ function capture(fn) {
 const BROKEN = 'planted-fault instrument broken --';
 
 /**
+ * The absent-output case's second assertion, named once and read from here by
+ * both the probe that can emit it and the case that forbids it, so the two
+ * cannot drift into agreeing about different strings.
+ */
+const ABSENT_EXIT_MARK = 'a fresh copy of the project was failed for something that is not a mismatch:';
+
+/**
  * The state of generated/ as one comparable string, or the fact that it is
  * absent. CFG-03's rule is that a rejected value is REJECTED, never quietly
  * transformed into a passing one -- and a rejection that still emitted output
@@ -1084,11 +1105,20 @@ function probeStaleOutput(config) {
  * generated/ is git-ignored. The distinct message this must produce is the
  * whole point: five phantom stale paths would read as five defects on a tree
  * with none, and a gate red for a non-defect is a gate its readers skip.
+ *
+ * The EXIT CODE is asserted here too, and separately from the message, because
+ * the two disagreed for a while: the message said "This is not a mismatch" and
+ * the function returned 1 regardless, which put the documented commit gate in a
+ * FAIL state on every fresh clone. A case reading only the message could not
+ * see that.
  */
 function probeAbsentOutput(config) {
     const parent = mkdtempSync(join(tmpdir(), 'generate-selftest-absent-'));
     try {
-        return capture(() => checkTargets(config, join(parent, 'never-generated')));
+        let code;
+        const lines = capture(() => { code = checkTargets(config, join(parent, 'never-generated')); });
+        if (code !== 0) lines.push(`${ABSENT_EXIT_MARK} it exited ${code}`);
+        return lines;
     } finally {
         rmSync(parent, { recursive: true, force: true });
     }
@@ -1278,13 +1308,15 @@ function selfTest() {
         },
         {
             // The absent-directory outcome is a DISTINCT message, not five
-            // stale paths. Asserted from both sides: the message is there and
-            // no target path is, so a future collapse of the three outcomes
-            // into one goes red here.
+            // stale paths, AND it is not a failure. Asserted from three sides:
+            // the message is there, no target path is, and the exit code was
+            // zero -- so a future collapse of the three outcomes into one goes
+            // red here, and so does a return to exiting 1 on a tree that has
+            // simply never generated.
             name: 'absent generated directory',
             probe: probeAbsentOutput,
             expect: 'nothing has been generated in this copy of the project yet',
-            notExpect: everyTargetPath,
+            notExpect: [...everyTargetPath, ABSENT_EXIT_MARK],
         },
         {
             // D-11. Red on the manifest and the line, and free of the parser's
