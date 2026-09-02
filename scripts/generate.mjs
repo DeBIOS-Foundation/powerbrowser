@@ -563,6 +563,15 @@ function assertUnderRepo(path, relative) {
  * emitter is what changes; the tracked files are the comparand and are never
  * edited to make a check green.
  *
+ * THE COPY STEP IS NAMED BECAUSE IT IS REAL. OUTPUT_ROOT is REPO_ROOT/generated
+ * and the build still consumes the TRACKED file under D-01, so "edit
+ * configuration.toml and run the generator" -- what these lines used to say --
+ * changes nothing a reader can see and then reddens generated-byte-identity
+ * with no documented recovery other than the one thing the first line forbids.
+ * The header now says to copy the emitted file over the tracked one, which is
+ * the procedure that actually works in Phase 2. A --write-tracked mode would
+ * replace that sentence; until one exists, the sentence stays honest.
+ *
  * ONE emitter serves BOTH variants. The dev and release files differ in exactly
  * one line, and that difference is entirely the variant's name_suffix -- the
  * release variant's is empty, which is what yields the shorter display name. If
@@ -579,7 +588,8 @@ function emitConfigureSh(config, variant) {
         '# file, You can obtain one at http://mozilla.org/MPL/2.0/.',
         '',
         '# Generated from configuration.toml by scripts/generate.mjs -- do not edit here.',
-        '# To change it, edit configuration.toml and run: node scripts/generate.mjs',
+        '# To change it: edit configuration.toml, run: node scripts/generate.mjs, then copy the',
+        '# matching file out of generated/ over this one. Phase 2 does not write it in place.',
         '# A disagreement reddens: scripts/verify-platform.sh --only generated-byte-identity',
         // Both halves pass the sink guard. This line is a double-quoted shell
         // assignment in a file the Gecko build sources, so an unchecked value
