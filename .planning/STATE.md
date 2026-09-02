@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.0
 current_phase: 02
 current_phase_name: configuration-manifest-and-generator-core
-status: executing
-stopped_at: Completed 02-05-PLAN.md
-last_updated: "2026-09-02T00:18:40.719Z"
+status: verifying
+stopped_at: Completed 02-06-PLAN.md
+last_updated: "2026-09-02T00:31:01.527Z"
 last_activity: 2026-09-01
 last_activity_desc: Phase 01 execution started
-state_head: c25fb75075c2f7cc4dc1b3308994963a1792cb8e
+state_head: 7f9d3d8499b0ddc19a09649a0051573b4cbc9b54
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 27
-  completed_plans: 26
+  completed_plans: 27
 milestone_name: milestone
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 Phase: 02 (configuration-manifest-and-generator-core) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-01 — Phase 02 execution started
 
 Progress: [█████████░] 93%
@@ -84,6 +84,7 @@ Progress: [█████████░] 93%
 | Phase 02 P03 | 35m | 2 tasks | 1 files |
 | Phase 02 P04 | 30m | 2 tasks | 1 files |
 | Phase 02 P05 | 25m | 2 tasks | 3 files |
+| Phase 02 P06 | ~35m | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -187,6 +188,11 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-05: the byte-identity gate emits into mkdtemp and compares against the TRACKED files, never git-ignored generated/ — a gate red on a fresh clone for a non-defect is a gate its readers learn to skip
 - [Phase 02]: 02-05: git check-ignore must be asked about 'generated/' with the trailing slash; .gitignore's directory-only pattern does not match a bare path when the directory is absent
 - [Phase 02]: 02-05: CFG-01 marked complete — 02-04 deferred it pending this plan's registry row, which is now green
+- [Phase 02]: checkTargets took a root parameter rather than the self-test re-implementing the comparison — two comparison paths would let the proved thing and the run thing drift
+- [Phase 02]: The no-internals copy rule is a predicate applied to every self-test case's output inside the loop, not a tenth case — a case could only ever check its own fixture
+- [Phase 02]: The malformed-manifest case runs in a child process, because an unparseable layer exits from inside loadLayer and would take the self-test down with it
+- [Phase 02]: generate-check asserts idempotence and nothing more; the CI steps run generate, then --check, then byte-identity, because generated/ is git-ignored and a fresh clone would otherwise show five phantom stale paths
+- [Phase 02]: The configure.sh header rewrite (D-03 step 2) was made only after the byte-identity row was recorded green against the original bytes at 94c47d1, and the emitter plus both tracked files changed in one commit
 
 ### Pending Todos
 
@@ -213,6 +219,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-02T00:17:19.794Z
-Stopped at: Completed 02-05-PLAN.md
+Last session: 2026-09-02T00:30:51.104Z
+Stopped at: Completed 02-06-PLAN.md
 Resume file: None
