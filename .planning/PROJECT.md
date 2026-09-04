@@ -123,11 +123,8 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - [ ] **EXT-02**: npm and local-path extension source kinds (v2)
 - [ ] **TEL-04**: crash-report pipeline beyond endpoint repointing (v2)
 - [ ] **GUI-02**: in-Theia web tabs via `<xul:browser>`; **GUI-05**: unified
-      tab strip — DEFERRED until after SQL tabs land (no GUI work in v1.1
-      per 2026-09-04 scoping)
-- [ ] **SQL-01 (v1.1)**: SQL-backed tabs — every tab a SQL row (plus
-      bookmarks/sessions exposure) on `TabUriRegistry` identity, promoted
-      from backlog 999.1 ahead of GUI work
+      tab strip — DEFERRED (no GUI work in v1.1 per 2026-09-04 scoping;
+      SQL tabs still precede them when scheduled)
 
 ### Out of Scope
 
@@ -167,18 +164,19 @@ and promote SQL-backed tabs — no GUI work this cycle.
 **Target features:**
 - Real installer builds (PKG-01) on packaging hosts (+ WR-04/WR-07
   hardening, `docs/BUILD.md` procedure), with the NAME-01 canonical
-  **PowerBrowser** rename slice folded in and gates re-pinned
+  **PowerBrowser** rename slice folded in and gates re-pinned.
+  Self-hosted MAR updates (fork signing); Nix-built Windows/macOS
+  packaging tried first, agent-driven VMs as fallback
 - Extensions + crash pipeline (EXT-02 npm/local-path sources, pinned and
-  fail-loud, plus the WebExtensions declaration sibling; TEL-04
-  crash-report pipeline beyond endpoint repointing)
-- SQL tabs (promote backlog 999.1): tabs/bookmarks/sessions as SQL rows on
-  `TabUriRegistry` identity — lands BEFORE any GUI work
+  fail-loud, plus the WebExtensions declaration sibling; TEL-04 minimal
+  crash collector, reporter stays compiled out)
 - v1 carry-overs ride along: release `objdir-release` build, tier-3
   per-fixture builds, live ESR rebase drill, Theia re-pin proof, WINDOWS
   #13 (`registerWindowActor` boundary hole) and #14 (BiDi double-window)
 
-GUI-02 (in-Theia web tabs) and GUI-05 (unified tab strip) are explicitly
-deferred until after SQL tabs land.
+No GUI work and no SQL tabs this cycle: GUI-02/GUI-05 stay deferred, and
+backlog 999.1 SQL-browser-memory stays backlog (confirmed 2026-09-04 —
+v1.1 is hardening-only).
 
 ## Evolution
 
