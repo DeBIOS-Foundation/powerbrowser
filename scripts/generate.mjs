@@ -5,11 +5,16 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT COVERS. Five targets, each byte-identical to the file Phase 1 wrote
-// by hand: the two branding configure.sh files, .mozconfig, and the two
-// .desktop files. That byte-identity IS the phase's acceptance test, which is
-// why no emitter here is allowed to reformat, reorder or "tidy" what it
-// reproduces. The Theia and packaging surfaces are Phase 3 (GEN-03).
+// WHAT IT COVERS. Twenty-three targets, each byte-identical to the file
+// Phase 1 wrote by hand: the five Phase 2 build surfaces (the two branding
+// configure.sh files, .mozconfig, and the two .desktop files) plus the
+// eighteen GEN-01 branding-directory surfaces (per variant: brand.ftl,
+// brand.properties, moz.build, content/jar.mn, content/moz.build,
+// locales/jar.mn, locales/moz.build, content/aboutDialog.css and
+// pref/firefox-branding.js). That byte-identity IS the acceptance test, which
+// is why no emitter here is allowed to reformat, reorder or "tidy" what it
+// reproduces. The icon rasters are plan 03-02 and the installer fields are
+// plan 03-03 (GEN-02/GEN-03).
 //
 // WHY THE PIPELINE ORDER IS LOAD-BEARING. Parse, then reject unknown settings,
 // then mask, then merge, then validate, then emit, then write -- in that order
@@ -590,8 +595,8 @@ function assertEmittable(path, value) {
  * alone, which left .mozconfig and the two .desktop files equally derived,
  * equally hand-editable and equally silent about it -- and a reader could no
  * longer tell generated from hand-written by opening the file, which is the
- * banner's whole purpose. A shared constant is also what stops the five files
- * drifting into four wordings.
+ * banner's whole purpose. A shared constant is also what stops the
+ * twenty-three files drifting into twenty-three wordings.
  *
  * `#` is a comment in all three formats: mozconfig is shell, configure.sh is
  * shell, and freedesktop permits comment lines in a .desktop file including
@@ -680,6 +685,95 @@ function emitConfigureSh(config, variant) {
         // here executes at build time; see assertEmittable.
         `MOZ_APP_DISPLAYNAME="${assertEmittable('identity.display_name', config.identity.display_name)}`
         + `${assertEmittable(variantPath(variant, 'name_suffix'), variant.name_suffix)}"`,
+    ];
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * A branding locale's Fluent terms, line for line against the files plan 01-03
+ * wrote by hand. ONE emitter serves BOTH variants, exactly like
+ * emitConfigureSh: the dev and release files differ in exactly one line, and
+ * that difference is entirely the variant's name_suffix.
+ *
+ * THE DERIVATION POINTS, AND NOTHING ELSE. Every other line is a literal copy
+ * of the tracked bytes, comments included:
+ *
+ *  * -brand-shorter-name, -brand-short-name and -brand-shortcut-name carry the
+ *    BASE display name with no suffix; only -brand-full-name carries base plus
+ *    the variant's name_suffix.
+ *  * -brand-product-name is the literal Firefox per D-78: a small set of
+ *    "requires Firefox" compatibility strings interpolates this term, and
+ *    byte-identical UA/product naming is the same rationale D-78 already
+ *    applied to the User-Agent.
+ *  * -vendor-short-name carries product.vendor_display, the DISPLAY-side
+ *    vendor (D-09 as amended).
+ *  * trademarkInfo is the literal brace-space line exactly as the tracked file
+ *    carries it. The tracked bytes win here: no manifest value reaches that
+ *    line, so legal.trademark_notice is validated and required but never
+ *    interpolated into this file.
+ *
+ * Joined with a literal newline, never the platform line-ending constant.
+ */
+function emitBrandFtl(config, variant) {
+    // Both halves pass the sink guard. A Fluent term value ends at the line
+    // break, so the guard's newline rejection is what stops one value from
+    // becoming two terms; the quote/backslash/dollar/backtick rejections cost
+    // nothing here and keep every interpolation in this file under one rule.
+    const base = assertEmittable('identity.display_name', config.identity.display_name);
+    const suffix = assertEmittable(variantPath(variant, 'name_suffix'), variant.name_suffix);
+    const vendor = assertEmittable('product.vendor_display', config.product.vendor_display);
+    const lines = [
+        '# This Source Code Form is subject to the terms of the Mozilla Public',
+        '# License, v. 2.0. If a copy of the MPL was not distributed with this',
+        '# file, You can obtain one at http://mozilla.org/MPL/2.0/.',
+        '',
+        '# Display literals, hand-written (plan 01-03, Pitfall 1). The product name is',
+        '# TWO WORDS WITH A SPACE here; the space-less `PowerBrowser` is the identifier',
+        '# form and must never appear in a display string.',
+        `-brand-shorter-name = ${base}`,
+        `-brand-short-name = ${base}`,
+        `-brand-shortcut-name = ${base}`,
+        `-brand-full-name = ${base}${suffix}`,
+        '# This brand name can be used in messages where the product name needs to',
+        '# remain unchanged across different versions (Nightly, Beta, etc.). Kept at',
+        '# Firefox (not Power Browser) per D-78: a small set of "requires Firefox"',
+        '# compatibility strings interpolate this term, and byte-identical UA/product',
+        '# naming is the same rationale D-78 already applied to the User-Agent.',
+        '-brand-product-name = Firefox',
+        '# The DISPLAY-side vendor (D-09 as amended). The machine-side vendor is the',
+        '# space-free `DeBIOS` in patches/010, because MOZ_APP_VENDOR is lowercased into',
+        '# the profile path with no space stripping.',
+        `-vendor-short-name = ${vendor}`,
+        'trademarkInfo = { " " }',
+    ];
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * A branding locale's legacy properties file, line for line against the files
+ * plan 01-03 wrote by hand. ONE emitter serves BOTH variants: the dev and
+ * release files differ in exactly one line (brandFullName), and that
+ * difference is entirely the variant's name_suffix.
+ *
+ * brandShorterName and brandShortName carry the BASE display name;
+ * brandFullName carries base plus suffix -- the same split emitBrandFtl
+ * applies, which is what the agreement assertion below checks.
+ */
+function emitBrandProperties(config, variant) {
+    const base = assertEmittable('identity.display_name', config.identity.display_name);
+    const suffix = assertEmittable(variantPath(variant, 'name_suffix'), variant.name_suffix);
+    const lines = [
+        '# This Source Code Form is subject to the terms of the Mozilla Public',
+        '# License, v. 2.0. If a copy of the MPL was not distributed with this',
+        '# file, You can obtain one at http://mozilla.org/MPL/2.0/.',
+        '',
+        '# Hand-written display literals (plan 01-03). These must equal the matching',
+        '# terms in this same variant\'s brand.ftl -- verify-branding-identity.mjs',
+        '# surface 4 asserts BOTH files against one expected value precisely so the two',
+        '# halves of one display surface cannot silently disagree.',
+        `brandShorterName=${base}`,
+        `brandShortName=${base}`,
+        `brandFullName=${base}${suffix}`,
     ];
     return lines.join('\n') + '\n';
 }
@@ -805,6 +899,488 @@ function emitDesktopEntry(config, variant) {
 }
 
 /**
+ * The branding-directory layout files that carry zero manifest-derived
+ * values, reproduced byte for byte. Each constant below is a literal copy of
+ * its tracked counterpart at the time of writing -- dev and release are
+ * byte-identical for all five, grep-verified -- and the tracked file stays
+ * the independent comparand: verify-generated-identity.mjs compares every
+ * new TARGETS row below against it, so a later hand edit to either side goes
+ * red instead of drifting.
+ *
+ * A file carrying brand values would get a format emitter like emitBrandFtl
+ * instead; a literal that froze a brand value would ship it under every
+ * downstream's name. Nothing below interpolates the manifest, so no line
+ * passes assertEmittable -- there is no sink to guard.
+ */
+const BRANDING_MOZ_BUILD_LINES = Object.freeze([
+    '# This Source Code Form is subject to the terms of the Mozilla Public',
+    '# License, v. 2.0. If a copy of the MPL was not distributed with this',
+    '# file, You can obtain one at http://mozilla.org/MPL/2.0/.',
+    '',
+    'DIRS += ["content", "locales"]',
+    '',
+    'DIST_SUBDIR = "browser"',
+    'export("DIST_SUBDIR")',
+    '',
+    'include("../../../browser/branding/branding-common.mozbuild")',
+    'FirefoxBranding()',
+]);
+
+const BRANDING_CONTENT_JAR_LINES = Object.freeze([
+    '# This Source Code Form is subject to the terms of the Mozilla Public',
+    '# License, v. 2.0. If a copy of the MPL was not distributed with this',
+    '# file, You can obtain one at http://mozilla.org/MPL/2.0/.',
+    '#',
+    '# Packages what this tree ships into the branding chrome package: the five',
+    '# default*.png icons, and aboutDialog.css -- the branding stylesheet that',
+    '# upstream\'s aboutDialog.xhtml loads as the third entry of its linkset.',
+    '# Deliberately does not reference about.png, about-logo*, about-wordmark.svg,',
+    '# firefox-wordmark.svg, document.ico or document_pdf.svg -- those are Mozilla',
+    '# marks or assets this tree does not ship, and Phase 3\'s icon pipeline owns',
+    '# the ones that will eventually be replaced.',
+    '',
+    'browser.jar:',
+    '% content branding %content/branding/ contentaccessible=yes',
+    '  content/branding/icon16.png                    (../default16.png)',
+    '  content/branding/icon32.png                    (../default32.png)',
+    '  content/branding/icon48.png                    (../default48.png)',
+    '  content/branding/icon64.png                    (../default64.png)',
+    '  content/branding/icon128.png                   (../default128.png)',
+    '  content/branding/aboutDialog.css               (aboutDialog.css)',
+]);
+
+const BRANDING_CONTENT_MOZBUILD_LINES = Object.freeze([
+    '# This Source Code Form is subject to the terms of the Mozilla Public',
+    '# License, v. 2.0. If a copy of the MPL was not distributed with this',
+    '# file, You can obtain one at http://mozilla.org/MPL/2.0/.',
+    '',
+    'JAR_MANIFESTS += ["jar.mn"]',
+]);
+
+const BRANDING_LOCALES_JAR_LINES = Object.freeze([
+    '#filter substitution',
+    '# This Source Code Form is subject to the terms of the Mozilla Public',
+    '# License, v. 2.0. If a copy of the MPL was not distributed with this',
+    '# file, You can obtain one at http://mozilla.org/MPL/2.0/.',
+    '',
+    '[localization] @AB_CD@.jar:',
+    '  branding                                          (en-US/**/*.ftl)',
+    '',
+    '@AB_CD@.jar:',
+    '% locale branding @AB_CD@ %locale/branding/',
+    '# Unofficial branding only exists in en-US',
+    '  locale/branding/brand.properties (en-US/brand.properties)',
+]);
+
+const BRANDING_LOCALES_MOZBUILD_LINES = Object.freeze([
+    '# This Source Code Form is subject to the terms of the Mozilla Public',
+    '# License, v. 2.0. If a copy of the MPL was not distributed with this',
+    '# file, You can obtain one at http://mozilla.org/MPL/2.0/.',
+    '',
+    'JAR_MANIFESTS += ["jar.mn"]',
+]);
+
+/**
+ * One literal emitter per layout file above. Each ignores its arguments --
+ * writeTargets calls every emitter as emit(config, variant), and uniformity
+ * there is worth more than a shorter parameter list here.
+ */
+function emitBrandingMozBuild() {
+    return BRANDING_MOZ_BUILD_LINES.join('\n') + '\n';
+}
+
+function emitBrandingContentJarMn() {
+    return BRANDING_CONTENT_JAR_LINES.join('\n') + '\n';
+}
+
+function emitBrandingContentMozBuild() {
+    return BRANDING_CONTENT_MOZBUILD_LINES.join('\n') + '\n';
+}
+
+function emitBrandingLocalesJarMn() {
+    return BRANDING_LOCALES_JAR_LINES.join('\n') + '\n';
+}
+
+function emitBrandingLocalesMozBuild() {
+    return BRANDING_LOCALES_MOZBUILD_LINES.join('\n') + '\n';
+}
+
+/**
+ * The branding stylesheet, reproduced byte for byte. It carries zero
+ * manifest-derived values -- structural selectors, shell neutrals and prose
+ * comments only, grep-verified -- so it is a literal like the five layout
+ * files above, and for the same reason it cannot stay behind: the content
+ * jar.mn above packages (aboutDialog.css), so a generated branding directory
+ * without it is not a drop-in but a build break. Dev and release are
+ * byte-identical.
+ */
+const BRANDING_ABOUT_DIALOG_CSS_LINES = Object.freeze([
+    '/* This Source Code Form is subject to the terms of the Mozilla Public',
+    ' * License, v. 2.0. If a copy of the MPL was not distributed with this',
+    ' * file, You can obtain one at http://mozilla.org/MPL/2.0/. */',
+    '',
+    '@media not ((prefers-contrast) and (prefers-color-scheme: light)) {',
+    '  #aboutDialogContainer {',
+    '    /* The shell\'s dominant neutral (01-UI-SPEC.md "Color"). Replaces the',
+    '       inherited Mozilla brand purple, which was a Mozilla brand value sitting',
+    '       inside Power Browser\'s branding directory and invisible to the residual',
+    '       scan, which matches brand tokens rather than hexes. */',
+    '    background-color: #1a1a1a;',
+    '    color: #fff;',
+    '    color-scheme: dark;',
+    '  }',
+    '',
+    '  #bottomBox {',
+    '    /* #111 at 50% -- the shell\'s diagnostics-well neutral. Replaces the',
+    '       translucent form of the same Mozilla brand hue. */',
+    '    background-color: rgba(17, 17, 17, 0.5);',
+    '  }',
+    '}',
+    '',
+    '/* The wordmark-positioning block that used to sit here is removed. Every',
+    '   declaration in it -- background sizing, inline margin, 64px top padding --',
+    '   positioned the wordmark that upstream\'s own aboutDialog.css loads from',
+    '   chrome://branding/content/about-wordmark.svg. This tree does not ship that',
+    '   asset and this directory\'s jar.mn correctly does not package it. While this',
+    '   stylesheet was itself unpackaged the block was inert; now that it loads, the',
+    '   padding would reserve an empty 64px band above the version text for an image',
+    '   that 404s. Phase 3\'s icon pipeline owns the wordmark; the block returns with',
+    '   the asset. */',
+    '',
+    '#bottomBox {',
+    '  padding: 15px 10px;',
+    '}',
+    '',
+    '/* Suppress the stock outbound-link rows (G-01-3). Upstream hard-codes every',
+    '   one of these hrefs as a literal attribute in aboutDialog.xhtml, so no pref',
+    '   can reach them; this stylesheet is the third and last entry in that file\'s',
+    '   linkset, which is the hook upstream provides to branding for exactly this.',
+    '',
+    '   #contributeDesc -- renders "Make a donation" and "get involved!".',
+    '   #communityDesc  -- renders the community blurb. It was not in the user',
+    '                      report; it is suppressed with the others rather than',
+    '                      deferred because its visible label is this product\'s own',
+    '                      vendor name while its target is mozilla.org -- the',
+    '                      reported defect in its worst instance.',
+    '   #communityExperimentalDesc -- the same blurb in its experimental-channel',
+    '                      form. It renders inside upstream\'s',
+    '                      <vbox id="experimental" hidden="true"> and is unhidden by',
+    '                      upstream\'s own channel logic, so its mozilla.org link is',
+    '                      dormant at the current ESR channel rather than absent. It',
+    '                      is suppressed rather than exempted because an exemption',
+    '                      list inside the checker would be a hand-kept expectation',
+    '                      that can only ever agree with the tree it was copied from',
+    '                      (01-REVIEW.md WR-08, CR-02).',
+    '',
+    '   The bottom row is MIXED, not outbound, and that is why the third entry is',
+    '   qualified by href rather than naming the container. #bottomBox\'s link row',
+    '   holds three children: "Licensing Information", whose href is the internal',
+    '   about:license, and "Terms of Use" and "Privacy Notice", both destined for',
+    '   https://www.mozilla.org. Only the two mozilla.org-destined children are',
+    '   suppressed. The licence link STAYS VISIBLE: it is this product\'s only in-UI',
+    '   route to its aggregated open-source licence text, and a build that ships',
+    '   MPL-covered and third-party code with no such route has no surface on which',
+    '   to discharge that disclosure. The row keeps its pack="center" layout with',
+    '   one visible child. #trademark is #bottomBox\'s other child and is untouched.',
+    '',
+    '   A container-wide rule here took the licence link down with the vendor ones',
+    '   (01-VERIFICATION.md Truth 9, 01-REVIEW.md CR-01); the qualified form and',
+    '   scripts/verify-about-dialog-suppression.mjs together keep that closed. */',
+    '#communityDesc,',
+    '#communityExperimentalDesc,',
+    '#contributeDesc,',
+    '#bottomBox > hbox > .bottom-link[href^="https://www.mozilla.org"] {',
+    '  display: none;',
+    '}',
+]);
+
+function emitBrandingAboutDialogCss() {
+    return BRANDING_ABOUT_DIALOG_CSS_LINES.join('\n') + '\n';
+}
+
+/**
+ * The branding pref file, reproduced byte for byte with exactly one
+ * variant-parameterised difference. The release file IS the first 164 lines
+ * below; the dev file appends the BRAND-06 title-bar block (lines 166-188 of
+ * the tracked dev file), which is a VARIANT property -- dev-only by design,
+ * the release tree deliberately carries no such default -- and not a brand
+ * value, so neither half interpolates the manifest.
+ *
+ * Split as base plus dev tail rather than two full copies: the two tracked
+ * files share their first 164 lines, and two copies would let the shared
+ * head drift into testing -- and shipping -- two things.
+ */
+const FIREFOX_BRANDING_BASE_LINES = Object.freeze([
+    '/* This Source Code Form is subject to the terms of the Mozilla Public',
+    ' * License, v. 2.0. If a copy of the MPL was not distributed with this',
+    ' * file, You can obtain one at http://mozilla.org/MPL/2.0/. */',
+    '',
+    '// BRAND-04 (D-83..D-88): every pref that gates an unattended callout to a',
+    '// host not in powerbrowser/endpoint-allowlist.json\'s `hosts` array. Every key',
+    '// here that appears in the allowlist\'s `prefs` array must match its',
+    '// `expect` value exactly -- scripts/verify-endpoints.sh layer 1 asserts',
+    '// this on the installed, unpreprocessed copy of this file',
+    '// (branding-common.mozbuild:13-15 hardcodes the filename).',
+    '//',
+    '// Prefs stay UNLOCKED (plain pref(), never the locking variant) so the',
+    '// developer can flip them while debugging -- D-84. No autoconfig.js / .cfg',
+    '// pair exists anywhere under powerbrowser/ (D-84 rejects that mechanism',
+    '// explicitly).',
+    '',
+    'pref("startup.homepage_override_url", "");',
+    'pref("startup.homepage_welcome_url", "");',
+    'pref("startup.homepage_welcome_url.additional", "");',
+    '',
+    '// The Mozilla update-wizard URLs must not be carried forward from the',
+    '// unofficial/ template (both pointed at nightly.mozilla.org).',
+    'pref("app.update.url.manual", "");',
+    'pref("app.update.url.details", "");',
+    '',
+    '// --- D-86: GMP manager -- Widevine stays working, no Mozilla host involved ---',
+    '// Blanked so the GMP manager never contacts aus5.mozilla.org for a plugin',
+    '// manifest. Widevine\'s own CDM fetch (widevinecdm.json\'s fileUrl,',
+    '// edgedl.me.gvt1.com) does not depend on this pref, and',
+    '// media.gmp-manager.allowLocalSources is deliberately left at its default',
+    '// (true) -- it is a fallback flag, not an unattended-callout gate.',
+    'pref("media.gmp-manager.url", "");',
+    '// media.gmp-widevinecdm.enabled is intentionally NOT set here (D-86): it',
+    '// routes to a handler that never fetches, and already defaults true on',
+    '// Linux.',
+    '',
+    '// --- D-87: OpenH264 -- the one genuinely unattended download at startup ---',
+    'pref("media.gmp-gmpopenh264.enabled", false);',
+    '',
+    '// --- D-84/D-87: system-addon update callout, killed before the URL is read ---',
+    'pref("extensions.systemAddon.update.enabled", false);',
+    'pref("extensions.systemAddon.update.url", "");',
+    '',
+    '// --- Telemetry / health-report / data-submission: defence in depth. The',
+    '// health-report subsystem itself is compiled out (MOZ_SERVICES_HEALTHREPORT',
+    '// = False, D-84), but these prefs are set anyway so a reader of this file',
+    '// sees the intent stated even if a future rebuild ever restored the flag. ---',
+    'pref("toolkit.telemetry.unified", false);',
+    'pref("toolkit.telemetry.server", "");',
+    'pref("datareporting.healthreport.uploadEnabled", false);',
+    'pref("datareporting.policy.dataSubmissionEnabled", false);',
+    '',
+    '// --- Captive portal: browser/app/profile/firefox.js:1375 re-enables this',
+    '// after toolkit\'s own all.js:3255 default of false -- our branding file',
+    '// loads last (JS_PREFERENCE_FILES, branding-common.mozbuild) so this wins. ---',
+    'pref("network.captive-portal-service.enabled", false);',
+    'pref("captivedetect.canonicalURL", "");',
+    '',
+    '// --- Normandy/Shield: MOZ_NORMANDY is compiled out (D-84), so these prefs',
+    '// are moot at runtime, but disabled anyway so the intent is stated in the',
+    '// one place a reader would look. ---',
+    'pref("app.normandy.enabled", false);',
+    'pref("app.shield.optoutstudies.enabled", false);',
+    '',
+    '// --- Pocket / Discover feed / sponsored New Tab content ---',
+    'pref("browser.newtabpage.activity-stream.discoverystream.enabled", false);',
+    'pref("browser.newtabpage.activity-stream.showSponsored", false);',
+    'pref("browser.newtabpage.activity-stream.showSponsoredTopSites", false);',
+    'pref("browser.topsites.contile.enabled", false);',
+    '',
+    '// --- Region-lookup and Web Push server URLs (both resolve',
+    '// location.services.mozilla.com / push.services.mozilla.com respectively,',
+    '// which powerbrowser/endpoint-allowlist.json disposition `deny` -- neither',
+    '// URL is essential to this phase\'s scope, no Theia-side feature depends on',
+    '// them yet). The GEOLOCATION and PUSH *APIs themselves*',
+    '// (geo.enabled/geo.provider.network.url, dom.push.enabled) are deliberately',
+    '// left untouched: both fire only on an explicit site request, never at',
+    '// unattended startup, and disabling the API surface would remove real',
+    '// browser capability this phase has no reason to take away. ---',
+    'pref("browser.region.network.url", "");',
+    'pref("dom.push.serverURL", "");',
+    '',
+    '// --- AMO (services.addons.mozilla.org): discovered only once the layer-3',
+    '// observation window was corrected from 20s to 35s (see verify-endpoints.sh)',
+    '// -- Firefox\'s general periodic AddonManager update-check timer',
+    '// (toolkit/components/timermanager/UpdateTimerManager.sys.mjs,',
+    '// app.update.timerFirstInterval defaults to 30000ms) does not fire inside a',
+    '// 20-second capture, so 03-02\'s original session never observed it. The',
+    '// master switch stops every AddonRepository network call (langpack',
+    '// matching, addon search/discovery, browser-mappings) in one pref; the',
+    '// individual URLs are blanked too, belt-and-braces. ---',
+    'pref("extensions.getAddons.cache.enabled", false);',
+    'pref("extensions.getAddons.get.url", "");',
+    'pref("extensions.getAddons.langpacks.url", "");',
+    'pref("extensions.getAddons.discovery.api_url", "");',
+    'pref("extensions.getAddons.browserMappings.url", "");',
+    'pref("extensions.addonAbuseReport.url", "");',
+    '',
+    '// --- NetworkConnectivityService: the actual source of the cloudflare-dns.com',
+    '// / example.org / ipv4only.arpa hosts observed by 03-02\'s real layer-3',
+    '// capture. These are NOT network.trr.mode (which already defaults to 0/off',
+    '// in this build, per modules/libpref/init/StaticPrefList.yaml -- TRR is not',
+    '// active) -- they come from NetworkConnectivityService.cpp\'s own DNSv4/DNSv6/',
+    '// DNS_HTTPS domain probes (network.connectivity-service.DNSv4.domain =',
+    '// "example.org", .DNS_HTTPS.domain = "cloudflare-dns.com") and its hardcoded',
+    '// ipv4only.arpa NAT64-prefix check (netwerk/base/NetworkConnectivityService.cpp:400).',
+    '// Turned off at the single master switch: no DRM/security-parity rationale',
+    '// applies (unlike Remote Settings/Safe Browsing), so per D-85 this',
+    '// unattended, non-Mozilla-host-producing background prober is disabled',
+    '// rather than waived. ---',
+    'pref("network.connectivity-service.enabled", false);',
+    '',
+    '// --- BRAND-04 ledger entry 5 fix (2026-08-29): Gecko speculatively',
+    '// DNS-prefetches link targets rendered by the Theia frontend --',
+    '// network.dns.disablePrefetch defaults false',
+    '// (modules/libpref/init/StaticPrefList.yaml:15308) and',
+    '// network.dns.disablePrefetchFromHTTPS also defaults false (:15161), so',
+    '// the origin scheme is irrelevant. Root cause traced to',
+    '// theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx:13\'s',
+    '// POWERBROWSER_REPO_URL link to github.com. Disabled rather than removing',
+    '// the link -- the link is a real, wanted affordance, and an explicit',
+    '// click is a user request this pref does not block, only the',
+    '// speculative prefetch. github.com stays a `deny` entry in',
+    '// endpoint-allowlist.json so a regression fails the check. ---',
+    'pref("network.dns.disablePrefetch", true);',
+    '',
+    '// --- BRAND-04 ledger entry 5 fix (2026-08-29): media.gmp-gmpopenh264.enabled',
+    '// (above) does not stop the periodic auto-update task from resolving',
+    '// ciscobinary.openh264.org. GMPProvider.findUpdates()',
+    '// (toolkit/mozapps/extensions/internal/GMPProvider.sys.mjs:380-451) runs',
+    '// on the general periodic AddonManager update timer regardless of',
+    '// .enabled -- that pref only feeds GMPUtils.isPluginHidden/userDisabled,',
+    '// and permissions (GMPProvider.sys.mjs:299-307) grants PERM_CAN_UPGRADE',
+    '// unconditionally for a non-EME plugin like OpenH264. The real gate is',
+    '// AddonManager.shouldAutoUpdate() (AddonManager.sys.mjs:4577-4598), which',
+    '// falls through to this.autoUpdateDefault whenever the addon\'s own',
+    '// applyBackgroundUpdates getter reports AUTOUPDATE_DEFAULT rather than an',
+    '// explicit ENABLE/DISABLE -- and it always does here, because that getter',
+    '// (GMPProvider.sys.mjs:347-358) gates on GMPPrefs.isSet(), which calls',
+    '// Services.prefs.prefHasUserValue() and is therefore permanently false for',
+    '// any value this default-branch pref file sets (media.gmp-gmpopenh264.',
+    '// autoupdate cannot be closed from here at all -- confirmed live: setting',
+    '// it false via this file had zero effect on the resolution). This global',
+    '// switch is the one lever that IS a plain default-branch-readable bool',
+    '// pref. Confirmed safe for Widevine: its own findUpdates() never reaches',
+    '// this fallback at all -- media.eme.enabled defaults false on Linux',
+    '// (StaticPrefList.yaml:12162-12175), so GMPProvider.appDisabled is true',
+    '// for the EME plugin, and shouldAutoUpdate() returns false at the',
+    '// PERM_CAN_UPGRADE check (line 4588) before applyBackgroundUpdates is',
+    '// even read; a real EME/DRM request instead drives checkForUpdates() ->',
+    '// simpleCheckAndInstall() (GMPProvider.sys.mjs:557-574), a separate call',
+    '// path gated by its own media.gmp-widevinecdm.enabled default (true),',
+    '// untouched by this pref. Traced live: with this pref at its stock true,',
+    '// findUpdates() ran checkForAddons() ->',
+    '// downloadLocalConfig(chrome://global/content/gmp-sources/openh264.json)',
+    '// -> installAddon(), genuinely downloading and extracting the OpenH264',
+    '// zip from ciscobinary.openh264.org; with it false, that call never ran.',
+    '// media.gmp-gmpopenh264.enabled stays false too -- still correct, still',
+    '// wanted, just not sufficient alone. ---',
+    'pref("extensions.update.autoUpdateDefault", false);',
+    '',
+    '// Number of usages of the web console.',
+    '// If this is less than 5, then pasting code into the web console is disabled',
+    'pref("devtools.selfxss.count", 5);',
+]);
+
+const FIREFOX_BRANDING_DEV_TAIL_LINES = Object.freeze([
+    '',
+    '// --- BRAND-06 / D-82 / D-84: dev-only title bar for at-a-glance',
+    '// distinguishability. Unlocked plain pref(), same mechanism as every other',
+    '// entry in this file -- a developer can flip it while debugging, and no',
+    '// autoconfig/.cfg pair exists anywhere under powerbrowser/ (D-84 rejects that',
+    '// mechanism explicitly). This is a runtime default only: it changes no',
+    '// compiled define, so no rebuild follows from editing it.',
+    '//',
+    '// browser.tabs.inTitlebar is a tri-state int (StaticPrefList.yaml:2096):',
+    '// 0 = no (draw a real title bar), 1 = yes (tabs-in-titlebar/CSD),',
+    '// 2 = default (true everywhere except Linux). The dev variant sets it to',
+    '// the "no" case; the release tree deliberately carries no such default --',
+    '// the absence is what makes the two variants differ.',
+    '//',
+    '// Mechanism chain: LookAndFeel::DrawInTitlebar()',
+    '// (widget/nsXPLookAndFeel.cpp:1452, case 0 returns false) ->',
+    '// Services.appinfo.drawInTitlebar -> browser-customtitlebar.js drops the',
+    '// customtitlebar attribute -> a real title bar is painted, carrying the',
+    '// window title (page title, then this variant\'s own -brand-full-name).',
+    '//',
+    '// Empirical reason this exists: 03-MANUAL-VERIFICATION.md Item A found',
+    '// that with tabs-in-titlebar on, this desktop paints no title bar at all,',
+    '// so the display name never reaches any surface a person can see.',
+    'pref("browser.tabs.inTitlebar", 0);',
+]);
+
+/**
+ * The one emitter both pref rows share. The dev-only tail is a property of
+ * the VARIANT, not of the brand: no manifest value selects it, so the branch
+ * is on the variant id, the two values this project builds.
+ */
+function emitFirefoxBrandingJs(config, variant) {
+    void config;
+    const lines = variant.id === 'dev'
+        ? [...FIREFOX_BRANDING_BASE_LINES, ...FIREFOX_BRANDING_DEV_TAIL_LINES]
+        : FIREFOX_BRANDING_BASE_LINES;
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * One `name = value` term out of an in-memory locale body. The same shape as
+ * verify-branding-preflight.mjs's ftlTerm/propTerm: a line-anchored match on
+ * the term name, trimmed. All three agreement keys below are letters and
+ * hyphens only, so no escaping is needed to interpolate them.
+ */
+function localeTermValue(body, key) {
+    const m = body.match(new RegExp(`^${key}\\s*=\\s*(.*)$`, 'm'));
+    return m ? m[1].trim() : null;
+}
+
+/**
+ * The ftl-versus-properties term pairs that must agree within one variant.
+ * Each row names the Fluent term, the properties key, and the plain-words
+ * surface they are two halves of.
+ */
+const LOCALE_AGREEMENT_PAIRS = Object.freeze([
+    Object.freeze({ ftl: '-brand-full-name', props: 'brandFullName', what: 'the full name' }),
+    Object.freeze({ ftl: '-brand-short-name', props: 'brandShortName', what: 'the short name' }),
+    Object.freeze({ ftl: '-brand-shorter-name', props: 'brandShorterName', what: 'the shorter name' }),
+]);
+
+/**
+ * Assert the cross-file agreement on the IN-MEMORY bodies of one emit pass,
+ * before anything is written. A mismatch here means the two emitters
+ * disagree with each other -- both derive from the same manifest, so
+ * configuration.toml is never the cause and the message says so, naming
+ * both files and both values.
+ *
+ * Returns failures rather than reporting them, so writeTargets folds them
+ * into its single emit-all-then-write report and --self-test drives this
+ * function directly on crafted bodies.
+ */
+function localeAgreementFailures(entries) {
+    const groups = new Map();
+    for (const { rel, body } of entries) {
+        const base = rel.split('/').pop();
+        if (base !== 'brand.ftl' && base !== 'brand.properties') continue;
+        const dir = rel.slice(0, rel.length - base.length);
+        let group = groups.get(dir);
+        if (group === undefined) {
+            group = {};
+            groups.set(dir, group);
+        }
+        group[base === 'brand.ftl' ? 'ftl' : 'props'] = { rel, body };
+    }
+    const failures = [];
+    for (const group of groups.values()) {
+        if (group.ftl === undefined || group.props === undefined) continue;
+        for (const { ftl, props, what } of LOCALE_AGREEMENT_PAIRS) {
+            const ftlValue = localeTermValue(group.ftl.body, ftl);
+            const propsValue = localeTermValue(group.props.body, props);
+            if (ftlValue !== propsValue) {
+                failures.push(
+                    `generated/${group.ftl.rel}'s ${ftl} carries ${JSON.stringify(ftlValue)} but generated/${group.props.rel}'s ${props} carries ${JSON.stringify(propsValue)} -- the two halves of ${what} disagree. `
+                    + `Next step: report this; ${MANIFEST_NAME} is not the cause and editing it will not help.`,
+                );
+            }
+        }
+    }
+    return failures;
+}
+
+/**
  * Every output path lives here and nowhere else, and the default run, --check
  * and plan 02-05's byte-identity gate all iterate this one array.
  *
@@ -858,6 +1434,114 @@ export const TARGETS = Object.freeze([
         variant: 'release',
         emit: emitDesktopEntry,
     }),
+    Object.freeze({
+        generated: 'branding/dev/locales/en-US/brand.ftl',
+        tracked: 'powerbrowser/branding/dev/locales/en-US/brand.ftl',
+        variant: 'dev',
+        emit: emitBrandFtl,
+    }),
+    Object.freeze({
+        generated: 'branding/dev/locales/en-US/brand.properties',
+        tracked: 'powerbrowser/branding/dev/locales/en-US/brand.properties',
+        variant: 'dev',
+        emit: emitBrandProperties,
+    }),
+    Object.freeze({
+        generated: 'branding/release/locales/en-US/brand.ftl',
+        tracked: 'powerbrowser/branding/release/locales/en-US/brand.ftl',
+        variant: 'release',
+        emit: emitBrandFtl,
+    }),
+    Object.freeze({
+        generated: 'branding/release/locales/en-US/brand.properties',
+        tracked: 'powerbrowser/branding/release/locales/en-US/brand.properties',
+        variant: 'release',
+        emit: emitBrandProperties,
+    }),
+    Object.freeze({
+        generated: 'branding/dev/moz.build',
+        tracked: 'powerbrowser/branding/dev/moz.build',
+        variant: 'dev',
+        emit: emitBrandingMozBuild,
+    }),
+    Object.freeze({
+        generated: 'branding/dev/content/jar.mn',
+        tracked: 'powerbrowser/branding/dev/content/jar.mn',
+        variant: 'dev',
+        emit: emitBrandingContentJarMn,
+    }),
+    Object.freeze({
+        generated: 'branding/dev/content/moz.build',
+        tracked: 'powerbrowser/branding/dev/content/moz.build',
+        variant: 'dev',
+        emit: emitBrandingContentMozBuild,
+    }),
+    Object.freeze({
+        generated: 'branding/dev/locales/jar.mn',
+        tracked: 'powerbrowser/branding/dev/locales/jar.mn',
+        variant: 'dev',
+        emit: emitBrandingLocalesJarMn,
+    }),
+    Object.freeze({
+        generated: 'branding/dev/locales/moz.build',
+        tracked: 'powerbrowser/branding/dev/locales/moz.build',
+        variant: 'dev',
+        emit: emitBrandingLocalesMozBuild,
+    }),
+    Object.freeze({
+        generated: 'branding/dev/content/aboutDialog.css',
+        tracked: 'powerbrowser/branding/dev/content/aboutDialog.css',
+        variant: 'dev',
+        emit: emitBrandingAboutDialogCss,
+    }),
+    Object.freeze({
+        generated: 'branding/dev/pref/firefox-branding.js',
+        tracked: 'powerbrowser/branding/dev/pref/firefox-branding.js',
+        variant: 'dev',
+        emit: emitFirefoxBrandingJs,
+    }),
+    Object.freeze({
+        generated: 'branding/release/moz.build',
+        tracked: 'powerbrowser/branding/release/moz.build',
+        variant: 'release',
+        emit: emitBrandingMozBuild,
+    }),
+    Object.freeze({
+        generated: 'branding/release/content/jar.mn',
+        tracked: 'powerbrowser/branding/release/content/jar.mn',
+        variant: 'release',
+        emit: emitBrandingContentJarMn,
+    }),
+    Object.freeze({
+        generated: 'branding/release/content/moz.build',
+        tracked: 'powerbrowser/branding/release/content/moz.build',
+        variant: 'release',
+        emit: emitBrandingContentMozBuild,
+    }),
+    Object.freeze({
+        generated: 'branding/release/locales/jar.mn',
+        tracked: 'powerbrowser/branding/release/locales/jar.mn',
+        variant: 'release',
+        emit: emitBrandingLocalesJarMn,
+    }),
+    Object.freeze({
+        generated: 'branding/release/locales/moz.build',
+        tracked: 'powerbrowser/branding/release/locales/moz.build',
+        variant: 'release',
+        emit: emitBrandingLocalesMozBuild,
+    }),
+    Object.freeze({
+        generated: 'branding/release/content/aboutDialog.css',
+        tracked: 'powerbrowser/branding/release/content/aboutDialog.css',
+        variant: 'release',
+        emit: emitBrandingAboutDialogCss,
+    }),
+    Object.freeze({
+        generated: 'branding/release/pref/firefox-branding.js',
+        tracked: 'powerbrowser/branding/release/pref/firefox-branding.js',
+        variant: 'release',
+        emit: emitFirefoxBrandingJs,
+    }),
 ]);
 
 function variantById(config, id) {
@@ -896,8 +1580,16 @@ function writeTargets(config, root) {
             );
             continue;
         }
-        pending.push({ outPath: join(root, target.generated), body: target.emit(config, variant) });
+        pending.push({ outPath: join(root, target.generated), rel: target.generated, body: target.emit(config, variant) });
     }
+    report(failures);
+
+    // GEN-01. The ftl-versus-properties agreement runs HERE, on the in-memory
+    // bodies, while the tree is still untouched -- a failed run leaves the
+    // output exactly as it found it, which the file header promises. A
+    // mismatch means the two emitters disagree with each other, never that
+    // the manifest is wrong, so its message already says where to look.
+    failures.push(...localeAgreementFailures(pending));
     report(failures);
 
     for (const { outPath, body } of pending) {
@@ -954,7 +1646,7 @@ function firstDifferingLine(a, b) {
  *
  * THREE OUTCOMES, THREE MESSAGES, deliberately not one. An absent generated/ is
  * the state every fresh copy of the project and every automated run begins in;
- * reporting it as five stale files reads as five problems and sends the reader
+ * reporting it as twenty-three stale files reads as twenty-three problems and sends the reader
  * hunting a mismatch that does not exist.
  *
  * The set comparison runs in BOTH directions. A per-target loop alone sees a
@@ -967,7 +1659,7 @@ function firstDifferingLine(a, b) {
  *
  * `root` is a PARAMETER for the same reason writeTargets' is, and for one more:
  * --self-test drives THIS function, not a re-implementation of it, by pointing
- * it at a throwaway tree it is free to corrupt. The five tracked files and the
+ * it at a throwaway tree it is free to corrupt. The tracked files and the
  * real generated/ are never touched by a planted fault (02-05's rule). The
  * reported paths keep the `generated/` prefix whatever the root is, because
  * that prefix names the output surface a reader has to go and fix, not the
@@ -985,7 +1677,7 @@ function checkTargets(config, root = OUTPUT_ROOT) {
         // gate its readers learn to skip, which is the failure mode
         // verify-generated-identity.mjs's own header is built to avoid.
         //
-        // Whether the emitters agree with the five hand-written files is the
+        // Whether the emitters agree with the hand-written files is the
         // DIFFERENT question generated-byte-identity answers, and it answers it
         // without needing a prior generate at all -- so nothing goes unchecked
         // on the tree this branch reports on.
@@ -1203,7 +1895,7 @@ function snapshotOutputRoot() {
 /**
  * Generate a whole tree into a throwaway directory, corrupt ONE byte of ONE
  * file, and ask the freshness comparison about it. The corruption lands in a
- * mkdtemp copy and never on the five tracked files: they are the independent
+ * mkdtemp copy and never on the tracked files: they are the independent
  * comparand this phase's acceptance test rests on, and a self-test one
  * interrupted run away from damaging them would be trading the thing proved
  * for the proof.
@@ -1231,7 +1923,7 @@ function probeStaleOutput(config) {
  * Ask the freshness comparison about a directory that is not there -- the state
  * every fresh copy of the project and every CI runner starts in, because
  * generated/ is git-ignored. The distinct message this must produce is the
- * whole point: five phantom stale paths would read as five defects on a tree
+ * whole point: twenty-three phantom stale paths would read as twenty-three defects on a tree
  * with none, and a gate red for a non-defect is a gate its readers skip.
  *
  * The EXIT CODE is asserted here too, and separately from the message, because
@@ -1250,6 +1942,32 @@ function probeAbsentOutput(config) {
     } finally {
         rmSync(parent, { recursive: true, force: true });
     }
+}
+
+/**
+ * GEN-01. The ftl-versus-properties agreement, driven directly on crafted
+ * bodies: the real dev pair with the ftl full-name term drifted by one
+ * value. The drift lands in a throwaway pair of strings, never on a tracked
+ * file and never under generated/ -- 02-05's rule.
+ *
+ * A probe rather than a fixture because no manifest can provoke it: both
+ * emitters derive from the same config, so only a directly-called
+ * localeAgreementFailures with a planted drift can go red here.
+ */
+function probeLocaleAgreementDrift(config) {
+    const dev = (config.variants ?? []).find(v => v.id === 'dev');
+    if (dev === undefined) return [`${BROKEN} the resolved config has no dev variant`];
+    const clean = emitBrandFtl(config, dev);
+    const drifted = clean.replace(/^(-brand-full-name = ).*$/m, '$1Planted Drift');
+    // Mutation-landed guard, same contract as probeStaleOutput's: a drift
+    // that was never written reporting green is worse than a red.
+    if (drifted === clean) {
+        return [`${BROKEN} the planted full-name drift did not land in the ftl body`];
+    }
+    return localeAgreementFailures([
+        { rel: 'branding/dev/locales/en-US/brand.ftl', body: drifted },
+        { rel: 'branding/dev/locales/en-US/brand.properties', body: emitBrandProperties(config, dev) },
+    ]);
 }
 
 /**
@@ -1323,9 +2041,10 @@ function parserIdiomLeaked(output) {
 
 /**
  * Proves the mask, the unset rule, array-replace, the required-setting check,
- * the value rules, the misspelled-header ordering, all three freshness outcomes
- * and the parse-failure copy actually discriminate, rather than merely being
- * intended. A check that can only go green is not a check.
+ * the value rules, the misspelled-header ordering, the locale agreement, all
+ * three freshness outcomes and the parse-failure copy actually discriminate,
+ * rather than merely being intended. A check that can only go green is not a
+ * check.
  */
 function selfTest() {
     // A planted-fault result measured against an already-red baseline says
@@ -1345,8 +2064,20 @@ function selfTest() {
     const outputRootBefore = snapshotOutputRoot();
 
     // Derived from the frozen table, not written out here: a hand-kept copy of
-    // these five paths could only ever agree with the table it was copied from.
+    // these paths could only ever agree with the table it was copied from.
     const everyTargetPath = TARGETS.map(t => t.generated);
+
+    // GEN-01's green control, computed once: the locale pairs the emitters
+    // actually produce for both variants, run through the same agreement
+    // function the drift case plants against. The baseline above is already
+    // established green, so a non-empty result here is a broken assertion,
+    // not a broken manifest.
+    const agreementControl = localeAgreementFailures(
+        ['dev', 'release'].map(id => baseline.config.variants.find(v => v.id === id)).flatMap(variant => ([
+            { rel: `branding/${variant.id}/locales/en-US/brand.ftl`, body: emitBrandFtl(baseline.config, variant) },
+            { rel: `branding/${variant.id}/locales/en-US/brand.properties`, body: emitBrandProperties(baseline.config, variant) },
+        ])),
+    );
 
     const cases = [
         {
@@ -1451,7 +2182,7 @@ function selfTest() {
             expect: TARGETS[0].generated,
         },
         {
-            // The absent-directory outcome is a DISTINCT message, not five
+            // The absent-directory outcome is a DISTINCT message, not twenty-three
             // stale paths, AND it is not a failure. Asserted from three sides:
             // the message is there, no target path is, and the exit code was
             // zero -- so a future collapse of the three outcomes into one goes
@@ -1470,6 +2201,26 @@ function selfTest() {
             expect: MANIFEST_NAME,
             also: [/line \d+/],
             extra: parserIdiomLeaked,
+        },
+        {
+            // GEN-01. The agreement assertion must name BOTH files and BOTH
+            // values when the ftl full-name term drifts from the properties
+            // value -- a red that only says something disagrees would not
+            // tell anyone which half to fix.
+            name: 'locale agreement rejects a drifted full name',
+            probe: probeLocaleAgreementDrift,
+            expect: 'brand.ftl',
+            also: ['brand.properties', 'Planted Drift', 'Power Browser Dev'],
+        },
+        {
+            // GEN-01's control: the pairs the emitters actually produce --
+            // both variants -- hold with zero failures. Without this, a red
+            // result from the drift case above could be the assertion firing
+            // on the unmodified bodies rather than on the plant.
+            name: 'locale agreement holds on the emitted pairs',
+            probe: () => agreementControl,
+            holds: 'no failures on the matching pairs',
+            resolved: () => agreementControl.length === 0,
         },
     ];
 

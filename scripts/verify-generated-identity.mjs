@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
  * GEN-04's byte-identity gate: what the generator emits from
- * configuration.toml is byte-for-byte the five build surfaces Phase 1 wrote by
- * hand.
+ * configuration.toml is byte-for-byte the twenty-three build surfaces Phase 1
+ * wrote by hand.
  *
  * This is the phase's acceptance test made mechanical. Phase 1 deliberately
  * wrote every branding value as a hand-written literal -- CLAUDE.md says so in
  * as many words -- precisely so that Phase 2 would have something INDEPENDENT
- * to compare its generator against. Those five tracked files are that
+ * to compare its generator against. Those twenty-three tracked files are that
  * comparand. They are never edited to make this check green; when this check
  * goes red, the emitter is what changed.
  *
  * ## Why the ACTUAL emitter set is derived and only the EXPECTED set is written down
  *
- * The tempting shape is a hand-kept list of five paths that the check loops
+ * The tempting shape is a hand-kept list of twenty-three paths that the check loops
  * over. That check agrees with every tree: it can never go red on a SIXTH
  * emitter being added, because it never asks the generator what it emits. So
  * the actual set is DERIVED from generate.mjs's own frozen target table at
@@ -38,7 +38,7 @@
  * The freshness of `generated/` itself is a DIFFERENT question with a different
  * answer, and it has its own instrument: `node scripts/generate.mjs --check`.
  *
- * Honestly --quick: it reads the manifest and five tracked text files and
+ * Honestly --quick: it reads the manifest and twenty-three tracked text files and
  * writes into the OS temp directory. No build, no browser, no display, no
  * network.
  *
@@ -58,7 +58,7 @@ const NAME = 'verify-generated-identity';
 const OUTPUT_DIR_NAME = 'generated';
 
 /**
- * The declared five-file contract, as paths tracked in this repo.
+ * The declared contract, as paths tracked in this repo.
  *
  * This is the ONE hand-kept list in the file, and it is deliberate. Without a
  * written-down expectation there is nothing for the derived set to be compared
@@ -75,6 +75,31 @@ const EXPECTED = Object.freeze([
     'powerbrowser/branding/release/configure.sh',
     'powerbrowser/powerbrowser.desktop',
     'powerbrowser/powerbrowser-release.desktop',
+    // NEW (03-01): the GEN-01 locale surfaces -- both variants' brand.ftl and
+    // brand.properties, emitted by the format emitters in scripts/generate.mjs
+    // and compared here against the hand-written files plan 01-03 wrote.
+    'powerbrowser/branding/dev/locales/en-US/brand.ftl',
+    'powerbrowser/branding/dev/locales/en-US/brand.properties',
+    'powerbrowser/branding/release/locales/en-US/brand.ftl',
+    'powerbrowser/branding/release/locales/en-US/brand.properties',
+    // NEW (03-01): the GEN-01 brand-literal layout surfaces -- zero
+    // manifest-derived values, reproduced byte for byte by the literal
+    // emitters, dev and release byte-identical except pref/firefox-branding.js
+    // which carries the dev-only title-bar block by design.
+    'powerbrowser/branding/dev/moz.build',
+    'powerbrowser/branding/dev/content/jar.mn',
+    'powerbrowser/branding/dev/content/moz.build',
+    'powerbrowser/branding/dev/locales/jar.mn',
+    'powerbrowser/branding/dev/locales/moz.build',
+    'powerbrowser/branding/dev/content/aboutDialog.css',
+    'powerbrowser/branding/dev/pref/firefox-branding.js',
+    'powerbrowser/branding/release/moz.build',
+    'powerbrowser/branding/release/content/jar.mn',
+    'powerbrowser/branding/release/content/moz.build',
+    'powerbrowser/branding/release/locales/jar.mn',
+    'powerbrowser/branding/release/locales/moz.build',
+    'powerbrowser/branding/release/content/aboutDialog.css',
+    'powerbrowser/branding/release/pref/firefox-branding.js',
 ]);
 
 /** Set difference reported by name, so a failure says WHICH path drifted. */
@@ -118,7 +143,7 @@ const variantOf = (config, id) => (config.variants ?? []).find(v => v.id === id)
  * faults would then prove nothing about the check that actually gates.
  *
  * `readTracked` is a parameter for the same reason: the different-root cases
- * substitute the tracked side in memory rather than editing one of the five
+ * substitute the tracked side in memory rather than editing one of the tracked
  * tracked files -- even temporarily, even restoring it afterwards -- which
  * would be one interrupted run away from corrupting the independent comparand
  * this phase's acceptance test rests on.
@@ -156,10 +181,10 @@ function compareAgainstTracked(targets, config, readTracked = (p) => readFileSyn
 
         const { surplus, missing } = diff([...emitted.keys()], EXPECTED);
         for (const path of surplus) {
-            failures.push(`${path}: emitted by a target that is NOT in the declared five-file contract -- add it to EXPECTED in this script if that is deliberate`);
+            failures.push(`${path}: emitted by a target that is NOT in the declared contract -- add it to EXPECTED in this script if that is deliberate`);
         }
         for (const path of missing) {
-            failures.push(`${path}: named in the declared five-file contract, but NO target emits it any more`);
+            failures.push(`${path}: named in the declared contract, but NO target emits it any more`);
         }
 
         for (const tracked of EXPECTED) {
@@ -292,7 +317,7 @@ function trackedAnchorLanded(anchor) {
 }
 
 /**
- * How many times this checkout's absolute root occurs across all five emitted
+ * How many times this checkout's absolute root occurs across all emitted
  * outputs. Under the placeholder design the answer must be zero: an emitted
  * byte carrying the checkout path is what made this gate red everywhere but
  * here, and the relocated case below would be vacuous over an emitter that
@@ -314,7 +339,7 @@ function emittedRootHits(config) {
  * 01-05 shipped two assertions resting on a non-discriminating instrument
  * before that was caught.
  *
- * The faults are planted in the TABLE, never on disk. Those five tracked files
+ * The faults are planted in the TABLE, never on disk. Those tracked files
  * are the independent comparand this phase's acceptance test rests on, and a
  * self-test that edited one of them -- even temporarily, even restoring it
  * afterwards -- would be one interrupted run away from corrupting the very
@@ -489,7 +514,7 @@ function main() {
 
     if (failures.length > 0) {
         console.error(`${NAME}: FAIL -- ${failures.length} problem(s) with the generator's byte-identity to the hand-written build surfaces.`);
-        console.error('These five tracked files are the INDEPENDENT comparand Phase 1 wrote by hand for exactly this test. Do not edit them to make this green -- change the emitter in scripts/generate.mjs, or, if the difference is a deliberate contract change, change EXPECTED in this script in the same commit.');
+        console.error(`These ${EXPECTED.length} tracked files are the INDEPENDENT comparand Phase 1 wrote by hand for exactly this test. Do not edit them to make this green -- change the emitter in scripts/generate.mjs, or, if the difference is a deliberate contract change, change EXPECTED in this script in the same commit.`);
         failures.forEach(f => console.error(`  ${f}`));
         return 1;
     }
