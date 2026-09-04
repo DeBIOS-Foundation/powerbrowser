@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-current_phase: 3
+current_phase: 03
 current_phase_name: Firefox Branding Emitter and Icon Pipeline
 status: executing
-stopped_at: Phase 02 complete, ready to plan Phase 1
-last_updated: "2026-09-04T01:55:44.676Z"
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-09-04T03:01:08.431Z"
 last_activity: 2026-09-04
-last_activity_desc: Phase 02 execution started
-state_head: acbd3b2c69d460b08571a0fa235369fcdd738207
+last_activity_desc: Phase 03 execution started
+state_head: eb089ad92cf03592c9c33384b28acdb17c3b7c2d
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 34
-  completed_plans: 27
+  completed_plans: 31
 milestone_name: milestone
 ---
 
@@ -24,14 +24,14 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 02 — Configuration Manifest and Generator Core
+**Current focus:** Phase 03 — Firefox Branding Emitter and Icon Pipeline
 
 ## Current Position
 
-Phase: 3 (Firefox Branding Emitter and Icon Pipeline) — READY TO EXECUTE
-Plan: 9 of 9
-Status: Phase 02 gap closure complete (G-02-11, G-02-12), ready to verify
-Last activity: 2026-09-04 — 02-07..02-09 executed, both gates honest at foreign checkout
+Phase: 03 (Firefox Branding Emitter and Icon Pipeline) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-09-03 — Phase 03 execution started
 
 Progress: [█████████░] 93%
 
@@ -85,6 +85,7 @@ Progress: [█████████░] 93%
 | Phase 02 P04 | 30m | 2 tasks | 1 files |
 | Phase 02 P05 | 25m | 2 tasks | 3 files |
 | Phase 02 P06 | ~35m | 3 tasks | 5 files |
+| Phase 03-firefox-branding-emitter-and-icon-pipeline P01 | 31min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -193,6 +194,12 @@ Recent decisions affecting current work:
 - [Phase 02]: The malformed-manifest case runs in a child process, because an unparseable layer exits from inside loadLayer and would take the self-test down with it
 - [Phase 02]: generate-check asserts idempotence and nothing more; the CI steps run generate, then --check, then byte-identity, because generated/ is git-ignored and a fresh clone would otherwise show five phantom stale paths
 - [Phase 02]: The configure.sh header rewrite (D-03 step 2) was made only after the byte-identity row was recorded green against the original bytes at 94c47d1, and the emitter plus both tracked files changed in one commit
+- [Phase 03]: [03-01]: --with-branding outside topsrcdir rejected by moz.build sandbox; overlay symlink powerbrowser/branding-generated -> ../generated/branding with VALUE at depth 3 (branding moz.build ../../../ include pins it)
+- [Phase 03]: [03-01]: mozconfig exports satisfy MOZ_APP_VENDOR/UA_NAME with zero diff -- identity carrier is exports, no generated configure include
+- [Phase 03]: [03-01]: aboutDialog.css and pref/firefox-branding.js emitted as literals (base plus dev-only tail) so generated/branding/<variant> is a complete drop-in dir
+- [Phase 03]: [03-01]: agreement checker SKIPs on absent generated/ tree, FAILs on present-but-empty (fresh-clone greenness preserved per 02-06)
+- [Phase 03]: [03-01]: overlay symlink is setup-created by ensure_branding_overlay, not committed (tracked symlink breaks residue scan with EISDIR)
+- [Phase 03]: [03-01]: GEN-01 left open -- identity.configure plus tier-3 build are 03-04 scope; default-env build red until 03-02 lands PNGs
 
 ### Pending Todos
 
@@ -219,6 +226,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-02T00:30:51.104Z
-Stopped at: Phase 02 complete, ready to plan Phase 1
+Last session: 2026-09-04T03:01:08.356Z
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None

@@ -207,12 +207,12 @@ Plans:
   3. Installer branding for Linux, Windows (NSIS/MSIX fields), and macOS (DMG/.icns fields) is emitted and schema-complete from `configuration.toml`, with the Linux output build-verified
    4. Changing the display name in `configuration.toml` and regenerating changes every Gecko-side branding surface, with no second file edited
 
-**Plans**: 4 plans in 4 sequential waves (shared scripts/generate.mjs forces sequencing)
+**Plans**: 1/4 plans executed in 4 sequential waves (shared scripts/generate.mjs forces sequencing)
 
 Plans:
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Tracer: spike --with-branding outside topsrcdir plus identity carrier, then locale emitters with ftl/properties agreement, literal layout rows, agreement registry check, and the build wiring
+- [x] 03-01-PLAN.md — Tracer: spike --with-branding outside topsrcdir plus identity carrier, then locale emitters with ftl/properties agreement, literal layout rows, agreement registry check, and the build wiring
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -225,6 +225,7 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [ ] 03-04-PLAN.md — Close the phase: identity carrier plus patch 010 de-configuration, single-edit propagation proof, tier-3 Linux build with built-artifact branding proof
+
 **Research**: spike — validate `--with-branding` pointing into a sibling `generated/` directory through the existing symlink mechanism with a throwaway branding dir before building the full emitter. Open question: whether the generated-`.mozconfig` route works with the `imply_option("MOZ_APP_VENDOR", ...)` line dropped from the patch.
 
 ### Phase 4: Theia Surface — Branding, Extensions, Telemetry
@@ -304,7 +305,7 @@ than noisy.
 |-------|----------------|--------|-----------|
 | 1. Platform Extraction and Rename | 21/21 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 9/9 | Complete    | 2026-09-04 |
-| 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
+| 3. Firefox Branding Emitter and Icon Pipeline | 1/4 | In Progress|  |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
 | 5. Hook-Only Patches and Upstream Uptake | 0/TBD | Not started | - |
 | 6. Two-Layer Verification and Rebranding Docs | 0/TBD | Not started | - |
