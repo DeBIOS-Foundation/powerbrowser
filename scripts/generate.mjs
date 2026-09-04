@@ -784,8 +784,25 @@ function emitBrandProperties(config, variant) {
  *
  * FOUR VALUES come from the manifest: the --with-app-basename argument, the
  * --with-distribution-id argument, the exported MOZ_APP_REMOTINGNAME, and --
- * inside the two shell-default expansions on lines 1 and 10 -- the variant's
- * objdir and branding_dir.
+ * inside the MOZ_OBJDIR shell-default expansion on line 1 -- the variant's
+ * objdir.
+ *
+ * THE --with-branding DEFAULT IS A STRING LITERAL, NOT A FIFTH VALUE. The
+ * 03-01 spike proved a branding path outside topsrcdir is rejected -- the
+ * moz.build sandbox refuses files outside its allowed paths -- so the flag
+ * points through the topsrcdir-internal symlink
+ * powerbrowser/branding-generated (itself pointing at generated/branding),
+ * with the dev variant as the default a release build overrides via
+ * POWERBROWSER_BRANDING. The symlink sits one level above the per-variant
+ * directories it serves rather than inside powerbrowser/branding/: the
+ * --with-branding VALUE must sit exactly three levels under topsrcdir,
+ * because the branding moz.build reaches upstream with a ../../../ include
+ * resolved against that value's own path. A link one level deeper puts the
+ * value at depth four and the include escapes topsrcdir -- proven red by a
+ * configure run during this plan. That spelling was chosen by configure
+ * runs, not by a manifest key, and T-03-03 keeps it that way: no manifest
+ * value may select the branding flag, so this line joins nothing from the
+ * config.
  *
  * WHY THE DEV VARIANT, ALWAYS. There is one .mozconfig, and the two expansions
  * spell out what the build falls back on when POWERBROWSER_OBJDIR and
@@ -815,9 +832,12 @@ function emitBrandProperties(config, variant) {
  */
 function emitMozconfig(config, variant) {
     // Every manifest value on these eleven lines lands in a file the Gecko
-    // build sources, so each passes the sink guard on its way in.
+    // build sources, so each passes the sink guard on its way in. The
+    // --with-branding default is the one line that carries no manifest value
+    // at all -- see above -- so branding_dir is neither read nor guarded
+    // here. (It is still read and guarded where it IS emitted as content:
+    // the desktop entry's Icon line.)
     const objdir = assertEmittable(variantPath(variant, 'objdir'), variant.objdir);
-    const brandingDir = assertEmittable(variantPath(variant, 'branding_dir'), variant.branding_dir);
     const lines = [
         ...GENERATED_BANNER,
         '',
@@ -830,7 +850,7 @@ function emitMozconfig(config, variant) {
         `ac_add_options --with-distribution-id=${assertEmittable('identity.distribution_id', config.identity.distribution_id)}`,
         'ac_add_options --disable-crashreporter',
         'ac_add_options --with-ccache=sccache',
-        'ac_add_options --with-branding=${POWERBROWSER_BRANDING:-' + brandingDir + '}',
+        'ac_add_options --with-branding=${POWERBROWSER_BRANDING:-powerbrowser/branding-generated/dev}',
         `mk_add_options "export MOZ_APP_REMOTINGNAME=${assertEmittable('identity.remoting_name', config.identity.remoting_name)}"`,
     ];
     return lines.join('\n') + '\n';

@@ -12,5 +12,5 @@ ac_add_options --with-app-basename=powerbrowser
 ac_add_options --with-distribution-id=org.debios
 ac_add_options --disable-crashreporter
 ac_add_options --with-ccache=sccache
-ac_add_options --with-branding=${POWERBROWSER_BRANDING:-powerbrowser/branding/dev}
+ac_add_options --with-branding=${POWERBROWSER_BRANDING:-powerbrowser/branding-generated/dev}
 mk_add_options "export MOZ_APP_REMOTINGNAME=powerbrowser"

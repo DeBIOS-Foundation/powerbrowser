@@ -112,6 +112,18 @@ classify_upstream_dirt() {
 ensure_branding_overlay() {
   local git_dir="$1"
   ln -sfn ../powerbrowser "$git_dir/powerbrowser"
+  # 03-01: the generated-branding overlay. --with-branding must name a path
+  # inside topsrcdir -- the moz.build sandbox rejects anything outside it,
+  # and the branding moz.build's ../../../ include pins the value to exactly
+  # three levels deep -- so the build reaches generated/branding/ through this
+  # topsrcdir-internal symlink rather than directly. Created here, next to the
+  # powerbrowser overlay above, and for the same reason: it is setup state,
+  # not source. Committing it was tried and reverted in plan 03-01: a tracked
+  # symlink into gitignored generated/ is read by the residual-brand scan as
+  # an unreadable file (EISDIR) and fails the gate. Untracked and gitignored
+  # like generated/ itself; `node scripts/generate.mjs` still has to run
+  # before ./mach configure (docs/BUILD.md) so the target exists.
+  ln -sfn ../generated/branding "$git_dir/../powerbrowser/branding-generated"
   local exclude_file="$git_dir/.git/info/exclude"
   if [ -f "$exclude_file" ] && ! grep -qxF '/powerbrowser' "$exclude_file"; then
     echo "/powerbrowser" >> "$exclude_file"

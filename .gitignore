@@ -28,7 +28,12 @@ objdir-release/
 # powerbrowser/ remain what the build consumes (D-01), and generated/ exists
 # only to be compared against them. Root-anchored so it cannot also swallow a
 # directory named generated/ nested somewhere else in the tree.
+# (D-16 into plan 03-01: the --with-branding overlay symlink
+# powerbrowser/branding-generated, created by scripts/fetch-upstream.sh's
+# ensure_branding_overlay, is ignored here for the same reason -- it points
+# into generated/ and is setup state, not source.)
 /generated/
+/powerbrowser/branding-generated
 
 # Logs
 *.log
