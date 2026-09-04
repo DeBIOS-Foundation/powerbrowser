@@ -1,15 +1,21 @@
 ---
-status: diagnosed
+status: complete
 phase: 02-configuration-manifest-and-generator-core
-source: [02-01-SUMMARY.md, 02-02-SUMMARY.md, 02-03-SUMMARY.md, 02-04-SUMMARY.md, 02-05-SUMMARY.md, 02-06-SUMMARY.md]
+source: [02-01-SUMMARY.md, 02-02-SUMMARY.md, 02-03-SUMMARY.md, 02-04-SUMMARY.md, 02-05-SUMMARY.md, 02-06-SUMMARY.md, 02-07-SUMMARY.md, 02-08-SUMMARY.md, 02-09-SUMMARY.md]
 started: 2026-09-02T00:00:00Z
-updated: 2026-09-02T00:00:00Z
+updated: 2026-09-04T00:00:00Z
 executed_by: claude (operator could not run the checks; every command below was run live in the working tree)
 ---
 
 ## Current Test
 
 [testing complete]
+
+## Deferred Follow-Ups
+
+- test: 13-17 confirmation
+  idea: "Human confirmation of gap-closure (desktop entries honest at any checkout) deferred — user declined to spot-check, signed off as to-do later (if ever)"
+  deferred_at: 2026-09-04
 
 ## Tests
 
@@ -79,20 +85,54 @@ expected: both tracked configure.sh carry a header pointing at configuration.tom
 result: pass
 evidence: "Both files carry a 4-line header at lines 5-8 (after the MPL boilerplate) naming configuration.toml, the re-run command, the copy-out step, and 'A disagreement reddens: scripts/verify-platform.sh --only generated-byte-identity'. It honestly states 'Phase 2 does not write it in place.' brand/ holds mark.svg; configuration.toml present; branding-preflight PASS; .gitignore:31 '/generated/' matches and 0 files tracked under it."
 
+### 13. Tracked .desktop entries carry the install token (02-08 D1)
+expected: Tracked .desktop entries carry @POWERBROWSER_REPO_ROOT@ instead of a checkout path; byte-identity exits 0 at a relocated checkout
+result: pass
+source: automated
+coverage_id: 02-08/D1
+
+### 14. Token-based preflight, green relocated (02-08 D2)
+expected: Preflight builds wantExec/wantIcon from the token and rejects absolute paths outside it; exits 0 at a relocated checkout
+result: pass
+source: automated
+coverage_id: 02-08/D2
+
+### 15. repo_root gone from inventory (02-08 D3)
+expected: repo_root gone from inventory and preflight; coincidental zero-count row byte-unchanged
+result: pass
+source: automated
+coverage_id: 02-08/D3
+
+### 16. Repo-location correction on the record (02-09 D1)
+expected: 02-04-SUMMARY.md carries an additive repo-location correction naming G-02-11 and option-4-placeholder; original claim byte-unchanged
+result: pass
+source: automated
+coverage_id: 02-09/D1
+
+### 17. Verification report honest about both gaps (02-09 D2)
+expected: 02-VERIFICATION.md reports passed-with-corrections, names both gaps, explains the single-checkout blindness, and keeps all five requirement IDs
+result: pass
+source: automated
+coverage_id: 02-09/D2
+
 ## Summary
 
-total: 12
-passed: 11
+total: 17
+passed: 16
 issues: 1
+note_issues: "test 11 only — both its gaps (G-02-11, G-02-12) resolved by 02-08-PLAN.md; human re-confirmation deferred, see Deferred Follow-Ups"
 pending: 0
 skipped: 0
 blocked: 0
+automated: 5
 
 ## Gaps
 
 - gap_id: G-02-11
   truth: "On a clean clone with no node_modules and no network, scripts/verify-platform.sh --quick runs to completion green"
-  status: failed
+  status: resolved
+  resolved_by: 02-08-PLAN.md
+  resolved_at: 2026-09-04
   reason: "User reported: on a genuine fresh clone --quick exits 1; generated-byte-identity and generated-byte-identity-self-test both FAIL for a non-defect"
   severity: major
   test: 11
@@ -114,7 +154,9 @@ blocked: 0
 
 - gap_id: G-02-12
   truth: "A gate that checks the tracked .desktop entries catches one that is wrong for the checkout it is in"
-  status: failed
+  status: resolved
+  resolved_by: 02-08-PLAN.md
+  resolved_at: 2026-09-04
   reason: "Found while fixing G-02-11: verify-branding-preflight PASSES at a relocated clone while blessing Exec=/home/chris/coding/Power-Browser/objdir/dist/bin/powerbrowser %u, a path that does not exist there."
   severity: major
   test: 11
