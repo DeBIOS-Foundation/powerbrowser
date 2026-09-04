@@ -799,35 +799,38 @@
       "case_form": "literal",
       "class": "frozen",
       "target": "-brand-product-name = Firefox",
-      "expected_count": 3,
+      "expected_count": 4,
       "expected_files": [
         "powerbrowser/branding/dev/locales/en-US/brand.ftl",
         "powerbrowser/branding/release/locales/en-US/brand.ftl",
         "scripts/generate.mjs"
       ],
-      "reason": "sourcerer/branding/dev/locales/en-US/brand.ftl:14 and sourcerer/branding/release/locales/en-US/brand.ftl:14 -- deliberately NOT the product name (D-78). A small set of \"requires Firefox\" compatibility strings interpolate this term, and byte-identical UA/product naming is the same rationale D-78 already applied to the User-Agent. Its rationale comment sits directly above it and migrates verbatim under D-08. COUNT MOVED 2 -> 3 (plan 03-01): scripts/generate.mjs now emits both brand.ftl files (emitBrandFtl carries the literal per D-78), so the term occurs once more, inside the emitter."
+      "reason": "sourcerer/branding/dev/locales/en-US/brand.ftl:14 and sourcerer/branding/release/locales/en-US/brand.ftl:14 -- deliberately NOT the product name (D-78). A small set of \"requires Firefox\" compatibility strings interpolate this term, and byte-identical UA/product naming is the same rationale D-78 already applied to the User-Agent. Its rationale comment sits directly above it and migrates verbatim under D-08. COUNT MOVED 2 -> 3 (plan 03-01): scripts/generate.mjs now emits both brand.ftl files (emitBrandFtl carries the literal per D-78), so the term occurs once more, inside the emitter. COUNT MOVED 3 -> 4 (plan 03-04): emitIdentityConfigure's doc cites the same D-78 literal for the UA_NAME carrier, so the term occurs once more, inside scripts/generate.mjs."
     },
     {
       "token": "MOZ_APP_UA_NAME",
       "case_form": "literal",
       "class": "frozen",
       "target": "MOZ_APP_UA_NAME",
-      "expected_count": 1,
+      "expected_count": 4,
       "expected_files": [
-        "patches/010-powerbrowser-identity.patch"
+        "scripts/generate.mjs",
+        "scripts/fetch-upstream.sh",
+        "scripts/verify-branding-preflight.mjs"
       ],
-      "reason": "COUNT MOVED 2 -> 1 (plan 01-08). The tree change that moved it: the second site was never a define of its own -- it was a CONTEXT LINE that patch 020 happened to carry, and patch 020 was regenerated during plan 01-05's browser-window work (it no longer overrides BROWSER_CHROME_URL), which changed its hunk context and dropped the line. The define itself is untouched and still pinned at its one real site, patches/010-powerbrowser-identity.patch, which is what expected_files now names: the row exists to prove the define stayed pinned, so it must keep naming a site that carries it rather than a stale second file. Original rationale: pinned to \"Firefox\" on purpose so the User-Agent stays byte-identical to Firefox's. Neither the option name nor its value is a brand token here."
+      "reason": "COUNT MOVED 2 -> 1 (plan 01-08). The tree change that moved it: the second site was never a define of its own -- it was a CONTEXT LINE that patch 020 happened to carry, and patch 020 was regenerated during plan 01-05's browser-window work (it no longer overrides BROWSER_CHROME_URL), which changed its hunk context and dropped the line. The define itself is untouched and still pinned at its one real site, patches/010-powerbrowser-identity.patch, which is what expected_files now names: the row exists to prove the define stayed pinned, so it must keep naming a site that carries it rather than a stale second file. Original rationale: pinned to \"Firefox\" on purpose so the User-Agent stays byte-identical to Firefox's. Neither the option name nor its value is a brand token here. COUNT MOVED 1 -> 4 (plan 03-04): the define left the patch stack BY DESIGN -- patch 010 carries only the include(\"../identity.configure\") hook now, and the compat literal lives in the generator (emitIdentityConfigure pins \"Firefox\" per D-78, two occurrences), with one setup comment in scripts/fetch-upstream.sh and the preflight's hook assertion naming it. The row now proves the literal stayed pinned at its new sites rather than at the stale patch site."
     },
     {
       "token": "MOZ_APP_ID",
       "case_form": "literal",
       "class": "frozen",
       "target": "MOZ_APP_ID",
-      "expected_count": 1,
+      "expected_count": 2,
       "expected_files": [
-        "patches/010-powerbrowser-identity.patch"
+        "patches/010-powerbrowser-identity.patch",
+        "scripts/generate.mjs"
       ],
-      "reason": "COUNT MOVED 2 -> 1 (plan 01-08). Same tree change as the MOZ_APP_UA_NAME row above and for the same reason: the second occurrence was a context line in patch 020, and patch 020 was regenerated during plan 01-05's browser-window work, which changed its hunk context and dropped the line. The define is untouched at its one real site, which expected_files now names. Original rationale: deliberately Firefox's own app id {ec8030f7-c20a-464f-9b0e-13a3a9e97384}, so installed extensions keep resolving. Changing it silently breaks extension compatibility with no build failure."
+      "reason": "COUNT MOVED 2 -> 1 (plan 01-08). Same tree change as the MOZ_APP_UA_NAME row above and for the same reason: the second occurrence was a context line in patch 020, and patch 020 was regenerated during plan 01-05's browser-window work, which changed its hunk context and dropped the line. The define is untouched at its one real site, which expected_files now names. Original rationale: deliberately Firefox's own app id {ec8030f7-c20a-464f-9b0e-13a3a9e97384}, so installed extensions keep resolving. Changing it silently breaks extension compatibility with no build failure. COUNT MOVED 1 -> 2 (plan 03-04): emitIdentityConfigure's doc records that MOZ_APP_ID stays patch-carried (a fixed platform constant, not a downstream brand value), so the token occurs once more, inside scripts/generate.mjs."
     },
     {
       "token": "-PLAN.md",

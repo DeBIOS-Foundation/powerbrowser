@@ -124,11 +124,28 @@ ensure_branding_overlay() {
   # like generated/ itself; `node scripts/generate.mjs` still has to run
   # before ./mach configure (docs/BUILD.md) so the target exists.
   ln -sfn ../generated/branding "$git_dir/../powerbrowser/branding-generated"
+  # 03-04: the generated-identity overlay. MOZ_APP_VENDOR and MOZ_APP_UA_NAME
+  # are project_flag() values settable only by imply_option, so the carrier
+  # is generated/identity.configure pulled in by patch 010's include hook.
+  # The configure sandbox only includes paths lexically under topsrcdir, so
+  # the fragment is reached through this topsrcdir-internal symlink rather
+  # than directly -- the same mechanism as the branding overlay above.
+  # Setup state, never committed, for the same reason: an untracked symlink
+  # into gitignored generated/; `node scripts/generate.mjs` still has to run
+  # before ./mach configure (docs/BUILD.md) so the target exists. Excluded
+  # from the upstream dirt classifier alongside /powerbrowser below, so the
+  # legal fully-applied state still reads clean.
+  ln -sfn ../generated/identity.configure "$git_dir/identity.configure"
   local exclude_file="$git_dir/.git/info/exclude"
   if [ -f "$exclude_file" ] && ! grep -qxF '/powerbrowser' "$exclude_file"; then
     echo "/powerbrowser" >> "$exclude_file"
   elif [ ! -f "$exclude_file" ]; then
     echo "/powerbrowser" >> "$exclude_file"
+  fi
+  if [ -f "$exclude_file" ] && ! grep -qxF '/identity.configure' "$exclude_file"; then
+    echo "/identity.configure" >> "$exclude_file"
+  elif [ ! -f "$exclude_file" ]; then
+    echo "/identity.configure" >> "$exclude_file"
   fi
 }
 
