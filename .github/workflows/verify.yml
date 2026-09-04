@@ -1,0 +1,85 @@
+# Plan 06-06: push/PR CI for the static verification layers (Phase 6
+# success criterion 4, static half). Runs on every push and pull request:
+# generate, then generate --check, then the whole --quick table through the
+# one driver scripts/verify-platform.sh -- no build, no browser, no display.
+#
+# Follows the rebase-upstream.yml precedents: no Nix (a GitHub-hosted runner
+# cannot honestly provide the Gecko toolchain closure), no tier-3 build, and
+# the WR-09 token posture (T-06-06) -- contents: read plus
+# persist-credentials: false, so the token is neither powerful nor present
+# while third-party trees (the 1.1 GB upstream clone some checks reference)
+# are on disk.
+
+name: Verify static layers
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    # T-06-06 (plan 06-06). This job clones the tree and runs this repo's
+    # scripts over it; it builds nothing and pushes nothing. With no
+    # `permissions:` block it would inherit the repository-default
+    # GITHUB_TOKEN scope, which on many repos is write-capable, and
+    # actions/checkout leaves that credential in .git/config for the whole
+    # job. `contents: read` plus `persist-credentials: false` means the
+    # token is neither powerful nor present while the job runs.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      # THE ORDER OF THE NEXT THREE STEPS IS LOAD-BEARING (plan 02-06).
+      # generated/ is git-ignored, so a fresh clone -- which every run of
+      # this workflow is -- has no such directory. Running the freshness
+      # check first would report every generated target as missing on a tree
+      # with no defect at all, and a gate that is red for a non-defect is a
+      # gate its readers learn to skip. Generate first, then --check asserts
+      # idempotence (a second run produces the same bytes as the first).
+      - name: Generate the derived build surfaces
+        run: node scripts/generate.mjs
+
+      - name: Check the generated tree is fresh
+        run: node scripts/generate.mjs --check
+
+      # The whole static table through the one driver -- the same gate
+      # developers run locally before committing. Includes the Phase 6 rows
+      # (verify-manifest-literals, verify-trademark-surface,
+      # verify-rebranding-docs, verify-branding-preflight,
+      # scan-brand-residue, theia-branding, theia-endpoints, telemetry,
+      # extension-pins, verify-upstream-pins) plus every other honestly
+      # --quick check the registry carries.
+      - name: Run the static verification table
+        run: scripts/verify-platform.sh --quick
+
+      # DELIBERATELY OUT OF THIS WORKFLOW -- runtime-behind-build rows CI
+      # cannot honestly run (no tier-3 binary, no display, no network
+      # observation on a GitHub-hosted runner). Each stays a local drill
+      # recorded in 06-06-SUMMARY.md; none is silently skipped:
+      #
+      # - verify-branding-identity-dev / -release and the two
+      #   positive-control rows (the six-surface live drive beyond what
+      #   --quick covers): launch the built binary out of objdir/ and
+      #   objdir-release/ via BiDi. Needs the tier-3 build this workflow
+      #   never runs. Local drill: node
+      #   scripts/verify-branding-identity.mjs --variant dev (green on this
+      #   tree) and --variant release (staged; needs an objdir-release build).
+      # - branding-variant-divergence: reads from BOTH objdir/dist/bin and
+      #   objdir-release/dist/bin, so it needs a full dev AND release build.
+      # - verify-endpoints layers 2-3: layer 2 is an exact-path strace
+      #   against the launched binary, layer 3 is host-resolution
+      #   observation via MOZ_LOG=nsHostResolver:5 on a live network. Needs
+      #   a display, a launched browser, and network CI cannot provide.
+      #   (Layer 1 reads the installed default prefs of the built tree, so
+      #   it is behind the same build.) Local drill: bash
+      #   scripts/verify-endpoints.sh (tier-3, display required).
+      # - smoke-firefox, verify-branding, the shell/side/gui live-launch
+      #   rows: each boots the built binary or the live Theia app. Same
+      #   reason. Local drill: scripts/verify-platform.sh (full run, no
+      #   --quick) on a built tree.
