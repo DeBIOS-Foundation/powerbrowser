@@ -1363,7 +1363,7 @@ export function emitTheiaFrontendConfig(config, variant) {
 function readMarkSvgElement() {
     let text;
     try {
-        text = readFileSync(MARK_SVG_ABS, 'utf8');
+        text = readFileSync(markSvgAbs(), 'utf8');
     } catch {
         text = null;
     }
@@ -2402,10 +2402,12 @@ function localeAgreementFailures(entries) {
 // rasters per variant are drawn from it through the system inkscape, and the
 // Windows ICO plus macOS ICNS containers (this plan's second task) wrap those
 // same bytes. No manifest key selects the source artwork, the sizes, or the
-// outputs: the source is the literal below, the sizes are the frozen array
-// below, and the ten destination paths are TARGETS rows like every other
-// output. That is structurally what stops a hostile filename reaching the
-// inkscape command line: no manifest value is ever joined into it (T-03-04).
+// outputs: the source is the relative literal below resolved against the
+// asset root (REPO_ROOT, or the PB_CONFIG_DIR folder when set -- CFG-05), the
+// sizes are the frozen array below, and the ten destination paths are TARGETS
+// rows like every other output. That is structurally what stops a hostile
+// filename reaching the inkscape command line: no manifest value is ever
+// joined into it (T-03-04).
 //
 // The raster runs INSIDE the emit pass, before any write: writeTargets calls
 // rasterizeIcons before its text emitters and long before its write loop, so
@@ -2420,12 +2422,23 @@ function localeAgreementFailures(entries) {
 const ICON_SIZES = Object.freeze([16, 32, 48, 64, 128]);
 
 /**
- * The single source artwork. A fixed literal, never a manifest value -- see
- * above -- so the path a reader restores on a missing-source failure is
- * always this one.
+ * The single source artwork. A fixed RELATIVE literal, never a manifest
+ * value -- see above -- so the path a reader restores on a missing-source
+ * failure is always this one.
+ *
+ * CFG-05 (07-01). The ROOT it resolves against is the one asset-root source
+ * of truth: REPO_ROOT by default, the resolved PB_CONFIG_DIR folder when an
+ * external config is in force (set once in main(), before anything reads).
+ * Every artwork read -- iconSourceFailures, the inkscape argv in
+ * iconPngBytes, readMarkSvgElement -- flows through markSvgAbs(), and every
+ * failure names MARK_SVG_REL, never the absolute path: the fixed asset a
+ * reader restores, not a host path of the invoking machine.
  */
 const MARK_SVG_REL = 'brand/mark.svg';
-const MARK_SVG_ABS = join(REPO_ROOT, MARK_SVG_REL);
+let ASSET_ROOT = REPO_ROOT;
+function markSvgAbs() {
+    return join(ASSET_ROOT, MARK_SVG_REL);
+}
 
 /** The first eight bytes of every PNG, checked on each raster output. */
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -2472,7 +2485,7 @@ function iconSourceFailuresForText(svgText) {
  * still names MARK_SVG_REL -- the fixed asset a reader restores, not the
  * probe's throwaway path, which must never reach what a reader sees.
  */
-function iconSourceFailures(readFrom = MARK_SVG_ABS) {
+function iconSourceFailures(readFrom = markSvgAbs()) {
     let svgText;
     try {
         svgText = readFileSync(readFrom, 'utf8');
@@ -2511,7 +2524,7 @@ function iconPngBytes(size) {
     try {
         const out = join(scratch, `icon${size}.png`);
         const child = spawnSync('inkscape', [
-            MARK_SVG_ABS,
+            markSvgAbs(),
             '--export-filename', out,
             '-w', String(size),
             '-h', String(size),
@@ -4226,7 +4239,7 @@ function selfTest() {
             }
             let markLine;
             try {
-                markLine = readFileSync(MARK_SVG_ABS, 'utf8').split('\n').find((l) => l.startsWith('<svg'))?.trim();
+                markLine = readFileSync(markSvgAbs(), 'utf8').split('\n').find((l) => l.startsWith('<svg'))?.trim();
             } catch {
                 markLine = undefined;
             }
@@ -4817,6 +4830,7 @@ function main() {
             ]);
         }
         downstreamPath = candidate;
+        ASSET_ROOT = extDir;
     }
 
     const { failures, config, defaulted } = resolveConfig(MANIFEST_PATH, downstreamPath);
