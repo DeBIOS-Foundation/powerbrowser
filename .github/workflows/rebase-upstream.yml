@@ -25,6 +25,11 @@ on:
       tag:
         description: "Upstream Firefox-ESR tag to rebase onto"
         required: true
+        # 05-02: configuration.toml ([upstreams] firefox_esr_tag) is
+        # authoritative; this literal is a mirror, because a
+        # workflow_dispatch input default cannot read TOML. Drift between
+        # the two fails scripts/verify-upstream-pins.mjs -- bump the
+        # manifest first, then mirror it here.
         default: FIREFOX_153_1_0esr_RELEASE
 
 jobs:
