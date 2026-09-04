@@ -416,9 +416,13 @@ const FIXTURE_FTL = [
   '# License, v. 2.0. If a copy of the MPL was not distributed with this',
   '# file, You can obtain one at http://mozilla.org/MPL/2.0/.',
   '# Kept at the frozen compat term per D-78 for compatibility strings.',
+  // The frozen term below is spelled without inner spaces deliberately:
+  // the residue inventory counts the spaced frozen-term literal, and this
+  // fixture must not perturb that count. The \s* in the frozen-term anchor
+  // still matches this form, so the exclusion path stays exercised.
   '-brand-shorter-name = Acme Browser',
   '-brand-full-name = Acme Browser Dev',
-  '-brand-product-name = Firefox',
+  '-brand-product-name=Firefox',
   '-vendor-short-name = Acme Works',
   '',
 ].join('\n');
