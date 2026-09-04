@@ -6,279 +6,267 @@
 ## System Overview
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│                    CHROME SHELL (Gecko, privileged)              │
-├──────────────────┬──────────────────┬───────────────────────────┤
-│  Boundary        │  Supervisor      │  Bootstrap / Window       │
-│  `powerbrowser/  │  `powerbrowser/  │  `powerbrowser/shell/     │
-│  shell/Power-    │  shell/Theia-    │  powerbrowser.xhtml` +    │
-│  BrowserAPI.     │  Service.        │  `powerbrowser/shell/     │
-│  sys.mjs`        │  sys.mjs`        │  powerbrowser.js`         │
-└────────┬─────────┴────────┬─────────┴──────────┬────────────────┘
-         │ spawn/stdin/     │ swap/navigate      │ window.open
-         │ cookie/health    │                    │ (no chrome code)
-         ▼                  ▼                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              THEIA SIDECAR (unprivileged Node + browser)         │
-│  `theia/extensions/token-gate/*` (backend gate + watchdog)      │
-│  `theia/extensions/tab-uris/*` (URL-addressable tabs, GUI-01)   │
-│  `theia/extensions/branding/*` + `theia/extensions/customize/*` │
-│  Composed by `theia/applications/browser/package.json`          │
-└─────────────────────────────────────────────────────────────────┘
-         ▲ derived from                        ▲ pins
-         │                                     │
-┌─────────────────────┐              ┌────────────────────────────┐
-│  GENERATOR LAYER    │              │  UPSTREAM (never edited)   │
-│  `configuration.toml` + `brand/`  │  `upstream/` (pinned ESR)   │
-│  → `scripts/generate.mjs`         │  + `patches/*.patch`        │
-│  → `generated/` → copy over       │  applied by                 │
-│    `powerbrowser/branding/*`,     │  `scripts/apply-patches.sh` │
-│    `.mozconfig`, `*.desktop`      │                             │
-└─────────────────────┘              └────────────────────────────┘
-         │ asserted by
+┌─────────────────────────────────────────────────────────────┐
+│                    Gecko Shell (chrome)                      │
+├──────────────────┬──────────────────┬───────────────────────┤
+│  Shell Document  │  Anti-Corruption │  Supervisor           │
+│  `powerbrowser/  │  Boundary        │  `powerbrowser/shell/ │
+│  shell/power-    │  `powerbrowser/  │  TheiaService.sys.mjs`│
+│  browser.xhtml`  │  shell/Power-    │                       │
+│  + `power-       │  BrowserAPI.     │                       │
+│  browser.js`     │  sys.mjs`        │                       │
+└────────┬─────────┴────────┬─────────┴──────────┬────────────┘
+         │                  │                     │
+         │  spawn + stdin   │  cookie + swap      │  stdout
+         │  handshake       │  navigation         │  sentinels
+         ▼                  ▼                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Theia Sidecar (Node + browser)                  │
+│  `theia/applications/browser/` + `theia/extensions/*/`      │
+│  token-gate │ parent-watchdog │ tab-uris │ branding │ customize│
+└─────────────────────────────────────────────────────────────┘
+         │
          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  VERIFICATION REGISTRY                                           │
-│  `scripts/verify-platform.sh` (one CHECKS array, --quick/full)  │
-│  + `scripts/check-internals-boundary.sh` + per-surface          │
-│    `scripts/verify-*.mjs` checks                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Rebrand Inputs → Generator → Build Surfaces                 │
+│  `configuration.toml` + `brand/` → `scripts/generate.mjs`   │
+│  → `generated/` → `powerbrowser/branding-generated/`,       │
+│  `.mozconfig`, `*.desktop`                                   │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+Underneath both halves sits the patch-set substrate: `upstream/` (pinned ESR checkout, never hand-edited) plus `patches/` (currently `010-powerbrowser-identity.patch`, `020-powerbrowser-shell.patch`). Above everything sits the verification registry `scripts/verify-platform.sh`, which is the single driver for all checks.
 
 ## Component Responsibilities
 
 | Component | Responsibility | File |
 |-----------|----------------|------|
-| Anti-corruption boundary | Only file allowed to touch Firefox internals (`Services`, `Cc`/`Ci`/`Cu`, `Subprocess`, `ctypes`, cookie manager, quit observers, window mediator); thin never-throw wrappers | `powerbrowser/shell/PowerBrowserAPI.sys.mjs` |
-| Sidecar supervisor | Spawns, health-gates, restarts, and reaps the Theia backend; owns token, port, swap state, error classification, recovery probe | `powerbrowser/shell/TheiaService.sys.mjs` |
-| Chrome bootstrap | Paints window first, wires deck layers (loading/error/diagnostics), exposes `window.powerbrowser*` globals, starts supervisor | `powerbrowser/shell/powerbrowser.js` |
-| Startup window | Chrome document: branded loading layer over one remote `<browser>`; error + diagnostics deck layers; no tab strip/toolbar/address bar | `powerbrowser/shell/powerbrowser.xhtml` |
-| Single-instance handler | Startup-window selection + second-launch focus; registered XPCOM command-line handler | `powerbrowser/shell/PowerBrowserAPI.sys.mjs` (`PowerBrowserSingleInstanceHandler`) + `powerbrowser/shell/components.conf` |
-| Sidecar defaults | Preprocessed default prefs (`nodePath`, `backendMain`, health/timeout/grace/log-buffer, give-up budget) | `powerbrowser/shell/powerbrowser-sidecar.js` |
-| Tab-URI registry | `factoryId <-> URI` bidirectional registry; seed of the chrome-owned tab model for the future mirror/proxy bridge | `theia/extensions/tab-uris/src/browser/tab-uri-registry.ts` |
-| URL open handlers | `view:`/`settings:`/`terminal:`/output/webview scheme handlers + terminal naming | `theia/extensions/tab-uris/src/browser/view-open-handler.ts`, `theia/extensions/tab-uris/src/browser/terminal-open-handler.ts`, `theia/extensions/tab-uris/src/browser/existing-scheme-coverage.ts`, `theia/extensions/tab-uris/src/browser/view-factory-table.ts`, `theia/extensions/tab-uris/src/browser/terminal-naming-contribution.ts` |
-| GUI-01 command | Palette command `powerbrowser.open-browser-window` that opens a stock browser window via `window.open(url, '_blank')` | `theia/extensions/tab-uris/src/browser/browser-window-command.ts` |
-| Token gate | Fail-closed backend auth: front-inserted Express middleware checking `POWERBROWSER_TOKEN` cookie; `/powerbrowser/health`; readiness sentinel; loopback-bind enforcement | `theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts` |
-| Env capture + token read | Module-load capture-and-scrub of all `POWERBROWSER_*` env keys; reads token off stdin byte-at-a-time | `theia/extensions/token-gate/src/node/powerbrowser-env.ts` |
-| Parent watchdog | Dies-with-the-browser: `POWERBROWSER_SUPERVISED=1`-gated stdin-EOF self-SIGTERM | `theia/extensions/token-gate/src/node/parent-watchdog-backend-contribution.ts` |
-| Theia composition root | DI composition: binds the four `@powerbrowser/*` extensions alongside pinned `@theia/*` packages | `theia/extensions/tab-uris/src/browser/tab-uris-frontend-module.ts`, `theia/extensions/token-gate/src/node/token-gate-backend-module.ts`, `theia/extensions/branding/src/browser/powerbrowser-frontend-module.ts`, `theia/extensions/customize/src/browser/customize-frontend-module.ts`, `theia/applications/browser/package.json` |
-| Branding extension | Welcome/about/favicon/AI-layout brand surfaces | `theia/extensions/branding/src/browser/powerbrowser-welcome-contribution.ts`, `theia/extensions/branding/src/browser/powerbrowser-ai-layout-contribution.ts`, `theia/extensions/branding/src/browser/powerbrowser-favicon-contribution.ts`, `theia/extensions/branding/src/browser/powerbrowser-mark.ts` |
-| Customize bridge | Runtime CSS + dev-flagged privileged JS bridge (`powerbrowserPrivilegedJs: false` by default) | `theia/extensions/customize/src/browser/customize-css-contribution.ts`, `theia/extensions/customize/src/browser/customize-privileged-js-contribution.ts`, `theia/extensions/customize/src/browser/powerbrowser-privileged-js.ts` |
-| Generator | Reads `configuration.toml`, validates against schema, emits 23 tracked-equivalent build surfaces under `generated/` | `scripts/generate.mjs` (+ schema `scripts/lib/config-schema.json`, vendored parser `scripts/lib/toml.cjs`) |
-| Verification driver | Single CHECKS registry; `--quick` (static, seconds) vs full (build/browser/display); `--only <label>`; `--gate` | `scripts/verify-platform.sh` |
-| Internals guard | Executable SHELL-02 boundary: fails on any forbidden pattern outside the boundary file; `--catalogue` mode derives `powerbrowser/INTERNAL-APIS.md` | `scripts/check-internals-boundary.sh` |
-| Brand gates | Residual-token scan; branding preflight/identity/agreement; generated byte-identity | `scripts/scan-brand-residue.mjs`, `scripts/verify-branding*.mjs`, `scripts/verify-generated-identity.mjs`, `scripts/verify-branding-agreement.mjs` |
-| Patch stack | Identity hook (vendor/UA/healthreport/normandy flags) + shell hook (build `DIRS` only, no `BROWSER_CHROME_URL` override) | `patches/010-powerbrowser-identity.patch`, `patches/020-powerbrowser-shell.patch` |
+| Anti-corruption boundary | Sole file allowed to touch Firefox internals (`Services.*`, `Cc`/`Ci`/`Cu`, `Subprocess`, `ctypes`, `AppConstants`); every touchpoint catalogued | `powerbrowser/shell/PowerBrowserAPI.sys.mjs` |
+| Backend supervisor | Owns sidecar lifecycle: resolve → spawn → readiness gate → cookie → swap → health loop → restart budget → quit; all per-launch in-memory state | `powerbrowser/shell/TheiaService.sys.mjs` |
+| Chrome bootstrap | Paints loading/error/diagnostics deck, exposes `window.powerbrowser*` globals, emits `dump()` sentinels, hands off to `TheiaService.start()` | `powerbrowser/shell/powerbrowser.js` |
+| Shell document | Chromeless window: branded loading layer + error layer + diagnostics layer + one remote `<browser>`; no tab strip/toolbar/address bar | `powerbrowser/shell/powerbrowser.xhtml` |
+| Single-instance handler | Startup-window selection: focus existing shell window or open it on initial launch, set `preventDefault` so stock handler stays quiet | `powerbrowser/shell/PowerBrowserAPI.sys.mjs` (`PowerBrowserSingleInstanceHandler`, registered in `powerbrowser/shell/components.conf`) |
+| Sidecar defaults | Preprocessed pref defaults (`backendMain`, `nodePath`, timeouts, give-up budget, recovery probe interval) | `powerbrowser/shell/powerbrowser-sidecar.js` |
+| Token gate | Fail-closed Express gate on every backend route; loopback-bind assertion; readiness sentinel emission; health endpoint | `theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts` |
+| Env capture + stdin handshake | Captures and scrubs all `POWERBROWSER_*` from `process.env` at module load; reads token off stdin byte-at-a-time on supervised launches | `theia/extensions/token-gate/src/node/powerbrowser-env.ts` |
+| Parent-death watchdog | Self-SIGTERM when supervisor's stdin pipe EOFs; inert unless `POWERBROWSER_SUPERVISED=1` | `theia/extensions/token-gate/src/node/parent-watchdog-backend-contribution.ts` |
+| Tab-URI registry | `factoryId <-> URI` bidirectional registry; declared public shape consumed by future `@powerbrowser/browser-bridge` | `theia/extensions/tab-uris/src/browser/tab-uri-registry.ts` |
+| URI open handlers | `view:`/`settings:` handler plus terminal/output/webview handlers; priority `1000` over in-tree bidders | `theia/extensions/tab-uris/src/browser/view-open-handler.ts`, `theia/extensions/tab-uris/src/browser/terminal-open-handler.ts`, `theia/extensions/tab-uris/src/browser/existing-scheme-coverage.ts` |
+| View factory table | Coverage contract: static list of `view:` factory ids cross-checked against runtime DI discovery at first use | `theia/extensions/tab-uris/src/browser/view-factory-table.ts` |
+| Browser-window command | GUI-01 entry affordance `powerbrowser.open-browser-window` → `window.open(url, '_blank')` from Theia frontend, no chrome-side code | `theia/extensions/tab-uris/src/browser/browser-window-command.ts` |
+| Branding extension | Welcome widget, favicon, about-dialog rebind, AI-layout rebinds (guarded `rebind`) | `theia/extensions/branding/src/browser/powerbrowser-frontend-module.ts` |
+| Customize extension | Opt-in CSS + privileged-JS surface, bound only when `powerbrowserPrivilegedJs === true` | `theia/extensions/customize/src/browser/customize-frontend-module.ts` |
+| Sidecar composition | Theia app assembly: pins `@theia/*@1.74.1`, composes four `@powerbrowser/*` extensions, sets `applicationName`, `powerbrowserPrivilegedJs: false` | `theia/applications/browser/package.json` |
+| Rebrand generator | Reads `configuration.toml`, validates against `scripts/lib/config-schema.json`, emits 33 byte-identical targets under `generated/` | `scripts/generate.mjs` |
+| Verification registry | Single driver: `--quick` / `--only <label>` / `--gate` / full; every check is one registry row | `scripts/verify-platform.sh` |
+| Internals catalogue | Derived catalogue of every boundary touchpoint; `check-internals-boundary.sh --catalogue` fails on drift | `powerbrowser/INTERNAL-APIS.md` |
 
 ## Pattern Overview
 
-**Overall:** Zen-style patch-set browser + supervised sidecar + Inversify-composed Theia extensions + manifest-driven generator, all held together by a single verification registry.
+**Overall:** Patch-set browser substrate + supervised sidecar + InversifyJS-composed Theia frontend, gated by a derive-and-compare verification registry.
 
 **Key Characteristics:**
-- Upstream is never forked: `upstream/` is fetched by `scripts/fetch-upstream.sh` and never hand-edited; all Gecko reach-through is confined to one boundary file, and all Theia additions are `@powerbrowser/*` extensions composed into the sidecar (never an edit to `@theia/*` core, guarded by `scripts/diff-theia-core.sh`).
-- One anti-corruption layer: `powerbrowser/shell/PowerBrowserAPI.sys.mjs` is the only file permitted to reach a Firefox internal; `powerbrowser/shell/TheiaService.sys.mjs` is its consumer (imports nothing else). Every touchpoint is catalogued in `powerbrowser/INTERNAL-APIS.md`, derived by `scripts/check-internals-boundary.sh --catalogue`.
-- Supervisor owns the backend lifecycle end-to-end: token mint → sidecar resolve → spawn on port 0 → readiness sentinel → health gate → cookie → swap → steady-state loop with pinned-port restart, bounded give-up, error layer, and background recovery probe.
-- Credentials avoid the environment: the token travels over the spawn stdin pipe (`PowerBrowserAPI.writeStdinLine`), is captured-and-scrubbed at backend module load (`theia/extensions/token-gate/src/node/powerbrowser-env.ts`), and never appears in `/proc/<pid>/environ`, logs, sentinels, or the diagnostics layer.
-- The manifest is the only rebrand input: `configuration.toml` + `brand/` → `scripts/generate.mjs` → `generated/`; byte-identity against the hand-written files is the acceptance gate (`generated-byte-identity`).
-- Verification is one registry, not N drivers: adding a check means appending one row to `scripts/verify-platform.sh`; every check carries a `--self-test` proving it can go red.
+- Never fork, never patch outside the stack: `upstream/` is fetched by `scripts/fetch-upstream.sh` and `git -C upstream diff` staying empty is the invariant; all Gecko reach-through lives in one file (`powerbrowser/shell/PowerBrowserAPI.sys.mjs`), enforced by `scripts/check-internals-boundary.sh`.
+- Supervisor owns the backend process: `TheiaService.sys.mjs` imports nothing but the boundary file; it mints a per-launch token, resolves the sidecar, spawns Node with `environmentAppend: true`, hands the token over the stdin pipe (never the environment), waits for the `POWERBROWSER_BACKEND_READY` sentinel, health-gates, mints the cookie, then swaps the `<browser>` exactly once.
+- InversifyJS composition over inheritance: each `@powerbrowser/*` extension contributes a `ContainerModule` (`*-frontend-module.ts` / `*-backend-module.ts`); overrides use the guarded `if (isBound(X)) rebind(X).to(Y)` idiom so modules stay loadable when a base binding is absent.
+- Derive-from-the-tree-and-compare: checks never hand-keep expectation lists. `scripts/verify-registry-shape.mjs` derives the registry's exported shape and compares as set equality; `scripts/verify-shell-error-copy.mjs` derives `USER_MESSAGE` values from `TheiaService.sys.mjs`; `scripts/check-internals-boundary.sh --catalogue` re-derives occurrences from the boundary file.
+- Sentinel protocol over stdout: `POWERBROWSER_SHELL_READY`, `POWERBROWSER_SHELL_SWAP`, `POWERBROWSER_SHELL_ERROR`, `POWERBROWSER_BACKEND_READY`, `POWERBROWSER_DIAGNOSTICS`, `POWERBROWSER_DECK_STATE` — written with chrome-global `dump()` so `--quick` and headless runs can assert without a display.
 
 ## Layers
 
-**Gecko chrome shell (`powerbrowser/shell/`):**
-- Purpose: Privileged startup window, process supervision, and the single Firefox-internals boundary.
+**Gecko chrome shell:**
+- Purpose: Chromeless startup window, supervision entry point, diagnostics deck
 - Location: `powerbrowser/shell/`
-- Contains: Chrome document (`powerbrowser/shell/powerbrowser.xhtml`), bootstrap (`powerbrowser/shell/powerbrowser.js`), boundary (`powerbrowser/shell/PowerBrowserAPI.sys.mjs`), supervisor (`powerbrowser/shell/TheiaService.sys.mjs`), prefs (`powerbrowser/shell/powerbrowser-sidecar.js`), XUL/XPCOM registration (`powerbrowser/shell/jar.mn`, `powerbrowser/shell/moz.build`, `powerbrowser/shell/components.conf`), styles (`powerbrowser/shell/powerbrowser.css`).
-- Depends on: Firefox platform services (only via the boundary file), the built Theia backend entry file at spawn time.
-- Used by: Nothing above it — it is the process entry surface. The Theia frontend later triggers stock-chrome windowing through platform machinery, not through this layer's code.
+- Contains: `powerbrowser.xhtml`, `powerbrowser.js`, `powerbrowser.css`, `PowerBrowserAPI.sys.mjs`, `TheiaService.sys.mjs`, `powerbrowser-sidecar.js`, `components.conf`, `jar.mn`, `moz.build`
+- Depends on: `upstream/` platform (via boundary only), `theia/applications/browser/lib/backend/main.js` at runtime
+- Used by: Nothing above it — this is the top of the stack; `verify-platform.sh` drives it as a black box
 
-**Theia sidecar backend (`theia/extensions/token-gate/`, `theia/applications/browser/`):**
-- Purpose: Unprivileged IDE backend gated by a per-launch token; health endpoint; parent-death watchdog; crash-leftover state-file protocol peer.
-- Location: `theia/extensions/token-gate/src/node/`, composed at `theia/applications/browser/package.json`
-- Contains: Inversify `ContainerModule` (`theia/extensions/token-gate/src/node/token-gate-backend-module.ts`), gate/health/readiness (`theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts`), env handshake (`theia/extensions/token-gate/src/node/powerbrowser-env.ts`), watchdog (`theia/extensions/token-gate/src/node/parent-watchdog-backend-contribution.ts`).
-- Depends on: `@theia/core` backend contribution points (`BackendApplicationContribution`, `EarlyExpressMiddleware`); supervisor-provided env + stdin line.
-- Used by: The shell supervisor (spawn/health/swap lifecycle); the frontend over loopback HTTP/WebSocket once gated.
+**Theia backend (Node):**
+- Purpose: Serves the IDE UI on loopback; gated by token; supervised via stdin pipe
+- Location: `theia/extensions/token-gate/src/node/`, composed in `theia/applications/browser/`
+- Contains: `token-gate-backend-contribution.ts`, `powerbrowser-env.ts`, `parent-watchdog-backend-contribution.ts`, `token-gate-backend-module.ts`
+- Depends on: `@theia/core` `BackendApplicationContribution` + `EarlyExpressMiddleware` hooks
+- Used by: Chrome shell (spawns it, probes `/powerbrowser/health`)
 
-**Theia sidecar frontend (`theia/extensions/tab-uris/`, `theia/extensions/branding/`, `theia/extensions/customize/`):**
-- Purpose: URL-addressable tabs (bridge seed), product branding, user customization bridge, GUI-01 stock-window command.
-- Location: `theia/extensions/*/src/browser/`, composed at `theia/applications/browser/package.json`
-- Contains: `ContainerModule`s, `OpenHandler`s, `CommandContribution`s, `FrontendApplicationContribution`s.
-- Depends on: `@theia/*` 1.74.1 packages only; `@powerbrowser/tab-uris` exposes `TabUriRegistry` for `@powerbrowser/customize` (optional, `isBound`-guarded).
-- Used by: The Theia application shell at runtime; the future `@powerbrowser/browser-bridge` consumes `TabUriRegistry`'s exported shape (asserted by `scripts/verify-registry-shape.mjs`).
+**Theia frontend (browser):**
+- Purpose: Default GUI — tab URIs, branding, customize surface, browser-window command
+- Location: `theia/extensions/tab-uris/src/browser/`, `theia/extensions/branding/src/browser/`, `theia/extensions/customize/src/browser/`
+- Contains: `ContainerModule` files, `OpenHandler` implementations, `TabUriRegistry`, React widgets (`.tsx`)
+- Depends on: `@theia/*@1.74.1` packages (consumed as npm deps, never vendored; `scripts/diff-theia-core.sh` guards this)
+- Used by: Shell's `<browser>` element after the swap; future `@powerbrowser/browser-bridge` consumes `TabUriRegistry`'s exported shape
 
-**Branding / generator layer (`configuration.toml`, `brand/`, `scripts/generate.mjs`, `generated/`):**
-- Purpose: Single-file rebrand: manifest + assets in, 23 build surfaces out.
-- Location: `configuration.toml`, `brand/`, `scripts/generate.mjs`, `scripts/lib/config-schema.json`, `generated/`
-- Contains: Manifest sections (`product`, `identity`, `legal`, `theia`, `variants`), schema + validation, per-format emitters (`emitConfigureSh`, `emitBrandFtl`, `emitBrandProperties`, `emitMozconfig`, `emitDesktopEntry`, branding-layout literals), frozen `TARGETS` table.
-- Depends on: Nothing at runtime — build-time only. Pipeline order is load-bearing: parse → reject-unknown → mask → merge → validate → emit → write; nothing is written until every check passes.
-- Used by: The Gecko build (copied over `powerbrowser/branding/*`, `.mozconfig`, `*.desktop`); the verification gates that prove byte-identity and agreement.
+**Patch substrate:**
+- Purpose: Minimal hook into upstream build (add `powerbrowser/shell` dir; set identity imply_options); startup-window selection moved out of the patch into `PowerBrowserSingleInstanceHandler`
+- Location: `patches/`
+- Contains: `010-powerbrowser-identity.patch`, `020-powerbrowser-shell.patch`
+- Depends on: `upstream/` at pinned ESR tag
+- Used by: `scripts/apply-patches.sh`; surface guarded by `scripts/check-patch-surface.sh`
 
-**Patch / upstream layer (`upstream/`, `patches/`):**
-- Purpose: Pin ESR, hook in the shell build directory and identity values without forking.
-- Location: `upstream/` (git-ignored 1.1 GB clone), `patches/010-powerbrowser-identity.patch`, `patches/020-powerbrowser-shell.patch`
-- Contains: `moz.configure` identity hook (vendor `DeBIOS`, UA `Firefox`, health-report/normandy off); `browser/moz.build` `DIRS += ["../powerbrowser/shell"]` hook-only entry (no `BROWSER_CHROME_URL` override since GUI-01 moved startup selection into `PowerBrowserSingleInstanceHandler`).
-- Depends on: `scripts/fetch-upstream.sh` + `scripts/apply-patches.sh`; guarded by `scripts/check-patch-surface.sh`.
-- Used by: The Gecko build (`objdir/`).
+**Rebrand pipeline:**
+- Purpose: `configuration.toml` + `brand/` are the only rebrand inputs; generator output is byte-identical to Phase 1 hand-written files
+- Location: `configuration.toml`, `brand/mark.svg`, `scripts/generate.mjs`, `scripts/lib/config-schema.json`, `generated/`
+- Contains: Manifest, SVG source, generator, vendored TOML parser (`scripts/lib/toml.cjs`), emitted branding dirs / `.mozconfig` / `.desktop` files
+- Depends on: System `inkscape` for icon rasters (GEN-02)
+- Used by: Build (`POWERBROWSER_BRANDING`, `MOZ_OBJDIR` variants `dev`/`release`); checked by `generate-check`, `generated-byte-identity`, `branding-dir-agreement`
 
-**Verification layer (`scripts/verify-platform.sh` + `scripts/verify-*.mjs`):**
-- Purpose: One driver, one CHECKS registry, one summary table: static brand/boundary/generator gates (`--quick`) plus live backend/shell/window gates (full).
-- Location: `scripts/verify-platform.sh`, `scripts/verify-*.mjs`, `scripts/check-*.sh`, `scripts/smoke-*.sh`, `scripts/verify-endpoints.sh`
-- Contains: ~44 ported rows + project rows (GUI-01 window trio, GUI-04 registry shape, error-copy, start-path-recovery, error-contract, generated byte-identity, branding agreement, about-dialog suppression).
-- Depends on: Built tree / live app / display only for the full tier; `--quick` needs none of those.
-- Used by: Commit gate (`--quick`), per-task sampling (`--only`), release gate (`--gate`).
+**Verification harness:**
+- Purpose: One driver, one `CHECKS` registry; `--quick` (no build/browser/display) is the commit gate
+- Location: `scripts/verify-platform.sh` plus ~20 `scripts/verify-*.mjs` / `verify-*.sh` checkers and `scripts/lib/firefox-bidi.mjs`
+- Contains: Shell-lifecycle helpers (`start_shell`, `start_shell_display`), sentinel helpers (`sentinel_present`, `first_byte_offset`), per-check functions, known-open ledger (`--gate` exclusions)
+- Depends on: Built binary at `objdir/dist/bin/powerbrowser`, Theia dev app at `http://localhost:3000`, `upstream/` clone for source-comparison checks
+- Used by: CI, commit gate, phase verification
 
 ## Data Flow
 
-### Primary Request Path (startup → swap → steady state)
+### Primary Request Path
 
-1. OS launches binary; `PowerBrowserSingleInstanceHandler.handle()` (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:588`) finds no shell window on initial launch → `openShellWindow()` (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:494`) opens `chrome://powerbrowser/content/powerbrowser.xhtml`, sets `preventDefault` so the stock handler opens nothing else (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:599`).
-2. `powerbrowser.xhtml` loads; `powerbrowser.js` `DOMContentLoaded` writes `POWERBROWSER_SHELL_READY` via `dump()` first, before any backend work (`powerbrowser/shell/powerbrowser.js:20`), then imports the two `.sys.mjs` modules, mints `permanentKey`, presents the `gBrowser.tabs` shape for automation, fires `notifyStartupFinished` (`powerbrowser/shell/powerbrowser.js:254`), and calls `TheiaService.start(browserElement)` fire-and-forget with a terminal handler (`powerbrowser/shell/powerbrowser.js:266`).
-3. `TheiaService.start()` (`powerbrowser/shell/TheiaService.sys.mjs:147`) sets the `_started` idempotency guard, mints `crypto.randomUUID()` token, resolves sidecar (`_resolveSidecar`), derives profile-scoped state-file path (`_stateFilePath`), registers the quit observer early (`_quitObserverOff`), ensures config dir, reaps any verified leftover (`_reapLeftover`), then enters `_restart()`.
-4. `_restart()` (`powerbrowser/shell/TheiaService.sys.mjs:889`) → `_spawnAndGate(!this._swapped)` (`powerbrowser/shell/TheiaService.sys.mjs:551`): spawns `node backendMain --hostname 127.0.0.1 --port 0` with `POWERBROWSER_SUPERVISED=1` and `POWERBROWSER_TOKEN_DISABLE=""` in environment (`powerbrowser/shell/TheiaService.sys.mjs:572`), writes the token over the stdin pipe (`powerbrowser/shell/TheiaService.sys.mjs:636`), pumps stdout for `POWERBROWSER_BACKEND_READY {port, pid}`, pins `this._port`/`this._pid`, writes `sidecar-state-<profileKey>.json` with field-22 start ticks, polls `/powerbrowser/health` to 200, mints the `POWERBROWSER_TOKEN` Lax session cookie (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:152`), swaps the `<browser>` via `loadURIInBrowser` (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:365`), and starts `_healthLoop()` fire-and-forget.
-5. Backend side: `powerbrowser-env.ts` captures-and-scrubs `POWERBROWSER_*` at module load and reads the token off stdin (`theia/extensions/token-gate/src/node/powerbrowser-env.ts:115`); the gate fails closed without it and front-inserts itself ahead of the stock connection-token middleware (`theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts:74`); `onStart` enforces loopback bind and announces readiness on stdout (`theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts:85`); the watchdog arms only when supervised (`theia/extensions/token-gate/src/node/parent-watchdog-backend-contribution.ts:26`).
-6. Steady state: `_healthLoop()` (`powerbrowser/shell/TheiaService.sys.mjs:819`) probes every `healthIntervalSteadyMs`; two consecutive failures trigger `_restart()` on the pinned port (D-104: the loaded page's origin must hold still).
+1. OS launches binary → `PowerBrowserSingleInstanceHandler.handle()` (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:588`) looks up `powerbrowser:main` window; on initial launch opens `chrome://powerbrowser/content/powerbrowser.xhtml` and sets `preventDefault` (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:494`).
+2. `powerbrowser.js` `DOMContentLoaded` writes `POWERBROWSER_SHELL_READY` via `dump()`, wires the deck, seeds `window.gBrowser` + `permanentKey`, fires `notifyStartupFinished` for WebDriver, then calls `TheiaService.start(browserElement)` fire-and-forget with a terminal `.catch(reportUnexpectedFailure)` (`powerbrowser/shell/powerbrowser.js:20`, `:254`, `:266`).
+3. `TheiaService.start()` mints `crypto.randomUUID()` token, resolves sidecar (`backendMain` pref + `node` on PATH), derives profile-scoped state-file path, registers `onQuitGranted(stop)`, reaps leftover, enters `_restart()` (`theia` side: `powerbrowser/shell/TheiaService.sys.mjs:147`).
+4. `_spawnAndGate(!swapped)` spawns `node <backendMain> --hostname 127.0.0.1 --port <0|pinned>`, writes token on stdin pipe, pumps stdout for `POWERBROWSER_BACKEND_READY {port, pid}`, writes sidecar state file, polls `/powerbrowser/health` (`powerbrowser/shell/TheiaService.sys.mjs:551`).
+5. Backend `powerbrowser-env.ts` at module load captures/scrubs `POWERBROWSER_*` and reads the token off stdin; `PowerBrowserTokenGateContribution.initialize()` unshifts the gate ahead of stock middleware and fails closed (exit 78) with no token; `onStart()` asserts loopback bind and announces readiness (`theia/extensions/token-gate/src/node/powerbrowser-env.ts:66`, `theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts:30`, `:85`).
+6. Supervisor mints `POWERBROWSER_TOKEN` session cookie (`SameSite=Lax`, `secure=false` on loopback), calls `window.powerbrowserSwapToUrl(url)` → `loadURIInBrowser` → loading layer hides, `POWERBROWSER_SHELL_SWAP` emitted, steady-state `_healthLoop()` starts (`powerbrowser/shell/TheiaService.sys.mjs:775`, `powerbrowser/shell/powerbrowser.js:72`).
 
-### Error → Retry → Recovery
+### Supervision / Recovery Loop
 
-1. Any spawn failure returns `{ok:false, recoverable, message, details}` (`powerbrowser/shell/TheiaService.sys.mjs:514`); unrecoverable (missing entry file, unresolvable node, `spawn()` throw, pinned-port steal) gives up immediately, recoverable retries with 500 ms → 5000 ms backoff until `giveUpAttempts`/`giveUpWallclockMs` (`powerbrowser/shell/TheiaService.sys.mjs:895`), both prefs overridable via `powerbrowser/shell/powerbrowser-sidecar.js:34`.
-2. Give-up paints the error layer through `window.powerbrowserShowError({reason, recoverable})` (`powerbrowser/shell/powerbrowser.js:102`): `reason` is always a `USER_MESSAGE` value (`powerbrowser/shell/TheiaService.sys.mjs:41`), identifiers ride the `POWERBROWSER_ERROR_DIAGNOSTICS` sentinel + `getFailureDetails()` rows, and `errorRetryButton.hidden = !recoverable` (`powerbrowser/shell/powerbrowser.js:115`).
-3. `retry()` (`powerbrowser/shell/TheiaService.sys.mjs:991`) refuses unless `_errorRecoverable === true` (supervisor-side refusal, not just hidden button), clears via `_hideError()`, and re-enters `_restart()` under the shared `_restartInFlight` guard; the background `_recoveryProbeLoop()` (`powerbrowser/shell/TheiaService.sys.mjs:1052`) takes the same path when the failure clears on its own, emitting `POWERBROWSER_SHELL_ERROR_CLEARED`. Any escaping rejection lands in the single terminal handler `reportUnexpectedFailure()` (`powerbrowser/shell/TheiaService.sys.mjs:1029`).
+1. `_healthLoop()` sleeps `healthIntervalSteadyMs` (default 5000ms), probes once with bounded `healthTimeoutMs`; two consecutive failures trigger `_restart()` (`powerbrowser/shell/TheiaService.sys.mjs:819`).
+2. `_restart()` reaps, then retries with exponential backoff (500ms → 5000ms cap) until success or the SHELL-03 split give-up: unrecoverable (bad `backendMain`, unresolvable Node, spawn throw, pinned-port conflict) gives up immediately; recoverable retries until `giveUpAttempts` (default 6) or `giveUpWallclockMs` (default 45000ms) (`powerbrowser/shell/TheiaService.sys.mjs:889`).
+3. Give-up paints the error layer via `window.powerbrowserShowError({reason, recoverable})` and starts the slow `_recoveryProbeLoop()` (default 15000ms) that re-enters `_restart()`; success calls `_hideError()` and auto-dismisses (`powerbrowser/shell/TheiaService.sys.mjs:102`, `:1052`).
+4. Retry control calls `window.powerbrowserRetry()` → `TheiaService.retry()`, refused unless `_errorRecoverable === true` so unrecoverable screens keep their diagnostics (`powerbrowser/shell/TheiaService.sys.mjs:991`).
+5. Quit (`quit-application-granted`) → `stop()` kills backend with `killGraceMs` (default 3000ms), removes state file, detaches observer (`powerbrowser/shell/TheiaService.sys.mjs:272`). SIGKILL path is covered by the backend watchdog (stdin EOF → self-SIGTERM) plus next-launch `_reapLeftover()` with exact `/proc/<pid>/stat` start-tick identity (`theia/extensions/token-gate/src/node/parent-watchdog-backend-contribution.ts:21`, `powerbrowser/shell/TheiaService.sys.mjs:443`).
 
-### Crash-leftover reap (SIDE-04)
+### Tab-URI Open Path
 
-1. Every successful spawn writes `{pid, port, startTicks, writtenAt}` to the profile-scoped state file (`powerbrowser/shell/TheiaService.sys.mjs:722`); clean `stop()` removes it (`powerbrowser/shell/TheiaService.sys.mjs:292`).
-2. Next `start()` calls `_reapLeftover()` before its first spawn (`powerbrowser/shell/TheiaService.sys.mjs:443`): absent/malformed record → proceed; dead pid → remove file; live pid → compare `/proc/<pid>/stat` field-22 ticks (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:415`) for exact string equality; mismatch (recycled pid) → never signal; match → `SIGTERM` via `ctypes` `kill(2)` (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:453`), bounded 3 s poll, no escalation, remove file either way. Outcomes go to the dual channel (ring buffer + stdout) via `_reapLog()`.
+1. Frontend calls `OpenerService.open('view:explorer-view-container')` → `DefaultOpenerService` enumerates `ContributionProvider<OpenHandler>` → `ViewUriOpenHandler.canHandle()` returns 1000 on scheme (`theia/extensions/tab-uris/src/browser/view-open-handler.ts:58`).
+2. `open()` parses the name via `TabUriRegistry.parseName()` (authority-aware, lenient over `scheme:x` / `scheme:/x` / `scheme:///x` / `scheme://x`), resolves the `AbstractViewContribution` from the lazily-built runtime index, delegates to `contribution.openView()` so placement matches the menu path (`theia/extensions/tab-uris/src/browser/tab-uri-registry.ts:50`, `:90`).
+3. Reverse direction (`uriOf(widget)`) reads `WidgetManager.getDescription()` — never the shell widget walk — with carve-outs for settings (`settings:`), terminal (`terminal:<name>`), output channels, webviews, and plugin view containers (`theia/extensions/tab-uris/src/browser/tab-uri-registry.ts:123`).
+4. Late-bound handlers (e.g. user `customize.js`) use `registerLateOpenHandler()` because `ContributionProvider.getContributions()` caches on first call (`theia/extensions/tab-uris/src/browser/tab-uris-frontend-module.ts:23`).
 
-### GUI-01 stock window (frontend → chrome with no chrome code)
+### GUI-01 Stock-Browser-Window Path
 
-1. User invokes `powerbrowser.open-browser-window` from the palette (`theia/extensions/tab-uris/src/browser/browser-window-command.ts:60`).
-2. The Theia frontend (remote web content) calls `window.open(url, '_blank')` (`theia/extensions/tab-uris/src/browser/browser-window-command.ts:77`); the shell window carries no `nsIBrowserDOMWindow`, so `nsWindowWatcher` falls through to `AppWindow::CreateNewContentWindow`, opening stock `BROWSER_CHROME_URL` — correct only because `patches/020-powerbrowser-shell.patch` no longer overrides that define.
-3. `PowerBrowserAPI.openBrowserWindow()` (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:523`) remains as the pre-approved JSWindowActor fallback, deliberately unused.
+1. User invokes `powerbrowser.open-browser-window` from the palette (`theia/extensions/tab-uris/src/browser/browser-window-command.ts:22`).
+2. `window.open(url, '_blank')` from remote web content crosses into chrome: shell carries no `nsIBrowserDOMWindow`, so `nsWindowWatcher` cannot divert into a tab and falls through to `AppWindow::CreateNewContentWindow`, opening stock `BROWSER_CHROME_URL` (`powerbrowser/shell/powerbrowser.js:287` documents the chain).
+3. No chrome-side command is registered — that absence is the ratified design. `PowerBrowserAPI.openBrowserWindow()` remains only as the pre-approved JSWindowActor fallback (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:523`).
+
+### Rebrand Generation Path
+
+1. Downstream edits `configuration.toml` (+ `brand/mark.svg`) only.
+2. `node scripts/generate.mjs` parses → rejects unknown settings → masks → merges over defaults → validates → emits 33 targets under `generated/` (branding dirs per variant, `.mozconfig`, `.desktop` files, icon rasters).
+3. Nothing is written until every check passes; `node scripts/generate.mjs --check` asserts the tree matches the manifest; byte-identity against Phase 1 hand-written files is the acceptance test.
 
 **State Management:**
-- All supervisor state is per-launch and in-memory (`powerbrowser/shell/TheiaService.sys.mjs:65`): token, port, pid, proc handle, `_swapped`, `_shuttingDown`, `_started`, `_errorShown`/`_errorRecoverable`, `_restartInFlight`, `_recoveryProbeActive`, D-106 ring buffer `_log`. The sole persistence is the crash-leftover state file (D-110), written on every successful spawn and removed on clean stop.
-- Completion is keyed on `this._swapped`, never on `this._port !== null`: a spawn that pinned a port but failed the health gate must not count as completed, or later respawns skip cookie/navigation/loop-start.
-- Backend state is per-process: token + supervised flag captured at module load (`theia/extensions/token-gate/src/node/powerbrowser-env.ts:66`); respawn-accepts-the-same-cookie comes from the supervisor re-writing the same token per spawn, not from backend persistence.
+- Chrome side: all supervisor state is per-launch, in-memory (`_token`, `_port`, `_pid`, `_proc`, `_swapped`, `_healthy`, `_restartCount`, `_errorShown`, `_restartInFlight`, `_failureDetails`, `_log` ring buffer in `TheiaService.sys.mjs`); the single file exception is the crash-recovery state file `~/.config/powerbrowser/sidecar-state-<profileKey>.json` (written per spawn, removed on clean stop).
+- Backend side: token held in-memory (`POWERBROWSER_ENV`), never persisted; no session-store dependence by design (see `powerbrowser/INTERNAL-APIS.md` "Deliberately not touched").
+- Frontend side: Theia `WidgetManager` dedup keys + `OpenerService` handler priorities; `TabUriRegistry._index` lazily cached after all modules load.
 
 ## Key Abstractions
 
 **PowerBrowserAPI (boundary):**
-- Purpose: The one module allowed to name platform internals; everything else calls named wrappers.
-- Examples: `powerbrowser/shell/PowerBrowserAPI.sys.mjs:36` (`getStringPref`), `powerbrowser/shell/PowerBrowserAPI.sys.mjs:193` (`spawnProcess`), `powerbrowser/shell/PowerBrowserAPI.sys.mjs:248` (`sleep` via `nsITimer`), `powerbrowser/shell/PowerBrowserAPI.sys.mjs:294` (`probeHealth` via privileged `XMLHttpRequest`), `powerbrowser/shell/PowerBrowserAPI.sys.mjs:311` (`onQuitGranted`), `powerbrowser/shell/PowerBrowserAPI.sys.mjs:336` (`notifyStartupFinished`), `powerbrowser/shell/PowerBrowserAPI.sys.mjs:415` (`readProcessStartTicks`), `powerbrowser/shell/PowerBrowserAPI.sys.mjs:453` (`signalBarePid`).
-- Pattern: Frozen export object of never-throw-or-throw-loudly primitives with no policy; lazy `ChromeUtils.defineESModuleGetters` for `Subprocess`/`ctypes`/`AppConstants`.
+- Purpose: The one file that may touch Firefox internals; thin never-throw wrappers (`getStringPref`, `getIntPref`, `getEnv`, `spawnProcess`, `probeHealth`, `sleep`, `setSessionCookie`, `loadURIInBrowser`, state-file trio, bare-pid signal trio, window trio)
+- Examples: `powerbrowser/shell/PowerBrowserAPI.sys.mjs`, catalogued in `powerbrowser/INTERNAL-APIS.md`, guarded by `scripts/check-internals-boundary.sh`
+- Pattern: Anti-corruption layer — `TheiaService.sys.mjs` imports nothing else
 
 **TheiaService (supervisor):**
-- Purpose: Owns the whole sidecar lifecycle and the user-visible failure contract.
-- Examples: `powerbrowser/shell/TheiaService.sys.mjs:147` (`start`), `powerbrowser/shell/TheiaService.sys.mjs:272` (`stop`), `powerbrowser/shell/TheiaService.sys.mjs:551` (`_spawnAndGate`), `powerbrowser/shell/TheiaService.sys.mjs:819` (`_healthLoop`), `powerbrowser/shell/TheiaService.sys.mjs:889` (`_restart`), `powerbrowser/shell/TheiaService.sys.mjs:991` (`retry`), `powerbrowser/shell/TheiaService.sys.mjs:443` (`_reapLeftover`).
-- Pattern: Singleton object with latched guards (`_started`, `_shuttingDown`, `_swapped`, `_errorShown`, `_restartInFlight`); `USER_MESSAGE` table (`powerbrowser/shell/TheiaService.sys.mjs:41`) as the only user-facing copy source.
+- Purpose: Sidecar process supervision with bounded give-up and self-healing
+- Examples: `powerbrowser/shell/TheiaService.sys.mjs`
+- Pattern: `_spawnAndGate` returns classified `{ok, recoverable, message, details}`; `_restart` is the single entry for every spawn after resolve; `_showError`/`_hideError` latch the deck; `reportUnexpectedFailure` is the one terminal backstop for all four fire-and-forget promise roots
 
-**TabUriRegistry + OpenHandlers (bridge seed):**
-- Purpose: Bidirectional `factoryId <-> URI` mapping across `view:`/`settings:`/`terminal:`/output/webview/extension-detail schemes; runtime discovery over `ContributionProvider<CommandContribution>` with a static coverage table cross-check.
-- Examples: `theia/extensions/tab-uris/src/browser/tab-uri-registry.ts:32`, `theia/extensions/tab-uris/src/browser/view-factory-table.ts`, `theia/extensions/tab-uris/src/browser/view-open-handler.ts`, `theia/extensions/tab-uris/src/browser/terminal-open-handler.ts`, `theia/extensions/tab-uris/src/browser/existing-scheme-coverage.ts`
-- Pattern: Inversify `@injectable()` singletons wired in `theia/extensions/tab-uris/src/browser/tab-uris-frontend-module.ts`; late-registration escape hatch `registerLateOpenHandler` for post-first-`open()` bindings.
+**TabUriRegistry (bridge contract):**
+- Purpose: Bidirectional `factoryId <-> URI` mapping whose exported shape is frozen for the post-4.0 mirror/proxy bridge
+- Examples: `theia/extensions/tab-uris/src/browser/tab-uri-registry.ts`, `theia/extensions/tab-uris/src/browser/view-factory-table.ts`
+- Pattern: Runtime DI discovery (`ContributionProvider<CommandContribution>` filtered to `AbstractViewContribution`) + static coverage table cross-checked at first use; shape asserted by `scripts/verify-registry-shape.mjs`
 
-**Token gate trio (backend auth boundary):**
-- Purpose: Fail-closed loopback gate + stdin credential channel + supervised-only watchdog.
-- Examples: `theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts`, `theia/extensions/token-gate/src/node/powerbrowser-env.ts`, `theia/extensions/token-gate/src/node/parent-watchdog-backend-contribution.ts`, wired by `theia/extensions/token-gate/src/node/token-gate-backend-module.ts`
-- Pattern: `BackendApplicationContribution` pair + module-load side-effect module; every reader uses `POWERBROWSER_ENV`, never `process.env`.
+**Token gate + env handshake:**
+- Purpose: Fail-closed auth for a loopback server with file/terminal reach
+- Examples: `theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts`, `theia/extensions/token-gate/src/node/powerbrowser-env.ts`
+- Pattern: `EarlyExpressMiddleware.handlers.unshift(gate)` ahead of stock cookie bootstrap; `timingSafeEqual` cookie compare; token via stdin line, never environment (`/proc/<pid>/environ` exposure); `POWERBROWSER_TOKEN_DISABLE=1` dev bypass only for unsupervised runs
 
-**Generator pipeline (manifest → surfaces):**
-- Purpose: Parse → reject-unknown → mask → merge → validate → emit → write; provenance-tracked merge, per-key required masking so downstreams can never inherit identity/legal keys.
-- Examples: `scripts/generate.mjs` (pipeline + emitters), `scripts/lib/config-schema.json` (single schema both masker and validator read), `scripts/lib/toml.cjs` (vendored parser with digest-pinned header).
-- Pattern: Frozen `TARGETS` table (`scripts/generate.mjs`) consumed by both the emitter and `scripts/verify-generated-identity.mjs`, so an added/removed target goes red without a second list.
+**ContainerModule composition:**
+- Purpose: Assemble the sidecar from `@theia/*` + `@powerbrowser/*` without forking Theia
+- Examples: `theia/extensions/*/src/*// *-frontend-module.ts`, `theia/extensions/token-gate/src/node/token-gate-backend-module.ts`, `theia/applications/browser/package.json`
+- Pattern: `bind(X).toSelf().inSingletonScope()` + `bind(Contribution).toService(X)`; overrides via guarded `isBound`/`rebind`; `powerbrowserPrivilegedJs: false` default keeps the privileged surface unbound (`isBound` provably false)
 
-**Prefs as policy knobs:**
-- Purpose: Timeouts, intervals, grace, log-buffer size, and the SHELL-03 give-up budget live in prefs so verification can force fast failure via a launch profile's `user.js`.
-- Examples: `powerbrowser/shell/powerbrowser-sidecar.js:16`, `scripts/verify-platform.sh:890` (poisoned `backendMain`), `scripts/verify-platform.sh:949` (`giveUpAttempts=2` fixture).
+**Sentinel + deck protocol:**
+- Purpose: Machine-readable launch/swap/error/diagnostics channel over `dump()` plus a three-layer chrome deck (loading / error / diagnostics)
+- Examples: `powerbrowser/shell/powerbrowser.js:20`, `:72`, `:102`, `:163`; `powerbrowser/shell/powerbrowser.xhtml:35`, `:36`, `:43`; `powerbrowser/shell/powerbrowser.css`
+- Pattern: Copy contract — user strings live only in `USER_MESSAGE` (`TheiaService.sys.mjs:41`), identifiers live in `getFailureDetails()` rows; both surfaces read the same accessors so render and sentinel can never disagree
 
 ## Entry Points
 
-**Gecko process start:**
-- Location: `powerbrowser/shell/components.conf` → `powerbrowser/shell/PowerBrowserAPI.sys.mjs:583` (`PowerBrowserSingleInstanceHandler`)
-- Triggers: OS launch / second launch against the same profile (platform remoting keys on profile path).
-- Responsibilities: First launch opens the shell and claims startup (`preventDefault`); second launch focuses the existing `powerbrowser:main` window and claims the handoff; pre-window remote handoff does nothing. Thrown errors are logged and swallowed so later handlers still run.
+**Shell startup (initial launch):**
+- Location: `powerbrowser/shell/PowerBrowserAPI.sys.mjs` (`PowerBrowserSingleInstanceHandler`), wired by `powerbrowser/shell/components.conf`
+- Triggers: OS process start / second launch against same profile (focus + `preventDefault`)
+- Responsibilities: Open `chrome://powerbrowser/content/powerbrowser.xhtml` once; suppress the stock window via `preventDefault`
 
-**Shell window load:**
-- Location: `powerbrowser/shell/powerbrowser.xhtml` + `powerbrowser/shell/powerbrowser.js:17` (`DOMContentLoaded`, `{once:true}`)
-- Triggers: `openShellWindow()` (first launch).
-- Responsibilities: Paint first (`POWERBROWSER_SHELL_READY`), wire deck globals (`powerbrowserSwapToUrl`, `powerbrowserShowError/HideError`, `powerbrowserRetry`, `powerbrowserShowDiagnostics/HideDiagnostics`), emit pref + identity sentinels, fire startup-finished for automation, start the supervisor, install the diagnostics chord (`accel,alt,shift+D`).
+**Chrome bootstrap:**
+- Location: `powerbrowser/shell/powerbrowser.js` (loaded by `powerbrowser/shell/powerbrowser.xhtml`)
+- Triggers: `DOMContentLoaded` of the shell document
+- Responsibilities: Paint first, emit `POWERBROWSER_SHELL_READY`, expose `window.powerbrowser*` globals, install diagnostics chord (`Ctrl+Alt+Shift+D`), start supervisor
 
-**Theia backend start:**
+**Backend main:**
 - Location: `theia/applications/browser/lib/backend/main.js` (built; source composition in `theia/applications/browser/package.json`)
-- Triggers: Supervisor spawn with `--hostname 127.0.0.1 --port <0|pinned>`.
-- Responsibilities: Load container modules (including `theia/extensions/token-gate/src/node/token-gate-backend-module.ts`), run env capture + token read at module load, fail closed without a token, bind loopback, announce `POWERBROWSER_BACKEND_READY`.
+- Triggers: Spawned by supervisor with `--hostname 127.0.0.1 --port <n>`
+- Responsibilities: Load container modules (including `powerbrowser-env.ts` scrub first), run contributions `initialize()` → `configure()` → `start()`/`onStart()`, announce `POWERBROWSER_BACKEND_READY`
 
-**Theia frontend composition:**
-- Location: `theia/extensions/*/src/browser/*-frontend-module.ts`, rooted at `theia/applications/browser/package.json`
-- Triggers: Backend serves the frontend; shell swaps the `<browser>` onto it.
-- Responsibilities: Bind open handlers, commands, and contributions into the Inversify container before first use (late bindings use `registerLateOpenHandler`).
-
-**Generator CLI:**
-- Location: `scripts/generate.mjs` (`node scripts/generate.mjs`, `--check`, `--self-test`)
-- Triggers: Developer rebrand edit; `generate-check` / `generated-byte-identity` gates.
-- Responsibilities: Validate manifest, emit all 23 targets into `generated/` (or assert identity/idempotence without writing).
+**Generator:**
+- Location: `scripts/generate.mjs` (`node scripts/generate.mjs [--check|--self-test]`)
+- Triggers: Rebrand edit, CI, `verify-platform.sh` `generate-check` row
+- Responsibilities: Validate manifest, emit `generated/` tree
 
 **Verification driver:**
-- Location: `scripts/verify-platform.sh` (`--quick`, `--only <label>`, `--build`, `--gate`)
-- Triggers: Commit gate, per-task sampling, full/release runs.
-- Responsibilities: Run the CHECKS registry in order, always the whole table (no `-e`), with lazy Theia-app boot, headless/display shell harnesses, and `setsid` process-group teardown.
+- Location: `scripts/verify-platform.sh` (`--quick` | `--only <label>` | `--gate` | full)
+- Triggers: Commit gate, phase verification, CI
+- Responsibilities: Run the `CHECKS` registry; adding a check means appending one row, never a sibling driver
 
 ## Architectural Constraints
 
-- **Threading:** Chrome shell JS is single-threaded event-loop; timed waits use `nsITimer` one-shots held in a module-level `pendingTimers` set (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:29`) because the timer does not keep itself alive. No worker threads. The backend is a separate Node OS process supervised over stdio/HTTP, never in-process.
-- **Global state:** Per-launch in-memory singletons only: `TheiaService` fields (`powerbrowser/shell/TheiaService.sys.mjs:65`), `PowerBrowserAPI`'s `pendingTimers`, backend module-load `captured` env (`theia/extensions/token-gate/src/node/powerbrowser-env.ts:66`), `TabUriRegistry._index` lazily built after all modules load (`theia/extensions/tab-uris/src/browser/tab-uri-registry.ts:50`). Re-entrancy is latched (`_started`, `_shuttingDown`, `_restartInFlight`, `_errorShown`).
-- **Circular imports:** None by construction. `TheiaService` imports only the boundary file (`powerbrowser/shell/TheiaService.sys.mjs:16`); `powerbrowser.js` imports both; the boundary imports no project file. Frontend `@powerbrowser/customize` reaches `@powerbrowser/tab-uris` only through an `isBound`-guarded optional get (`theia/extensions/customize/src/browser/customize-frontend-module.ts:37`).
-- **Linux-only paths:** Bare-pid signalling opens `libc.so.6` via `ctypes` (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:453`); `/proc/<pid>/stat` field-22 identity and `/proc/<pid>/environ` reasoning assume Linux procfs.
-- **No-space checkout path:** `pkgs.mkShell` appends an rpath to space-separated `NIX_LDFLAGS`; the repo must live at a path with no space. `vendor_machine` stays space-free (`DeBIOS`) because it lands in the profile path.
-- **No custom browser chrome:** No tab strip, toolbar, address bar, or menu of our own (`powerbrowser/shell/powerbrowser.xhtml:5`); stock chrome is reachable (GUI-01) but never authored.
-- **Internal identifiers are fixed:** `chrome://powerbrowser/`, `@powerbrowser/*`, pref branches, `PowerBrowserAPI`, and sentinel names are never rebrand inputs.
+- **Threading:** Chrome JS is single-threaded event loop; no `setTimeout` in `sys.mjs` scope — delays go through `PowerBrowserAPI.sleep()` (`Cc["@mozilla.org/timer;1"]` + strong `pendingTimers` reference so GC cannot swallow the timer). Backend is Node single-process; health probes are sequential with bounded timeouts so probes never overlap.
+- **Global state:** `TheiaService` module-level singleton fields are per-launch in-memory only (see list above); the only persisted file is the sidecar state file, profile-keyed. No Firefox `SessionStore` dependence. Token lives in memory on both sides, never in prefs, logs, sentinels, or the DOM.
+- **Circular imports:** None by construction — the dependency arrow is one-way: `powerbrowser.js` → `PowerBrowserAPI` + `TheiaService` → `PowerBrowserAPI`; `TheiaService` imports nothing else (boundary-guard enforced). Theia side: `customize` optionally reads `TabUriRegistry` via `isBound`-guarded `get`, never a hard import cycle.
+- **No Theia core edits:** `@theia/*` consumed as pinned npm deps (`1.74.1`); `scripts/diff-theia-core.sh` fails on vendoring. Overrides are `rebind` in `@powerbrowser/*` modules only.
+- **No space in checkout path:** `pkgs.mkShell` appends an rpath to space-separated `NIX_LDFLAGS`; dev shells (`nix develop .#firefox`, `nix develop .#theia`) and all builds assume a space-free path.
+- **Copy rule:** No internal identifier (pref key, sentinel, port, timeout, raw exception) in user-facing text; every dropped identifier appears as a labelled diagnostics row (`shell-error-copy-no-internals` enforces by pattern).
 
 ## Anti-Patterns
 
-### Privileged call outside the boundary file
+### Second boundary file
 
-**What happens:** Chrome-privileged API (`fixupAndLoadURIString`, `nodePrincipal`) is called directly from `powerbrowser.js` or a new shell module, possibly with a comment saying it avoids the boundary.
-**Why it's wrong:** The guard's pattern list is the definition of "internal"; an unnamed touch passes the check while breaking the one-file audit surface the next ESR rebase depends on.
-**Do this instead:** Add a named wrapper in `powerbrowser/shell/PowerBrowserAPI.sys.mjs` (see `loadURIInBrowser` at `powerbrowser/shell/PowerBrowserAPI.sys.mjs:365`) and catalogue the row in `powerbrowser/INTERNAL-APIS.md`; the guard fails until both exist.
+**What happens:** A new file under `powerbrowser/` imports `Services`, `Cc`/`Ci`, `ChromeUtils.import*`, or calls `fixupAndLoadURIString` / touches `nodePrincipal` directly.
+**Why it's wrong:** The audit surface at ESR rebase is exactly one file; a second touchpoint splits it and `INTERNAL-APIS.md` can no longer claim completeness.
+**Do this instead:** Add a thin wrapper method on `PowerBrowserAPI` in `powerbrowser/shell/PowerBrowserAPI.sys.mjs`, catalogue it in `powerbrowser/INTERNAL-APIS.md`, and call it from the consumer (`scripts/check-internals-boundary.sh` fails otherwise).
 
-### Secret in the spawn environment
+### Reading `process.env` for the handshake in token-gate code
 
-**What happens:** A credential (token, cookie value) is added to `_spawnAndGate`'s `environment` object or any `POWERBROWSER_*` key expecting a grandchild to read it.
-**Why it's wrong:** `environment` becomes `/proc/<pid>/environ`, an exec-time snapshot readable by any same-uid process for the process lifetime; `delete process.env.X` does not rewrite it. Node also hands `process.env` to every child (terminals, tasks, plugin host).
-**Do this instead:** Hand secrets over the stdin pipe per spawn (`powerbrowser/shell/TheiaService.sys.mjs:636` → `theia/extensions/token-gate/src/node/powerbrowser-env.ts:88`) and read them from `POWERBROWSER_ENV`, never `process.env`.
+**What happens:** A new reader uses `process.env.POWERBROWSER_TOKEN` instead of `POWERBROWSER_ENV`.
+**Why it's wrong:** `powerbrowser-env.ts` scrubs those keys at module load, so the read finds nothing — and re-adding the variable re-opens the `/proc/<pid>/environ` + child-inheritance leaks the stdin handoff was built to close.
+**Do this instead:** Read `POWERBROWSER_ENV` from `theia/extensions/token-gate/src/node/powerbrowser-env.ts`, which is the captured-then-scrubbed handshake.
 
-### Keying respawn logic on the pinned port
+### Late `OpenHandler` / `CommandContribution` binding
 
-**What happens:** `_spawnAndGate` / `_restart` branches on `this._port === null` to decide first-spawn vs respawn behavior.
-**Why it's wrong:** A first spawn that announced readiness (pinning a port) then failed the health gate leaves every later successful respawn taking the "already initialised" branch — no cookie, no navigation, no health loop — stranding the user on the loading layer with a healthy backend.
-**Do this instead:** Key completion on `this._swapped` (`powerbrowser/shell/TheiaService.sys.mjs:762`), the one field `_swap()`'s own guard owns; the static half is enforced by `start-path-recovery` (`scripts/verify-start-path-recovery.mjs`).
+**What happens:** Binding an `OpenHandler` or palette command after the app's first `OpenerService.open()` / command enumeration.
+**Why it's wrong:** `ContributionProvider.getContributions()` caches on first call and drops its container reference — the late binding is permanently invisible (no error, just a URI/command that quietly does nothing).
+**Do this instead:** Bind statically at module load like `theia/extensions/tab-uris/src/browser/tab-uris-frontend-module.ts:38`; runtime additions go through `registerLateOpenHandler()` in the same file.
 
-### Second owner of one rendered fact
+### Hand-kept expectation lists in checks
 
-**What happens:** The bootstrap writes `errorElement.style.display` (or any deck visibility) directly alongside the supervisor's `_showError`/`_hideError`, or the retry control clears the layer before the supervisor does.
-**Why it's wrong:** Two writers drift: the DOM goes blank while `_errorShown` stays latched, so the next failing retry repaints nothing and the session ends on a blank window.
-**Do this instead:** Route every visibility change through `TheiaService._showError/_hideError` → `window.powerbrowserShowError/HideError` (`powerbrowser/shell/powerbrowser.js:102`, `powerbrowser/shell/powerbrowser.js:122`); the retry entry clears via the supervisor (`powerbrowser/shell/TheiaService.sys.mjs:991`), never the DOM.
-
-### Hand-kept expectation lists
-
-**What happens:** A check asserts against a literal list of files, sentinels, or messages copied from the tree.
-**Why it's wrong:** The list agrees with the tree it was copied from forever; additions and removals both pass silently.
-**Do this instead:** Derive the expectation at check time and compare as set equality — `TARGETS` shared between `scripts/generate.mjs` and `scripts/verify-generated-identity.mjs`, factory-id set derived from sources in `scripts/verify-registry-shape.mjs`, `USER_MESSAGE` values derived from `powerbrowser/shell/TheiaService.sys.mjs` in `scripts/verify-shell-error-copy.mjs` — each with a `--self-test` planting faults that must go red.
+**What happens:** A new `scripts/verify-*.mjs` asserts a copied list of strings (probe names, message texts, file lists).
+**Why it's wrong:** The list agrees with the tree it was copied from forever — it goes red on neither additions nor removals.
+**Do this instead:** Derive the actual set from the tree at check time and compare as set equality, with a `--self-test` that plants an addition and a removal (see `scripts/verify-registry-shape.mjs`, `scripts/verify-shell-error-copy.mjs`).
 
 ## Error Handling
 
-**Strategy:** Never-throw primitives at the boundary; classified `{ok, recoverable, message, details}` results in the supervisor; static product-named copy on screen with full identifiers in the diagnostics layer; a single terminal backstop for escaping rejections; machine-readable `dump()` sentinels for the harness.
+**Strategy:** Classified failures with a user/diagnostics split: every failure path returns `{ok, recoverable, message, details}`; the user sees only a `USER_MESSAGE` sentence ending in a real on-screen affordance (Retry / Details); every dropped identifier becomes a labelled diagnostics row readable through the single `getFailureDetails()` accessor.
 
 **Patterns:**
-- Boundary accessors return fallbacks instead of throwing (`getStringPref`/`getIntPref`/`getProfileDir`/`pathSearch`/`readStateFile`/`probeHealth` in `powerbrowser/shell/PowerBrowserAPI.sys.mjs`); the loud exceptions are `setSessionCookie` rejection (silent 403 is worse than a throw) and swallowed-then-logged handler errors (`PowerBrowserSingleInstanceHandler.handle`).
-- `USER_MESSAGE` (`powerbrowser/shell/TheiaService.sys.mjs:41`) is the only user-facing copy source; every message names the product, states the problem plainly, and ends with a real on-screen affordance; no pref key, sentinel, port, timeout, or raw exception ever reaches `#powerbrowser-error-message` (gated by `shell-error-copy-no-internals`).
-- `_fatal()` keeps full diagnostics in the D-106 ring buffer + stdout; `getFailureDetails()` (`powerbrowser/shell/TheiaService.sys.mjs:327`) is the single accessor both the rendered rows and the `POWERBROWSER_ERROR_DIAGNOSTICS` sentinel read.
-- All four fire-and-forget promise roots (bootstrap `start()`, retry, `_healthLoop`, `_recoveryProbeLoop`) route rejections to `reportUnexpectedFailure()` (`powerbrowser/shell/TheiaService.sys.mjs:1029`).
+- Never-throw boundary reads (`getStringPref`/`getIntPref`/`readStateFile`/`getProfileDir` resolve fallbacks, never throw) vs. fail-loud writes (`setSessionCookie` throws on cookie rejection so a dead credential never becomes a silent 403 after the swap).
+- Bounded give-up with split rule (`_restart()`): unrecoverable → immediate `_showError(recoverable: false)`, Retry hidden and refused; recoverable → exhaust attempts/wall-clock, then `_showError(recoverable: true)` + background recovery probe.
+- One terminal backstop: `reportUnexpectedFailure()` is the single handler for all four fire-and-forget promise roots (start call, Retry call, `_healthLoop`, `_recoveryProbeLoop`); it paints `couldNotStart` (recoverable) with the rejection text in the rows — a slow-but-succeeding start can never trip it.
 
 ## Cross-Cutting Concerns
 
-**Logging:** Dual channel everywhere: `PowerBrowserAPI.log()` (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:322`) mirrors to browser console + stdout with a `[PowerBrowserAPI] <level>:` prefix the harness tolerates; `TheiaService._pushLog/_reapLog` feed the bounded (500-line, `powerbrowser/shell/powerbrowser-sidecar.js:25`) in-memory ring buffer read by `getRecentLog()` and the diagnostics `<pre>`. Never log the token — enforced by `shell04-log-redacts-token`.
-**Validation:** Manifest validation in `scripts/generate.mjs` (unknown-setting rejection before merge, required-mask before merge, regex/type/business rules, emittability sink guard); schema in `scripts/lib/config-schema.json`; every failure message is user-facing copy naming the dotted setting and a next step.
-**Authentication:** Per-launch token minted by the supervisor, delivered over stdin, minted into a `SameSite=Lax` non-`Secure` session cookie for loopback HTTP (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:152`), checked with `timingSafeEqual` on every plain-HTTP route ahead of stock middleware (`theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts:74`); named `POWERBROWSER_TOKEN_DISABLE=1` bypass exists only for dev/verify loops and is explicitly cleared on the supervised spawn.
+**Logging:** Dual channel — `PowerBrowserAPI.log()` mirrors to browser console + stdout (`dump()`), and `TheiaService._log` ring buffer (`logBufferLines` pref, default 500) backs `getRecentLog()` for the diagnostics layer. Every message is static/derived-from-config text, never the token.
+**Validation:** Manifest validated against `scripts/lib/config-schema.json` (unknown-setting rejection before merge; required-identity check; no writes until green). Prefs read with fallbacks; user.js overrides used by checks to force fast give-up.
+**Authentication:** Per-launch token: minted in chrome, delivered over stdin pipe, validated per-request with `timingSafeEqual` against the `POWERBROWSER_TOKEN` cookie; fail-closed (exit 78) when absent; named `POWERBROWSER_TOKEN_DISABLE=1` bypass only for unsupervised dev runs, explicitly cleared (`""`) on every supervised spawn.
 
 ---
 

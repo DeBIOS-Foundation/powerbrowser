@@ -5,100 +5,110 @@
 ## Languages
 
 **Primary:**
-- TypeScript ~5.9.3 - Theia sidecar: all code under `theia/extensions/*` (`branding`, `tab-uris`, `customize`, `token-gate`) and `theia/applications/browser/` build files (`esbuild.mjs`, `gen-esbuild.*.mjs`)
-- JavaScript (ES modules, `.sys.mjs` / `.mjs`) - Gecko shell layer `powerbrowser/shell/` (`PowerBrowserAPI.sys.mjs`, `TheiaService.sys.mjs`, `powerbrowser-sidecar.js`, `powerbrowser.js`); all build/verify tooling under `scripts/*.mjs` (notably `scripts/generate.mjs`, `scripts/verify-*.mjs`); vendored TOML parser `scripts/lib/toml.cjs`
-- Bash - Upstream/rebase/patch lifecycle `scripts/fetch-upstream.sh`, `scripts/apply-patches.sh`, `scripts/rebase-upstream.sh`, `scripts/check-patch-surface.sh`, `scripts/check-internals-boundary.sh`, `scripts/verify-platform.sh`, `scripts/verify-endpoints.sh`, `scripts/smoke-*.sh`, `scripts/toolchain-baseline.sh`
+- TypeScript (~5.9.3, `ES2017` target, `commonjs` modules) - all Theia sidecar code: `theia/extensions/*/src/**/*.ts(.tsx)`, built per-extension with `tsc -b`
+- JavaScript ES modules (`.sys.mjs`, no `setTimeout` in module global scope) - Gecko shell: `powerbrowser/shell/PowerBrowserAPI.sys.mjs` (the one internals boundary), `powerbrowser/shell/TheiaService.sys.mjs` (supervisor, boundary consumer only)
+- JavaScript ESM (Node, `node:` built-ins only where noted) - all `scripts/*.mjs` checkers and `scripts/generate.mjs` generator
+- Bash (`set -uo pipefail`, no `-e` in the driver) - `scripts/*.sh`, above all `scripts/verify-platform.sh` (the single check registry)
 
 **Secondary:**
-- TOML - Single rebrand input `configuration.toml` (validated against `scripts/lib/config-schema.json`)
-- JSON - Pref defaults `powerbrowser/branding/{dev,release}/pref/firefox-branding.js` (JS-syntax prefs), endpoint policy `powerbrowser/endpoint-allowlist.json`, enterprise policy `powerbrowser/distribution/policies.json`, schema `scripts/lib/config-schema.json`, all `package.json` manifests
-- Nix expression language - `flake.nix` (two dev shells: `.#theia`, `.#firefox`)
-- Mozilla build DSL - `.mozconfig` (generated from `configuration.toml`), `powerbrowser/shell/moz.build`, `powerbrowser/branding/*/moz.build`, `content/jar.mn`, `locales/jar.mn`
-- Fluent (`.ftl`) + legacy `.properties` - `powerbrowser/branding/{dev,release}/en-US/brand.ftl`, `brand.properties`
-- CSS - `powerbrowser/shell/powerbrowser.css`, `powerbrowser/branding/*/content/aboutDialog.css`, Theia `customize` extension runtime CSS injection (`theia/extensions/customize/src/browser/customize-css-contribution.ts`)
-- XUL/XHTML - `powerbrowser/shell/powerbrowser.xhtml`, `powerbrowser/shell/components.conf`, `powerbrowser/shell/jar.mn`
-- C++ / Rust - Not authored here. They are the `upstream/` Gecko implementation language, reached only through the patch stack (`patches/*.patch`) and the `PowerBrowserAPI.sys.mjs` anti-corruption layer (catalogued in `powerbrowser/INTERNAL-APIS.md`)
-- Python - Gecko build tooling inside `upstream/` (driven via `./mach`), plus `python3` in the `.#theia` dev shell for `node-gyp` native modules
+- Nix (flake expression) - `flake.nix` defines the two dev shells (`#theia`, `#firefox`)
+- Python 3 (system `pkgs.python3`, no virtualenv, no `requirements.txt`) - Gecko `mach`/mozbuild toolchain only; no first-party Python source in this tree
+- Rust 1.97.1 / C++ (upstream Gecko, never hand-edited) - compiled via `./mach build` inside `upstream/`; this repo authors only `patches/*.patch` plus `powerbrowser/shell/` chrome code
+- CSS - `powerbrowser/shell/powerbrowser.css`, per-variant `aboutDialog.css` branding surfaces
+- TOML - `configuration.toml` (the only hand-edited rebrand input file)
+- Fluent (`*.ftl`) + legacy `.properties` - branding locale surfaces (`brand.ftl`, `brand.properties` per variant)
+- mozbuild dialect (Python-embedded) - `powerbrowser/shell/moz.build`, branding `moz.build` files
 
 ## Runtime
 
 **Environment:**
-- Node.js 22 (pinned `pkgs.nodejs_22` in `flake.nix`; `engines: node >= 22` in `theia/package.json`). Host shells may carry another Node (e.g. v24) — builds must run under `nix develop .#theia`
-- Yarn 1.x (`engines: yarn >=1.7.0 <2` in `theia/package.json`; `flake.nix` overrides `pkgs.yarn` to run on Node 22 so `node-gyp` native modules target the right `MODULE_VERSION`)
-- Gecko/Firefox ESR 153 — pinned tag `FIREFOX_153_1_0esr_RELEASE` (`scripts/fetch-upstream.sh`, `TAG` override; `flake.nix` `.#firefox` shell uses `inputsFrom = [ pkgs.firefox-esr-153-unwrapped ]`)
-- Rust 1.97.1 / Cargo 1.97.0 / cbindgen 0.29.4 — authoritative values in `toolchain-baseline.txt`, enforced by `scripts/toolchain-baseline.sh`; supplied by the `.#firefox` shell (clang via `llvmPackages.stdenv`, `RUSTC_WRAPPER=sccache`)
+- Node.js 22 (`pkgs.nodejs_22`, "one Node version for the whole sidecar toolchain" - `flake.nix:14-21`) for everything Theia-side: lifecycle scripts, `node-gyp`, backend, `esbuild`
+- Firefox ESR 153 (`FIREFOX_153_1_0esr_RELEASE`, `firefox-esr-153-unwrapped` stdenv) - the Gecko shell runtime; built binary runs outside the dev shell, verified live (`scripts/lib/firefox-bidi.mjs:13-20`)
+- System Inkscape - icon raster pipeline only (`scripts/generate.mjs:1501-1513`, per-variant `default16/32/48/64/128.png` from `brand/mark.svg`)
 
 **Package Manager:**
-- Yarn 1.x workspaces for the Theia sidecar (`theia/package.json` declares `workspaces: ["applications/*", "extensions/*"]`)
-- Lockfile: `theia/yarn.lock` (present — committed; install via `nix develop .#theia` then `yarn install` inside `theia/`)
-- No root `package.json`, no npm: repo root is manifest-driven (`configuration.toml`), and `scripts/` deliberately has zero install step — `scripts/lib/toml.cjs` is vendored `smol-toml@1.8.0` source, verified by `scripts/verify-vendored-parser.mjs`, so `scripts/verify-platform.sh --quick` runs on a fresh clone with only system `node`
+- Yarn Classic (`>=1.7.0 <2`, `engines` in `theia/package.json:59-62`), overridden to run on the pinned Node 22 (`flake.nix:21`)
+- Lockfile: present and enforced - `theia/yarn.lock` + `yarn install --frozen-lockfile` (docs: `docs/BUILD.md:49`)
+- Nix flakes (`flake.lock` pins `nixos-unstable` @ `ffb3c9b700e759be2ef13237c9d8f953b32a1e46`) for system toolchains; host Node 24 exists but is explicitly excluded from the toolchain (MODULE_VERSION 137 mismatch, `flake.nix:15-19`)
 
 ## Frameworks
 
 **Core:**
-- Eclipse Theia 1.74.1 - Default GUI sidecar. Every `@theia/*` dependency is pinned to `1.74.1` twice: as `resolutions` in `theia/package.json` and as direct deps in `theia/applications/browser/package.json`. Consumed strictly as npm dependencies — never vendored, never patched (`scripts/diff-theia-core.sh` enforces this). Composed app: `theia/applications/browser/` (`powerbrowser-theia-browser-app`)
-- Gecko / Firefox ESR 153 - Browser substrate. `upstream/` checkout (gitignored, multi-GB) + `patches/` stack (`010-powerbrowser-identity.patch`, `020-powerbrowser-shell.patch`) + `powerbrowser/` tree overlaid via symlink. Never hand-edited (`git -C upstream diff` must stay empty outside patch paths)
-- React 18.3.1 + react-dom 18.3.1 - Theia frontend UI (direct deps of `theia/applications/browser/package.json`; `@types/react 18.3.31`, `@types/react-dom 18.3.7` devDeps in `theia/package.json`)
-- InversifyJS (DI) - Via `@theia/core/shared/inversify` (see `theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts`); the standard Theia contribution/module pattern (`*-frontend-module.ts`, `*-backend-module.ts`) is used by all four `@powerbrowser/*` extensions
-- Express - Via `@theia/core/shared/express` (token-gate backend middleware: `BackendApplicationContribution`, `EarlyExpressMiddleware`)
-- Monaco editor core 1.108.201 - Pinned alongside Theia (`@theia/monaco-editor-core` in both `theia/package.json` resolutions and the browser app deps)
+- Eclipse Theia 1.74.1 - sidecar GUI framework; 49-`@theia/*`-package "daily-drivable set" composed in `theia/applications/browser/package.json:26-74`, all versions pinned via `resolutions` in `theia/package.json:7-58`
+- React 18.3.1 (`react`, `react-dom` in `theia/applications/browser/package.json:75-76`) - Theia frontend rendering (`.tsx` widgets, e.g. `theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx`)
+- InversifyJS (via `@theia/core/shared/inversify`) - DI for all `@powerbrowser/*` contributions (e.g. `@injectable()` in `theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts`)
+- Express (via `@theia/core/shared/express`) - Theia backend HTTP layer; `@powerbrowser/token-gate` inserts at `EarlyExpressMiddleware` (`theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts`)
+- Monaco editor core 1.108.201 (`@theia/monaco-editor-core`, `theia/package.json:35`) - editor widget backend
 
-**Theia AI feature set (compiled in, user-keyed at runtime):**
-- `@theia/ai-anthropic`, `@theia/ai-openai`, `@theia/ai-core`, `@theia/ai-core-ui`, `@theia/ai-chat`, `@theia/ai-chat-ui`, `@theia/ai-ide`, `@theia/ai-editor`, `@theia/ai-terminal`, `@theia/ai-code-completion`, `@theia/ai-mcp`, `@theia/ai-mcp-ui` — all `1.74.1`, direct deps of `theia/applications/browser/package.json`. No keys or endpoints in tree; providers are configured by the end user at runtime
+**Theia AI stack (composed but not wired to any key in-tree):**
+- `@theia/ai-anthropic`, `@theia/ai-openai`, `@theia/ai-core`, `@theia/ai-chat`, `@theia/ai-mcp`, `@theia/ai-terminal`, etc. (`theia/applications/browser/package.json:26-37`) - present as dependencies; no API keys, endpoints, or provider config exist anywhere in this tree
 
 **Testing:**
-- No unit-test runner (no jest/vitest/mocha config anywhere). Verification is bespoke: `node --self-test` entry points inside each `scripts/verify-*.mjs` check plus `scripts/verify-platform.sh` as the single driver/registry (`--quick` = commit gate, `--only <label>` = one check, `--gate` = full + `WINDOWS.md` exclusions). `@theia/test 1.74.1` is present only as a composed Theia framework package, not as project test harness
+- No unit-test framework in first-party code - no `jest`/`vitest`/`mocha`/`playwright` config or scripts outside `theia/node_modules/` (transitive only)
+- Verification driver: `scripts/verify-platform.sh` (bash registry, `CHECKS+=(...)` at `scripts/verify-platform.sh:3738`) invoking `scripts/verify-*.mjs` Node checkers + `scripts/*.sh` layer scripts; every checker carries a `--self-test` that plants faults and must go red
+- Zero-dependency WebDriver BiDi harness: `scripts/lib/firefox-bidi.mjs` (global `WebSocket` on Node 22, no Playwright/Puppeteer/geckodriver per D-69)
+- Smoke scripts: `scripts/smoke-theia.sh` (yarn install + drivelist rebuild + boot), `scripts/smoke-firefox.sh` (no-bootstrap + `--version` pin assert)
 
 **Build/Dev:**
-- esbuild - Theia browser app bundler (`theia/applications/browser/esbuild.mjs` + generated `gen-esbuild.browser.mjs` / `gen-esbuild.node.mjs`); app scripts: `rebuild` (`theia rebuild:browser`), `build` (`theia build --app-target=browser --mode development`), `start` (`theia start`)
-- TypeScript project references - Each extension builds with `tsc -b` (`"build": "tsc -b"`, `"clean": "rm -rf lib *.tsbuildinfo"`); root sidecar build order is `theia/package.json` `"build:extensions"` (branding → tab-uris → customize → token-gate) then the browser app
-- `scripts/generate.mjs` - THE build-time generator: reads `configuration.toml`, validates against `scripts/lib/config-schema.json`, emits 23 byte-identical targets under `generated/` (branding `configure.sh`, `.mozconfig`, `.desktop` files, per-variant `brand.ftl`/`brand.properties`/`moz.build`/`jar.mn`/`aboutDialog.css`/`firefox-branding.js`). `--check` and `--self-test` modes; nothing under `generated/` is written until all checks pass
-- Mozilla `mach` build - `./mach build` with `MOZCONFIG=../.mozconfig` inside `upstream/` (tier-3 cost, ~47–54 min per `docs/BUILD.md`); `MOZBUILD_STATE_PATH` anchored repo-local (`.mozbuild/`) by the `.#firefox` shell hook; `sccache` wraps `rustc`
-- `p-debounce ^2.1.0` - Only third-party runtime dep outside Theia/React: used by `@powerbrowser/customize` (`theia/extensions/customize/package.json`)
+- `esbuild` via `@theia/bundle-plugin` - backend (`gen-esbuild.node.mjs`) + browser (`gen-esbuild.browser.mjs`) bundles, driven by `theia/applications/browser/esbuild.mjs`; native binding allowlist is one entry (`drivelist: drivelist/build/Release/drivelist.node`)
+- `tsc -b` (TypeScript project references, `composite: true`, per-extension `tsconfig.json` e.g. `theia/extensions/tab-uris/tsconfig.json`) - `yarn build:extensions` in `theia/package.json:69`
+- Theia CLI 1.74.1 (`@theia/cli`) - `theia rebuild:browser` + `theia build --app-target=browser --mode development` (`theia/applications/browser/package.json:81-84`)
+- Gecko: `./mach build` under `nix develop .#firefox` with `MOZCONFIG=../.mozconfig`; `sccache` via `RUSTC_WRAPPER` (`flake.nix:85`); `MOZBUILD_STATE_PATH` anchored repo-local (`flake.nix:68`)
+- Rebrand generator: `node scripts/generate.mjs` (reads `configuration.toml`, validates against `scripts/lib/config-schema.json`, writes 33 byte-identical targets under `generated/`)
 
 ## Key Dependencies
 
 **Critical:**
-- `@theia/* @ 1.74.1` (~40 packages) - Entire IDE substrate: `core`, `monaco`, `filesystem`, `terminal`, `preferences`, `navigator`, `editor`, `debug`, `plugin`/`plugin-ext`/`plugin-ext-vscode`, `ovsx-client`, `vsx-registry`, `ai-*`, and the rest listed in `theia/package.json` resolutions. Re-pinned as a set on upstream adoption; never partially upgraded
-- `@powerbrowser/branding`, `@powerbrowser/tab-uris`, `@powerbrowser/customize`, `@powerbrowser/token-gate` (all `0.1.0`, `private: true`) - First-party Theia extensions composed into `theia/applications/browser/package.json`. `customize` depends on `@powerbrowser/tab-uris`; `tab-uris` consumes `@theia/ai-chat-ui`, `@theia/output`, `@theia/plugin-ext(-vscode)`, `@theia/preferences`, `@theia/terminal`, `@theia/vsx-registry`; `branding` consumes `@theia/ai-ide` + `@theia/core`; `token-gate` is backend-only (`lib/node/token-gate-backend-module`)
-- `smol-toml 1.8.0` (vendored, not installed) - `scripts/lib/toml.cjs` + provenance header + `scripts/lib/toml.LICENSE` (BSD-3-Clause). Pinned by sha256 recorded in the file header; `scripts/verify-vendored-parser.mjs` re-derives both sides
-- Gecko ESR 153 source - Not a package; the `upstream/` git checkout at `FIREFOX_153_1_0esr_RELEASE` from `https://github.com/mozilla-firefox/firefox.git`, mutated only by `scripts/apply-patches.sh` replaying `patches/*.patch`
+- `@theia/*` 1.74.1 (49 packages) - the entire GUI substrate; adopted by re-pinning only, never patched (`scripts/diff-theia-core.sh` enforces)
+- `react` / `react-dom` 18.3.1 - Theia frontend peer deps (`@types/react` 18.3.31, `@types/react-dom` 18.3.7 in `theia/package.json:63-67`)
+- `p-debounce` ^2.1.0 - the ONLY direct third-party npm dependency outside Theia/React; used in `theia/extensions/customize/src/browser/customize-css-contribution.ts`
+- Vendored TOML parser `scripts/lib/toml.cjs` (+ `scripts/lib/toml.LICENSE`) - `scripts/generate.mjs` parses `configuration.toml` with zero new npm installs
+
+**First-party (`@powerbrowser/*` 0.1.0, composed in `theia/applications/browser/package.json:22-25`):**
+- `@powerbrowser/branding` (`theia/extensions/branding/`) - welcome widget, frontend only
+- `@powerbrowser/tab-uris` (`theia/extensions/tab-uris/`) - `TabUriRegistry`, frontend only; shape asserted by `scripts/verify-registry-shape.mjs`
+- `@powerbrowser/customize` (`theia/extensions/customize/`) - CSS customization, frontend only, depends on `@powerbrowser/tab-uris`
+- `@powerbrowser/token-gate` (`theia/extensions/token-gate/`) - backend-only Express gate + `GET /powerbrowser/health`
 
 **Infrastructure:**
-- `nixpkgs nixos-unstable` (`flake.lock` rev `ffb3c9b...`) - Supplies both dev shells; `firefox-esr-153-unwrapped` supplies the Gecko toolchain via `inputsFrom`
-- `sccache` - Compiler cache in the `.#firefox` shell (`buildInputs`), exported as `RUSTC_WRAPPER`
-- `node-gyp` (bundled with pinned Node's npm, prepended to `PATH` in the `.#theia` shell hook) - Required because `drivelist` ships no prebuild and falls through to `node-gyp rebuild`
-- System libs `libx11`, `libxkbfile`, `pkg-config`, `gnumake`, `python3` - Native-module build inputs in the `.#theia` shell
-- `actions/checkout@v4.4.0` (pinned SHA `11d5960a...`) - Only CI action, in `.github/workflows/rebase-upstream.yml`
+- `nixpkgs/nixos-unstable` (flake input) - supplies `nodejs_22`, `yarn`, `python3`, `pkg-config`, `gnumake`, `libx11`, `libxkbfile` (theia shell) and the full Gecko toolchain via `inputsFrom = [ pkgs.firefox-esr-153-unwrapped ]` with `llvmPackages.stdenv` override (clang, `flake.nix:57`)
+- Gecko toolchain baseline `toolchain-baseline.txt`: `rustc 1.97.1`, `cargo 1.97.0`, `cbindgen 0.29.4`; diffed after every ESR rebase by `scripts/toolchain-baseline.sh`
+- Native modules (transitive, prebuilt via platform optional-deps; install scripts skipped): `node-pty`, `@parcel/watcher`, `msgpackr-extract`, `esbuild`, `@vscode/ripgrep`; the one explicit rebuild is `drivelist@12.0.2` (`cd node_modules/drivelist && node-gyp rebuild`, `docs/BUILD.md:50`, node-gyp from pinned Node's npm per `flake.nix:43`)
+- System `inkscape` - PNG raster pipeline in `scripts/generate.mjs` (never joined with manifest values on the command line)
 
 ## Configuration
 
 **Environment:**
-- `configuration.toml` + `brand/` are the ONLY rebrand inputs (CFG-01). Sections: `[product]` (vendors, description, homepage), `[identity]` (all REQUIRED: `display_name`, `app_basename`, `binary_name`, `remoting_name`, `distribution_id`), `[legal]` (all REQUIRED: `license`, `copyright_holder`, `trademark_notice`), `[theia]` (`default_theme`), `[[variants]]` (`dev` with `name_suffix = " Dev"`, `branding_dir = "powerbrowser/branding/dev"`, `objdir = "objdir"`; `release` with empty suffix, `powerbrowser/branding/release`, `objdir-release`). Schema: `scripts/lib/config-schema.json`. Required keys can never be inherited from defaults (mask-then-merge in `scripts/generate.mjs`); unknown/reserved (`__proto__`, `constructor`, `prototype`) keys are hard failures. Machine-specific values are forbidden in the manifest — repo root is derived from the generator's own path, `.desktop` absolute paths use the `@POWERBROWSER_REPO_ROOT@` install-time token
-- Shell env (runtime): `POWERBROWSER_SUPERVISED=1`, `POWERBROWSER_TOKEN` (per-spawn supervisor-minted credential delivered over stdin, never inherited — `theia/extensions/token-gate/src/node/powerbrowser-env.ts`), `POWERBROWSER_TOKEN_DISABLE` (dev-only bypass), `THEIA_CONFIG_DIR` (`${XDG_CONFIG_HOME:-$HOME/.config}/powerbrowser`, created in the app `start` script), `VSX_REGISTRY_URL=https://open-vsx.org`
-- Shell env (build): `MOZCONFIG`, `MOZBUILD_STATE_PATH` (repo-local `.mozbuild/`), `POWERBROWSER_OBJDIR` / `POWERBROWSER_BRANDING` (release overrides for the dev defaults baked into `.mozconfig`), `LIBCLANG_PATH`, `RUSTC_WRAPPER=sccache`, `TAG` (upstream pin override for `scripts/fetch-upstream.sh`)
-- Firefox prefs: `powerbrowser/branding/{dev,release}/pref/firefox-branding.js` (unlocked `pref()` calls only — no `autoconfig.js`/locking, per D-84); enterprise policy `powerbrowser/distribution/policies.json` (`DisableAppUpdate`, `DisableTelemetry`, `DisableFirefoxStudies`); network policy `powerbrowser/endpoint-allowlist.json` (`hosts` + `prefs`, enforced by `scripts/verify-endpoints.sh`)
-- Brand-token inventory: `inventory/brand-tokens.json` (sole file allowed to name the originating product; drives `scripts/scan-brand-residue.mjs` and `scripts/verify-branding-preflight.mjs` expectations)
+- Rebrand inputs (the ONLY two a downstream edits, CFG-01): `configuration.toml` + `brand/` (`brand/mark.svg`); generator `node scripts/generate.mjs` rewrites `generated/`; `--check` asserts freshness, `--self-test` exercises parse→merge→validate→emit
+- Single schema table `scripts/lib/config-schema.json` - unknown-key rejection, required-key masking, and validation all derive from it; `required: true` doubles as the downstream-inheritance mask (D-06)
+- `.mozconfig` is GENERATED output (banner: "do not edit here") - dev-variant defaults with `${POWERBROWSER_OBJDIR:-objdir}` / `${POWERBROWSER_BRANDING:-powerbrowser/branding-generated/dev}` shell fallbacks (`.mozconfig:6-16`)
+- Sidecar prefs with code fallbacks (never throwing): `powerbrowser.sidecar.nodePath`, `backendMain`, `startupTimeoutMs` (90000), `healthIntervalStartupMs` (250), `healthIntervalSteadyMs` (5000), `healthTimeoutMs` (4000), `killGraceMs` (3000), `logBufferLines` (500), `giveUpAttempts` (6), `giveUpWallclockMs` (45000), `recoveryProbeIntervalMs` (15000) - defaults in `powerbrowser/shell/powerbrowser-sidecar.js`, read via `PowerBrowserAPI.getStringPref/getIntPref` in `powerbrowser/shell/TheiaService.sys.mjs`
+- Theia app config in `theia/applications/browser/package.json:5-20` (`applicationName: "Power Browser"`, `frontendConnectionTimeout: 3000`, `powerbrowserPrivilegedJs: false`, workspace trust off); start script pins `VSX_REGISTRY_URL=https://open-vsx.org` and `THEIA_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/powerbrowser"`
+- `.envrc` contains only `use flake` (direnv → Nix); no `.nvmrc`/`.node-version`/`.python-version`; `.env*` files are absent by design (per-launch token is never persisted)
+- Build variants from `configuration.toml:57-67`: `dev` (suffix `" Dev"`, `powerbrowser/branding/dev`, `objdir`) and `release` (empty suffix, `powerbrowser/branding/release`, `objdir-release`)
 
 **Build:**
-- `flake.nix` — `.#theia` (Node 22 + yarn + python3 + native inputs) and `.#firefox` (Gecko toolchain via `inputsFrom`, clang `stdenv` override, sccache). `flake.lock` pins `nixos-unstable`
-- `.mozconfig` — Generated artifact (banner: `Generated from configuration.toml by scripts/generate.mjs`); build consumes the tracked copy, generator writes `generated/` (byte-identity gated by `scripts/verify-generated-identity.mjs` via `scripts/verify-platform.sh --only generated-byte-identity`)
-- `.envrc` + `.direnv/` — direnv/Nix integration (do not hand-edit generated state)
-- `theia/*/tsconfig.json` — Per-extension TypeScript project references
-- `theia/applications/browser/package.json` `theia.frontend.config` — `applicationName: "Power Browser"`, `powerbrowserPrivilegedJs: false` (default-off dev flag, enforced by `scripts/verify-dev-flag-off.mjs`), `security.workspace.trust.enabled: false`; backend `frontendConnectionTimeout: 3000`
+- `flake.nix` / `flake.lock` - Nix shells (never host toolchain; `yarn` does not work outside `nix develop .#theia`)
+- `.mozconfig` - Gecko configure flags (`--enable-application=browser`, `--disable-updater`, `--disable-crashreporter`, `--with-ccache=sccache`, `--with-app-basename=powerbrowser`, `--with-distribution-id=org.debios`, `MOZ_APP_REMOTINGNAME=powerbrowser`)
+- `patches/010-powerbrowser-identity.patch` (compile flags: vendor `DeBIOS`, `MOZ_APP_UA_NAME=Firefox`, telemetry/Normandy compiled out) and `patches/020-powerbrowser-shell.patch` (hook-only: adds `powerbrowser/shell` to `DIRS`)
+- `powerbrowser/shell/moz.build`, `powerbrowser/shell/jar.mn`, `powerbrowser/shell/components.conf` - chrome packaging wiring
+- Branding pref files `powerbrowser/branding/{dev,release}/pref/firefox-branding.js` - unattended-callout gates (see INTEGRATIONS.md)
+- `theia/package.json` (workspaces `applications/*`, `extensions/*` + `@theia/*` resolutions), per-extension `package.json` + `tsconfig.json`, `theia/applications/browser/{esbuild.mjs,gen-esbuild.browser.mjs,gen-esbuild.node.mjs}`
 
 ## Platform Requirements
 
 **Development:**
-- Linux `x86_64-linux` (both dev shells pin `system = "x86_64-linux"`); Nix with flakes; checkout path must contain NO space character (hard rule — `NIX_LDFLAGS` rpath splitting breaks native links in both Gecko and `node-gyp` builds)
-- `nix develop .#theia` for `theia/` (`node` works outside, `yarn` does not); `nix develop .#firefox` for `upstream/` (`rustc`, `cargo`, `cbindgen`, `clang` supplied — no separate toolchain setup)
-- Fresh clone needs `scripts/fetch-upstream.sh` (multi-GB clone, re-runnable, verifies `HEAD` == pinned tag + D-76 dirt classification) then `scripts/apply-patches.sh`, then `node scripts/generate.mjs` before `./mach configure`
-- Commit gate is seconds: `scripts/verify-platform.sh --quick` (no build, no browser, no display). Full `./mach build` is ~47–54 min — never spend it on a typo
+- Nix with flakes (`experimental-features = nix-command flakes`); two shells: `nix develop .#firefox` (Gecko toolchain) and `nix develop .#theia` (Node 22 + yarn + python3 + make + X11 libs)
+- Linux `x86_64-linux` (flake `system` is fixed; Windows exclusions tracked via `--gate` in `scripts/verify-platform.sh`)
+- Checkout path must contain NO space character (`NIX_LDFLAGS` is space-separated; breaks Gecko + node-gyp links) - e.g. `/home/chris/coding/Power-Browser`
+- ~30 GB free disk, 8 GB RAM (full Gecko compile peaks ~14 GB `objdir/` + ~5.6 GB `upstream/` checkout); `upstream/` materialised by `scripts/fetch-upstream.sh` (default `TAG=FIREFOX_153_1_0esr_RELEASE`)
+- Reference host `legion` (16 cores, 62 GB RAM, NixOS); full `./mach build` tier-3 ≈ 47–54 min; `--quick` (no build/browser/display) is the commit gate
 
 **Production:**
-- Deployment target is a locally installed Gecko application, not a hosted service: Gecko packaging machinery produces per-OS installers; Linux desktop entries `powerbrowser/powerbrowser.desktop` and `powerbrowser/powerbrowser-release.desktop` (generated, `Exec`/`Icon` carry the `@POWERBROWSER_REPO_ROOT@` token substituted at install time per `docs/BUILD.md`); `StartupWMClass` = remoting name; `powerbrowser/branding-generated/` symlink exposes `generated/branding/` inside topsrcdir for `--with-branding`
-- No server, container, or cloud target. The Theia backend is a supervised loopback sidecar spawned by `powerbrowser/shell/TheiaService.sys.mjs` at browser runtime, not a deployed process
-- Excluded by design (never scanned, never committed): `upstream/` (~5 GB ESR checkout, reproducible via `scripts/fetch-upstream.sh`), `objdir/` + `objdir-release/` (Gecko build output), `theia/**/node_modules`, `generated/` (gitignored generator output), `.mozbuild/` (local mozbuild state), `powerbrowser/branding-generated` (untracked overlay symlink)
+- Linux desktop target: freedesktop `.desktop` entries emitted by the generator (`generated/powerbrowser.desktop`, `generated/powerbrowser-release.desktop`; `Exec`/`Icon` carry `@POWERBROWSER_REPO_ROOT@` token substituted at install time per `docs/BUILD.md`)
+- Shipped shape: Gecko binary (`objdir/dist/bin/powerbrowser`) supervising a bundled Node 22 + Theia backend on loopback `127.0.0.1:3000`, presented full-window as the default GUI; stock browser chrome reachable via `window.open(url, '_blank')` (GUI-01)
+- No updater, no crash reporter, no telemetry compiled or configured (compile flags + pref gates, audited by `scripts/verify-endpoints.sh` layers 1–3 against `powerbrowser/endpoint-allowlist.json`)
+- License: PolyForm Noncommercial 1.0.0 (`LICENSE`, `configuration.toml:45`)
 
 ---
 

@@ -5,171 +5,229 @@
 ## Test Framework
 
 **Runner:**
-- No unit-test runner is configured. Verified absent: no `jest.config.*`, `vitest.config.*`, or mocha config; no `*.test.*` / `*.spec.*` files; no `test` script in `theia/package.json` (scripts are `build:extensions`, `build`, `start` only).
-- The test system is `scripts/verify-platform.sh` — one driver, one `CHECKS` registry, one summary table — plus per-check `--self-test` entry points and two smoke scripts. `verify-phase-0{2,3,4,5}.sh` were deleted in the commit that created it and must not come back.
+- No unit-test runner exists. There is no jest, vitest, mocha, or `*.test.ts`/`*.spec.ts` in the tree, and no `test` script in `theia/package.json` or any extension `package.json`. The test framework is `scripts/verify-platform.sh` — one driver, one `CHECKS` registry, one summary table — plus the `scripts/verify-*.mjs` / `scripts/check-*.sh` / `scripts/smoke-*.sh` checks it invokes.
+- Config: the registry itself, `run_own_checks()` in `scripts/verify-platform.sh` (~line 3489). Adding a check means appending one `"label|command"` row to the `CHECKS` array. It does NOT mean creating a sibling driver — that rule is stated in the file header and is the reason the four `verify-phase-0*.sh` drivers were consolidated.
 
 **Assertion Library:**
-- Bash: POSIX `[ ]`, `grep -qE`, and purpose-built helpers (`sentinel_present`, `backend_ready_pids` in `scripts/verify-platform.sh`).
-- Node: `node:assert`-free hand-rolled `failures.push(...)` arrays compared as set equality, plus `process.exit(1)` on any failure (see `scripts/verify-shell-error-copy.mjs`, `scripts/verify-registry-shape.mjs`, `scripts/verify-generated-identity.mjs`).
+- None. Assertions are hand-rolled per check: `grep -qE` against sentinel patterns in bash, string/RegExp derivations and set-equality comparisons in Node, `pgrep`/`/proc` polling for lifecycle checks. Failure output always follows `"<check>: FAIL -- <reason>"` on stderr with exit 1; passes print `"<check>: PASS -- <what was proven>"` with exit 0.
 
 **Run Commands:**
 ```bash
-scripts/verify-platform.sh --quick          # no build, no browser, no display — the commit gate (seconds)
-scripts/verify-platform.sh --only <label>   # exactly one named check and nothing else
-scripts/verify-platform.sh                  # everything (needs built tree; tier-3 class checks launch a browser)
+scripts/verify-platform.sh --quick          # no build, no browser, no display, no network — the commit gate (seconds)
+scripts/verify-platform.sh --only <label>   # exactly one registry row, e.g. --only shell-error-copy-no-internals
+scripts/verify-platform.sh                  # everything (tier 3: builds + headless launches, tens of minutes)
 scripts/verify-platform.sh --gate           # everything, plus the WINDOWS.md known-open exclusions
-node scripts/<check>.mjs --self-test        # prove one Node check discriminates
-bash scripts/<guard>.sh --self-test         # prove one bash guard discriminates
+node scripts/<check>.mjs --self-test        # fault-planting proof for one Node check
+bash scripts/<guard>.sh --self-test         # fault-planting proof for one bash guard
 ```
 
 ## Test File Organization
 
 **Location:**
-- Static/hermetic checks live beside the driver: `scripts/verify-*.mjs` (one file per behavior) and `scripts/check-*.sh` (boundary/surface guards).
-- Launch-class checks live as `check_*` shell functions INSIDE `scripts/verify-platform.sh` (shared `start_shell`/`stop_shell` scaffolding cannot be sourced into a second driver — one-driver rule).
-- Build gates: `scripts/smoke-theia.sh` (yarn install + native rebuild + app build), `scripts/smoke-firefox.sh` (no-bootstrap + pinned ESR version), `scripts/verify-endpoints.sh` (endpoint surface, with `--interrupt-self-test`).
-- Shared helpers: `scripts/lib/firefox-bidi.mjs` (BiDi reads of the live frontend), `scripts/lib/config-schema.json` + `scripts/lib/toml.cjs` (vendored parser, provenance-checked by `scripts/verify-vendored-parser.mjs`).
-- Human verification record: `.planning/WINDOWS.md` ledger plus phase `01-UAT.md`-style UAT reports (e.g. GUI-01/GUI-03 live runs referenced by ledger items 15–16).
+- Checks live in `scripts/`, beside the code they guard — not co-located with sources and not in a separate `test/` tree. Shared drivers live in `scripts/lib/` (notably `scripts/lib/firefox-bidi.mjs`, the WebDriver-BiDi page driver every live-frontend check imports via `withFirefoxPage`).
+- The supervisor/contract checks evaluate the shipped sources in-process rather than importing test doubles of them: `scripts/verify-shell-error-contract.mjs` `await import()`s `powerbrowser/shell/TheiaService.sys.mjs` with a faked `globalThis.ChromeUtils` and runs `powerbrowser/shell/powerbrowser.js` through `node:vm`.
 
 **Naming:**
-- Check files: `verify-<subject>.mjs`. Guard files: `check-<subject>.sh`. Registry labels: kebab-case matching the behavior (`shell-error-copy-no-internals`, `gui04-registry-shape`, `generated-byte-identity`, `start-path-recovery`, `shell-error-contract`, `about-dialog-suppression`, `side04-sigkill-no-orphan`, `health-gate-recovery-swaps`).
-- Every check row SHOULD have a paired `<label>-self-test` row in the same `CHECKS` array.
+- `verify-<behavior>.mjs` — behavioral checks with `--self-test` (e.g. `scripts/verify-registry-shape.mjs`, `scripts/verify-shell-error-copy.mjs`, `scripts/verify-generated-identity.mjs`)
+- `check-<boundary>.sh` — executable guards over a directory/patch surface (`scripts/check-internals-boundary.sh`, `scripts/check-patch-surface.sh`)
+- `smoke-<target>.sh` — build/boot proofs (`scripts/smoke-theia.sh`, `scripts/smoke-firefox.sh`)
+- Registry labels are kebab-case and stable: `shell-error-copy-no-internals`, `gui04-registry-shape`, `side04-sigkill-no-orphan`, `generated-byte-identity`
 
 **Structure:**
 ```
 scripts/
-├── verify-platform.sh          # THE driver: helpers + check_* functions + CHECKS registry + runner
-├── verify-<subject>.mjs        # static/hermetic check (scan fn + selfTest + arg dispatch)
-├── check-<subject>.sh          # bash guard (scan fn + --self-test fixture + default-path scan)
-├── smoke-theia.sh / smoke-firefox.sh / verify-endpoints.sh
-└── lib/                        # firefox-bidi.mjs, config-schema.json, toml.cjs (vendored)
+├── verify-platform.sh          # THE driver: helpers + CHECKS registry + runner + summary
+├── verify-<behavior>.mjs       # one behavior per file: check() + FAULTS[] + --self-test
+├── check-<boundary>.sh         # scan function + --self-test fixture planting
+├── smoke-<target>.sh           # install/build/boot with real-spawn proofs
+└── lib/
+    ├── firefox-bidi.mjs        # shared withFirefoxPage driver (BiDi over the live app)
+    ├── toml.cjs                # vendored parser (digest-pinned, see verify-vendored-parser.mjs)
+    └── config-schema.json      # configuration.toml schema for scripts/generate.mjs
 ```
 
 ## Test Structure
 
 **Suite Organization:**
-- The suite IS the `CHECKS` array in `scripts/verify-platform.sh:3489` (quick set) plus the `CHECKS+=(...)` full-set block. Each entry is `label|command`: external `bash <script>` / `node <script>` invocations run under `setsid` in their own process group; bare names must be argument-free shell functions (anything needing arguments gets a wrapper like `check_verify_branding`, never an inline command string).
-- Tiering rule: `--quick` rows must need no build, no browser, no display, no network. Rows that need a built tree or the 1.1 GB `upstream/` clone live in the full set (the RE-TIERED comment block in `scripts/verify-platform.sh` records why `desktop-entry-quick` and `apply-patches-self-test` moved).
-- An empty check set is a loud FAIL, not a pass (`scripts/verify-platform.sh:3890-3896`). `--gate` cannot combine with `--quick`/`--only` (named, loud error).
+```bash
+# `scripts/verify-platform.sh` — every row is "label|command"; helpers above, registry below
+local -a CHECKS=(
+  "scan-brand-residue|node $REPO_ROOT/scripts/scan-brand-residue.mjs"
+  "scan-brand-residue-self-test|node $REPO_ROOT/scripts/scan-brand-residue.mjs --self-test"
+  "shell-error-copy-no-internals|node $REPO_ROOT/scripts/verify-shell-error-copy.mjs"
+  "side04-sigkill-no-orphan|check_side04_sigkill_no_orphan"
+  ...
+)
+# Runner: each entry runs under `setsid` in its own process group so
+# `kill -- "-$PID"` on interrupt reaches the whole group (browsers two layers deep).
+```
 
 **Patterns:**
-- Setup pattern: `REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"` at the top of every script; throwaway dirs via `mktemp -d` registered with `track_temp` and removed by a `trap cleanup EXIT` + `trap 'cleanup; exit 130' INT TERM` pair (`scripts/verify-platform.sh:90-164`). The trap handler exits itself — a bare EXIT-trap cleanup that returns lets bash continue the script after SIGINT.
-- Lazy shared fixtures: the Theia dev app boots once via `theia_app_up()` on first need (60 s poll, stale-occupant wait), never unconditionally, so `--quick` never pays for it.
-- Teardown pattern: `stop_shell` / `stop_shell_display` / `stop_virtual_display` kill the whole `setsid` process group (`kill -- "-$PID"`), then `wait`, then clear the PID var. Two concurrent instances are tracked with explicit locals (`pid_a`/`pid_b`), never the shared global.
-- Assertion pattern: named FAIL to stderr (`<label>: FAIL -- <SCOPE> -- <detail>`), `cat "$BROWSER_LOG"` on failure paths, `result=1` accumulation with all branches still executed.
-- Hermeticity pattern: one run-scoped throwaway `XDG_CONFIG_HOME` exported for every launch (`scripts/verify-platform.sh:97-115`); `VERIFY05_USER_JS_PROFILE` injects pref overrides per launch; `VERIFY05_XDG_CONFIG_HOME` redirects the config dir per check. Never touch the real `$HOME/.config/powerbrowser` or any repo file from a check.
+- **Setup pattern:** `mktemp -d` throwaway dirs tracked in `TEMP_PATHS` (`track_temp`) with a merged `cleanup()` on `EXIT`/`INT`/`TERM`; throwaway browser profiles per launch; `XDG_CONFIG_HOME` pointed at a harness-scoped temp dir so runs never litter `~/.config/powerbrowser` — see the top of `scripts/verify-platform.sh`.
+- **Teardown pattern:** `stop_shell` / `stop_shell_display` / `stop_virtual_display` kill the whole process group (`kill -- "-$PID"`), then `wait`, then `rm -rf` over `TEMP_PATHS`. The `trap cleanup EXIT` plus `trap 'cleanup; exit 130' INT TERM` pair exists because a bare EXIT trap resumes the script after SIGINT instead of exiting.
+- **Assertion pattern:** poll-until-sentinel with a bounded deadline, then fail naming the log. Never assert on the absence of a log line unless the emitter is proven to be the code under test:
+```bash
+# `scripts/verify-platform.sh` — check_shell03_budget_exhausted_error
+deadline=$((SECONDS + 30))
+while [ "$SECONDS" -lt "$deadline" ]; do
+  sentinel_present 'POWERBROWSER_SHELL_ERROR ' "$BROWSER_LOG" && break
+  ...
+done
+# Positive controls ride along so a check cannot pass vacuously:
+# an unrecoverable failure must show NO spawn-attempt line AND exactly one error sentinel
+# with exactly the {reason, recoverable} JSON shape.
+```
 
 ## Mocking
 
-**Framework:** None. There are no mocks, stubs libraries, or fakes directories. Isolation is achieved with real processes, real files in `mktemp -d`, and inline `node -e` harnesses.
+**Framework:** None. Fakes are hand-rolled per check, in three shapes:
 
-**Patterns:**
-```bash
-# Planted leftover process + forged state file (SIDE-04 reaping checks)
-setsid sleep 300 &
-PLANTED_PID=$!
-node -e '...fs.writeFileSync(path, JSON.stringify({pid, port, startTicks, writtenAt}))...' \
-  "$PLANTED_STATE_FILE" "$PLANTED_PID" "$ticks"
-export VERIFY05_XDG_CONFIG_HOME="$parent"
-start_shell "$PLANTED_PROFILE_DIR"
-```
-```bash
-# Always-crashing backend + lowered attempt budget (SHELL-03 budget checks)
-echo 'process.exit(1);' > "$crasher_dir/main.js"
-printf 'user_pref("powerbrowser.sidecar.backendMain", "%s/main.js");\nuser_pref("powerbrowser.sidecar.giveUpAttempts", 2);' \
-  "$crasher_dir" > "$user_js"
-```
 ```javascript
-// Shipped module under test with its one chrome dep stubbed (shell04-log-redacts-token)
-globalThis.ChromeUtils = { importESModule: () => ({ PowerBrowserAPI: { getIntPref: (_k, d) => d } }) };
-const { TheiaService } = await import(process.env.SHIPPED_THEIA_SERVICE);
-TheiaService._pushLog.call({ _token: "TOK-11111111", _log: [] }, "Cookie: powerbrowser-token=TOK-11111111");
+// 1. Proxy-throws fake boundary — a supervisor change reaching a new
+//    PowerBrowserAPI method goes red NAMING it instead of passing silently.
+//    `scripts/verify-shell-error-contract.mjs`
+// "The fake PowerBrowserAPI is a Proxy whose unknown-property trap THROWS
+//  naming the method, so a supervisor change that reaches a new boundary
+//  method goes red naming it instead of being silently satisfied."
 ```
+
 ```javascript
-// Chrome bootstrap evaluated in a node:vm sandbox that is also its own window
-// (shell-error-contract drives the supervisor + bootstrap without a browser)
+// 2. node:vm sandbox that IS its own window — the chrome bootstrap's
+//    `window.powerbrowser*` assignments land where the supervisor reaches them,
+//    and firing the captured DOMContentLoaded handler IS the drive.
+//    `scripts/verify-shell-error-contract.mjs`
 ```
 
-Additional planted fixtures: invocation-counting wrapper backends (healthy-on-Nth-try via a marker file), a 503-then-200 health-gate stub, a poisoned config home (regular file where the settings folder must be), and known-bad markup fixtures for scanner self-tests (e.g. the `style=`/`onclick=` fixture asserting exactly 2 offenses in `check_shell_csp_inline_attrs`).
+```bash
+# 3. Wrapper-backend fixtures that count their own invocations in a marker
+#    file — the analyzer asserts the count OUTSIDE the code under test, so a
+#    wrong analyzer cannot excuse a fixture that never fired.
+#    `scripts/verify-platform.sh` — check_health_gate_recovery_swaps
+echo 0 > "$marker"
+cat > "$wrap_dir/main.js" <<EOF
+const n = parseInt(fs.readFileSync('$marker', 'utf8'), 10) + 1;
+fs.writeFileSync('$marker', String(n));
+// Invocation 1: bind, announce readiness, answer 503 (health-gate timeout,
+// not a crash). Invocation 2+: answer 200.
+EOF
+```
 
-**What to Mock (plant):**
-- Backend entry files, `user.js` pref overrides, config-home contents, state-file JSON, log text, markup fixtures — all under `mktemp -d`, all removed by `cleanup()`.
+**What to Mock:**
+- The platform boundary (`ChromeUtils`, `Services`, `Subprocess`, `dump`) when driving supervisor logic in-process — `scripts/verify-shell-error-contract.mjs`.
+- The backend entry file (`powerbrowser.sidecar.backendMain` pointed at a wrapper/crasher via a `user.js` profile override) when driving launch/recovery behavior — `check_shell03_budget_exhausted_error`, `check_health_gate_recovery_swaps` in `scripts/verify-platform.sh`.
+- The config/profile filesystem (`mkdtemp` config homes, planted `sidecar-state-<profile>.json` files in the exact JSON shape `TheiaService` writes) for leftover-reap controls — `plant_leftover`/`unplant_leftover` in `scripts/verify-platform.sh`.
 
 **What NOT to Mock:**
-- The supervisor logic under test (`powerbrowser/shell/TheiaService.sys.mjs` is imported directly, never re-implemented); the analyzer a runtime check asserts (e.g. `health-gate-recovery-swaps` drives `scripts/verify-start-path-recovery.mjs` on the real launch log); the command registry in GUI-01 checks (read from the live frontend via BiDi). A self-test that re-implements the unit under test proves nothing.
+- The tree under test. Checks derive expectations FROM the sources at check time (the `USER_MESSAGE` table, the registry's exported members, the catalogue occurrence lines) and compare as set equality — a mock of the source would be a second expectation list that can only agree with itself.
+- Your own instrumentation. Never assert on the absence of a log line unless you have proven that line is emitted by the code under test rather than by your own harness (`scripts/verify-shell-error-contract.mjs` proves its sentinel prefixes come from `dump(` call sites before any scenario runs).
 
 ## Fixtures and Factories
 
 **Test Data:**
 ```bash
-# Canonical temp-dir lifecycle for every fixture
-fixture_dir="$(mktemp -d)"; track_temp "$fixture_dir"
-cat > "$fixture" <<'EOF'
-<!-- decoy: style="display:none;" inside a comment must not be flagged -->
-<div id="powerbrowser-error" style="display:none;"></div>
+# Planted violation fixture in a mktemp dir — never a real repo file.
+# `scripts/check-internals-boundary.sh` --self-test
+cat > "$tmp/planted-violation.sys.mjs" <<'EOF'
+export function badFunction() {
+  return Services.prefs.getBoolPref("some.pref", false);
+}
 EOF
+# ...then assert the scan rejects it AND names the planted path.
 ```
-- Self-test fault tables are `cases` arrays in-file: each case names the plant, the expected red text (file + both values), and any required green-at-foreign-root polarity (`scripts/verify-generated-identity.mjs:260-483`, `scripts/generate.mjs:1828-2318`).
-- Sentinel polling uses bounded `SECONDS`-deadline loops (`deadline=$((SECONDS + 30))`) with explicit "process exited early" branches that `cat` the log — a timeout without the liveness branch cannot distinguish failure from slowness.
+
+```javascript
+// Planted-fault table: each row mutates a copy and names the drift it must produce.
+// `scripts/verify-shell-error-copy.mjs`
+const FAULTS = [
+  { name: "all-caps sentinel leaked into a message",
+    apply: (s) => s.replace("Power Browser's interface didn't finish starting.",
+                            "Power Browser did not see POWERBROWSER_BACKEND_READY."),
+    expect: "POWERBROWSER_BACKEND_READY" },
+  { name: "stale declared-but-unreferenced entry",
+    apply: (s) => s.replace("const USER_MESSAGE = {\n",
+                            'const USER_MESSAGE = {\n  neverUsed: "Power Browser has an unused message.",\n'),
+    expect: "USER_MESSAGE.neverUsed is declared but never referenced" },
+  // ...15 rows total: each must go red NAMING the drift, or the self-test fails.
+];
+```
 
 **Location:**
-- Fixtures are created inline in `mkdtemp`/`mktemp -d` at check time. No committed fixture directory exists. The one exception is data derived from the tree itself at check time (jar.mn ship lists, `USER_MESSAGE` tables, `TARGETS` rows), which are reads, not fixtures.
+- Fixtures are built inline in the check (heredocs, `node -e` writers, `FAULTS[].apply` mutations) under `mktemp -d` / `mkdtempSync(join(tmpdir(), ...))` and removed in `cleanup()` / `finally { rmSync }`. There is no shared fixtures directory — each check owns its plants so a fixture change cannot silently weaken a sibling check.
 
 ## Coverage
 
-**Requirements:** No numeric coverage target and no coverage tool. Coverage is structural: one registry row per behavior, one `--self-test` row per check, and the `.planning/WINDOWS.md` broken-windows ledger for everything known-open (`open_count`, per-item file/line/description/status, plus a machine-readable fenced JSON block that `--gate` reads).
+**Requirements:** No line/branch coverage tool and no percentage target. Coverage is defined as registry reconciliation: every behavior has a row, and every row proves it discriminates via `--self-test`. The known gaps that cannot run on Linux (chrome-context Marionette clicks, pixel assertions) are recorded as named items in `docs/WINDOWS.md` and routed to the human record — a check that cannot run FAILs or is re-tiered, never skipped-and-green.
 
 **View Coverage:**
 ```bash
-scripts/verify-platform.sh --quick                       # commit gate: ~all static rows
-scripts/verify-platform.sh --only <label>                # per-task sampling of one row
-node scripts/<check>.mjs --self-test                     # does this check discriminate?
-grep -c 'self-test' scripts/verify-platform.sh           # every row should have a paired self-test row
+scripts/verify-platform.sh --quick              # the commit gate: static checks only
+scripts/verify-platform.sh --only <label>       # per-task sampling of one row
+node scripts/verify-shell-error-copy.mjs --self-test   # prove one check discriminates
 ```
 
 ## Test Types
 
 **Unit Tests:**
-- The `--quick` static checks are the unit layer: single-file readers asserting shape/set-equality over source (`shell-error-copy-no-internals` over `powerbrowser/shell/TheiaService.sys.mjs`; `gui04-registry-shape` over `theia/extensions/tab-uris/src/browser/`; `internals-boundary` over `powerbrowser/shell/`; `vendored-parser-digest` over `scripts/lib/toml.cjs`). No build, browser, display, or network.
+- Not used as a category. The smallest checks are static source-derivation assertions (export sets, `USER_MESSAGE` table shape, `_showError` call-site enumeration, vendored-parser digest) that read files and compare derived sets — see `scripts/verify-registry-shape.mjs`, `scripts/verify-shell-error-copy.mjs`, `scripts/verify-vendored-parser.mjs`. They run in milliseconds under `--quick`.
 
 **Integration Tests:**
-- The full-set launch checks drive the built binary at `objdir/dist/bin/powerbrowser` headless (`start_shell`) or on a real/Xvfb display (`start_shell_display`) and assert on sentinel streams: SIDE-04 orphan/reap/identity checks, SHELL-03 error-budget checks, SIDE-05 second-launch checks, `health-gate-recovery-swaps`, `start-failure-shows-error`, `shell-diagnostics-rows-populated`, `side04-token-not-in-environment`.
-- App-level checks boot the Theia dev app and read it over BiDi (`verify-branding`, `verify-customize-inert`, `verify-dev-flag-off`, `verify-uri-roundtrip`, `gui01-command-registered`), or launch real browser sessions (`verify-branding-identity-dev/release`, `verify-endpoints`).
-- Every launch check asserts the launch actually reached readiness BEFORE drawing conclusions (the "never pass vacuously" rule), pairs the assertion with a positive control where a constant could satisfy it (e.g. `side05-no-second-backend`'s different-profile control, the two-failure-path discriminator in `shell-diagnostics-rows-populated`), and keeps the fixture's own proof outside the analyzer (marker-file invocation counts).
+- In-process contract checks: supervisor + chrome bootstrap evaluated together with faked platform, asserting sentinel ordering across failing-Retry repaints, probe gating in both directions, and refusal of unrecoverable Retry — `scripts/verify-shell-error-contract.mjs` (four scenarios, still `--quick` because no build/browser is needed).
+- Live-frontend checks over BiDi: branding, customize-inert, dev-flag-off, URI roundtrip, GUI-01 command registration — `scripts/verify-branding.mjs`, `scripts/verify-customize-inert.mjs`, `scripts/verify-dev-flag-off.mjs`, `scripts/verify-uri-roundtrip.mjs`, `scripts/verify-gui01-command.mjs`, all needing the lazily-started Theia dev app (`theia_app_up` in `scripts/verify-platform.sh`).
+- Headless-binary lifecycle checks: SIGKILL-no-orphan, leftover-reaped, stale-identity-not-signalled, budget-exhausted-error, auto-dismiss-on-selfheal, health-gate-recovery-swaps, diagnostics-rows-populated — the `check_side04_*` / `check_shell03_*` functions in `scripts/verify-platform.sh`.
 
 **E2E Tests:**
-- No automated E2E framework (Selenium/Playwright/WebDriver) is used. Chrome-context driving is platform-blocked on Linux (`moz:windowless` is macOS-only — `.planning/WINDOWS.md` item 7; `scripts/lib/firefox-marionette.mjs` deliberately does not exist). The perceptual halves (Retry click, Details chord, GUI-01 window flow, customize live-restyle) route to the human record: UAT reports plus ledger entries 15–16 style closures. Never fabricate these as passes.
+- `scripts/smoke-theia.sh` (yarn install frozen-lockfile, drivelist rebuild, app build, node-pty real-spawn proof, backend boot) and `scripts/smoke-firefox.sh` (incremental `./mach build` no-op, no-`mach bootstrap` assertion, `--version` reports pinned ESR). Human-driven perceptual halves (real Retry click, pixel states) stay on the `docs/WINDOWS.md` record because chrome-context Marionette is platform-blocked on Linux.
 
 ## Common Patterns
 
-**Async Testing (sentinel polling):**
+**Async Testing:**
 ```bash
-local deadline=$((SECONDS + 30))
-while [ "$SECONDS" -lt "$deadline" ]; do
-  sentinel_present 'POWERBROWSER_BACKEND_READY ' "$BROWSER_LOG" && break
-  if ! kill -0 "$BROWSER_SPAWN_PID" 2>/dev/null; then
-    echo "<label>: FAIL -- browser exited before the sentinel appeared; log:" >&2
-    cat "$BROWSER_LOG" >&2; stop_shell; return 1
-  fi
-  sleep 0.5
-done
+# Bounded poll for a sentinel; tolerate the console-mirror duplicate line;
+# assert liveness BEFORE the kill so "no orphan" cannot pass vacuously.
+# `scripts/verify-platform.sh` — check_side04_sigkill_no_orphan
+backend_pid="$(backend_ready_pids "$BROWSER_LOG" | head -1)"
+[ -e "/proc/$backend_pid" ] || FAIL  # must be alive before the kill
+kill -9 "$BROWSER_SPAWN_PID"          # browser process ALONE, never the group
+wait_pid_gone_or_zombie "$backend_pid" || FAIL  # 15s poll, Z (zombie) counts as gone
+orphans="$(backends_in_groups "$backend_pgid")"  # run-scoped PGID, not machine-wide pgrep
+[ -n "$orphans" ] && FAIL
 ```
 
-**Error Testing (planted-fault self-test):**
+**Error Testing:**
 ```javascript
-// 1. Green control first: the unmutated tree/fixture must pass, else the red below proves nothing.
-// 2. Plant one mutation per case into a mkdtemp mirror (never a repo file).
-// 3. Require red NAMING the drift (file + both values), not just red.
-// 4. Refuse to report when the unmodified tree is already red.
+// --self-test runner shape shared by every Node check:
+// 1. prove the clean tree is green first (else plants are meaningless);
+// 2. assert each plant actually mutated the source (else the row is vacuous);
+// 3. require red output NAMING the drift (not just non-zero exit).
+// `scripts/verify-registry-shape.mjs`
+const baseline = checkShape(clean);
+if (baseline.length !== 0) { /* FAIL: unmodified tree already red */ }
+for (const testCase of cases) {
+  const mutated = /* any source differs from clean */;
+  if (!mutated) { /* FAIL: anchor drifted, plant landed nowhere */ }
+  const failures = checkShape(testCase.sources);
+  if (!failures.some(f => f.includes(testCase.expect))) { /* FAIL */ }
+}
 ```
 
-**Vacuity guards (apply to every new check):**
-- Empty scan set / zero shippable files / zero parsed rows is its own distinct FAIL, never clean (`scan_internals_boundary`, `scan_inline_attrs` rc=2 path, `verify-branding-preflight.mjs` empty-row-set rejection).
-- Start-time identity compares `startTicks` (`/proc/<pid>/stat` field 22), never bare pids — Linux recycles pids (`read_start_ticks` in `scripts/verify-platform.sh`, mirrored by `TheiaService`).
-- Zombie (`Z`) state counts as gone; reap own children with `wait` so `kill(pid,0)`-style liveness re-checks do not false-alive (`wait_pid_gone_or_zombie`).
-- Scope process scans to this run's process groups (`backends_in_groups`), never machine-wide `pgrep` — a developer box may already have the app open.
-- Assert exact counts where "at least one" would pass vacuously (exactly 2 respawn attempts for `giveUpAttempts=2`; exactly one `POWERBROWSER_SHELL_ERROR`; exactly one swap sentinel across a recovery session).
-- Cross-run discriminators: when one emitter serves two assertions, require the two runs' label sets to DIFFER, so a constant emitter cannot go green (the `shell-diagnostics-rows-populated` discriminator, documented in its header comment).
+**Derive-from-tree-and-compare (the master pattern — use for every new check):**
+```javascript
+// Actual surface DERIVED from the module source at check time; only the
+// EXPECTED set is written down. Discriminates in BOTH directions:
+// an addition is a surplus, a removal is a shortfall, both named.
+// `scripts/verify-registry-shape.mjs`
+const actual = exportedNamesOf(sources[file]);
+if (actual.length === 0) { /* FAIL: parse found nothing — proves nothing */ }
+const { surplus, missing } = diff(actual, expected);
+```
+- A hand-kept expectation list "can only ever agree with the tree it was copied from" — it goes stale silently and can never go red on an addition. New checks must derive the actual set from the tree and compare as set equality, with a non-vacuity guard and a `--self-test` planting one fault per direction (addition + removal minimum).
+
+**Checklist for adding a check (from `CLAUDE.md` and the registry comments):**
+1. Append one `"label|command"` row to `CHECKS` in `run_own_checks()` in `scripts/verify-platform.sh` — never a sibling driver.
+2. Place it honestly: `--quick` array only if it needs no build, no browser, no display, no network, and no `upstream/` clone (re-tiering precedent: `desktop-entry-quick`, `apply-patches-self-test`, `about-dialog-suppression`).
+3. Derive, don't list: actual set computed from the tree at check time, set-equality comparison, non-vacuity guard.
+4. Ship `--self-test` in the same commit: one planted fault per failure mode, each required to go red naming the drift, plus mutation-landed and clean-tree-green guards. Register the self-test as its own adjacent registry row.
+5. Presence assertions, never absence — unless the emitter is proven to be the code under test.
 
 ---
 
