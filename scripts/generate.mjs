@@ -5,7 +5,7 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT COVERS. Fifty targets: thirty-three byte-identical to the
+// WHAT IT COVERS. Fifty-one targets: thirty-three byte-identical to the
 // file Phase 1 wrote by hand -- the five Phase 2 build surfaces (the two
 // branding configure.sh files, .mozconfig, and the two .desktop files), the
 // eighteen GEN-01 branding-directory surfaces (per variant: brand.ftl,
@@ -28,7 +28,10 @@
 // that same block -- welcome/about texts, the in-app repo URL, the mark
 // SVG), plus the TEL-01/TEL-02 telemetry fragment
 // (generated/theia-telemetry.json: the powerbrowserTelemetry key of that
-// same block -- level and endpoint), plus the EXT-01 declared-extensions map
+// same block -- level and endpoint), plus the TEL-03 endpoint-hosts
+// fragment (generated/endpoint-hosts.json: the sorted hosts of the
+// manifest telemetry endpoint, the [urls] values and the support URL),
+// plus the EXT-01 declared-extensions map
 // (generated/theia-plugins.json: the application package.json's theiaPlugins
 // block, one exact download URL per [[extensions]] entry -- a versioned
 // Open VSX file URL for source = "openvsx", the stated URL verbatim for
@@ -1786,16 +1789,24 @@ function emitBrandingAboutDialogCss() {
 }
 
 /**
- * The branding pref file, reproduced byte for byte with exactly one
- * variant-parameterised difference. The release file IS the first 164 lines
- * below; the dev file appends the BRAND-06 title-bar block (lines 166-188 of
- * the tracked dev file), which is a VARIANT property -- dev-only by design,
- * the release tree deliberately carries no such default -- and not a brand
- * value, so neither half interpolates the manifest.
+ * The branding pref file, reproduced byte for byte with exactly two
+ * parameterised differences. The release file IS the base below plus the
+ * manifest-driven telemetry/crash lines; the dev file appends the BRAND-06
+ * title-bar block on top of that (lines at the end of the tracked dev
+ * file), which is a VARIANT property -- dev-only by design, the release
+ * tree deliberately carries no such default -- and not a brand value.
  *
  * Split as base plus dev tail rather than two full copies: the two tracked
- * files share their first 164 lines, and two copies would let the shared
+ * files share their head, and two copies would let the shared
  * head drift into testing -- and shipping -- two things.
+ *
+ * THE FIRST PARAMETERISATION (04-04, TEL-03). The two endpoint prefs below
+ * the DYNAMIC_PREF_ANCHOR -- toolkit.telemetry.server and
+ * breakpad.reportURL -- are NOT in this const: mozillaEndpointPrefs owns
+ * their values from the manifest ([telemetry] level+endpoint and
+ * [urls].crash_report), and emitFirefoxBrandingJs splices them in at the
+ * anchor. Everything else in this const interpolates no manifest value
+ * and is a literal like the layout files.
  */
 const FIREFOX_BRANDING_BASE_LINES = Object.freeze([
     '/* This Source Code Form is subject to the terms of the Mozilla Public',
@@ -1844,9 +1855,15 @@ const FIREFOX_BRANDING_BASE_LINES = Object.freeze([
     '// --- Telemetry / health-report / data-submission: defence in depth. The',
     '// health-report subsystem itself is compiled out (MOZ_SERVICES_HEALTHREPORT',
     '// = False, D-84), but these prefs are set anyway so a reader of this file',
-    '// sees the intent stated even if a future rebuild ever restored the flag. ---',
+    '// sees the intent stated even if a future rebuild ever restored the flag.',
+    '// The two endpoint prefs that follow the anchor below are manifest-driven',
+    '// (TEL-03): toolkit.telemetry.server is blanked when [telemetry] level is',
+    '// off and repointed to the manifest endpoint when a level is set, and',
+    '// breakpad.reportURL is blanked without [urls].crash_report and repointed',
+    '// to it when stated. The compiled-out flags around them stay exactly as',
+    '// defence-in-depth -- code that is not compiled cannot be re-enabled at',
+    '// runtime, and these lines state the intent at the pref layer too. ---',
     'pref("toolkit.telemetry.unified", false);',
-    'pref("toolkit.telemetry.server", "");',
     'pref("datareporting.healthreport.uploadEnabled", false);',
     'pref("datareporting.policy.dataSubmissionEnabled", false);',
     '',
@@ -1992,15 +2009,158 @@ const FIREFOX_BRANDING_DEV_TAIL_LINES = Object.freeze([
 ]);
 
 /**
+ * The anchor line in FIREFOX_BRANDING_BASE_LINES below which the
+ * manifest-driven endpoint prefs are spliced. Named once so the emitter
+ * and the drift message below cannot disagree about where the dynamic
+ * lines live: if the const ever loses this line, emission fails naming
+ * the anchor rather than silently dropping both prefs.
+ */
+const DYNAMIC_PREF_ANCHOR = 'pref("toolkit.telemetry.unified", false);';
+
+/**
+ * The two Mozilla endpoint prefs TEL-03 drives from the manifest (04-04).
+ *
+ * toolkit.telemetry.server (stock https://incoming.telemetry.mozilla.org,
+ * upstream/modules/libpref/init/all.js:534) is blanked when [telemetry]
+ * level is off or unset and repointed to the manifest endpoint VERBATIM
+ * when a level is set -- no origin-trimming, no path-stripping (CFG-03:
+ * rejection only, never mangling). The [telemetry] level selects
+ * repoint-vs-blank; the compiled-out flags around it stay as
+ * defence-in-depth and are never flipped here.
+ *
+ * breakpad.reportURL (stock https://crash-stats.mozilla.org/report/index/,
+ * upstream/browser/app/profile/firefox.js:1551, read by
+ * toolkit/crashreporter/CrashReports.sys.mjs:15 and content/crashes.js:42)
+ * is blanked without [urls].crash_report and repointed to it verbatim when
+ * stated. Blank-by-default is load-bearing, not tidy: omitting the line
+ * would leave the stock Mozilla URL standing (this branding file loads
+ * last and wins, so only a stated value overrides it).
+ *
+ * BOTH VALUES pass the sink guard on the way out: a pref() line is a
+ * double-quoted JS string, so a quote, a backslash or a line break in the
+ * URL breaks out of it. The schema https pattern already excludes
+ * whitespace and controls but admits those three, so on a validated
+ * manifest this guard never fires -- it is what fires if a future schema
+ * edit loosens the pattern.
+ *
+ * THE SINGLE SOURCE for these two values. emitFirefoxBrandingJs below
+ * splices them into the branding pref files, and
+ * scripts/verify-theia-endpoints.mjs asserts the endpoint allowlist's
+ * `expect` entries equal them -- one derivation, two gates, so the gates
+ * cannot disagree. Returns [{name, value}] in file order.
+ */
+export function mozillaEndpointPrefs(config) {
+    const rawLevel = config.telemetry?.level;
+    const level = isUnset(rawLevel) ? 'off' : rawLevel;
+    if (!TELEMETRY_LEVELS.includes(level)) {
+        report([
+            `telemetry.level is ${JSON.stringify(level)}, which is not a telemetry level this project implements. `
+            + `Write it as one of ${TELEMETRY_LEVELS.map(l => JSON.stringify(l)).join(', ')} in ${MANIFEST_NAME}, then run: ${RERUN}`,
+        ]);
+    }
+    const rawEndpoint = config.telemetry?.endpoint;
+    const server = (level === 'off' || isUnset(rawEndpoint)) ? '' : assertEmittable('telemetry.endpoint', rawEndpoint);
+    const rawCrash = config.urls?.crash_report;
+    const reportURL = isUnset(rawCrash) ? '' : assertEmittable('urls.crash_report', rawCrash);
+    return [
+        { name: 'toolkit.telemetry.server', value: server },
+        { name: 'breakpad.reportURL', value: reportURL },
+    ];
+}
+
+/**
+ * Every manifest URL that names a host this build may contact (04-04,
+ * TEL-03): the [telemetry] endpoint when stated, each stated [urls] value,
+ * and installer.support_url -- the in-app link target the welcome and
+ * about surfaces render (powerbrowserBranding.repoUrl), whose host
+ * powerbrowser/endpoint-allowlist.json already tracks. product.homepage is
+ * deliberately NOT here: it is product metadata, not a contacted surface.
+ * There is no urls.support_url key by design: installer.support_url IS the
+ * one support URL (one setting, one path).
+ *
+ * Returns [{path, url}] in this fixed order. A value that parses as no
+ * host is a hard failure naming the dotted path, never a skipped entry --
+ * the schema https pattern already refuses such values in validate(), so
+ * this fires only on a bypassed validate, which is exactly when a loud
+ * failure matters.
+ */
+export function manifestEndpointSources(config) {
+    const sources = [];
+    const take = (path, value) => {
+        if (isUnset(value)) return;
+        let host;
+        try {
+            host = new URL(value).hostname;
+        } catch {
+            host = '';
+        }
+        if (host === '') {
+            report([
+                `${path} is ${JSON.stringify(value)}, which names no host to cover in the endpoint allowlist. `
+                + `Write it as an https URL in ${MANIFEST_NAME}, then run: ${RERUN}`,
+            ]);
+        }
+        sources.push({ path, url: value, host });
+    };
+    take('telemetry.endpoint', config.telemetry?.endpoint);
+    for (const key of ['release_notes', 'update', 'crash_report', 'homepage', 'search']) {
+        take(`urls.${key}`, config.urls?.[key]);
+    }
+    take('installer.support_url', config.installer?.support_url);
+    return sources;
+}
+
+/**
+ * The sorted unique hosts of manifestEndpointSources above -- the set the
+ * endpoint-allowlist coverage check measures. Sorted so the fragment bytes
+ * are stable regardless of manifest key order.
+ */
+export function manifestEndpointHosts(config) {
+    return [...new Set(manifestEndpointSources(config).map(s => s.host))].sort();
+}
+
+/**
+ * The endpoint-hosts fragment (04-04, TEL-03): the sorted host array above
+ * as JSON. No tracked comparand -- there is no hand-written original (the
+ * hosts are derived, never authored); the byte-identity gate skips rows
+ * without one, --check still covers the row through the frozen table, and
+ * scripts/verify-theia-endpoints.mjs pins the tracked side (fragment
+ * equality against this emission, then coverage against the allowlist).
+ *
+ * WHY NO GENERATED_BANNER. Same reason as the fragments before it:
+ * strict JSON carries no comment, and a `_comment` key would pollute the
+ * array a reader compares against the allowlist.
+ */
+export function emitEndpointHosts(config, variant) {
+    void variant;
+    const hosts = manifestEndpointHosts(config);
+    return `[\n${hosts.map(h => `  ${JSON.stringify(h)}`).join(',\n')}${hosts.length > 0 ? '\n' : ''}]\n`;
+}
+
+/**
  * The one emitter both pref rows share. The dev-only tail is a property of
  * the VARIANT, not of the brand: no manifest value selects it, so the branch
- * is on the variant id, the two values this project builds.
+ * is on the variant id, the two values this project builds. The
+ * manifest-driven endpoint prefs are spliced below the DYNAMIC_PREF_ANCHOR
+ * line above (TEL-03): if the anchor ever leaves the const, emission fails
+ * naming it rather than shipping pref files with no telemetry/crash lines.
  */
 function emitFirefoxBrandingJs(config, variant) {
-    void config;
-    const lines = variant.id === 'dev'
+    const base = variant.id === 'dev'
         ? [...FIREFOX_BRANDING_BASE_LINES, ...FIREFOX_BRANDING_DEV_TAIL_LINES]
         : FIREFOX_BRANDING_BASE_LINES;
+    if (!base.includes(DYNAMIC_PREF_ANCHOR)) {
+        report([
+            `the branding pref emitter lost its anchor line ${JSON.stringify(DYNAMIC_PREF_ANCHOR)} -- the manifest-driven `
+            + `telemetry and crash-report prefs would ship nowhere. Next step: report this; ${MANIFEST_NAME} is not the cause and editing it will not help.`,
+        ]);
+    }
+    const dynamic = mozillaEndpointPrefs(config).map(({ name, value }) => `pref("${name}", ${JSON.stringify(value)});`);
+    const lines = [];
+    for (const line of base) {
+        lines.push(line);
+        if (line === DYNAMIC_PREF_ANCHOR) lines.push(...dynamic);
+    }
     return lines.join('\n') + '\n';
 }
 
@@ -2683,6 +2843,17 @@ export const TARGETS = Object.freeze([
         variant: 'dev',
         emit: emitTheiaBranding,
     }),
+    // NEW (04-04): TEL-03's endpoint-hosts fragment. No tracked comparand
+    // -- the hosts are derived, never hand-written; the byte-identity gate
+    // skips rows without a tracked path while --check still covers the row
+    // through the frozen table. The tracked side is pinned by
+    // scripts/verify-theia-endpoints.mjs (fragment equality against this
+    // emission, then coverage against powerbrowser/endpoint-allowlist.json).
+    Object.freeze({
+        generated: 'endpoint-hosts.json',
+        variant: 'dev',
+        emit: emitEndpointHosts,
+    }),
     Object.freeze({
         generated: 'branding/dev/configure.sh',
         tracked: 'powerbrowser/branding/dev/configure.sh',
@@ -3062,7 +3233,7 @@ function firstDifferingLine(a, b) {
  *
  * THREE OUTCOMES, THREE MESSAGES, deliberately not one. An absent generated/ is
  * the state every fresh copy of the project and every automated run begins in;
- * reporting it as fifty stale files reads as fifty problems and sends the reader
+ * reporting it as fifty-one stale files reads as fifty-one problems and sends the reader
  * hunting a mismatch that does not exist.
  *
  * The set comparison runs in BOTH directions. A per-target loop alone sees a
@@ -3364,7 +3535,7 @@ function probeStaleOutput(config) {
  * Ask the freshness comparison about a directory that is not there -- the state
  * every fresh copy of the project and every CI runner starts in, because
  * generated/ is git-ignored. The distinct message this must produce is the
- * whole point: fifty phantom stale paths would read as fifty defects on a tree
+ * whole point: fifty-one phantom stale paths would read as fifty-one defects on a tree
  * with none, and a gate red for a non-defect is a gate its readers skip.
  *
  * The EXIT CODE is asserted here too, and separately from the message, because
@@ -3864,6 +4035,68 @@ function selfTest() {
         }
     })();
 
+    // TEL-03's green control, computed once: a fixture with a telemetry
+    // endpoint, a crash-report URL and a support URL resolves to exactly
+    // those three hosts sorted, with the endpoint prefs repointed to the
+    // stated URLs -- and a fixture with none of them resolves to the lone
+    // inherited support host with both prefs blanked. Without this, a red
+    // result from the coverage gate could be the derivation broken on a
+    // clean manifest rather than on a drift. The expected hosts and prefs
+    // are literals: deriving them through the derivation would make the
+    // control agree with it no matter how wrong both were.
+    const endpointHostsControl = (() => {
+        const fixtureDir = mkdtempSync(join(tmpdir(), 'generate-selftest-endpoints-'));
+        try {
+            const checkOne = (toml, wantHosts, wantServer, wantReport) => {
+                const fixturePath = join(fixtureDir, `endpoints-${wantHosts.length}.toml`);
+                writeFileSync(fixturePath, toml, 'utf8');
+                const resolved = resolveConfig(MANIFEST_PATH, fixturePath);
+                if (resolved.failures.length > 0) {
+                    return [`the endpoints fixture failed validation: ${resolved.failures.join(' | ')}`];
+                }
+                const hosts = manifestEndpointHosts(resolved.config);
+                if (JSON.stringify(hosts) !== JSON.stringify(wantHosts)) {
+                    return [`the derived endpoint hosts are not ${JSON.stringify(wantHosts)}: ${JSON.stringify(hosts)}`];
+                }
+                const prefs = mozillaEndpointPrefs(resolved.config);
+                const server = prefs.find(p => p.name === 'toolkit.telemetry.server')?.value;
+                const reportURL = prefs.find(p => p.name === 'breakpad.reportURL')?.value;
+                if (server !== wantServer || reportURL !== wantReport) {
+                    return [`the derived endpoint prefs are not ${JSON.stringify(wantServer)}/${JSON.stringify(wantReport)}: ${JSON.stringify(server)}/${JSON.stringify(reportURL)}`];
+                }
+                let fragment;
+                try {
+                    fragment = JSON.parse(emitEndpointHosts(
+                        resolved.config,
+                        resolved.config.variants.find(v => v.id === 'dev'),
+                    ));
+                } catch {
+                    return ['the emitted endpoint-hosts fragment is not valid JSON'];
+                }
+                if (JSON.stringify(fragment) !== JSON.stringify(wantHosts)) {
+                    return [`the emitted endpoint-hosts fragment is not ${JSON.stringify(wantHosts)}: ${JSON.stringify(fragment)}`];
+                }
+                return [];
+            };
+            return [
+                ...checkOne(
+                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "all"\nendpoint = "https://collector.example.org/v1/events"\n[urls]\ncrash_report = "https://crash.example.org/report"\n[installer]\nsupport_url = "https://example.org/support"\n`,
+                    ['collector.example.org', 'crash.example.org', 'example.org'],
+                    'https://collector.example.org/v1/events',
+                    'https://crash.example.org/report',
+                ),
+                ...checkOne(
+                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}`,
+                    ['powerbrowser.org'],
+                    '',
+                    '',
+                ),
+            ];
+        } finally {
+            rmSync(fixtureDir, { recursive: true, force: true });
+        }
+    })();
+
     const cases = [
         {
             // D-10. A whitespace-only value is not a value.
@@ -3967,7 +4200,7 @@ function selfTest() {
             expect: TARGETS[0].generated,
         },
         {
-            // The absent-directory outcome is a DISTINCT message, not fifty
+            // The absent-directory outcome is a DISTINCT message, not fifty-one
             // stale paths, AND it is not a failure. Asserted from three sides:
             // the message is there, no target path is, and the exit code was
             // zero -- so a future collapse of the three outcomes into one goes
@@ -4233,6 +4466,19 @@ function selfTest() {
             probe: () => brandingControl,
             holds: 'the stated theme, texts, repo URL and verbatim mark, and null texts when unset',
             resolved: () => brandingControl.length === 0,
+        },
+        {
+            // TEL-03's control: the stated endpoint and crash-report URLs
+            // derive to exactly their hosts plus the support host, with
+            // both endpoint prefs repointed -- and a fixture stating none
+            // of them derives the lone inherited support host with both
+            // prefs blanked. Without this, a red result from the coverage
+            // gate could be the derivation broken on a clean manifest
+            // rather than on a drift.
+            name: 'manifest endpoint hosts derive the stated hosts and repoint the prefs',
+            probe: () => endpointHostsControl,
+            holds: 'the stated hosts sorted, the prefs repointed, and blanks when unstated',
+            resolved: () => endpointHostsControl.length === 0,
         },
     ];
 

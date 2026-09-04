@@ -44,9 +44,17 @@ pref("extensions.systemAddon.update.url", "");
 // --- Telemetry / health-report / data-submission: defence in depth. The
 // health-report subsystem itself is compiled out (MOZ_SERVICES_HEALTHREPORT
 // = False, D-84), but these prefs are set anyway so a reader of this file
-// sees the intent stated even if a future rebuild ever restored the flag. ---
+// sees the intent stated even if a future rebuild ever restored the flag.
+// The two endpoint prefs that follow the anchor below are manifest-driven
+// (TEL-03): toolkit.telemetry.server is blanked when [telemetry] level is
+// off and repointed to the manifest endpoint when a level is set, and
+// breakpad.reportURL is blanked without [urls].crash_report and repointed
+// to it when stated. The compiled-out flags around them stay exactly as
+// defence-in-depth -- code that is not compiled cannot be re-enabled at
+// runtime, and these lines state the intent at the pref layer too. ---
 pref("toolkit.telemetry.unified", false);
 pref("toolkit.telemetry.server", "");
+pref("breakpad.reportURL", "");
 pref("datareporting.healthreport.uploadEnabled", false);
 pref("datareporting.policy.dataSubmissionEnabled", false);
 

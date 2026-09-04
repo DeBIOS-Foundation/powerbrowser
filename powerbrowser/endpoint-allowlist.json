@@ -146,7 +146,12 @@
     {
       "name": "toolkit.telemetry.server",
       "expect": "",
-      "reason": "D-84 defence in depth: blanked so the compiled-out telemetry path has nowhere to send a report even if a future rebuild restored the flag. Stock value is https://incoming.telemetry.mozilla.org (modules/libpref/init/all.js:534), the deny-listed host above."
+      "reason": "D-84 defence in depth: blanked so the compiled-out telemetry path has nowhere to send a report even if a future rebuild restored the flag. Stock value is https://incoming.telemetry.mozilla.org (modules/libpref/init/all.js:534), the deny-listed host above. TEL-03 (04-04): manifest-driven -- repointed to the [telemetry] endpoint when a level is set; this expect tracks the shipped level off, and scripts/verify-theia-endpoints.mjs asserts it stays in sync with the manifest derivation."
+    },
+    {
+      "name": "breakpad.reportURL",
+      "expect": "",
+      "reason": "TEL-03 (04-04) defence in depth: blanked so the crash-report path has nowhere to send even though the reporter itself is compiled out (--disable-crashreporter). Stock value is https://crash-stats.mozilla.org/report/index/ (browser/app/profile/firefox.js:1551), read by toolkit/crashreporter/CrashReports.sys.mjs:15. Manifest-driven -- repointed to [urls].crash_report when stated; this expect tracks the shipped unstated key, and scripts/verify-theia-endpoints.mjs asserts it stays in sync with the manifest derivation."
     },
     {
       "name": "datareporting.healthreport.uploadEnabled",
