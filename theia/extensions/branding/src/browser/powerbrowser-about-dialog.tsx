@@ -7,14 +7,27 @@ import { POWERBROWSER_REPO_URL } from './powerbrowser-welcome-widget';
 import { readBrandingConfig } from './powerbrowser-branding-config';
 
 // GEN-05 (04-01, carried over from the welcome widget): the boot fallback
-// for the dialog title, and the ONLY display literal this file carries.
-// The title itself resolves at runtime through the frontend application
-// config (see displayName below), which the generator owns from
-// configuration.toml -- so a rebrand is a manifest edit plus the
+// for the dialog title. The title itself resolves at runtime through the
+// frontend application config (see displayName below), which the generator
+// owns from configuration.toml -- so a rebrand is a manifest edit plus the
 // app-bundle step, never a .ts edit. Must stay exactly one quoted
 // occurrence, which scripts/verify-branding-preflight.mjs asserts from the
 // inventory value.
 const FALLBACK_DISPLAY_NAME = 'Power Browser';
+
+// GEN-05 legal-notice channel (06-04): the boot fallback for the three
+// About-dialog notices, and the ONLY notice literals this file carries.
+// The rendered notices resolve at runtime through readBrandingConfig (see
+// legalNotices below), which the generator owns from configuration.toml
+// plus brand/mark.svg -- so a rebrand is a manifest edit plus the
+// app-bundle step, never a .ts edit. Each entry must stay exactly one
+// quoted occurrence, which scripts/verify-branding-preflight.mjs asserts
+// from the manifest through the emitter.
+const FALLBACK_LEGAL_NOTICES = [
+    'Power Browser is a trademark of DeBIOS Foundation.',
+    'Power Browser Dev is not officially associated with Mozilla or its products.',
+    'This product (powerbrowser.org) includes Eclipse Theia, a trademark of Eclipse Foundation AISBL.',
+];
 
 // D-35: `render()` is overridden entirely -- not just the title -- because
 // the base `AboutDialog`'s two identity-leaking renderers are unavoidable
@@ -56,6 +69,15 @@ export class PowerBrowserAboutDialog extends AboutDialog {
         return readBrandingConfig().aboutText;
     }
 
+    // GEN-05 legal-notice channel (06-04): the rendered notices are the
+    // RUNTIME powerbrowserBranding.legalNotices array -- the same
+    // synchronous read as above, with the compiled notices as the boot
+    // fallback where the provider is unset. Rendered as text nodes below,
+    // so the strings are escaped, never markup (T-06-04).
+    protected get legalNotices(): string[] {
+        return readBrandingConfig().legalNotices ?? FALLBACK_LEGAL_NOTICES;
+    }
+
     protected get repoUrl(): string {
         return readBrandingConfig().repoUrl || POWERBROWSER_REPO_URL;
     }
@@ -78,6 +100,10 @@ export class PowerBrowserAboutDialog extends AboutDialog {
             <h3>{this.displayName}</h3>
             {this.aboutText && <p>{this.aboutText}</p>}
             {this.applicationInfo && <p>Version {this.applicationInfo.version}</p>}
+            {/* The runtime legal notices, one paragraph each. Mapped from
+                the channel value, never a literal: no notice string may
+                appear here as render text, only the mapping over it. */}
+            {this.legalNotices.map((notice) => <p key={notice}>{notice}</p>)}
             <p>
                 <a
                     role='button'

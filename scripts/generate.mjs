@@ -27,7 +27,7 @@
 // applicationName and defaultTheme), plus the GEN-05 Theia branding
 // fragment (generated/theia-branding.json: the powerbrowserBranding key of
 // that same block -- welcome/about texts, the in-app repo URL, the mark
-// SVG), plus the TEL-01/TEL-02 telemetry fragment
+// SVG, and the three About-dialog legal notices (06-04)), plus the TEL-01/TEL-02 telemetry fragment
 // (generated/theia-telemetry.json: the powerbrowserTelemetry key of that
 // same block -- level and endpoint), plus the TEL-03 endpoint-hosts
 // fragment (generated/endpoint-hosts.json: the sorted hosts of the
@@ -1377,6 +1377,73 @@ function readMarkSvgElement() {
 }
 
 /**
+ * The fixed predicate of the Mozilla non-association notice (06-04, VER-02).
+ *
+ * Named once: emitLegalNotices composes the notice from it, and
+ * scripts/verify-trademark-surface.mjs anchors its mandated-sentence
+ * exclusion on this same const (imported, never restated), so the two
+ * cannot drift into disagreeing about which sentence the policy mandates.
+ * The trademark policy requires the non-association statement to name
+ * Mozilla in words, which is why the display-surface token scan must let
+ * exactly this sentence shape through.
+ */
+export const MOZILLA_NON_ASSOCIATION_TAIL = 'is not officially associated with Mozilla or its products.';
+
+/**
+ * The three About-dialog legal notices (06-04, VER-02): the downstream's
+ * own trademark notice verbatim, the Mozilla non-association sentence, and
+ * the Eclipse attribution sentence.
+ *
+ * DERIVATION, PER NOTICE. The own notice is legal.trademark_notice
+ * verbatim (required, so always stated). The Mozilla sentence
+ * interpolates the manifest display identity in the same
+ * display-name-plus-suffix composition the locale emitters use, with the
+ * fixed tail above. The Eclipse sentence names Theia as a trademark of
+ * Eclipse Foundation AISBL and identifies this product's home by the
+ * manifest repo URL's domain -- REUSED via URL parsing of the already
+ * derived repoUrl, never restated as a literal, so a domain move carries
+ * the sentence with it. Each component passes the sink guard on the way
+ * in; the fixed tails are authored literals carrying no interpolation.
+ *
+ * NULL-TOLERANT LIKE THE REST OF THE CHANNEL. A null repoUrl (both
+ * support URL and homepage emptied downstream) emits the bare
+ * attribution core without the home clause rather than failing the
+ * generate: the channel already tolerates null texts the same way, and a
+ * missing home link is the widgets' fallback-constant case, not a
+ * manifest defect this emitter owns. An UNPARSEABLE repoUrl is different:
+ * it passed the schema yet names no host, so it fails naming the key,
+ * the same shape manifestEndpointSources keeps.
+ *
+ * ONE NOTICE PER LINE in the emitted array, deliberately: the
+ * trademark-surface token scan excludes the mandated Mozilla sentence by
+ * anchored line match, and a single-line array would let any other notice
+ * ride that line's exclusion with it.
+ */
+function emitLegalNotices(config, variant, repoUrl, repoPath) {
+    const own = assertEmittable('legal.trademark_notice', config.legal.trademark_notice);
+    const base = assertEmittable('identity.display_name', config.identity.display_name);
+    const suffix = assertEmittable(variantPath(variant, 'name_suffix'), variant.name_suffix);
+    const mozilla = `${base}${suffix} ${MOZILLA_NON_ASSOCIATION_TAIL}`;
+    let eclipse = 'Eclipse Theia is a trademark of Eclipse Foundation AISBL.';
+    if (!isUnset(repoUrl)) {
+        let host = '';
+        try {
+            host = new URL(repoUrl).hostname;
+        } catch {
+            host = '';
+        }
+        if (host === '') {
+            report([
+                `${repoPath} is ${JSON.stringify(repoUrl)}, which names no host for the Eclipse attribution sentence to identify this product's home. `
+                + `Write it as a web address starting with https:// in ${MANIFEST_NAME}, then run: ${RERUN}`,
+            ]);
+        }
+        eclipse = `This product (${assertEmittable(repoPath, host)}) includes Eclipse Theia, a trademark of Eclipse Foundation AISBL.`;
+    }
+    return [own, mozilla, eclipse];
+}
+
+/**
  * The Theia branding fragment (04-04, GEN-05 remainder): the
  * `powerbrowserBranding` key of theia/applications/browser/package.json's
  * `theia.frontend.config` block -- welcome/about display texts, the
@@ -1415,16 +1482,22 @@ function readMarkSvgElement() {
  *
  * THE MARK IS TEXT, NOT BINARY. The 04-01 channel decision left the logo
  * BINARY channel open because a PNG cannot ride a JSON string; the mark
- * SVG is text, so it rides as a string key, read from brand/mark.svg at
- * emit time. No assertEmittable on it: the SVG legitimately carries double
- * quotes, and JSON.stringify is the correct escaping for a JSON sink --
- * the shell-sink guard would reject every real logo. Its presence is
- * asserted above; its shape is the icon pipeline's contract.
- *
- * Joined with a literal newline, never the platform line-ending constant.
- */
+  * SVG is text, so it rides as a string key, read from brand/mark.svg at
+  * emit time. No assertEmittable on it: the SVG legitimately carries double
+  * quotes, and JSON.stringify is the correct escaping for a JSON sink --
+  * the shell-sink guard would reject every real logo. Its presence is
+  * asserted above; its shape is the icon pipeline's contract.
+  *
+  * LEGAL NOTICES (06-04) ride as a string array, one notice per line (see
+  * emitLegalNotices for the per-notice derivation): the downstream's own
+  * trademark notice, the Mozilla non-association sentence, and the Eclipse
+  * attribution sentence. The About dialog renders them as text nodes
+  * through the channel reader with compiled fallbacks where the provider
+  * is unset.
+  *
+  * Joined with a literal newline, never the platform line-ending constant.
+  */
 export function emitTheiaBranding(config, variant) {
-    void variant;
     const rawWelcome = config.theia?.welcome_text;
     const welcomeText = isUnset(rawWelcome) ? null : assertEmittable('theia.welcome_text', rawWelcome);
     const rawAbout = config.theia?.about_text;
@@ -1433,12 +1506,19 @@ export function emitTheiaBranding(config, variant) {
     const repoPath = config.installer?.support_url !== undefined ? 'installer.support_url' : 'product.homepage';
     const repoUrl = isUnset(rawRepo) ? null : assertEmittable(repoPath, rawRepo);
     const markSvg = readMarkSvgElement();
+    // The variant carries the name_suffix the Mozilla sentence composes
+    // with the display name; the TARGETS row below runs this on the dev
+    // variant, so the sentence names the dev composition.
+    const legalNotices = emitLegalNotices(config, variant, repoUrl, repoPath);
     const lines = [
         '{',
         `  "welcomeText": ${JSON.stringify(welcomeText)},`,
         `  "aboutText": ${JSON.stringify(aboutText)},`,
         `  "repoUrl": ${JSON.stringify(repoUrl)},`,
-        `  "markSvg": ${JSON.stringify(markSvg)}`,
+        `  "markSvg": ${JSON.stringify(markSvg)},`,
+        '  "legalNotices": [',
+        ...legalNotices.map((notice, i) => `    ${JSON.stringify(notice)}${i < legalNotices.length - 1 ? ',' : ''}`),
+        '  ]',
         '}',
     ];
     return lines.join('\n') + '\n';
@@ -4109,6 +4189,19 @@ function selfTest() {
                 || branding?.repoUrl !== 'https://example.org/support') {
                 return [`the emitted branding fragment is not the stated texts and repo URL: ${JSON.stringify({ ...branding, markSvg: undefined })}`];
             }
+            // The legal-notice triple as literals (06-04): the downstream's
+            // own notice verbatim, the Mozilla sentence over the dev
+            // composition, the Eclipse sentence over the fixture support
+            // URL's domain. Deriving these through the emitter would make
+            // the control agree with it no matter how wrong both were.
+            const wantNotices = [
+                'Acme Browser is a trademark of Acme Works.',
+                'Acme Browser Dev is not officially associated with Mozilla or its products.',
+                'This product (example.org) includes Eclipse Theia, a trademark of Eclipse Foundation AISBL.',
+            ];
+            if (JSON.stringify(branding?.legalNotices) !== JSON.stringify(wantNotices)) {
+                return [`the emitted branding fragment does not carry the three stated legal notices: ${JSON.stringify(branding?.legalNotices)}`];
+            }
             let markLine;
             try {
                 markLine = readFileSync(MARK_SVG_ABS, 'utf8').split('\n').find((l) => l.startsWith('<svg'))?.trim();
@@ -4135,6 +4228,11 @@ function selfTest() {
             }
             if (bareBranding?.welcomeText !== null || bareBranding?.aboutText !== null) {
                 return [`the emitted textless branding fragment does not default unset texts to null: ${JSON.stringify({ ...bareBranding, markSvg: undefined })}`];
+            }
+            // Notices are independent of the texts: a manifest stating no
+            // welcome/about copy still emits all three notices.
+            if (!Array.isArray(bareBranding?.legalNotices) || bareBranding.legalNotices.length !== 3) {
+                return [`the emitted textless branding fragment does not carry three legal notices: ${JSON.stringify(bareBranding?.legalNotices)}`];
             }
             return [];
         } finally {
