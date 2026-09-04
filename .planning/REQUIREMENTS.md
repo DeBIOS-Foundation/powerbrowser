@@ -187,7 +187,7 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
 
 ### Upstream Uptake (UPD)
 
-- [ ] **UPD-01**: A Firefox ESR point release is adopted by bumping the pin in
+- [x] **UPD-01**: A Firefox ESR point release is adopted by bumping the pin in
       `configuration.toml` and re-running fetch + patch apply, with the
       existing rebase/conflict tooling failing loudly on drift
 
@@ -281,7 +281,7 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 | TEL-03 | Phase 4 | Pending |
 | MIG-05 | Phase 5 | Complete |
 | CFG-06 | Phase 5 | Pending |
-| UPD-01 | Phase 5 | Pending |
+| UPD-01 | Phase 5 | Complete |
 | UPD-02 | Phase 5 | Pending |
 | VER-01 | Phase 6 | Pending |
 | VER-02 | Phase 6 | Pending |
