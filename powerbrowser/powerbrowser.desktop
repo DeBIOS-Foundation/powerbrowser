@@ -2,10 +2,11 @@
 # To change it: edit configuration.toml, run: node scripts/generate.mjs, then copy the
 # matching file out of generated/ over this one. Phase 2 does not write it in place.
 # A disagreement reddens: scripts/verify-platform.sh --only generated-byte-identity
+# Before installing, replace @POWERBROWSER_REPO_ROOT@ with this checkout's absolute path (docs/BUILD.md names the command).
 [Desktop Entry]
 Name=Power Browser Dev
-Exec=/home/chris/coding/Power-Browser/objdir/dist/bin/powerbrowser %u
-Icon=/home/chris/coding/Power-Browser/powerbrowser/branding/dev/default128.png
+Exec=@POWERBROWSER_REPO_ROOT@/objdir/dist/bin/powerbrowser %u
+Icon=@POWERBROWSER_REPO_ROOT@/powerbrowser/branding/dev/default128.png
 Terminal=false
 Type=Application
 Categories=Development;IDE;

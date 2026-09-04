@@ -506,10 +506,18 @@ path:
 ~/.local/share/applications/powerbrowser-release.desktop
 ```
 
-Both `Exec=` and `Icon=` in each file are **absolute paths** into this
-machine's `objdir*`/branding tree — they must be repointed at the new paths
-before either file works on another machine or after this repo moves. After
-any later change to either file's `Exec=` or `StartupWMClass=`, re-register
+Both `Exec=` and `Icon=` in each file carry the placeholder
+`@POWERBROWSER_REPO_ROOT@` instead of an absolute path, so the tracked files
+are identical at every checkout and the byte-identity gate stays green on a
+fresh clone. Substitute the placeholder with this checkout's absolute path
+before installing:
+
+```
+sed "s|@POWERBROWSER_REPO_ROOT@|$PWD|g" powerbrowser/powerbrowser.desktop > ~/.local/share/applications/powerbrowser.desktop
+sed "s|@POWERBROWSER_REPO_ROOT@|$PWD|g" powerbrowser/powerbrowser-release.desktop > ~/.local/share/applications/powerbrowser-release.desktop
+```
+
+After any later change to either file's `Exec=` or `StartupWMClass=`, re-register
 with:
 
 ```
