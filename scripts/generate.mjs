@@ -5,7 +5,7 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT COVERS. Fifty-one targets: thirty-three byte-identical to the
+// WHAT IT COVERS. Fifty-two targets: thirty-three byte-identical to the
 // file Phase 1 wrote by hand -- the five Phase 2 build surfaces (the two
 // branding configure.sh files, .mozconfig, and the two .desktop files), the
 // eighteen GEN-01 branding-directory surfaces (per variant: brand.ftl,
@@ -36,7 +36,9 @@
 // (generated/theia-plugins.json: the application package.json's theiaPlugins
 // block, one exact download URL per [[extensions]] entry -- a versioned
 // Open VSX file URL for source = "openvsx", the stated URL verbatim for
-// source = "url").
+// source = "url"), plus the UPD-01 pin fragment
+// (generated/upstream-pins.env: the [upstreams] tag as one shell
+// assignment, sourced by scripts/fetch-upstream.sh as its default).
 // That byte-identity IS
 // the acceptance test for the thirty-three,
 // which is why no emitter here is allowed to reformat, reorder or "tidy" what
@@ -2184,6 +2186,46 @@ export function emitEndpointHosts(config, variant) {
 }
 
 /**
+ * The shell-consumable pin fragment (05-02, UPD-01): the [upstreams] tag
+ * as one KEY=value assignment, sourced by scripts/fetch-upstream.sh as
+ * its TAG default.
+ *
+ * WHY NO GENERATED_BANNER. Same reason as the JSON fragments: there is no
+ * tracked file to copy over -- the fragment is read from generated/
+ * directly, never copied -- so the banner's copy step would name a
+ * procedure that does not exist. The carrier lines below name the real
+ * pointers instead: the manifest key, the rerun command, and the sourcing
+ * script.
+ *
+ * THE SINK GUARD IS THE SHAPE, enforced twice. The schema already refuses
+ * anything outside the plain-tag-name class in validate(), and the emitter
+ * re-checks the same class here: an unquoted shell assignment has no
+ * quoting to hide behind, so a value outside that class must be refused
+ * naming the key, never emitted. A tag carrying a space would otherwise
+ * source as an assignment plus a stray command.
+ *
+ * Joined with a literal newline, never the platform line-ending constant.
+ */
+const UPSTREAM_PINS_BANNER = Object.freeze([
+    '# Generated from configuration.toml by scripts/generate.mjs -- do not edit here.',
+    '# To change it: edit configuration.toml ([upstreams] firefox_esr_tag), run: node scripts/generate.mjs.',
+    '# Sourced by scripts/fetch-upstream.sh as its TAG default.',
+]);
+const TAG_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
+export function emitUpstreamPins(config, variant) {
+    void variant;
+    const tag = config.upstreams?.firefox_esr_tag;
+    if (typeof tag !== 'string' || !TAG_NAME_PATTERN.test(tag)) {
+        report([
+            `upstreams.firefox_esr_tag is ${JSON.stringify(tag)}, which is not a plain tag name. `
+            + `Write it as letters, digits, dots, underscores and hyphens only in ${MANIFEST_NAME}, then run: ${RERUN}`,
+        ]);
+    }
+    assertEmittable('upstreams.firefox_esr_tag', tag);
+    return [...UPSTREAM_PINS_BANNER, `FIREFOX_ESR_TAG=${tag}`, ''].join('\n');
+}
+
+/**
  * The one emitter both pref rows share. The dev-only tail is a property of
  * the VARIANT, not of the brand: no manifest value selects it, so the branch
  * is on the variant id, the two values this project builds. The
@@ -2904,6 +2946,17 @@ export const TARGETS = Object.freeze([
         variant: 'dev',
         emit: emitEndpointHosts,
     }),
+    // NEW (05-02): UPD-01's pin fragment. No tracked comparand -- the tag
+    // is derived from the manifest, never hand-written; the byte-identity
+    // gate skips rows without a tracked path while --check still covers
+    // the row through the frozen table. The tracked side is pinned by
+    // scripts/verify-upstream-pins.mjs (manifest-to-fragment equality plus
+    // the workflow-mirror and no-second-literal agreement).
+    Object.freeze({
+        generated: 'upstream-pins.env',
+        variant: 'dev',
+        emit: emitUpstreamPins,
+    }),
     Object.freeze({
         generated: 'branding/dev/configure.sh',
         tracked: 'powerbrowser/branding/dev/configure.sh',
@@ -3283,7 +3336,7 @@ function firstDifferingLine(a, b) {
  *
  * THREE OUTCOMES, THREE MESSAGES, deliberately not one. An absent generated/ is
  * the state every fresh copy of the project and every automated run begins in;
- * reporting it as fifty-one stale files reads as fifty-one problems and sends the reader
+ * reporting it as fifty-two stale files reads as fifty-two problems and sends the reader
  * hunting a mismatch that does not exist.
  *
  * The set comparison runs in BOTH directions. A per-target loop alone sees a
@@ -3462,6 +3515,9 @@ const FIXTURE_BASE = [
     'copyright_holder = "Acme Works"',
     'trademark_notice = "Acme Browser is a trademark of Acme Works."',
     '',
+    '[upstreams]',
+    'firefox_esr_tag = "ACME_1_2_3esr_RELEASE"',
+    '',
 ].join('\n');
 
 /**
@@ -3585,7 +3641,7 @@ function probeStaleOutput(config) {
  * Ask the freshness comparison about a directory that is not there -- the state
  * every fresh copy of the project and every CI runner starts in, because
  * generated/ is git-ignored. The distinct message this must produce is the
- * whole point: fifty-one phantom stale paths would read as fifty-one defects on a tree
+ * whole point: fifty-two phantom stale paths would read as fifty-two defects on a tree
  * with none, and a gate red for a non-defect is a gate its readers skip.
  *
  * The EXIT CODE is asserted here too, and separately from the message, because
@@ -4250,7 +4306,7 @@ function selfTest() {
             expect: TARGETS[0].generated,
         },
         {
-            // The absent-directory outcome is a DISTINCT message, not fifty-one
+            // The absent-directory outcome is a DISTINCT message, not fifty-two
             // stale paths, AND it is not a failure. Asserted from three sides:
             // the message is there, no target path is, and the exit code was
             // zero -- so a future collapse of the three outcomes into one goes

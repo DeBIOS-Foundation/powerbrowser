@@ -92,3 +92,11 @@ level = "off"
 # package.json's theiaPlugins block and the build downloads and bundles
 # them. This project declares none, so the block stays absent. A downstream
 # drops an inherited entry by restating the list without it.
+
+# Upstream pins (UPD-01). firefox_esr_tag is the one ESR tag this project
+# builds against: scripts/fetch-upstream.sh clones it,
+# scripts/rebase-upstream.sh moves to it, and the rebase workflow mirrors
+# it. Edit this one value, run `node scripts/generate.mjs`, and every
+# consumer follows -- no second copy lives anywhere else in the tree.
+[upstreams]
+firefox_esr_tag = "FIREFOX_153_1_0esr_RELEASE"
