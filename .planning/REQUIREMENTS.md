@@ -177,7 +177,7 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
       boundary-matched tokens fails the build on any configured brand value
       hardcoded outside the manifest; a stale allowlist entry also fails
 
-- [ ] **VER-02**: Runtime verification checks the six branding surfaces by
+- [x] **VER-02**: Runtime verification checks the six branding surfaces by
       exact equality, reading expectations from `configuration.toml` — never
       from constants — so it passes for every correctly-configured downstream
 
@@ -284,7 +284,7 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 | UPD-01 | Phase 5 | Complete |
 | UPD-02 | Phase 5 | Complete |
 | VER-01 | Phase 6 | Pending |
-| VER-02 | Phase 6 | Pending |
+| VER-02 | Phase 6 | Complete |
 | DOC-01 | Phase 6 | Pending |
 | CFG-05 | Phase 7 | Pending |
 | VER-03 | Phase 7 | Pending |

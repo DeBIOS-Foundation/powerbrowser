@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 05
 current_phase_name: Hook-Only Patches and Upstream Uptake
 status: executing
-stopped_at: Completed 05-hook-only-patches-and-upstream-uptake-04-PLAN.md
-last_updated: "2026-09-04T08:37:09.058Z"
+stopped_at: Completed 06-two-layer-verification-and-rebranding-docs-02-PLAN.md
+last_updated: "2026-09-04T09:02:15.226Z"
 last_activity: 2026-09-04
 last_activity_desc: Phase 03 plan 04 execution completed
-state_head: 783199069ffe99ed74b4d4f82b483b57cca22aab
+state_head: 0e238f13c378f72437a28fd1b4445d58536abe78
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 42
-  completed_plans: 42
+  total_plans: 48
+  completed_plans: 44
 milestone_name: milestone
 ---
 
@@ -94,6 +94,7 @@ Progress: [█████████░] 93%
 | Phase 05-hook-only-patches-and-upstream-uptake P02 | 6min | 3 tasks | 9 files |
 | Phase 05-hook-only-patches-and-upstream-uptake P03 | 9min | 2 tasks | 6 files |
 | Phase 05-hook-only-patches-and-upstream-uptake P04 | 10min | 2 tasks | 1 files |
+| Phase 06-two-layer-verification-and-rebranding-docs P02 | 5min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -224,6 +225,7 @@ Recent decisions affecting current work:
 - [Phase 04]: 05-04: real-conflict drift gets a permanent self-test case; silent-adoption and dirt classes cited from existing output, not duplicated
 - [Phase 04]: 05-04: 3-way-clean context shift is correct-apply behavior; backstops are the post-replay surface, brand, and fetch re-check chain in rebase-upstream.sh
 - [Phase 04]: 05-04: workflow read-through clean so task 2 commits nothing; live rebase plus tier-3 build staged as UNEXECUTED commands pending a next ESR tag
+- [Phase 05]: 06-02: identity checker VARIANTS keeps structural paths only; all brand values derive from configuration.toml via resolveConfig
 
 ### Pending Todos
 
@@ -262,6 +264,6 @@ real problem needs human help.
 
 ## Session Continuity
 
-Last session: 2026-09-04T08:37:08.975Z
-Stopped at: Completed 05-hook-only-patches-and-upstream-uptake-04-PLAN.md
+Last session: 2026-09-04T09:02:15.141Z
+Stopped at: Completed 06-two-layer-verification-and-rebranding-docs-02-PLAN.md
 Resume file: None
