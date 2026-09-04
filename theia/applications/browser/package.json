@@ -12,6 +12,10 @@
       "config": {
         "applicationName": "Power Browser",
         "powerbrowserPrivilegedJs": false,
+        "powerbrowserTelemetry": {
+          "level": "off",
+          "endpoint": null
+        },
         "preferences": {
           "security.workspace.trust.enabled": false
         }
@@ -22,6 +26,7 @@
     "@powerbrowser/branding": "0.1.0",
     "@powerbrowser/customize": "0.1.0",
     "@powerbrowser/tab-uris": "0.1.0",
+    "@powerbrowser/telemetry": "0.1.0",
     "@powerbrowser/token-gate": "0.1.0",
     "@theia/ai-anthropic": "1.74.1",
     "@theia/ai-chat": "1.74.1",
