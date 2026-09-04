@@ -44,7 +44,7 @@ fi
 
 # Echoed to stdout up front, on every path (success or failure): the
 # requested tag drives every command this script prints or runs from here
-# on, and it must never be silently substituted for the pinned default --
+# on, and it must never be silently substituted for the manifest pin --
 # see it named here even if step 1 below rejects it.
 echo "rebase-upstream: target tag: $NEW_TAG"
 
@@ -98,7 +98,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   # This script's header says the real path is exercised locally ONLY via
   # --dry-run, so this printed text IS the artifact under local test.
   echo "  4b. node '$REPO_ROOT/scripts/scan-brand-residue.mjs' --extra-root '$UPSTREAM_DIR'  # D-18 permanent gate, no exception; --extra-root reaches the replayed tree, which is git-ignored and invisible to git ls-files"
-  echo "  5. TAG=$NEW_TAG '$REPO_ROOT/scripts/fetch-upstream.sh'  # re-check: fully-applied state at $NEW_TAG, not the pinned default"
+  echo "  5. TAG=$NEW_TAG '$REPO_ROOT/scripts/fetch-upstream.sh'  # re-check: fully-applied state at $NEW_TAG, not the manifest pin"
   echo "  5b. readlink -f '$UPSTREAM_DIR/powerbrowser'  # must resolve to '$REPO_ROOT/powerbrowser' -- git-excluded, invisible to step 5's classifier otherwise"
   echo "  6. Operator follow-up (not run here): '$REPO_ROOT/scripts/toolchain-baseline.sh' under 'nix develop .#firefox', diffed against '$REPO_ROOT/toolchain-baseline.txt' (PITFALLS #2)"
   exit 0

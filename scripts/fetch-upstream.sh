@@ -4,12 +4,32 @@
 # HEAD is the pinned tag instead of re-cloning.
 set -euo pipefail
 
-TAG="${TAG:-FIREFOX_153_1_0esr_RELEASE}"
 REMOTE="https://github.com/mozilla-firefox/firefox.git"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UPSTREAM_DIR="$REPO_ROOT/upstream"
 PATCHES_DIR="$REPO_ROOT/patches"
+# 05-02: the ESR pin is declared once in configuration.toml ([upstreams]
+# firefox_esr_tag) and emitted into generated/upstream-pins.env by
+# `node scripts/generate.mjs`. An explicit TAG= export still overrides it --
+# that is how scripts/rebase-upstream.sh drives a tag that is not the pin.
+# With no export the fragment is the default, and there is deliberately no
+# literal fallback: a missing fragment fails below naming the rerun command,
+# so a stale pin can never hide behind a hardcoded string.
+PINS_FRAGMENT="$REPO_ROOT/generated/upstream-pins.env"
+
+if [ -z "${TAG:-}" ]; then
+  if [ -f "$PINS_FRAGMENT" ]; then
+    # shellcheck disable=SC1090 -- generated output, never checked in
+    . "$PINS_FRAGMENT"
+    TAG="${FIREFOX_ESR_TAG:-}"
+  fi
+fi
+if [ -z "${TAG:-}" ]; then
+  echo "fetch-upstream: FAIL -- no TAG export and $PINS_FRAGMENT is absent." >&2
+  echo "  Run 'node scripts/generate.mjs' from the repo root, then re-run this script." >&2
+  exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # D-76 classifier. Gates on unexpected changes only: the two legal states of
