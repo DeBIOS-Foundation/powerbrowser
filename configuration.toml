@@ -65,3 +65,12 @@ id = "release"
 name_suffix = ""
 branding_dir = "powerbrowser/branding/release"
 objdir = "objdir-release"
+
+# Installer branding. support_url feeds the NSIS URLInfoAbout and HelpLink
+# defines, falling back to product.homepage when absent. tile_color is
+# deliberately UNSET: when it is absent the generator omits the tile
+# manifest's BackgroundColor line and Windows falls back to its app-tile
+# default, so this tree builds through the omission path a partial
+# downstream manifest will take. No color is invented here.
+[installer]
+support_url = "https://powerbrowser.org"

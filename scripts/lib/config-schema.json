@@ -80,6 +80,20 @@
       "type": "string",
       "required": false
     },
+    "installer.support_url": {
+      "type": "string",
+      "required": false,
+      "regex": "^https://[^\\s\\x00-\\x1f\\x7f]+$",
+      "regex_help": "a web address starting with https:// and containing no spaces or control characters",
+      "regex_example": "https://example.org/support"
+    },
+    "installer.tile_color": {
+      "type": "string",
+      "required": false,
+      "regex": "^#[0-9A-Fa-f]{6}$",
+      "regex_help": "a hash sign followed by exactly six hexadecimal digits, 0 to 9 and a to f",
+      "regex_example": "#123abc"
+    },
     "variants[].id": {
       "type": "string",
       "required": true,
