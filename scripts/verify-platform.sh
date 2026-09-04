@@ -3654,13 +3654,15 @@ run_own_checks() {
     #
     # generate-self-test rides alongside for the reason every other self-test
     # row in this array gives, and here it carries more weight than most:
-    # seventeen planted faults -- a missing required key, an invalid basename,
+    # twenty planted faults -- a missing required key, an invalid basename,
     # a misspelled section header, a whitespace-only value, a short downstream
     # array, an incomplete variant, a duplicated variant id, an unused variant
     # id, a partially-stated identity table, a stale generated file, an absent
     # generated directory, a malformed manifest, a drifted locale full name,
     # the locale agreement holding on the emitted pairs, a non-square icon
-    # source, a missing icon source, and a drifted icon raster -- each required
+    # source, a missing icon source, a drifted icon raster, the container
+    # writers holding on the emitted buffers, a truncated ICO payload and a
+    # wrong-magic ICNS -- each required
     # to go red NAMING the drift (or resolve as pinned), plus a
     # cross-cutting assertion that no case's output carries a stack frame, a
     # module specifier, or this machine's path to the project. Every one of the

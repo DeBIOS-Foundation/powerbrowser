@@ -5,18 +5,20 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT COVERS. Thirty-three targets, each byte-identical to the file
-// Phase 1 wrote by hand: the five Phase 2 build surfaces (the two branding
-// configure.sh files, .mozconfig, and the two .desktop files), the
+// WHAT IT COVERS. Thirty-seven targets: thirty-three byte-identical to the
+// file Phase 1 wrote by hand -- the five Phase 2 build surfaces (the two
+// branding configure.sh files, .mozconfig, and the two .desktop files), the
 // eighteen GEN-01 branding-directory surfaces (per variant: brand.ftl,
 // brand.properties, moz.build, content/jar.mn, content/moz.build,
 // locales/jar.mn, locales/moz.build, content/aboutDialog.css and
 // pref/firefox-branding.js), and the ten GEN-02 icon rasters (per variant:
 // default16/32/48/64/128.png, drawn from the single brand/mark.svg through
-// the system inkscape). That byte-identity IS the acceptance test, which
-// is why no emitter here is allowed to reformat, reorder or "tidy" what it
-// reproduces. The ICO/ICNS containers are the second half of plan 03-02 and
-// the installer fields are plan 03-03 (GEN-02/GEN-03).
+// the system inkscape) -- plus the four GEN-02 containers (per variant:
+// firefox.ico and firefox.icns, wrapped from those same rasters by pure-Node
+// writers). That byte-identity IS the acceptance test for the thirty-three,
+// which is why no emitter here is allowed to reformat, reorder or "tidy" what
+// it reproduces; the four containers have no hand-written originals and are
+// structurally checked instead. The installer fields are plan 03-03 (GEN-03).
 //
 // WHY THE PIPELINE ORDER IS LOAD-BEARING. Parse, then reject unknown settings,
 // then mask, then merge, then validate, then emit, then write -- in that order
@@ -598,7 +600,7 @@ function assertEmittable(path, value) {
  * equally hand-editable and equally silent about it -- and a reader could no
  * longer tell generated from hand-written by opening the file, which is the
  * banner's whole purpose. A shared constant is also what stops the
- * thirty-three files drifting into thirty-three wordings.
+ * thirty-seven files drifting into thirty-seven wordings.
  *
  * `#` is a comment in all three formats: mozconfig is shell, configure.sh is
  * shell, and freedesktop permits comment lines in a .desktop file including
@@ -1570,6 +1572,198 @@ function emitIconPng(size) {
     };
 }
 
+// --- GEN-02: the Windows ICO and macOS ICNS containers ------------------------
+//
+// The five PNG rasters above are the Linux icon set. The Windows and macOS
+// builds need the same pixels wrapped in their own containers, so two
+// pure-Node writers do the wrapping with zero new packages: an ICO file is a
+// 6-byte header plus 16-byte directory entries over byte-identical PNG
+// payloads, and an ICNS file is an 8-byte header plus typed chunks over the
+// same. No manifest value reaches either writer beyond the pixels
+// iconPngBytes already rasterized -- payload sizes, entry counts and chunk
+// types are frozen below (T-03-04, the same structural reason as the raster
+// step), and Buffer.concat carries the payloads through untouched.
+//
+// macOS-host rendering stays explicitly deferred to v2 PKG-01 per GEN-03:
+// what these writers guarantee is structural validity -- magic, counts,
+// lengths, payload identity -- asserted twice: by the structure functions
+// below over the bytes just built (--self-test plants a truncation and a
+// wrong magic against them), and by scripts/verify-icon-ihdr.mjs over the
+// files on disk. The two assertions share the contract, not the code path,
+// so one cannot pass by agreeing with itself -- the same split the locale
+// agreement and the branding-agreement checker keep.
+
+/**
+ * A complete Windows .ico file over the three smallest raster PNGs, in the
+ * fixed ascending order 16, 32, 48. The 6-byte header carries reserved byte
+ * 0, image type 1 and the entry count; each 16-byte directory entry carries
+ * the width, the height, a zero color count, a zero reserved byte, two
+ * planes, 32 bits per pixel, the PNG payload length and the running payload
+ * offset. The payloads follow byte-identical.
+ */
+function emitFirefoxIco(png16, png32, png48) {
+    const payloads = [png16, png32, png48];
+    const sizes = [16, 32, 48];
+    const count = payloads.length;
+    const header = Buffer.alloc(6 + 16 * count);
+    header.writeUInt16LE(0, 0);
+    header.writeUInt16LE(1, 2);
+    header.writeUInt16LE(count, 4);
+    let offset = header.length;
+    payloads.forEach((payload, i) => {
+        const at = 6 + 16 * i;
+        header.writeUInt8(sizes[i], at);
+        header.writeUInt8(sizes[i], at + 1);
+        header.writeUInt8(0, at + 2);
+        header.writeUInt8(0, at + 3);
+        header.writeUInt16LE(2, at + 4);
+        header.writeUInt16LE(32, at + 6);
+        header.writeUInt32LE(payload.length, at + 8);
+        header.writeUInt32LE(offset, at + 12);
+        offset += payload.length;
+    });
+    return Buffer.concat([header, ...payloads]);
+}
+
+/**
+ * The ICNS chunk type codes for the three wrapped sizes, largest first. From
+ * the Apple TN0617 icon-family table: ic07 is the 128-pixel family member,
+ * icp5 the 32-pixel one, icp4 the 16-pixel one. Modern macOS accepts
+ * PNG-compressed payloads in these chunks.
+ */
+const ICNS_TYPES = Object.freeze(['ic07', 'icp5', 'icp4']);
+
+/**
+ * A complete macOS .icns file over the 128, 32 and 16 raster PNGs, in that
+ * order. The 8-byte header carries the icns magic plus the total file length
+ * as big-endian uint32; each chunk carries its four-character type code plus
+ * its own big-endian total length -- header included -- plus the PNG payload.
+ */
+function emitFirefoxIcns(png128, png32, png16) {
+    const payloads = [png128, png32, png16];
+    const chunks = payloads.map((payload, i) => {
+        const chunk = Buffer.alloc(8 + payload.length);
+        chunk.write(ICNS_TYPES[i], 0, 'ascii');
+        chunk.writeUInt32BE(chunk.length, 4);
+        payload.copy(chunk, 8);
+        return chunk;
+    });
+    const body = Buffer.concat(chunks);
+    const header = Buffer.alloc(8);
+    header.write('icns', 0, 'ascii');
+    header.writeUInt32BE(header.length + body.length, 4);
+    return Buffer.concat([header, body]);
+}
+
+/**
+ * Structural failures of one ICO's bytes, naming `rel` with the file and the
+ * offending values. Walks the directory the header declares: a count the
+ * file cannot hold, an entry pointing past the end, or trailing bytes past
+ * the last payload each fail. A header that does not open as an icon fails
+ * at once, with nothing further read off it.
+ */
+function icoStructureFailures(bytes, rel) {
+    if (bytes.length < 6 || bytes.readUInt16LE(0) !== 0 || bytes.readUInt16LE(2) !== 1) {
+        return [
+            `${rel} does not open as a Windows icon: the header must carry reserved byte 0 and image type 1. `
+            + `Next step: run: ${RERUN}`,
+        ];
+    }
+    const count = bytes.readUInt16LE(4);
+    if (count === 0 || 6 + 16 * count > bytes.length) {
+        return [
+            `${rel} declares ${count} icon(s) but the file ends inside the directory. `
+            + `Next step: run: ${RERUN}`,
+        ];
+    }
+    const failures = [];
+    let end = 6 + 16 * count;
+    for (let i = 0; i < count; i++) {
+        const at = 6 + 16 * i;
+        const length = bytes.readUInt32LE(at + 8);
+        const offset = bytes.readUInt32LE(at + 12);
+        if (offset + length > bytes.length) {
+            failures.push(
+                `${rel} entry ${i} points at bytes ${offset}..${offset + length} but the file is only ${bytes.length} bytes long. `
+                + `Next step: run: ${RERUN}`,
+            );
+            continue;
+        }
+        end = Math.max(end, offset + length);
+    }
+    if (failures.length === 0 && end !== bytes.length) {
+        failures.push(
+            `${rel} carries ${bytes.length - end} trailing byte(s) past its last icon payload. `
+            + `Next step: run: ${RERUN}`,
+        );
+    }
+    return failures;
+}
+
+/**
+ * Structural failures of one ICNS's bytes, naming `rel` with the file and
+ * the offending values. A header without the icns magic or with a total
+ * length that is not the file size fails at once; otherwise the chunk chain
+ * is walked and a short header, a short payload or trailing bytes each fail.
+ */
+function icnsStructureFailures(bytes, rel) {
+    const magic = bytes.length >= 4 ? bytes.subarray(0, 4).toString('ascii') : '';
+    if (bytes.length < 8 || magic !== 'icns' || bytes.readUInt32BE(4) !== bytes.length) {
+        return [
+            `${rel} does not open as a macOS icon: the header must carry the magic ${JSON.stringify('icns')} `
+            + `and a total length equal to the file size of ${bytes.length} bytes, but carries ${JSON.stringify(magic)}. `
+            + `Next step: run: ${RERUN}`,
+        ];
+    }
+    const failures = [];
+    let at = 8;
+    while (at < bytes.length) {
+        if (at + 8 > bytes.length) {
+            failures.push(
+                `${rel} ends inside an icon chunk header at byte ${at}. `
+                + `Next step: run: ${RERUN}`,
+            );
+            break;
+        }
+        const type = bytes.subarray(at, at + 4).toString('ascii');
+        const length = bytes.readUInt32BE(at + 4);
+        if (length < 8 || at + length > bytes.length) {
+            failures.push(
+                `${rel} chunk ${JSON.stringify(type)} declares a length of ${length} byte(s) but only ${bytes.length - at} remain from byte ${at}. `
+                + `Next step: run: ${RERUN}`,
+            );
+            break;
+        }
+        at += length;
+    }
+    if (failures.length === 0 && at !== bytes.length) {
+        failures.push(
+            `${rel} carries ${bytes.length - at} trailing byte(s) past its last icon chunk. `
+            + `Next step: run: ${RERUN}`,
+        );
+    }
+    return failures;
+}
+
+/**
+ * The TARGETS-row shape over the container writers: the just-rasterized
+ * buffers for this process, wrapped inside the same emit pass. The variant
+ * contributes nothing -- both variants wrap the same rasters -- and uniformity
+ * with every other row's emit(config, variant) signature is worth more than a
+ * shorter parameter list here (the same trade emitIconPng makes).
+ */
+function emitFirefoxIcoFile(config, variant) {
+    void config;
+    void variant;
+    return emitFirefoxIco(iconPngBytes(16), iconPngBytes(32), iconPngBytes(48));
+}
+
+function emitFirefoxIcnsFile(config, variant) {
+    void config;
+    void variant;
+    return emitFirefoxIcns(iconPngBytes(128), iconPngBytes(32), iconPngBytes(16));
+}
+
 /**
  * Every output path lives here and nowhere else, and the default run, --check
  * and plan 02-05's byte-identity gate all iterate this one array.
@@ -1798,6 +1992,31 @@ export const TARGETS = Object.freeze([
         variant: 'release',
         emit: emitIconPng(128),
     }),
+    // NEW (03-02): GEN-02's Windows and macOS containers, one pair per
+    // variant, wrapped from the just-rasterized PNG buffers inside the same
+    // emit pass. No tracked comparand: no hand-written originals exist, so
+    // the byte-identity gate skips these rows and scripts/verify-icon-ihdr.mjs
+    // owns their structure (magic, counts, lengths, payload identity).
+    Object.freeze({
+        generated: 'branding/dev/firefox.ico',
+        variant: 'dev',
+        emit: emitFirefoxIcoFile,
+    }),
+    Object.freeze({
+        generated: 'branding/dev/firefox.icns',
+        variant: 'dev',
+        emit: emitFirefoxIcnsFile,
+    }),
+    Object.freeze({
+        generated: 'branding/release/firefox.ico',
+        variant: 'release',
+        emit: emitFirefoxIcoFile,
+    }),
+    Object.freeze({
+        generated: 'branding/release/firefox.icns',
+        variant: 'release',
+        emit: emitFirefoxIcnsFile,
+    }),
 ]);
 
 function variantById(config, id) {
@@ -1908,7 +2127,7 @@ function firstDifferingLine(a, b) {
  *
  * THREE OUTCOMES, THREE MESSAGES, deliberately not one. An absent generated/ is
  * the state every fresh copy of the project and every automated run begins in;
- * reporting it as thirty-three stale files reads as thirty-three problems and sends the reader
+ * reporting it as thirty-seven stale files reads as thirty-seven problems and sends the reader
  * hunting a mismatch that does not exist.
  *
  * The set comparison runs in BOTH directions. A per-target loop alone sees a
@@ -2185,7 +2404,7 @@ function probeStaleOutput(config) {
  * Ask the freshness comparison about a directory that is not there -- the state
  * every fresh copy of the project and every CI runner starts in, because
  * generated/ is git-ignored. The distinct message this must produce is the
- * whole point: thirty-three phantom stale paths would read as thirty-three defects on a tree
+ * whole point: thirty-seven phantom stale paths would read as thirty-seven defects on a tree
  * with none, and a gate red for a non-defect is a gate its readers skip.
  *
  * The EXIT CODE is asserted here too, and separately from the message, because
@@ -2287,6 +2506,38 @@ function probeIconPngDrift(config) {
 }
 
 /**
+ * GEN-02. The ICO just built, with one byte shaved off the end: the last
+ * directory entry then points past the end of the file, and the structure
+ * assertion has to name THAT file and the entry -- proving the assertion can
+ * go red on the thing that broke, not merely that the writer goes green.
+ */
+function probeTruncatedIco() {
+    const whole = emitFirefoxIco(iconPngBytes(16), iconPngBytes(32), iconPngBytes(48));
+    const cut = whole.subarray(0, whole.length - 1);
+    // Mutation-landed guard, same contract as probeStaleOutput's: a
+    // truncation that was never cut reporting green is worse than a red.
+    if (cut.length !== whole.length - 1) {
+        return [`${BROKEN} the planted truncation did not land in branding/dev/firefox.ico`];
+    }
+    return icoStructureFailures(cut, 'branding/dev/firefox.ico');
+}
+
+/**
+ * GEN-02. The ICNS just built, with its magic overwritten: the header
+ * assertion has to name THAT file carrying the planted magic and the icns it
+ * must carry.
+ */
+function probeWrongMagicIcns() {
+    const whole = emitFirefoxIcns(iconPngBytes(128), iconPngBytes(32), iconPngBytes(16));
+    const bad = Buffer.from(whole);
+    bad.write('XXXX', 0, 'ascii');
+    if (bad.subarray(0, 4).toString('ascii') !== 'XXXX') {
+        return [`${BROKEN} the planted magic did not land in branding/dev/firefox.icns`];
+    }
+    return icnsStructureFailures(bad, 'branding/dev/firefox.icns');
+}
+
+/**
  * A manifest that is not valid TOML, read by a CHILD process.
  *
  * It has to be a child: an unparseable layer exits from inside loadLayer rather
@@ -2358,9 +2609,9 @@ function parserIdiomLeaked(output) {
 /**
  * Proves the mask, the unset rule, array-replace, the required-setting check,
  * the value rules, the misspelled-header ordering, the locale agreement, the
- * icon squareness and presence guards, all freshness outcomes and the
- * parse-failure copy actually discriminate, rather than merely being
- * intended. A check that can only go green is not a check.
+ * icon squareness and presence guards, the container structure, all freshness
+ * outcomes and the parse-failure copy actually discriminate, rather than
+ * merely being intended. A check that can only go green is not a check.
  */
 function selfTest() {
     // A planted-fault result measured against an already-red baseline says
@@ -2394,6 +2645,22 @@ function selfTest() {
             { rel: `branding/${variant.id}/locales/en-US/brand.properties`, body: emitBrandProperties(baseline.config, variant) },
         ])),
     );
+
+    // GEN-02's green control, computed once: the containers the writers
+    // actually build, run through the same structure functions the corruption
+    // cases plant against. Without this, a red result from those cases could
+    // be the assertion firing on the unmodified bytes rather than on the
+    // plant.
+    const containerControl = [
+        ...icoStructureFailures(
+            emitFirefoxIco(iconPngBytes(16), iconPngBytes(32), iconPngBytes(48)),
+            'branding/dev/firefox.ico',
+        ),
+        ...icnsStructureFailures(
+            emitFirefoxIcns(iconPngBytes(128), iconPngBytes(32), iconPngBytes(16)),
+            'branding/dev/firefox.icns',
+        ),
+    ];
 
     const cases = [
         {
@@ -2498,7 +2765,7 @@ function selfTest() {
             expect: TARGETS[0].generated,
         },
         {
-            // The absent-directory outcome is a DISTINCT message, not thirty-three
+            // The absent-directory outcome is a DISTINCT message, not thirty-seven
             // stale paths, AND it is not a failure. Asserted from three sides:
             // the message is there, no target path is, and the exit code was
             // zero -- so a future collapse of the three outcomes into one goes
@@ -2564,6 +2831,34 @@ function selfTest() {
             name: 'drifted icon raster',
             probe: probeIconPngDrift,
             expect: 'branding/dev/default32.png',
+        },
+        {
+            // GEN-02's control: the containers the writers actually build
+            // hold with zero structural failures. Without this, a red result
+            // from the corruption cases below could be the assertion firing
+            // on the unmodified bytes rather than on the plant.
+            name: 'container writers hold on the emitted buffers',
+            probe: () => containerControl,
+            holds: 'no structural failures on the unmodified containers',
+            resolved: () => containerControl.length === 0,
+        },
+        {
+            // GEN-02. The ICO just built, with one byte shaved off the end:
+            // the last directory entry then points past the end of the file,
+            // and the structure assertion has to name THAT file and the entry.
+            name: 'truncated ICO payload',
+            probe: probeTruncatedIco,
+            expect: 'branding/dev/firefox.ico',
+            also: ['entry 2'],
+        },
+        {
+            // GEN-02. The ICNS just built, with its magic overwritten: the
+            // header assertion has to name THAT file carrying the planted
+            // magic and the icns it must carry.
+            name: 'wrong-magic ICNS',
+            probe: probeWrongMagicIcns,
+            expect: 'branding/dev/firefox.icns',
+            also: ['icns'],
         },
     ];
 
