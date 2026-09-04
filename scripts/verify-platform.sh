@@ -53,6 +53,7 @@
 # file. It does NOT mean creating a sibling driver. That rule is the entire
 # reason this consolidation was necessary.
 set -uo pipefail
+unset PB_CONFIG_DIR # a stray export must never silently rebrand CI; fixture rows pass it per-command instead
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 THEIA_DIR="$REPO_ROOT/theia"
