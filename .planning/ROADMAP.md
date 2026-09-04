@@ -205,9 +205,26 @@ Plans:
   1. The generator emits a complete Firefox branding directory with `brand.ftl`, `brand.properties`, and `brand.dtd` written atomically and cross-checked for agreement, plus `generated/identity.configure`, and a Linux build wired via `--with-branding` produces the correctly branded application
   2. All five Linux icon sizes (16/32/48/64/128) are rasterized at target density from the single source SVG/PNG in `brand/`, and the built application shows the downstream's icon in the launcher, window, and desktop entry
   3. Installer branding for Linux, Windows (NSIS/MSIX fields), and macOS (DMG/.icns fields) is emitted and schema-complete from `configuration.toml`, with the Linux output build-verified
-  4. Changing the display name in `configuration.toml` and regenerating changes every Gecko-side branding surface, with no second file edited
+   4. Changing the display name in `configuration.toml` and regenerating changes every Gecko-side branding surface, with no second file edited
 
-**Plans**: TBD
+**Plans**: 4 plans in 4 sequential waves (shared scripts/generate.mjs forces sequencing)
+
+Plans:
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — Tracer: spike --with-branding outside topsrcdir plus identity carrier, then locale emitters with ftl/properties agreement, literal layout rows, agreement registry check, and the build wiring
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md — GEN-02 icon pipeline: five exact PNG rasters per variant from brand/mark.svg, pure-Node ICO/ICNS writers, IHDR registry check
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-03-PLAN.md — GEN-03 Windows/macOS schema-complete: installer schema keys, NSIS/MSIX/plist/tile emitters with sink guards, installer-schema registry check
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 03-04-PLAN.md — Close the phase: identity carrier plus patch 010 de-configuration, single-edit propagation proof, tier-3 Linux build with built-artifact branding proof
 **Research**: spike — validate `--with-branding` pointing into a sibling `generated/` directory through the existing symlink mechanism with a throwaway branding dir before building the full emitter. Open question: whether the generated-`.mozconfig` route works with the `imply_option("MOZ_APP_VENDOR", ...)` line dropped from the patch.
 
 ### Phase 4: Theia Surface — Branding, Extensions, Telemetry
