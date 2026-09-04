@@ -3,7 +3,8 @@
 ## Milestones
 
 - ✅ **v1.0 PowerBrowser** — Phases 1–7 (shipped 2026-09-04, override closeout — see `.planning/milestones/v1.0-ROADMAP.md`)
-- 🚧 **v2** — Phases 8+ (planned — inputs in `.planning/NEXT-MILESTONE-INPUTS.md`)
+- 🚧 **v1.1 Hardening and SQL Tabs** — Phases 08–09 (hardening-only: no GUI, no SQL tabs this cycle — roadmap awaiting approval)
+- 📋 **Future** — SQL-backed tabs (SQL-01, promoted from backlog 999.1) then GUI tabs (GUI-02/GUI-05)
 
 ## Phases
 
@@ -21,6 +22,46 @@
 Archive: `.planning/milestones/v1.0-ROADMAP.md` · Requirements: `.planning/milestones/v1.0-REQUIREMENTS.md` · Tag: `v1.0`
 
 </details>
+
+- [ ] **Phase 08: Installer Hardening + Canonical Rename** - Real Windows/macOS installers, self-hosted MAR updates, canonical PowerBrowser name, release build
+- [ ] **Phase 09: Extensions + Crash Pipeline** - npm/local-path extension sources, WebExtensions policy, minimal crash collector, tier-3 fixtures
+
+## Phase Details
+
+<details>
+<summary>✅ v1.0 phase details — archived</summary>
+
+See `.planning/milestones/v1.0-ROADMAP.md`.
+
+</details>
+
+### Phase 08: Installer Hardening + Canonical Rename
+**Goal**: Downstreams ship real, self-updating branded installers under the canonical PowerBrowser name
+**Depends on**: v1.0 (Phases 1–7)
+**Requirements**: NAME-01, PKG-01, PKG-02, PKG-03, BLD-01, UPD-03, SEC-02, SHELL-01
+**Success Criteria** (what must be TRUE):
+  1. A builder following the docs/BUILD.md packaging procedure produces working Windows (NSIS/MSIX) and macOS (DMG) installers from the generated branding on real packaging hosts (Nix-built packaging first, agent-driven VMs as fallback)
+  2. A user installing either package gets a browser carrying the canonical PowerBrowser name on every branded surface, running side by side with stock Firefox with no profile or remoting collisions
+  3. The per-OS install → launch → uninstall → no-residue matrix is green, and the recorded update story (self-hosted MAR updates under fork signing, no Mozilla phone-home) proves one real N→N+1 hop per OS
+  4. A release objdir-release build passes with the release-variant verify rows green, and the live ESR rebase drill passes through the existing rebase and conflict tooling
+  5. WINDOWS #13 (registerWindowActor boundary hole) and #14 (BiDi double-window) are closed with their gates green
+**Plans**: TBD
+
+### Phase 09: Extensions + Crash Pipeline
+**Goal**: Downstreams declare npm/local-path extensions and crashes reach their own collector
+**Depends on**: Phase 08
+**Requirements**: EXT-02, EXT-03, TEL-04, BLD-02, UPD-04
+**Success Criteria** (what must be TRUE):
+  1. A downstream declaring npm and local-path extension entries gets exact-pinned, integrity-verified installs that fail loud on mismatch, proven per target platform including offline-from-vendor packaging
+  2. Declared WebExtensions land through ExtensionSettings in the already-emitted distribution/policies.json with the agreement gate green
+  3. A crashing browser build submits through the minimal Antenna-protocol collector (multipart POST with upload_file_minidump, CrashID returned, about:crashes lists the crash) under the written PII/retention/throttle policy, with the native reporter still compiled out
+  4. Tier-3 per-fixture builds pass over the new source kinds on real built artifacts, and the Theia re-pin proof passes with the token-gate backend intact
+**Plans**: TBD
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 08. Installer Hardening + Canonical Rename | 0/0 | Not started | - |
+| 09. Extensions + Crash Pipeline | 0/0 | Not started | - |
 
 ## Inherited network egress (carried through the migration, not decided here)
 
