@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic fixture artwork for plan 07-02 (DOC-02 proof instrument). ORIGINAL
+  geometry: a diamond ring (even-odd cutout), not the platform's power-glyph
+  construction of arc plus bar. Square viewBox; the <svg> element below is ONE
+  LINE starting with the literal open tag -- the runtime-channel contract
+  readMarkSvgElement enforces (first line starting with '<svg').
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><defs><style>.n{fill:#0f3d2e;}@media (prefers-color-scheme: dark){.n{fill:#8fe3bd;}}</style></defs><path class="n" fill-rule="evenodd" d="M64 12L116 64L64 116L12 64Z M64 40L88 64L64 88L40 64Z"/></svg>
