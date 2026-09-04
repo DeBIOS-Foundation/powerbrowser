@@ -42,10 +42,13 @@
 //                       powerbrowser/branding/<variant>/locales/en-US/brand.ftl
 //                       `-brand-full-name` AND that same variant's own
 //                       locales/en-US/brand.properties `brandFullName`, and
-//                       asserts BOTH against that variant's own expected
-//                       value, all sourced from the VARIANTS descriptor (or
+//                       asserts BOTH against that variant's expected value --
+//                       derived at check time from configuration.toml through
+//                       scripts/generate.mjs resolveConfig (base display_name
+//                       plus the variant's name_suffix, the exact composition
+//                       emitBrandFtl/emitBrandProperties themselves use), or
 //                       the --brand-ftl/--brand-properties/
-//                       --expect-brand-full-name overrides). Reading only
+//                       --expect-brand-full-name overrides. Reading only
 //                       brand.ftl let the two files silently disagree
 //                       within the same variant (03-REVIEW.md WR-01, closed
 //                       03-11): this surface now fails if either file's
@@ -106,14 +109,16 @@
 // Usage:
 //   node scripts/verify-branding-identity.mjs [--bin <path>]
 //     [--expect-display-name <string>] [--positive-control <surface>]
+//   node scripts/verify-branding-identity.mjs --self-test
 //   node scripts/verify-branding-identity.mjs --help
 
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { execFileSync, spawn } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { resolveConfig } from './generate.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
@@ -123,6 +128,13 @@ const REPO_ROOT = join(__dirname, '..');
 // id, instead of as independent per-flag defaults. Adding a surface means
 // extending a record here, not adding an unrelated flag with its own
 // silently-defaulting fallback -- the exact seam CR-01 fell through.
+//
+// STRUCTURAL PATHS ONLY (06-02). The descriptor keeps tree layout -- bin,
+// desktop, config.status, brandFtl, brandProperties locations -- never an
+// expected brand VALUE. Every expectation is derived below from
+// configuration.toml through resolveConfig, so the descriptor and the
+// emitter compute the same string from the same source rather than the
+// checker keeping a copy a downstream's manifest could never satisfy.
 const VARIANTS = {
     dev: {
         bin: join(REPO_ROOT, 'objdir', 'dist', 'bin', 'powerbrowser'),
@@ -130,7 +142,6 @@ const VARIANTS = {
         configStatus: join(REPO_ROOT, 'objdir', 'config.status'),
         brandFtl: join(REPO_ROOT, 'powerbrowser', 'branding', 'dev', 'locales', 'en-US', 'brand.ftl'),
         brandProperties: join(REPO_ROOT, 'powerbrowser', 'branding', 'dev', 'locales', 'en-US', 'brand.properties'),
-        brandFullName: 'Power Browser Dev',
     },
     release: {
         bin: join(REPO_ROOT, 'objdir-release', 'dist', 'bin', 'powerbrowser'),
@@ -138,7 +149,6 @@ const VARIANTS = {
         configStatus: join(REPO_ROOT, 'objdir-release', 'config.status'),
         brandFtl: join(REPO_ROOT, 'powerbrowser', 'branding', 'release', 'locales', 'en-US', 'brand.ftl'),
         brandProperties: join(REPO_ROOT, 'powerbrowser', 'branding', 'release', 'locales', 'en-US', 'brand.properties'),
-        brandFullName: 'Power Browser',
     },
 };
 const VARIANT_IDS = Object.keys(VARIANTS);
@@ -167,19 +177,25 @@ Runs BRAND-01's six-surface identity checklist against the built binary.
                                expected value (default: the selected variant's
                                own brand.properties).
   --expect-brand-full-name <s> Override the expected -brand-full-name /
-                               brandFullName value for the brand-full-name
-                               surface (default: the selected variant's own
-                               expected value).
+                                brandFullName value for the brand-full-name
+                                surface (default: derived from
+                                configuration.toml for the selected variant).
   --expect-display-name <s>   Override the expected MOZ_APP_DISPLAYNAME for the
-                               desktop-entry surface (default: read live from
-                               the --config-status path)
+                                desktop-entry surface (default: read live from
+                                the --config-status path)
   --positive-control <surface>
-                               Run exactly one surface (application-ini,
-                               runtime-identity, version, desktop-entry, or
-                               brand-full-name) with its expected value (or,
-                               for brand-full-name, its input files) replaced
-                               by a value that must be wrong. Exits 0 only if
-                               that surface then reports FAILURE.
+                                Run exactly one surface (application-ini,
+                                runtime-identity, version, desktop-entry, or
+                                brand-full-name) with its expected value (or,
+                                for brand-full-name, its input files) replaced
+                                by a value that must be wrong. Exits 0 only if
+                                that surface then reports FAILURE.
+  --self-test                Prove the expectations derive from the manifest:
+                                the shipped-manifest control first, then a
+                                scratch-manifest fault carrying a different
+                                display name through the same derivation path.
+                                Exits 0 only if the control is green and the
+                                fault derives the scratch value.
   --help                       Print this message and exit 0
 `;
 
@@ -189,6 +205,30 @@ if (args.includes('--help')) {
     console.log(HELP.trimEnd());
     process.exit(0);
 }
+
+const SELF_TEST = args.includes('--self-test');
+
+// Manifest-derived identity expectations (06-02): base display_name plus the
+// variant's name_suffix -- the exact composition emitBrandFtl and
+// emitBrandProperties apply -- with vendor from product.vendor_machine and
+// the basename from identity.app_basename, the values the .mozconfig and
+// generated-identity emitters compile into application.ini's Name=/Vendor=.
+// Derived, never executed: the values reach only exact-equality comparisons
+// (T-06-02).
+const { failures: MANIFEST_FAILURES, config: MANIFEST_CONFIG } = resolveConfig(join(REPO_ROOT, 'configuration.toml'), undefined);
+if (MANIFEST_FAILURES.length > 0) {
+    console.error(`verify-branding-identity: FAIL -- configuration.toml does not resolve, so no expectation can be derived: ${MANIFEST_FAILURES.join('; ')}`);
+    process.exit(1);
+}
+
+function deriveBrandFullName(config, variantId) {
+    const entry = (config.variants || []).find((v) => v.id === variantId);
+    if (!entry) throw new Error(`configuration.toml declares no variant '${variantId}'`);
+    return `${config.identity.display_name}${entry.name_suffix}`;
+}
+
+const EXPECTED_APP_BASENAME = MANIFEST_CONFIG.identity.app_basename;
+const EXPECTED_VENDOR_MACHINE = MANIFEST_CONFIG.product.vendor_machine;
 
 function argValue(flag) {
     const i = args.indexOf(flag);
@@ -228,7 +268,7 @@ const VERSION_DISPLAY_PATH = join(REPO_ROOT, 'upstream', 'browser', 'config', 'v
 const DESKTOP_FILE_PATH = desktopOverride || variant.desktop;
 const BRAND_FTL_PATH = brandFtlOverride || variant.brandFtl;
 const BRAND_PROPERTIES_PATH = brandPropertiesOverride || variant.brandProperties;
-const EXPECTED_BRAND_FULL_NAME = expectBrandFullNameOverride || variant.brandFullName;
+const EXPECTED_BRAND_FULL_NAME = expectBrandFullNameOverride || deriveBrandFullName(MANIFEST_CONFIG, variantId);
 
 const SURFACE_IDS = ['executable', 'application-ini', 'runtime-identity', 'brand-full-name', 'desktop-entry', 'version'];
 const CONTROLLABLE_SURFACES = ['application-ini', 'runtime-identity', 'version', 'desktop-entry', 'brand-full-name'];
@@ -334,8 +374,8 @@ function checkExecutable() {
 
 function checkApplicationIni({ stockControl = false } = {}) {
     const { name, vendor } = readAppIni(APP_INI_PATH);
-    const expectedName = stockControl ? 'Firefox' : 'powerbrowser';
-    const expectedVendor = stockControl ? 'Mozilla' : 'DeBIOS';
+    const expectedName = stockControl ? 'Firefox' : EXPECTED_APP_BASENAME;
+    const expectedVendor = stockControl ? 'Mozilla' : EXPECTED_VENDOR_MACHINE;
     const pass = name === expectedName && vendor === expectedVendor;
     surfacesRun.push('application-ini');
     return {
@@ -591,7 +631,101 @@ async function runPositiveControl(surface) {
     process.exit(1);
 }
 
-if (positiveControlSurface !== undefined) {
+// --- --self-test ------------------------------------------------------------
+//
+// Proves the expectations derive from the manifest rather than from a
+// constant. Control first: the shipped manifest resolved through
+// deriveBrandFullName must equal the shipped tree's own brand.ftl AND
+// brand.properties values for BOTH variants -- without this, a red fault
+// below would prove nothing. Then the fault: a scratch manifest carrying a
+// display name that appears nowhere in this file is resolved through the
+// SAME deriveBrandFullName path and the derived expectation must equal the
+// scratch value -- and must differ from the shipped tree's value, proving
+// the derivation moved with the manifest. Needs no build: it reads the
+// manifest and the brand locale files only, never launches the binary.
+async function runSelfTest() {
+    let ok = true;
+
+    for (const id of VARIANT_IDS) {
+        let derived;
+        try {
+            derived = deriveBrandFullName(MANIFEST_CONFIG, id);
+        } catch (err) {
+            console.error(`verify-branding-identity: --self-test FAIL -- control: cannot derive '${id}' from the shipped manifest: ${err.message}`);
+            ok = false;
+            continue;
+        }
+        let ftl;
+        let props;
+        try {
+            ftl = readBrandFullName(VARIANTS[id].brandFtl);
+            props = readBrandPropertiesFullName(VARIANTS[id].brandProperties);
+        } catch (err) {
+            console.error(`verify-branding-identity: --self-test FAIL -- control: cannot read the shipped brand files for '${id}': ${err.message}`);
+            ok = false;
+            continue;
+        }
+        if (derived !== ftl || derived !== props) {
+            console.error(
+                `verify-branding-identity: --self-test FAIL -- control: derived ${JSON.stringify(derived)} for '${id}' ` +
+                `but the shipped tree carries brand.ftl=${JSON.stringify(ftl)} brand.properties=${JSON.stringify(props)}`,
+            );
+            ok = false;
+        } else {
+            console.log(`verify-branding-identity: --self-test -- control variant '${id}': derived ${JSON.stringify(derived)} equals the shipped brand.ftl and brand.properties`);
+        }
+    }
+
+    if (!ok) {
+        console.error('verify-branding-identity: --self-test FAIL -- the shipped-manifest control is red, so a red fault would prove nothing');
+        process.exit(1);
+    }
+
+    const scratchDir = await mkdtemp(join(tmpdir(), 'branding-identity-selftest-'));
+    try {
+        const shippedText = readFileSync(join(REPO_ROOT, 'configuration.toml'), 'utf8');
+        // The anchor is the display_name LINE SHAPE, never its value: spelling
+        // the shipped value here would keep a display string in the checker --
+        // the exact copy 06-02 removes -- and 06-01's literal scan would fail
+        // on this file for carrying it.
+        const anchor = shippedText.split('\n').find((l) => l.startsWith('display_name = "') && l.endsWith('"'));
+        if (!anchor) {
+            console.error('verify-branding-identity: --self-test FAIL -- the shipped manifest carries no display_name = "..." line; the scratch fault has no anchor to mutate');
+            process.exit(1);
+        }
+        const scratchValue = 'Selftest Drift';
+        writeFileSync(join(scratchDir, 'configuration.toml'), shippedText.replace(anchor, `display_name = "${scratchValue}"`));
+        const { failures, config: scratchConfig } = resolveConfig(join(scratchDir, 'configuration.toml'), undefined);
+        if (failures.length > 0) {
+            console.error(`verify-branding-identity: --self-test FAIL -- the scratch manifest does not resolve: ${failures.join('; ')}`);
+            process.exit(1);
+        }
+        const scratchDerived = deriveBrandFullName(scratchConfig, 'dev');
+        const wantScratch = `${scratchValue} Dev`;
+        if (scratchDerived !== wantScratch) {
+            console.error(`verify-branding-identity: --self-test FAIL -- the scratch manifest carries ${JSON.stringify(scratchValue)} but the same derivation path produced ${JSON.stringify(scratchDerived)} instead of ${JSON.stringify(wantScratch)}; the expectation is not coming from the manifest`);
+            process.exit(1);
+        }
+        const shippedDev = readBrandFullName(VARIANTS.dev.brandFtl);
+        if (scratchDerived === shippedDev) {
+            console.error(`verify-branding-identity: --self-test FAIL -- the scratch derivation ${JSON.stringify(scratchDerived)} did not move off the shipped value; it is a constant wearing a manifest's clothes`);
+            process.exit(1);
+        }
+        console.log(`verify-branding-identity: --self-test -- scratch manifest display name ${JSON.stringify(scratchValue)} derived to ${JSON.stringify(scratchDerived)} through the same path (shipped tree carries ${JSON.stringify(shippedDev)})`);
+    } finally {
+        await rm(scratchDir, { recursive: true, force: true });
+    }
+
+    console.log('verify-branding-identity: --self-test PASS');
+    process.exit(0);
+}
+
+if (SELF_TEST) {
+    runSelfTest().catch(err => {
+        console.error(`verify-branding-identity: FAIL -- ${err.message}`);
+        process.exit(1);
+    });
+} else if (positiveControlSurface !== undefined) {
     runPositiveControl(positiveControlSurface).catch(err => {
         console.error(`verify-branding-identity: FAIL -- ${err.message}`);
         process.exit(1);
