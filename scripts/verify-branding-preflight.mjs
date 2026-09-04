@@ -30,8 +30,11 @@
 // the recorded identity decisions (D-09 as amended, D-10, D-12, D-13), never
 // written by scripts/rename-brand.mjs (which is hard-excluded from every
 // brand-display row by class and from every hand-write surface by site), and
-// never read back out of the branding files. This script compares the branding
-// files AND verify-branding-identity.mjs's own descriptor against it. Two
+// never read back out of the branding files. Sections 2-3 compare the branding
+// files against it, and section 4 compares the MANIFEST-derived identity
+// values the runtime checker asserts (06-02: the identity checker's VARIANTS
+// descriptor keeps structural paths only, never an expected value, so there
+// is no descriptor text left to cross-examine) against it. Two
 // sources agreeing with each other proves nothing when one pass wrote both;
 // three sources agreeing, one of which no pass writes, is evidence.
 //
@@ -43,6 +46,7 @@ import { readFileSync, existsSync, mkdtempSync, mkdirSync, readdirSync, writeFil
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { resolveConfig } from './generate.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const NAME = 'verify-branding-preflight';
@@ -308,45 +312,60 @@ function runChecks(root) {
         }
     }
 
-    // --- 4. the identity verifier's own descriptor ---------------------------
+    // --- 4. manifest-vs-inventory agreement --------------------------------
     //
     // THE ANTI-TAUTOLOGY CHECK. verify-branding-identity.mjs runs against a
-    // BUILT binary and compares the branding files against its own VARIANTS
-    // descriptor. Both of those were rewritten by the same rename pass, so they
-    // can agree on a wrong value indefinitely. Here the descriptor is compared
-    // against the inventory instead -- the one source that pass never touched.
-    const identityPath = 'scripts/verify-branding-identity.mjs';
-    const identity = readText(root, identityPath);
-    if (identity === null) {
-        r.fail(`${identityPath} does not exist -- the surface this check exists to cross-examine is missing`);
+    // BUILT binary and derives its expected brandFullName, machine vendor and
+    // app basename at check time from configuration.toml through generate.mjs
+    // resolveConfig -- the same source the emitter derives the tree from. Its
+    // VARIANTS descriptor keeps structural paths only, never an expected
+    // value, so there is no descriptor text left to cross-examine by search.
+    // What can still go wrong is the two hand-authored sources disagreeing:
+    // the manifest (which the checker derives from) and the inventory's
+    // brand_display_expectations (which sections 2-3 assert the tree
+    // against). Here the manifest-derived identity values are compared
+    // against the inventory: agreement means two independent sources concur;
+    // disagreement fails naming the variant, the manifest value, and the
+    // inventory value. The inventory stays the EXPECTED side throughout --
+    // this file never treats the manifest as an expectation source, only as
+    // the second input under comparison.
+    const { failures: manifestFailures, config: manifestConfig } = resolveConfig(join(root, 'configuration.toml'), undefined);
+    if (manifestFailures.length > 0) {
+        r.fail(
+            'configuration.toml does not resolve, so the manifest-vs-inventory agreement proves nothing: ' +
+            `${manifestFailures.join('; ')}`,
+        );
     } else {
-        for (const [variantId, variant] of Object.entries(exp.variants || {})) {
-            const block = identity.match(new RegExp(`\\n\\s{4}${variantId}:\\s*\\{([\\s\\S]*?)\\n\\s{4}\\},`));
-            if (!block) {
-                r.fail(`${identityPath}: no VARIANTS descriptor entry found for variant '${variantId}'`);
+        const manifestBase = manifestConfig.identity.display_name;
+        for (const v of manifestConfig.variants || []) {
+            const manifestValue = `${manifestBase}${v.name_suffix}`;
+            const invVariant = (exp.variants || {})[v.id];
+            if (!invVariant) {
+                r.fail(
+                    `variant ${v.id}: configuration.toml declares a variant the inventory's ` +
+                    'brand_display_expectations does not -- agreement cannot be checked',
+                );
                 continue;
             }
-            const m = block[1].match(/brandFullName:\s*'([^']*)'/);
             r.eq(
-                `${identityPath} VARIANTS.${variantId}.brandFullName`,
-                m ? m[1] : null,
-                variant.brand_full_name,
-                identityPath,
+                `manifest-vs-inventory variant ${v.id} brand_full_name`,
+                manifestValue,
+                invVariant.brand_full_name,
+                'configuration.toml vs inventory/brand-tokens.json',
             );
         }
-        // The machine-side vendor, read back from application.ini's Vendor=.
-        // A LITERAL comparison, not a pattern. Built as a RegExp this
-        // interpolated an inventory value whose own schema permits `.`, `-`
-        // and `_`, so a vendor of `Ac.e` became the wildcard `Ac.e` and matched
-        // `Acme` -- the assertion passing on a vendor string that is not the
-        // declared one, which is the exact tautology this file exists to
-        // prevent. Nothing here needed pattern semantics in the first place.
-        if (!identity.includes(`stockControl ? 'Mozilla' : '${exp.vendor_machine}'`)) {
-            r.fail(
-                `${identityPath} does not expect the machine-side vendor ${JSON.stringify(exp.vendor_machine)}. ` +
-                'The version surface concatenates vendor and basename, so a wrong value here is a wrong `--version` string.',
-            );
-        }
+        r.eq(
+            'manifest-vs-inventory vendor_machine',
+            manifestConfig.product.vendor_machine,
+            exp.vendor_machine,
+            'configuration.toml vs inventory/brand-tokens.json',
+        );
+        r.eq(
+            'manifest-vs-inventory app_basename',
+            manifestConfig.identity.app_basename,
+            exp.app_basename,
+            'configuration.toml vs inventory/brand-tokens.json',
+        );
     }
 
     // --- 5. the vendor split -------------------------------------------------
@@ -999,6 +1018,11 @@ function selfTest() {
         // Mirror the real tree's shape, then mutate exactly one literal.
         const copy = [
             'inventory/brand-tokens.json',
+            // Section 4 resolves the manifest through generate.mjs
+            // resolveConfig (06-02): the fixture carries it so the unmutated
+            // control stays green and the plant below has a manifest to
+            // corrupt.
+            'configuration.toml',
             '.mozconfig',
             'patches/010-powerbrowser-identity.patch',
             // Section 5 reads the generated identity carrier alongside the
@@ -1487,6 +1511,37 @@ function selfTest() {
             console.log(`${NAME}: --self-test -- repointed the repo-link fallback in ${widgetRel} and it was REJECTED by name: ${repoFallbackMsg}`);
         }
         writeFileSync(widgetPath, widgetOriginal);
+
+        // Twenty-first plant (06-02): a manifest/inventory disagreement --
+        // the fixture manifest's display name repointed so the
+        // manifest-derived dev value no longer equals the inventory's. No
+        // other section reads the manifest, so only section 4 can go red,
+        // and it must name the variant, the manifest value, and the
+        // inventory value: a red that only says something disagrees would
+        // not tell anyone which of the two hand-authored sources is being
+        // contradicted by the other.
+        const manifestRel = 'configuration.toml';
+        const manifestPath = join(dir, manifestRel);
+        const manifestOriginal = readFileSync(manifestPath, 'utf8');
+        const manifestAnchor = manifestOriginal.split('\n').find((l) => l.startsWith('display_name = "') && l.endsWith('"'));
+        if (!manifestAnchor) {
+            console.error(`${NAME}: --self-test FAIL -- the fixture manifest carries no display_name = "..." line to plant the disagreement on`);
+            ok = false;
+        } else {
+            writeFileSync(manifestPath, manifestOriginal.replace(manifestAnchor, 'display_name = "Planted Manifest Drift"'));
+            const manifestPlanted = runChecks(dir);
+            const manifestMsg = manifestPlanted.failures.find(
+                (f) => f.includes('manifest-vs-inventory variant dev') && f.includes('Planted Manifest Drift Dev') && f.includes('"Power Browser Dev"'),
+            );
+            if (!manifestMsg) {
+                console.error(`${NAME}: --self-test FAIL -- the manifest/inventory disagreement planted in ${manifestRel} was NOT rejected naming the variant and both values`);
+                for (const f of manifestPlanted.failures) console.error(`  - ${f}`);
+                ok = false;
+            } else {
+                console.log(`${NAME}: --self-test -- repointed the fixture manifest display name and it was REJECTED naming the variant and both values: ${manifestMsg}`);
+            }
+            writeFileSync(manifestPath, manifestOriginal);
+        }
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
