@@ -2,15 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Hardening and SQL Tabs
+current_phase: 08
+current_phase_name: Installer Hardening + Canonical Rename
 status: planning
-last_updated: "2026-09-04T22:14:29.917Z"
+stopped_at: Completed 07-sourcerer-as-downstream-04-PLAN.md
+last_updated: "2026-09-04T23:24:03.807Z"
 last_activity: 2026-09-04
+last_activity_desc: v1.1 roadmap created (Phases 08–09)
+state_head: 346306f58b7ff21aa9825dd0dccfac1c1403b370
 progress:
   total_phases: 2
   completed_phases: 0
-  total_plans: 0
+  total_plans: 5
   completed_plans: 0
-  percent: 0
 ---
 
 # Project State
@@ -24,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 ## Current Position
 
-Phase: 08 (roadmap awaiting approval)
+Phase: 08 (Installer Hardening + Canonical Rename) — READY TO EXECUTE
 Plan: —
 Status: Roadmap awaiting approval
 Last activity: 2026-09-04 — v1.1 roadmap created (Phases 08–09)
