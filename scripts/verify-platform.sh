@@ -3864,6 +3864,36 @@ run_own_checks() {
     # itself is a build step, not a --quick check.)
     "extension-pins|node $REPO_ROOT/scripts/verify-extension-pins.mjs"
     "extension-pins-self-test|node $REPO_ROOT/scripts/verify-extension-pins.mjs --self-test"
+
+    # NEW (04-03): TEL-01/TEL-02's telemetry gate -- the manifest's
+    # [telemetry] reaches the sidecar as the powerbrowserTelemetry block,
+    # and the batching sender's unit suite is green.
+    #
+    # It asserts something DIFFERENT from the rows above it, which is why
+    # another pair of rows exists rather than none. generate-check proves
+    # the generated/ tree matches the manifest right now, but the
+    # powerbrowserTelemetry block lives in a yarn-managed package.json
+    # with no tracked comparand, so a block still carrying an endpoint the
+    # manifest no longer emits would stay green under every row above.
+    # This row derives the expected pair from the manifest at check time
+    # and compares as equality in both directions (generated fragment,
+    # tracked block); then proves the sender compiles (tsc -b on the one
+    # extension -- seconds, honestly --quick) and runs its plain-node
+    # suite (dependency-free: bare node, no install, no build).
+    #
+    # telemetry-self-test rides alongside for the reason every other
+    # self-test row in this array gives: it runs the suite against the
+    # always-send stub requiring the off assertion red, and plants a
+    # drifted block and a drifted fragment each requiring red naming the
+    # drift -- with the unmutated control green first in both halves.
+    #
+    # Both are honestly --quick, with one named SKIP each for trees that
+    # have never generated or never installed: an absent fragment skips
+    # the fragment half (generate-check's own rule), and an absent theia
+    # install skips the tsc half (the suite needs neither). No build, no
+    # browser, no display, no network.
+    "telemetry|node $REPO_ROOT/scripts/verify-telemetry.mjs"
+    "telemetry-self-test|node $REPO_ROOT/scripts/verify-telemetry.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
