@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-current_phase: 07
-current_phase_name: Sourcerer as Downstream
-status: milestone_complete
-stopped_at: Archived v1.0 PowerBrowser (override closeout)
-last_updated: "2026-09-04T00:00:00.000Z"
+milestone: v1.1
+milestone_name: Hardening and SQL Tabs
+status: planning
+last_updated: "2026-09-04T22:14:29.917Z"
 last_activity: 2026-09-04
-last_activity_desc: v1.0 milestone archived, tag v1.0
-state_head: abc62dce3a33742a3534de40172e43ae7b6d8681
 progress:
-  total_phases: 7
-  completed_phases: 1
-  total_plans: 52
-  completed_plans: 52
-milestone_name: milestone
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,11 +24,10 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 ## Current Position
 
-Phase: — (v1.0 PowerBrowser SHIPPED 2026-09-04, override closeout)
-Status: Milestone archived to `.planning/milestones/`; tag `v1.0`. Next: `/gsd-new-milestone` for v2.
-Last activity: 2026-09-04 — v1.0 archived
-
-Progress: [██████████] 100% (52/52 plans; formal requirements sign-off partially staged — see Deferred Items)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-09-04 — Milestone v1.1 started
 
 ## Performance Metrics
 
