@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 03
 current_phase_name: Firefox Branding Emitter and Icon Pipeline
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-09-04T04:13:18.404Z"
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-09-04T05:22:00.000Z"
 last_activity: 2026-09-04
-last_activity_desc: Phase 03 execution resumed (wave continue)
-state_head: e66f59c3d84ddadf6d5de17513ace755380134e8
+last_activity_desc: Phase 03 plan 04 execution completed
+state_head: cc7ddd2cce84e9b71bf230cb373d9b4bc2d443e7
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 34
-  completed_plans: 32
+  completed_plans: 33
 milestone_name: milestone
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 ## Current Position
 
-Phase: 03 (Firefox Branding Emitter and Icon Pipeline) — EXECUTING
-Plan: 2 of 4
-Status: Ready to execute
-Last activity: 2026-09-03 — Phase 03 execution resumed (wave continue)
+Phase: 03 (Firefox Branding Emitter and Icon Pipeline) — PLANS COMPLETE (pending verify-work)
+Plan: 4 of 4
+Status: Executed Phase 03 plan 04 (identity carrier, propagation proof, tier-3 build)
+Last activity: 2026-09-04 — Phase 03 plan 04 completed
 
 Progress: [█████████░] 93%
 
@@ -87,6 +87,7 @@ Progress: [█████████░] 93%
 | Phase 02 P06 | ~35m | 3 tasks | 5 files |
 | Phase 03-firefox-branding-emitter-and-icon-pipeline P01 | 31min | 3 tasks | 9 files |
 | Phase 03-firefox-branding-emitter-and-icon-pipeline P02 | 8min | 3 tasks | 4 files |
+| Phase 03-firefox-branding-emitter-and-icon-pipeline P04 | 30min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -202,6 +203,9 @@ Recent decisions affecting current work:
 - [Phase 03]: [03-01]: overlay symlink is setup-created by ensure_branding_overlay, not committed (tracked symlink breaks residue scan with EISDIR)
 - [Phase 03]: [03-01]: GEN-01 left open -- identity.configure plus tier-3 build are 03-04 scope; default-env build red until 03-02 lands PNGs
 - [Phase 03]: [Phase 03]: 03-02 icon pipeline closed on landed commits 633976e/83646b1/e66f59c — stale resume state expected only task 1 done, so tasks 2-3 were adopted via full re-verification rather than duplicate commits
+- [Phase 03]: [03-04]: identity carrier is a generated imply_option fragment (generated/identity.configure) pulled in by patch 010's include hook, NOT mozconfig exports -- project_flag() pins possible_origins to (implied,) and a forced configure rejects environment-origin exports live (03-01 spike conclusion corrected)
+- [Phase 03]: [03-04]: proof-only tasks commit nothing (03-01 tracer precedent); Zebra-excursion and tier-3 outcomes live in 03-04-SUMMARY.md, not in empty commits
+- [Phase 03]: [03-04]: release tree still never built -- full-suite release rows fail pre-existing (documented since 03-01); tier-3 proof is dev-variant per plan
 
 ### Pending Todos
 
@@ -228,6 +232,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-04T04:13:18.278Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-09-04T05:22:00.000Z
+Stopped at: Completed 03-04-PLAN.md
 Resume file: None
