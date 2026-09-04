@@ -207,7 +207,7 @@ Plans:
   3. Installer branding for Linux, Windows (NSIS/MSIX fields), and macOS (DMG/.icns fields) is emitted and schema-complete from `configuration.toml`, with the Linux output build-verified
    4. Changing the display name in `configuration.toml` and regenerating changes every Gecko-side branding surface, with no second file edited
 
-**Plans**: 1/4 plans executed in 4 sequential waves (shared scripts/generate.mjs forces sequencing)
+**Plans**: 2/4 plans executed in 4 sequential waves (shared scripts/generate.mjs forces sequencing)
 
 Plans:
 **Wave 1**
@@ -216,7 +216,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-02-PLAN.md — GEN-02 icon pipeline: five exact PNG rasters per variant from brand/mark.svg, pure-Node ICO/ICNS writers, IHDR registry check
+- [x] 03-02-PLAN.md — GEN-02 icon pipeline: five exact PNG rasters per variant from brand/mark.svg, pure-Node ICO/ICNS writers, IHDR registry check
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -305,7 +305,7 @@ than noisy.
 |-------|----------------|--------|-----------|
 | 1. Platform Extraction and Rename | 21/21 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 9/9 | Complete    | 2026-09-04 |
-| 3. Firefox Branding Emitter and Icon Pipeline | 1/4 | In Progress|  |
+| 3. Firefox Branding Emitter and Icon Pipeline | 2/4 | In Progress|  |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
 | 5. Hook-Only Patches and Upstream Uptake | 0/TBD | Not started | - |
 | 6. Two-Layer Verification and Rebranding Docs | 0/TBD | Not started | - |
