@@ -3504,6 +3504,25 @@ run_own_checks() {
     "scan-brand-residue-self-test|node $REPO_ROOT/scripts/scan-brand-residue.mjs --self-test"
     "branding-preflight|node $REPO_ROOT/scripts/verify-branding-preflight.mjs"
     "branding-preflight-self-test|node $REPO_ROOT/scripts/verify-branding-preflight.mjs --self-test"
+    # NEW (06-01): VER-01's static layer -- the manifest's own display
+    # strings (per-variant full display names, vendor display, trademark
+    # notice, all derived from configuration.toml at check time) must not
+    # be hardcoded outside the manifest-owned surfaces. The residue scan
+    # covers the originating product's tokens and check-patch-surface
+    # covers patches/; this row covers the leak neither sees, with a
+    # committed allowlist that itself fails on stale entries.
+    #
+    # Honestly --quick: it reads text files off disk only. No build, no
+    # browser, no display, no network.
+    #
+    # verify-manifest-literals-self-test rides alongside for the reason
+    # every other self-test row in this array gives: it plants a display
+    # literal (red, naming file and value), a boundary control (green),
+    # and one stale allowlist entry of each kind (removed literal,
+    # rewritten file, deleted file -- each red, naming the entry), with
+    # the unplanted control green first.
+    "verify-manifest-literals|node $REPO_ROOT/scripts/verify-manifest-literals.mjs"
+    "verify-manifest-literals-self-test|node $REPO_ROOT/scripts/verify-manifest-literals.mjs --self-test"
 
     # from verify-phase-03.sh
     "check-patch-surface|bash $REPO_ROOT/scripts/check-patch-surface.sh"
