@@ -3638,7 +3638,7 @@ run_own_checks() {
     # generate-check asserts IDEMPOTENCE, and only that: on a tree where the
     # generator has already run, a second run produces the same bytes as the
     # first. Anything stronger would be a claim about a tree this row cannot
-    # observe. Whether the emitted bytes match the five HAND-WRITTEN files is
+    # observe. Whether the emitted bytes match the twenty-three HAND-WRITTEN files is
     # the separate question generated-byte-identity answers, and it answers it
     # without needing a prior generate at all.
     #
@@ -3653,11 +3653,14 @@ run_own_checks() {
     # the skip message and its zero exit.
     #
     # generate-self-test rides alongside for the reason every other self-test
-    # row in this array gives, and here it carries more weight than most: nine
-    # planted faults -- a missing required key, an invalid basename, a
-    # misspelled section header, a whitespace-only value, a short downstream
-    # array, a stale generated file, an absent generated directory, a
-    # malformed manifest -- each required to go red NAMING the drift, plus a
+    # row in this array gives, and here it carries more weight than most:
+    # fourteen planted faults -- a missing required key, an invalid basename,
+    # a misspelled section header, a whitespace-only value, a short downstream
+    # array, an incomplete variant, a duplicated variant id, an unused variant
+    # id, a partially-stated identity table, a stale generated file, an absent
+    # generated directory, a malformed manifest, a drifted locale full name
+    # and the locale agreement holding on the emitted pairs -- each required
+    # to go red NAMING the drift (or resolve as pinned), plus a
     # cross-cutting assertion that no case's output carries a stack frame, a
     # module specifier, or this machine's path to the project. Every one of the
     # generator's failure messages is user-facing copy under CLAUDE.md's
@@ -3670,6 +3673,45 @@ run_own_checks() {
     # no display, no network.
     "generate-check|node $REPO_ROOT/scripts/generate.mjs --check"
     "generate-self-test|node $REPO_ROOT/scripts/generate.mjs --self-test"
+
+    # NEW (03-01): the branding-directory agreement gate -- what the generator
+    # emits under generated/branding/ is a complete drop-in branding directory
+    # per variant whose locale halves agree.
+    #
+    # It asserts something DIFFERENT from the three pairs above, which is why
+    # another pair of rows exists rather than none. generated-byte-identity
+    # proves each emitted file equals its hand-written counterpart;
+    # generate-check proves the generated/ tree matches the manifest right
+    # now. Neither sees the directory AS a directory: a deleted emitter row
+    # leaves its file out of the set without failing any per-file comparison,
+    # and the two locale files can disagree on a shared name while each still
+    # matching nothing that checks them against each other. This row derives
+    # the emitted file set per variant at check time and compares as set
+    # equality in three directions (every emitted file declared by TARGETS,
+    # every TARGETS branding row present on disk, dev versus release
+    # destination sets equal), then re-asserts the ftl-versus-properties term
+    # equality off the generated files -- the same agreement the emitter
+    # asserts in memory before writing, now proved on the bytes on disk.
+    #
+    # ON A TREE WITH NO generated/branding/, THIS ROW SKIPS AND PASSES, for
+    # the same reason generate-check does: generated/ is git-ignored, so that
+    # is the state of every fresh clone, and a tree that has never generated
+    # cannot disagree with itself. A PRESENT but empty or partial tree is a
+    # defect and fails -- the self-test's emptied-directory case pins the
+    # distinction.
+    #
+    # branding-dir-agreement-self-test rides alongside for the reason every
+    # other self-test row in this array gives: it mirrors the real tree into
+    # mkdtemp with the true TARGETS rows and emitters, asserts the unmutated
+    # control is green first, then plants one mutation per case (a drifted
+    # full-name term, a removed layout file, an emptied directory) requiring
+    # red naming the file and both values, plus the absent-tree SKIP.
+    #
+    # Both are honestly --quick. The check reads text files off disk only;
+    # the self-test emits into mkdtemp directories. No build, no browser, no
+    # display, no network.
+    "branding-dir-agreement|node $REPO_ROOT/scripts/verify-branding-agreement.mjs"
+    "branding-dir-agreement-self-test|node $REPO_ROOT/scripts/verify-branding-agreement.mjs --self-test"
 
     # NEW: the vendored settings parser's provenance record, machine-checked.
     #
