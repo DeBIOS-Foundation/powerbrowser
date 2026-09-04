@@ -308,7 +308,14 @@ Plans:
   3. Adversarial fixture configs (display name containing a space, name sorting after `m-browser`, non-square logo, missing required key) each either build and verify correctly or fail with the intended clear error — none silently produce a wrong build
   4. Both verification layers pass for every fixture, proving nothing in the platform is keyed to Power Browser's or Sourcerer's own values
 
-**Plans**: TBD
+**Plans**: 1/4 plans executed
+
+Plans:
+
+- [x] 07-01-PLAN.md — Land the CFG-05 mechanism: PB_CONFIG_DIR external-config resolution in the generator, as the thinnest end-to-end slice the rest of the phase expands from
+- [ ] 07-02-PLAN.md — Prove the milestone acceptance core with a synthetic downstream: a Sourcerer-equivalent external config yields a fully branded product from an untouched platform tree
+- [ ] 07-03-PLAN.md — Close VER-03's adversarial half: four hostile fixtures that prove the platform is not accidentally built around one friendly config
+- [ ] 07-04-PLAN.md — Formalize the both-layers-pass proof, carry-test the rebranding guide against a fixture, and stage the tier-3 drills
 
 ## Progress
 
