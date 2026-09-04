@@ -507,14 +507,14 @@
       "case_form": "title",
       "class": "brand-display",
       "target": "Power Browser",
-      "expected_count": 1,
+      "expected_count": 3,
       "expected_files": [
         "theia/applications/browser/package.json"
       ],
       "only_in": [
         "theia/applications/browser/package.json"
       ],
-      "reason": "theia/applications/browser/package.json:13 -- `\"applicationName\": \"Sourcerer\"` is the Theia frontend's window/title display name. The rest of this file carries ordinary lowercase identifier occurrences the rename script DOES handle, so the exclusion is line-scoped in hand_write.line_contains rather than whole-file."
+      "reason": "theia/applications/browser/package.json:13 -- `\"applicationName\": \"Sourcerer\"` is the Theia frontend's window/title display name -- plus :29-30, the first two powerbrowserBranding legal notices (06-04: the own-trademark notice and the Mozilla non-association sentence, both carrying the display form). The rest of this file carries ordinary lowercase identifier occurrences the rename script DOES handle, so the exclusion is line-scoped in hand_write.line_contains rather than whole-file."
     },
     {
       "token": "Sourcerer",
