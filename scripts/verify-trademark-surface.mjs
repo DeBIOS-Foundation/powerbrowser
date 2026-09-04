@@ -84,7 +84,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { resolveConfig } from './generate.mjs';
+import { resolveConfig, MOZILLA_NON_ASSOCIATION_TAIL } from './generate.mjs';
 import { findMatches } from './scan-brand-residue.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -152,6 +152,11 @@ const DISPLAY_LINE_EXCLUSIONS = [
     id: 'frozen-term-rationale',
     test: (line) => line.includes('D-78'),
     reason: 'the comment recording why the frozen term stays; it cites the decision, not a display value',
+  },
+  {
+    id: 'mandated-legal-notice',
+    test: (line) => line.includes(MOZILLA_NON_ASSOCIATION_TAIL),
+    reason: 'the About-dialog legal-notice channel must name the upstream project in words per the 06-03 primary-source basis (an equally prominent non-association statement); excluded only by the emitter-fixed full tail imported from the generator, so a bare token on any other line still goes red',
   },
 ];
 
@@ -455,6 +460,26 @@ const FIXTURE_REVIEW = [
 
 const FIXTURE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"></svg>\n';
 
+// An emitted branding fragment carrying the legal-notice channel (06-04).
+// The Mozilla sentence is composed from the generator's own tail const --
+// derived, never restated -- so the exclusion and the emitter cannot drift
+// into disagreeing about the mandated shape. Fixture values stay in the
+// Acme namespace like every other fixture in this file.
+const FIXTURE_BRANDING_FRAGMENT = [
+  '{',
+  '  "welcomeText": null,',
+  '  "aboutText": null,',
+  '  "repoUrl": "https://example.org/support",',
+  '  "markSvg": "<svg></svg>",',
+  '  "legalNotices": [',
+  '    "Acme Browser is a trademark of Acme Works.",',
+  `    "Acme Browser Dev ${MOZILLA_NON_ASSOCIATION_TAIL}",`,
+  '    "This product (example.org) includes Eclipse Theia, a trademark of Eclipse Foundation AISBL."',
+  '  ]',
+  '}',
+  '',
+].join('\n');
+
 function controlFiles() {
   return {
     [MANIFEST_REL]: FIXTURE_MANIFEST,
@@ -554,10 +579,44 @@ function selfTest() {
     }
   }
 
+  // Plant 5 (06-04): the mandated legal-notice sentence in an emitted
+  // fragment stays green through the anchored exclusion, while a bare
+  // token on a non-notice line still goes red -- proving the exclusion is
+  // the sentence shape, not the token.
+  {
+    const { dir, files } = fixtureRoot({ 'generated/theia-branding.json': FIXTURE_BRANDING_FRAGMENT });
+    dirs.push(dir);
+    const { failures } = checkTree({ root: dir, files, manifestRel: MANIFEST_REL, reviewRel: REVIEW_REL, brandDirRel: BRAND_DIR_REL });
+    if (failures.length > 0) {
+      complain('mandated legal-notice sentence', `was not excluded; got: ${failures.join(' | ')}`);
+    } else {
+      console.log('  ok  mandated legal-notice sentence -> excluded, fragment green');
+    }
+  }
+  {
+    const drifted = FIXTURE_BRANDING_FRAGMENT.replace(
+      `Acme Browser Dev ${MOZILLA_NON_ASSOCIATION_TAIL}`,
+      'Acme Browser Dev ships with Mozilla technology.',
+    );
+    if (drifted === FIXTURE_BRANDING_FRAGMENT) {
+      complain('bare token outside the notice', 'planted no fault at all: the drift did not land');
+    } else {
+      const { dir, files } = fixtureRoot({ 'generated/theia-branding.json': drifted });
+      dirs.push(dir);
+      const { failures } = checkTree({ root: dir, files, manifestRel: MANIFEST_REL, reviewRel: REVIEW_REL, brandDirRel: BRAND_DIR_REL });
+      const hit = failures.find((f) => f.includes('generated/theia-branding.json') && f.includes('"Mozilla"'));
+      if (!hit) {
+        complain('bare token outside the notice', `did not go red naming file and token; got: ${failures.join(' | ') || '(no failures at all)'}`);
+      } else {
+        console.log('  ok  bare token outside the notice -> red, naming the fragment file and the token');
+      }
+    }
+  }
+
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
 
   if (failed > 0) return 1;
-  console.log(`${NAME}: --self-test PASS -- 4 planted faults all behaved as pinned`);
+  console.log(`${NAME}: --self-test PASS -- 5 planted faults all behaved as pinned`);
   return 0;
 }
 
