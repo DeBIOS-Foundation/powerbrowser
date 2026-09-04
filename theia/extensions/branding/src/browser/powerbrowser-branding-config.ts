@@ -13,6 +13,7 @@ export interface PowerBrowserBrandingConfig {
     aboutText?: unknown;
     repoUrl?: unknown;
     markSvg?: unknown;
+    legalNotices?: unknown;
 }
 
 export interface PowerBrowserBranding {
@@ -20,10 +21,22 @@ export interface PowerBrowserBranding {
     aboutText: string | undefined;
     repoUrl: string | undefined;
     markSvg: string | undefined;
+    legalNotices: string[] | undefined;
 }
 
 function textOrUndefined(value: unknown): string | undefined {
     return typeof value === 'string' && value !== '' ? value : undefined;
+}
+
+// GEN-05 legal-notice shape carried over (06-04): an array of non-empty
+// strings. Anything else -- a missing key, a bare string, an empty array,
+// an element that is not a non-empty string -- resolves to undefined and
+// the call site falls back to its compiled notices. Never throws: a
+// channel read that throws takes the whole widget down with it.
+function stringArrayOrUndefined(value: unknown): string[] | undefined {
+    if (!Array.isArray(value) || value.length === 0) return undefined;
+    if (!value.every((entry): entry is string => typeof entry === 'string' && entry !== '')) return undefined;
+    return [...value];
 }
 
 // GEN-05 (04-01) read-site shape carried over: synchronous read,
@@ -37,8 +50,9 @@ export function readBrandingConfig(): PowerBrowserBranding {
             aboutText: textOrUndefined(raw?.aboutText),
             repoUrl: textOrUndefined(raw?.repoUrl),
             markSvg: textOrUndefined(raw?.markSvg),
+            legalNotices: stringArrayOrUndefined(raw?.legalNotices),
         };
     } catch {
-        return { welcomeText: undefined, aboutText: undefined, repoUrl: undefined, markSvg: undefined };
+        return { welcomeText: undefined, aboutText: undefined, repoUrl: undefined, markSvg: undefined, legalNotices: undefined };
     }
 }
