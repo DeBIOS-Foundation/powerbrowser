@@ -1,23 +1,16 @@
-# Stack Research
+# Stack Research: v1.1 Hardening and SQL Tabs
 
-**Domain:** Rebrandable Firefox-ESR fork platform (Zen-style `upstream/ + patches/ + own tree`) hosting an Eclipse Theia sidecar, driven by a single `configuration.toml` manifest
-**Researched:** 2026-08-29
-**Confidence:** HIGH (most decisions verified against the live sourcerer tree, the vendored Firefox ESR source, the npm registry, and a running Nix 2.34.8)
+**Domain:** Stack additions for Power Browser v1.1 — Windows/macOS installer builds, npm/local-path/WebExtension extension sources, crash-report pipeline, SQL-backed tabs
+**Researched:** 2026-09-04
+**Confidence:** HIGH (versions verified against npm registry, Mozilla source docs, and release feeds this session; integration points read from the live tree)
 
 ---
 
 ## Verdict
 
-There is no "standard 2026 stack" to adopt wholesale — there is exactly one piece
-of real prior art (Zen's **surfer**), and Power Browser should copy its *shape*
-(one manifest + a template directory + a generator) while rejecting its
-*implementation* (a 20-dependency npm CLI that owns your whole build and copies
-generated branding into the vendored Firefox tree).
+v1.1 needs **two new npm dependencies total** (`better-sqlite3`, `@sentry/node`) and **zero new build-system dependencies**. Everything else is host tooling on the packaging machines (NSIS, Windows SDK, `hdiutil`/`iconutil`) or machinery already in the tree (`mach repackage`, `Sqlite.sys.mjs`, `policies.json`, `theia download:plugins --packed`).
 
-The correct stack is almost entirely **already in the sourcerer tree** and should
-be carried over unchanged. The genuinely new surface is small: a TOML parser for
-Node, an SVG rasterizer, and ~400 lines of plain Node ESM. **Three new
-dependencies total.** Anything more is over-building.
+The shape of every addition follows the existing seams: the generator emits, `verify-platform.sh` asserts, the `PowerBrowserAPI.sys.mjs` boundary stays the single internals touchpoint. Anything that would add a second boundary, a second SQLite writer, or a second packaging system is rejected below.
 
 ---
 
@@ -27,107 +20,79 @@ dependencies total.** Anything more is over-building.
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| Firefox ESR | `153.1.0esr` (tag `FIREFOX_153_1_0esr_RELEASE`) | Browser substrate | Mozilla product-details (2026-08-29) lists `FIREFOX_ESR_NEXT = 153.1.0esr` and `FIREFOX_ESR = 140.14.0esr`. Sourcerer already pins ESR-next, which is the correct forward-looking pin during the ESR overlap window. **Confidence: HIGH** (live product-details JSON) |
-| Zen-style fork layout | n/a | `upstream/` (pinned tag, never committed) + `patches/` + `powerbrowser/` tree + `upstream/powerbrowser -> ../powerbrowser` symlink | Already proven in sourcerer. The symlink is what lets `--with-branding=powerbrowser/branding/release` resolve inside topsrcdir while the branding files live in *our* repo, not in the disposable vendored tree. This is strictly better than surfer's approach of generating into `engine/browser/branding/`. **Confidence: HIGH** (read from the live tree) |
-| Eclipse Theia | **pin `1.74.1`** (latest is `1.75.0`, published 2026-08-27) | IDE sidecar | Do not bundle a Theia bump into an extraction/rename milestone. `1.74.1` is the version the working sourcerer tree builds and smoke-tests against, including the `@theia/monaco-editor-core@1.108.201` pairing. Bump in a separate milestone. **Confidence: HIGH** |
-| Node.js | `22.x` for the Theia toolchain | Theia backend + native modules | Sourcerer's flake pins `nodejs_22` *and* overrides `yarn` to run on it, because nixpkgs' `yarn` shebang hard-codes the default Node (24.x) and would build `drivelist`'s node-gyp native module for the wrong `MODULE_VERSION`. Keep this override verbatim. **Confidence: HIGH** (documented in `flake.nix` with the failure mode) |
-| Yarn | `1.22.x` (classic) | Theia workspace build | `theia/package.json` declares `"yarn": ">=1.7.0 <2"`. `@theia/cli` builds are validated against yarn 1; switching package managers during an extraction is gratuitous risk. **Confidence: HIGH** |
-| TypeScript | `~5.9.3` | Theia extensions | **Do not take `typescript@7.x`** (latest is `7.0.2`, the Go-native rewrite). Theia 1.74's `tsc -b` project-references build and its `@theia/*` `.d.ts` surface are validated on 5.x. **Confidence: HIGH** |
-| React | `18.3.1` (+ `@types/react@18.3.31`) | Theia widgets | Pinned by Theia 1.74. Not a choice. **Confidence: HIGH** |
-| Nix flake | `nixpkgs-unstable`, Nix `2.34.8` | Two dev shells (`theia`, `firefox`) | Supplies the entire Gecko toolchain via `inputsFrom = [ firefox-esr-153-unwrapped ]` plus `mkShell.override { stdenv = llvmPackages.stdenv; }`. Reproducing that by hand is days of work. **Confidence: HIGH** |
-| `mach` + `.mozconfig` | ships with ESR | Firefox build driver | Not optional. **The `.mozconfig` becomes a generated file** (see Generator, below). **Confidence: HIGH** |
+| Firefox ESR | `153.2.0` (re-pin tag `FIREFOX_153_2_0esr_RELEASE` via UPD-01/02 drill) | Browser substrate + all packaging machinery | 153 is the current ESR branch (153.0esr 2026-07-21, 153.2.0 2026-09-01, Mozilla official). The tree pins `FIREFOX_153_1_0esr_RELEASE`; the one-minor re-pin rides the existing uptake tooling, it is not a stack decision. **Confidence: HIGH** |
+| Eclipse Theia | stay on **`1.74.1`** | Sidecar | Still the latest stable tag on GitHub (v1.74.1, 2026-08-06; 1.74.x is the 2026-08 community release). 1.75.0 has a release-plan date of 2026-08-27 but is not marked latest; a Theia bump inside a hardening milestone makes every failure ambiguous. The Theia re-pin proof rides along as a carried drill, not a version change. **Confidence: HIGH** |
+| Node.js 22 + yarn 1.22 classic + TS ~5.9.3 + React 18.3.1 | unchanged | Sidecar toolchain | Per v1 research; `node:sqlite`'s status (below) is the reason Node stays at 22 rather than chasing 24. **Confidence: HIGH** |
+| `smol-toml` | **`1.8.0`** (latest; Snyk confirms 1.8.0 current) | Manifest parsing | Carry over. Note: upstream now advertises TOML 1.1.0 compliance — the manifest must stay on the TOML **1.0.0 subset** (`builtins.fromTOML` is 1.0-only and errors on dates), so never write 1.1-only syntax into `configuration.toml`. Also: 1.6.1+ fixes Snyk uncontrolled-recursion advisories, another reason to take 1.8.0. **Confidence: HIGH** |
+| `sharp` | **`0.35.4`** (2026-08-26, latest) | Icon rasterization | Carry over. Now also feeds the macOS `.iconset` PNG set (16→1024 incl. `@2x`) that `iconutil`/`png2icns` assembles into `.icns`. **Confidence: HIGH** |
 
-### New Dependencies (the entire net addition)
+### NEW (1): SQL-backed tabs — two access paths, one writer
 
-| Library | Version | Purpose | Why Recommended |
-|---------|---------|---------|-----------------|
-| **`smol-toml`** | `1.8.0` (published 2026-08-11) | Parse (and stringify) `configuration.toml` in Node | **Zero runtime dependencies**, ESM + CJS, `engines.node >= 18`, BSD-3-Clause, 109 KB unpacked, TOML 1.0.0-correct, actively maintained. `stringify` is a bonus: it is how you machine-generate the downstream Sourcerer `configuration.toml` that proves the mechanism. **Confidence: HIGH** (registry metadata read directly) |
-| **`sharp`** | `0.35.4` (published 2026-08-26) | Rasterize `brand/logo.svg` → `default{16,32,48,64,128}.png`, and resize PNG→PNG for the About logo | Prebuilt N-API binaries for linux-x64/arm64 with **no system libraries required**, so a stranger who clones the repo does not have to install librsvg first. Actively maintained. Handles both the SVG path and the "downstream only has a PNG" path with one dependency. **Confidence: HIGH** for maintenance/format support; **MEDIUM** on rasterization fidelity — see the `density` pitfall below |
-| **`builtins.fromTOML`** | built into Nix (verified on 2.34.8) | `flake.nix` reads `[upstreams]` pins from the same manifest | No dependency at all. Verified live: handles tables, arrays of tables, multi-line strings, floats, bools, dotted keys. Gives one source of truth for the ESR tag across the Nix shell and `fetch-upstream.sh`. **Confidence: HIGH** (tested empirically this session) |
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| **`Sqlite.sys.mjs`** (`resource://gre/modules/Sqlite.sys.mjs`) | ships in ESR 153 (in-tree, ~70 KB) | Gecko chrome-side SQLite: the new tabs store + exposing places | This is Mozilla's own promise-based wrapper over mozStorage — `Sqlite.openConnection()` / `openDatabaseWithFileURL`, prepared statements, transactions. It is what `Bookmarks.sys.mjs`, `History.sys.mjs`, and every first-party consumer already sits on. Zero new dependencies, profile-dir-aware, WAL-capable, and it keeps crash-report filenames controllable via the explicit `TelemetryFilename` parameter (the module header carries a privacy warning: pass a fixed name like `tabs.sqlite`, never a per-origin filename). New-tab schema is a **new `tabs.sqlite`** in the profile dir — never new tables inside `places.sqlite` (upstream-owned schema; a rebase that migrates places would collide with us). Bookmarks/history are **exposed via the async `Bookmarks.sys.mjs` / `History.sys.mjs` APIs**, not raw SQL against places internals. **Confidence: HIGH** (module confirmed present on mozilla-central/main; Places-on-SQLite architecture per Firefox Source Docs) |
+| **`better-sqlite3`** | **`13.0.3`** (2026-08-05, latest stable; MIT) | Theia Node-backend SQLite reads | The fastest synchronous SQLite driver for Node (~9,800 dependents, weekly releases, actively maintained). Synchronous API matches the backend's low-concurrency tab-query path and mirrors `node:sqlite`'s shape, so a future stdlib migration is mechanical. Prebuilds cover Node 22 (`NODE_MODULE_VERSION` 127); if a prebuild is ever missing, the `theia` dev shell already carries the fallback toolchain (`python3`, `gnumake`, `pkg-config`, node-gyp-bin on PATH — the `drivelist` precedent). Open the DB **`readonly: true`** from the backend. **Confidence: HIGH** |
 
-That is the complete list. Everything else the generator needs is `node:fs`,
-`node:path`, and template literals.
+**Single-writer rule (load-bearing): Gecko owns `tabs.sqlite`; the Theia backend never writes.** SQLite locking plus Firefox's own profile lock make two writers a corruption story. The backend opens read-only for queries (search, diagnostics) and all mutations go through `PowerBrowserAPI.sys.mjs` → chrome-side `Sqlite.sys.mjs` connection. Tab identity keys are `TabUriRegistry` URIs (the GUI-04 stable-identity seam) — the URI is the primary key, so the later mirror/proxy bridge joins on identity rather than rowids. Schema carries a `schema_version` table from day one; migrations live in the chrome-side module, catalogued as new `INTERNAL-APIS.md` rows (every `Services.dirsvc`/`Sqlite` touch enters through the boundary file, per `check-internals-boundary.sh`).
 
-### Development / Verification Tools
+### NEW (2): Installer builds — host tools, no new tree deps
 
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| `desktop-file-validate` (nixpkgs `desktop-file-utils` 0.28) | Validate every generated `.desktop` file | Free correctness gate on generated output; one line in the verify script. Add `pkgs.desktop-file-utils` to the flake. |
-| `sccache` | Gecko rebuild cache | Already wired (`RUSTC_WRAPPER=sccache`, `--with-ccache=sccache`). Exported **after** the `unset AS LD NM ...` line — order is load-bearing. |
-| Plain Node `.mjs` scripts, no test framework | All verification | Sourcerer's `scripts/*.mjs` deliberately carry **zero npm dependencies** and run under bare `node`. Preserve this: `verify-branding-identity.mjs` must be runnable before `yarn install` ever happens. |
-| `scripts/lib/firefox-bidi.mjs` (vendored) | WebDriver BiDi driving of the built browser | Already exists (15 KB). Live-page assertions beat reading source, per the existing `D-64` "vacuous pass" rule. |
-| `git grep` / Node regex walk | "no hardcoded brand string outside the manifest" gate | Do not add ripgrep as a dependency; extend the existing `.mjs` verifier. |
+| Tool | Version | Purpose | Why Recommended |
+|------|---------|---------|-----------------|
+| **NSIS** (Windows packaging host) | **`3.12`** (2026-04-19; floor 3.11) | Stub + full Windows installers | Firefox builds its own installers from in-tree `browser/installer/windows/nsis/` via `mach build installer` / `mach package` — the generator's job is only correct `branding.nsi` defines (the six `!define` names `verify-installer-schema.mjs` already asserts). 3.11 fixed CVE-2025-43715 (privilege escalation when installers run as SYSTEM); 3.12 fixes a second SYSTEM priv-esc plus macOS-cross build fixes. v1's WR-04 (reject bare `$VAR` in NSIS defines) is exactly the hardening this needs. NSIS installs on the Windows host only; nothing enters the repo or flake. **Confidence: HIGH** |
+| **Windows SDK `MAKEAPPX`/`SIGNTOOL`** (Windows packaging host) **or** Mozilla `msix-packaging` fork toolchain (Linux cross path) | Windows SDK 10+ / `mach artifact toolchain --from-build linux64-msix-packaging` | MSIX repackaging | `mach repackage msix [--unsigned] [--sign]` is the entire MSIX pipeline (per Firefox Source Docs): it repackages the `mach package` ZIP, is branding-aware (channel-specific paths — which is why the generator's identity keys feed it), and handles self-signed test certs itself. Unsigned packages install on Win11 with the OID path (`Add-AppxPackage -AllowUnsigned`, admin). No npm/MSIX-SDK dependency — the MSIX format's proprietary bits (`resources.pri` via `makepri.exe`) are why you use Mozilla's tooling, not a third-party packager. **Confidence: HIGH** |
+| **`hdiutil` + `iconutil`** (macOS packaging host) | preinstalled on macOS | DMG creation + `.icns` assembly | Mozilla's own note: DMGs are built with `hdiutil` on macOS hosts (Linux automation uses `libdmg-hfsplus`; lzma compression since FF136 needs macOS ≥10.15 semantics). `iconutil -c icns firefox.iconset` is Mozilla's documented icon path (`UpdatingMacIcons` source doc). sharp emits the PNG set (16→1024 + `@2x`); the mac host assembles. Nothing enters the repo. **Confidence: HIGH** |
+| **`libicns` `png2icns`** (nixpkgs, Linux-side fallback) | **`0.8.1`** (1024px support; LGPL) | `.icns` assembly without a Mac host | Only if v1.1 wants a Linux-generated icns for smoke/verify purposes — real DMGs still build on the Mac host. `pkgs.libicns` provides it; it is a one-line flake addition, not an npm dep. Prefer host `iconutil` for shippable artifacts. **Confidence: MEDIUM** (format support verified; pin the "host iconutil is canonical" rule so Linux icns never ships) |
+
+### NEW (3): Extension sources — manifest kinds, no new tooling
+
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| **npm-source Theia extensions** = exact-pinned `dependencies` + `resolutions` in `theia/applications/browser/package.json` | yarn 1.22 (existing) | EXT-02 npm kind | A Theia extension *is* an npm package exposing `ContainerModule`s, consumed as a compile-time dependency — there is no plugin-runtime install step to build. So "npm source" needs no new tooling: the generator maps `[[extensions]] source="npm"` entries to exact-pinned deps, the existing `resolutions` table forces the `@theia/*` pairing, `yarn.lock` freezes transitive closure, and `verify-extension-pins.mjs` grows a step-2 rule (every npm entry's installed version equals its pin — a floated range goes red the same way a floated Open VSX URL does today). **Confidence: HIGH** |
+| **local-path extensions** = `file:` deps or `theia/extensions/*` workspace members | yarn 1.22 workspaces (existing) | EXT-02 local-path kind | Same mechanism as the five `@powerbrowser/*` extensions already in the tree. Fail-loud = the generator resolves the path at generate time (missing dir = hard fail, same class as WR-07's fixture-root threading) and the verifier asserts the workspace member builds. **Confidence: HIGH** |
+| **`ExtensionSettings` in `powerbrowser/distribution/policies.json`** | ESR 153 policy schema | WebExtensions declaration sibling | The tree already ships `powerbrowser/distribution/policies.json` — the documented enterprise path (`distribution/` + `distribution/extensions/<id>.xpi` bundling, or `force_installed`/`normal_installed` + `install_url`). ESR 153 even makes `install_url` optional for AMO-hosted extensions and adds `runtime_blocked_hosts`/`blocked_permissions`. The generator emits this block from `[[extensions]]` webext entries, so the "sibling" is one manifest section rendered twice (Theia `theiaPlugins` + Firefox `ExtensionSettings`), pinned and fail-loud through the same verifier. **Confidence: HIGH** |
+
+### NEW (4): Crash-report pipeline — Sentry, not Socorro
+
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| **`@sentry/node`** | **`10.73.0`** (latest, 2026-09-03; MIT; Node ≥18) | Theia-backend crash + error capture (TEL-04 client side) | The sidecar is a Node backend — its crashes are JS exceptions and native aborts, both of which the Sentry Node SDK captures with breadcrumbs, release/channel annotations, and offline-queued retry upload. Wire it behind the existing `[telemetry]` level gate: level `off` (default) = `Sentry.init` never runs (fail-closed, consistent with the token-gate posture); `crash`/`error`/`all` map to `tracesSampleRate`/`beforeSend` filtering; the `[telemetry] endpoint` becomes the DSN. Theia 1.74's own `@theia/telemetry` (`TelemetrySink`) is the in-extension seam — contribute a Sentry sink rather than inventing a reporting module. **Confidence: HIGH** |
+| **Self-hosted Sentry** | **`26.8.0`** (2026-08-17; docker-compose) | Downstream-operated collector (TEL-04 server side) | Socorro is explicitly out: its README states it is Mozilla-centric with **no capacity for external users**, and it drags Postgres/Kafka/Elasticsearch-class infrastructure. `electron/mini-breakpad-server` is archived (Dec 2022, CoffeeScript, unmaintained) — do not adopt. Self-hosted Sentry is the maintained single-`install.sh` collector a downstream can actually operate; SaaS Sentry is the zero-ops alternative. Either way the platform only ever carries the DSN key, never collector infra. **Confidence: MEDIUM-HIGH** (SDK/client choice HIGH; collector-operability MEDIUM — needs the TEL-04 live drill against a real collector) |
+| Gecko minidumps | no change in v1.1 (reporter stays compiled out) | deliberate deferral | `breakpad.reportURL` repointing (TEL-03, already manifest-driven) is the only Gecko-side crash key in v1.1. Re-enabling `--enable-crashreporter` + a minidump upload/consent UI is a separate milestone's worth of privacy surface (consent prompt, `about:crashes`, symbolication pipeline) — TEL-04's "beyond endpoint repointing" is satisfied by the Sentry sidecar pipeline + the documented minidump follow-up, not by half-enabling Breakpad. **Confidence: HIGH** |
 
 ---
 
 ## Installation
 
 ```bash
-# Root tooling package (new): the generator's only two deps.
-# Keep this SEPARATE from theia/package.json — the generator must be
-# installable and runnable without the Theia workspace existing.
-npm install --save-exact smol-toml@1.8.0 sharp@0.35.4
+# Theia workspace additions (exact pins; resolutions table keeps @theia/* paired)
+# In theia/applications/browser/package.json or the workspace root:
+yarn add --exact better-sqlite3@13.0.3
+yarn add --exact @sentry/node@10.73.0
 
-# Nix shells (existing flake, two additions)
-#   theia shell:   unchanged (nodejs_22 + overridden yarn + python3 + pkg-config)
-#   firefox shell: add pkgs.desktop-file-utils  (validate generated .desktop)
-#                  add pkgs.librsvg             (optional rsvg-convert fallback)
+# No new root/generator dependencies.
+# smol-toml stays 1.8.0 (do NOT downgrade: <1.6.1 has Snyk recursion advisories).
+# sharp stays 0.35.4.
 
-# Theia sidecar (existing)
-cd theia && yarn install && yarn build
+# Windows packaging host (PKG-01 procedure for docs/BUILD.md)
+#   - NSIS 3.12  (https://nsis.sourceforge.io/Download)
+#   - Windows SDK 10+ (MAKEAPPX, SIGNTOOL, makepri.exe) — MSIX path only
+#   - then: mach package  →  mach repackage msix --unsigned  (test)
+#     or:   mach build installer  (NSIS stub+full)
+
+# macOS packaging host
+#   - Xcode CLT only (hdiutil + iconutil are preinstalled)
+#   - sharp PNG set → *.iconset/ → iconutil -c icns → mach package (DMG)
+
+# Crash collector (downstream-operated, never in this repo)
+#   - Self-hosted Sentry 26.8.0 install.sh, or SaaS Sentry DSN
+#   - DSN lands in [telemetry] endpoint only
 ```
 
----
+### Flake notes
 
-## The Generator: prescribed design
-
-One file, `scripts/generate-brand.mjs`, plain Node ESM, run before `mach build`
-and before `yarn build`. Idempotent. Supports `--check` (regenerate to a temp dir
-and diff; non-zero exit on drift) so CI proves generated output is in sync.
-
-### Surface map — what it writes, from which manifest key
-
-| Generated artifact | Manifest source | Notes |
-|---|---|---|
-| `powerbrowser/branding/<variant>/configure.sh` | `[product] name` | `MOZ_APP_DISPLAYNAME="..."` (+ `MOZ_APP_REMOTINGNAME` for non-release variants) |
-| `.../locales/en-US/brand.ftl` | `[product] name`, `short_name`, `vendor` | `-brand-{shorter,short,shortcut,full}-name`, `-vendor-short-name`, `trademarkInfo`. **Keep `-brand-product-name = Firefox`** — a small set of "requires Firefox" compat strings interpolate it (sourcerer's D-78) |
-| `.../locales/en-US/brand.properties` | same | Must agree byte-for-byte with `brand.ftl` — the existing verifier already fails on divergence (WR-01) |
-| `.../locales/{jar.mn,moz.build}`, `.../content/{jar.mn,moz.build}` | none (static) | Copy from template unchanged |
-| `.../moz.build` | none (static) | `include("../../../browser/branding/branding-common.mozbuild"); FirefoxBranding()` — the `../../../` depth is fixed by the symlink layout |
-| `.../default{16,32,48,64,128}.png` | `[assets] logo_svg` | **Exactly these five** for Linux — verified in `browser/branding/branding-common.mozbuild`, which only adds those five under `MOZ_WIDGET_TOOLKIT == "gtk"`. Upstream `unofficial/` also ships 22/24/256 but the gtk template does not install them |
-| `.../pref/firefox-branding.js` | `[telemetry]`, `[urls]` | The prefs that gate unattended callouts. Sourcerer's file is a hard-won ledger (OpenH264/`extensions.update.autoUpdateDefault`, GMP manager, NetworkConnectivityService, DNS prefetch). **Port it verbatim as the template's static body**; only the URL-valued prefs are substituted |
-| `.mozconfig` | `[identity]`, `[build]`, `[upstreams]` | `--with-app-basename`, `--with-distribution-id`, `--with-branding`, `MOZ_APP_REMOTINGNAME`, objdir |
-| `powerbrowser/<binary>-<variant>.desktop` | `[product]`, `[identity]`, install prefix | Currently hand-written with an absolute `/home/chris/...` path — that alone justifies generation |
-| `theia/applications/browser/package.json` → `theia.frontend.config` | `[product]`, `[theia]`, `[telemetry]` | See "Theia side" below |
-| `theia/applications/browser/package.json` → `dependencies` | `[extensions]` | id + source + pin |
-| `flake.nix` **reads** `[upstreams]` (not generated) | `[upstreams] firefox_esr_tag` | `builtins.fromTOML (builtins.readFile ./configuration.toml)` |
-
-### Theia side: use frontend config custom keys, not code generation
-
-Sourcerer already proves the pattern — `theia.frontend.config.sourcererPrivilegedJs`
-is a **custom key** read at runtime through `FrontendApplicationConfigProvider`
-(D-62), and the existing `verify-branding.mjs` reads it live in the page over BiDi.
-
-Put every user-visible Theia brand value there (`applicationName`, welcome text,
-about text, repo URL, logo path) and have `@powerbrowser/branding` read them from
-the provider. **Do not** generate a `generated-brand.ts` module and rebuild the
-extension on every rebrand — that turns a config edit into a TypeScript compile.
-The `package.json` `theia` block is already a build-time input; one generated
-JSON blob there covers the whole surface.
-
-**Confidence: HIGH** — the mechanism, and a headless test for it, already exist in
-the tree.
-
-### No templating engine
-
-Surfer does `stringTemplate(fileContents, brandingConfig)` — plain `${var}`
-substitution over a `template/branding.optional/` directory tree, then fills any
-remaining gaps by copying `browser/branding/unofficial/`. That is the right
-amount of machinery. Use `String.prototype.replace` with a
-`/\{\{(\w+)\}\}/g` callback that **throws on an unknown key** (so a typo in a
-template fails the build instead of silently emitting `{{brandFulName}}`).
-
-Do not add Handlebars/Mustache/EJS/Nunjucks.
+- `theia` shell: no new inputs required for `better-sqlite3` prebuilds on x86_64-linux; the existing `python3` + `gnumake` + `pkg-config` + node-gyp-bin PATH already covers a source fallback rebuild (same path `drivelist` uses). If aarch64 packaging hosts appear, re-verify prebuild availability there.
+- Optional: `pkgs.libicns` only if a Linux-side `png2icns` smoke check is wanted. Never required for shippable DMGs.
 
 ---
 
@@ -135,13 +100,18 @@ Do not add Handlebars/Mustache/EJS/Nunjucks.
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
-| Write our own ~400-line generator | **Zen's `@zen-browser/surfer` 1.14.8** | If you wanted surfer to own download, bootstrap, patch, build, package, and update. It does all of that, pulls ~20 deps (axios, execa, fs-extra, commander, prompts, xmlbuilder2…), and generates branding *into* the vendored Firefox tree. Power Browser already has `fetch-upstream.sh`, `apply-patches.sh`, `rebase-upstream.sh` and a Nix toolchain that surfer does not know about. **Steal the schema, not the tool.** Worth re-reading `src/commands/patches/branding-patch.ts` before writing ours |
-| `sharp` for rasterization | `rsvg-convert` (nixpkgs `librsvg` 2.62.3) | If you decide the generator may assume the Nix shell. One shell-out per size, deterministic, zero npm deps. Genuinely tempting; rejected only because "a stranger clones and builds" is the project's stated core value and this adds a system prerequisite |
-| `sharp` | `resvg` CLI (nixpkgs 0.48.1) | Best pure-Rust SVG fidelity, self-contained font handling. Same system-prerequisite objection |
-| `sharp` | `@resvg/resvg-js` 2.6.2 | Note: surfer *imports* `renderAsync` from it but the import is effectively dead — surfer requires pre-rendered `logo{16..512}.png`. Last published **2024-03**; stale. Deriving sizes from one SVG is a real improvement over surfer, so don't inherit its dead dep |
-| Hand-rolled schema validation (~60 lines: required-key table + type checks) | `zod` / `ajv` + JSON Schema | If `configuration.toml` grows past ~50 keys or a third party needs a machine-readable schema. Until then a declarative key table gives better error messages to non-developers ("`[product] name` is required — set it in configuration.toml line N") than a Zod issue array |
-| Node parses the TOML | Nix `fromTOML` → `configuration.json` → Node `JSON.parse` | Would drop `smol-toml` entirely, but makes **Nix mandatory to build**, which contradicts the core value. Use `fromTOML` only for the pins the flake itself needs |
-| One generated `.mozconfig` | Hand-maintained `.mozconfig` + env vars | Never — `--with-branding`, `--with-app-basename` and `--with-distribution-id` are all manifest-derived. A hand-maintained mozconfig *is* the second file a rebrander has to edit, which is the bug the project exists to prevent |
+| `Sqlite.sys.mjs` (chrome JS) | Raw `mozIStorageConnection` / `Services.storage` | Never in new code — `Sqlite.sys.mjs` *is* the mozStorage wrapper with the promise API, telemetry-filename hygiene, and shutdown blocking. Raw connections bypass all three. |
+| `Sqlite.sys.mjs` + new `tabs.sqlite` | New tables in `places.sqlite` | Never — places is upstream-owned; every ESR rebase may migrate it. Our schema lives in our file. |
+| `better-sqlite3@13.0.3` | `node:sqlite` (stdlib) | When it graduates stable on the pinned Node line. Today it is **Stability 1.2 / Release Candidate** (Node 25.7+; still flagged experimental on Node 22, unflagged only since 22.13 but API still shifting — `column()`, session tracking, and `location()` all landed mid-22.x). A platform surface cannot pin a moving API. Revisit at the next Node re-pin; the call shapes are deliberately similar so the swap is small. |
+| `better-sqlite3@13.0.3` | `node-sqlite3` / `sqlite3` npm | Never — async-callback API, slower, heavier native surface, no advantage for a single-reader backend. |
+| `better-sqlite3@13.0.3` | `sql.js` (WASM SQLite) | Only if the backend ever had to run where native modules cannot load. It can (the shell already builds `drivelist` native) — WASM would add a ~MB blob and synchronous-fs quirks for zero benefit. |
+| `@sentry/node` + self-hosted Sentry | Self-hosted **Socorro** | Never — upstream explicitly declines external support; the stack (Antenna collector + processor + Postgres + ES + S3) is an ops team, not a downstream affordance. |
+| `@sentry/node` | `electron/mini-breakpad-server` | Never — archived by Electron Dec 2022, CoffeeScript, no symbolication pipeline. Listed here only because Socorro's own README still names it. |
+| `@sentry/node` | `wk8/sentry_breakpad` bridge | If v1.1 later re-enables the Gecko reporter and needs minidumps forwarded into Sentry — that is the documented escape hatch, not the starting point. |
+| `mach repackage msix` + Windows SDK | Third-party MSIX packagers / Electron builders | Never — they cannot reproduce Mozilla's branding-aware `resources.pri`/manifest handling; `electron-builder` in particular would be a second packaging system alongside `mach`. |
+| Host `iconutil` (macOS) | `libicns png2icns` for shippable icns | Only as a Linux smoke-check fallback. Shippable `.icns` comes from Apple's own tool on the Mac host (Mozilla's documented path). |
+| Hand-rolled manifest validation (existing key table) | `zod`/`ajv` for new `[[extensions]]` kinds | If `configuration.toml` grows past ~50 keys. The new source kinds are three enum values + existing pin/sha fields — the key table covers them with better error messages to non-developers. |
+| No ORM anywhere | Drizzle / TypeORM / Prisma / Sequelize | Never for this schema — one `tabs` table plus a version row, accessed from *two different runtimes* (Gecko JS, Node) no ORM spans. An ORM would be a third schema description disagreeing with the other two. Hand-written SQL in `PowerBrowserAPI` + one backend reader module, both asserting `schema_version`. |
 
 ---
 
@@ -149,69 +119,34 @@ Do not add Handlebars/Mustache/EJS/Nunjucks.
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `typescript@7.x` | Latest is `7.0.2` (Go-native rewrite). Theia 1.74's project-references `tsc -b` build and `@theia/*` typings are validated on 5.x. Unrelated risk in a rename milestone | `typescript@~5.9.3` |
-| `@theia/core@1.75.0` in this milestone | Latest (2026-08-27), but the extraction milestone should change **names only**. A version bump underneath a rename makes every failure ambiguous | Pin `1.74.1`; bump in its own milestone |
-| Yarn 2+/Berry, pnpm, npm for the Theia workspace | `theia/package.json` declares `"yarn": ">=1.7.0 <2"`; `@theia/cli`'s `rebuild:browser`/`build` path assumes yarn 1 hoisting | Yarn 1.22 classic |
-| `@iarna/toml` | Last publish **2020-04**, TOML 0.5 era, unmaintained | `smol-toml@1.8.0` |
-| `@ltd/j-toml` | Last publish **2023-01** | `smol-toml@1.8.0` |
-| `toml` (BinaryMuse) / `js-toml` | Both are alive (2026) and target TOML **1.1.0**, which is *not* a finished spec. Writing 1.1-only syntax would silently break `builtins.fromTOML`, which is 1.0.0 | `smol-toml@1.8.0` — TOML 1.0.0, the version Nix also implements |
-| A hand-rolled TOML subset parser | Users will write valid TOML your subset mis-parses; a wrong parse of a branding manifest is a shipped-with-wrong-name build | `smol-toml` |
-| TOML **date/time literals** anywhere in `configuration.toml` | **Verified this session:** `builtins.fromTOML` *errors* on both `d = 1979-05-27T07:32:00Z` and `d = 1979-05-27`, while `smol-toml` parses them into a `TomlDate`. The two readers would disagree, and Nix would hard-fail | Quote all dates as strings: `release_date = "2026-08-29"` |
-| Committing generated branding output | It is derived state; a stale commit and a fresh generate diverge silently | `.gitignore` the generated dirs; add `generate-brand.mjs --check` to CI |
-| Generating into `upstream/browser/branding/` (surfer's model) | `upstream/` is disposable and re-fetched at the pinned tag. Anything written there is destroyed on rebase and invisible to `git status` | Keep branding in `powerbrowser/branding/<variant>/`, reached via the `upstream/powerbrowser` symlink |
-| `npm install`-time postinstall hooks to run the generator | Firefox side must be buildable without ever touching npm lifecycle scripts | Explicit `scripts/generate-brand.mjs` invocation in the documented build steps |
-| Adding `zod`/`ajv`/`chalk`/`commander` to the generator | Every dep is one more thing a stranger's `npm ci` can fail on before they have a browser | `node:util.parseArgs`, `process.exitCode`, plain strings |
+| `node:sqlite` on Node 22 | Still experimental/RC on the pinned line; API shifted across 22.x minors (session API in .12, TypedArray bindings in .14, `columns()`/timeout in .16). A platform that pins exact versions cannot build on a moving stdlib surface | `better-sqlite3@13.0.3`; revisit at next Node re-pin |
+| Socorro self-host | Explicitly unsupported for non-Mozilla use; multi-service ops burden no downstream will run | Self-hosted Sentry 26.8.0 or SaaS Sentry; DSN-only in tree |
+| `mini-breakpad-server` | Archived, unmaintained since 2022 | Same as above |
+| Any ORM | Cannot span Gecko/Node runtimes; triples schema descriptions for a single-table store | Hand SQL + `schema_version` assertion both sides |
+| Second SQLite writer (backend writes to `tabs.sqlite`) | Lock contention + Firefox profile-lock corruption story | Backend opens `readonly: true`; all writes via `PowerBrowserAPI` |
+| New tables in `places.sqlite` | Upstream-owned schema; rebase migrations collide | Own `tabs.sqlite` in profile dir |
+| `sql.js` | WASM weight + sync-fs quirks with no payoff where native modules already build | `better-sqlite3` |
+| Electron packagers / third-party MSIX tools | Second packaging system; cannot do Mozilla's branding-aware MSIX bits | `mach build installer` / `mach repackage msix` on packaging hosts |
+| Re-enabling `--enable-crashreporter` in v1.1 | Opens consent/UI/symbolication surface (prompt, `about:crashes`, minidump retention) that dwarfs the milestone | Sentry sidecar pipeline now; Gecko reporter as a later milestone |
+| New GUI frameworks / tab-strip UI libs | Explicitly out of scope — no GUI work until after SQL tabs (GUI-02/GUI-05 deferred) | `TabUriRegistry` URI identity as the data seam; UI later |
+| `typescript@7.x`, Theia bump, yarn Berry/pnpm | Per v1 research — unrelated risk inside a hardening milestone | Current pins (TS ~5.9.3, Theia 1.74.1, yarn 1.22) |
+| TOML 1.1-only syntax in `configuration.toml` | `builtins.fromTOML` is 1.0.0 and hard-fails on dates/new syntax; smol-toml 1.8 accepts 1.1, so the two readers would disagree | TOML 1.0 subset only; quote all dates as strings |
 
 ---
 
-## Stack Pitfalls (specific, load-bearing)
+## Integration Points (existing tree)
 
-**1. `sharp` + SVG needs `density`, not `resize`. — Confidence: MEDIUM-HIGH**
-`sharp(svg).resize(16,16)` rasterizes the SVG at its intrinsic size (72 dpi) and
-then *downsamples*, which blurs small icons. Rasterize at the target size
-instead: `sharp(svgBuffer, { density: 72 * targetPx / intrinsicPx })`. Verify by
-eye on `default16.png` — this is exactly the size where the mistake shows.
-Corollary: **require logo SVGs to have text converted to paths**, and document it
-in `REBRANDING.md`. sharp's SVG text rendering goes through fontconfig and will
-not match across machines.
-
-**2. Brand strings currently live inside `patches/`. — Confidence: HIGH**
-`patches/010-sourcerer-identity.patch` sets `imply_option("MOZ_APP_VENDOR", "Deocracy")`
-and `020` sets `BROWSER_CHROME_URL` to `chrome://sourcerer/...` and
-`DIRS += ["../sourcerer/shell"]`. If patches carry brand strings, a rebrand
-requires regenerating patches — the exact failure mode this project forbids.
-
-**Rule to adopt: the internal namespace is fixed at `powerbrowser`; only
-user-visible strings come from `configuration.toml`.** Chrome URLs, directory
-names, and the npm scope stay `powerbrowser` in every downstream. That makes the
-patch set brand-invariant and rebasable forever.
-
-`MOZ_APP_VENDOR` is the one genuinely user-visible value stuck in a patch.
-`toolkit/moz.configure` declares it with `env="MOZ_APP_VENDOR"`, so the intended
-route is `mk_add_options "export MOZ_APP_VENDOR=..."` in the generated
-`.mozconfig`, with the `imply_option` line dropped from the patch. **This needs a
-real `configure` run to confirm** — `imply_option` conflicts with an explicitly
-set option, and `toolkit/moz.configure:103-106` `die()`s if no value is supplied
-at all. Flag this for phase-level verification; fallback is a templated patch.
-
-**3. `--with-branding` path depth is fixed by the symlink. — Confidence: HIGH**
-`powerbrowser/branding/<variant>/moz.build` must `include("../../../browser/branding/branding-common.mozbuild")`.
-Three levels up resolves to topsrcdir *only* through `upstream/powerbrowser -> ../powerbrowser`.
-If the generator ever emits branding at a different nesting depth, that include
-breaks. Keep the depth constant; make the variant name the only variable.
-
-**4. Node version split is deliberate. — Confidence: HIGH**
-The generator must run on any Node ≥18 (it is a stranger's first command). The
-Theia sidecar must run on Node 22 with the yarn override. Do not couple them —
-no shared `node_modules`, no shared `package.json`.
-
-**5. `verify-branding-identity.mjs` is the asset to evolve, not replace. — Confidence: HIGH**
-604 lines already implement a six-surface exact-equality identity check
-(executable name, `application.ini`, live runtime identity via a real headless
-launch, `brand.ftl`+`brand.properties` cross-agreement, `.desktop`, `--version`
-string), with cross-variant positive controls. The "no hardcoded brand string
-outside the manifest" requirement is a **seventh surface on that file**, not a new
-script.
+| New capability | Manifest key | Generator emitter | Verifier row | Boundary note |
+|----------------|--------------|-------------------|--------------|---------------|
+| NSIS hardening (WR-04) | `[installer]` (+ quoting rules) | `branding.nsi` define quoting — reject bare `$VAR` | extend `verify-installer-schema.mjs` (self-test plants a bare `$VAR`) | none (build-time text) |
+| Fixture root threading (WR-07) | — | installer verifier takes fixture `root` | extend `verify-installer-schema.mjs` | none |
+| DMG/icns inputs | `[installer]` support_url + sharp PNG set | `.iconset/` file set under `generated/` | extend icon-output checker sizes → 16…1024+`@2x` | none |
+| npm extension kind | `[[extensions]] source="npm"` | exact dep + `resolutions` entry in browser `package.json` | extend `verify-extension-pins.mjs` step 2 (installed version == pin) | none |
+| local-path kind | `[[extensions]] source="path"` | `file:` dep / workspace member | generate-time existence hard-fail + build assertion | none |
+| WebExtensions sibling | `[[extensions]]` webext entries | `powerbrowser/distribution/policies.json` `ExtensionSettings` | new policy-shape row (set equality from manifest, like tile manifest) | none |
+| Sidecar crash pipeline | `[telemetry]` level + endpoint (DSN) | Sentry DSN into backend config; `Sentry.init` gated on level ≠ off | extend `verify-telemetry.mjs` (off ⇒ no init call reachable; endpoint ⇒ DSN agreement) | DSN is config, not an internal |
+| SQL tabs store | (no new manifest keys — fixed `tabs.sqlite` name) | none (runtime file, not generated) | **new** `verify-sql-tabs-shape.mjs`: schema set-equality (`tabs` cols, `schema_version`) + URI-PK assertion | new `INTERNAL-APIS.md` rows: `Sqlite.sys.mjs` import + `Services.dirsvc` profile path, both inside `PowerBrowserAPI.sys.mjs` only |
+| NAME-01 rename slice | `[identity] display_name → PowerBrowser` | re-run single-edit propagation; re-pin byte-identity comparands | re-pin `generated-byte-identity`, `brand_display_expectations`, trademark-surface scan | none |
 
 ---
 
@@ -219,26 +154,34 @@ script.
 
 | Package A | Compatible With | Notes |
 |-----------|-----------------|-------|
-| `@theia/core@1.74.1` | `@theia/monaco-editor-core@1.108.201` | Pinned pair; `resolutions` in `theia/package.json` forces it across the workspace. Do not bump one alone |
-| `@theia/*@1.74.1` | `typescript@~5.9.3`, `react@18.3.1`, `@types/react@18.3.31` | React 19 types will break Theia widget typings |
-| `nodejs_22` | `yarn` **overridden** to the same Node | nixpkgs `yarn` otherwise runs node-gyp under Node 24 → `MODULE_VERSION` mismatch → `drivelist` fails to load in the Node 22 backend |
-| `smol-toml@1.8.0` | Node ≥18, `builtins.fromTOML` (Nix ≥2.x) | Both implement TOML **1.0.0**. Agreement holds only if the manifest avoids date/time literals |
-| `sharp@0.35.4` | Node ≥20.9.0 (Node-API v9) | Generator's real floor is therefore Node 20.9, not 18 |
-| Firefox ESR `153.1.0esr` | `rustc 1.97.1` / `cargo 1.97.0` / `cbindgen 0.29.4` | Recorded in `toolchain-baseline.txt`; supplied by the `firefox` dev shell via `inputsFrom` |
-| Firefox ESR `153.x` | `llvmPackages.stdenv` (clang), **not** gcc | `mkShell` defaults to gcc and `mach build` fails at "Could not find clang to generate run bindings" |
+| `better-sqlite3@13.0.3` | Node 22 (`NODE_MODULE_VERSION` 127) | v13 line supports 22.x/24.x; prebuilds cover x64. Source fallback uses the existing theia-shell node-gyp path |
+| `better-sqlite3` (backend, readonly) | Gecko `Sqlite.sys.mjs` (writer) + WAL | Reader never blocks the writer; never open read-write outside the chrome module |
+| `@sentry/node@10.73.0` | Node ≥18; Theia backend on Node 22 | Init once, before other imports (`--import` / first-line), DSN from `[telemetry] endpoint` only |
+| `@theia/telemetry` (1.74.1, in-tree) | `@sentry/node` sink | Contribute `TelemetrySink`; do not fork telemetry |
+| NSIS 3.12 output | Win10/11 installer hosts | Floor 3.11 (CVE-2025-43715); 3.12 also fixes SYSTEM priv-esc follow-up |
+| `mach repackage msix --unsigned` | Win11 (OID path, admin install) | Signed MSIX needs the downstream's own cert + `--publisher` match; platform never ships a cert |
+| `smol-toml@1.8.0` | `builtins.fromTOML` (Nix) | Agreement holds **only** on the TOML 1.0 subset — no dates, no 1.1-only syntax |
+| `sharp@0.35.4` | Node ≥20.9 (Node-API v9) | Generator floor stays Node 20.9+, unchanged |
+| ESR 153 `ExtensionSettings` | `policies.json` (UTF-8, `distribution/`) | `install_url` optional for AMO-hosted (new in 153); `runtime_blocked_hosts`, `blocked_permissions` available |
 
 ---
 
-## Sources & Confidence
+## Sources
 
-| Source | Provider | Confidence |
-|---|---|---|
-| `/home/chris/coding/sourcerer` — `flake.nix`, `.mozconfig`, `patches/`, `sourcerer/branding/**`, `scripts/**`, `theia/package.json` | local (primary) | HIGH |
-| `upstream/browser/branding/branding-common.mozbuild`, `browser/branding/unofficial/**`, `toolkit/moz.configure` (vendored ESR 153.1.0) | local (upstream source) | HIGH |
-| npm registry metadata for `smol-toml`, `sharp`, `@theia/core`, `typescript`, `@resvg/resvg-js`, `js-toml`, `toml`, `@iarna/toml`, `@ltd/j-toml` | registry API | HIGH |
-| `product-details.mozilla.org/1.0/firefox_versions.json` (2026-08-29) | Mozilla official | HIGH |
-| `builtins.fromTOML` behaviour incl. datetime failure | empirical, Nix 2.34.8 | HIGH |
-| nixpkgs-unstable versions: `librsvg` 2.62.3, `resvg` 0.48.1, `desktop-file-utils` 0.28 | `nix eval` | HIGH |
-| `zen-browser/desktop` `surfer.json`; `zen-browser/surfer` `package.json` + `src/commands/patches/branding-patch.ts` (v1.14.8) | GitHub raw | HIGH |
-| Node has no built-in TOML parser | empirical (Node v24.19.0) + web search | HIGH |
-| LibreWolf / Waterfox / Floorp rebrand tooling | web search only, no source read | LOW — none of them ship a manifest-driven generator; they use patch trees + Makefiles. No usable prior art beyond surfer. Do not plan around this |
+- npm registry metadata: `better-sqlite3` 13.0.3 (2026-08-05), `@sentry/node` 10.73.0 (2026-09-03), `smol-toml` 1.8.0, `sharp` 0.35.4 — **HIGH**
+- Node.js docs (`nodejs.org/api/sqlite`): `node:sqlite` added v22.5.0, unflagged v22.13.0 but Stability 1.2 Release Candidate — **HIGH** (why: not stable on pinned line)
+- Firefox Source Docs: MSIX packaging (`mach repackage msix`, MAKEAPPX/SIGNTOOL/`WINDOWSSDKDIR` lookup, `linux64-msix-packaging` toolchain), Windows installer kinds (stub/full/MSI/MSIX), macOS DMG lzma + `libdmg-hfsplus`, `UpdatingMacIcons` (`iconutil -c icns`) — **HIGH**
+- NSIS 3.12 release notes (SourceForge, 2026-04-19) + CVE-2025-43715 fix in 3.11 — **HIGH**
+- Firefox ESR release notes: 153.0esr (2026-07-21), 153.2.0 (2026-09-01); whattrainisitnow ESR schedule — **HIGH**
+- Theia GitHub releases (v1.74.1 latest, 2026-08-06) + theia-ide `package.json` (`@theia/cli` 1.73.1, `theiaPlugins`/`theiaPluginsDir` mechanism) + `@theia/cli` README (plugin download properties) — **HIGH**
+- Firefox Source Docs Places architecture (places.sqlite via mozStorage; `Bookmarks.sys.mjs`/`History.sys.mjs` async APIs) + searchfox `toolkit/modules/Sqlite.sys.mjs` header (TelemetryFilename privacy warning) — **HIGH**
+- Socorro README ("Mozilla-specific… no capacity to support external users"; alternatives list) + `electron/mini-breakpad-server` archived Dec 2022 — **HIGH** (why: not Socorro/mini-breakpad)
+- getsentry/self-hosted 26.8.0 (2026-08-17) — **MEDIUM-HIGH**
+- Firefox enterprise docs: `ExtensionSettings` reference (ESR 153 fields), `policies.json` locations, `distribution/extensions/<id>.xpi` bundling — **HIGH**
+- libicns 0.8.1 (`png2icns`, 1024px support; man page + MacPorts) — **MEDIUM** (fallback role only)
+- Local tree: `scripts/verify-installer-schema.mjs` (schema-complete-only contract, PKG-01 handoff comment), `scripts/verify-extension-pins.mjs` (`--packed` archive-hash design), `powerbrowser/distribution/policies.json`, `powerbrowser/INTERNAL-APIS.md` (D-107/D-108: session store deliberately untouched, ground kept clean for the SQL store), `powerbrowser/endpoint-allowlist.json` (`breakpad.reportURL` TEL-03 wiring) — **HIGH**
+
+---
+
+*Stack research for: v1.1 Hardening and SQL Tabs (PKG-01, EXT-02, TEL-04, SQL-01)*
+*Researched: 2026-09-04*

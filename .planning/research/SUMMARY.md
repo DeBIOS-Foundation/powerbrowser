@@ -1,135 +1,164 @@
-# Research Summary
+# Project Research Summary
 
-**Project:** Power Browser — rebrandable Firefox-ESR + Theia platform
-**Synthesized:** 2026-08-29
-**Sources:** STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md
-
----
+**Project:** Power Browser — v1.1 Hardening and SQL Tabs
+**Domain:** Rebrandable browser platform (Firefox-ESR patch-stack fork + Eclipse Theia sidecar)
+**Researched:** 2026-09-04
+**Confidence:** HIGH overall (tree-derived claims + canonical upstream docs; gaps enumerated below)
 
 ## Executive Summary
 
-Power Browser has no existing "standard stack" to adopt — the only real prior art is Zen Browser's `surfer`, and the right move is to copy its *shape* (one manifest + generator) while rejecting its *implementation* (a 20-dependency CLI that owns the whole build). Nearly the entire stack already exists in the sourcerer tree; the net-new surface is three dependencies (`smol-toml`, `sharp`, and Nix's built-in `fromTOML`) plus roughly 400 lines of plain Node ESM. The architecture research converges on the same shape independently: `configuration.toml` + `brand/` as the only tracked inputs, a single Node generator that is the only TOML parser in the system, and one gitignored `generated/` root that every downstream build reads from — never committed, never hand-edited.
+Power Browser v1.1 hardens distribution (real Windows/macOS installer builds, npm/local-path extension sources, a crash-report pipeline) and promotes SQL-backed tabs ahead of all GUI work. Experts build each of these by reusing upstream machinery rather than inventing parallel systems: Mozilla's `mach package`/`mach repackage` for installers, Theia's existing `theiaPlugins` fragment pipeline for new extension source kinds, a Breakpad-protocol-compatible minimal collector instead of full Socorro, and Mozilla's own `Sqlite.sys.mjs` plus one new `tabs.sqlite` file for tab storage.
 
-The critical risk is not "the build breaks," it is "the build succeeds and is silently wrong." Sourcerer's own history already produced three classes of silent failure: a blind rename that touches a load-bearing sort key or a DNS-derived contract ID, a verifier that reads the manifest instead of the built artifact and passes tautologically, and a residual-brand scan that is either noise (matches upstream Gecko's own `firefox*` files) or a false pass (substring-matched). All three recur as first-class pitfalls this project must design against from the schema stage forward, not discover after the generator exists.
+The recommended approach is three phases in dependency order: Phase 08 installer hardening with the NAME-01 canonical-`PowerBrowser` rename slice folded in (every installer surface embeds the name, so renaming after packaging proofs would invalidate them), Phase 09 extensions + crash pipeline (both reuse the hardened generator/verification loop and both touch the endpoint allowlist, so they land under one review), Phase 10 SQL tabs last with zero presentation changes. Every v1 carry-over drill rides inside the phase that needs it — release build with installers, per-fixture tier-3 with extensions, live ESR rebase over the new SQL touchpoints — because a terminal "drills phase" is the first thing cut under schedule pressure.
 
-The recommended approach is a strict seven-phase build order: (1) mechanical extract+rename with zero generator, proven by boot; (2) generator core with cheap emitters, proven byte-identical to phase 1's hand-written files; (3) Firefox branding emitter + icon pipeline; (4) Theia emitter (highest-unknown phase — untested `theiaPlugins`/Open VSX pinning); (5) de-configure the patches into hook-only form; (6) verification + docs; (7) Sourcerer reproduced as a downstream, the milestone's real acceptance test, gated by adversarial fixtures (space in name, non-square logo, missing required key) — not just the friendly Sourcerer config.
-
-## Corrections Needed to PROJECT.md
-
-These are contradictions between PROJECT.md's stated design and what FEATURES.md/PITFALLS.md found. The roadmapper and requirements phase should treat these as resolved-by-research, not open questions.
-
-1. **`[telemetry] send-to-theia` toggle does not correspond to anything real.** FEATURES.md confirms Theia IDE ships zero telemetry and no upstream collector — "no setting or hidden switch that could activate any collection." Theia 1.74 only ships a *framework* (`telemetry.telemetryLevel`: `off|crash|error|all`, default off; `telemetry.filters`) with no shipped destination. **Fix:** replace the `send-to-theia` toggle with Theia's actual enum (`level = off|crash|error|all`) plus `endpoint`, and have Power Browser itself implement the one shipped destination.
-
-2. **"Unset values fall back to Power Browser defaults" is a footgun for identity fields, not just a convenience.** PITFALLS.md (Pitfall 5) shows this literally means a downstream that forgets `[product] vendor` ships a build branded "Power Browser" — distributing under a mark that is not theirs, the exact failure the project exists to prevent. **Fix:** two-tier schema — identity/legal keys (`name`, `short_name`, `vendor`, `basename`, `binary_name`, `app_id`, `copyright_holder`) have no code-level default and hard-fail the generator when missing, naming the key; all other (cosmetic) keys may default silently but the generator must echo every default it applied at build time.
-
-3. **"Grep for the platform name comes back empty" is not an achievable verification criterion.** Both FEATURES.md and PITFALLS.md (Pitfall 8) independently confirm this is already refuted in sourcerer's own `verify-branding-identity.mjs` header — a correctly branded build still ships dozens of files with `firefox` in the name (upstream feature files, `MOZ_APP_UA_NAME`, `-brand-product-name` compat strings). **Fix:** two-layer verification — Layer A (static, seconds): `generate --check` clean + a scoped literal-scan with an explicit include/exclude list, case-variant coverage, and a committed, reasoned allowlist. Layer B (runtime): the existing six/seven-surface exact-equality check against the *built artifact*, never against the manifest itself (Pitfall 6 — verifying TOML against generator output is tautological).
-
-4. **Minor scope correction:** PROJECT.md's `configuration.toml` sketch has one `name` field implicitly feeding both display and machine identity. PITFALLS.md (Pitfall 3) shows `MOZ_APP_NAME = MOZ_APP_BASENAME.lower()` with zero sanitization in Gecko — a display name with a space produces a binary literally named `power browser`. **Fix:** three separate fields — `[product] name` (display, free text), `[identity] basename` (MOZ_APP_BASENAME — profile dir + remoting), `[identity] binary_name` (validated `^[a-z][a-z0-9-]{1,31}$`, hard-fail on violation, never silently sanitized).
+The key risks are all second-machine failures: an updater that phones Mozilla or dies silently, profile/remoting collisions exposed only alongside stock Firefox, floating extension pins that resolve differently next month, and a second SQLite writer that corrupts the profile. Each is mitigated by a decision-first gate (update story and crash rung are questioning outputs that precede any mechanism), an authority/invariant table written before schema or code (single chrome-side writer, sessionstore authoritative for restore, registry URIs as join keys), and verification biased toward second-machine, second-profile, second-month checks.
 
 ## Key Findings
 
-### Stack (Confidence: HIGH)
+### Recommended Stack
 
-- Carry over the sourcerer stack unchanged: Firefox ESR `153.1.0esr`, Theia `1.74.1` (pin — do not bump in this milestone), Node 22 for the Theia toolchain (with the yarn-override fix for `drivelist`'s node-gyp), Yarn 1.22 classic, TypeScript `~5.9.3`, React 18.3.1, the existing Nix flake shells.
-- Net-new dependencies, total: `smol-toml@1.8.0` (zero-dep TOML 1.0.0 parser — must be 1.0.0, not 1.1.0, to agree with `builtins.fromTOML`), `sharp@0.35.4` (SVG→PNG rasterization, no system library required), and Nix's built-in `fromTOML` (for `[upstreams]` pins only, at eval time).
-- No templating engine — plain `${var}` substitution that throws on unknown keys. No `zod`/`ajv`/`commander`/`chalk` in the generator — every dependency is a thing a stranger's first `npm ci` can fail on.
-- `sharp` pitfall: must rasterize at target density (`density: 72 * targetPx / intrinsicPx`), not resize-after-render, or small icons blur.
+Two new npm dependencies total (`better-sqlite3@13.0.3`, `@sentry/node@10.73.0`) and zero new build-system dependencies. Everything else is host tooling on packaging machines or machinery already in the tree. ESR stays on the 153 line (one-minor re-pin via existing uptake tooling, not a stack decision); Theia stays at 1.74.1 (no framework bump inside a hardening milestone).
 
-### Features (Confidence: MEDIUM — canonical artifacts read verbatim, but transport-graded LOW by the confidence seam)
+**Core technologies:**
+- `Sqlite.sys.mjs` (in-tree, ESR 153) — Gecko chrome-side SQLite writer for the new `tabs.sqlite`; the promise wrapper every first-party consumer already sits on — zero new deps, profile-dir-aware, WAL-capable
+- `better-sqlite3@13.0.3` — Theia Node-backend SQLite **readonly** reader; exact pin, prebuilds cover Node 22, call shape mirrors `node:sqlite` so a future stdlib swap is mechanical (see reconciliation below)
+- `@sentry/node@10.73.0` + self-hosted Sentry 26.8.0 (or SaaS) — sidecar crash/error capture behind the existing `[telemetry]` level gate; platform carries only the DSN, never collector infra
+- NSIS 3.12 + Windows SDK (`MAKEAPPX`/`SIGNTOOL`) + macOS `hdiutil`/`iconutil` — packaging-host tools only; nothing enters the repo or flake
+- Generator-owned `ExtensionSettings` policy emission + npm-exact/`file:` extension resolution through the existing `theiaPlugins` fragment pipeline — no new tooling, no second packaging system
 
-- Table stakes (P1, must ship in v1): three-length display name (full/short/shorter), machine identity fields (appId, binaryName, remoting name, URI scheme, config-dir name, npm scope — separate surfaces, not derived from each other), generated Firefox branding directory (Linux subset only) with `--with-branding` wiring, icon set generated from one SVG, atomic generation of `brand.ftl`+`brand.properties`+`brand.dtd` together (a known defect class — they've silently disagreed before), Theia frontend config generation, enumerated verification reading the manifest (not hardcoded), URLs/legal/upstream-pins blocks, `REBRANDING.md`, Sourcerer-as-downstream proof.
-- Deferred to v1.x: telemetry destination, multi-source-kind extensions (npm/local path), second-file-touched CI guard, build channel variants.
-- Deferred to v2+: Windows/macOS branding assets, prefs/policies pointer, multi-brand matrix, published schema for third parties.
-- Anti-features to explicitly avoid: runtime-reloadable config (branding is compiled in — Fluent bundle, `application.ini`, binary name), multi-brand matrix in one manifest, inline prefs/policies in `configuration.toml` (LibreWolf deliberately keeps these in a separate repo — different cadence, 100x the field count), unpinned extension fetch, GUI rebrand wizard (the manifest *is* the UI).
+**Stack reconciliation — `better-sqlite3` vs `node:sqlite` (decided):** the architecture researcher preferred the Node 22 built-in `node:sqlite` (no native addon, no `yarn.lock` delta); the stack researcher pinned `better-sqlite3@13.0.3` and rejected `node:sqlite`. **Recommendation: `better-sqlite3@13.0.3`, readonly, for v1.1.** Rationale: `node:sqlite` is Stability 1.2 / Release Candidate on the pinned Node 22 line with API shifts across 22.x minors (`column()`/session/`location()` landed mid-line) — a platform that pins exact versions cannot build on a moving stdlib surface. The native-addon objection is already answered in-tree: prebuilds cover `NODE_MODULE_VERSION` 127 and the `theia` dev shell carries the node-gyp fallback toolchain (the `drivelist` precedent). The call shapes are deliberately similar, so revisit `node:sqlite` at the next Node re-pin as a mechanical swap. One line in the backend reader carries a `ponytail:` comment marking that ceiling.
 
-### Architecture (Confidence: HIGH for local-tree findings)
+**SQLite access reconciliation (STACK readonly-backend vs PITFALLS never-open):** Pitfall 8's strict rule is preserved in substance — *no Theia-side process ever opens `places.sqlite` or `sessionstore` files, read or write* (WAL `-shm` coordination makes even readers hazardous, and profile-lock defeat is a corruption story). The sanctioned design is: all tab writes go through `PowerBrowserAPI.sys.mjs` → chrome-side `Sqlite.sys.mjs` (single writer); tab data lives in its **own `tabs.sqlite`** (own WAL, decoupled checkpoint/vacuum, a tab bug can never take bookmarks down); the backend's `better-sqlite3` handle on that dedicated file is `readonly: true`; verification keeps the static no-`sqlite`-open scan (forgiving only the dedicated-file readonly reader) plus an interleaved-write soak asserting `PRAGMA integrity_check` stays clean. Details in STACK.md and PITFALLS.md Pitfall 8.
 
-- Three governing findings: (1) debranding renames *user-visible product identity*, not internal symbols — `chrome://powerbrowser/`, `@powerbrowser/*`, pref branches, env-var prefixes stay fixed forever across every downstream, roughly halving the generator's real scope; (2) nothing generated is ever committed, nothing committed contains a brand literal — one gitignored `generated/` root; (3) the generator composes rather than templates everything — verbatim policy fragments (like the 150-line `pref/firefox-branding.js`) get concatenated with a small generated brand delta, never placeholder-ized wholesale.
-- Six architectural patterns to apply: hook-only patches (patches add `include()`/`DIRS +=` lines only, never carry values), compose-don't-template, one parser one direction (Node generator is the only TOML consumer; Nix's `fromTOML` is a deliberate, narrow exception for `[upstreams]` pins only), the fixed/configurable split (Pattern 4's two-column list), config-directory indirection for downstream layering (`PB_CONFIG_DIR`, no forking/patching), and icon rasterization from one source SVG at generation time.
-- Seven anti-patterns to actively avoid: templating patch files, renaming internal identifiers per downstream, committing generated files, making the generator a Nix derivation, three languages parsing the same TOML, `#ifdef`-ing downstream features into the platform, and the refuted grep-for-empty verification criterion.
+### Expected Features
 
-### Pitfalls (Confidence: HIGH for sourcerer-tree-derived pitfalls; LOW for the two trademark items — web-sourced, not legal advice)
+v1.1 covers exactly four areas — PKG-01 installers, EXT-02 extension sources + WebExtensions declaration, TEL-04 crash pipeline, SQL-01 SQL tabs. GUI-02/GUI-05 are explicitly deferred until after SQL tabs (2026-09-04 scoping). See FEATURES.md for the full landscape, dependency graph, and prioritization matrix.
 
-Top 5 critical pitfalls, ranked by how silently they fail:
+**Must have (table stakes):**
+- Full branding-dir file set emitted + real `mach package` builds on Windows/macOS packaging hosts + `docs/BUILD.md` installer procedure, with WR-04 (reject bare `$VAR` in NSIS defines) and WR-07 (fixture root through installer verifier) as pre-fixes before the first real-host build
+- NAME-01 rename slice (`PowerBrowser` canonical) folded into installer work with every display-form gate re-pinned — not a late standalone slice
+- EXT-02 `npm` source kind (generate-time resolve to pinned tarball URL + hash into the existing `theiaPlugins` chain) and `local-path` kind (repo- or `PB_CONFIG_DIR`-relative, hashed, fail-loud on absence)
+- WebExtensions declaration sibling: one mechanism — **default hypothesis `distribution/policies.json` `ExtensionSettings`** (the policy Mozilla is actively improving; confirm against the pinned ESR surface in phase research) — schema + emitter + verifier, no curated list in tree (REQUIREMENTS.md bar)
+- TEL-04 rung for v1.1: **Gecko reporter stays compiled out; ship the server side** — minimal Antenna-protocol collector (multipart POST with `upload_file_minidump` → `CrashID=`), `about:crashes` acceptance, crash-ping/report separation kept, PII/retention/throttle policy written before go-live
+- SQL-01 live-tab table keyed on `TabUriRegistry` URIs (registry → SQL write-through only) + places read exposure + sessionstore read projection + private-browsing exclusion with absence test + query API home on `@powerbrowser/tab-uris` (extension point, never a `[features]` flag)
+- Update-story decision recorded as the installer phase's first output (fork-hosted updates / no in-place updates / OS-package updates — no fourth option by omission), with zero Mozilla hosts in packaged config
 
-1. **Blind `s/sourcerer/powerbrowser/g` rewrites non-brand tokens** — DNS-derived contract IDs, position-sensitive sort keys, `MOZ_APP_ID`, frozen Fluent compat strings (`-brand-product-name = Firefox`), MPL license text, schema key names. ~1,090 occurrences across 80 files, five case-variant forms. Prevention: a committed token-classification inventory (brand/identity/frozen/coincidental) as the rename phase's *first* task, not a review after.
-2. **A TOML value feeding a position-sensitive sort key** — `components.conf`'s `"a-sourcerer"` category name sorts ahead of `"m-browser"` by `strcmp`; a downstream binary name starting with a later letter silently breaks single-instance activation with zero build failure. Prevention: keep the `a-` prefix literal in the template; add a generator-time `strcmp` assertion.
-3. **`MOZ_APP_NAME = MOZ_APP_BASENAME.lower()`, unsanitized** — a display name with a space produces a binary with a space in it, cascading into `.desktop` `Exec=`, `StartupWMClass`, and profile-directory paths. Prevention: three separate schema fields (name/basename/binary_name), regex-validated, hard-fail not silent-sanitize.
-4. **Silent patch no-op** (`git apply --3way` exits 0 on already-adopted content) **regresses if the non-vacuity assertion is dropped during extraction**, and **templating a `.patch` file from TOML invalidates its own blob-hash chain**, degrading `--3way` back into the exact silent-drop mode it exists to prevent. Prevention: never template a patch file; carry the hash-comparison assertion and its self-test forward verbatim.
-5. **Unset TOML values silently default to Power Browser's own identity** — a downstream that forgets `vendor` ships a build saying "Power Browser" everywhere, distributing under a mark not theirs. Prevention: required-key hard-fail with no code-level default, defaults echoed at build time for the cosmetic majority.
+**Should have (competitive):**
+- Single-manifest propagation into NSIS + DMG + MSIX surfaces (nearly free once the generator owns the emitters — the installer half of the single-file claim)
+- Per-fixture installer verification staged for packaging hosts (build script + assert script a human runs; full CI with Windows/macOS runners is the later form)
+- Minimal collector shipped as downstream-runnable platform tooling (same status as `scripts/`)
+- Cross-surface joins (tabs ⋈ history ⋈ bookmarks on URL) and queryable closed-tab retention with a bounded retention policy from day one
+- Unified `[[extensions]]` with explicit `side = "theia" | "gecko"` key — design alongside EXT-02, land after
 
-Also load-bearing: tautological verification (Pitfall 6 — verify against the built artifact, never the manifest that produced it), vacuous parameterized checks (Pitfall 7 — one hardcoded path silently makes every variant but one untested), and the residual-scan scoping trap (Pitfall 8 — too wide hits `upstream/`/`objdir*/` and gets `|| true`'d, too narrow/substring-matched is a false pass).
+**Defer (v2+):**
+- Stub installer, Maintenance Service, MSIX build/sign — trigger: real users downloading at volume (generate `msix/` branding slots as inert files only if cheap)
+- Symbol upload wiring, processor-side crash analysis — trigger: crash volume or the reporter-client re-enable decision (itself a later milestone of privacy surface)
+- SQL → registry write-back (restore/reopen from SQL) — trigger: GUI-02 landing as the consumer
+- Full Socorro deployment — never at v1.1 scale; revisit on crash-volume evidence
+- Replacing sessionstore or `places.sqlite` write paths — never without a dual-write + restore-parity proof
+
+### Architecture Approach
+
+v1.1 adds surfaces, not layers: `configuration.toml` gains additive keys only, `generate.mjs` gains emitters + `TARGETS` rows, verification gains registry rows, and three of four features land as `@powerbrowser/*` extensions plus generated fragments. The Gecko patch stack stays at two hook-only patches, `PowerBrowserAPI.sys.mjs` stays the sole internals touchpoint, and the SQL store lives *beside* `TabUriRegistry` as a new `tab-store` extension consuming URI strings as opaque keys — never inside the registry, never behind a `[features]` flag, never touching presentation. See ARCHITECTURE.md §§1–8.
+
+**Major components:**
+1. Generator fan-out (`generate.mjs` + frozen `TARGETS`) — all derivation; every new emitter adds a row so `--check` and derive-and-compare gates cover it with no further edits
+2. `@powerbrowser/tab-store` (new extension) — backend SQLite service + frontend URI-keyed API; DB filename and schema version are fixed platform content, not manifest keys
+3. Extended `theiaPlugins` fragment pipeline — EXT-02 npm/local-path kinds resolve *into* the v1 URL/hash chain; `verify-extension-pins.mjs` grows per-kind archive handling
+4. Theia-side crash events via the existing `PowerBrowserTelemetrySender` (`sendErrorData`, level-`crash` admission) — no second sender; Gecko repoint derivation stays honest
+5. `verify-platform.sh` (one driver, one `CHECKS` registry) — new gates append rows only: SQL roundtrip, installer build-proof (full-mode only), WebExtensions agreement, crash-pipeline agreement; every gate derives expectations from the generator and self-tests in both directions
+
+### Critical Pitfalls
+
+Full analysis (10 critical, 6 moderate, debt patterns, "looks done" checklist) is in PITFALLS.md. The five that shape the roadmap:
+
+1. **Updater with no update story (P1)** — installer that installs but phones Mozilla for updates or dies silently; MAR verification assumed away; maintenance-service cert pin goes stale. Avoid: record one of three decisions (fork-hosted / none / OS-package) before mechanism; prove one real N→N+1 hop per OS.
+2. **Profile/remoting collision + rename-triggered migration (P2)** — NAME-01 must change display strings only; `basename`/`binary_name`/remoting frozen. Avoid: identity-field freeze assertion + alongside-Firefox interleaved launch test as installer-phase exit criteria.
+3. **Second SQLite writer (P8)** — Theia backend opening profile SQLite corrupts it (WAL/`-shm` + profile-lock precedent). Avoid: single chrome-side writer invariant before schema; own `tabs.sqlite`; static no-open scan + soak test. This is the milestone's one absolute "never."
+4. **Two truths for open tabs (P9)** — SQL mirror vs sessionstore split-brain after abnormal shutdown (skeleton-session Bug 1906808 class). Avoid: authority table in writing before building — sessionstore restores, SQL reconciles toward it, registry URIs are the join key; prove with a kill -9 restart test.
+5. **Drills staged forever (P12)** — release build, per-fixture tier-3, live rebase, re-pin all carried; a terminal drills phase gets cut. Avoid: each phase carries its own drill; the carry-over bucket holds only WINDOWS #13/#14.
 
 ## Implications for Roadmap
 
-### Consolidated Phase Ordering
+### Phase 08: Installer hardening + NAME-01
 
-All three research files converge on the same shape; ARCHITECTURE.md's 7-step order is the spine, with PITFALLS.md's ordering constraints and FEATURES.md's dependency chain folded in as gates within/between phases.
+**Rationale:** Every installer surface embeds the display/identity names — verifying installers under the old spaced form then re-pinning doubles the packaging-host work, so the rename rides here, first. Gates must discriminate before binaries exist, so WR-04/WR-07 pre-fixes come before the first real-host run.
+**Delivers:** WR-04 + WR-07 pre-fixes; NAME-01 propagation with all display-form gates re-pinned; full branding-dir file set; real `mach package` builds on named Windows + macOS hosts; per-OS install→launch→uninstall→no-residue matrix; update-story decision recorded; `docs/BUILD.md` installer procedure with attributed timings; `objdir-release` carry-over build.
+**Addresses:** PKG-01, NAME-01, WR-04/WR-07, signing decision, release-build drill.
+**Avoids:** Pitfalls 1 (updater), 2 (profile collision), 3 (done-from-Linux), 4 (strings outside generator), 13 (half re-pin).
 
-| # | Phase | Delivers | Ordering rationale (why here, not earlier/later) |
-|---|-------|----------|-----|
-| 1 | **Extract + rename** (with residual-scan proven red *first*, as its own sub-step before the rename runs) | `powerbrowser/` tree, `@powerbrowser/*`, `PowerBrowserAPI.sys.mjs`, chrome package, pref branch, env vars; hardcoded "Power Browser" everywhere; boots | No generator yet — deliberately, so failures are unambiguous (pure rename, binary pass/fail). **Highest-risk phase** — PROJECT.md's plan-review-convergence flag is correct. Task 1 within this phase is the token-classification inventory (Pitfall 1) — it precedes the rename, it is not a review of it. Task 0 is proving the residual scan goes red on an untouched tree (Pitfall 8) — otherwise the rename's completion has no measure. |
-| 2 | **Schema + generator core + cheap emitters** (env.sh, mozconfig, desktop) | TOML schema + defaults-merge; the required/optional identity split (Pitfalls 3, 5) | Free, total acceptance test: generated output must be byte-identical to what phase 1 wrote by hand. Requires phase 1 first. Schema-design decisions (binary_name validation, required-key hard-fail) belong here, not discovered inside the generator later. |
-| 3 | **Firefox branding emitter + icon pipeline** | Both variants, all five PNGs, atomic `brand.ftl`+`brand.properties`+`brand.dtd`, composed pref file, moz.build/jar.mn/configure.sh | Same byte-identical proof; separated from phase 2 because it adds the `sharp` dependency and the dev/release variant delta — the two things most likely to need iteration. Icon rasterization gates the branding directory (FEATURES.md dependency chain). |
-| 4 | **Theia emitter** | Generated app manifest, `brand.json`, `applicationName`, welcome/about/mark reads, `theiaPlugins` from `[extensions]` + `theia download:plugins` | Independent of phase 3 (Firefox half vs Theia half) — can run in parallel. Carries the most unknowns: `theiaPlugins`/Open VSX pin semantics are unexercised in this tree. |
-| 5 | **De-configure the patches** | `imply_option` block moved into `generated/identity.configure`; patches become hook-only; `check-patch-surface.sh` extended | Must follow 2–3 — `generated/` and the `upstream/generated` symlink must exist before a patch can `include()` into them. Cheap once they do. |
-| 6 | **Verification + docs** | `tools/verify.mjs` (Layer A: check-clean + scoped literal scan), retargeted `verify-branding-identity.mjs` (Layer B, artifact-based), endpoint allowlist wiring, `docs/REBRANDING.md` | The literal scan can only pass meaningfully once every surface is generated — running it earlier produces noise. Verifier's contract (Pitfall 6) depends on what the generator emits (a manifest of every file it wrote), so generator must precede this. |
-| 7 | **Sourcerer as downstream** | `PB_CONFIG_DIR`, separate repo with only `configuration.toml`+`brand/`, Sourcerer-branded build from the untouched platform | The milestone's real acceptance test — proves the boundary rule. Must be last (needs 1–6 done) and **must be joined by adversarial fixtures** (name with a space, name starting with `z`, non-square logo, config missing a required key) — Sourcerer's own config is a friendly input the platform may have accidentally been built around. |
+### Phase 09: Extensions + crash pipeline
 
-**Ordering constraints that cut across phases** (from PITFALLS.md, binding on the roadmap):
-- Residual scan (P8) is written and proven red *before* the rename runs.
-- Classification inventory (P1) precedes the rename, as its first task, same phase.
-- Schema decisions (P3, P5) precede the generator — not discovered inside it.
-- Generator precedes the verification rewrite (P6) — verifier needs the generator's file-manifest output.
-- Sourcerer reproduction is last, and insufficient alone without adversarial fixtures.
+**Rationale:** Builds directly on 08's hardened generator/verification loop — new source kinds reuse the exact emitter→fragment→block→hash pipeline EXT-01 proved. Crash work is mostly agreement plumbing (prefs + allowlist + sender call sites), so it pairs cheaply with the resolver work; both touch `endpoint-allowlist.json` and land under one allowlist review.
+**Delivers:** EXT-02 npm + local-path kinds (pinned, fail-loud, per-kind self-tests); WebExtensions declaration via `ExtensionSettings` (mechanism confirmed against pinned ESR in phase research); vendored/mirrored artifacts with offline-from-vendor packaging proof; per-target `${targetPlatform}` arch assertions; TEL-04 minimal Antenna-protocol collector + `about:crashes` acceptance + ping/report separation + PII/retention/throttle policy; Theia re-pin proof + per-fixture tier-3 over the new source kinds as the riding drills.
+**Uses:** `better-sqlite3`/`@sentry/node` pins resolved (stack), `theiaPlugins` chain (architecture), pin/registry-host mechanics (pitfalls 5–6).
+**Implements:** Extended extension pipeline, crash agreement gate, allowlist rows for collector/crash/registry hosts.
+**Avoids:** Pitfalls 5 (floating pins), 6 (wrong-arch/offline plugins), 7 (Socorro-scope + PII), 16 (two runtimes, one entry).
+
+### Phase 10: SQL tabs (no GUI)
+
+**Rationale:** Depends on a stable registry (untouched by 08/09 by construction) and on the verification discipline 08/09 exercise — its gate is the most behaviorally novel. Landing persistence before any presentation is the PROJECT.md ordering: GUI-02/GUI-05 then build on rows, not wishes.
+**Delivers:** `tab-store` extension (chrome-side `Sqlite.sys.mjs` writer, `better-sqlite3` readonly backend reader, own `tabs.sqlite` with `schema_version` from day one); registry→SQL write-through; places read exposure; sessionstore read projection; private-browsing exclusion + absence test; query API on `@powerbrowser/tab-uris`; authority table + single-writer invariant recorded before schema; kill -9 reconciliation test; `user_version` migrations + quarantine-not-delete corruption path; **live ESR rebase drill over the new touchpoints as the phase's closing task**; registry-shape gate green untouched as proof the bridge stayed landable.
+**Addresses:** SQL-01 (backlog 999.1), rebase-drill carry-over.
+**Avoids:** Pitfalls 8 (second writer), 9 (split-brain), 10 (rebase debt), 11 (one schema for four histories), 14 (layout conflated), 15 (unversioned schema).
+
+### Phase Ordering Rationale
+
+- **Rename-with-installers:** installer artifacts multiply display-form assertions; renaming after verification means re-verifying all of them (FEATURES dependency notes, Pitfall 13).
+- **Extensions-after-generator-hardening:** EXT-02 reuses the EXT-01 fragment chain — it needs the hardened emitter/verifier loop from 08, not a parallel greenfield pipeline.
+- **SQL-last-before-GUI:** the bridge join key (registry URI) and the authority table must exist before any chrome reads them, or GUI-02 bakes in the split-brain (Pitfall 9, ordering constraint 5).
+- **Drills ride inside phases:** installer phase runs the release build it needs; extensions phase runs per-fixture tier-3 over the new source kinds; SQL phase closes with the live rebase over its touchpoints. WINDOWS #13 (boundary hole) + #14 (BiDi double-window) ride alongside 08–09 — the boundary must be airtight before a persistence layer keys user data off chrome-adjacent identity.
+- **Decisions precede mechanisms:** update-scope (P1) and crash-scope (P7) rungs are questioning outputs; SQL invariants (P8/P9) are design inputs, not review findings.
 
 ### Research Flags
 
-Phases needing `/gsd-plan-phase --research-phase <N>` during planning:
+Phases likely needing deeper research during planning (`/gsd-plan-phase --research-phase <N>`):
+- **Phase 10 (SQL tabs) — HIGH.** Storage-API choice (which Gecko storage interface hosts tab rows), Places API evolution at the pinned ESR, and Theia-side observation plumbing are version-sensitive and unverified in this tree. Also re-confirm sessionstore load order, Places WAL behavior, and updater/maintenance-service defines against the **pinned ESR tag**, not upstream main.
+- **Phase 08 (installers) — MEDIUM.** NSIS/DMG mechanics are documented, but per-OS signing/notarization requirements and the maintenance-service cert story need confirmation against pinned ESR source.
+- **Phase 09 (extensions + crash) — MEDIUM.** Open VSX resolution semantics and Firefox-side add-on signing enforcement for the pinned versions need phase-level confirmation; TEL-04's rung needs scoping (questioning decision), not research.
 
-- **Phase 1 (Extract + rename)** — HIGH. ~1,090 occurrences, five case forms, six coupled reference formats (jar.mn, components.conf, moz.build, patch content, verifier regex). Needs its own deep pass on the token-classification inventory before any replacement runs.
-- **Phase 4 (Theia emitter)** — HIGH. `theia download:plugins` / Open VSX pin semantics are completely unexercised in the current tree (no `theiaPlugins` block has ever existed here); whether a pin can be verified by hash is unknown.
-- **Trademark/legal surface** (likely folded into phase 6 or its own gating item) — MEDIUM. Both Mozilla and Eclipse Foundation trademark findings in PITFALLS.md are LOW-confidence, web-sourced, and explicitly flagged as needing re-verification against primary policy text before the milestone gates on them. Also needs a named human-verification ritual (open every file in `brand/`, not judged by filename) recorded with reviewer and date.
-- **Phase 3 (Firefox branding emitter)** — needs a narrow, early spike (not full research) to validate `--with-branding` pointing into a sibling `generated/` directory via the existing symlink mechanism — architecturally sound but never executed. Validate with a throwaway branding directory before building the full emitter.
-
-Phases with well-documented patterns (skip deep research, treat as mechanical porting):
-- **Phase 2 (schema + generator core)**, **Phase 5 (de-configure patches)**, **Phase 6 (verification mechanics, once phase 4's Theia unknowns are resolved)** — these are "porting, not discovery," per PITFALLS.md's own confidence assessment (LOW-effort ports of well-trodden sourcerer Phase 3 work).
-- **Asset pipeline (icon rasterization)** — the `sharp`/density pitfall and the aspect-ratio distortion pitfall are both already fully characterized with concrete prevention steps.
-
-### Open Questions to Resolve During Phase Research
-
-Carried forward verbatim from the four research files — these are gaps, not settled facts, and should be treated as phase-research inputs rather than roadmap blockers:
-
-1. **`MOZ_APP_VENDOR` configure behavior** — STACK.md flags that `imply_option("MOZ_APP_VENDOR", ...)` conflicts with an explicitly-set option, and `toolkit/moz.configure:103-106` `die()`s if no value is supplied at all. Needs a real `configure` run to confirm the generated-`.mozconfig` route (`mk_add_options "export MOZ_APP_VENDOR=..."`) actually works with the `imply_option` line dropped from the patch. Fallback: a templated patch (but see Pitfall 4 — templating patches is otherwise forbidden, so this specific exception needs explicit design).
-2. **`--with-branding` out-of-tree path via the `upstream/generated` symlink** — architecturally sound (same mechanism already proven for `upstream/powerbrowser`), but never executed with a generated (not hand-written) branding directory. Validate early in phase 3 with a throwaway directory before building the full emitter.
-3. **`moz.build`/`branding.nsi` exact contents and depth constraints** — the `../../../browser/branding/branding-common.mozbuild` include-depth is fixed by the symlink layout (ARCHITECTURE.md Pattern 3); confirm the generator never varies branding-directory nesting depth, only the variant name.
-4. **Open VSX pin semantics** — whether a `[extensions]` entry can be pinned to an exact version and verified by hash is unverified in this tree; no `theiaPlugins` block has ever existed here. Core unknown for phase 4.
-5. **`sharp` output determinism / 16px fidelity across versions** — assumed, not measured. If `--check`'s byte-diff proves flaky across `sharp` versions, the documented fallback is comparing decoded pixel data instead of raw PNG bytes. Also unresolved: whether incremental `mach build` removes the orphaned old-name binary when `MOZ_APP_NAME` changes (verify on the first branded build, do not assume).
-6. **Both trademark findings (Mozilla and Eclipse Foundation)** are LOW-confidence web-sourced claims that shape phase-ordering risk but need re-verification against current primary policy text before any milestone gate depends on them.
+Phases with standard patterns (skip research-phase):
+- **Carry-over drills (release build, Theia re-pin, WINDOWS #13/#14 fixes)** — known work with known shapes; risk is scheduling, not discovery.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Verified against the live sourcerer tree, vendored Firefox ESR source, npm registry metadata, and a running Nix 2.34.8 instance. Empirically tested `builtins.fromTOML` behavior this session. |
-| Features | MEDIUM | Canonical artifacts (surfer.json, Firefox branding directory listing, Theia telemetry docs, local verify scripts) read verbatim — high practical reliability — but the confidence seam grades all `websearch`/`webfetch` transport as LOW regardless of source authority. VSCodium/Chromium exact field names need re-verification against the real files before coding against them. |
-| Architecture | HIGH | Everything derived from direct inspection of `/home/chris/coding/sourcerer` — actual files read, not descriptions. Zen Browser's `surfer` used only as corroboration that the shape is production-proven, never as a load-bearing claim. |
-| Pitfalls | HIGH for tree-derived pitfalls (1–13, 15–22); MEDIUM for manifest-generation failure modes (5, 9 — no generator exists yet to observe, inferred from design + two real drift incidents); LOW for the two trademark items (14) — web-sourced, explicitly flagged as not legal advice. |
+| Stack | HIGH | Versions verified against npm registry, Mozilla source docs, and release feeds this session; integration points read from the live tree. `node:sqlite`-vs-`better-sqlite3` conflict resolved above with a revisit trigger. Collector-operability MEDIUM — needs the TEL-04 live drill. |
+| Features | MEDIUM-HIGH | Canonical upstream docs read verbatim (installer, DMG, crash protocol, `theiaPlugins`, places, sessionstore, policies) + local tree reads; effort estimates and DS_Store-maintenance burden are judgment. |
+| Architecture | HIGH (as-is) / MEDIUM (to-be) | Every as-is claim derived from first-party tree reads at pinned paths; to-be layout is design inference against those constraints, not executed work. |
+| Pitfalls | HIGH (tree-derived) / MEDIUM (web, cross-checked) | Pinned-ESR confirmation outstanding for updater flags, sessionstore load order, Places WAL, and extension-signing enforcement — each flagged to its phase. |
 
-**Overall confidence: HIGH**, with two explicitly bounded gaps: no generator has been built yet (so generator-specific pitfalls are well-reasoned inference, not observation), and the trademark scope needs primary-source re-verification before any milestone gate depends on it. Both gaps are already flagged for phase-level research above and should not block roadmap creation.
+**Overall confidence:** HIGH for direction and phase structure; MEDIUM for per-OS installer mechanics and crash-collector operability until real hosts and a live collector drill exist.
+
+### Gaps to Address
+
+- **No packaging host exists yet.** Every per-OS installer claim is unverified until Phase 08 names hosts and runs the matrix — handle by making the matrix the phase exit gate, never a follow-up.
+- **Pinned-ESR drift.** Updater flags, maintenance-service issuer defines, sessionstore load order, Places WAL behavior verified against upstream main/recent sources — Phase 08/10 must re-confirm against the actual pinned tag.
+- **Firefox-side extension signing enforcement** for the pinned ESR is unresolved — Phase 09 confirms before schema freezes.
+- **Tab-store storage API unchosen** (which Gecko interface hosts tab rows) — Phase 10's HIGH-priority research question, deliberately not pre-decided here.
+- **TEL-04 rung and update story are scoping decisions**, not researchable facts — questioning picks the rung; the decision gates its phase.
 
 ## Sources
 
-Aggregated from all four research files — see each file's own Sources section for full detail and per-claim confidence tiers. Primary sources of record:
+### Primary (HIGH confidence)
 
-- `/home/chris/coding/sourcerer` — full local tree read directly this session: `flake.nix`, `.mozconfig`, `patches/*.patch`, `sourcerer/branding/**`, `scripts/**`, `theia/**/package.json`, `theia/extensions/branding/src/**`, `.planning/phases/03-*`, `.planning/STATE.md`, `docs/PRODUCT-REQUIREMENTS.md`, `docs/BUILD.md`
-- Vendored Firefox ESR 153.1.0 upstream source: `browser/branding/branding-common.mozbuild`, `browser/branding/unofficial/**`, `toolkit/moz.configure`, `js/moz.configure`, `toolkit/xre/nsAppRunner.cpp`, `xpcom/components/nsCategoryManager.cpp`, `widget/gtk/{nsAppShell,nsWindow}.cpp`
-- npm registry metadata (smol-toml, sharp, @theia/core, typescript, TOML alternatives) — read directly, HIGH
-- `product-details.mozilla.org` (Firefox ESR version data, 2026-08-29) — HIGH
-- zen-browser/desktop `surfer.json`, zen-browser/surfer source — read verbatim, transport-graded LOW but practically HIGH (canonical GitHub raw content)
-- Theia official docs (theia-ide.org — Data Usage and Telemetry, Extensions and Plugins) — HIGH practical reliability, LOW transport tier
-- Mozilla and Eclipse Foundation trademark policy pages — LOW confidence, web search only, flagged for re-verification
+- Local tree reads: `scripts/generate.mjs`, `scripts/verify-{installer-schema,extension-pins,theia-endpoints,registry-shape}.mjs`, `scripts/verify-platform.sh`, `powerbrowser/shell/PowerBrowserAPI.sys.mjs`, `powerbrowser/INTERNAL-APIS.md`, `powerbrowser/endpoint-allowlist.json`, `powerbrowser/distribution/policies.json`, `theia/extensions/tab-uris`, `theia/extensions/telemetry`, `configuration.toml` — via STACK.md / ARCHITECTURE.md
+- npm registry metadata: `better-sqlite3` 13.0.3, `@sentry/node` 10.73.0, `smol-toml` 1.8.0, `sharp` 0.35.4; Node.js docs (`node:sqlite` Stability 1.2 RC) — via STACK.md
+- Firefox Source Docs: MSIX packaging, Windows installer kinds, macOS DMG + `UpdatingMacIcons`, Places architecture, sessionstore, crash reporter; `toolkit/modules/Sqlite.sys.mjs` header; ESR 153.0/153.2 release notes; Theia v1.74.1 releases; Firefox enterprise `ExtensionSettings`/`policies.json` docs — via STACK.md / FEATURES.md
+- Socorro README (declines external users) + `mini-breakpad-server` archived status; getsentry/self-hosted 26.8.0 — via STACK.md
+- Firefox installer/DMB/crash/`theiaPlugins`/places/sessionstore/policy sources read verbatim (full URL list in FEATURES.md Source Confidence + Sources)
+
+### Secondary (MEDIUM confidence)
+
+- MDN-archive update-server doc, `update-programs.configure`, maintenance-service Bugs 1205843/1079858; SQLite-forum WAL corruption report + Bugs 627936/1090961/1359887/2040253; sessionstore Bugs 1906808/1983990; Theia PRs #8864/#12410/#13825/#16774; Mozilla distribution-policy/trademark text — all cross-checked across official docs + Bugzilla + source (PITFALLS.md)
+- libicns 0.8.1 (Linux icns smoke-check fallback only); self-hosted Sentry operability — MEDIUM, flagged to live drills
+
+### Tertiary (LOW confidence)
+
+- Firefox-side add-on signing enforcement for the pinned ESR (version-dependent, needs Phase 09 confirmation); per-OS signing/Gatekeeper host specifics before packaging hosts exist — both recorded as phase research items, not assumed.
 
 ---
-*Research synthesis for: Power Browser — rebrandable Firefox-ESR + Theia platform*
-*Synthesized: 2026-08-29*
+
+*Research completed: 2026-09-04*
+*Ready for roadmap: yes*
