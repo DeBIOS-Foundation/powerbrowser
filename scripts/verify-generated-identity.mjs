@@ -177,6 +177,13 @@ function compareAgainstTracked(targets, config, readTracked = (p) => readFileSyn
                 failures.push(`${target.tracked}: the manifest declares no build variant with id "${target.variant}", so nothing could be emitted for it`);
                 continue;
             }
+            // Rows with no tracked comparand prove nothing here: GEN-02's
+            // ICO/ICNS containers have no hand-written originals, so there is
+            // nothing to compare them against. Skipped, not compared against
+            // nothing -- their structure is scripts/verify-icon-ihdr.mjs's
+            // contract, and the agreement gate still sees the rows through the
+            // frozen table it derives from.
+            if (target.tracked === undefined) continue;
             const out = join(dir, target.generated);
             mkdirSync(dirname(out), { recursive: true });
             writeFileSync(out, target.emit(config, variant), 'utf8');
@@ -397,11 +404,14 @@ function selfTest() {
     const surplus = { ...TARGETS[0], generated: 'planted-surplus.mozconfig', tracked: 'powerbrowser/planted-surplus.mozconfig' };
 
     const cases = Object.freeze([
-        ...TARGETS.map((target, i) => ({
+        // Drift rows cover the tracked set only: a container row with no
+        // tracked comparand cannot drift against one, and the template-string
+        // wrapper below would corrupt binary output on the way through.
+        ...TARGETS.flatMap((target, i) => (target.tracked === undefined ? [] : [{
             name: `one-byte drift in the emitter for ${target.tracked}`,
             targets: withDriftAt(i),
             expect: target.tracked,
-        })),
+        }])),
         {
             name: 'a sixth target emitting a file nobody declared',
             targets: [...TARGETS, surplus],
