@@ -1,0 +1,22 @@
+{
+  "private": true,
+  "name": "@powerbrowser/telemetry",
+  "version": "0.1.0",
+  "license": "MIT",
+  "dependencies": {
+    "@theia/core": "1.74.1"
+  },
+  "theiaExtensions": [
+    {
+      "frontend": "lib/browser/telemetry-frontend-module"
+    }
+  ],
+  "files": [
+    "lib",
+    "src"
+  ],
+  "scripts": {
+    "clean": "rm -rf lib *.tsbuildinfo",
+    "build": "tsc -b"
+  }
+}
