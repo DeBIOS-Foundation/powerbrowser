@@ -284,14 +284,14 @@ Plans:
   3. `docs/REBRANDING.md` documents every `configuration.toml` field and walks a first-time reader from clone to branded build with no prior knowledge of the tree
   4. Both verification layers plus `generate --check` run in CI and pass on Power Browser's own build
 
-**Plans**: TBD
+**Plans**: 6/6 plans executed in 6 sequential waves (verification deferred per standing instruction; human artwork ritual 06-03 deferred to end-of-roadmap)
 
-- [x] 06-01-PLAN.md
-- [x] 06-02-PLAN.md
-- [ ] 06-03-PLAN.md
-- [ ] 06-04-PLAN.md
-- [ ] 06-05-PLAN.md
-- [ ] 06-06-PLAN.md
+- [x] 06-01-PLAN.md — VER-01 static layer: manifest-derived brand-literal scan with a committed slot-keyed allowlist that fails on stale entries, plus two registry rows
+- [x] 06-02-PLAN.md — VER-02 runtime layer: six-surface identity check re-sourced to manifest-derived expectations, live dev-variant run green, release-variant drill staged
+- [x] 06-03-PLAN.md — Trademark gate with four-plant self-test plus brand/HUMAN-REVIEW.md review record (mechanical half green; human sign-off ritual deferred)
+- [x] 06-04-PLAN.md — Legal notices on the runtime channel: emitter derivation, channel reader, About-dialog rendering, preflight pin with two planted faults
+- [x] 06-05-PLAN.md — DOC-01: docs/REBRANDING.md stranger walkthrough plus every-field reference, pinned by a schema-derived coverage gate with two registry rows
+- [x] 06-06-PLAN.md — CI wiring and phase close: push/PR workflow for generate, --check and the --quick table, full local gate green, exclusions named with local drills
 
 **Research**: verify — the Mozilla and Eclipse Foundation trademark findings are LOW-confidence and web-sourced; re-check against primary policy text before any gate depends on them, and record the named human review of every file in `brand/` (opened, not judged by filename) with reviewer and date.
 
@@ -327,7 +327,7 @@ than noisy.
 | 3. Firefox Branding Emitter and Icon Pipeline | 3/4 | In Progress|  |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 4/4 | In Progress|  |
 | 5. Hook-Only Patches and Upstream Uptake | 4/4 | In Progress|  |
-| 6. Two-Layer Verification and Rebranding Docs | 2/6 | In Progress|  |
+| 6. Two-Layer Verification and Rebranding Docs | 6/6 | In Progress|  |
 | 7. Sourcerer as Downstream | 0/TBD | Not started | - |
 
 ## Coverage
