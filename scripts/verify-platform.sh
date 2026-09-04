@@ -3654,7 +3654,7 @@ run_own_checks() {
     #
     # generate-self-test rides alongside for the reason every other self-test
     # row in this array gives, and here it carries more weight than most:
-    # twenty-five planted faults -- a missing required key, an invalid basename,
+    # thirty planted faults -- a missing required key, an invalid basename,
     # a misspelled section header, a whitespace-only value, a short downstream
     # array, an incomplete variant, a duplicated variant id, an unused variant
     # id, a partially-stated identity table, a stale generated file, an absent
@@ -3666,7 +3666,11 @@ run_own_checks() {
     # variable reference in the support URL, a hostile ampersand in the
     # display name, a hostile double quote driven past validation at the
     # theia frontend-config emitter and the frontend-config fragment holding
-    # as valid JSON on the emitted pairs -- each required
+    # as valid JSON on the emitted pairs, an extension entry without its
+    # version pin, an extension entry with an unimplemented source, an
+    # extension entry with a malformed sha256 pin, the declared extensions
+    # resolving to their exact versioned URLs, and an emptied downstream
+    # extensions array resolving to zero entries -- each required
     # to go red NAMING the drift (or resolve as pinned), plus a
     # cross-cutting assertion that no case's output carries a stack frame, a
     # module specifier, or this machine's path to the project. Every one of the
@@ -3820,6 +3824,43 @@ run_own_checks() {
     # Honestly --quick: one file read and one hash.
     "vendored-parser-digest|node $REPO_ROOT/scripts/verify-vendored-parser.mjs"
     "vendored-parser-digest-self-test|node $REPO_ROOT/scripts/verify-vendored-parser.mjs --self-test"
+
+    # NEW (04-02): EXT-01's declared-extensions pin gate -- every
+    # [[extensions]] entry reaches the sidecar build as the exact bytes its
+    # pin names, and nothing else does.
+    #
+    # It asserts something DIFFERENT from the rows above it, which is why
+    # another pair of rows exists rather than none. generate-check proves
+    # the generated/ tree matches the manifest right now, and
+    # generated-byte-identity proves each emitted file equals its
+    # hand-written counterpart -- but the theiaPlugins block lives in a
+    # yarn-managed package.json with no tracked comparand, and neither row
+    # reads the downloaded archives at all. A manifest with entries and a
+    # stock package.json, a latest-floating block URL faithfully copied from
+    # a drifted fragment, or one flipped byte in a downloaded vsix would
+    # stay green under every row above. This row derives the expected map
+    # from the manifest at check time and compares as set equality in both
+    # directions (generated fragment, tracked block), asserts every Open
+    # VSX block URL carries its pinned version segment, and asserts each
+    # packed archive under the derived plugins directory hashes to its pin.
+    # An empty derived set is NOT vacuous here: with no entries declared it
+    # still reads the tracked package.json and requires the block absent, so
+    # a stale block left behind by a removed entry goes red.
+    #
+    # extension-pins-self-test rides alongside for the reason every other
+    # self-test row in this array gives: it builds a fully synthetic
+    # fixture (two entries, random-byte archives pinned by their own
+    # hashes), asserts the unmutated control is green first, then plants
+    # one mutation per case (a corrupted archive byte, a latest-floating
+    # URL in both fragment and block, a drifted block URL) requiring red
+    # naming the entry.
+    #
+    # Both are honestly --quick. The check reads text files and archive
+    # bytes off disk only; the self-test mirrors into mkdtemp directories.
+    # No build, no browser, no display, no network. (The download step
+    # itself is a build step, not a --quick check.)
+    "extension-pins|node $REPO_ROOT/scripts/verify-extension-pins.mjs"
+    "extension-pins-self-test|node $REPO_ROOT/scripts/verify-extension-pins.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
