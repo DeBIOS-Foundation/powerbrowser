@@ -280,6 +280,13 @@ check_gui01_command_registered() { _run_app_check_mjs verify-gui01-command.mjs; 
 check_verify_downstream_fixtures() {
   local root
   root=$(echo "$REPO_ROOT"/.planning/phases/07-*/fixtures)
+  # v1.0 closeout archived the 07 phase under milestones/: fall back to the
+  # archived fixtures root when the live phases dir no longer carries one.
+  # Still a glob, never spelled (see the note above), and still loud on a
+  # miss -- the harness fails on an unknown path.
+  if [ ! -d "$root" ]; then
+    root=$(echo "$REPO_ROOT"/.planning/milestones/v1.0-phases/07-*/fixtures)
+  fi
   setsid node "$REPO_ROOT/scripts/verify-downstream-fixture.mjs" --all --fixtures-root "$root" &
   CURRENT_CHECK_PID=$!
   local rc=0; wait "$CURRENT_CHECK_PID" || rc=$?; CURRENT_CHECK_PID=""
