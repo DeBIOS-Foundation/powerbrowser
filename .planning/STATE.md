@@ -24,16 +24,13 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** End-of-roadmap verification batch (all 7 phases executed, verification deferred throughout)
+**Current focus:** Human verification batch — all automated verification passes, 0 gaps; only human-eyes/heavy-machine items remain
 
 ## Current Position
 
-Phase: 07 (Sourcerer as Downstream) — PLANS COMPLETE (verification deferred per standing instruction)
-Plan: 4 of 4
-Status: Executed Phase 07 plans 01–04 (PB_CONFIG_DIR mechanism, synthetic fixture + harness 66 assertions, 4 adversarial fixtures 210 assertions total, registry rows + REBRANDING carry-through; tier-3 drills staged unexecuted)
-Last activity: 2026-09-04 — Phase 07 plan 04 completed
-
-All build phases executed. Standing instruction triggers now: verify everything, or surface real problems needing human help.
+Phase: 07 (Sourcerer as Downstream) — VERIFIED 4/4 (human_needed: 3 staged tier-3 fixture-build drills)
+Status: End-of-roadmap verification batch complete. All phases 03–07 verified 4/4 statically with 0 gaps; `verify-platform.sh --quick` 95 PASS, 0 FAIL. Remaining items all require human eyes, display, or heavy builds — listed below.
+Last activity: 2026-09-04 — Phase 07 verification completed
 
 Progress: [█████████░] 93%
 
