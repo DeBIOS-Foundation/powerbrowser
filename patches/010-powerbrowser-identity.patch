@@ -1,22 +1,27 @@
 diff --git a/browser/moz.configure b/browser/moz.configure
-index 3ea3d88b93..8cd613b25f 100644
+index 3ea3d88b93..89317a4be2 100644
 --- a/browser/moz.configure
 +++ b/browser/moz.configure
-@@ -3,15 +3,15 @@
+@@ -3,15 +3,20 @@
  # file, You can obtain one at http://mozilla.org/MPL/2.0/.
  
  imply_option("MOZ_PLACES", True)
 -imply_option("MOZ_SERVICES_HEALTHREPORT", True)
-+imply_option("MOZ_SERVICES_HEALTHREPORT", False)
++# Telemetry policy lives in generated/identity.configure (see the include
++# hook below) -- this patch carries no value literals.
  imply_option("MOZ_SERVICES_SYNC", True)
  imply_option("MOZ_DEDICATED_PROFILES", True)
  imply_option("MOZ_BLOCK_PROFILE_DOWNGRADE", True)
 -imply_option("MOZ_NORMANDY", True)
-+imply_option("MOZ_NORMANDY", False)
++# (Same -- Normandy policy lives in the fragment too.)
  imply_option("MOZ_PROFILE_MIGRATOR", True)
  
  
 -imply_option("MOZ_APP_VENDOR", "Mozilla")
++# Hook-only identity patch (MIG-05): every value lives in
++# generated/identity.configure, reached through the topsrcdir-internal
++# upstream/identity.configure symlink (fetch-upstream.sh
++# ensure_branding_overlay).
 +include("../identity.configure")
  imply_option("MOZ_APP_ID", "{ec8030f7-c20a-464f-9b0e-13a3a9e97384}")
  # Include the DevTools client, not just the server (which is the default)

@@ -18,8 +18,9 @@
 // writers) and the eight GEN-03 installer fields (per variant:
 // branding.nsi, firefox.VisualElementsManifest.xml, installer
 // AppxManifest-fields.xml and Info-plist-fields.xml), plus the GEN-01
-// identity carrier (generated/identity.configure: the two imply_option
-// lines patch 010 used to hard-code, pulled in by its include hook), plus
+// identity carrier (generated/identity.configure: the vendor/UA lines plus
+// the two fixed telemetry-policy lines patch 010 used to hard-code,
+// pulled in by its include hook), plus
 // the GEN-05 Theia frontend-config fragment
 // (generated/theia-frontend-config.json: the brand-owned upstream keys of
 // the application package.json's theia.frontend.config block --
@@ -1184,9 +1185,10 @@ function emitMozconfig(config, variant) {
 }
 
 /**
- * The Gecko identity carrier (03-04, GEN-01 close-out): the two
- * project_flag values patch 010 used to hard-code, emitted as
- * imply_option lines for the build to include.
+ * The Gecko identity carrier (03-04, GEN-01 close-out; 05-01 hook-only
+ * strip): the vendor/UA project_flag values plus the two telemetry-policy
+ * flags patch 010 used to hard-code, emitted as imply_option lines for the
+ * build to include.
  *
  * WHY AN INCLUDE, NOT MOZCONFIG EXPORTS. MOZ_APP_VENDOR and MOZ_APP_UA_NAME
  * are project_flag() values, whose template pins possible_origins to
@@ -1195,9 +1197,29 @@ function emitMozconfig(config, variant) {
  * rejects it ("can not be set by environment. Values are accepted from:
  * implied", proven red by a forced configure during this plan). So the
  * carrier is a generated moz.configure fragment, pulled into the build by
- * the single include() hook patch 010 carries in place of the two
- * hard-codes. MOZ_APP_ID stays patch-carried: it is a fixed platform
- * constant shared with upstream, not a downstream brand value.
+ * the single include() hook patch 010 carries.
+ *
+ * FIXED VS CONFIGURED (05-01, MIG-05). The two telemetry lines --
+ * imply_option("MOZ_SERVICES_HEALTHREPORT", False) and
+ * imply_option("MOZ_NORMANDY", False) -- are FIXED platform content, not
+ * manifest keys. The manifest covers identity, branding, telemetry,
+ * extensions, URLs and pins; these two build flags are platform policy
+ * (this tree compiles both subsystems out for every downstream), not
+ * downstream-varying brand, so no manifest key feeds them and no rebrand
+ * can switch them. A downstream that needs either subsystem carries its
+ * own patch. This is also why the brand-value scan
+ * (scripts/check-patch-surface.sh) never matches them: that scan derives
+ * its set from configuration.toml, and these lines derive from nothing but
+ * this emitter.
+ *
+ * MOZ_APP_ID is deliberately NOT carried here. The 05-01 audit proved the
+ * GUID line is byte-identical stock context -- `git show
+ * HEAD:browser/moz.configure` already carries
+ * "{ec8030f7-c20a-464f-9b0e-13a3a9e97384}" and patch 010 never changed it
+ * (it rides the hunk as a context line, not a +line). Relocating it would
+ * delete a stock line only to re-add the identical value elsewhere: churn
+ * with a second source for one fact. It stays where upstream put it. (This
+ * corrects the 03-04 comment that called it "patch-carried".)
  *
  * WHY ONE FILE, NOT ONE PER VARIANT. Vendor and UA name do not vary by
  * variant -- the dev/release split is name_suffix, which reaches the build
@@ -1206,8 +1228,10 @@ function emitMozconfig(config, variant) {
  *
  * UA_NAME takes no manifest key by design -- it is the D-78 compat literal
  * (same rationale as -brand-product-name = Firefox in emitBrandFtl).
- * Both lines pass the sink guard: the fragment executes in the configure
- * sandbox, so a quote in either value would break out of its string.
+ * The vendor line passes the sink guard; the UA literal and the two fixed
+ * policy lines carry no interpolation: the fragment executes in the
+ * configure sandbox, so a quote in either vendor value would break out of
+ * its string.
  *
  * The fragment reaches the build through the topsrcdir-internal symlink
  * upstream/identity.configure (setup-created by fetch-upstream.sh
@@ -1215,17 +1239,39 @@ function emitMozconfig(config, variant) {
  * includes as ../identity.configure -- lexically inside topsrcdir for the
  * sandbox's basedir check, resolving to this file outside it.
  *
+ * CARRIER BANNER (05-01, WR-05). The shared GENERATED_BANNER's recovery
+ * pointers are wrong for this file -- there is no tracked
+ * identity.configure to copy over, and until the MIG-05 comparand the
+ * generated-byte-identity row skipped untracked rows -- so the carrier
+ * carries its own banner naming the real pointers: this emitter, the
+ * upstream symlink, and the two gates that redden on a disagreement.
+ *
  * Joined with a literal newline, never the platform line-ending constant.
  */
+const IDENTITY_BANNER = Object.freeze([
+    '# Managed by scripts/generate.mjs -- do not edit here.',
+    '# The vendor and UA lines derive from configuration.toml; the telemetry',
+    '# policy lines below them are fixed platform content (see emitIdentityConfigure).',
+    '# To change it: edit scripts/generate.mjs, then run: node scripts/generate.mjs.',
+    '# It reaches the build through the upstream/identity.configure symlink',
+    '# (setup-created by scripts/fetch-upstream.sh, never committed).',
+    '# A disagreement reddens: scripts/verify-platform.sh --only generated-byte-identity',
+    '# and: scripts/verify-branding-preflight.mjs (check 5).',
+]);
 function emitIdentityConfigure(config, variant) {
     void variant;
     const vendor = assertEmittable('product.vendor_machine', config.product.vendor_machine);
     const ua = assertEmittable('product.ua_name', 'Firefox');
     const lines = [
-        ...GENERATED_BANNER,
+        ...IDENTITY_BANNER,
         '',
         `imply_option("MOZ_APP_VENDOR", "${vendor}")`,
         `imply_option("MOZ_APP_UA_NAME", "${ua}")`,
+        // FIXED platform policy, not manifest-derived -- see above. These
+        // two lines are what patch 010 used to hard-code; the patch now
+        // carries only the include hook and comments (MIG-05).
+        'imply_option("MOZ_SERVICES_HEALTHREPORT", False)',
+        'imply_option("MOZ_NORMANDY", False)',
     ];
     return lines.join('\n') + '\n';
 }
@@ -2783,7 +2829,7 @@ export const TARGETS = Object.freeze([
         emit: emitMozconfig,
     }),
     // 03-04: the GEN-01 identity carrier. No tracked comparand -- there is
-    // no hand-written original (patch 010 used to hard-code these two lines
+    // no hand-written original (patch 010 used to hard-code these lines
     // inline); the agreement and byte-identity gates skip rows without one,
     // and --check still covers the row through the frozen table.
     Object.freeze({
