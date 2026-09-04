@@ -230,6 +230,16 @@ Items acknowledged and carried forward from previous milestone close:
 |----------|------|--------|-------------|
 | *(none)* | | | |
 
+## Deferred Verification
+
+Standing instruction (2026-09-04, user): defer ALL verification until everything
+that can be built is built. Verify only when the roadmap is fully executed or a
+real problem needs human help.
+
+| Phase | State | Resume |
+|-------|-------|--------|
+| 03 | verification_deferred_human | /gsd-verify-work 03 |
+
 ## Session Continuity
 
 Last session: 2026-09-04T05:22:00.000Z
