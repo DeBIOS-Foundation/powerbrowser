@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-09-04T22:14:29.917Z"
 last_activity: 2026-09-04
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** v2 planning — inputs frozen in `.planning/NEXT-MILESTONE-INPUTS.md` (NAME-01 rename slice first)
+**Current focus:** v1.1 Hardening and SQL Tabs — roadmap awaiting approval (Phases 08–09, hardening-only: no GUI, no SQL tabs this cycle)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 08 (roadmap awaiting approval)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-09-04 — Milestone v1.1 started
+Status: Roadmap awaiting approval
+Last activity: 2026-09-04 — v1.1 roadmap created (Phases 08–09)
 
 ## Performance Metrics
 

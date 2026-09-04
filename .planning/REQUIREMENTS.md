@@ -131,16 +131,16 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NAME-01 | TBD | Pending |
-| PKG-01 | TBD | Pending |
-| PKG-02 | TBD | Pending |
-| PKG-03 | TBD | Pending |
-| EXT-02 | TBD | Pending |
-| EXT-03 | TBD | Pending |
-| TEL-04 | TBD | Pending |
-| BLD-01 | TBD | Pending |
-| BLD-02 | TBD | Pending |
-| UPD-03 | TBD | Pending |
-| UPD-04 | TBD | Pending |
-| SEC-02 | TBD | Pending |
-| SHELL-01 | TBD | Pending |
+| NAME-01 | Phase 08 | Pending |
+| PKG-01 | Phase 08 | Pending |
+| PKG-02 | Phase 08 | Pending |
+| PKG-03 | Phase 08 | Pending |
+| EXT-02 | Phase 09 | Pending |
+| EXT-03 | Phase 09 | Pending |
+| TEL-04 | Phase 09 | Pending |
+| BLD-01 | Phase 08 | Pending |
+| BLD-02 | Phase 09 | Pending |
+| UPD-03 | Phase 08 | Pending |
+| UPD-04 | Phase 09 | Pending |
+| SEC-02 | Phase 08 | Pending |
+| SHELL-01 | Phase 08 | Pending |
