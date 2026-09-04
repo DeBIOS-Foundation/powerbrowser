@@ -158,7 +158,7 @@ Plans:
   4. Cosmetic fields left unset fall back to Power Browser defaults that are themselves a `configuration.toml` (one merge code path), with every applied default echoed at generate time
   5. Everything the generator writes lands under a single gitignored `generated/` root, nothing generated is committed, and `generate --check` fails when that output is stale
 
-**Plans**: 9 plans — 6/6 executed in 5 waves, plus 3 gap-closure plans (02-07..02-09) in 3 further waves, closing G-02-11 and G-02-12 from `02-UAT.md`
+**Plans**: 9/9 plans executed — 6/6 executed in 5 waves, plus 3 gap-closure plans (02-07..02-09) in 3 further waves, closing G-02-11 and G-02-12 from `02-UAT.md`
 
 Plans:
 **Wave 1**
@@ -184,15 +184,15 @@ Plans:
 
 **Wave 6** *(gap closure — G-02-11, G-02-12)*
 
-- [ ] 02-07-PLAN.md — Score the never-audited placeholder design against the quotient design on the panel's four lenses, and ratify one at a blocking checkpoint (one-way door)
+- [x] 02-07-PLAN.md — Score the never-audited placeholder design against the quotient design on the panel's four lenses, and ratify one at a blocking checkpoint (one-way door)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 02-08-PLAN.md — Tracer: one relocated checkout, both gates honest — close the false RED and the false GREEN in one slice, add a self-test case at a different repo root, and move the honesty claim everywhere it is written down
+- [x] 02-08-PLAN.md — Tracer: one relocated checkout, both gates honest — close the false RED and the false GREEN in one slice, add a self-test case at a different repo root, and move the honesty claim everywhere it is written down
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 02-09-PLAN.md — Correct the one documentation claim still standing and make `02-VERIFICATION.md` name the two gaps it reported as absent
+- [x] 02-09-PLAN.md — Correct the one documentation claim still standing and make `02-VERIFICATION.md` name the two gaps it reported as absent
 
 ### Phase 3: Firefox Branding Emitter and Icon Pipeline
 
@@ -286,7 +286,7 @@ than noisy.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Platform Extraction and Rename | 21/21 | In Progress|  |
-| 2. Configuration Manifest and Generator Core | 6/6 | Complete    | 2026-09-01 |
+| 2. Configuration Manifest and Generator Core | 9/9 | Complete    | 2026-09-04 |
 | 3. Firefox Branding Emitter and Icon Pipeline | 0/TBD | Not started | - |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
 | 5. Hook-Only Patches and Upstream Uptake | 0/TBD | Not started | - |
