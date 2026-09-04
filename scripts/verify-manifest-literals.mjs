@@ -144,8 +144,6 @@ const ALLOWLIST = [
   { slot: 'variant-display:release', file: 'scripts/generate.mjs', reason: 'emitter comments and messages quoting the value shape they derive' },
   { slot: 'variant-display:release', file: 'scripts/rename-brand.mjs', reason: 'rename header documenting the two-word display target' },
   { slot: 'variant-display:release', file: 'scripts/scan-brand-residue.mjs', reason: 'scan comments distinguishing the display value from the identifier' },
-  { slot: 'variant-display:dev', file: 'scripts/verify-branding-identity.mjs', reason: 'identity-check expectation for the dev surface' },
-  { slot: 'variant-display:release', file: 'scripts/verify-branding-identity.mjs', reason: 'identity-check expectation for the release surface' },
   { slot: 'variant-display:dev', file: 'scripts/verify-branding-preflight.mjs', reason: 'preflight comments and plants quoting the dev derivation chain' },
   { slot: 'variant-display:release', file: 'scripts/verify-branding-preflight.mjs', reason: 'preflight comments and plants quoting the release derivation chain' },
   { slot: 'variant-display:release', file: 'scripts/verify-branding.mjs', reason: 'comment citing the display form the live check asserts' },
