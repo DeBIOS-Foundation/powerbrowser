@@ -100,6 +100,10 @@
     "app_basename": "powerbrowser",
     "distribution_id": "org.debios",
     "domain": "powerbrowser.org",
+    "theia": {
+      "default_theme": "dark"
+    },
+    "theia_reason": "GEN-05 (04-04): the Theia sidecar's default theme id, owned by the [theia] default_theme manifest key and emitted into the application package.json's theia.frontend.config.defaultTheme. One of Theia's own builtin theme ids (@theia/core 1.74.1 theming.ts BuiltinThemeProvider); the preflight pins the tracked package.json value against this declaration, never against the manifest the generator also reads.",
     "identifier_form": "PowerBrowser",
     "identifier_form_reason": "D-10's TitleCase identifier prefix. It is listed here as the value that must NEVER appear in a display string -- the preflight asserts its absence from every display surface, because `PowerBrowser Dev` is exactly what a token-boundary rename produces and exactly what nothing else in the tree would object to."
   },

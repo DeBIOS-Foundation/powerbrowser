@@ -802,6 +802,188 @@ function runChecks(root) {
         }
     }
 
+    // --- 11. the about dialog reads its display values at runtime ---------
+    //
+    // GEN-05 (04-04): the about title is the second Theia display surface
+    // that resolves at runtime instead of at generate time. The same triple
+    // section 10 pins on the welcome heading, aimed at the about dialog:
+    //
+    // (a) the read: the dialog resolves its title through
+    // FrontendApplicationConfigProvider's applicationName -- a title that
+    // stops reading the provider is a per-rebrand TypeScript edit again.
+    // (b) the fallback: the file still carries the expected display name as
+    // a quoted literal -- the boot fallback where the provider is unset.
+    // (c) the render: no line paints the display name as JSX text -- the
+    // literal may appear in code, never as a rendered string.
+    //
+    // Plus the channel half for the dialog's three powerbrowserBranding
+    // values (d): the file reads aboutText, repoUrl and markSvg through
+    // the shared reader and renders the mark through the theme-correct
+    // transform -- a dialog that stops reading the channel is a
+    // per-rebrand edit for each of those values again. And the link half
+    // (e): no line carries a literal href -- the link target resolves at
+    // runtime, never as markup.
+    //
+    // The expected VALUE comes from the inventory's brand_display_expectations
+    // (release short name), never the manifest: this file's whole design
+    // forbids reading the manifest as expectation source.
+    const ABOUT_REL = 'theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx';
+    const aboutDialog = readText(root, ABOUT_REL);
+    if (aboutDialog === null) {
+        r.fail(`${ABOUT_REL} does not exist -- the about dialog has no declared read site`);
+    } else {
+        if (!aboutDialog.includes('FrontendApplicationConfigProvider') || !aboutDialog.includes('.applicationName')) {
+            r.fail(
+                `${ABOUT_REL} does not resolve its title through FrontendApplicationConfigProvider's applicationName. ` +
+                'A title that stops reading the provider is a per-rebrand TypeScript edit again.',
+            );
+        }
+        const aboutName = exp.variants?.release?.brand_short_name;
+        if (typeof aboutName !== 'string' || aboutName === '') {
+            r.fail('the inventory declares no release brand_short_name, so the about fallback has no expected value');
+        } else {
+            if (!aboutDialog.includes(`'${aboutName}'`) && !aboutDialog.includes(`"${aboutName}"`)) {
+                r.fail(
+                    `${ABOUT_REL} does not carry the boot fallback ${JSON.stringify(aboutName)} as a quoted literal. ` +
+                    'Without it the tree cannot boot where the provider is unset.',
+                );
+            }
+            // ESCAPED before interpolation, like the section 6 leak pattern:
+            // brand_short_name is hand-authored and unconstrained, so a value
+            // carrying pattern syntax must not change the match semantics.
+            const aboutRendered = new RegExp(`>\\s*${escapeForRegExp(aboutName)}\\s*<`);
+            for (const [i, line] of aboutDialog.split('\n').entries()) {
+                if (aboutRendered.test(line)) {
+                    r.fail(
+                        `${ABOUT_REL}:${i + 1} paints the display literal as rendered text: ${JSON.stringify(line.trim())}. ` +
+                        'Resolve it through the provider instead; the literal may appear in code, never in render.',
+                    );
+                }
+            }
+        }
+        for (const token of ['readBrandingConfig', 'aboutText', 'repoUrl', 'markSvg', 'inlineMarkFromSvg']) {
+            if (!aboutDialog.includes(token)) {
+                r.fail(
+                    `${ABOUT_REL} does not read ${token} through the runtime branding channel. ` +
+                    'A dialog that stops reading the channel is a per-rebrand TypeScript edit again.',
+                );
+            }
+        }
+        for (const [i, line] of aboutDialog.split('\n').entries()) {
+            if (/href="https?:/.test(line)) {
+                r.fail(
+                    `${ABOUT_REL}:${i + 1} carries a literal link target as markup: ${JSON.stringify(line.trim())}. ` +
+                    'Resolve the link through the channel instead; literals may appear in fallback code, never in render.',
+                );
+            }
+        }
+    }
+
+    // --- 12. the welcome widget's remaining channel reads --------------------
+    //
+    // GEN-05 (04-04): section 10 owns the welcome heading triple; this
+    // section owns the widget's three powerbrowserBranding values (d) and
+    // its link half (e), the same two halves section 11 pins on the
+    // dialog. One shared reader serves both files, so the token list is
+    // the same shape with the widget's own text key.
+    if (welcomeWidget !== null) {
+        for (const token of ['readBrandingConfig', 'welcomeText', 'repoUrl', 'markSvg', 'inlineMarkFromSvg']) {
+            if (!welcomeWidget.includes(token)) {
+                r.fail(
+                    `${WELCOME_WIDGET_REL} does not read ${token} through the runtime branding channel. ` +
+                    'A widget that stops reading the channel is a per-rebrand TypeScript edit again.',
+                );
+            }
+        }
+        for (const [i, line] of welcomeWidget.split('\n').entries()) {
+            if (/href="https?:/.test(line)) {
+                r.fail(
+                    `${WELCOME_WIDGET_REL}:${i + 1} carries a literal link target as markup: ${JSON.stringify(line.trim())}. ` +
+                    'Resolve the link through the channel instead; literals may appear in fallback code, never in render.',
+                );
+            }
+        }
+        // The repo-link fallback, pinned to the inventory domain -- derived
+        // as https://<domain>/, never restated, so a domain move carries
+        // the expectation with it. The const lives in the widget and is
+        // imported by the dialog, so one site carries the literal.
+        const domain = exp.domain;
+        if (typeof domain !== 'string' || domain === '') {
+            r.fail('the inventory declares no domain, so the repo-link fallback has no expected value');
+        } else if (!welcomeWidget.includes(`'https://${domain}/'`) && !welcomeWidget.includes(`"https://${domain}/"`)) {
+            r.fail(
+                `${WELCOME_WIDGET_REL} does not carry the repo-link boot fallback 'https://${domain}/' as a quoted literal. ` +
+                'Without it the tree cannot link where the provider is unset.',
+            );
+        }
+    }
+
+    // --- 13. the favicon channel read, the theme pin, the geometry rule ----
+    //
+    // GEN-05 (04-04), three halves. First, the favicon contribution reads
+    // the channel mark and keeps the compiled data-URI twin as its boot
+    // fallback: a favicon that stops reading the channel is a per-rebrand
+    // edit, and one that loses the fallback cannot paint where the
+    // provider is unset. (Which theme each surface follows stays section
+    // 7's MARK_CONSUMERS contract, asserted from both directions there.)
+    //
+    // Second, the application package.json's defaultTheme equals the
+    // inventory's declared theia id -- the value pin for the key the
+    // generator owns from theia.default_theme. The expectation source is
+    // brand_display_expectations.theia, never the manifest.
+    //
+    // Third, no branding source outside the twin restates mark geometry: a
+    // pasted `<svg` anywhere but powerbrowser-mark.ts is a second source
+    // of truth about the same asset, which is precisely what the twin
+    // assertion in section 7 exists to prevent.
+    const FAVICON_REL = 'theia/extensions/branding/src/browser/powerbrowser-favicon-contribution.ts';
+    const favicon = readText(root, FAVICON_REL);
+    if (favicon === null) {
+        r.fail(`${FAVICON_REL} does not exist -- the favicon has no declared read site`);
+    } else {
+        for (const token of ['readBrandingConfig', 'markSvg']) {
+            if (!favicon.includes(token)) {
+                r.fail(
+                    `${FAVICON_REL} does not read ${token} through the runtime branding channel. ` +
+                    'A favicon that stops reading the channel is a per-rebrand TypeScript edit again.',
+                );
+            }
+        }
+        if (!favicon.includes('POWERBROWSER_MARK_DATA_URI')) {
+            r.fail(
+                `${FAVICON_REL} does not keep the compiled mark twin as its boot fallback. ` +
+                'Without it the tree cannot paint where the provider is unset.',
+            );
+        }
+    }
+
+    const inventoryTheme = exp.theia?.default_theme;
+    if (typeof inventoryTheme !== 'string' || inventoryTheme === '') {
+        r.fail('the inventory declares no theia.default_theme, so the packaged default theme has no expected value');
+    } else if (appPkg !== null) {
+        const m = appPkg.match(/"defaultTheme":\s*"([^"]*)"/);
+        r.eq(
+            'theia defaultTheme',
+            m ? m[1] : null,
+            inventoryTheme,
+            'theia/applications/browser/package.json',
+        );
+    }
+
+    for (const rel of brandingSources) {
+        if (rel.endsWith('powerbrowser-mark.ts')) continue;
+        const text = readText(root, rel);
+        if (text === null) continue;
+        for (const [i, line] of text.split('\n').entries()) {
+            if (line.includes('<svg')) {
+                r.fail(
+                    `${rel}:${i + 1} restates mark geometry outside the twin: ${JSON.stringify(line.trim())}. ` +
+                    'Read the channel value instead; powerbrowser-mark.ts is the one source a second copy drifts from.',
+                );
+            }
+        }
+    }
+
     return r;
 }
 
@@ -1114,6 +1296,195 @@ function selfTest() {
             ok = false;
         } else {
             console.log(`${NAME}: --self-test -- deleted the boot fallback from ${widgetRel} and it was REJECTED by name: ${fallbackMsg}`);
+        }
+        writeFileSync(widgetPath, widgetOriginal);
+
+        // Eleventh plant (04-04): the about title back as a rendered display
+        // literal, the exact line the runtime read replaced. Section 11 must
+        // go red NAMING the file, the line number and the offending text.
+        writeFileSync(aboutPath, aboutOriginal.replace('<h3>{this.displayName}</h3>', '<h3>Power Browser</h3>'));
+        const aboutLiteralPlanted = runChecks(dir);
+        const aboutLiteralMsg = aboutLiteralPlanted.failures.find(
+            (f) => f.includes(`${aboutRel}:`) && f.includes('rendered text') && f.includes('<h3>Power Browser</h3>'),
+        );
+        if (!aboutLiteralMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the display literal planted as rendered text in ${aboutRel} (the pre-04-04 shape) was NOT rejected naming the file, the line and the offending text`);
+            for (const f of aboutLiteralPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- planted the display literal as rendered text in ${aboutRel} and it was REJECTED naming the file and the offending line: ${aboutLiteralMsg}`);
+        }
+        writeFileSync(aboutPath, aboutOriginal);
+
+        // Twelfth plant (04-04): the about title's runtime read broken --
+        // the provider call replaced by the fallback constant, so the title
+        // compiles and renders yet no longer follows a rebrand. Section 11
+        // must go red NAMING the file and the provider it no longer reads.
+        writeFileSync(
+            aboutPath,
+            aboutOriginal.replace(
+                'FrontendApplicationConfigProvider.get().applicationName',
+                'FALLBACK_DISPLAY_NAME',
+            ),
+        );
+        const aboutChannelPlanted = runChecks(dir);
+        const aboutChannelMsg = aboutChannelPlanted.failures.find(
+            (f) => f.includes(aboutRel) && f.includes('FrontendApplicationConfigProvider'),
+        );
+        if (!aboutChannelMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the about title with its provider read removed (${aboutRel}) was NOT rejected naming the file and the provider`);
+            for (const f of aboutChannelPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- removed the provider read from ${aboutRel} and it was REJECTED by name: ${aboutChannelMsg}`);
+        }
+        writeFileSync(aboutPath, aboutOriginal);
+
+        // Thirteenth plant (04-04): the about boot fallback deleted -- the
+        // quoted literal gone while the runtime read still stands. Section
+        // 11 must go red NAMING the file and the missing fallback value.
+        writeFileSync(aboutPath, aboutOriginal.replace(`= 'Power Browser';`, `= '';`));
+        const aboutFallbackPlanted = runChecks(dir);
+        const aboutFallbackMsg = aboutFallbackPlanted.failures.find(
+            (f) => f.includes(aboutRel) && f.includes('boot fallback') && f.includes('"Power Browser"'),
+        );
+        if (!aboutFallbackMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the boot fallback deleted from ${aboutRel} was NOT rejected naming the file and the missing value`);
+            for (const f of aboutFallbackPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- deleted the boot fallback from ${aboutRel} and it was REJECTED by name: ${aboutFallbackMsg}`);
+        }
+        writeFileSync(aboutPath, aboutOriginal);
+
+        // Fourteenth plant (04-04): the welcome widget's channel read
+        // broken -- every readBrandingConfig call renamed away, so the
+        // texts, link and mark compile against nothing and render from no
+        // channel. Section 12 must go red NAMING the file and the reader.
+        writeFileSync(widgetPath, widgetOriginal.replace(/readBrandingConfig/g, 'readChannelConfig'));
+        const widgetChannelPlanted = runChecks(dir);
+        const widgetChannelMsg = widgetChannelPlanted.failures.find(
+            (f) => f.includes(widgetRel) && f.includes('readBrandingConfig'),
+        );
+        if (!widgetChannelMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the welcome widget with its channel read removed (${widgetRel}) was NOT rejected naming the file and the reader`);
+            for (const f of widgetChannelPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- removed the channel read from ${widgetRel} and it was REJECTED by name: ${widgetChannelMsg}`);
+        }
+        writeFileSync(widgetPath, widgetOriginal);
+
+        // Fifteenth plant (04-04): the about dialog's channel read broken,
+        // same shape as the fourteenth aimed at the dialog's own read site.
+        // Section 11 must go red NAMING the file and the reader.
+        writeFileSync(aboutPath, aboutOriginal.replace(/readBrandingConfig/g, 'readChannelConfig'));
+        const aboutBrandingPlanted = runChecks(dir);
+        const aboutBrandingMsg = aboutBrandingPlanted.failures.find(
+            (f) => f.includes(aboutRel) && f.includes('readBrandingConfig'),
+        );
+        if (!aboutBrandingMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the about dialog with its channel read removed (${aboutRel}) was NOT rejected naming the file and the reader`);
+            for (const f of aboutBrandingPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- removed the channel read from ${aboutRel} and it was REJECTED by name: ${aboutBrandingMsg}`);
+        }
+        writeFileSync(aboutPath, aboutOriginal);
+
+        // Sixteenth plant (04-04): the welcome link back as a literal href,
+        // the exact markup the runtime link replaced. Section 12 must go
+        // red NAMING the file, the line number and the offending text.
+        writeFileSync(widgetPath, widgetOriginal.replace('href={this.repoUrl}', 'href="https://powerbrowser.org/"'));
+        const hrefPlanted = runChecks(dir);
+        const hrefMsg = hrefPlanted.failures.find(
+            (f) => f.includes(`${widgetRel}:`) && f.includes('literal link target'),
+        );
+        if (!hrefMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the literal link target planted as markup in ${widgetRel} (the pre-04-04 shape) was NOT rejected naming the file and the offending line`);
+            for (const f of hrefPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- planted a literal link target in ${widgetRel} and it was REJECTED naming the file and the offending line: ${hrefMsg}`);
+        }
+        writeFileSync(widgetPath, widgetOriginal);
+
+        // Seventeenth plant (04-04): mark geometry restated outside the
+        // twin -- a pasted `<svg` in the widget, a second source of truth
+        // about the same asset. Section 13 must go red NAMING the file and
+        // the offending line.
+        writeFileSync(widgetPath, widgetOriginal.replace(`className='gs-container'`, `className='gs-container <svg '`));
+        const svgPlanted = runChecks(dir);
+        const svgMsg = svgPlanted.failures.find(
+            (f) => f.includes(`${widgetRel}:`) && f.includes('restates mark geometry'),
+        );
+        if (!svgMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the restated mark geometry planted in ${widgetRel} was NOT rejected naming the file and the offending line`);
+            for (const f of svgPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- planted restated mark geometry in ${widgetRel} and it was REJECTED naming the file and the offending line: ${svgMsg}`);
+        }
+        writeFileSync(widgetPath, widgetOriginal);
+
+        // Eighteenth plant (04-04): the favicon's channel read broken --
+        // every readBrandingConfig call renamed away, so the icon silently
+        // pins to the compiled twin and no longer follows a rebrand.
+        // Section 13 must go red NAMING the file and the reader it no
+        // longer calls.
+        const faviconRel = 'theia/extensions/branding/src/browser/powerbrowser-favicon-contribution.ts';
+        const faviconPath = join(dir, faviconRel);
+        const faviconOriginal = readFileSync(faviconPath, 'utf8');
+        writeFileSync(faviconPath, faviconOriginal.replace(/readBrandingConfig/g, 'readChannelConfig'));
+        const faviconPlanted = runChecks(dir);
+        const faviconMsg = faviconPlanted.failures.find(
+            (f) => f.includes(faviconRel) && f.includes('readBrandingConfig'),
+        );
+        if (!faviconMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the favicon with its channel read removed (${faviconRel}) was NOT rejected naming the file and the reader`);
+            for (const f of faviconPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- removed the channel read from ${faviconRel} and it was REJECTED by name: ${faviconMsg}`);
+        }
+        writeFileSync(faviconPath, faviconOriginal);
+
+        // Nineteenth plant (04-04): the packaged default theme drifted --
+        // the tracked package.json carrying a theme id the inventory does
+        // not declare. Section 13 must go red NAMING the key and BOTH
+        // disagreeing values.
+        const appPkgRel = 'theia/applications/browser/package.json';
+        const appPkgPath = join(dir, appPkgRel);
+        const appPkgOriginal = readFileSync(appPkgPath, 'utf8');
+        writeFileSync(appPkgPath, appPkgOriginal.replace('"defaultTheme": "dark"', '"defaultTheme": "light"'));
+        const themePlanted = runChecks(dir);
+        const themeMsg = themePlanted.failures.find(
+            (f) => f.includes('theia defaultTheme') && f.includes('"light"') && f.includes('"dark"'),
+        );
+        if (!themeMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the drifted default theme planted in ${appPkgRel} was NOT rejected naming the key and both values`);
+            for (const f of themePlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- planted a drifted default theme in ${appPkgRel} and it was REJECTED naming the key and both values: ${themeMsg}`);
+        }
+        writeFileSync(appPkgPath, appPkgOriginal);
+
+        // Twentieth plant (04-04): the repo-link boot fallback repointed --
+        // the widget's quoted fallback no longer the inventory domain's
+        // URL. Section 12 must go red NAMING the file and the expected
+        // domain-derived value.
+        writeFileSync(widgetPath, widgetOriginal.replace(`'https://powerbrowser.org/'`, `'https://example.org/'`));
+        const repoFallbackPlanted = runChecks(dir);
+        const repoFallbackMsg = repoFallbackPlanted.failures.find(
+            (f) => f.includes(widgetRel) && f.includes('repo-link boot fallback'),
+        );
+        if (!repoFallbackMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the repointed repo-link fallback planted in ${widgetRel} was NOT rejected naming the file and the expected value`);
+            for (const f of repoFallbackPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- repointed the repo-link fallback in ${widgetRel} and it was REJECTED by name: ${repoFallbackMsg}`);
         }
         writeFileSync(widgetPath, widgetOriginal);
     } finally {
