@@ -65,7 +65,21 @@ export const POWERBROWSER_MARK_DATA_URI = `data:image/svg+xml,${encodeURICompone
  * viewBox falls back to 300x150, not to its container.
  */
 export function powerBrowserMarkInline(size: number): string {
-    return POWERBROWSER_MARK_SVG
+    return inlineMarkFromSvg(POWERBROWSER_MARK_SVG, size);
+}
+
+/**
+ * The currentColor transform above, applied to a runtime mark string.
+ *
+ * GEN-05 (04-04): the mark SVG rides the runtime channel
+ * (powerbrowserBranding.markSvg), so the in-shell surfaces apply this same
+ * transform to the channel value and keep POWERBROWSER_MARK_SVG's compiled
+ * twin as the boot fallback. Pure string surgery, no brand value: a mark
+ * that fails to parse renders nothing, which the fallback below prevents
+ * from ever being what a reader sees.
+ */
+export function inlineMarkFromSvg(svg: string, size: number): string {
+    return svg
         .replace(/<defs>[\s\S]*?<\/defs>/, '')
         .replace(/class="a"/g, 'fill="currentColor"')
         .replace('<svg ', `<svg width="${size}" height="${size}" aria-hidden="true" focusable="false" `);

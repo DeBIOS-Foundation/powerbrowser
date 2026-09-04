@@ -80,6 +80,55 @@
       "type": "string",
       "required": false
     },
+    "theia.welcome_text": {
+      "type": "string",
+      "required": false,
+      "regex": "^[^<>&\"`$\\\\\\x00-\\x1f\\x7f]+$",
+      "regex_help": "plain words with no markup or code: letters, digits, spaces and ordinary punctuation, but no angle bracket, ampersand, double quote, backtick, dollar sign, backslash or control character",
+      "regex_example": "A browser you can make your own."
+    },
+    "theia.about_text": {
+      "type": "string",
+      "required": false,
+      "regex": "^[^<>&\"`$\\\\\\x00-\\x1f\\x7f]+$",
+      "regex_help": "plain words with no markup or code: letters, digits, spaces and ordinary punctuation, but no angle bracket, ampersand, double quote, backtick, dollar sign, backslash or control character",
+      "regex_example": "A rebrandable browser platform."
+    },
+    "urls.release_notes": {
+      "type": "string",
+      "required": false,
+      "regex": "^https://[^\\s\\x00-\\x1f\\x7f]+$",
+      "regex_help": "a web address starting with https:// and containing no spaces or control characters",
+      "regex_example": "https://example.org/releases"
+    },
+    "urls.update": {
+      "type": "string",
+      "required": false,
+      "regex": "^https://[^\\s\\x00-\\x1f\\x7f]+$",
+      "regex_help": "a web address starting with https:// and containing no spaces or control characters",
+      "regex_example": "https://example.org/update"
+    },
+    "urls.crash_report": {
+      "type": "string",
+      "required": false,
+      "regex": "^https://[^\\s\\x00-\\x1f\\x7f]+$",
+      "regex_help": "a web address starting with https:// and containing no spaces or control characters",
+      "regex_example": "https://example.org/crash-report"
+    },
+    "urls.homepage": {
+      "type": "string",
+      "required": false,
+      "regex": "^https://[^\\s\\x00-\\x1f\\x7f]+$",
+      "regex_help": "a web address starting with https:// and containing no spaces or control characters",
+      "regex_example": "https://example.org"
+    },
+    "urls.search": {
+      "type": "string",
+      "required": false,
+      "regex": "^https://[^\\s\\x00-\\x1f\\x7f]+$",
+      "regex_help": "a web address starting with https:// and containing no spaces or control characters",
+      "regex_example": "https://example.org/search"
+    },
     "installer.support_url": {
       "type": "string",
       "required": false,
