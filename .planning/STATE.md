@@ -258,6 +258,16 @@ Standing instruction (2026-09-04, user): defer ALL verification until everything
 that can be built is built. Verify only when the roadmap is fully executed or a
 real problem needs human help.
 
+Standing instruction (2026-09-04, user): every `/gsd-autonomous` run is
+nonstop by default — no human until done. Pre-answered pause points:
+(1) verification asking to validate → record deferred, keep going;
+(2) verification gaps → one automatic gap-closure retry, then record deferred
+and keep going; (3) milestone audit gaps/tech debt → accept, continue to
+closeout; (4) cleanup file-deletion approval → approve after checking the
+dry-run list is phase scratch only. The ONLY contact is a blocker surviving
+3 fix-and-retry attempts → halt `needs_human` with resume command. Rescind
+with "autonomous interactive".
+
 | Phase | State | Resume |
 |-------|-------|--------|
 | 03 | verification_deferred_human | /gsd-verify-work 03 |
