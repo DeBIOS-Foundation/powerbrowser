@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 04
 current_phase_name: Theia Surface — Branding, Extensions, Telemetry
 status: executing
-stopped_at: Completed 04-theia-surface-branding-extensions-telemetry-04-PLAN.md
-last_updated: "2026-09-04T07:33:51.486Z"
+stopped_at: Completed 05-hook-only-patches-and-upstream-uptake-01-PLAN.md
+last_updated: "2026-09-04T08:06:03.875Z"
 last_activity: 2026-09-04
 last_activity_desc: Phase 03 plan 04 execution completed
-state_head: 81c47ea3b0c671616af5458b082719e900463e7f
+state_head: fb6aa091b9093abe80ffd80d54a40fa5cd7a1beb
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 38
-  completed_plans: 38
+  total_plans: 42
+  completed_plans: 39
 milestone_name: milestone
 ---
 
@@ -90,6 +90,7 @@ Progress: [█████████░] 93%
 | Phase 03-firefox-branding-emitter-and-icon-pipeline P04 | 30min | 3 tasks | 6 files |
 | Phase 04-theia-surface-branding-extensions-telemetry P02 | 14min | 3 tasks | 6 files |
 | Phase 04-theia-surface-branding-extensions-telemetry P04 | 19min | 3 tasks | 16 files |
+| Phase 05-hook-only-patches-and-upstream-uptake P01 | 12min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -213,6 +214,7 @@ Recent decisions affecting current work:
 - [Phase 03]: 04-04: logo rides the runtime channel as SVG text (D-04-04-01); PNG rasters stay in the Phase-3 icon pipeline
 - [Phase 03]: 04-04: allowlist stale direction scoped to manifest-marked entries; derivation owned by generate.mjs with the new check asserting sync (D-04-04-06/07)
 - [Phase 03]: 04-04: breakpad.reportURL confirmed at upstream firefox.js:1551, always emitted blank-by-default; shipped welcome/about texts null (D-04-04-04/05)
+- [Phase 04]: 05-01: MOZ_APP_ID GUID stays as untouched stock context (audit proved never patch-carried); telemetry flags relocated as fixed platform content, not manifest keys
 
 ### Pending Todos
 
@@ -250,6 +252,6 @@ real problem needs human help.
 
 ## Session Continuity
 
-Last session: 2026-09-04T07:33:51.410Z
-Stopped at: Completed 04-theia-surface-branding-extensions-telemetry-04-PLAN.md
+Last session: 2026-09-04T08:06:03.796Z
+Stopped at: Completed 05-hook-only-patches-and-upstream-uptake-01-PLAN.md
 Resume file: None
