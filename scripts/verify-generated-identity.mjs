@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
  * GEN-04's byte-identity gate: what the generator emits from
- * configuration.toml is byte-for-byte the twenty-three build surfaces Phase 1
+ * configuration.toml is byte-for-byte the thirty-three build surfaces Phase 1
  * wrote by hand.
  *
  * This is the phase's acceptance test made mechanical. Phase 1 deliberately
  * wrote every branding value as a hand-written literal -- CLAUDE.md says so in
  * as many words -- precisely so that Phase 2 would have something INDEPENDENT
- * to compare its generator against. Those twenty-three tracked files are that
+ * to compare its generator against. Those thirty-three tracked files are that
  * comparand. They are never edited to make this check green; when this check
  * goes red, the emitter is what changed.
  *
  * ## Why the ACTUAL emitter set is derived and only the EXPECTED set is written down
  *
- * The tempting shape is a hand-kept list of twenty-three paths that the check loops
+ * The tempting shape is a hand-kept list of thirty-three paths that the check loops
  * over. That check agrees with every tree: it can never go red on a SIXTH
  * emitter being added, because it never asks the generator what it emits. So
  * the actual set is DERIVED from generate.mjs's own frozen target table at
@@ -38,9 +38,9 @@
  * The freshness of `generated/` itself is a DIFFERENT question with a different
  * answer, and it has its own instrument: `node scripts/generate.mjs --check`.
  *
- * Honestly --quick: it reads the manifest and twenty-three tracked text files and
- * writes into the OS temp directory. No build, no browser, no display, no
- * network.
+ * Honestly --quick: it reads the manifest and thirty-three tracked files --
+ * ten of them PNG rasters -- and writes into the OS temp directory. No
+ * build, no browser, no display, no network.
  *
  * Usage:
  *   node scripts/verify-generated-identity.mjs
@@ -100,6 +100,19 @@ const EXPECTED = Object.freeze([
     'powerbrowser/branding/release/locales/moz.build',
     'powerbrowser/branding/release/content/aboutDialog.css',
     'powerbrowser/branding/release/pref/firefox-branding.js',
+    // NEW (03-02): GEN-02's icon rasters -- both variants' five PNGs, drawn
+    // from the single brand/mark.svg and compared here against the ten
+    // hand-rasterized files plan 01-03 drew with the same inkscape.
+    'powerbrowser/branding/dev/default16.png',
+    'powerbrowser/branding/dev/default32.png',
+    'powerbrowser/branding/dev/default48.png',
+    'powerbrowser/branding/dev/default64.png',
+    'powerbrowser/branding/dev/default128.png',
+    'powerbrowser/branding/release/default16.png',
+    'powerbrowser/branding/release/default32.png',
+    'powerbrowser/branding/release/default48.png',
+    'powerbrowser/branding/release/default64.png',
+    'powerbrowser/branding/release/default128.png',
 ]);
 
 /** Set difference reported by name, so a failure says WHICH path drifted. */
@@ -302,6 +315,22 @@ const FOREIGN_SELFTEST_ROOT = '/foreign/checkout/pb';
 const DESKTOP_TOKEN = '@POWERBROWSER_REPO_ROOT@';
 
 /**
+ * The foreign-root substitution both readTracked cases share, applied to TEXT
+ * files only. A PNG read as utf8 and re-encoded is NOT the same bytes --
+ * undecodable sequences become the replacement character -- so substituting
+ * blindly would redden every GEN-02 raster for an encoding reason rather
+ * than a drift. Files that do not survive a utf8 round trip pass through
+ * byte-identical, which is also what they would be at any other checkout:
+ * tracked bytes are tracked bytes.
+ */
+function substituteForForeignRoot(path, from, to) {
+    const raw = readFileSync(path);
+    const text = raw.toString('utf8');
+    if (!Buffer.from(text, 'utf8').equals(raw)) return raw;
+    return text.split(from).join(to);
+}
+
+/**
  * The landed-guard for the `readTracked` cases, alongside `mutationLanded`.
  *
  * A substitution whose anchor occurs in no tracked file changes nothing the
@@ -328,7 +357,9 @@ function emittedRootHits(config) {
     for (const target of TARGETS) {
         const variant = variantOf(config, target.variant);
         if (variant === undefined) continue;
-        hits += target.emit(config, variant).split(REPO_ROOT).length - 1;
+        // String() because the GEN-02 icon rows emit Buffers, which have no
+        // split: for text rows it is the identity, for binary it decodes.
+        hits += String(target.emit(config, variant)).split(REPO_ROOT).length - 1;
     }
     return hits;
 }
@@ -389,7 +420,7 @@ function selfTest() {
         {
             name: 'relocated checkout',
             targets: TARGETS,
-            readTracked: (p) => readFileSync(p, 'utf8').split(REPO_ROOT).join(FOREIGN_SELFTEST_ROOT),
+            readTracked: (p) => substituteForForeignRoot(p, REPO_ROOT, FOREIGN_SELFTEST_ROOT),
             anchor: DESKTOP_TOKEN,
             expectGreen: true,
         },
@@ -400,7 +431,7 @@ function selfTest() {
         {
             name: 'a literal absolute path planted where the token belongs',
             targets: TARGETS,
-            readTracked: (p) => readFileSync(p, 'utf8').split(DESKTOP_TOKEN).join(FOREIGN_SELFTEST_ROOT),
+            readTracked: (p) => substituteForForeignRoot(p, DESKTOP_TOKEN, FOREIGN_SELFTEST_ROOT),
             anchor: DESKTOP_TOKEN,
             expect: 'powerbrowser/powerbrowser.desktop',
         },

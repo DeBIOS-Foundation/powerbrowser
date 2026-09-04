@@ -3620,7 +3620,7 @@ run_own_checks() {
     # build, no browser, no display, no network.
     #
     # The self-test rides alongside for the reason every other self-test row in
-    # this array gives: it plants a one-byte drift in each of the five emitters
+    # this array gives: it plants a one-byte drift in each emitter
     # and requires each to go red naming that file, plus a surplus target and a
     # missing one, and it refuses to report at all when the unmodified tree is
     # already red. A byte comparison that nobody has seen go red is not a check.
@@ -3638,7 +3638,7 @@ run_own_checks() {
     # generate-check asserts IDEMPOTENCE, and only that: on a tree where the
     # generator has already run, a second run produces the same bytes as the
     # first. Anything stronger would be a claim about a tree this row cannot
-    # observe. Whether the emitted bytes match the twenty-three HAND-WRITTEN files is
+    # observe. Whether the emitted bytes match the thirty-three HAND-WRITTEN files is
     # the separate question generated-byte-identity answers, and it answers it
     # without needing a prior generate at all.
     #
@@ -3654,12 +3654,13 @@ run_own_checks() {
     #
     # generate-self-test rides alongside for the reason every other self-test
     # row in this array gives, and here it carries more weight than most:
-    # fourteen planted faults -- a missing required key, an invalid basename,
+    # seventeen planted faults -- a missing required key, an invalid basename,
     # a misspelled section header, a whitespace-only value, a short downstream
     # array, an incomplete variant, a duplicated variant id, an unused variant
     # id, a partially-stated identity table, a stale generated file, an absent
-    # generated directory, a malformed manifest, a drifted locale full name
-    # and the locale agreement holding on the emitted pairs -- each required
+    # generated directory, a malformed manifest, a drifted locale full name,
+    # the locale agreement holding on the emitted pairs, a non-square icon
+    # source, a missing icon source, and a drifted icon raster -- each required
     # to go red NAMING the drift (or resolve as pinned), plus a
     # cross-cutting assertion that no case's output carries a stack frame, a
     # module specifier, or this machine's path to the project. Every one of the
