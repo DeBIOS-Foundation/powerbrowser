@@ -1,0 +1,44 @@
+# Synthetic downstream manifest for plan 07-02 (DOC-02 proof instrument).
+#
+# This is TEST DATA, not a real product: every value is invented ("Northlight")
+# and no real-world product name, vendor, URL, or trademark appears here. It
+# stands in for a Sourcerer-equivalent external config, proving that an
+# untouched platform tree generates a fully branded product from an outside
+# folder via PB_CONFIG_DIR. Lives under .planning/ so both tree scanners
+# (scan-brand-residue, verify-manifest-literals) exclude it by committed table.
+#
+# SHAPE: the two rebrand inputs only (this manifest plus brand/mark.svg),
+# mirroring the in-tree layout. Every required key differs from the platform's
+# except upstreams.theia_release (kept identical: the generator emits no
+# fragment for it, and verify-upstream-pins enforces it against the @theia
+# pins) and the [[variants]] block (omitted on purpose: a downstream stating
+# no variants inherits the platform's two, which exercises the default-echo
+# path). Cosmetic keys (description, homepage, theia texts, urls, tile_color,
+# extensions) are likewise omitted to exercise that path.
+
+[product]
+vendor_machine = "Northlight"
+vendor_display = "Northlight Collective"
+
+[identity]
+display_name = "Northlight Browser"
+app_basename = "northlight-browser"
+binary_name = "northlight"
+remoting_name = "northlight"
+distribution_id = "org.northlight"
+
+[legal]
+license = "Apache License 2.0"
+copyright_holder = "Northlight Collective"
+trademark_notice = "Northlight Browser is a trademark of Northlight Collective."
+
+[installer]
+support_url = "https://northlight.example.org"
+
+[telemetry]
+level = "error"
+endpoint = "https://telemetry.northlight.example.org/v1/events"
+
+[upstreams]
+firefox_esr_tag = "FIREFOX_154_0esr_RELEASE"
+theia_release = "1.74.1"
