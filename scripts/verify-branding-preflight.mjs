@@ -749,6 +749,59 @@ function runChecks(root) {
         }
     }
 
+    // --- 10. the welcome widget reads its display name at runtime ------------
+    //
+    // GEN-05 (04-01): the welcome heading is the one Theia display surface
+    // that resolves at runtime instead of at generate time. Three
+    // assertions, all read off the live source:
+    //
+    // (a) the read: the widget resolves its heading through
+    // FrontendApplicationConfigProvider's applicationName -- a heading that
+    // stops reading the provider is a per-rebrand TypeScript edit again.
+    // (b) the fallback: the file still carries the expected display name as
+    // a quoted literal -- the boot fallback where the provider is unset.
+    // (c) the render: no line paints the display name as JSX text -- the
+    // literal may appear in code, never as a rendered string.
+    //
+    // The expected VALUE comes from the inventory's brand_display_expectations
+    // (release short name), never the manifest: this file's whole design
+    // forbids reading the manifest as expectation source.
+    const WELCOME_WIDGET_REL = 'theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx';
+    const welcomeWidget = readText(root, WELCOME_WIDGET_REL);
+    if (welcomeWidget === null) {
+        r.fail(`${WELCOME_WIDGET_REL} does not exist -- the welcome tab has no declared read site`);
+    } else {
+        if (!welcomeWidget.includes('FrontendApplicationConfigProvider') || !welcomeWidget.includes('.applicationName')) {
+            r.fail(
+                `${WELCOME_WIDGET_REL} does not resolve its heading through FrontendApplicationConfigProvider's applicationName. ` +
+                'A heading that stops reading the provider is a per-rebrand TypeScript edit again.',
+            );
+        }
+        const runtimeName = exp.variants?.release?.brand_short_name;
+        if (typeof runtimeName !== 'string' || runtimeName === '') {
+            r.fail('the inventory declares no release brand_short_name, so the welcome fallback has no expected value');
+        } else {
+            if (!welcomeWidget.includes(`'${runtimeName}'`) && !welcomeWidget.includes(`"${runtimeName}"`)) {
+                r.fail(
+                    `${WELCOME_WIDGET_REL} does not carry the boot fallback ${JSON.stringify(runtimeName)} as a quoted literal. ` +
+                    'Without it the tree cannot boot where the provider is unset.',
+                );
+            }
+            // ESCAPED before interpolation, like the section 6 leak pattern:
+            // brand_short_name is hand-authored and unconstrained, so a value
+            // carrying pattern syntax must not change the match semantics.
+            const rendered = new RegExp(`>\\s*${escapeForRegExp(runtimeName)}\\s*<`);
+            for (const [i, line] of welcomeWidget.split('\n').entries()) {
+                if (rendered.test(line)) {
+                    r.fail(
+                        `${WELCOME_WIDGET_REL}:${i + 1} paints the display literal as rendered text: ${JSON.stringify(line.trim())}. ` +
+                        'Resolve it through the provider instead; the literal may appear in code, never in render.',
+                    );
+                }
+            }
+        }
+    }
+
     return r;
 }
 
@@ -997,6 +1050,70 @@ function selfTest() {
             console.log(`${NAME}: --self-test -- stripped the include hook from ${hookPatchRel} and it was REJECTED by name: ${hookMsg}`);
         }
         writeFileSync(hookPatchPath, hookPatchOriginal);
+
+        // Eighth plant (04-01): the pre-tracer render -- the welcome heading
+        // back as a JSX literal, the exact line the runtime read replaced.
+        // Section 10 must go red NAMING the file, the line number and the
+        // offending text; a red that only says something disagrees would not
+        // tell anyone the heading is a per-rebrand edit again.
+        const widgetRel = 'theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx';
+        const widgetPath = join(dir, widgetRel);
+        const widgetOriginal = readFileSync(widgetPath, 'utf8');
+        writeFileSync(widgetPath, widgetOriginal.replace('<h1>{this.displayName}</h1>', '<h1>Power Browser</h1>'));
+        const widgetPlanted = runChecks(dir);
+        const widgetMsg = widgetPlanted.failures.find(
+            (f) => f.includes(`${widgetRel}:`) && f.includes('rendered text') && f.includes('<h1>Power Browser</h1>'),
+        );
+        if (!widgetMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the display literal planted as rendered JSX text in ${widgetRel} (the pre-04-01 shape) was NOT rejected naming the file, the line and the offending text`);
+            for (const f of widgetPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- planted the display literal as rendered text in ${widgetRel} and it was REJECTED naming the file and the offending line: ${widgetMsg}`);
+        }
+        writeFileSync(widgetPath, widgetOriginal);
+
+        // Ninth plant (04-01): the runtime read broken -- the provider call
+        // replaced by the fallback constant, so the heading compiles and
+        // renders yet no longer follows a rebrand. Section 10 must go red
+        // NAMING the file and the provider it no longer reads.
+        writeFileSync(
+            widgetPath,
+            widgetOriginal.replace(
+                'FrontendApplicationConfigProvider.get().applicationName',
+                'FALLBACK_DISPLAY_NAME',
+            ),
+        );
+        const channelPlanted = runChecks(dir);
+        const channelMsg = channelPlanted.failures.find(
+            (f) => f.includes(widgetRel) && f.includes('FrontendApplicationConfigProvider'),
+        );
+        if (!channelMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the welcome heading with its provider read removed (${widgetRel}) was NOT rejected naming the file and the provider`);
+            for (const f of channelPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- removed the provider read from ${widgetRel} and it was REJECTED by name: ${channelMsg}`);
+        }
+        writeFileSync(widgetPath, widgetOriginal);
+
+        // Tenth plant (04-01): the boot fallback deleted -- the quoted
+        // literal gone while the runtime read still stands. Section 10 must
+        // go red NAMING the file and the missing fallback value; without it
+        // the tree cannot boot where the provider is unset.
+        writeFileSync(widgetPath, widgetOriginal.replace(`= 'Power Browser';`, `= '';`));
+        const fallbackPlanted = runChecks(dir);
+        const fallbackMsg = fallbackPlanted.failures.find(
+            (f) => f.includes(widgetRel) && f.includes('boot fallback') && f.includes('"Power Browser"'),
+        );
+        if (!fallbackMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the boot fallback deleted from ${widgetRel} was NOT rejected naming the file and the missing value`);
+            for (const f of fallbackPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- deleted the boot fallback from ${widgetRel} and it was REJECTED by name: ${fallbackMsg}`);
+        }
+        writeFileSync(widgetPath, widgetOriginal);
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }

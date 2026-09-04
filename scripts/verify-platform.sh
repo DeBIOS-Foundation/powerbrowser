@@ -3654,7 +3654,7 @@ run_own_checks() {
     #
     # generate-self-test rides alongside for the reason every other self-test
     # row in this array gives, and here it carries more weight than most:
-    # twenty-three planted faults -- a missing required key, an invalid basename,
+    # twenty-five planted faults -- a missing required key, an invalid basename,
     # a misspelled section header, a whitespace-only value, a short downstream
     # array, an incomplete variant, a duplicated variant id, an unused variant
     # id, a partially-stated identity table, a stale generated file, an absent
@@ -3663,8 +3663,10 @@ run_own_checks() {
     # source, a missing icon source, a drifted icon raster, the container
     # writers holding on the emitted buffers, a truncated ICO payload, a
     # wrong-magic ICNS, a hostile double quote in the display name, a hostile
-    # variable reference in the support URL and a hostile ampersand in the
-    # display name -- each required
+    # variable reference in the support URL, a hostile ampersand in the
+    # display name, a hostile double quote driven past validation at the
+    # theia frontend-config emitter and the frontend-config fragment holding
+    # as valid JSON on the emitted pairs -- each required
     # to go red NAMING the drift (or resolve as pinned), plus a
     # cross-cutting assertion that no case's output carries a stack frame, a
     # module specifier, or this machine's path to the project. Every one of the
