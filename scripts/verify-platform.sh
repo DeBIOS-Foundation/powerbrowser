@@ -3523,6 +3523,25 @@ run_own_checks() {
     # the unplanted control green first.
     "verify-manifest-literals|node $REPO_ROOT/scripts/verify-manifest-literals.mjs"
     "verify-manifest-literals-self-test|node $REPO_ROOT/scripts/verify-manifest-literals.mjs --self-test"
+    # NEW (06-03): the trademark-surface gate -- the mechanical half of the
+    # brand/ human review. Derives everything at check time: the tracked
+    # asset walk (no hand-kept file list), the display-field scan over the
+    # manifest-derived variant surfaces plus the theia fragments and the
+    # desktop Name lines, the legal-keys presence out of configuration.toml,
+    # and the brand/ listing versus the signed list in HUMAN-REVIEW.md as
+    # set equality, so a new brand/ file fails until the ritual is
+    # re-recorded.
+    #
+    # Honestly --quick: reads text files off disk only. No build, no
+    # browser, no display, no network.
+    #
+    # verify-trademark-surface-self-test rides alongside for the reason
+    # every other self-test row in this array gives: it plants an asset
+    # basename, a display-field token, an emptied legal key, and an
+    # unlisted brand file -- each red, naming the drift -- with the
+    # unplanted control green first.
+    "verify-trademark-surface|node $REPO_ROOT/scripts/verify-trademark-surface.mjs"
+    "verify-trademark-surface-self-test|node $REPO_ROOT/scripts/verify-trademark-surface.mjs --self-test"
 
     # from verify-phase-03.sh
     "check-patch-surface|bash $REPO_ROOT/scripts/check-patch-surface.sh"
