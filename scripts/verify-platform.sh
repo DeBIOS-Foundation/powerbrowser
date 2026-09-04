@@ -3517,6 +3517,14 @@ run_own_checks() {
     "check-patch-surface-brand-values|bash $REPO_ROOT/scripts/check-patch-surface.sh --brand-values"
     "check-patch-surface-brand-values-self-test|bash $REPO_ROOT/scripts/check-patch-surface.sh --self-test-brand"
     "fetch-upstream-self-test|bash $REPO_ROOT/scripts/fetch-upstream.sh --self-test"
+    # NEW (05-02): the ESR pin-agreement gate -- configuration.toml's
+    # [upstreams] tag equals the generated shell fragment, the workflow
+    # mirror default and fetch-upstream.sh's effective default, with no
+    # second tag literal anywhere else in scope. Static: parses text,
+    # never clones. The self-test rides alongside for the reason every
+    # other self-test row in this array gives.
+    "verify-upstream-pins|node $REPO_ROOT/scripts/verify-upstream-pins.mjs"
+    "verify-upstream-pins-self-test|node $REPO_ROOT/scripts/verify-upstream-pins.mjs --self-test"
     "allowlist-schema|check_allowlist_schema"
     "allowlist-doc-consistency|check_allowlist_doc_consistency"
     "allowlist-doc-consistency-self-test|check_allowlist_doc_consistency_self_test"
