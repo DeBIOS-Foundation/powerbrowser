@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 06
 current_phase_name: Two-Layer Verification and Rebranding Docs
 status: executing
-stopped_at: Completed 06-two-layer-verification-and-rebranding-docs-02-PLAN.md
-last_updated: "2026-09-04T09:02:15.226Z"
+stopped_at: Completed 07-sourcerer-as-downstream-02-PLAN.md
+last_updated: "2026-09-04T10:09:57.921Z"
 last_activity: 2026-09-04
 last_activity_desc: Phase 03 plan 04 execution completed
-state_head: 0e238f13c378f72437a28fd1b4445d58536abe78
+state_head: 3d443426db19e3b1d7d0a596f9983b8dc5a87413
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 48
-  completed_plans: 44
+  total_plans: 52
+  completed_plans: 50
 milestone_name: milestone
 ---
 
@@ -95,6 +95,7 @@ Progress: [█████████░] 93%
 | Phase 05-hook-only-patches-and-upstream-uptake P03 | 9min | 2 tasks | 6 files |
 | Phase 05-hook-only-patches-and-upstream-uptake P04 | 10min | 2 tasks | 1 files |
 | Phase 06-two-layer-verification-and-rebranding-docs P02 | 5min | 3 tasks | 3 files |
+| Phase 07-sourcerer-as-downstream P02 | ~7min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -226,6 +227,7 @@ Recent decisions affecting current work:
 - [Phase 04]: 05-04: 3-way-clean context shift is correct-apply behavior; backstops are the post-replay surface, brand, and fetch re-check chain in rebase-upstream.sh
 - [Phase 04]: 05-04: workflow read-through clean so task 2 commits nothing; live rebase plus tier-3 build staged as UNEXECUTED commands pending a next ESR tag
 - [Phase 05]: 06-02: identity checker VARIANTS keeps structural paths only; all brand values derive from configuration.toml via resolveConfig
+- [Phase 06]: 07-02: sweep exemption E1 derives rebrand-invariance per run; --all requires --fixtures-root as argv (phase path spells a residue probe)
 
 ### Pending Todos
 
@@ -265,6 +267,6 @@ real problem needs human help.
 
 ## Session Continuity
 
-Last session: 2026-09-04T09:02:15.141Z
-Stopped at: Completed 06-two-layer-verification-and-rebranding-docs-02-PLAN.md
+Last session: 2026-09-04T10:09:57.834Z
+Stopped at: Completed 07-sourcerer-as-downstream-02-PLAN.md
 Resume file: None

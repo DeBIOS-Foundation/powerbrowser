@@ -50,7 +50,7 @@
       visible echo at generate time; the defaults are themselves a
       `configuration.toml` (one merge code path)
 
-- [ ] **CFG-05**: A downstream can point the build at an external config dir
+- [x] **CFG-05**: A downstream can point the build at an external config dir
       (`PB_CONFIG_DIR`) so distributions like Sourcerer live in their own repo
 
 - [x] **CFG-06**: Upstream pins (Firefox ESR tag, Theia release) are declared
@@ -181,7 +181,7 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
       exact equality, reading expectations from `configuration.toml` — never
       from constants — so it passes for every correctly-configured downstream
 
-- [ ] **VER-03**: Adversarial fixture configs (e.g. a downstream named
+- [x] **VER-03**: Adversarial fixture configs (e.g. a downstream named
       "Zebra") build and verify correctly, proving nothing is accidentally
       keyed to Power Browser's or Sourcerer's values
 
@@ -200,7 +200,7 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
       rebrand — edit `configuration.toml`, drop in logos, build — with every
       field documented
 
-- [ ] **DOC-02**: Sourcerer is reproduced as a pure downstream: its own
+- [x] **DOC-02**: Sourcerer is reproduced as a pure downstream: its own
       `configuration.toml` + logo assets (its branding separate from Power
       Browser's) yield the Sourcerer-branded product with zero platform-file
       edits — the acceptance test for the whole milestone
@@ -286,6 +286,6 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 | VER-01 | Phase 6 | Pending |
 | VER-02 | Phase 6 | Complete |
 | DOC-01 | Phase 6 | Pending |
-| CFG-05 | Phase 7 | Pending |
-| VER-03 | Phase 7 | Pending |
-| DOC-02 | Phase 7 | Pending |
+| CFG-05 | Phase 7 | Complete |
+| VER-03 | Phase 7 | Complete |
+| DOC-02 | Phase 7 | Complete |
