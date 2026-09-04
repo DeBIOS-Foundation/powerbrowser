@@ -168,7 +168,7 @@ message a tolerant refactor would produce.
 
 | What was run | Result |
 |---|---|
-| `node scripts/generate.mjs --self-test` | PASS, exactly **9** `ok` lines, PASS line naming 9 |
+| `node scripts/generate.mjs --self-test` | PASS, exactly **9** `ok` lines, PASS line naming 9 (count as this plan closed; see the correction note above — 12 today) |
 | `grep -c 'e\.message' scripts/generate.mjs` | 0 |
 | `node scripts/generate.mjs` / `--check` | 5 files written / `--check PASS` |
 | `node scripts/verify-generated-identity.mjs` and `--self-test` | PASS / PASS |

@@ -88,6 +88,15 @@ from `process.cwd()` and not from a manifest key. That is D-04 held in both dire
 machine-specific value enters `configuration.toml`, and the emitted bytes do not depend on where
 the generator was invoked from.
 
+> **Corrected 2026-09-04 (Phase 2 UAT, test 11).** The closing sentence above is true of the
+> working directory and false of the repository's location. The emitted absolute `Exec`/`Icon`
+> paths were built from the resolved repository root (`REPO_ROOT`, derived from the script's own
+> location), so relocating the checkout changed the emitted bytes and the byte-identity gate could
+> only go green at this checkout's path. This is gap G-02-11 in `02-UAT.md`. The ratified design
+> in `02-DESIGN-G-02-11.md` (`option-4-placeholder`) removes the absolute path from both sides:
+> the emitter and the tracked `.desktop` files now carry `@POWERBROWSER_REPO_ROOT@`, substituted
+> at install time, so the emitted bytes carry no checkout-specific content at all.
+
 **`emitDevConfigureSh` became `emitConfigureSh`.** One emitter now serves dev and release. The two
 files differ in exactly one line and that difference is entirely the variant's `name_suffix`, whose
 release value is the empty string. If they ever differ by anything else, the emitter is wrong and a
