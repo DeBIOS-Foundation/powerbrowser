@@ -773,36 +773,39 @@
       "case_form": "literal",
       "class": "frozen",
       "target": "%content/branding/",
-      "expected_count": 2,
+      "expected_count": 3,
       "expected_files": [
         "powerbrowser/branding/dev/content/jar.mn",
-        "powerbrowser/branding/release/content/jar.mn"
+        "powerbrowser/branding/release/content/jar.mn",
+        "scripts/generate.mjs"
       ],
-      "reason": "sourcerer/branding/{dev,release}/content/jar.mn:12 -- `branding` here is Gecko's OWN chrome slot name, not this product's brand. Renaming it detaches the branding package from every stock consumer of chrome://branding/content/."
+      "reason": "sourcerer/branding/{dev,release}/content/jar.mn:12 -- `branding` here is Gecko's OWN chrome slot name, not this product's brand. Renaming it detaches the branding package from every stock consumer of chrome://branding/content/. COUNT MOVED 2 -> 3 (plan 03-01): scripts/generate.mjs now reproduces both jar.mn files byte for byte (BRANDING_CONTENT_JAR_LINES), so the stock slot name occurs once more, inside the emitter. The rename-era rationale is unchanged."
     },
     {
       "token": "%locale/branding/",
       "case_form": "literal",
       "class": "frozen",
       "target": "%locale/branding/",
-      "expected_count": 2,
+      "expected_count": 3,
       "expected_files": [
         "powerbrowser/branding/dev/locales/jar.mn",
-        "powerbrowser/branding/release/locales/jar.mn"
+        "powerbrowser/branding/release/locales/jar.mn",
+        "scripts/generate.mjs"
       ],
-      "reason": "sourcerer/branding/{dev,release}/locales/jar.mn:10 -- the locale half of the same stock Gecko slot. Upstream's name, never ours."
+      "reason": "sourcerer/branding/{dev,release}/locales/jar.mn:10 -- the locale half of the same stock Gecko slot. Upstream's name, never ours. COUNT MOVED 2 -> 3 (plan 03-01): scripts/generate.mjs now reproduces both jar.mn files byte for byte (BRANDING_LOCALES_JAR_LINES), so the stock slot name occurs once more, inside the emitter."
     },
     {
       "token": "-brand-product-name = Firefox",
       "case_form": "literal",
       "class": "frozen",
       "target": "-brand-product-name = Firefox",
-      "expected_count": 2,
+      "expected_count": 3,
       "expected_files": [
         "powerbrowser/branding/dev/locales/en-US/brand.ftl",
-        "powerbrowser/branding/release/locales/en-US/brand.ftl"
+        "powerbrowser/branding/release/locales/en-US/brand.ftl",
+        "scripts/generate.mjs"
       ],
-      "reason": "sourcerer/branding/dev/locales/en-US/brand.ftl:14 and sourcerer/branding/release/locales/en-US/brand.ftl:14 -- deliberately NOT the product name (D-78). A small set of \"requires Firefox\" compatibility strings interpolate this term, and byte-identical UA/product naming is the same rationale D-78 already applied to the User-Agent. Its rationale comment sits directly above it and migrates verbatim under D-08."
+      "reason": "sourcerer/branding/dev/locales/en-US/brand.ftl:14 and sourcerer/branding/release/locales/en-US/brand.ftl:14 -- deliberately NOT the product name (D-78). A small set of \"requires Firefox\" compatibility strings interpolate this term, and byte-identical UA/product naming is the same rationale D-78 already applied to the User-Agent. Its rationale comment sits directly above it and migrates verbatim under D-08. COUNT MOVED 2 -> 3 (plan 03-01): scripts/generate.mjs now emits both brand.ftl files (emitBrandFtl carries the literal per D-78), so the term occurs once more, inside the emitter."
     },
     {
       "token": "MOZ_APP_UA_NAME",
