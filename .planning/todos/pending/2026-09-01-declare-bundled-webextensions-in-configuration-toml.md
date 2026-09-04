@@ -3,6 +3,7 @@ created: 2026-09-02T00:36:47.892Z
 title: Declare bundled WebExtensions in configuration.toml
 area: tooling
 severity: minor
+resolves_phase: 9
 files:
   - .planning/REQUIREMENTS.md:243
   - .planning/REQUIREMENTS.md:170-172
