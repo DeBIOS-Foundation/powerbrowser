@@ -13,3 +13,5 @@ require only that `--quick` stays green. Register it alongside the remaining emi
 
 Logged here rather than in `.planning/WINDOWS.md`: that file's frontmatter counts are
 inconsistent and `gsd-tools windows append` refuses to write to it.
+
+- **G-02-11 design ratified 2026-09-03** (02-07 checkpoint): `option-4-placeholder` — see `02-DESIGN-G-02-11.md` `## Verdict`; 02-08 implements it.
