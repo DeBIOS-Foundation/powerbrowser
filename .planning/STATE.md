@@ -264,7 +264,8 @@ nonstop by default — no human until done. Pre-answered pause points:
 (2) verification gaps → one automatic gap-closure retry, then record deferred
 and keep going; (3) milestone audit gaps/tech debt → accept, continue to
 closeout; (4) cleanup file-deletion approval → approve after checking the
-dry-run list is phase scratch only. The ONLY contact is a blocker surviving
+dry-run list is phase scratch only; (5) plan-phase runs with
+`--no-reversibility-gates` (one-way decisions still rated, never gated). The ONLY contact is a blocker surviving
 3 fix-and-retry attempts → halt `needs_human` with resume command. Rescind
 with "autonomous interactive".
 

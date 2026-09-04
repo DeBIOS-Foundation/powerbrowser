@@ -59,7 +59,7 @@ platform. If a rebrand ever requires editing a second file, that is a bug.
 | Identity fields required, no silent fallback | A downstream omitting `vendor` must hard-fail, not ship under Power Browser's mark; cosmetic fields default with an echo | — Pending |
 | Extensions declared in `configuration.toml` with sources | Each entry: id + source (Open VSX / npm / URL / local path) + pin | — Pending |
 | Adversarial review enabled | plan_check + verifier on; /gsd-plan-review-convergence on risky phases (rename pass, generator) | — Pending |
-| Autonomous nonstop default | every `/gsd-autonomous` runs without human pauses (verify→defer+continue, gaps→one retry then defer+continue, audit→accept, cleanup→approve); only a 3-retry-exhausted blocker halts `needs_human` | — Decided 2026-09-04 |
+| Autonomous nonstop default | every `/gsd-autonomous` runs without human pauses (verify→defer+continue, gaps→one retry then defer+continue, audit→accept, cleanup→approve, plan with `--no-reversibility-gates`); only a 3-retry-exhausted blocker halts `needs_human` | — Decided 2026-09-04 |
 | Canonical product name from v2: **PowerBrowser** (accepted variants **Powerbrowser** / **powerbrowser** for identifier-class surfaces) | v1 shipped the spaced display form "Power Browser" across generated surfaces; the canonical form + re-pinned gates land as v2 NAME-01 so the v1 archive stays faithful to what was verified | — Decided 2026-09-04 |
 
 ## configuration.toml planned sections
