@@ -45,7 +45,14 @@ See `.planning/milestones/v1.0-ROADMAP.md`.
   3. The per-OS install → launch → uninstall → no-residue matrix is green, and the recorded update story (self-hosted MAR updates under fork signing, no Mozilla phone-home) proves one real N→N+1 hop per OS
   4. A release objdir-release build passes with the release-variant verify rows green, and the live ESR rebase drill passes through the existing rebase and conflict tooling
   5. WINDOWS #13 (registerWindowActor boundary hole) and #14 (BiDi double-window) are closed with their gates green
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — WR-04 + WR-07 pre-fixes plus NAME-01 rename slice through byte-identity (tracer)
+- [ ] 08-02-PLAN.md — NAME-01 propagation completion: gate re-pins, canonical fixture, proof
+- [ ] 08-03-PLAN.md — WINDOWS #13 boundary guard plus #14 BiDi context fix
+- [ ] 08-04-PLAN.md — Updater enablement, Linux MAR hop, NSIS on Nix, registry rows, procedure
+- [ ] 08-05-PLAN.md — MSIX/DMG on named hosts, per-OS matrix, release build, rebase drill
 
 ### Phase 09: Extensions + Crash Pipeline
 **Goal**: Downstreams declare npm/local-path extensions and crashes reach their own collector
