@@ -3624,6 +3624,10 @@ run_own_checks() {
     # and requires each to go red naming that file, plus a surplus target and a
     # missing one, and it refuses to report at all when the unmodified tree is
     # already red. A byte comparison that nobody has seen go red is not a check.
+    # The case set now carries two polarities: one case stays green at a
+    # different checkout root -- a gate that could only ever go red at a
+    # foreign checkout is the defect this row was fixed for -- while every
+    # planted drift still goes red naming its file.
     "generated-byte-identity|node $REPO_ROOT/scripts/verify-generated-identity.mjs"
     "generated-byte-identity-self-test|node $REPO_ROOT/scripts/verify-generated-identity.mjs --self-test"
 
