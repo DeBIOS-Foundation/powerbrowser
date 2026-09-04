@@ -58,3 +58,8 @@ result-*
 
 # Per-machine Claude Code settings
 .claude/settings.local.json
+
+# Per-machine agent/editor tooling state
+.vscode/
+.gsd/
+opencode.json
