@@ -160,6 +160,74 @@ Yarn package cache was already warm from this session's prior installs.
 Treat 23.4s as a lower bound for a genuinely cold-cache cold run, not as
 the number a first-time contributor should expect.
 
+**One-pin Theia re-pin procedure (CFG-06, UPD-02).** A Theia release is
+adopted by re-pinning — never by editing Theia core. The release is
+declared once as `[upstreams] theia_release` in `configuration.toml`, and
+`node scripts/verify-upstream-pins.mjs` proves every `@theia/*` pin in
+`theia/package.json` resolutions, every member
+`applications/*/package.json` and `extensions/*/package.json`, and every
+resolved `@theia` tarball in `theia/yarn.lock` agrees with it. The one
+known exception is `@theia/monaco-editor-core`, which tracks upstream's
+own monaco line rather than the Theia release and is excluded by exact
+package name in the check. No re-pin has been performed under this
+procedure yet — it is proven structurally by the check's `--self-test`
+(a patch-bumped member pin and a drifted lockfile stanza both go red
+naming the file) and is exercised live only when an actual Theia release
+demands it. Do NOT perform it speculatively: it rewrites the lockfile and
+reinstalls `node_modules`, which is network and time neither a static
+check nor a review needs.
+
+```
+# 1. declare the new release (exact triple, never a range):
+#    edit configuration.toml -> [upstreams] theia_release = "<new-triple>"
+# 2. move every @theia/* pin to the manifest pin. Inside the shell below,
+#    from the repo root — the pin comes out of the manifest, so the
+#    command line states no version of its own:
+nix develop .#theia
+NEW=$(node -p "require('./scripts/lib/toml.cjs').parse(require('fs').readFileSync('configuration.toml','utf8')).upstreams.theia_release")
+node -e '
+const fs = require("fs");
+const pin = process.argv[1], EX = "@theia/monaco-editor-core";
+const files = ["theia/package.json", ...fs.readdirSync("theia/applications").map(d => `theia/applications/${d}/package.json`), ...fs.readdirSync("theia/extensions").map(d => `theia/extensions/${d}/package.json`)];
+for (const f of files) {
+  const doc = JSON.parse(fs.readFileSync(f, "utf8"));
+  let changed = false;
+  for (const block of ["resolutions", "dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+    const deps = doc[block];
+    if (deps === null || typeof deps !== "object" || Array.isArray(deps)) continue;
+    for (const name of Object.keys(deps)) {
+      if (name.startsWith("@theia/") && name !== EX && deps[name] !== pin) { deps[name] = pin; changed = true; }
+    }
+  }
+  if (changed) fs.writeFileSync(f, JSON.stringify(doc, null, 2) + "\n");
+  console.log((changed ? "moved " : "clean ") + f);
+}
+' "$NEW"
+# 3. re-resolve the lockfile to the moved pins (deliberately NOT
+#    --frozen-lockfile: the lock is being moved on purpose), from theia/:
+cd theia
+yarn install --ignore-scripts
+cd ..
+# 4. regenerate (the Theia pin needs no emitted fragment — package.json
+#    files are committed build input, so the generator never rewrites
+#    them; the check above is the enforcement) and prove agreement:
+node scripts/generate.mjs
+node scripts/verify-upstream-pins.mjs
+node scripts/verify-upstream-pins.mjs --self-test
+# 5. prove core untouched, full stages now that the fresh install exists:
+bash scripts/diff-theia-core.sh
+```
+
+Expect the lock diff to show the `@theia` moves plus their transitive
+consequences — a new `@theia` tarball carries its own dependency ranges,
+so unrelated-looking lock lines moving with them is normal. What must
+never appear in a re-pin diff: an edit under
+`theia/node_modules/@theia`, a patch file touching Theia sources, a
+vendored Theia monorepo, or a `--latest` float anywhere. `yarn upgrade
+--latest` is specifically NOT this procedure: it resolves to whatever is
+newest rather than to the declared pin, which is the unpinned behavior
+the manifest exists to forbid.
+
 ## Firefox half
 
 ```
