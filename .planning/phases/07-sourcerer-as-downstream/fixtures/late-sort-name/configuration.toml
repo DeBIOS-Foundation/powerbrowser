@@ -1,0 +1,47 @@
+# Adversarial EXPECTED-PASS fixture for plan 07-03 (VER-03 hostile half).
+#
+# This is TEST DATA, not a real product: every value is invented ("Zebra")
+# and no real-world product name, vendor, URL, or trademark appears here.
+# Cloned from the 07-02 fixture with surgical diffs; lives under .planning/
+# so both tree scanners exclude it by committed table.
+#
+# HOSTILITY: display_name, app_basename, binary_name, and remoting_name all
+# sort after m-browser ("Zebra Browser" / "zebra-browser" / "zebra" /
+# "zebra"), proving no alphabetical-position assumption anywhere in
+# derivation, emission, or assertion. The machine-sortable keys sort after
+# byte-wise; the display form sorts after case-insensitively (byte-wise an
+# uppercase Z precedes lowercase m, which is itself the reason a
+# position-sensitive consumer would mishandle it -- the harness asserts exact
+# bytes, so any such mishandling goes red).
+#
+# SHAPE: same carve-outs as the 07-02 fixture (theia_release platform-
+# identical, [[variants]]/cosmetic keys omitted to exercise the default-echo
+# path). Every required key differs from the platform's and from every other
+# fixture's.
+
+[product]
+vendor_machine = "Zebraworks"
+vendor_display = "Zebra Works"
+
+[identity]
+display_name = "Zebra Browser"
+app_basename = "zebra-browser"
+binary_name = "zebra"
+remoting_name = "zebra"
+distribution_id = "org.zebra"
+
+[legal]
+license = "BSD-2-Clause"
+copyright_holder = "Zebra Works"
+trademark_notice = "Zebra Browser is a trademark of Zebra Works."
+
+[installer]
+support_url = "https://zebra.example.org"
+
+[telemetry]
+level = "error"
+endpoint = "https://telemetry.zebra.example.org/v1/events"
+
+[upstreams]
+firefox_esr_tag = "FIREFOX_155_0_0esr_RELEASE"
+theia_release = "1.74.1"

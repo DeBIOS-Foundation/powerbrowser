@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fixture artwork for plan 07-03 (late-sort-name). ORIGINAL geometry: three
+  rounded vertical bars (stripes), not the platform's power-glyph construction
+  of arc plus bar and not the 07-02 fixture's diamond ring. Square viewBox;
+  the <svg> element below is ONE LINE starting with the literal open tag --
+  the runtime-channel contract readMarkSvgElement enforces.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><defs><style>.z{fill:#111111;}@media (prefers-color-scheme: dark){.z{fill:#e5e5e5;}}</style></defs><rect class="z" x="22" y="14" width="18" height="100" rx="9"/><rect class="z" x="55" y="14" width="18" height="100" rx="9"/><rect class="z" x="88" y="14" width="18" height="100" rx="9"/></svg>
