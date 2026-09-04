@@ -5,16 +5,18 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT COVERS. Twenty-three targets, each byte-identical to the file
+// WHAT IT COVERS. Thirty-three targets, each byte-identical to the file
 // Phase 1 wrote by hand: the five Phase 2 build surfaces (the two branding
-// configure.sh files, .mozconfig, and the two .desktop files) plus the
+// configure.sh files, .mozconfig, and the two .desktop files), the
 // eighteen GEN-01 branding-directory surfaces (per variant: brand.ftl,
 // brand.properties, moz.build, content/jar.mn, content/moz.build,
 // locales/jar.mn, locales/moz.build, content/aboutDialog.css and
-// pref/firefox-branding.js). That byte-identity IS the acceptance test, which
+// pref/firefox-branding.js), and the ten GEN-02 icon rasters (per variant:
+// default16/32/48/64/128.png, drawn from the single brand/mark.svg through
+// the system inkscape). That byte-identity IS the acceptance test, which
 // is why no emitter here is allowed to reformat, reorder or "tidy" what it
-// reproduces. The icon rasters are plan 03-02 and the installer fields are
-// plan 03-03 (GEN-02/GEN-03).
+// reproduces. The ICO/ICNS containers are the second half of plan 03-02 and
+// the installer fields are plan 03-03 (GEN-02/GEN-03).
 //
 // WHY THE PIPELINE ORDER IS LOAD-BEARING. Parse, then reject unknown settings,
 // then mask, then merge, then validate, then emit, then write -- in that order
@@ -596,7 +598,7 @@ function assertEmittable(path, value) {
  * equally hand-editable and equally silent about it -- and a reader could no
  * longer tell generated from hand-written by opening the file, which is the
  * banner's whole purpose. A shared constant is also what stops the
- * twenty-three files drifting into twenty-three wordings.
+ * thirty-three files drifting into thirty-three wordings.
  *
  * `#` is a comment in all three formats: mozconfig is shell, configure.sh is
  * shell, and freedesktop permits comment lines in a .desktop file including
@@ -1400,6 +1402,174 @@ function localeAgreementFailures(entries) {
     return failures;
 }
 
+// --- GEN-02: the icon pipeline ------------------------------------------------
+//
+// brand/mark.svg is the ONLY icon input a downstream touches. Five square PNG
+// rasters per variant are drawn from it through the system inkscape, and the
+// Windows ICO plus macOS ICNS containers (this plan's second task) wrap those
+// same bytes. No manifest key selects the source artwork, the sizes, or the
+// outputs: the source is the literal below, the sizes are the frozen array
+// below, and the ten destination paths are TARGETS rows like every other
+// output. That is structurally what stops a hostile filename reaching the
+// inkscape command line: no manifest value is ever joined into it (T-03-04).
+//
+// The raster runs INSIDE the emit pass, before any write: writeTargets calls
+// rasterizeIcons before its text emitters and long before its write loop, so
+// a missing or non-square source fails with the tree exactly as it was found.
+// A source already at a target size takes the same path -- there is no
+// passthrough shortcut to drift out of sync with the rest. Dev and release
+// rasters come from the same source, so their bytes are identical, and they
+// are still written as ten separate files: separate, never merged or
+// deduplicated.
+
+/** The icon sizes in pixels, ascending. The raster order is this order. */
+const ICON_SIZES = Object.freeze([16, 32, 48, 64, 128]);
+
+/**
+ * The single source artwork. A fixed literal, never a manifest value -- see
+ * above -- so the path a reader restores on a missing-source failure is
+ * always this one.
+ */
+const MARK_SVG_REL = 'brand/mark.svg';
+const MARK_SVG_ABS = join(REPO_ROOT, MARK_SVG_REL);
+
+/** The first eight bytes of every PNG, checked on each raster output. */
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/**
+ * The squareness rule against one SVG document's text. Returns failures
+ * rather than reporting them, so writeTargets folds them into its single
+ * emit-all-then-write report and --self-test drives this function directly
+ * on crafted fixtures -- the same split localeAgreementFailures uses.
+ *
+ * P-GEN-02: a non-square source is a hard failure naming the asset and the
+ * rule, never a stretch, a letterbox, or a quiet substitution.
+ */
+function iconSourceFailuresForText(svgText) {
+    const m = svgText.match(/viewBox\s*=\s*"([^"]+)"/);
+    if (m === null) {
+        return [
+            `${MARK_SVG_REL} does not declare a viewBox, so its shape cannot be checked against the square-artwork rule every icon depends on. `
+            + `Give the svg element a square viewBox, then run: ${RERUN}`,
+        ];
+    }
+    const parts = m[1].split(/[\s,]+/).filter(p => p !== '').map(Number);
+    if (parts.length !== 4 || parts.some(n => !Number.isFinite(n))) {
+        return [
+            `${MARK_SVG_REL} declares a viewBox of ${JSON.stringify(m[1])}, which is not four numbers, so its shape cannot be checked against the square-artwork rule. `
+            + `Give the svg element a square viewBox, then run: ${RERUN}`,
+        ];
+    }
+    const width = parts[2];
+    const height = parts[3];
+    if (!(width > 0) || width !== height) {
+        return [
+            `${MARK_SVG_REL} is ${width} wide by ${height} tall, but every icon must come from square artwork. `
+            + `Replace it with a square logo, then run: ${RERUN}`,
+        ];
+    }
+    return [];
+}
+
+/**
+ * The squareness rule against the source file. `readFrom` is a parameter for
+ * one reason: --self-test points it at a path that is not there, to prove
+ * the missing-source message, without touching the real artwork. The message
+ * still names MARK_SVG_REL -- the fixed asset a reader restores, not the
+ * probe's throwaway path, which must never reach what a reader sees.
+ */
+function iconSourceFailures(readFrom = MARK_SVG_ABS) {
+    let svgText;
+    try {
+        svgText = readFileSync(readFrom, 'utf8');
+    } catch {
+        return [
+            `${MARK_SVG_REL} is missing, so the icons for both variants cannot be generated. `
+            + `Restore ${MARK_SVG_REL} at the top of the project, then run: ${RERUN}`,
+        ];
+    }
+    if (svgText.length === 0) {
+        return [
+            `${MARK_SVG_REL} is empty, so the icons for both variants cannot be generated. `
+            + `Restore the artwork in ${MARK_SVG_REL}, then run: ${RERUN}`,
+        ];
+    }
+    return iconSourceFailuresForText(svgText);
+}
+
+/**
+ * Raster bytes by size, warmed once per process. The inkscape invocation is
+ * a fixed argument array -- no shell, no joined strings, sizes from the
+ * frozen array -- with the scratch output under a mkdtemp directory removed
+ * in a finally.
+ */
+const iconRasterCache = new Map();
+
+function iconPngBytes(size) {
+    const hit = iconRasterCache.get(size);
+    if (hit !== undefined) return hit;
+    // Validated on every cold miss, not only on the writeTargets path, so a
+    // direct emitter call -- the byte-identity gate, the agreement mirror --
+    // fails with the same plain-words message instead of spawning inkscape
+    // on artwork that already failed the rule.
+    report(iconSourceFailures());
+    const scratch = mkdtempSync(join(tmpdir(), 'generate-icons-'));
+    try {
+        const out = join(scratch, `icon${size}.png`);
+        const child = spawnSync('inkscape', [
+            MARK_SVG_ABS,
+            '--export-filename', out,
+            '-w', String(size),
+            '-h', String(size),
+        ], { encoding: 'utf8' });
+        // The child's own output is deliberately unread: a failure here must
+        // speak plain words, never inkscape's vocabulary or this machine's
+        // paths, which the self-test's no-internals assertion enforces.
+        let bytes = null;
+        try {
+            bytes = readFileSync(out);
+        } catch {
+            bytes = null;
+        }
+        if (child.error !== undefined || child.status !== 0 || bytes === null
+            || bytes.length < 24 || !bytes.subarray(0, 8).equals(PNG_SIGNATURE)
+            || bytes.readUInt32BE(16) !== size || bytes.readUInt32BE(20) !== size) {
+            report([
+                `${MARK_SVG_REL} could not be turned into the ${size}-pixel icon. `
+                + `Check that the artwork opens as an image, then run: ${RERUN}`,
+            ]);
+        }
+        iconRasterCache.set(size, bytes);
+        return bytes;
+    } finally {
+        rmSync(scratch, { recursive: true, force: true });
+    }
+}
+
+/**
+ * GEN-02's named step: validate the source once, then rasterize every size
+ * in the frozen ascending order. Called from writeTargets inside the emit
+ * pass, before any write.
+ */
+function rasterizeIcons() {
+    report(iconSourceFailures());
+    for (const size of ICON_SIZES) iconPngBytes(size);
+}
+
+/**
+ * One TARGETS row's emitter per size: the cached raster bytes for it. The
+ * variant contributes nothing -- both variants rasterize the same source --
+ * and uniformity with every other row's emit(config, variant) signature is
+ * worth more than a shorter parameter list here.
+ */
+function emitIconPng(size) {
+    return (config, variant) => {
+        void config;
+        void variant;
+        return iconPngBytes(size);
+    };
+}
+
 /**
  * Every output path lives here and nowhere else, and the default run, --check
  * and plan 02-05's byte-identity gate all iterate this one array.
@@ -1562,6 +1732,72 @@ export const TARGETS = Object.freeze([
         variant: 'release',
         emit: emitFirefoxBrandingJs,
     }),
+    // NEW (03-02): GEN-02's icon rasters. Five exact-size PNGs per variant
+    // drawn from the single brand/mark.svg through the system inkscape, with
+    // the tracked Phase 1 rasters as comparands -- inkscape 1.4.4 on this
+    // host reproduces those bytes deterministically. Dev and release come
+    // from the same source, so their bytes are identical, and they are still
+    // ten separate rows and ten separate files, never merged or deduplicated.
+    Object.freeze({
+        generated: 'branding/dev/default16.png',
+        tracked: 'powerbrowser/branding/dev/default16.png',
+        variant: 'dev',
+        emit: emitIconPng(16),
+    }),
+    Object.freeze({
+        generated: 'branding/dev/default32.png',
+        tracked: 'powerbrowser/branding/dev/default32.png',
+        variant: 'dev',
+        emit: emitIconPng(32),
+    }),
+    Object.freeze({
+        generated: 'branding/dev/default48.png',
+        tracked: 'powerbrowser/branding/dev/default48.png',
+        variant: 'dev',
+        emit: emitIconPng(48),
+    }),
+    Object.freeze({
+        generated: 'branding/dev/default64.png',
+        tracked: 'powerbrowser/branding/dev/default64.png',
+        variant: 'dev',
+        emit: emitIconPng(64),
+    }),
+    Object.freeze({
+        generated: 'branding/dev/default128.png',
+        tracked: 'powerbrowser/branding/dev/default128.png',
+        variant: 'dev',
+        emit: emitIconPng(128),
+    }),
+    Object.freeze({
+        generated: 'branding/release/default16.png',
+        tracked: 'powerbrowser/branding/release/default16.png',
+        variant: 'release',
+        emit: emitIconPng(16),
+    }),
+    Object.freeze({
+        generated: 'branding/release/default32.png',
+        tracked: 'powerbrowser/branding/release/default32.png',
+        variant: 'release',
+        emit: emitIconPng(32),
+    }),
+    Object.freeze({
+        generated: 'branding/release/default48.png',
+        tracked: 'powerbrowser/branding/release/default48.png',
+        variant: 'release',
+        emit: emitIconPng(48),
+    }),
+    Object.freeze({
+        generated: 'branding/release/default64.png',
+        tracked: 'powerbrowser/branding/release/default64.png',
+        variant: 'release',
+        emit: emitIconPng(64),
+    }),
+    Object.freeze({
+        generated: 'branding/release/default128.png',
+        tracked: 'powerbrowser/branding/release/default128.png',
+        variant: 'release',
+        emit: emitIconPng(128),
+    }),
 ]);
 
 function variantById(config, id) {
@@ -1590,6 +1826,12 @@ function writeTargets(config, root) {
     // pass, while the tree is still untouched.
     const failures = [];
     const pending = [];
+    // GEN-02. The icon source is validated and every size rasterized BEFORE
+    // the text emitters run and long before the write loop below -- a missing
+    // or non-square brand/mark.svg fails with the tree exactly as it was
+    // found, and the ten PNG rows below read their bodies straight out of the
+    // same cache, so what is written is what was just rasterized.
+    rasterizeIcons();
     for (const target of TARGETS) {
         const variant = variantById(config, target.variant);
         if (variant === undefined) {
@@ -1666,7 +1908,7 @@ function firstDifferingLine(a, b) {
  *
  * THREE OUTCOMES, THREE MESSAGES, deliberately not one. An absent generated/ is
  * the state every fresh copy of the project and every automated run begins in;
- * reporting it as twenty-three stale files reads as twenty-three problems and sends the reader
+ * reporting it as thirty-three stale files reads as thirty-three problems and sends the reader
  * hunting a mismatch that does not exist.
  *
  * The set comparison runs in BOTH directions. A per-target loop alone sees a
@@ -1868,10 +2110,10 @@ function carries(text, needle) {
 
 /**
  * Run `fn` with console.log and console.error COLLECTED rather than printed,
- * so a case can assert on what a caller would have seen. Three of the nine
- * cases drive checkTargets, which reports through the console rather than by
+ * so a case can assert on what a caller would have seen. The freshness cases
+ * drive checkTargets, which reports through the console rather than by
  * returning a failure list, and a case that could not read that report could
- * only assert the exit code -- which is 1 for every one of the three distinct
+ * only assert the exit code -- which is 1 for every one of the distinct
  * outcomes and so cannot tell them apart.
  *
  * Restored in a finally. A self-test that left the console swallowed on its way
@@ -1943,7 +2185,7 @@ function probeStaleOutput(config) {
  * Ask the freshness comparison about a directory that is not there -- the state
  * every fresh copy of the project and every CI runner starts in, because
  * generated/ is git-ignored. The distinct message this must produce is the
- * whole point: twenty-three phantom stale paths would read as twenty-three defects on a tree
+ * whole point: thirty-three phantom stale paths would read as thirty-three defects on a tree
  * with none, and a gate red for a non-defect is a gate its readers skip.
  *
  * The EXIT CODE is asserted here too, and separately from the message, because
@@ -1991,6 +2233,60 @@ function probeLocaleAgreementDrift(config) {
 }
 
 /**
+ * GEN-02, P-GEN-02. A downstream logo that is not square, driven straight at
+ * the squareness rule on fixture text. A probe rather than a fixture because
+ * no manifest can provoke it: no manifest value selects the artwork, so only
+ * a directly-called iconSourceFailuresForText with a non-square viewBox can
+ * go red here.
+ */
+function probeNonSquareSource() {
+    return iconSourceFailuresForText(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 64"></svg>',
+    );
+}
+
+/**
+ * GEN-02's empty probe: the artwork missing outright. Points the source
+ * check at a path that is not there; the message still names brand/mark.svg,
+ * the fixed asset a reader restores.
+ */
+function probeMissingSource() {
+    const dir = mkdtempSync(join(tmpdir(), 'generate-selftest-nosource-'));
+    try {
+        return iconSourceFailures(join(dir, 'mark.svg'));
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+/**
+ * GEN-02. One byte of one rasterized PNG changed by hand, and the freshness
+ * comparison has to name THAT file -- the icon half of probeStaleOutput,
+ * aimed at branding/dev/default32.png instead of TARGETS[0]. The corruption
+ * lands in a mkdtemp copy and never on the tracked files: they are the
+ * independent comparand this phase's acceptance test rests on.
+ */
+function probeIconPngDrift(config) {
+    const root = mkdtempSync(join(tmpdir(), 'generate-selftest-icondrift-'));
+    try {
+        writeTargets(config, root);
+        const victim = join(root, 'branding/dev/default32.png');
+        const before = readFileSync(victim);
+        const after = Buffer.from(before);
+        after[after.length - 1] ^= 0xff;
+        writeFileSync(victim, after);
+        // Mutation-landed guard, same contract as probeStaleOutput's: a drift
+        // that was never written reporting green is worse than a red.
+        if (Buffer.compare(before, readFileSync(victim)) === 0) {
+            return [`${BROKEN} the planted byte did not land in branding/dev/default32.png`];
+        }
+        return capture(() => checkTargets(config, root));
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+}
+
+/**
  * A manifest that is not valid TOML, read by a CHILD process.
  *
  * It has to be a child: an unparseable layer exits from inside loadLayer rather
@@ -2024,7 +2320,7 @@ function probeMalformedManifest() {
 
 /**
  * THE CROSS-CUTTING ASSERTION, applied to every case's output rather than
- * written as a tenth case -- because it is a property of all nine, and a case
+ * written as one more case -- because it is a property of every case, and a case
  * of its own would only ever check whatever fixture that case happened to use.
  *
  * CLAUDE.md's user-facing copy rule in executable form: no failure a reader
@@ -2061,10 +2357,10 @@ function parserIdiomLeaked(output) {
 
 /**
  * Proves the mask, the unset rule, array-replace, the required-setting check,
- * the value rules, the misspelled-header ordering, the locale agreement, all
- * three freshness outcomes and the parse-failure copy actually discriminate,
- * rather than merely being intended. A check that can only go green is not a
- * check.
+ * the value rules, the misspelled-header ordering, the locale agreement, the
+ * icon squareness and presence guards, all freshness outcomes and the
+ * parse-failure copy actually discriminate, rather than merely being
+ * intended. A check that can only go green is not a check.
  */
 function selfTest() {
     // A planted-fault result measured against an already-red baseline says
@@ -2202,7 +2498,7 @@ function selfTest() {
             expect: TARGETS[0].generated,
         },
         {
-            // The absent-directory outcome is a DISTINCT message, not twenty-three
+            // The absent-directory outcome is a DISTINCT message, not thirty-three
             // stale paths, AND it is not a failure. Asserted from three sides:
             // the message is there, no target path is, and the exit code was
             // zero -- so a future collapse of the three outcomes into one goes
@@ -2241,6 +2537,33 @@ function selfTest() {
             probe: () => agreementControl,
             holds: 'no failures on the matching pairs',
             resolved: () => agreementControl.length === 0,
+        },
+        {
+            // GEN-02, P-GEN-02. A non-square downstream logo must fail naming
+            // the asset and the squareness rule -- never a stretch, a
+            // letterbox, or a quiet substitution of the placeholder mark.
+            name: 'non-square icon source',
+            probe: probeNonSquareSource,
+            expect: MARK_SVG_REL,
+            also: ['square'],
+        },
+        {
+            // GEN-02's empty probe: a missing brand/mark.svg is a hard
+            // failure naming the asset, never an empty icon set and never a
+            // quiet reuse of the checked-in PNGs.
+            name: 'missing icon source',
+            probe: probeMissingSource,
+            expect: MARK_SVG_REL,
+            also: ['missing'],
+        },
+        {
+            // GEN-02. One byte of one raster changed by hand, and the
+            // freshness comparison has to name THAT png -- naming some other
+            // file would prove it can go red, not that it goes red on the
+            // thing that drifted.
+            name: 'drifted icon raster',
+            probe: probeIconPngDrift,
+            expect: 'branding/dev/default32.png',
         },
     ];
 
