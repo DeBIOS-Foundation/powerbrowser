@@ -74,3 +74,10 @@ objdir = "objdir-release"
 # downstream manifest will take. No color is invented here.
 [installer]
 support_url = "https://powerbrowser.org"
+
+# Declared sidecar extensions. Each [[extensions]] entry names an Open VSX
+# id at an exact version pin, or a direct https URL, plus the sha256 of the
+# download archive; the generator resolves them into the application
+# package.json's theiaPlugins block and the build downloads and bundles
+# them. This project declares none, so the block stays absent. A downstream
+# drops an inherited entry by restating the list without it.
