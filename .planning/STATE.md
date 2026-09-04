@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 06
 current_phase_name: Two-Layer Verification and Rebranding Docs
 status: executing
-stopped_at: Completed 07-sourcerer-as-downstream-03-PLAN.md
-last_updated: "2026-09-04T10:14:47.010Z"
+stopped_at: Completed 07-sourcerer-as-downstream-04-PLAN.md
+last_updated: "2026-09-04T10:26:49.946Z"
 last_activity: 2026-09-04
 last_activity_desc: Phase 03 plan 04 execution completed
-state_head: f05fed6120e22d40c5a166a96fe3b776c6116bc9
+state_head: abc62dce3a33742a3534de40172e43ae7b6d8681
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 52
-  completed_plans: 51
+  completed_plans: 52
 milestone_name: milestone
 ---
 
@@ -97,6 +97,7 @@ Progress: [█████████░] 93%
 | Phase 06-two-layer-verification-and-rebranding-docs P02 | 5min | 3 tasks | 3 files |
 | Phase 07-sourcerer-as-downstream P02 | ~7min | 3 tasks | 3 files |
 | Phase 07-sourcerer-as-downstream P03 | ~5min | 3 tasks | 9 files |
+| Phase 07-sourcerer-as-downstream P04 | ~10min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -231,6 +232,8 @@ Recent decisions affecting current work:
 - [Phase 06]: 07-02: sweep exemption E1 derives rebrand-invariance per run; --all requires --fixtures-root as argv (phase path spells a residue probe)
 - [Phase 06]: 07-03: harness copy-shape fix is case-insensitive matching, not a generator copy change (both casings pinned by generate self-test)
 - [Phase 06]: 07-03: fail plants clone the 07-02 manifest verbatim so each fixture carries exactly one defect
+- [Phase 06]: 07-04: fixtures root glob-derived in scan-scoped registry (probe-bearing phase path never spelled)
+- [Phase 06]: 07-04: drill identity pairs script overrides with direct artifact asserts (application-ini/executable report rebrand delta by design)
 
 ### Pending Todos
 
@@ -270,6 +273,6 @@ real problem needs human help.
 
 ## Session Continuity
 
-Last session: 2026-09-04T10:14:46.918Z
-Stopped at: Completed 07-sourcerer-as-downstream-03-PLAN.md
+Last session: 2026-09-04T10:26:49.856Z
+Stopped at: Completed 07-sourcerer-as-downstream-04-PLAN.md
 Resume file: None
