@@ -267,7 +267,7 @@ Plans:
 **Plans**: TBD
 
 - [x] 05-01-PLAN.md
-- [ ] 05-02-PLAN.md
+- [x] 05-02-PLAN.md
 - [ ] 05-03-PLAN.md
 - [ ] 05-04-PLAN.md
 
@@ -318,7 +318,7 @@ than noisy.
 | 2. Configuration Manifest and Generator Core | 9/9 | Complete    | 2026-09-04 |
 | 3. Firefox Branding Emitter and Icon Pipeline | 3/4 | In Progress|  |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 4/4 | In Progress|  |
-| 5. Hook-Only Patches and Upstream Uptake | 1/4 | In Progress|  |
+| 5. Hook-Only Patches and Upstream Uptake | 2/4 | In Progress|  |
 | 6. Two-Layer Verification and Rebranding Docs | 0/TBD | Not started | - |
 | 7. Sourcerer as Downstream | 0/TBD | Not started | - |
 
