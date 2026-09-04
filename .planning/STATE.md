@@ -1,8 +1,8 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-current_phase: 03
-current_phase_name: Firefox Branding Emitter and Icon Pipeline
+current_phase: 04
+current_phase_name: Theia Surface — Branding, Extensions, Telemetry
 status: executing
 stopped_at: Completed 04-theia-surface-branding-extensions-telemetry-04-PLAN.md
 last_updated: "2026-09-04T07:33:51.486Z"
@@ -24,14 +24,14 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 03 — Firefox Branding Emitter and Icon Pipeline
+**Current focus:** Phase 05 — Hook-Only Patches and Upstream Uptake (Phase 04 plans 01–04 executed, verification deferred)
 
 ## Current Position
 
-Phase: 03 (Firefox Branding Emitter and Icon Pipeline) — PLANS COMPLETE (pending verify-work)
+Phase: 04 (Theia Surface — Branding, Extensions, Telemetry) — PLANS COMPLETE (verification deferred per standing instruction)
 Plan: 4 of 4
-Status: Executed Phase 03 plan 04 (identity carrier, propagation proof, tier-3 build)
-Last activity: 2026-09-04 — Phase 03 plan 04 completed
+Status: Executed Phase 04 plans 01–04 (frontend.config channel, extensions pipeline, telemetry sender, wiring close-out)
+Last activity: 2026-09-04 — Phase 04 plan 04 completed
 
 Progress: [█████████░] 93%
 
@@ -246,6 +246,7 @@ real problem needs human help.
 | Phase | State | Resume |
 |-------|-------|--------|
 | 03 | verification_deferred_human | /gsd-verify-work 03 |
+| 04 | verification_deferred (no VERIFICATION.md yet — plans executed, verifier not run) | /gsd-verify-work 04 |
 
 ## Session Continuity
 
