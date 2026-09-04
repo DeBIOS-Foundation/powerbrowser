@@ -3,6 +3,7 @@ import { injectable, inject, postConstruct } from '@theia/core/shared/inversify'
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { ApplicationServer } from '@theia/core/lib/common/application-protocol';
 import { WindowService } from '@theia/core/lib/browser/window/window-service';
+import { FrontendApplicationConfigProvider } from '@theia/core/lib/browser/frontend-application-config-provider';
 import { powerBrowserMarkInline } from './powerbrowser-mark';
 
 // D-33: `@powerbrowser/branding` ships its own welcome widget rather than
@@ -14,6 +15,16 @@ import { powerBrowserMarkInline } from './powerbrowser-mark';
 // value was a github.com org URL that does not exist -- the DeBIOS Foundation
 // has no GitHub org yet -- so this points at the one host the project owns.
 export const POWERBROWSER_REPO_URL = 'https://powerbrowser.org/';
+
+// GEN-05 (04-01): the boot fallback for the welcome heading, and the ONLY
+// display literal this file carries. The heading itself resolves at runtime
+// through the frontend application config (see displayName below), which the
+// generator owns from configuration.toml -- so a rebrand is a manifest edit
+// plus the app-bundle step, never a .ts edit. The fallback keeps the tree
+// bootable where the provider is unset (specs, stories outside the built
+// app): it must stay exactly one quoted occurrence, which
+// scripts/verify-branding-preflight.mjs asserts from the inventory value.
+const FALLBACK_DISPLAY_NAME = 'Power Browser';
 
 @injectable()
 export class PowerBrowserWelcomeWidget extends ReactWidget {
@@ -55,6 +66,21 @@ export class PowerBrowserWelcomeWidget extends ReactWidget {
         this.windowService.openNewWindow(POWERBROWSER_REPO_URL, { external: true });
     };
 
+    // GEN-05 (04-01): the welcome heading is the RUNTIME application name --
+    // the `applicationName` the app-bundle step injects into index.js from
+    // theia/applications/browser/package.json's theia.frontend.config block,
+    // which scripts/generate.mjs owns from identity.display_name. Read
+    // synchronously: the provider is set at page load before any widget
+    // renders, so there is no fetch, no state, no loading flash. An empty
+    // value or an unset provider falls back to FALLBACK_DISPLAY_NAME above.
+    protected get displayName(): string {
+        try {
+            return FrontendApplicationConfigProvider.get().applicationName || FALLBACK_DISPLAY_NAME;
+        } catch {
+            return FALLBACK_DISPLAY_NAME;
+        }
+    }
+
     // Per CONTEXT.md's discretion leaning: product name, version, and one
     // repo link only -- no invented marketing copy or tagline.
     protected render(): React.ReactNode {
@@ -73,8 +99,9 @@ export class PowerBrowserWelcomeWidget extends ReactWidget {
                 that must never appear in a display string. This heading was
                 the identifier form until 01-07 -- exactly what a token-boundary
                 rename produces -- and verify-branding.mjs had been renamed to
-                expect it, so the two agreed and neither noticed. */}
-            <h1>Power Browser</h1>
+                expect it, so the two agreed and neither noticed. Resolved at
+                runtime since 04-01 (see displayName above), never a literal. */}
+            <h1>{this.displayName}</h1>
             {this.version && <p>Version {this.version}</p>}
             <p>
                 <a href={POWERBROWSER_REPO_URL} onClick={this.openRepo}>{POWERBROWSER_REPO_URL}</a>
