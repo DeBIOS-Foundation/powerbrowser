@@ -1,7 +1,10 @@
 ---
 phase: 02-configuration-manifest-and-generator-core
 verified: 2026-09-01T00:00:00Z
-status: passed
+status: passed-with-corrections
+corrected: 2026-09-04
+gaps_found_after_verification: [G-02-11, G-02-12]
+gaps_closed_by: [02-08]
 score: 5/5 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -30,7 +33,7 @@ mutation and stayed limited to the pre-existing unrelated items called out in th
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | Running the generator against Power Browser's own `configuration.toml` reproduces Phase 1's hand-written env script, `.mozconfig`, and desktop files byte-for-byte, and those files are no longer edited by hand | VERIFIED | `node scripts/generate.mjs` writes 5 files under `generated/`; `cmp` against each of `.mozconfig`, `powerbrowser/branding/{dev,release}/configure.sh`, `powerbrowser/powerbrowser{,-release}.desktop` reports IDENTICAL for all five. `node scripts/verify-generated-identity.mjs` independently confirms: `PASS -- 5 generated file(s) are byte-identical to their hand-written counterparts, and generated/ is untracked`. Simulated a fresh clone by `rm -rf generated/` and re-ran the identity gate — still PASS (comparand is emitted to its own `mkdtemp`, never read from `generated/`), and `generate.mjs --check` correctly reported the distinct absent-directory message rather than crashing or silently passing. |
+| 1 | Running the generator against Power Browser's own `configuration.toml` reproduces Phase 1's hand-written env script, `.mozconfig`, and desktop files byte-for-byte, and those files are no longer edited by hand | VERIFIED | `node scripts/generate.mjs` writes 5 files under `generated/`; `cmp` against each of `.mozconfig`, `powerbrowser/branding/{dev,release}/configure.sh`, `powerbrowser/powerbrowser{,-release}.desktop` reports IDENTICAL for all five. `node scripts/verify-generated-identity.mjs` independently confirms: `PASS -- 5 generated file(s) are byte-identical to their hand-written counterparts, and generated/ is untracked`. Simulated a fresh clone by `rm -rf generated/` and re-ran the identity gate — still PASS (comparand is emitted to its own `mkdtemp`, never read from `generated/`), and `generate.mjs --check` correctly reported the distinct absent-directory message rather than crashing or silently passing. That simulation exercised the absent-output case only, not a relocated checkout: every check this run performed, it performed at this checkout's single path, so it could not see G-02-11, which 02-UAT.md test 11 found by running a genuine clone at a different path. |
 | 2 | Generation hard-fails and names the offending key when any identity field or legal field is unset — no build can proceed under Power Browser's mark by omission | VERIFIED | `scripts/lib/config-schema.json` marks all of `product.vendor_machine`, `product.vendor_display`, every `identity.*` key, and every `legal.*` key as `required: true`. Negative test: a scratch manifest with `identity.display_name = "   "` (whitespace-only) run through `resolveConfig()` returned `failures: ["identity.display_name is not set. ..."]` — confirming the unset test is a trim, not merely an absence check. `generate.mjs --self-test` also plants and confirms red on a missing required key, a whitespace-only identity value, and a partial identity table (9/9 self-test cases pass). |
 | 3 | A basename or binary name violating `^[a-z][a-z0-9-]{1,31}$` is rejected at generate time with a clear message, never silently sanitized into an invalid `MOZ_APP_NAME` | VERIFIED | Negative test: scratch manifest with `identity.app_basename = "Power Browser 2!"` returned a rejection naming the key, quoting the offending value, and stating the character-set/length/leading-letter rule in words (`^[a-z][a-z0-9-]{1,31}$`, with a worked example) — no lowercased/hyphenated auto-corrected value was ever written. `generate.mjs --self-test`'s "invalid basename" case independently confirms the same. |
 | 4 | Cosmetic fields left unset fall back to Power Browser defaults that are themselves a `configuration.toml` (one merge code path), with every applied default echoed at generate time | VERIFIED | `node scripts/generate.mjs` on the real manifest echoes exactly the cosmetic keys left unset (`product.description`, `product.homepage`, `theia.default_theme`, `variants`), each as one sorted stderr line. Adjacency-edge negative test: a scratch downstream manifest that explicitly sets `theia.default_theme = "dark"` (same value as the default) does NOT appear in the returned `defaulted` array — proving downstream-set values are never echoed as inherited defaults even when the resolved value is unchanged. `resolveConfig()`'s single defaults path is `configuration.toml` itself (masked of required keys), confirmed by reading the merge code (`maskDefaults`/`mergeLayers` in `scripts/generate.mjs`) — one merge code path, no separate defaults file. |
@@ -112,6 +115,14 @@ None. Scanned `scripts/generate.mjs`, `scripts/verify-generated-identity.mjs`,
 `scripts/lib/config-schema.json`, and `configuration.toml` for `TBD|FIXME|XXX|TODO|HACK|PLACEHOLDER`
 — zero matches in any phase-2 file.
 
+> **Corrected 2026-09-04 (Phase 2 UAT, test 11).** The marker scan above stayed clean while the
+> UAT found the anti-pattern a marker scan cannot: an expectation hand-kept as an absolute
+> literal (`repo_root` in `inventory/brand-tokens.json`, mirrored in the tracked `.desktop`
+> files), which made the preflight a tautology with respect to location (G-02-12). It violated
+> the CLAUDE.md rule to derive from the tree and compare rather than hand-keep an expectation
+> list. Closed by 02-08, which deleted the `repo_root` key and derives the preflight's
+> expectation from the token instead.
+
 ### Deferred Items
 
 The one item logged in `deferred-items.md` under "02-03 — scripts/generate.mjs is not a
@@ -138,6 +149,30 @@ defaults-echo mechanism is a single merge path with the adjacency edge correctly
 All four newly-registered `verify-platform.sh --quick` rows pass in a full `--quick` run
 alongside the pre-existing 24 rows (28/28 total). The working tree was left clean — no phase-2
 file was mutated by this verification pass.
+
+### Gaps found after this report
+
+> **Corrected 2026-09-04 (Phase 2 UAT, 2026-09-02).** This report said "No gaps found" above
+> while two major gaps were open against the same phase. The run could not see them because
+> every check it ran, it ran at one checkout path — this machine's — and both gaps are
+> invisible there:
+>
+> - **G-02-11** (major, 02-UAT.md test 11): "On a clean clone with no node_modules and no
+>   network, scripts/verify-platform.sh --quick runs to completion green" — failed, because the
+>   tracked `.desktop` files carried this checkout's absolute path while the emitter rebuilt it
+>   from the live repo root.
+> - **G-02-12** (major, 02-UAT.md test 11): "A gate that checks the tracked .desktop entries
+>   catches one that is wrong for the checkout it is in" — failed, because the preflight built
+>   its expectation from the same hand-kept `repo_root` literal the tracked files carried, a
+>   tautology with respect to location.
+>
+> Both were closed by plan **02-08** under the ratified design in `02-DESIGN-G-02-11.md`
+> (`option-4-placeholder`): emitter and tracked files carry `@POWERBROWSER_REPO_ROOT@`,
+> `foreign_checkout_byte_identity_exit: 0` and `foreign_checkout_preflight_exit: 0` observed at
+> a relocated checkout. The requirement traceability table above was considered and deliberately
+> left: G-02-11 and G-02-12 were defects in the GATES over CFG-01..04 and GEN-04, not in the
+> requirements themselves, so marking a requirement incomplete on this evidence would misreport
+> the phase in the opposite direction.
 
 ---
 
