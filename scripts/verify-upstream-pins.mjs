@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // scripts/verify-upstream-pins.mjs
 //
-// The pin-agreement gate (05-02, UPD-01): the ESR tag is declared once in
-// configuration.toml ([upstreams] firefox_esr_tag) and every consumer
-// reads that declaration. This check derives the expected tag from the
-// manifest at check time via the vendored parser and asserts agreement in
-// both directions:
+// The pin-agreement gate: both upstream pins are declared once in
+// configuration.toml ([upstreams]) and every consumer reads that
+// declaration. This check derives each expected pin from the manifest at
+// check time via the vendored parser and asserts agreement in both
+// directions.
+//
+// ESR half (05-02, UPD-01): firefox_esr_tag agreement over four steps:
 //
 //  1. generated/upstream-pins.env carries the manifest tag (stale output
 //     fails naming the fragment and the rerun command). An absent
@@ -39,6 +41,34 @@
 // prefix match would flag every legitimate reader and the gate would
 // train its readers to ignore it.
 //
+// Theia half (05-03, CFG-06/UPD-02): theia_release agreement over three
+// steps. The generator never rewrites a package.json (GEN-04: generator
+// output lands only under gitignored generated/, and package.json files
+// are committed build input), so the manifest pin is the declaration and
+// this check is the enforcement -- set-equality, failing by file name on
+// any drift in either direction:
+//
+//  5. the manifest pin: upstreams.theia_release must be set and must be a
+//     strict numeric triple (the schema enforces the same shape; the
+//     re-check here names the dotted path, the way the ESR half does).
+//  6. every @theia/* pin in theia/package.json resolutions and in every
+//     member theia/applications/*/package.json and
+//     theia/extensions/*/package.json (dependencies, devDependencies,
+//     peerDependencies and optionalDependencies alike) equals the manifest
+//     pin. The one exception is @theia/monaco-editor-core, excluded by
+//     exact package name: it tracks upstream's own monaco line rather
+//     than the Theia release (measured apart from the release at the time
+//     of writing; the name, not the value, is what the exclusion keys
+//     on). An empty resolutions block, an unreadable member, or zero
+//     member files each fail naming the file -- an agreement over nothing
+//     is vacuous, not clean. A manifest pin no @theia entry carries fails
+//     naming the manifest.
+//  7. every resolved @theia tarball stanza in theia/yarn.lock (same
+//     exception) carries the manifest pin as its version. The stanza
+//     version is the resolved tarball's version, so this is the lockfile
+//     half of the agreement; the header ranges and the upstream-authored
+//     transitive constraint lines inside stanzas are not asserted.
+//
 // Honestly --quick: it reads text files and runs one git ls-files. No
 // clone, no fetch, no build, no browser, no display, no network.
 //
@@ -46,10 +76,12 @@
 //   node scripts/verify-upstream-pins.mjs
 //   node scripts/verify-upstream-pins.mjs --self-test
 //
-// The self-test plants two faults and requires each to go red naming the
-// file -- a drifted workflow mirror and a second literal under scripts/ --
-// with the unmutated tree as the clean control proving each red is
-// plant-caused.
+// The self-test plants four faults and requires each to go red naming the
+// file -- an ESR drifted workflow mirror, an ESR second literal under
+// scripts/, a patch-bumped @theia pin in one member package.json, and a
+// drifted @theia stanza version in the lockfile -- with the unmutated tree
+// as the clean control proving each red is plant-caused. Every plant lands
+// in memory: no tracked file is edited, not even temporarily.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -84,6 +116,19 @@ const TAG_LITERAL = /FIREFOX_[0-9][A-Za-z0-9._-]*/g;
 const TAG_SHAPE = /^[A-Za-z0-9._-]+$/;
 const PIN_DOTTED = 'upstreams.firefox_esr_tag';
 const PIN_SECTION = '[upstreams]';
+
+// The Theia half. The pin is a strict numeric triple; the shape is
+// re-checked here (the schema enforces it too) so the failure names the
+// dotted path instead of deferring to the generator's report.
+const THEIA_DOTTED = 'upstreams.theia_release';
+const THEIA_SHAPE = /^[0-9]+\.[0-9]+\.[0-9]+$/;
+const THEIA_ROOT_REL = 'theia/package.json';
+const THEIA_LOCK_REL = 'theia/yarn.lock';
+const THEIA_MEMBER_PATTERN = /^theia\/(applications|extensions)\/[^/]+\/package\.json$/;
+const THEIA_DEP_BLOCKS = Object.freeze(['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']);
+// The one @theia package that does NOT track the release. Excluded by
+// exact name everywhere below; see the step-6 comment.
+const THEIA_MONACO_EXCEPTION = '@theia/monaco-editor-core';
 
 function readBytes(root, rel) {
     const p = join(root, rel);
@@ -129,10 +174,80 @@ function tagLiterals(text) {
     return text.match(TAG_LITERAL) ?? [];
 }
 
+function theiaEntriesOf(doc, blocks) {
+    // Every @theia/* entry the document declares in the given blocks, as
+    // [name, version, block] triples. The monaco exception is excluded by
+    // exact package name here, once, so neither caller can forget it.
+    const entries = [];
+    for (const block of blocks) {
+        const deps = doc?.[block];
+        if (deps === null || typeof deps !== 'object' || Array.isArray(deps)) continue;
+        for (const [name, version] of Object.entries(deps)) {
+            if (!name.startsWith('@theia/') || name === THEIA_MONACO_EXCEPTION) continue;
+            entries.push([name, version, block]);
+        }
+    }
+    return entries;
+}
+
+function lockTheiaStanzas(text) {
+    // Yarn v1 lockfile, parsed line-wise: each stanza opens with one or
+    // more quoted `name@range` headers ending in a colon, followed by
+    // indented fields including `version "..."`. Returns one row per
+    // @theia package per stanza carrying it. The monaco exception is
+    // excluded by exact package name, like the manifest entries above.
+    // Header ranges and upstream-authored transitive constraint lines are
+    // deliberately not returned: the stanza version is the resolved
+    // tarball's version, which is what the agreement asserts.
+    const rows = [];
+    const lines = text.split('\n');
+    let names = null;
+    let version = null;
+    const flush = () => {
+        if (names !== null) {
+            for (const name of names) {
+                if (name.startsWith('@theia/') && name !== THEIA_MONACO_EXCEPTION) {
+                    rows.push({ name, version });
+                }
+            }
+        }
+        names = null;
+        version = null;
+    };
+    for (const line of lines) {
+        if (line === '' || line.startsWith('#')) {
+            flush();
+            continue;
+        }
+        if (!line.startsWith(' ') && !line.startsWith('\t')) {
+            flush();
+            const m = line.match(/^((?:"[^"]*"(?:, )?)+):$/);
+            if (m === null) continue;
+            names = [];
+            for (const raw of m[1].split(', ')) {
+                const bare = raw.slice(1, -1);
+                const at = bare.lastIndexOf('@');
+                if (at > 0) names.push(bare.slice(0, at));
+            }
+            continue;
+        }
+        if (names !== null && version === null) {
+            const vm = line.match(/^\s+version "([^"]*)"\s*$/);
+            if (vm !== null) version = vm[1];
+        }
+    }
+    flush();
+    return rows;
+}
+
 function runChecks(root, overrides = {}) {
     const failures = [];
     const skipped = [];
     const read = overrides.read ?? ((rel) => readBytes(root, rel)?.toString('utf8') ?? null);
+    // The tracked set, derived from version control once and shared by the
+    // ESR sweep (step 4) and the Theia member walk (step 6) -- one
+    // derivation, never a hand-kept list.
+    const tracked = overrides.files ?? listTracked(root);
 
     // --- 0. the manifest pin ------------------------------------------------
     let expected = null;
@@ -210,7 +325,6 @@ function runChecks(root, overrides = {}) {
 
     // --- 4. no second literal anywhere else in scope ----------------------------
     {
-        const tracked = overrides.files ?? listTracked(root);
         if (tracked === null) {
             failures.push(`the project's version control could not be read, so the literal sweep proves nothing. Next step: run this from a working copy of the project, with git available.`);
         } else {
@@ -229,19 +343,138 @@ function runChecks(root, overrides = {}) {
         }
     }
 
-    return { failures, skipped, expected };
+    // --- 5. the manifest Theia pin ------------------------------------------------
+    let theia = null;
+    {
+        const text = read(MANIFEST_REL);
+        if (text === null) {
+            failures.push(`${MANIFEST_REL} could not be read, so the Theia pin proves nothing. Next step: restore it at the top of the project.`);
+        } else {
+            let manifest = null;
+            try {
+                manifest = parse(text);
+            } catch {
+                failures.push(`${MANIFEST_REL} could not be read as a settings file, so the Theia pin proves nothing. Next step: run ${RERUN_GENERATE} -- it reports the faulty line.`);
+            }
+            if (manifest !== null) {
+                const pin = manifest?.upstreams?.theia_release;
+                if (typeof pin !== 'string' || pin.trim() === '') {
+                    failures.push(`${THEIA_DOTTED} is not set. Open ${MANIFEST_REL}, find the ${PIN_SECTION} section, and give theia_release a value. Then run: ${RERUN_GENERATE}`);
+                } else if (!THEIA_SHAPE.test(pin)) {
+                    failures.push(`${THEIA_DOTTED} is ${JSON.stringify(pin)}, which is not an exact release triple. Write it as three numeric parts separated by dots in ${MANIFEST_REL}, then run: ${RERUN_GENERATE}`);
+                } else {
+                    theia = pin;
+                }
+            }
+        }
+    }
+
+    // --- 6. resolutions plus every member package.json ---------------------------
+    // Set-equality against the manifest pin in both directions: any entry
+    // that is not the pin fails naming its file, and a manifest pin no
+    // entry carries fails naming the manifest.
+    let theiaCarriers = 0;
+    let theiaMembers = 0;
+    {
+        const agree = (rel, entries) => {
+            for (const [name, version, block] of entries) {
+                if (version === theia) {
+                    theiaCarriers += 1;
+                } else if (theia !== null) {
+                    failures.push(`${rel} ${block} ${name} is ${JSON.stringify(version)} but ${MANIFEST_REL} declares ${theia} -- the pin drifted. Next step: move every @theia/* entry to the manifest pin (except ${THEIA_MONACO_EXCEPTION}), then re-run this check.`);
+                }
+            }
+        };
+
+        const rootText = read(THEIA_ROOT_REL);
+        if (rootText === null) {
+            failures.push(`${THEIA_ROOT_REL} could not be read, so the release proves nothing over the root manifest. Next step: restore it.`);
+        } else {
+            let doc = null;
+            try {
+                doc = JSON.parse(rootText);
+            } catch {
+                failures.push(`${THEIA_ROOT_REL} is not valid JSON, so its resolutions prove nothing. Next step: restore it -- move the manifest pin first, never hand-edit a package.json pin to make this check green.`);
+            }
+            if (doc !== null) {
+                const res = doc.resolutions;
+                if (res === null || typeof res !== 'object' || Array.isArray(res)) {
+                    failures.push(`${THEIA_ROOT_REL} carries no resolutions block, so the release proves nothing over the root manifest. Next step: restore the block -- it is what forces one release across the tree.`);
+                } else {
+                    const entries = theiaEntriesOf(doc, ['resolutions']);
+                    if (entries.length === 0) {
+                        failures.push(`${THEIA_ROOT_REL} resolutions carries no @theia/* pin at all -- an agreement over nothing is vacuous, not clean. Next step: restore the block.`);
+                    } else {
+                        agree(THEIA_ROOT_REL, entries);
+                    }
+                }
+            }
+        }
+
+        if (tracked !== null) {
+            const memberRels = tracked.filter(rel => THEIA_MEMBER_PATTERN.test(rel));
+            theiaMembers = memberRels.length;
+            if (memberRels.length === 0) {
+                failures.push(`no theia/applications/*/package.json or theia/extensions/*/package.json found in version control -- the member walk proves nothing. Next step: run this from a working copy of the project, with git available.`);
+            }
+            for (const rel of memberRels) {
+                const text = read(rel);
+                if (text === null) continue;
+                let doc = null;
+                try {
+                    doc = JSON.parse(text);
+                } catch {
+                    failures.push(`${rel} is not valid JSON, so its @theia pins prove nothing. Next step: restore it.`);
+                    continue;
+                }
+                agree(rel, theiaEntriesOf(doc, THEIA_DEP_BLOCKS));
+            }
+        }
+        // Step 4 already reported unreadable version control; the member
+        // walk cannot run without it, and the root and lockfile halves
+        // above still ran.
+
+        if (theia !== null && theiaCarriers === 0) {
+            failures.push(`${MANIFEST_REL} declares ${THEIA_DOTTED} ${theia} but no @theia pin in the tree carries it -- the manifest pin names a release nothing resolves to. Next step: move the pins to the manifest pin, or correct the manifest pin.`);
+        }
+    }
+
+    // --- 7. the resolved @theia tarballs in the lockfile --------------------------
+    {
+        const text = read(THEIA_LOCK_REL);
+        if (text === null) {
+            failures.push(`${THEIA_LOCK_REL} could not be read, so the locked tree proves nothing. Next step: restore it -- it is committed, so its absence is breakage, not a fresh clone.`);
+        } else {
+            const rows = lockTheiaStanzas(text);
+            if (rows.length === 0) {
+                failures.push(`${THEIA_LOCK_REL} resolves no @theia tarball at all -- an agreement over nothing is vacuous, not clean. Next step: restore it.`);
+            } else if (theia !== null) {
+                for (const { name, version } of rows) {
+                    if (version === null) {
+                        failures.push(`${THEIA_LOCK_REL} resolves ${name} with no version line -- broken lockfile output. Next step: re-resolve with yarn inside nix develop .#theia, then re-run this check.`);
+                    } else if (version !== theia) {
+                        failures.push(`${THEIA_LOCK_REL} resolves ${name} to ${version} but ${MANIFEST_REL} declares ${theia} -- the locked tree drifted. Next step: move the pins to the manifest pin and re-resolve, then re-run this check.`);
+                    } else {
+                        theiaCarriers += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    return { failures, skipped, expected, theia, theiaMembers };
 }
 
 function main() {
     if (args.includes('--self-test')) return selfTest();
-    const { failures, skipped } = runChecks(REPO_ROOT);
+    const { failures, skipped, theia, theiaMembers } = runChecks(REPO_ROOT);
     for (const s of skipped) console.log(`${NAME}: SKIP -- ${s}`);
     if (failures.length > 0) {
-        console.error(`${NAME}: FAIL -- ${failures.length} problem(s) with the ESR pin agreement.`);
+        console.error(`${NAME}: FAIL -- ${failures.length} problem(s) with the upstream pin agreement.`);
         failures.forEach(f => console.error(`  ${f}`));
         return 1;
     }
-    console.log(`${NAME}: PASS -- the manifest pin agrees with the fragment, the workflow mirror and fetch's default, with no second literal in scope`);
+    console.log(`${NAME}: PASS -- the manifest ESR pin agrees with the fragment, the workflow mirror and fetch's default, with no second literal in scope; the Theia pin ${theia} agrees across resolutions, ${theiaMembers} member files and the lockfile`);
     return 0;
 }
 
@@ -266,6 +499,19 @@ function selfTest() {
     const neighbor = neighborTag(expected);
     if (neighbor === expected || !TAG_SHAPE.test(neighbor)) {
         console.error(`${NAME}: --self-test FAIL -- planted no fault at all: the neighbour tag did not land.`);
+        return 1;
+    }
+    const { theia } = baseline;
+    if (theia === null) {
+        console.error(`${NAME}: --self-test FAIL -- the unmodified tree states no Theia pin, so no plant could mean anything.`);
+        return 1;
+    }
+    // A patch-bumped neighbour of the Theia pin, derived -- never a
+    // literal kept in this file, which would be a hand-kept pin no sweep
+    // excludes.
+    const theiaNeighbor = theia.replace(/(\d+)$/, d => String(Number(d) + 1));
+    if (theiaNeighbor === theia || !THEIA_SHAPE.test(theiaNeighbor)) {
+        console.error(`${NAME}: --self-test FAIL -- planted no fault at all: the Theia neighbour pin did not land.`);
         return 1;
     }
 
@@ -335,8 +581,79 @@ function selfTest() {
         }
     }
 
+    // Plant 3: one member package.json with a single @theia pin bumped by
+    // a patch version must go red NAMING the member file. The substitution
+    // lands in memory and must still parse as JSON -- otherwise the plant
+    // would prove the JSON guard, not the agreement.
+    {
+        const name = 'bumped member @theia pin';
+        const memberRel = 'theia/extensions/branding/package.json';
+        const real = readBytes(REPO_ROOT, memberRel)?.toString('utf8') ?? '';
+        const needle = `"@theia/core": "${theia}"`;
+        let planted = null;
+        if (real.includes(needle)) {
+            const candidate = real.replace(needle, `"@theia/core": "${theiaNeighbor}"`);
+            try {
+                JSON.parse(candidate);
+                planted = candidate;
+            } catch {
+                planted = null;
+            }
+        }
+        if (planted === null) {
+            console.error(`${NAME}: --self-test FAIL -- '${name}' planted no fault at all: the anchor pin did not land as valid JSON.`);
+            failed += 1;
+        } else {
+            const { failures } = runChecks(REPO_ROOT, { read: (rel) => (rel === memberRel ? planted : readBytes(REPO_ROOT, rel)?.toString('utf8') ?? null) });
+            if (failures.some(f => f.includes(memberRel) && f.includes(theiaNeighbor))) {
+                console.log(`  ok  ${name} -> red, naming '${memberRel}'`);
+                if (!checkNoRoot(name, failures)) failed += 1;
+            } else {
+                console.error(`${NAME}: --self-test FAIL -- '${name}' did not go red naming '${memberRel}'; got: ${failures.join(' | ') || '(no failures at all)'}`);
+                failed += 1;
+            }
+        }
+    }
+
+    // Plant 4: the first @theia stanza in the lockfile resolving to the
+    // neighbour pin must go red NAMING the lockfile. The version line is
+    // located structurally (first @theia header, then its indented version
+    // field), never by blind ordinal, so a lockfile reorder cannot make
+    // the plant land on the wrong stanza.
+    {
+        const name = 'drifted lockfile @theia stanza';
+        const real = readBytes(REPO_ROOT, THEIA_LOCK_REL)?.toString('utf8') ?? '';
+        const lines = real.split('\n');
+        let planted = null;
+        for (let i = 0; i < lines.length && planted === null; i += 1) {
+            if (!/^"@theia\/(?!monaco-editor-core\b)[^"]*":$/.test(lines[i])) continue;
+            for (let j = i + 1; j < lines.length && /^[ \t]/.test(lines[j]); j += 1) {
+                const vm = lines[j].match(/^(\s+version ")([^"]*)("\s*)$/);
+                if (vm !== null && vm[2] === theia) {
+                    const copy = [...lines];
+                    copy[j] = `${vm[1]}${theiaNeighbor}${vm[3]}`;
+                    planted = copy.join('\n');
+                    break;
+                }
+            }
+        }
+        if (planted === null) {
+            console.error(`${NAME}: --self-test FAIL -- '${name}' planted no fault at all: no @theia stanza carrying the pin was found.`);
+            failed += 1;
+        } else {
+            const { failures } = runChecks(REPO_ROOT, { read: (rel) => (rel === THEIA_LOCK_REL ? planted : readBytes(REPO_ROOT, rel)?.toString('utf8') ?? null) });
+            if (failures.some(f => f.includes(THEIA_LOCK_REL) && f.includes(theiaNeighbor))) {
+                console.log(`  ok  ${name} -> red, naming '${THEIA_LOCK_REL}'`);
+                if (!checkNoRoot(name, failures)) failed += 1;
+            } else {
+                console.error(`${NAME}: --self-test FAIL -- '${name}' did not go red naming '${THEIA_LOCK_REL}'; got: ${failures.join(' | ') || '(no failures at all)'}`);
+                failed += 1;
+            }
+        }
+    }
+
     if (failed > 0) return 1;
-    console.log(`${NAME}: --self-test PASS -- 2 planted faults went red naming the drifted file`);
+    console.log(`${NAME}: --self-test PASS -- 4 planted faults went red naming the drifted file`);
     return 0;
 }
 

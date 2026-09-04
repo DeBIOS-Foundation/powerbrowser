@@ -3517,6 +3517,7 @@ const FIXTURE_BASE = [
     '',
     '[upstreams]',
     'firefox_esr_tag = "ACME_1_2_3esr_RELEASE"',
+    'theia_release = "0.0.0"',
     '',
 ].join('\n');
 

@@ -161,6 +161,13 @@
       "regex_help": "a plain upstream tag name, never a glob or pattern; letters, digits, dots, underscores and hyphens only",
       "regex_example": "ACME_1_2_3esr_RELEASE"
     },
+    "upstreams.theia_release": {
+      "type": "string",
+      "required": true,
+      "regex": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "regex_help": "an exact Theia release triple, never a range or a floating tag; digits and dots only, three numeric parts",
+      "regex_example": "9.9.9"
+    },
     "variants[].id": {
       "type": "string",
       "required": true,
