@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 # D-72/D-73: the artifact/patch-surface boundary as an executable guard, not
-# prose. Fails if any patches/*.patch touches a compiled-file path -- this
-# phase's entire Gecko patch surface is meant to be config-only (D-74).
+# prose. Two modes, one script, one registry:
+#
+#  * Compiled-suffix scan (default): fails if any patches/*.patch touches a
+#    compiled-file path -- this phase's entire Gecko patch surface is meant
+#    to be config-only (D-74).
+#  * Brand-value scan (05-01, MIG-05; default): fails if any ADDED (+) line
+#    of patches/*.patch carries a downstream-varying brand or config value;
+#    every value lives under generated/. The value set is DERIVED from
+#    configuration.toml at check time (required [identity]/[product]/
+#    [legal] strings via the vendored parser), never a hand-kept list, so a
+#    rebrand that changes a display string moves the scan with it.
 #
 # Target paths are read from each patch's own '+++ b/' header lines, never
 # grepped from the patch body -- a body-grep would false-match a string that
@@ -63,6 +72,200 @@ scan_patch_surface() {
   return 0
 }
 
+# Scans a patches/ directory for downstream-varying brand values on added
+# (+) lines. Prints one "patch carries brand value" line per offense to
+# stderr and returns 1 when any is found, 0 when clean; the empty-directory
+# case fails explicitly, like scan_patch_surface above.
+#
+# WHAT COUNTS AS A VALUE. Required string leaves under the manifest tables
+# [identity], [product] and [legal] (required-ness read out of
+# scripts/lib/config-schema.json, so a key flipping to required joins the
+# set with no edit here). Optional keys (descriptions, homepages, URLs) are
+# not brand: a patch quoting the homepage is sloppy, not a rebrand leak.
+# The frozen app GUID is not in configuration.toml at all, so a
+# manifest-derived set excludes it by construction -- a GUID-regex scan
+# would flag the stock context line 010 keeps, which is exactly why this
+# scan derives instead of pattern-matching.
+#
+# BOUNDARIES ARE PATH-AWARE. A value matches only between characters
+# outside [A-Za-z0-9_./-]. The extra / . - beyond the word class is what
+# keeps hook syntax green: 020's DIRS += ["../powerbrowser/shell"] carries
+# the tree name as path segments, never as a value, and the shipped-stack
+# control in --self-test proves it stays green. A planted
+# +imply_option("MOZ_APP_DISPLAYNAME", "Power Browser") is quote-bounded
+# and goes red naming the patch and the value.
+#
+# ADDED LINES ONLY. Context lines and the +++ header paths are never read:
+# the stock MOZ_APP_ID context line 010 keeps would otherwise flag any
+# scan whose set contained the GUID, and a header path is a filename, not
+# a value.
+scan_brand_values() {
+  local patches_dir="$1"
+  node -e "
+    const fs = require(\"fs\");
+    const path = require(\"path\");
+    const repoRoot = process.argv[1];
+    const patchesDir = process.argv[2];
+    let manifest, schema;
+    try {
+      const { parse } = require(path.join(repoRoot, \"scripts/lib/toml.cjs\"));
+      manifest = parse(fs.readFileSync(path.join(repoRoot, \"configuration.toml\"), \"utf8\"));
+      schema = JSON.parse(fs.readFileSync(path.join(repoRoot, \"scripts/lib/config-schema.json\"), \"utf8\"));
+    } catch (err) {
+      console.error(\"check-patch-surface: FAIL -- could not derive the brand-value set from configuration.toml: \" + (err && err.message));
+      process.exit(1);
+    }
+    const values = new Set();
+    for (const table of [\"identity\", \"product\", \"legal\"]) {
+      const node = manifest[table];
+      if (!node || typeof node !== \"object\") continue;
+      for (const [key, value] of Object.entries(node)) {
+        const spec = schema.keys[table + \".\" + key];
+        if (!spec || !spec.required) continue;
+        if (typeof value !== \"string\" || value === \"\") continue;
+        if (/[\r\n]/.test(value)) continue;
+        values.add(value);
+      }
+    }
+    let files;
+    try {
+      files = fs.readdirSync(patchesDir).filter((n) => n.endsWith(\".patch\")).sort();
+    } catch (err) {
+      console.error(\"check-patch-surface: FAIL -- could not read \" + patchesDir + \": \" + (err && err.message));
+      process.exit(1);
+    }
+    if (files.length === 0) {
+      console.error(\"check-patch-surface: FAIL -- \" + patchesDir + \" contains no *.patch files (an empty stack is not a clean surface)\");
+      process.exit(1);
+    }
+    const esc = (s) => s.replace(/[.*+?^\${}()|[\]\\\\]/g, \"\\\\$&\");
+    const BOUND = \"[^A-Za-z0-9_./-]\";
+    // Longest first: \"DeBIOS Foundation\" must name itself, not its
+    // \"DeBIOS\" prefix, on a line carrying the display string.
+    const ordered = [...values].sort((a, b) => b.length - a.length);
+    let offenses = 0;
+    for (const name of files) {
+      const lines = fs.readFileSync(path.join(patchesDir, name), \"utf8\").split(\"\n\");
+      for (const line of lines) {
+        if (!line.startsWith(\"+\") || line.startsWith(\"+++\")) continue;
+        const added = line.slice(1);
+        for (const value of ordered) {
+          const re = new RegExp(\"(?:^|\" + BOUND + \")\" + esc(value) + \"(?:\" + BOUND + \"|$)\");
+          if (re.test(added)) {
+            console.error(\"  \" + name + \" carries brand value \" + JSON.stringify(value) + \" in: \" + added.slice(0, 120));
+            offenses += 1;
+            break;
+          }
+        }
+      }
+    }
+    if (offenses !== 0) {
+      console.error(\"check-patch-surface: FAIL -- \" + offenses + \" brand-value patch line(s) found\");
+      process.exit(1);
+    }
+  " "$REPO_ROOT" "$patches_dir"
+}
+
+# --self-test-brand: the brand-value mode's own plant-and-control pair, in
+# the same mktemp-fixture style as the compiled scan above. Three
+# assertions, each proving a different half:
+#
+#  1. A planted patch carrying the LIVE display name (derived from
+#     configuration.toml, the same source the scan reads -- never typed as
+#     a literal, so a rebrand moves the plant with the scan) in a +line
+#     goes red NAMING the patch and the value.
+#  2. A hook-only patch mirroring the shipped shapes (include hook, DIRS
+#     hook, comments -- no values) goes green in isolation, proving the
+#     path-aware boundaries do not trip on hook syntax.
+#  3. The SHIPPED stack goes green -- the clean control proving the red in
+#     (1) is plant-caused rather than a scan that rejects everything.
+#
+# Called by --self-test-brand AND by the full --self-test below: one logic
+# path, never a re-implementation per flag.
+run_self_test_brand() {
+  local tmp
+  tmp="$(mktemp -d)"
+  trap 'find "$tmp" -delete' RETURN
+
+  local display
+  display="$(node -e "
+    const fs = require(\"fs\");
+    const path = require(\"path\");
+    const { parse } = require(path.join(process.argv[1], \"scripts/lib/toml.cjs\"));
+    const manifest = parse(fs.readFileSync(path.join(process.argv[1], \"configuration.toml\"), \"utf8\"));
+    process.stdout.write(manifest.identity.display_name);
+  " "$REPO_ROOT")"
+  if [ -z "$display" ]; then
+    echo "check-patch-surface: --self-test-brand FAIL -- could not derive identity.display_name from configuration.toml, so no plant could mean anything" >&2
+    return 1
+  fi
+
+  cat > "$tmp/900-brand.patch" <<EOF
+--- a/browser/moz.configure
++++ b/browser/moz.configure
+@@ -1 +1 @@
+-imply_option("MOZ_APP_DISPLAYNAME", "Stock")
++imply_option("MOZ_APP_DISPLAYNAME", "$display")
+EOF
+
+  mkdir -p "$tmp/clean"
+  cat > "$tmp/clean/010-clean.patch" <<'EOF'
+--- a/browser/moz.configure
++++ b/browser/moz.configure
+@@ -1 +1,5 @@
+ context
++# hook comment, no values
++include("../identity.configure")
+ context
+EOF
+  cat > "$tmp/clean/020-clean.patch" <<'EOF'
+--- a/browser/moz.build
++++ b/browser/moz.build
+@@ -1 +1,2 @@
+ context
++DIRS += ["../powerbrowser/shell"]
+EOF
+  # Context lines are never read, even when they carry a value: the stock
+  # MOZ_APP_ID context line 010 keeps is the reason this exclusion exists.
+  cat > "$tmp/clean/030-context.patch" <<EOF
+--- a/browser/moz.configure
++++ b/browser/moz.configure
+@@ -1,3 +1,4 @@
+ # A stock comment naming $display that upstream already carries
+ existing
++include("../identity.configure")
+ more
+EOF
+
+  if scan_brand_values "$tmp" >/dev/null 2>"$tmp/brand.err"; then
+    echo "check-patch-surface: --self-test-brand FAIL -- planted brand-value patch was NOT rejected" >&2
+    cat "$tmp/brand.err" >&2
+    return 1
+  fi
+
+  if ! grep -q '900-brand.patch' "$tmp/brand.err" || ! grep -qF "$display" "$tmp/brand.err"; then
+    echo "check-patch-surface: --self-test-brand FAIL -- rejected, but message does not name the planted patch and value" >&2
+    cat "$tmp/brand.err" >&2
+    return 1
+  fi
+  echo "check-patch-surface: --self-test-brand PASS -- planted brand value (900-brand.patch, \"$display\") was correctly rejected"
+
+  if ! scan_brand_values "$tmp/clean" >/dev/null 2>"$tmp/clean.err"; then
+    echo "check-patch-surface: --self-test-brand FAIL -- hook-only fixture was rejected, so the boundaries trip on hook syntax:" >&2
+    cat "$tmp/clean.err" >&2
+    return 1
+  fi
+  echo "check-patch-surface: --self-test-brand PASS -- hook-only fixture (include + DIRS + value-carrying context) stays green"
+
+  if ! scan_brand_values "$REPO_ROOT/patches" >/dev/null 2>"$tmp/shipped.err"; then
+    echo "check-patch-surface: --self-test-brand FAIL -- the SHIPPED stack is red, so the plant red above proves nothing:" >&2
+    cat "$tmp/shipped.err" >&2
+    return 1
+  fi
+  echo "check-patch-surface: --self-test-brand PASS -- shipped hook-only stack stays green (clean control)"
+  return 0
+}
+
 # --self-test: plants a throwaway patch whose target is a compiled path in a
 # mktemp -d directory (never touches the real patches/), and asserts the scan
 # rejects it. This is D-73's acceptance check 1 -- a green run alone proves
@@ -98,9 +301,27 @@ EOF
 }
 
 if [ "${1:-}" = "--self-test" ]; then
-  run_self_test
+  run_self_test || exit $?
+  run_self_test_brand
   exit $?
 fi
 
+if [ "${1:-}" = "--brand-values" ]; then
+  scan_brand_values "$REPO_ROOT/patches"
+  echo "check-patch-surface: PASS -- no brand values on added patch lines in $(ls "$REPO_ROOT"/patches/*.patch | wc -l) patch(es)"
+  exit $?
+fi
+
+if [ "${1:-}" = "--self-test-brand" ]; then
+  run_self_test_brand
+  exit $?
+fi
+
+if [ -n "${1:-}" ]; then
+  echo "check-patch-surface: FAIL -- unknown argument '$1'" >&2
+  exit 1
+fi
+
 scan_patch_surface "$REPO_ROOT/patches"
-echo "check-patch-surface: PASS -- no compiled-file target paths in $(ls "$REPO_ROOT"/patches/*.patch | wc -l) patch(es)"
+scan_brand_values "$REPO_ROOT/patches"
+echo "check-patch-surface: PASS -- no compiled-file target paths and no brand values in $(ls "$REPO_ROOT"/patches/*.patch | wc -l) patch(es)"
