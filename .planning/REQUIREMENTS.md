@@ -30,7 +30,7 @@
            everything. Plan 01-03 had delivered only the prerequisites and
            correctly left this unchecked. -->
 
-- [ ] **MIG-05**: Brand values are removed from `patches/*.patch` (hook-only
+- [x] **MIG-05**: Brand values are removed from `patches/*.patch` (hook-only
       patches that `include()` generated files), preserving the 3-way-merge
       hash chain
 
@@ -279,7 +279,7 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 | TEL-01 | Phase 4 | Pending |
 | TEL-02 | Phase 4 | Pending |
 | TEL-03 | Phase 4 | Pending |
-| MIG-05 | Phase 5 | Pending |
+| MIG-05 | Phase 5 | Complete |
 | CFG-06 | Phase 5 | Pending |
 | UPD-01 | Phase 5 | Pending |
 | UPD-02 | Phase 5 | Pending |
