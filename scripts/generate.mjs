@@ -445,6 +445,8 @@ const EXTENSIONS_PREFIX = 'extensions[].';
 /** The two `source` values EXT-01 implements. Anything else is a v2 kind (EXT-02) or a typo. */
 const EXTENSION_SOURCES = Object.freeze(['openvsx', 'url']);
 
+/** The four telemetry levels TEL-01 implements: Theia's real enum, default `off`. */
+const TELEMETRY_LEVELS = Object.freeze(['off', 'crash', 'error', 'all']);
 /** Accepted download archive suffixes: exactly what stock `theia download:plugins` unpacks. */
 const EXTENSION_ARCHIVE_SUFFIXES = Object.freeze(['.vsix', '.theia', '.tar.gz']);
 
@@ -664,8 +666,47 @@ function validateExtensionElements(doc) {
     return failures;
 }
 
-function validate(doc, leaves) {
+/**
+ * The `[telemetry]` level enum and the endpoint rule (04-03, TEL-01/TEL-02).
+ *
+ * WHY A DEDICATED FUNCTION (same reason as validateExtensionElements).
+ * `telemetry.level` carries no schema `regex` -- its four values are an
+ * enum, not a shape -- so the generic regex loop below cannot express it,
+ * and the cross rule (an enabled level with nowhere to send must never
+ * build) relates two keys no per-key loop can see. Both failures name the
+ * dotted path, the same contract the generic loop keeps, so one value is
+ * still reported exactly once: the loop skips the regex-less level, and
+ * the endpoint shape stays the loop's alone.
+ *
+ * UNSET LEVEL IS OFF. Both keys are `required: false`; an absent (or
+ * whitespace-only, D-10) level resolves to `off` in the emitter, so
+ * absence alone refuses nothing here. The one refusal is an enabled
+ * (non-`off`) level with no endpoint: a sender that can never deliver
+ * must never build.
+ */
+function validateTelemetry(doc) {
     const failures = [];
+    const level = readPath(doc, 'telemetry.level');
+    const endpoint = readPath(doc, 'telemetry.endpoint');
+
+    if (!isUnset(level) && !TELEMETRY_LEVELS.includes(level)) {
+        failures.push(
+            `telemetry.level is ${JSON.stringify(level)}, which is not a telemetry level this project implements. `
+            + `Write it as one of ${TELEMETRY_LEVELS.map(l => JSON.stringify(l)).join(', ')} in ${MANIFEST_NAME}, then run: ${RERUN}`,
+        );
+    }
+
+    if (!isUnset(level) && level !== 'off' && isUnset(endpoint)) {
+        failures.push(
+            `telemetry.level is ${JSON.stringify(level)} but telemetry.endpoint ${UNSET_MARK} An enabled level with nowhere `
+            + `to send must never build. Open ${MANIFEST_NAME}, find the [telemetry] section, and give endpoint an https URL. `
+            + `Then run: ${RERUN}`,
+        );
+    }
+    return failures;
+}
+
+function validate(doc, leaves) {    const failures = [];
     const reportedUnset = new Set();
 
     for (const [path, spec] of Object.entries(SCHEMA_KEYS)) {
@@ -682,6 +723,7 @@ function validate(doc, leaves) {
     failures.push(...validateVariantElements(doc));
     failures.push(...validateVariantIds(doc));
     failures.push(...validateExtensionElements(doc));
+    failures.push(...validateTelemetry(doc));
 
     for (const { path, value } of leaves) {
         // EXT-01 (04-02). extensions[] leaves are validated by
@@ -1257,6 +1299,65 @@ export function emitTheiaPlugins(config, variant) {
     // keep the one-entry-per-line shape the fragment readers expect.)
     if (lines.length > 1) lines[lines.length - 1] = lines[lines.length - 1].replace(/,$/, '');
     lines.push('}');
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * The telemetry fragment (04-03, TEL-01/TEL-02): the level the sender
+ * enforces and the downstream's own endpoint it delivers to, as
+ * `{level, endpoint}`.
+ *
+ * FRAGMENT, NOT THE WHOLE PACKAGE (04-01's rule carried over). The tracked
+ * theia/applications/browser/package.json is yarn-managed, so whole-file
+ * byte-identity is brittle there; the copy-over sets ONLY the
+ * powerbrowserTelemetry key from this fragment and leaves every sibling
+ * byte-identical. No tracked comparand row -- the byte-identity gate skips
+ * rows without one, --check still covers the row through the frozen table,
+ * and the tracked side is pinned by scripts/verify-telemetry.mjs (fragment
+ * equality against this emission, block equality on the tracked key).
+ *
+ * WHY NO GENERATED_BANNER. Same reason as the two fragments before it:
+ * strict JSON carries no comment, and a `_comment` key would pollute the
+ * block a reader copies from. Derivation lives here; freshness is
+ * generate --check's contract.
+ *
+ * UNSET LEVEL IS OFF. The shipped manifest states `off` explicitly, so a
+ * downstream omitting the key inherits it through the standard merge with
+ * the standard D-08 default-echo; a manifest with no [telemetry] at all
+ * (every self-test fixture) resolves the same way here. An unset endpoint
+ * emits null -- with level off there is nowhere to send and nothing is
+ * ever sent, and with any other level validate() has already refused the
+ * manifest, so null never reaches a live sender.
+ *
+ * Both values pass the sink guard on the way out, and the level passes
+ * the enum a second time: the schema carries no level pattern by design
+ * (an enum is not a shape), so without this check a future edit loosening
+ * validateTelemetry would emit an arbitrary string into the fragment.
+ * The endpoint pattern already excludes every sink metacharacter, so on a
+ * validated manifest these guards never fire.
+ *
+ * Joined with a literal newline, never the platform line-ending constant.
+ */
+export function emitTheiaTelemetry(config, variant) {
+    void variant;
+    const rawLevel = config.telemetry?.level;
+    const level = isUnset(rawLevel) ? 'off' : rawLevel;
+    if (!TELEMETRY_LEVELS.includes(level)) {
+        report([
+            `telemetry.level is ${JSON.stringify(level)}, which is not a telemetry level this project implements. `
+            + `Write it as one of ${TELEMETRY_LEVELS.map(l => JSON.stringify(l)).join(', ')} in ${MANIFEST_NAME}, then run: ${RERUN}`,
+        ]);
+    }
+    const rawEndpoint = config.telemetry?.endpoint;
+    const endpoint = isUnset(rawEndpoint) ? null : rawEndpoint;
+    assertEmittable('telemetry.level', level);
+    if (endpoint !== null) assertEmittable('telemetry.endpoint', endpoint);
+    const lines = [
+        '{',
+        `  "level": ${JSON.stringify(level)},`,
+        `  "endpoint": ${JSON.stringify(endpoint)}`,
+        '}',
+    ];
     return lines.join('\n') + '\n';
 }
 
@@ -2395,6 +2496,19 @@ export const TARGETS = Object.freeze([
         variant: 'dev',
         emit: emitTheiaPlugins,
     }),
+    // NEW (04-03): TEL-01/TEL-02's telemetry fragment. No tracked
+    // comparand -- the tracked theia/applications/browser/package.json is
+    // yarn-managed, so whole-file byte-identity is brittle there; the
+    // copy-over sets ONLY the powerbrowserTelemetry key from this fragment,
+    // and the byte-identity gate skips rows without a tracked path while
+    // --check still covers the row through the frozen table. The tracked
+    // side is pinned by scripts/verify-telemetry.mjs (fragment equality
+    // against this emission, block equality on the tracked key).
+    Object.freeze({
+        generated: 'theia-telemetry.json',
+        variant: 'dev',
+        emit: emitTheiaTelemetry,
+    }),
     Object.freeze({
         generated: 'branding/dev/configure.sh',
         tracked: 'powerbrowser/branding/dev/configure.sh',
@@ -2774,7 +2888,7 @@ function firstDifferingLine(a, b) {
  *
  * THREE OUTCOMES, THREE MESSAGES, deliberately not one. An absent generated/ is
  * the state every fresh copy of the project and every automated run begins in;
- * reporting it as forty-eight stale files reads as forty-eight problems and sends the reader
+ * reporting it as forty-nine stale files reads as forty-nine problems and sends the reader
  * hunting a mismatch that does not exist.
  *
  * The set comparison runs in BOTH directions. A per-target loop alone sees a
@@ -3076,7 +3190,7 @@ function probeStaleOutput(config) {
  * Ask the freshness comparison about a directory that is not there -- the state
  * every fresh copy of the project and every CI runner starts in, because
  * generated/ is git-ignored. The distinct message this must produce is the
- * whole point: forty-eight phantom stale paths would read as forty-eight defects on a tree
+ * whole point: forty-nine phantom stale paths would read as forty-nine defects on a tree
  * with none, and a gate red for a non-defect is a gate its readers skip.
  *
  * The EXIT CODE is asserted here too, and separately from the message, because
@@ -3457,6 +3571,51 @@ function selfTest() {
         }
     })();
 
+    // TEL-01/TEL-02's green control, computed once: a [telemetry] fixture
+    // at level error validates clean and emits a fragment carrying that
+    // level and endpoint verbatim -- and a fixture with no [telemetry] at
+    // all resolves to off/null, which is the default the emitter owns.
+    // Without this, a red result from the three fault cases below could be
+    // the emitter broken on a clean value rather than on the plant. The
+    // expected pairs are literals: deriving them through emitTheiaTelemetry
+    // would make the control agree with the emitter no matter how wrong
+    // both were.
+    const telemetryControl = (() => {
+        const fixtureDir = mkdtempSync(join(tmpdir(), 'generate-selftest-telemetry-'));
+        try {
+            const checkOne = (toml, wantLevel, wantEndpoint) => {
+                const fixturePath = join(fixtureDir, `telemetry-${wantLevel}.toml`);
+                writeFileSync(fixturePath, toml, 'utf8');
+                const resolved = resolveConfig(MANIFEST_PATH, fixturePath);
+                if (resolved.failures.length > 0) {
+                    return [`the telemetry fixture failed validation: ${resolved.failures.join(' | ')}`];
+                }
+                let parsed;
+                try {
+                    parsed = JSON.parse(emitTheiaTelemetry(
+                        resolved.config,
+                        resolved.config.variants.find(v => v.id === 'dev'),
+                    ));
+                } catch {
+                    return ['the emitted theia-telemetry fragment is not valid JSON'];
+                }
+                if (parsed?.level !== wantLevel || parsed?.endpoint !== wantEndpoint) {
+                    return [`the emitted theia-telemetry fragment is not ${JSON.stringify(wantLevel)}/${JSON.stringify(wantEndpoint)}: ${JSON.stringify(parsed)}`];
+                }
+                return [];
+            };
+            return [
+                ...checkOne(
+                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "error"\nendpoint = "https://example.org/telemetry/v1/events"\n`,
+                    'error', 'https://example.org/telemetry/v1/events',
+                ),
+                ...checkOne(`${FIXTURE_BASE}\n${FIXTURE_VARIANT}`, 'off', null),
+            ];
+        } finally {
+            rmSync(fixtureDir, { recursive: true, force: true });
+        }
+    })();
+
     const cases = [
         {
             // D-10. A whitespace-only value is not a value.
@@ -3560,7 +3719,7 @@ function selfTest() {
             expect: TARGETS[0].generated,
         },
         {
-            // The absent-directory outcome is a DISTINCT message, not forty-eight
+            // The absent-directory outcome is a DISTINCT message, not forty-nine
             // stale paths, AND it is not a failure. Asserted from three sides:
             // the message is there, no target path is, and the exit code was
             // zero -- so a future collapse of the three outcomes into one goes
@@ -3751,6 +3910,41 @@ function selfTest() {
             toml: `extensions = []\n${FIXTURE_BASE}\n${FIXTURE_VARIANT}`,
             holds: 'zero entries, not an unknown-setting failure',
             resolved: c => Array.isArray(c.extensions) && c.extensions.length === 0,
+        },
+        {
+            // TEL-01. An enabled level with no endpoint must fail NAMING
+            // the missing key -- a sender that can never deliver must
+            // never build.
+            name: 'telemetry level enabled without an endpoint',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "all"\n`,
+            expect: 'telemetry.endpoint',
+        },
+        {
+            // TEL-01. A level outside the four-value enum must fail NAMING
+            // the key -- the sender gates on exactly these four, and the
+            // schema carries no pattern for them by design.
+            name: 'telemetry level outside the four-value enum',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "verbose"\nendpoint = "https://example.org/telemetry/v1/events"\n`,
+            expect: 'telemetry.level',
+        },
+        {
+            // TEL-02. A non-https endpoint must fail NAMING the key, via
+            // the schema pattern in the established installer.support_url
+            // style.
+            name: 'telemetry endpoint outside https',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "error"\nendpoint = "http://example.org/telemetry"\n`,
+            expect: 'telemetry.endpoint',
+        },
+        {
+            // TEL-01/TEL-02's control: the enabled fixture above emits the
+            // stated pair verbatim, and a fixture with no [telemetry] at
+            // all emits off/null. Without this, a red result from the three
+            // fault cases above could be the emitter broken on a clean
+            // value rather than on the plant.
+            name: 'telemetry fragment carries the stated pair and defaults an unset section to off',
+            probe: () => telemetryControl,
+            holds: 'the stated level and endpoint verbatim, and off/null when unset',
+            resolved: () => telemetryControl.length === 0,
         },
     ];
 

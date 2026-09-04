@@ -75,6 +75,17 @@ objdir = "objdir-release"
 [installer]
 support_url = "https://powerbrowser.org"
 
+# Product telemetry (TEL-01/TEL-02). level is one of off, crash, error, all
+# and defaults to off: an unset level resolves to off with the standard
+# D-08 default-echo, so a downstream omitting it inherits off rather than
+# a live sender. endpoint is the downstream's own https URL; an enabled
+# level with no endpoint fails the generate naming telemetry.endpoint, so
+# a sender that can never deliver never builds. endpoint is deliberately
+# UNSET here: with level off there is nowhere to send and nothing ever
+# leaves the application.
+[telemetry]
+level = "off"
+
 # Declared sidecar extensions. Each [[extensions]] entry names an Open VSX
 # id at an exact version pin, or a direct https URL, plus the sha256 of the
 # download archive; the generator resolves them into the application

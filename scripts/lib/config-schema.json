@@ -94,6 +94,17 @@
       "regex_help": "a hash sign followed by exactly six hexadecimal digits, 0 to 9 and a to f",
       "regex_example": "#123abc"
     },
+    "telemetry.level": {
+      "type": "string",
+      "required": false
+    },
+    "telemetry.endpoint": {
+      "type": "string",
+      "required": false,
+      "regex": "^https://[^\\s\\x00-\\x1f\\x7f]+$",
+      "regex_help": "a web address starting with https:// and containing no spaces or control characters",
+      "regex_example": "https://example.org/telemetry/v1/events"
+    },
     "variants[].id": {
       "type": "string",
       "required": true,
