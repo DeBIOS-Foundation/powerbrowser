@@ -118,6 +118,8 @@ const EXCLUDED_LINES = [
 
 const ALLOWLIST = [
   { slot: 'variant-display:release', file: 'CLAUDE.md', reason: 'project instructions prose naming the product' },
+  { slot: 'variant-display:release', file: 'README.md', reason: 'readme prose naming the product it documents' },
+  { slot: 'product.vendor_display', file: 'README.md', reason: 'readme footer attributing the project to the foundation' },
   { slot: 'variant-display:release', file: 'brand/HUMAN-REVIEW.md', reason: 'review record prose and confirmations naming the product (06-03)' },
   { slot: 'variant-display:release', file: 'brand/mark.svg', reason: 'artwork header comment for the placeholder mark' },
   { slot: 'variant-display:release', file: 'docs/BUILD.md', reason: 'build-guide prose naming the product tree' },

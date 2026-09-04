@@ -1,56 +1,98 @@
-# PowerBrowser
+# Power Browser
 
-PowerBrowser is a Firefox-ESR fork under its own branding, hosting Eclipse Theia
-IDE. Version 4.0 ships Theia as the only GUI: the fork boots under the
-PowerBrowser name, supervises a bundled Theia backend on localhost, and presents
-Theia full-window. The custom browser interface — a unified tab strip where
-web pages and editors are peers — comes in later milestones, and v4.0 is built
-so they land without rework.
+A rebrandable browser platform: a Gecko shell hosting an Eclipse Theia sidecar
+as its default GUI. The browser boots, supervises a bundled Theia backend on
+localhost, and presents the IDE as the interface. Web pages and editors run in
+the same application, on a real browser engine.
 
-**Status:** pre-build. This repository was reset to a clean slate on 2026-08-19.
-Requirements live in [docs/PRODUCT-REQUIREMENTS.md](docs/PRODUCT-REQUIREMENTS.md);
-the architecture is [docs/research/powerbrowser-architecture.md](docs/research/powerbrowser-architecture.md).
+The substrate is Firefox, not Electron, because the point is to have a **whole
+browser** — not a browser-shaped shell around an editor. Everything a real
+browser does, it does: DRM and streaming, the full WebExtensions API, per-site
+process isolation, Mozilla's security patch stream. An Electron app can imitate
+none of that.
 
-## What v4.0 is
+## What this repo is
 
-- **R1 — Rebrand.** Application name, window title, icon, installer name, and
-  Theia-side branding (welcome tab, about dialog).
-- **R2 — Own build.** A Zen-style Firefox-ESR fork (pinned ESR tag + patches +
-  our tree) with a bundled Node + Theia browser-target backend as a supervised
-  localhost sidecar. Theia loads full-window as the sole GUI. Linux first.
-- **R3 — Extension-based internals.** Theia-side additions are `@powerbrowser/*`
-  Theia extensions — Theia core is never forked or patched. Firefox-side code
-  touches internals only through one anti-corruption layer.
-- **R4 — Incremental growth.** Parts are added without rework of what came
-  before; the future chrome-owned tab model must stay landable.
-- **R4a — GUI customization bridge.** One Theia extension exposing a runtime
-  CSS layer and a dev-flagged privileged JS layer. Changes nothing visually by
-  default.
-- **R4b — Every Theia tab has a URL.** All widget types (settings, terminals,
-  chat views, …) become URI-addressable under their own schemes, opening
-  through `OpenerService` — the reusable prerequisite for the future unified
-  URL bar and tab strip.
+Power Browser is a **platform**, and it is deliberately agnostic. It has no
+opinion about how you should code — no bundled database, no curated extension
+set, no workflow baked in, no branding beyond a neutral default. It ships that
+way on purpose, so anyone can remake it into the environment they actually
+want.
 
-Post-4.0 requirements — the unified tab strip, full GUI customization,
-surfacing the inherited real-browser capabilities (Widevine DRM, WebExtensions,
-site isolation), AI integration, extension distribution — are recorded in the
-requirements document so the internals do not preclude them.
+This is not a Firefox fork. It is a patch-set repo: an `upstream/` checkout
+pinned to an ESR tag, a small stack of patches, and this tree.
+
+```
+Firefox ESR + Eclipse Theia     upstream — consumed, never modified
+            ↓
+      Power Browser             this repo — the platform
+            ↓
+       distributions            downstream — add, never patch
+```
+
+## Rules we hold ourselves to
+
+- **Gecko is never modified outside the patch stack.** `upstream/` is fetched,
+  never hand-edited. Firefox internals are reached through one anti-corruption
+  layer, and every touchpoint is catalogued.
+- **Theia core is never forked.** `@theia/*` are npm dependencies; everything we
+  add is a `@powerbrowser/*` Theia extension. Upstream Theia is adopted by
+  re-pinning a version.
+- **Downstreams add, never patch.** If a distribution needs to change a file in
+  here, that is a bug in our boundary — the platform needs an extension point.
+- **Theia is the default GUI, not the only one.** A stock browser window stays
+  reachable. No custom browser chrome is authored.
+
+Keeping the patch stack small is what keeps upstream updates cheap: ESR rebases
+roughly every four weeks, Theia upgrades by changing a version number.
+
+## Rebranding
+
+Anyone redistributing a Firefox derivative **must** rebrand it — Mozilla's
+trademark policy requires it. Power Browser is built so that renaming the
+product, swapping icons, and repointing or disabling telemetry happen through
+two inputs and nothing else: [configuration.toml](configuration.toml) and
+[brand/](brand/). Edit a value, run `node scripts/generate.mjs`, and every
+derived build surface follows.
+
+See [docs/REBRANDING.md](docs/REBRANDING.md). For the customization layers a
+downstream gets without rebranding, see [docs/CUSTOMIZE.md](docs/CUSTOMIZE.md)
+and [docs/URI-SCHEMES.md](docs/URI-SCHEMES.md).
 
 ## Building
 
-Two Nix dev shells build the two halves: `nix develop .#theia` for the
-Theia sidecar, `nix develop .#firefox` for the Firefox-ESR fork. The repo
-must live at a space-free path. See [docs/BUILD.md](docs/BUILD.md) for the
-exact commands, measured durations, and a fresh-clone verification —
-including the tiered rebuild loop, the compiled-file patch boundary, the
-endpoint allowlist, and the rebase/desktop-install procedures.
+Two Nix dev shells build the two halves — `nix develop .#theia` for the Theia
+sidecar, `nix develop .#firefox` for the Gecko shell. The repo must live at a
+path containing no space character; `pkgs.mkShell` appends an rpath to the
+space-separated `NIX_LDFLAGS`, and a space breaks every native link step in
+both halves.
 
-## History
+[docs/BUILD.md](docs/BUILD.md) has the exact commands, measured durations, and
+a fresh-clone verification.
 
-Versions 1.0–3.0 were a bespoke Tauri 2 + React desktop shell. That work is
-frozen with its full git history at `/home/chris/Vibe Coding/PowerBrowser-Archived`.
-Nothing from it is a dependency of v4.0.
+## Verification
+
+`scripts/verify-platform.sh` is the single driver, and every check is a row in
+its registry.
+
+```sh
+scripts/verify-platform.sh --quick   # no build, no browser, no display — the commit gate
+scripts/verify-platform.sh           # everything
+scripts/verify-platform.sh --gate    # everything, plus the known-open exclusions
+```
+
+## Status
+
+Alpha. Both halves build and run on the reference host. Pinned to Firefox ESR
+153 (`FIREFOX_153_1_0esr_RELEASE`) and Theia 1.74.1, Linux first. The rebrand
+manifest and generator are complete; the remaining verification is live-build
+drills that need a human at a screen.
 
 ## License
 
-PolyForm Noncommercial. See [LICENSE](LICENSE).
+PolyForm Noncommercial 1.0.0. See [LICENSE](LICENSE).
+
+---
+
+A project of the [DeBIOS Foundation](https://github.com/DeBIOS-Foundation), a
+501(c)(3) nonprofit.
