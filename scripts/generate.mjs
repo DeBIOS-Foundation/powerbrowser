@@ -194,9 +194,10 @@ function settingOf(path) {
 /**
  * Parse ONE layer. The path is a parameter rather than a constant because the
  * pipeline takes two layers -- the repo-root manifest, and a downstream
- * manifest that overlays it. In Phase 2 the only caller that supplies a
- * downstream path is --self-test; PB_CONFIG_DIR is CFG-05 and arrives in
- * Phase 7. The downstream parameter is therefore NOT dead code awaiting a
+ * manifest that overlays it. The downstream path arrives two ways: main()
+ * passes the PB_CONFIG_DIR manifest when that variable names a folder
+ * (CFG-05, 07-01), and --self-test passes per-case fixtures. The downstream
+ * parameter is therefore NOT dead code awaiting a
  * caller: it is the merge's only Phase-2 coverage, and deleting it would
  * delete the merge's tests along with it.
  */
@@ -3575,6 +3576,27 @@ function echoDefaults(defaulted, config) {
     }
 }
 
+// --- CFG-05: the external-config directory -----------------------------------
+
+/**
+ * CFG-05 (07-01). The downstream's own folder, read once from the
+ * environment. An unset or whitespace-only value counts as unset: an empty
+ * export on the way past is a predictable default run, never a failure.
+ * A relative value resolves against the working directory, so a reader
+ * invoking from anywhere names the folder the same way their shell does.
+ * An absolute value passes through resolve unchanged.
+ *
+ * Pure by design: it resolves but never reads, so --self-test can drive
+ * the same derivation the default run uses without taking the process
+ * down -- a missing folder and an unreadable manifest still exit, from
+ * main(), through report().
+ */
+function externalConfigDir() {
+    const raw = process.env.PB_CONFIG_DIR;
+    if (raw === undefined || raw.trim() === '') return undefined;
+    return resolve(process.cwd(), raw);
+}
+
 // --- self-test: planted faults that must each go red ------------------------
 
 /** Every required setting, stated. Each fixture below breaks exactly one thing. */
@@ -4771,7 +4793,33 @@ function main() {
 
     if (args.includes('--self-test')) return selfTest();
 
-    const { failures, config, defaulted } = resolveConfig(MANIFEST_PATH, undefined);
+    // CFG-05 (07-01). The external manifest overlay: PB_CONFIG_DIR names a
+    // folder, and that folder's configuration.toml becomes the downstream
+    // layer of the existing merge below -- no new merge code. A resolved
+    // folder with no readable manifest is a hard failure naming the
+    // variable, in the file's plain-words shape: no stack trace, no host
+    // path of this checkout (the reader named the folder themselves; the
+    // variable name is what they go and fix).
+    const extDir = externalConfigDir();
+    let downstreamPath;
+    if (extDir !== undefined) {
+        const candidate = join(extDir, MANIFEST_NAME);
+        let readable = true;
+        try {
+            readFileSync(candidate, 'utf8');
+        } catch {
+            readable = false;
+        }
+        if (!readable) {
+            report([
+                `PB_CONFIG_DIR names a folder with no readable ${MANIFEST_NAME} in it, so there is nothing to generate from. `
+                + `Check that PB_CONFIG_DIR names the folder holding the downstream ${MANIFEST_NAME}, then run: ${RERUN}`,
+            ]);
+        }
+        downstreamPath = candidate;
+    }
+
+    const { failures, config, defaulted } = resolveConfig(MANIFEST_PATH, downstreamPath);
     report(failures);
     echoDefaults(defaulted, config);
 
