@@ -1,0 +1,48 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": "v1.0",
+  "phases": [
+    {
+      "number": "1",
+      "name": "Platform Extraction and Rename",
+      "status": "in_progress"
+    },
+    {
+      "number": "2",
+      "name": "Configuration Manifest and Generator Core",
+      "status": "complete"
+    },
+    {
+      "number": "3",
+      "name": "Firefox Branding Emitter and Icon Pipeline",
+      "status": "in_progress"
+    },
+    {
+      "number": "4",
+      "name": "Theia Surface — Branding, Extensions, Telemetry",
+      "status": "pending"
+    },
+    {
+      "number": "5",
+      "name": "Hook-Only Patches and Upstream Uptake",
+      "status": "pending"
+    },
+    {
+      "number": "6",
+      "name": "Two-Layer Verification and Rebranding Docs",
+      "status": "pending"
+    },
+    {
+      "number": "7",
+      "name": "Sourcerer as Downstream",
+      "status": "pending"
+    }
+  ],
+  "next": {
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 3 of 7 · executing"
+  },
+  "updated_at": "2026-09-04T04:35:29.048Z"
+}

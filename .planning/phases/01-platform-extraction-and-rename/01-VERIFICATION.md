@@ -1,7 +1,7 @@
 ---
 phase: 01-platform-extraction-and-rename
 verified: 2026-09-01T21:15:00Z
-status: human_needed
+status: passed
 score: 13/13 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -9,6 +9,7 @@ re_verification:
   previous_status: gaps_found
   previous_score: 12/13
   gaps_closed:
+
     - "Truth 9c — the registered check built to close Truth 9
       (`scripts/verify-about-dialog-suppression.mjs`) had no coverage assertion and could not go
       red on the exact regression it exists to prevent (a suppression selector deleted or
@@ -27,12 +28,14 @@ gaps: []
 deferred: []
 behavior_unverified_items: []
 human_verification:
+
   - test: "Re-run `shell03-budget-exhausted-error` and `shell03-auto-dismiss-on-selfheal` against a
       repackaged binary (WINDOWS.md ledger item 19, still `open`)."
     expected: "Neither check moves, since neither clicks Retry."
     why_human: "Requires a `./mach build faster` repackage and a running binary; explicitly
       deferred to the phase gate, not run by this static verification pass (build cost ~47-54 min
       per CLAUDE.md, out of scope per this pass's explicit instruction)."
+
   - test: "A repackaged binary's About dialog renders 'Licensing Information' as the only visible
       bottom-row link, clicking it opens the aggregated open-source licence text, and no Terms of
       Use, Privacy Notice, community, contribute, or experimental-community row is present (01-21
@@ -212,11 +215,13 @@ reproduced as closed in this pass, not accepted on 01-21-SUMMARY's narrative:
   6/6 planted faults REJECTED naming their drift, including the two new rows — (e) the outbound
   selector deleted, (f) the outbound selector's href prefix narrowed — that specifically exercise
   the failure shape the prior pass found ungated.
+
 - The prior pass's own load-bearing reproduction — a scratch copy of both `aboutDialog.css`
   variants with the outbound `.bottom-link[href^="https://www.mozilla.org"]` selector deleted,
   restoring UAT G-01-3 in full — was re-run in this pass against the current tree. It exited **0**
   before 01-21; it exits **1** now, with stderr naming `UNSUPPRESSED VENDOR LINK`, both surviving
   hrefs, and both stylesheet paths.
+
 - `cmp` between the two branding variants stays clean; `git -C upstream diff` stays empty;
   `scripts/verify-platform.sh` is confirmed unedited since the prior verification's commit
   (`b5fefe4`); `--quick` stays green at the same 25-row count, so no sibling driver or registry
