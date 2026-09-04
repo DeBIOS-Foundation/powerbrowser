@@ -46,7 +46,7 @@ import { readFileSync, existsSync, mkdtempSync, mkdirSync, readdirSync, writeFil
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { resolveConfig } from './generate.mjs';
+import { resolveConfig, emitTheiaBranding } from './generate.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const NAME = 'verify-branding-preflight';
@@ -93,6 +93,38 @@ function readText(root, rel) {
     const p = join(root, rel);
     if (!existsSync(p)) return null;
     return readFileSync(p, 'utf8');
+}
+
+/**
+ * The channel pin for one powerbrowserBranding carrier (06-04): its
+ * legalNotices array must equal the manifest-derived expectation, in
+ * order. A dropped or drifted notice fails NAMING the notice -- a red
+ * that only says something disagrees would not tell anyone which legal
+ * sentence went missing. `next` names the recovery for this carrier.
+ */
+function pinLegalNotices(r, rel, actual, expected, next) {
+    if (!Array.isArray(actual)) {
+        r.fail(
+            `${rel} carries no legalNotices array -- stale output. Next step: ${next}`,
+        );
+        return;
+    }
+    for (const notice of expected) {
+        if (!actual.includes(notice)) {
+            r.fail(
+                `${rel} dropped the legal notice ${JSON.stringify(notice)}: expected ${JSON.stringify(expected)}. ` +
+                `Next step: ${next}`,
+            );
+        }
+    }
+    for (const notice of actual) {
+        if (!expected.includes(notice)) {
+            r.fail(
+                `${rel} carries the legal notice ${JSON.stringify(notice)}, which the manifest does not emit -- stale output. ` +
+                `Next step: ${next}`,
+            );
+        }
+    }
 }
 
 function countOccurrences(haystack, needle) {
@@ -896,6 +928,111 @@ function runChecks(root) {
                 );
             }
         }
+
+        // --- 11b. the about dialog's legal notices (06-04) -----------------
+        //
+        // The section 10 triple for the dialog's legalNotices array:
+        //
+        // (a) the read: the dialog resolves legalNotices through the shared
+        // readBrandingConfig reader -- stopping is a per-rebrand edit again.
+        // (b) the fallback: each expected notice appears as a quoted literal
+        // in code -- the boot fallback where the provider is unset. The
+        // literal may appear in code, never in render.
+        // (c) the render: no line paints a notice string as JSX text -- the
+        // mapping over the channel value is the only render site.
+        //
+        // Plus the channel pin (d): the tracked powerbrowserBranding block
+        // and, when present, the generated fragment carry exactly the
+        // expected array. The expectation is DERIVED from configuration.toml
+        // through the emitter at check time, never kept here: the manifest
+        // is the rebrand input, so a deliberate rebrand moves the
+        // expectation with it, while a dropped notice or a stale dialog
+        // goes red naming the notice. The generated fragment is checked
+        // when present and skipped when absent (fresh clones carry no
+        // generated/ tree); the tracked block always asserts and carries
+        // the gate there.
+        let expectedNotices = null;
+        if (manifestConfig === undefined) {
+            r.fail(
+                `${ABOUT_REL} legal notices cannot be checked because configuration.toml does not resolve ` +
+                '(see the manifest-vs-inventory failure above).',
+            );
+        } else {
+            const devVariant = (manifestConfig.variants ?? []).find((v) => v.id === 'dev');
+            if (devVariant === undefined) {
+                r.fail(
+                    `${ABOUT_REL} legal notices cannot be checked because configuration.toml declares no dev variant for the branding fragment row.`,
+                );
+            } else {
+                let emitted = null;
+                try {
+                    emitted = JSON.parse(emitTheiaBranding(manifestConfig, devVariant));
+                } catch {
+                    emitted = null;
+                }
+                if (!Array.isArray(emitted?.legalNotices) || emitted.legalNotices.some((n) => typeof n !== 'string')) {
+                    r.fail(
+                        `${ABOUT_REL} legal notices cannot be checked because the emitted branding fragment carries no string-array legalNotices. ` +
+                        `Next step: report this; configuration.toml is not the cause and editing it will not help.`,
+                    );
+                } else {
+                    expectedNotices = emitted.legalNotices;
+                }
+            }
+        }
+        if (expectedNotices !== null) {
+            if (!aboutDialog.includes('readBrandingConfig') || !aboutDialog.includes('legalNotices')) {
+                r.fail(
+                    `${ABOUT_REL} does not resolve legalNotices through readBrandingConfig. ` +
+                    'A dialog that stops reading the channel is a per-rebrand TypeScript edit again.',
+                );
+            }
+            for (const notice of expectedNotices) {
+                if (!aboutDialog.includes(`'${notice}'`) && !aboutDialog.includes(`"${notice}"`)) {
+                    r.fail(
+                        `${ABOUT_REL} does not carry the legal-notice fallback ${JSON.stringify(notice)} as a quoted literal. ` +
+                        'Without it the tree cannot render notices where the provider is unset.',
+                    );
+                }
+                // ESCAPED before interpolation, like the section 11 display
+                // check above it: a downstream notice is prose and
+                // unconstrained, so a value carrying pattern syntax must not
+                // change the match semantics.
+                const noticeRendered = new RegExp(`>\\s*${escapeForRegExp(notice)}\\s*<`);
+                for (const [i, line] of aboutDialog.split('\n').entries()) {
+                    if (noticeRendered.test(line)) {
+                        r.fail(
+                            `${ABOUT_REL}:${i + 1} paints the legal notice as rendered text: ${JSON.stringify(line.trim())}. ` +
+                            'Resolve it through the channel instead; the literal may appear in fallback code, never in render.',
+                        );
+                    }
+                }
+            }
+            const appPkgRel = 'theia/applications/browser/package.json';
+            const fragRel = 'generated/theia-branding.json';
+            const copyNext = `run node scripts/generate.mjs, then copy the powerbrowserBranding block from ${fragRel} (that key only; leave every sibling key byte-identical)`;
+            if (appPkg === null) {
+                r.fail(`${appPkgRel} does not exist -- the runtime branding channel has no declared carrier`);
+            } else {
+                let block = null;
+                try {
+                    block = JSON.parse(appPkg)?.theia?.frontend?.config?.powerbrowserBranding;
+                } catch {
+                    block = null;
+                }
+                pinLegalNotices(r, appPkgRel, block?.legalNotices, expectedNotices, copyNext);
+            }
+            const fragText = readText(root, fragRel);
+            if (fragText !== null) {
+                let frag = null;
+                try {
+                    frag = JSON.parse(fragText);
+                } catch {
+                    frag = null;
+                }
+                pinLegalNotices(r, fragRel, frag?.legalNotices, expectedNotices, 'run node scripts/generate.mjs');
+            }
+        }
     }
 
     // --- 12. the welcome widget's remaining channel reads --------------------
@@ -1033,6 +1170,11 @@ function selfTest() {
             'scripts/verify-branding-identity.mjs',
             'theia/applications/browser/package.json',
             'brand/mark.svg',
+            // Section 11b pins the generated branding fragment when the
+            // tree carries one; the copy loop skips it where this checkout
+            // never generated (fresh clones), and the check skips it there
+            // too -- the tracked block carries the gate instead.
+            'generated/theia-branding.json',
             'powerbrowser/powerbrowser.desktop',
             'powerbrowser/powerbrowser-release.desktop',
             'LICENSE',
@@ -1541,6 +1683,61 @@ function selfTest() {
                 console.log(`${NAME}: --self-test -- repointed the fixture manifest display name and it was REJECTED naming the variant and both values: ${manifestMsg}`);
             }
             writeFileSync(manifestPath, manifestOriginal);
+        }
+        // Twenty-second plant (06-04): the about dialog's legal-notice
+        // channel read broken -- every readBrandingConfig call renamed away,
+        // so the notices compile against nothing and render from no
+        // channel. The section 11b read pin must go red NAMING the file,
+        // the key and the reader (the older channel pins fire too, but the
+        // legal-notice one is what this plant proves).
+        writeFileSync(aboutPath, aboutOriginal.replace(/readBrandingConfig/g, 'readChannelConfig'));
+        const legalChannelPlanted = runChecks(dir);
+        const legalChannelMsg = legalChannelPlanted.failures.find(
+            (f) => f.includes(aboutRel) && f.includes('legalNotices') && f.includes('readBrandingConfig'),
+        );
+        if (!legalChannelMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the about dialog with its legal-notice channel read removed (${aboutRel}) was NOT rejected naming the file and the reader`);
+            for (const f of legalChannelPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- removed the legal-notice channel read from ${aboutRel} and it was REJECTED by name: ${legalChannelMsg}`);
+        }
+        writeFileSync(aboutPath, aboutOriginal);
+
+        // Twenty-third plant (06-04): one legal notice dropped from the
+        // generated fragment. The section 11b channel pin must go red
+        // NAMING the dropped notice; the unplanted control above stayed
+        // green first, so the red is plant-caused. The fixture carries the
+        // fragment only when this checkout generated one -- fresh clones
+        // carry no generated/ tree, and the check skips an absent fragment
+        // there, so the plant skips with it rather than failing over an
+        // assertion it cannot exercise.
+        const fragRel = 'generated/theia-branding.json';
+        const fragPath = join(dir, fragRel);
+        if (!existsSync(fragPath)) {
+            console.log(`${NAME}: --self-test -- SKIP the dropped-notice plant: no ${fragRel} in this checkout (never generated), and the check skips an absent fragment`);
+        } else {
+            const fragOriginal = readFileSync(fragPath, 'utf8');
+            const frag = JSON.parse(fragOriginal);
+            const before = Array.isArray(frag.legalNotices) ? frag.legalNotices.length : 0;
+            const dropped = Array.isArray(frag.legalNotices) ? frag.legalNotices.splice(1, 1)[0] : undefined;
+            if (!Array.isArray(frag.legalNotices) || frag.legalNotices.length !== before - 1 || typeof dropped !== 'string') {
+                console.error(`${NAME}: --self-test FAIL -- the dropped-notice plant did not land in ${fragRel}: the fixture fragment carries no notice array to drop from`);
+                ok = false;
+            } else {
+                writeFileSync(fragPath, JSON.stringify(frag, null, 2));
+                const fragPlanted = runChecks(dir);
+                const fragMsg = fragPlanted.failures.find(
+                    (f) => f.includes(fragRel) && f.includes(dropped),
+                );
+                if (!fragMsg) {
+                    console.error(`${NAME}: --self-test FAIL -- the legal notice dropped from ${fragRel} was NOT rejected naming the notice; got: ${fragPlanted.failures.join(' | ') || '(no failures at all)'}`);
+                    ok = false;
+                } else {
+                    console.log(`${NAME}: --self-test -- dropped a legal notice from ${fragRel} and it was REJECTED naming the notice: ${fragMsg}`);
+                }
+            }
+            writeFileSync(fragPath, fragOriginal);
         }
     } finally {
         rmSync(dir, { recursive: true, force: true });
