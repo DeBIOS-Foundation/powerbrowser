@@ -3542,6 +3542,22 @@ run_own_checks() {
     # unplanted control green first.
     "verify-trademark-surface|node $REPO_ROOT/scripts/verify-trademark-surface.mjs"
     "verify-trademark-surface-self-test|node $REPO_ROOT/scripts/verify-trademark-surface.mjs --self-test"
+    # NEW (06-05): the rebranding-doc coverage gate -- the completeness half
+    # of DOC-01. Derives the documented-field list at check time from the
+    # generator's own known-setting schema table (the same table that
+    # rejects unknown settings, so a setting added without a guide row
+    # fails), requires each dotted path as inline code or a heading, and
+    # requires the walkthrough's load-bearing commands as code spans.
+    #
+    # Honestly --quick: reads text files off disk only. No build, no
+    # browser, no display, no network.
+    #
+    # verify-rebranding-docs-self-test rides alongside for the reason
+    # every other self-test row in this array gives: it runs the real
+    # guide unmutated (green first), then a field's mentions removed and
+    # a command removed -- each red, naming the removal.
+    "verify-rebranding-docs|node $REPO_ROOT/scripts/verify-rebranding-docs.mjs"
+    "verify-rebranding-docs-self-test|node $REPO_ROOT/scripts/verify-rebranding-docs.mjs --self-test"
 
     # from verify-phase-03.sh
     "check-patch-surface|bash $REPO_ROOT/scripts/check-patch-surface.sh"
