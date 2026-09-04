@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 04
 current_phase_name: Theia Surface — Branding, Extensions, Telemetry
 status: executing
-stopped_at: Completed 05-hook-only-patches-and-upstream-uptake-02-PLAN.md
-last_updated: "2026-09-04T08:20:20.637Z"
+stopped_at: Completed 05-hook-only-patches-and-upstream-uptake-03-PLAN.md
+last_updated: "2026-09-04T08:32:44.885Z"
 last_activity: 2026-09-04
 last_activity_desc: Phase 03 plan 04 execution completed
-state_head: fd7aaa3c56c2cadd1da1ba940c48e81e75ad094e
+state_head: 6c04960b5308158538373c66b3bba812354befe8
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 42
-  completed_plans: 40
+  completed_plans: 41
 milestone_name: milestone
 ---
 
@@ -92,6 +92,7 @@ Progress: [█████████░] 93%
 | Phase 04-theia-surface-branding-extensions-telemetry P04 | 19min | 3 tasks | 16 files |
 | Phase 05-hook-only-patches-and-upstream-uptake P01 | 12min | 3 tasks | 7 files |
 | Phase 05-hook-only-patches-and-upstream-uptake P02 | 6min | 3 tasks | 9 files |
+| Phase 05-hook-only-patches-and-upstream-uptake P03 | 9min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -218,6 +219,7 @@ Recent decisions affecting current work:
 - [Phase 04]: 05-01: MOZ_APP_ID GUID stays as untouched stock context (audit proved never patch-carried); telemetry flags relocated as fixed platform content, not manifest keys
 - [Phase 04]: 05-02: ESR pin is schema-required (masked from defaults) so a downstream must state its own tag, never inherit this project's
 - [Phase 04]: 05-02: tag-literal sweep shape is FIREFOX_-plus-digit; fixtures outside the checker use a shape-valid Acme pin to stay sweep-clean
+- [Phase 04]: 05-03: theia_release schema-required (masked); fixture 0.0.0; generator emits nothing (GEN-04); lockfile asserts stanza version only; no new registry rows
 
 ### Pending Todos
 
@@ -255,6 +257,6 @@ real problem needs human help.
 
 ## Session Continuity
 
-Last session: 2026-09-04T08:20:20.554Z
-Stopped at: Completed 05-hook-only-patches-and-upstream-uptake-02-PLAN.md
+Last session: 2026-09-04T08:32:44.799Z
+Stopped at: Completed 05-hook-only-patches-and-upstream-uptake-03-PLAN.md
 Resume file: None

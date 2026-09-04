@@ -53,7 +53,7 @@
 - [ ] **CFG-05**: A downstream can point the build at an external config dir
       (`PB_CONFIG_DIR`) so distributions like Sourcerer live in their own repo
 
-- [ ] **CFG-06**: Upstream pins (Firefox ESR tag, Theia release) are declared
+- [x] **CFG-06**: Upstream pins (Firefox ESR tag, Theia release) are declared
       in `configuration.toml` and consumed by the fetch/build scripts
 
 ### Brand Generator (GEN)
@@ -191,7 +191,7 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
       `configuration.toml` and re-running fetch + patch apply, with the
       existing rebase/conflict tooling failing loudly on drift
 
-- [ ] **UPD-02**: A Theia release is adopted by re-pinning; Theia core is
+- [x] **UPD-02**: A Theia release is adopted by re-pinning; Theia core is
       never forked or patched
 
 ### Documentation & Downstream Proof (DOC)
@@ -280,9 +280,9 @@ All 31 v1 requirements map to exactly one phase. See `.planning/ROADMAP.md`.
 | TEL-02 | Phase 4 | Pending |
 | TEL-03 | Phase 4 | Pending |
 | MIG-05 | Phase 5 | Complete |
-| CFG-06 | Phase 5 | Pending |
+| CFG-06 | Phase 5 | Complete |
 | UPD-01 | Phase 5 | Complete |
-| UPD-02 | Phase 5 | Pending |
+| UPD-02 | Phase 5 | Complete |
 | VER-01 | Phase 6 | Pending |
 | VER-02 | Phase 6 | Pending |
 | DOC-01 | Phase 6 | Pending |
