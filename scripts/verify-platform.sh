@@ -3716,6 +3716,43 @@ run_own_checks() {
     "branding-dir-agreement|node $REPO_ROOT/scripts/verify-branding-agreement.mjs"
     "branding-dir-agreement-self-test|node $REPO_ROOT/scripts/verify-branding-agreement.mjs --self-test"
 
+    # NEW (03-02): the icon-output gate -- the five PNG rasters per variant
+    # are IHDR-exact and the ICO/ICNS containers wrapping them are
+    # structurally valid.
+    #
+    # It asserts something DIFFERENT from the two rows above it, which is why
+    # another pair of rows exists rather than none. generated-byte-identity
+    # proves each raster equals its hand-written counterpart, and
+    # branding-dir-agreement proves the directory holds the declared set --
+    # but the four containers have no hand-written originals, so no per-file
+    # comparison can see a directory entry pointing past the end of the file
+    # or a missing icns magic. This row reads the five defaultN.png files per
+    # variant and asserts PNG signature plus IHDR width and height both equal
+    # to N; asserts firefox.ico opens with reserved 0, type 1 and a count
+    # equal to its directory entries with each entry's payload slice
+    # byte-identical to the corresponding raster; and asserts firefox.icns
+    # opens with the icns magic and a total length equal to the file size
+    # with each chunk's payload slice byte-identical to its raster while
+    # walking the chunk chain.
+    #
+    # ON A TREE WITH NO generated/branding/, THIS ROW SKIPS AND PASSES, for
+    # the same reason generate-check does: generated/ is git-ignored, so that
+    # is the state of every fresh clone, and a tree that has never generated
+    # cannot disagree with itself. A PRESENT but empty or partial tree is a
+    # defect and fails -- the self-test's plants pin the distinction.
+    #
+    # icon-ihdr-self-test rides alongside for the reason every other
+    # self-test row in this array gives: it mirrors the real icon set into
+    # mkdtemp, asserts the unmutated control is green first, then plants one
+    # mutation per case (a wrong-height PNG, a truncated ICO, a bad ICNS
+    # magic) requiring red naming the file and both values.
+    #
+    # Both are honestly --quick. The check reads PNG, ICO and ICNS bytes off
+    # disk only; the self-test copies into mkdtemp directories. No build, no
+    # browser, no display, no network.
+    "icon-ihdr|node $REPO_ROOT/scripts/verify-icon-ihdr.mjs"
+    "icon-ihdr-self-test|node $REPO_ROOT/scripts/verify-icon-ihdr.mjs --self-test"
+
     # NEW: the vendored settings parser's provenance record, machine-checked.
     #
     # scripts/lib/toml.cjs's header records a sha256 and a body size and
