@@ -126,11 +126,44 @@ run_self_test() {
 
   if grep -q "$(basename "$patch")" "$tmp/second-apply.err"; then
     echo "apply-patches: --self-test PASS -- second apply of $(basename "$patch") was correctly rejected by name"
+  else
+    echo "apply-patches: --self-test FAIL -- second apply was rejected, but the message doesn't name the patch" >&2
+    cat "$tmp/second-apply.err" >&2
+    return 1
+  fi
+
+  # Third drift class (05-04): real conflict. A target file whose context no
+  # longer matches the patch must make `git apply --3way` itself fail, and
+  # apply_patch_with_assertion must reject by patch name through its first
+  # branch -- this is the drift class a silently-adopted patch is NOT:
+  # upstream moved the surrounding lines so the hunk no longer locates.
+  # Hermetic: a throwaway repo holding unrelated content at the same path,
+  # never the real upstream/ tree (which this function never touches).
+  local conflict_repo="$tmp/conflict-repo"
+  mkdir -p "$conflict_repo/browser"
+  printf 'unrelated\ncontent\nthat\nmatches\nneither\nimage\n' > "$conflict_repo/$target_rel"
+  (
+    cd "$conflict_repo"
+    git init -q
+    git config user.email "test@example.invalid"
+    git config user.name "Test"
+    git add "$target_rel"
+    git commit -q -m "self-test: conflict fixture"
+  )
+
+  if (cd "$conflict_repo" && apply_patch_with_assertion "$patch") >/dev/null 2>"$tmp/conflict-apply.err"; then
+    echo "apply-patches: --self-test FAIL -- apply onto conflict-drifted content was NOT rejected" >&2
+    cat "$tmp/conflict-apply.err" >&2
+    return 1
+  fi
+
+  if grep -q "$(basename "$patch")" "$tmp/conflict-apply.err"; then
+    echo "apply-patches: --self-test PASS -- conflict-drifted apply of $(basename "$patch") was correctly rejected by name"
     return 0
   fi
 
-  echo "apply-patches: --self-test FAIL -- second apply was rejected, but the message doesn't name the patch" >&2
-  cat "$tmp/second-apply.err" >&2
+  echo "apply-patches: --self-test FAIL -- conflict-drifted apply was rejected, but the message doesn't name the patch" >&2
+  cat "$tmp/conflict-apply.err" >&2
   return 1
 }
 
