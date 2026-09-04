@@ -4,7 +4,8 @@ import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { ApplicationServer } from '@theia/core/lib/common/application-protocol';
 import { WindowService } from '@theia/core/lib/browser/window/window-service';
 import { FrontendApplicationConfigProvider } from '@theia/core/lib/browser/frontend-application-config-provider';
-import { powerBrowserMarkInline } from './powerbrowser-mark';
+import { powerBrowserMarkInline, inlineMarkFromSvg } from './powerbrowser-mark';
+import { readBrandingConfig } from './powerbrowser-branding-config';
 
 // D-33: `@powerbrowser/branding` ships its own welcome widget rather than
 // subclassing `@theia/getting-started`'s `GettingStartedWidget` (D-24).
@@ -14,6 +15,13 @@ import { powerBrowserMarkInline } from './powerbrowser-mark';
 // D-12 fixes the domain `powerbrowser.org` and nothing else. The inherited
 // value was a github.com org URL that does not exist -- the DeBIOS Foundation
 // has no GitHub org yet -- so this points at the one host the project owns.
+// GEN-05 (04-04): the boot fallback for the repo link, and the ONLY link
+// literal this file carries. The link itself resolves at runtime through the
+// frontend application config (see repoUrl below), which the generator owns
+// from installer.support_url -- so a rebrand is a manifest edit plus the
+// app-bundle step, never a .ts edit. Must stay exactly one quoted
+// occurrence, which scripts/verify-branding-preflight.mjs asserts from the
+// inventory domain value.
 export const POWERBROWSER_REPO_URL = 'https://powerbrowser.org/';
 
 // GEN-05 (04-01): the boot fallback for the welcome heading, and the ONLY
@@ -63,7 +71,7 @@ export class PowerBrowserWelcomeWidget extends ReactWidget {
 
     protected openRepo = (e: React.SyntheticEvent): void => {
         e.preventDefault();
-        this.windowService.openNewWindow(POWERBROWSER_REPO_URL, { external: true });
+        this.windowService.openNewWindow(this.repoUrl, { external: true });
     };
 
     // GEN-05 (04-01): the welcome heading is the RUNTIME application name --
@@ -81,6 +89,26 @@ export class PowerBrowserWelcomeWidget extends ReactWidget {
         }
     }
 
+    // GEN-05 (04-04): the welcome text, the repo link and the mark are the
+    // RUNTIME powerbrowserBranding values -- the `powerbrowserBranding` key
+    // of that same config block, which scripts/generate.mjs owns from
+    // theia.welcome_text, installer.support_url and brand/mark.svg. Same
+    // synchronous read, same boot fallbacks: the compiled link literal and
+    // the compiled mark twin below. An unset text renders no element --
+    // the shipped manifest states none, so nothing is invented here.
+    protected get welcomeText(): string | undefined {
+        return readBrandingConfig().welcomeText;
+    }
+
+    protected get repoUrl(): string {
+        return readBrandingConfig().repoUrl || POWERBROWSER_REPO_URL;
+    }
+
+    protected get markInline(): string {
+        const channel = readBrandingConfig().markSvg;
+        return channel !== undefined ? inlineMarkFromSvg(channel, 64) : powerBrowserMarkInline(64);
+    }
+
     // Per CONTEXT.md's discretion leaning: product name, version, and one
     // repo link only -- no invented marketing copy or tagline.
     protected render(): React.ReactNode {
@@ -89,10 +117,10 @@ export class PowerBrowserWelcomeWidget extends ReactWidget {
                 foreground through currentColor, and an <img> is a separate
                 document that inherits nothing -- which is how the OS-driven
                 variant came to render #1a1a1a on the shell's own dark
-                background on a light-mode OS and disappear. The markup is a
-                compile-time constant derived from POWERBROWSER_MARK_SVG. */}
+                background on a light-mode OS and disappear. The markup is the
+                runtime channel value with the compiled twin as fallback. */}
             {/* eslint-disable-next-line react/no-danger */}
-            <span dangerouslySetInnerHTML={{ __html: powerBrowserMarkInline(64) }} />
+            <span dangerouslySetInnerHTML={{ __html: this.markInline }} />
             {/* The DISPLAY form, with the space. `PowerBrowser` is the
                 identifier form (class names, the chrome: package, the API
                 object) and inventory/brand-tokens.json records it as the value
@@ -102,9 +130,13 @@ export class PowerBrowserWelcomeWidget extends ReactWidget {
                 expect it, so the two agreed and neither noticed. Resolved at
                 runtime since 04-01 (see displayName above), never a literal. */}
             <h1>{this.displayName}</h1>
+            {/* The manifest welcome text, rendered as a React text node (so
+                it is escaped, never markup) only when the manifest states
+                one -- the shipped manifest states none. */}
+            {this.welcomeText && <p>{this.welcomeText}</p>}
             {this.version && <p>Version {this.version}</p>}
             <p>
-                <a href={POWERBROWSER_REPO_URL} onClick={this.openRepo}>{POWERBROWSER_REPO_URL}</a>
+                <a href={this.repoUrl} onClick={this.openRepo}>{this.repoUrl}</a>
             </p>
         </div>;
     }

@@ -3654,7 +3654,7 @@ run_own_checks() {
     #
     # generate-self-test rides alongside for the reason every other self-test
     # row in this array gives, and here it carries more weight than most:
-    # thirty-four planted faults -- a missing required key, an invalid basename,
+    # thirty-eight planted faults -- a missing required key, an invalid basename,
     # a misspelled section header, a whitespace-only value, a short downstream
     # array, an incomplete variant, a duplicated variant id, an unused variant
     # id, a partially-stated identity table, a stale generated file, an absent
@@ -3672,8 +3672,11 @@ run_own_checks() {
     # resolving to their exact versioned URLs, an emptied downstream
     # extensions array resolving to zero entries, a telemetry level enabled
     # without an endpoint, a telemetry level outside the four-value enum, a
-    # telemetry endpoint outside https, and the telemetry fragment carrying
-    # the stated pair and defaulting an unset section to off -- each required
+    # telemetry endpoint outside https, the telemetry fragment carrying
+    # the stated pair and defaulting an unset section to off, a theia theme
+    # outside the builtin theme ids, a markup-bearing theia welcome text, a
+    # crash-report URL outside https, and the theia branding riding the
+    # runtime channel fragments and defaulting unset texts to null -- each required
     # to go red NAMING the drift (or resolve as pinned), plus a
     # cross-cutting assertion that no case's output carries a stack frame, a
     # module specifier, or this machine's path to the project. Every one of the
@@ -3894,6 +3897,35 @@ run_own_checks() {
     # browser, no display, no network.
     "telemetry|node $REPO_ROOT/scripts/verify-telemetry.mjs"
     "telemetry-self-test|node $REPO_ROOT/scripts/verify-telemetry.mjs --self-test"
+
+    # NEW (04-04): GEN-05 remainder's branding gate -- the manifest's
+    # [theia]/[installer] display values plus brand/mark.svg reach the
+    # sidecar as the theia.frontend.config applicationName/defaultTheme
+    # keys and the powerbrowserBranding block, and the branding extension
+    # compiles.
+    #
+    # It asserts something DIFFERENT from the rows above it, which is why
+    # another pair of rows exists rather than none. generate-check proves
+    # the generated/ tree matches the manifest right now, but the branding
+    # keys live in a yarn-managed package.json with no tracked comparand,
+    # so a block still carrying a repo URL the manifest no longer emits
+    # would stay green under every row above. This row derives the expected
+    # maps from the manifest at check time and compares as equality in
+    # both directions (generated fragments, tracked keys and block); then
+    # proves the extension compiles (tsc -b on the one extension --
+    # seconds, honestly --quick).
+    #
+    # theia-branding-self-test rides alongside for the reason every other
+    # self-test row in this array gives: it plants a drifted block, a
+    # drifted fragment and a removed block each requiring red naming the
+    # drift -- with the unmutated control green first.
+    #
+    # Both are honestly --quick, with the same two named SKIPs as the
+    # telemetry pair: an absent fragment skips the fragment half
+    # (generate-check's own rule), and an absent theia install skips the
+    # tsc half. No build, no browser, no display, no network.
+    "theia-branding|node $REPO_ROOT/scripts/verify-theia-branding.mjs"
+    "theia-branding-self-test|node $REPO_ROOT/scripts/verify-theia-branding.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then

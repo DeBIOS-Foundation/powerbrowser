@@ -923,11 +923,13 @@ function selfTest() {
         // remembered to append its path. It is also the exact defect this plan
         // closes -- `<h3>PowerBrowser</h3>` shipped as rendered display text
         // while both guards that should have seen it stayed green.
+        // (04-04: the dialog title resolves at runtime, so the plant targets
+        // the runtime render line rather than the pre-channel literal.)
         writeFileSync(ftlPath, readFileSync(join(REPO_ROOT, ftlRel)));
         const aboutRel = 'theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx';
         const aboutPath = join(dir, aboutRel);
         const aboutOriginal = readFileSync(aboutPath, 'utf8');
-        writeFileSync(aboutPath, aboutOriginal.replace('<h3>Power Browser</h3>', '<h3>PowerBrowser</h3>'));
+        writeFileSync(aboutPath, aboutOriginal.replace('<h3>{this.displayName}</h3>', '<h3>PowerBrowser</h3>'));
         const aboutPlanted = runChecks(dir);
         const aboutMsg = aboutPlanted.failures.find((f) => f.includes(aboutRel) && f.includes('IDENTIFIER form'));
         if (!aboutMsg) {

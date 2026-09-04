@@ -5,7 +5,7 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT COVERS. Forty-eight targets: thirty-three byte-identical to the
+// WHAT IT COVERS. Fifty targets: thirty-three byte-identical to the
 // file Phase 1 wrote by hand -- the five Phase 2 build surfaces (the two
 // branding configure.sh files, .mozconfig, and the two .desktop files), the
 // eighteen GEN-01 branding-directory surfaces (per variant: brand.ftl,
@@ -21,9 +21,14 @@
 // identity carrier (generated/identity.configure: the two imply_option
 // lines patch 010 used to hard-code, pulled in by its include hook), plus
 // the GEN-05 Theia frontend-config fragment
-// (generated/theia-frontend-config.json: the brand-owned keys of the
-// application package.json's theia.frontend.config block, today only
-// applicationName), plus the EXT-01 declared-extensions map
+// (generated/theia-frontend-config.json: the brand-owned upstream keys of
+// the application package.json's theia.frontend.config block --
+// applicationName and defaultTheme), plus the GEN-05 Theia branding
+// fragment (generated/theia-branding.json: the powerbrowserBranding key of
+// that same block -- welcome/about texts, the in-app repo URL, the mark
+// SVG), plus the TEL-01/TEL-02 telemetry fragment
+// (generated/theia-telemetry.json: the powerbrowserTelemetry key of that
+// same block -- level and endpoint), plus the EXT-01 declared-extensions map
 // (generated/theia-plugins.json: the application package.json's theiaPlugins
 // block, one exact download URL per [[extensions]] entry -- a versioned
 // Open VSX file URL for source = "openvsx", the stated URL verbatim for
@@ -447,6 +452,20 @@ const EXTENSION_SOURCES = Object.freeze(['openvsx', 'url']);
 
 /** The four telemetry levels TEL-01 implements: Theia's real enum, default `off`. */
 const TELEMETRY_LEVELS = Object.freeze(['off', 'crash', 'error', 'all']);
+/**
+ * The theme ids the `[theia] default_theme` setting may name (04-04, GEN-05).
+ *
+ * No schema `regex` by design -- an enum is not a shape -- so validateTheia
+ * below owns this list, the same split validateTelemetry keeps for the
+ * telemetry level. The ids are Theia's own builtin theme contributions
+ * (@theia/core 1.74.1 theming.ts BuiltinThemeProvider: dark, light,
+ * hc-theia, hc-theia-light), read by ThemeService.defaultTheme through
+ * FrontendApplicationConfigProvider.get().defaultTheme (theming.ts) with the
+ * DefaultTheme string-or-{light,dark} shape (application-package
+ * application-props.ts). A value outside this list fails generate naming
+ * theia.default_theme: a typo'd theme silently falling back is the failure.
+ */
+const THEIA_THEME_IDS = Object.freeze(['dark', 'light', 'hc-theia', 'hc-theia-light']);
 /** Accepted download archive suffixes: exactly what stock `theia download:plugins` unpacks. */
 const EXTENSION_ARCHIVE_SUFFIXES = Object.freeze(['.vsix', '.theia', '.tar.gz']);
 
@@ -706,6 +725,30 @@ function validateTelemetry(doc) {
     return failures;
 }
 
+/**
+ * The `[theia]` theme id enum (04-04, GEN-05).
+ *
+ * WHY A DEDICATED FUNCTION (same reason as validateTelemetry).
+ * `theia.default_theme` carries no schema `regex` -- its values are Theia's
+ * builtin theme ids, not a shape -- so the generic regex loop below cannot
+ * express it. An absent (or whitespace-only, D-10) theme refuses nothing:
+ * the emitter falls back to Theia's own default pair, so absence is a
+ * clean tree, not a defect. The one refusal is an unknown id, which would
+ * otherwise silently fall back and ship a theme nobody asked for.
+ */
+function validateTheia(doc) {
+    const failures = [];
+    const theme = readPath(doc, 'theia.default_theme');
+
+    if (!isUnset(theme) && !THEIA_THEME_IDS.includes(theme)) {
+        failures.push(
+            `theia.default_theme is ${JSON.stringify(theme)}, which is not a theme id this project's Theia sidecar implements. `
+            + `Write it as one of ${THEIA_THEME_IDS.map(t => JSON.stringify(t)).join(', ')} in ${MANIFEST_NAME}, then run: ${RERUN}`,
+        );
+    }
+    return failures;
+}
+
 function validate(doc, leaves) {    const failures = [];
     const reportedUnset = new Set();
 
@@ -724,6 +767,7 @@ function validate(doc, leaves) {    const failures = [];
     failures.push(...validateVariantIds(doc));
     failures.push(...validateExtensionElements(doc));
     failures.push(...validateTelemetry(doc));
+    failures.push(...validateTheia(doc));
 
     for (const { path, value } of leaves) {
         // EXT-01 (04-02). extensions[] leaves are validated by
@@ -1186,8 +1230,9 @@ function emitIdentityConfigure(config, variant) {
 /**
  * The Theia application frontend-config fragment (04-01, GEN-05 tracer):
  * the brand-owned keys of theia/applications/browser/package.json's
- * `theia.frontend.config` block, today exactly one -- `applicationName`
- * from identity.display_name.
+ * `theia.frontend.config` block -- `applicationName` from
+ * identity.display_name, and (04-04) `defaultTheme` from
+ * theia.default_theme.
  *
  * WHICH DISPLAY FORM. identity.display_name is the BASE name -- the release
  * short name the preflight pins on the tracked package.json against the
@@ -1195,14 +1240,23 @@ function emitIdentityConfigure(config, variant) {
  * Theia window title: there is one application manifest, not one per
  * variant, so a suffixed name would brand every window Dev.
  *
+ * THEME SHAPE. Theia's DefaultTheme is a string id or a {light, dark} pair
+ * (application-package application-props.ts); the manifest carries the
+ * string form only, and the emitter passes it through verbatim. An unset
+ * theme omits the key rather than restating Theia's own default pair --
+ * restating it would make this file a second source for Theia's default.
+ * validateTheia has already refused unknown ids, and the sink guard below
+ * re-checks the enum so a future loosening cannot emit an arbitrary
+ * string into the fragment.
+ *
  * FRAGMENT, NOT THE WHOLE BLOCK. The tracked package.json carries sibling
  * keys no rebrand owns -- powerbrowserPrivilegedJs, the preferences map --
  * so emitting the whole object would make this file's literals the owner
  * of Theia behaviour flags. The copy-over is surgical instead: set ONLY
- * applicationName from this fragment and leave every sibling
+ * the keys of this fragment and leave every sibling
  * byte-identical. Whole-file byte-identity is brittle here anyway -- yarn
  * rewrites that file -- which is why the contract is block-level equality
- * on this one key rather than a tracked comparand row.
+ * on these keys rather than a tracked comparand row.
  *
  * WHY NO GENERATED_BANNER. Strict JSON carries no comment, and a `_comment`
  * key would pollute the block a reader copies from. The derivation is
@@ -1225,7 +1279,115 @@ export function emitTheiaFrontendConfig(config, variant) {
     const name = assertEmittable('identity.display_name', config.identity.display_name);
     const lines = [
         '{',
-        `  "applicationName": ${JSON.stringify(name)}`,
+        `  "applicationName": ${JSON.stringify(name)},`,
+    ];
+    const rawTheme = config.theia?.default_theme;
+    if (!isUnset(rawTheme)) {
+        if (!THEIA_THEME_IDS.includes(rawTheme)) {
+            report([
+                `theia.default_theme is ${JSON.stringify(rawTheme)}, which is not a theme id this project implements. `
+                + `Write it as one of ${THEIA_THEME_IDS.map(t => JSON.stringify(t)).join(', ')} in ${MANIFEST_NAME}, then run: ${RERUN}`,
+            ]);
+        }
+        assertEmittable('theia.default_theme', rawTheme);
+        lines.push(`  "defaultTheme": ${JSON.stringify(rawTheme)},`);
+    }
+    // The last entry's trailing comma comes off: strict JSON, read back
+    // with JSON.parse by the copy-over, like emitTheiaPlugins below.
+    lines[lines.length - 1] = lines[lines.length - 1].replace(/,$/, '');
+    lines.push('}');
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * The single-line `<svg>` element out of brand/mark.svg, read the same way
+ * scripts/verify-branding-preflight.mjs reads it (first line starting with
+ * `<svg`), never restated. A missing file or a missing element is a hard
+ * failure naming the asset, never an empty string the widgets would render
+ * as nothing -- the icon pipeline's squareness rule already gates the
+ * artwork's SHAPE at rasterize time; this gates its PRESENCE for the
+ * runtime channel.
+ */
+function readMarkSvgElement() {
+    let text;
+    try {
+        text = readFileSync(MARK_SVG_ABS, 'utf8');
+    } catch {
+        text = null;
+    }
+    const line = text === null ? undefined : text.split('\n').find((l) => l.startsWith('<svg'));
+    if (line === undefined) {
+        report([
+            `${MARK_SVG_REL} carries no single-line <svg> element to publish to the Theia runtime channel. `
+            + `Restore the one-line svg element in ${MARK_SVG_REL}, then run: ${RERUN}`,
+        ]);
+    }
+    return line.trim();
+}
+
+/**
+ * The Theia branding fragment (04-04, GEN-05 remainder): the
+ * `powerbrowserBranding` key of theia/applications/browser/package.json's
+ * `theia.frontend.config` block -- welcome/about display texts, the
+ * in-app repo URL, and the mark SVG -- read at runtime through
+ * FrontendApplicationConfigProvider with the compiled values as boot
+ * fallbacks, so a rebrand is a manifest edit plus the app-bundle step,
+ * never a `.ts` edit.
+ *
+ * FRAGMENT, NOT THE WHOLE BLOCK (04-01's rule carried over, 04-03's
+ * precedent: one fragment per brand-owned key, same package.json block).
+ * No tracked comparand -- the tracked package.json is yarn-managed, so
+ * whole-file byte-identity is brittle there; the copy-over sets ONLY the
+ * powerbrowserBranding key from this fragment, and the byte-identity gate
+ * skips rows without one while --check still covers the row through the
+ * frozen table. The tracked side is pinned by
+ * scripts/verify-theia-branding.mjs (fragment equality against this
+ * emission, block equality on the tracked key).
+ *
+ * WHY NO GENERATED_BANNER. Same reason as the fragments before it:
+ * strict JSON carries no comment, and a `_comment` key would pollute the
+ * block a reader copies from. Derivation lives here; freshness is
+ * generate --check's contract.
+ *
+ * UNSET TEXTS ARE NULL. welcome_text and about_text are required: false
+ * with no shipped value -- an unset text emits null and the widgets render
+ * no element for it, rather than inventing copy the manifest never stated.
+ * An explicitly emptied string never reaches here: the schema pattern
+ * needs one or more characters, so it fails validation naming the key.
+ *
+ * THE REPO URL IS REUSED, NOT RESTATED. There is no `urls.repo_url` key:
+ * installer.support_url is already the one support URL (falling back to
+ * product.homepage where a downstream states no installer section), so a
+ * second key for the same value would be one setting with two paths. The
+ * value is emitted verbatim -- no trailing-slash normalisation (CFG-03:
+ * rejection only, never mangling).
+ *
+ * THE MARK IS TEXT, NOT BINARY. The 04-01 channel decision left the logo
+ * BINARY channel open because a PNG cannot ride a JSON string; the mark
+ * SVG is text, so it rides as a string key, read from brand/mark.svg at
+ * emit time. No assertEmittable on it: the SVG legitimately carries double
+ * quotes, and JSON.stringify is the correct escaping for a JSON sink --
+ * the shell-sink guard would reject every real logo. Its presence is
+ * asserted above; its shape is the icon pipeline's contract.
+ *
+ * Joined with a literal newline, never the platform line-ending constant.
+ */
+export function emitTheiaBranding(config, variant) {
+    void variant;
+    const rawWelcome = config.theia?.welcome_text;
+    const welcomeText = isUnset(rawWelcome) ? null : assertEmittable('theia.welcome_text', rawWelcome);
+    const rawAbout = config.theia?.about_text;
+    const aboutText = isUnset(rawAbout) ? null : assertEmittable('theia.about_text', rawAbout);
+    const rawRepo = config.installer?.support_url ?? config.product?.homepage;
+    const repoPath = config.installer?.support_url !== undefined ? 'installer.support_url' : 'product.homepage';
+    const repoUrl = isUnset(rawRepo) ? null : assertEmittable(repoPath, rawRepo);
+    const markSvg = readMarkSvgElement();
+    const lines = [
+        '{',
+        `  "welcomeText": ${JSON.stringify(welcomeText)},`,
+        `  "aboutText": ${JSON.stringify(aboutText)},`,
+        `  "repoUrl": ${JSON.stringify(repoUrl)},`,
+        `  "markSvg": ${JSON.stringify(markSvg)}`,
         '}',
     ];
     return lines.join('\n') + '\n';
@@ -2509,6 +2671,18 @@ export const TARGETS = Object.freeze([
         variant: 'dev',
         emit: emitTheiaTelemetry,
     }),
+    // NEW (04-04): GEN-05's branding fragment. No tracked comparand -- same
+    // yarn-managed package.json, same reason; the copy-over sets ONLY the
+    // powerbrowserBranding key from this fragment, and the byte-identity
+    // gate skips rows without a tracked path while --check still covers
+    // the row through the frozen table. The tracked side is pinned by
+    // scripts/verify-theia-branding.mjs (fragment equality against this
+    // emission, block equality on the tracked key).
+    Object.freeze({
+        generated: 'theia-branding.json',
+        variant: 'dev',
+        emit: emitTheiaBranding,
+    }),
     Object.freeze({
         generated: 'branding/dev/configure.sh',
         tracked: 'powerbrowser/branding/dev/configure.sh',
@@ -2888,7 +3062,7 @@ function firstDifferingLine(a, b) {
  *
  * THREE OUTCOMES, THREE MESSAGES, deliberately not one. An absent generated/ is
  * the state every fresh copy of the project and every automated run begins in;
- * reporting it as forty-nine stale files reads as forty-nine problems and sends the reader
+ * reporting it as fifty stale files reads as fifty problems and sends the reader
  * hunting a mismatch that does not exist.
  *
  * The set comparison runs in BOTH directions. A per-target loop alone sees a
@@ -3190,7 +3364,7 @@ function probeStaleOutput(config) {
  * Ask the freshness comparison about a directory that is not there -- the state
  * every fresh copy of the project and every CI runner starts in, because
  * generated/ is git-ignored. The distinct message this must produce is the
- * whole point: forty-nine phantom stale paths would read as forty-nine defects on a tree
+ * whole point: fifty phantom stale paths would read as fifty defects on a tree
  * with none, and a gate red for a non-defect is a gate its readers skip.
  *
  * The EXIT CODE is asserted here too, and separately from the message, because
@@ -3616,6 +3790,80 @@ function selfTest() {
         }
     })();
 
+    // GEN-05 remainder's green control, computed once: a [theia] fixture
+    // with a theme id, both texts and a support URL validates clean and
+    // emits a frontend-config fragment carrying the theme alongside the
+    // name plus a branding fragment carrying both texts, the repo URL and
+    // the mark SVG verbatim -- and a fixture with no [theia] texts at all
+    // emits null texts. Without this, a red result from the three fault
+    // cases below could be the emitter broken on a clean value rather than
+    // on the plant. The expected pairs are literals (and the mark line is
+    // read straight out of brand/mark.svg, the way the preflight reads it):
+    // deriving them through the emitters would make the control agree with
+    // the emitter no matter how wrong both were.
+    const brandingControl = (() => {
+        const fixtureDir = mkdtempSync(join(tmpdir(), 'generate-selftest-branding-'));
+        try {
+            const fixturePath = join(fixtureDir, 'branding.toml');
+            writeFileSync(
+                fixturePath,
+                `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[theia]\ndefault_theme = "light"\nwelcome_text = "Acme welcomes you."\nabout_text = "Acme Browser is a test product."\n[installer]\nsupport_url = "https://example.org/support"\n`,
+                'utf8',
+            );
+            const resolved = resolveConfig(MANIFEST_PATH, fixturePath);
+            if (resolved.failures.length > 0) {
+                return [`the branding fixture failed validation: ${resolved.failures.join(' | ')}`];
+            }
+            const dev = resolved.config.variants.find(v => v.id === 'dev');
+            let frontend;
+            let branding;
+            try {
+                frontend = JSON.parse(emitTheiaFrontendConfig(resolved.config, dev));
+                branding = JSON.parse(emitTheiaBranding(resolved.config, dev));
+            } catch {
+                return ['the emitted theia frontend-config or branding fragment is not valid JSON'];
+            }
+            if (frontend?.applicationName !== 'Acme Browser' || frontend?.defaultTheme !== 'light') {
+                return [`the emitted frontend-config fragment is not the stated name and theme: ${JSON.stringify(frontend)}`];
+            }
+            if (branding?.welcomeText !== 'Acme welcomes you.'
+                || branding?.aboutText !== 'Acme Browser is a test product.'
+                || branding?.repoUrl !== 'https://example.org/support') {
+                return [`the emitted branding fragment is not the stated texts and repo URL: ${JSON.stringify({ ...branding, markSvg: undefined })}`];
+            }
+            let markLine;
+            try {
+                markLine = readFileSync(MARK_SVG_ABS, 'utf8').split('\n').find((l) => l.startsWith('<svg'))?.trim();
+            } catch {
+                markLine = undefined;
+            }
+            if (typeof markLine !== 'string' || branding?.markSvg !== markLine) {
+                return ['the emitted branding fragment does not carry the brand/mark.svg single-line element verbatim'];
+            }
+            const barePath = join(fixtureDir, 'branding-bare.toml');
+            writeFileSync(barePath, `${FIXTURE_BASE}\n${FIXTURE_VARIANT}`, 'utf8');
+            const bare = resolveConfig(MANIFEST_PATH, barePath);
+            if (bare.failures.length > 0) {
+                return [`the textless branding fixture failed validation: ${bare.failures.join(' | ')}`];
+            }
+            let bareBranding;
+            try {
+                bareBranding = JSON.parse(emitTheiaBranding(
+                    bare.config,
+                    bare.config.variants.find(v => v.id === 'dev'),
+                ));
+            } catch {
+                return ['the emitted textless branding fragment is not valid JSON'];
+            }
+            if (bareBranding?.welcomeText !== null || bareBranding?.aboutText !== null) {
+                return [`the emitted textless branding fragment does not default unset texts to null: ${JSON.stringify({ ...bareBranding, markSvg: undefined })}`];
+            }
+            return [];
+        } finally {
+            rmSync(fixtureDir, { recursive: true, force: true });
+        }
+    })();
+
     const cases = [
         {
             // D-10. A whitespace-only value is not a value.
@@ -3719,7 +3967,7 @@ function selfTest() {
             expect: TARGETS[0].generated,
         },
         {
-            // The absent-directory outcome is a DISTINCT message, not forty-nine
+            // The absent-directory outcome is a DISTINCT message, not fifty
             // stale paths, AND it is not a failure. Asserted from three sides:
             // the message is there, no target path is, and the exit code was
             // zero -- so a future collapse of the three outcomes into one goes
@@ -3945,6 +4193,46 @@ function selfTest() {
             probe: () => telemetryControl,
             holds: 'the stated level and endpoint verbatim, and off/null when unset',
             resolved: () => telemetryControl.length === 0,
+        },
+        {
+            // GEN-05 remainder. A theme id outside Theia's builtin set must
+            // fail NAMING the key -- a typo'd theme silently falling back is
+            // the failure, and the schema carries no pattern for ids by
+            // design.
+            name: 'theia theme outside the builtin theme ids',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[theia]\ndefault_theme = "midnight"\n`,
+            expect: 'theia.default_theme',
+        },
+        {
+            // GEN-05 remainder. Markup in the welcome text must fail NAMING
+            // the key -- the text reaches rendered UI, so an angle bracket
+            // is an injection character at the schema layer, refused with
+            // the whole list reported at once.
+            name: 'markup-bearing theia welcome text',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[theia]\nwelcome_text = "Acme <b>welcomes</b> you."\n`,
+            expect: 'theia.welcome_text',
+        },
+        {
+            // TEL-03. A non-https crash-report URL must fail NAMING the key,
+            // via the schema pattern in the established
+            // installer.support_url style -- the host feeds endpoint
+            // allowlist coverage, so a value that is not an https URL is a
+            // manifest bug, not a coverage gap.
+            name: 'crash-report URL outside https',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[urls]\ncrash_report = "http://example.org/crash"\n`,
+            expect: 'urls.crash_report',
+        },
+        {
+            // GEN-05 remainder's control: the stated theme rides the
+            // frontend-config fragment, the stated texts and repo URL ride
+            // the branding fragment with the mark SVG verbatim, and unset
+            // texts default to null. Without this, a red result from the
+            // three fault cases above could be the emitter broken on a
+            // clean value rather than on the plant.
+            name: 'theia branding rides the runtime channel fragments and defaults unset texts to null',
+            probe: () => brandingControl,
+            holds: 'the stated theme, texts, repo URL and verbatim mark, and null texts when unset',
+            resolved: () => brandingControl.length === 0,
         },
     ];
 
