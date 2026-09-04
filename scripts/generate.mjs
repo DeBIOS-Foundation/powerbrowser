@@ -5,7 +5,7 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT COVERS. Forty-seven targets: thirty-three byte-identical to the
+// WHAT IT COVERS. Forty-eight targets: thirty-three byte-identical to the
 // file Phase 1 wrote by hand -- the five Phase 2 build surfaces (the two
 // branding configure.sh files, .mozconfig, and the two .desktop files), the
 // eighteen GEN-01 branding-directory surfaces (per variant: brand.ftl,
@@ -23,7 +23,11 @@
 // the GEN-05 Theia frontend-config fragment
 // (generated/theia-frontend-config.json: the brand-owned keys of the
 // application package.json's theia.frontend.config block, today only
-// applicationName).
+// applicationName), plus the EXT-01 declared-extensions map
+// (generated/theia-plugins.json: the application package.json's theiaPlugins
+// block, one exact download URL per [[extensions]] entry -- a versioned
+// Open VSX file URL for source = "openvsx", the stated URL verbatim for
+// source = "url").
 // That byte-identity IS
 // the acceptance test for the thirty-three,
 // which is why no emitter here is allowed to reformat, reorder or "tidy" what
@@ -256,8 +260,17 @@ function rejectUnknown(leaves, refused) {
             + `Remove it from ${MANIFEST_NAME}, then run: ${RERUN}`,
         );
     }
-    for (const { path } of leaves) {
+    for (const { path, value } of leaves) {
         if (Object.hasOwn(SCHEMA_KEYS, path)) continue;
+        // EXT-01 (04-02). An explicitly emptied array of tables is not an
+        // unknown setting: `extensions = []` is how a downstream restates the
+        // list without its entries (D-07 array-replace), and collectLeaves
+        // has no element to fold onto an `extensions[].*` schema path, so the
+        // bare path is all it can report. The schema's `extensions[].*` keys
+        // are what prove the bare path names a declared array of tables --
+        // derived, not a second list.
+        if (Array.isArray(value) && value.length === 0
+            && Object.keys(SCHEMA_KEYS).some(k => k.startsWith(`${path}[].`))) continue;
         failures.push(
             `unknown setting '${path}' -- ${MANIFEST_NAME} has no setting by that name. `
             + `Check the spelling of the setting and of the section header above it, then run: ${RERUN}`,
@@ -427,6 +440,13 @@ function isUnset(value) {
 }
 
 const VARIANT_PREFIX = 'variants[].';
+const EXTENSIONS_PREFIX = 'extensions[].';
+
+/** The two `source` values EXT-01 implements. Anything else is a v2 kind (EXT-02) or a typo. */
+const EXTENSION_SOURCES = Object.freeze(['openvsx', 'url']);
+
+/** Accepted download archive suffixes: exactly what stock `theia download:plugins` unpacks. */
+const EXTENSION_ARCHIVE_SUFFIXES = Object.freeze(['.vsix', '.theia', '.tar.gz']);
 
 /**
  * The required-setting check for the elements of an array of tables.
@@ -513,6 +533,137 @@ function ordinal(n) {
     return `${n}${suffix}`;
 }
 
+/**
+ * The required-setting check for the elements of the `[[extensions]] array,
+ * plus the two checks no scalar loop can express: the `source` allowlist and
+ * the conditional pins.
+ *
+ * WHY A SECOND LOOP (same reason as validateVariantElements). `extensions[].id`
+ * is one setting per element and readPath cannot address any of them.
+ *
+ * WHY EVERY FAILURE NAMES THE ENTRY ID. The generic regex loop below reports a
+ * dotted path, and `extensions[].sha256` does not say WHICH of several
+ * entries is unpinned or malformed. Every failure here names the entry's id
+ * (or its ordinal where the id itself is what is missing), so a manifest with
+ * five entries fails on the one that is wrong.
+ *
+ * CONDITIONAL PINS. `version` is required when source is `openvsx` (it builds
+ * the exact versioned file URL -- latest-resolution is the unpinned behavior
+ * EXT-01 forbids) and `url` is required when source is `url`. Both carry
+ * `required: false` in the schema so this function, which sees the source, is
+ * the only place that demands them; `id`, `source` and `sha256` carry
+ * `required: true` and are enforced by the loop below exactly like the variant
+ * elements above. A `url` that stock `theia download:plugins` would refuse
+ * (anything not ending in .vsix/.theia/.tar.gz) fails HERE, at generate time,
+ * rather than after the download step -- same entry-naming shape.
+ *
+ * SHAPES ARE DERIVED, NOT RESTATED. Each value is tested against its own
+ * schema `regex`, read out of SCHEMA_KEYS, so the pattern lives in exactly
+ * one place. The generic regex loop skips `extensions[].*` paths for the same
+ * reason: one value, one failure, naming the entry.
+ */
+function validateExtensionElements(doc) {
+    const failures = [];
+    const extensions = readPath(doc, 'extensions');
+    if (!Array.isArray(extensions)) return failures;
+
+    const labelOf = (entry, index) => (isTable(entry) && typeof entry.id === 'string' && entry.id !== ''
+        ? `the [[extensions]] entry with id ${JSON.stringify(entry.id)}`
+        : `the ${ordinal(index + 1)} [[extensions]] entry (no id stated)`);
+
+    const seen = new Map();
+    for (const [index, entry] of extensions.entries()) {
+        if (isTable(entry) && typeof entry.id === 'string' && entry.id !== '') {
+            seen.set(entry.id, (seen.get(entry.id) ?? 0) + 1);
+        }
+    }
+    for (const [id, count] of seen) {
+        if (count > 1) {
+            failures.push(
+                `two or more [[extensions]] entries both use the id ${JSON.stringify(id)}, and only one download URL `
+                + `can be emitted for it. Give each entry its own id in ${MANIFEST_NAME}, then run: ${RERUN}`,
+            );
+        }
+    }
+
+    for (const [index, entry] of extensions.entries()) {
+        if (!isTable(entry)) {
+            failures.push(
+                `the ${ordinal(index + 1)} [[extensions]] entry is not a section of settings. `
+                + `Open ${MANIFEST_NAME}, write it as an [[extensions]] section with id, source and sha256, then run: ${RERUN}`,
+            );
+            continue;
+        }
+        const label = labelOf(entry, index);
+
+        for (const [path, spec] of Object.entries(SCHEMA_KEYS)) {
+            if (!path.startsWith(EXTENSIONS_PREFIX) || !spec.required) continue;
+            const key = path.slice(EXTENSIONS_PREFIX.length);
+            if (entry[key] !== undefined) continue;
+            failures.push(
+                `${label}: ${key} ${UNSET_MARK} Open ${MANIFEST_NAME}, find that [[extensions]] entry, and give `
+                + `${key} a value. Then run: ${RERUN}`,
+            );
+        }
+
+        const source = entry.source;
+        if (source !== undefined && !EXTENSION_SOURCES.includes(source)) {
+            failures.push(
+                `${label}: source is ${JSON.stringify(source)}, which this project does not implement. `
+                + `Write it as one of ${EXTENSION_SOURCES.map(s => JSON.stringify(s)).join(' or ')} -- anything else `
+                + `(npm, local paths) is a later phase. Correct it in ${MANIFEST_NAME}, then run: ${RERUN}`,
+            );
+            continue;
+        }
+
+        // Conditional pins: the key the entry's own source demands.
+        if (source === 'openvsx' && entry.version === undefined) {
+            failures.push(
+                `${label}: version ${UNSET_MARK} An Open VSX entry without an exact version would resolve to `
+                + `whatever is latest, which is the unpinned behavior this setting forbids. Open ${MANIFEST_NAME}, `
+                + `find that [[extensions]] entry, and pin version. Then run: ${RERUN}`,
+            );
+        }
+        if (source === 'url' && entry.url === undefined) {
+            failures.push(
+                `${label}: url ${UNSET_MARK} A direct-URL entry downloads from its url verbatim, so without one `
+                + `there is nothing to download. Open ${MANIFEST_NAME}, find that [[extensions]] entry, and give `
+                + `url a value. Then run: ${RERUN}`,
+            );
+        }
+
+        // Shapes, against each key's own schema pattern, naming the entry.
+        for (const key of ['id', 'version', 'url', 'sha256']) {
+            const value = entry[key];
+            if (value === undefined) continue;
+            const spec = SCHEMA_KEYS[`${EXTENSIONS_PREFIX}${key}`];
+            if (typeof value !== 'string') {
+                failures.push(
+                    `${label}: ${key} is ${JSON.stringify(value)}, but this setting has to be text written inside double `
+                    + `quotes. Open ${MANIFEST_NAME}, quote the value, then run: ${RERUN}`,
+                );
+                continue;
+            }
+            if (spec.regex && !new RegExp(spec.regex).test(value)) {
+                failures.push(
+                    `${label}: ${key} is ${JSON.stringify(value)}, which is not allowed here. Write it as ${spec.regex_help}. `
+                    + `Allowed form: ${spec.regex} . A valid value looks like ${JSON.stringify(spec.regex_example)}. `
+                    + `Correct it in ${MANIFEST_NAME}, then run: ${RERUN}`,
+                );
+                continue;
+            }
+            if (key === 'url' && !EXTENSION_ARCHIVE_SUFFIXES.some(suffix => value.endsWith(suffix))) {
+                failures.push(
+                    `${label}: url is ${JSON.stringify(value)}, which the download step cannot unpack -- it accepts only `
+                    + `${EXTENSION_ARCHIVE_SUFFIXES.join(', ')} archives. Point it at a download archive in ${MANIFEST_NAME}, `
+                    + `then run: ${RERUN}`,
+                );
+            }
+        }
+    }
+    return failures;
+}
+
 function validate(doc, leaves) {
     const failures = [];
     const reportedUnset = new Set();
@@ -530,9 +681,20 @@ function validate(doc, leaves) {
 
     failures.push(...validateVariantElements(doc));
     failures.push(...validateVariantIds(doc));
+    failures.push(...validateExtensionElements(doc));
 
     for (const { path, value } of leaves) {
+        // EXT-01 (04-02). extensions[] leaves are validated by
+        // validateExtensionElements above, which names the ENTRY id -- the
+        // generic shape below can only name the dotted path, so letting both
+        // run would report one value twice.
+        if (path.startsWith(EXTENSIONS_PREFIX)) continue;
+        // An explicitly emptied array (extensions = []) carries no spec by
+        // construction -- rejectUnknown vetted it above, and there is no
+        // value to check a pattern against. Without this guard the spec
+        // lookup below throws past report() into a stack trace.
         const spec = SCHEMA_KEYS[path];
+        if (spec === undefined) continue;
         if (reportedUnset.has(path)) continue;
         if (spec.type === 'string' && typeof value !== 'string') {
             failures.push(
@@ -1024,6 +1186,77 @@ export function emitTheiaFrontendConfig(config, variant) {
         `  "applicationName": ${JSON.stringify(name)}`,
         '}',
     ];
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * The exact versioned Open VSX file URL for a pinned entry.
+ *
+ * NO latest-resolution at any point in this pipeline: the version segment is
+ * the manifest's pinned version, so what the build downloads is what the
+ * manifest names. The publisher is everything up to the FIRST dot -- the id
+ * pattern keeps dots out of the publisher half, so the first dot is the
+ * separator whatever the extension name carries.
+ */
+export function openVsxFileUrl(entry) {
+    const dot = entry.id.indexOf('.');
+    const namespace = entry.id.slice(0, dot);
+    const name = entry.id.slice(dot + 1);
+    return `https://open-vsx.org/api/${namespace}/${name}/${entry.version}/file/${entry.id}-${entry.version}.vsix`;
+}
+
+/**
+ * The declared-extensions map (04-02, EXT-01): the application
+ * package.json's `theiaPlugins` block, one exact download URL per
+ * [[extensions]] entry -- the versioned file URL above for source =
+ * "openvsx", the stated URL verbatim for source = "url".
+ *
+ * FRAGMENT, NOT THE WHOLE MANIFEST (04-01's rule carried over). The tracked
+ * package.json is yarn-managed, so whole-file byte-identity is brittle
+ * there; the copy-over sets ONLY the theiaPlugins block from this fragment
+ * and leaves every sibling byte-identical. No tracked comparand row -- the
+ * byte-identity gate skips rows without one, --check still covers this row
+ * through the frozen table, and the tracked side is pinned by
+ * scripts/verify-extension-pins.mjs (block equality + version segments +
+ * sha256 over the packed archives).
+ *
+ * WHY NO GENERATED_BANNER. Same reason as the frontend-config fragment:
+ * strict JSON carries no comment, and a `_comment` key would pollute the
+ * block a reader copies from. Derivation lives here; freshness is
+ * generate --check's contract.
+ *
+ * An absent [[extensions]] list emits the empty map: the no-extension tree
+ * is today's tree, and its correct tracked state is NO theiaPlugins block
+ * at all. A downstream drops a default entry by restating the list without
+ * it (D-07 array-replace) -- restating an empty list drops them all.
+ *
+ * Runs AFTER validate(), so every entry below carries its source's pins in
+ * the schema's shapes. The id-dot check is defence in depth for a future
+ * schema edit that loosens the id pattern: without a dot there is no
+ * publisher to build the file URL from.
+ *
+ * Joined with a literal newline, never the platform line-ending constant.
+ */
+export function emitTheiaPlugins(config, variant) {
+    void variant;
+    const lines = ['{'];
+    for (const entry of config.extensions ?? []) {
+        if (typeof entry?.id !== 'string' || !entry.id.includes('.')
+            || (entry.source !== 'openvsx' && entry.source !== 'url')) {
+            report([
+                `the [[extensions]] entry with id ${JSON.stringify(entry?.id ?? '')} cannot be resolved to a download URL as it stands. `
+                + `Open ${MANIFEST_NAME}, correct it, then run: ${RERUN}`,
+            ]);
+        }
+        const url = entry.source === 'openvsx' ? openVsxFileUrl(entry) : entry.url;
+        lines.push(`  ${JSON.stringify(entry.id)}: ${JSON.stringify(url)},`);
+    }
+    // A trailing comma after the last entry is NOT valid strict JSON, and the
+    // copy-over reads this file with JSON.parse -- so the final comma comes
+    // off. (Built per line rather than via JSON.stringify of the whole map to
+    // keep the one-entry-per-line shape the fragment readers expect.)
+    if (lines.length > 1) lines[lines.length - 1] = lines[lines.length - 1].replace(/,$/, '');
+    lines.push('}');
     return lines.join('\n') + '\n';
 }
 
@@ -2148,6 +2381,20 @@ export const TARGETS = Object.freeze([
         variant: 'dev',
         emit: emitTheiaFrontendConfig,
     }),
+    // NEW (04-02): EXT-01's declared-extensions map. No tracked
+    // comparand -- the tracked theia/applications/browser/package.json is
+    // yarn-managed, so whole-file byte-identity is brittle there; the
+    // copy-over sets ONLY the theiaPlugins block from this fragment, and
+    // the byte-identity gate skips rows without a tracked path while
+    // --check still covers the row through the frozen table. The tracked
+    // side is pinned by scripts/verify-extension-pins.mjs (block equality
+    // against this fragment, version segments, sha256 over the packed
+    // archives), never the manifest.
+    Object.freeze({
+        generated: 'theia-plugins.json',
+        variant: 'dev',
+        emit: emitTheiaPlugins,
+    }),
     Object.freeze({
         generated: 'branding/dev/configure.sh',
         tracked: 'powerbrowser/branding/dev/configure.sh',
@@ -2527,7 +2774,7 @@ function firstDifferingLine(a, b) {
  *
  * THREE OUTCOMES, THREE MESSAGES, deliberately not one. An absent generated/ is
  * the state every fresh copy of the project and every automated run begins in;
- * reporting it as forty-seven stale files reads as forty-seven problems and sends the reader
+ * reporting it as forty-eight stale files reads as forty-eight problems and sends the reader
  * hunting a mismatch that does not exist.
  *
  * The set comparison runs in BOTH directions. A per-target loop alone sees a
@@ -2722,6 +2969,31 @@ const FIXTURE_VARIANT = [
     '',
 ].join('\n');
 
+/**
+ * TWO complete [[extensions]] entries, stated once because several cases
+ * below need them -- one whole for the URL-exactness control, one with a
+ * single pin removed or corrupted for each planted fault. One `openvsx`
+ * entry (pinned version + sha256) and one `url` entry (verbatim URL +
+ * sha256), so the control proves both resolution paths and every fault
+ * below breaks exactly one thing.
+ */
+const FIXTURE_EXTENSION_PIN_A = 'a'.repeat(64);
+const FIXTURE_EXTENSION_PIN_B = 'b'.repeat(64);
+const FIXTURE_EXTENSIONS = [
+    '[[extensions]]',
+    'id = "acme.gadget"',
+    'source = "openvsx"',
+    'version = "1.2.3"',
+    `sha256 = "${FIXTURE_EXTENSION_PIN_A}"`,
+    '',
+    '[[extensions]]',
+    'id = "acme.widget"',
+    'source = "url"',
+    'url = "https://example.org/acme-widget-2.0.0.vsix"',
+    `sha256 = "${FIXTURE_EXTENSION_PIN_B}"`,
+    '',
+].join('\n');
+
 /** Does `text` carry `needle`, which is either a literal or a pattern? */
 function carries(text, needle) {
     return needle instanceof RegExp ? needle.test(text) : text.includes(needle);
@@ -2804,7 +3076,7 @@ function probeStaleOutput(config) {
  * Ask the freshness comparison about a directory that is not there -- the state
  * every fresh copy of the project and every CI runner starts in, because
  * generated/ is git-ignored. The distinct message this must produce is the
- * whole point: forty-seven phantom stale paths would read as forty-seven defects on a tree
+ * whole point: forty-eight phantom stale paths would read as forty-eight defects on a tree
  * with none, and a gate red for a non-defect is a gate its readers skip.
  *
  * The EXIT CODE is asserted here too, and separately from the message, because
@@ -3144,6 +3416,47 @@ function selfTest() {
         return [];
     })();
 
+    // EXT-01's green control, computed once: the two-entry fixture below must
+    // resolve with zero failures and emit a theiaPlugins block with the two
+    // EXACT URLs -- the versioned Open VSX file URL for the openvsx entry
+    // (no latest-resolution anywhere in the pipeline) and the stated URL
+    // verbatim for the url entry. The expected URLs are literals: deriving
+    // them through openVsxFileUrl would make the control agree with the
+    // emitter no matter how wrong both were. Without this, a red result from
+    // the fault cases below could be the emitter broken on clean entries
+    // rather than on the plant.
+    const extensionUrlsControl = (() => {
+        const fixtureDir = mkdtempSync(join(tmpdir(), 'generate-selftest-extensions-'));
+        try {
+            const fixturePath = join(fixtureDir, 'extensions.toml');
+            writeFileSync(fixturePath, `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS}`, 'utf8');
+            const resolved = resolveConfig(MANIFEST_PATH, fixturePath);
+            if (resolved.failures.length > 0) {
+                return [`the extensions fixture failed validation: ${resolved.failures.join(' | ')}`];
+            }
+            let parsed;
+            try {
+                parsed = JSON.parse(emitTheiaPlugins(
+                    resolved.config,
+                    resolved.config.variants.find(v => v.id === 'dev'),
+                ));
+            } catch {
+                return ['the emitted theiaPlugins fragment is not valid JSON'];
+            }
+            const want = {
+                'acme.gadget': 'https://open-vsx.org/api/acme/gadget/1.2.3/file/acme.gadget-1.2.3.vsix',
+                'acme.widget': 'https://example.org/acme-widget-2.0.0.vsix',
+            };
+            const keys = Object.keys(parsed ?? {});
+            if (keys.length !== 2 || keys.some(k => parsed[k] !== want[k])) {
+                return [`the emitted theiaPlugins block is not the two exact URLs: ${JSON.stringify(parsed)}`];
+            }
+            return [];
+        } finally {
+            rmSync(fixtureDir, { recursive: true, force: true });
+        }
+    })();
+
     const cases = [
         {
             // D-10. A whitespace-only value is not a value.
@@ -3247,7 +3560,7 @@ function selfTest() {
             expect: TARGETS[0].generated,
         },
         {
-            // The absent-directory outcome is a DISTINCT message, not forty-seven
+            // The absent-directory outcome is a DISTINCT message, not forty-eight
             // stale paths, AND it is not a failure. Asserted from three sides:
             // the message is there, no target path is, and the exit code was
             // zero -- so a future collapse of the three outcomes into one goes
@@ -3389,6 +3702,55 @@ function selfTest() {
             probe: () => frontendConfigControl,
             holds: 'valid JSON carrying the manifest display name',
             resolved: () => frontendConfigControl.length === 0,
+        },
+        {
+            // EXT-01. An Open VSX entry without its version pin must fail
+            // NAMING the entry -- a version-less entry would resolve to
+            // whatever is latest, which is the unpinned behavior this
+            // setting forbids.
+            name: 'extension entry without its version pin',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "1.2.3"\n', '')}`,
+            expect: 'acme.gadget',
+        },
+        {
+            // EXT-01. A source outside the v1 pair (npm and local paths are
+            // EXT-02) must fail NAMING the entry, with the implemented pair
+            // stated -- not a generic schema complaint.
+            name: 'extension entry with an unimplemented source',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('source = "openvsx"', 'source = "npm"')}`,
+            expect: 'acme.gadget',
+            also: ['"openvsx"'],
+        },
+        {
+            // EXT-01. A sha256 of the wrong shape must fail NAMING the entry,
+            // not just the dotted path -- with several entries,
+            // `extensions[].sha256` does not say which one is malformed.
+            name: 'extension entry with a malformed sha256 pin',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace(FIXTURE_EXTENSION_PIN_A, 'xyz')}`,
+            expect: 'acme.gadget',
+        },
+        {
+            // EXT-01's control: the two-entry fixture resolves with zero
+            // failures and emits the two exact URLs (versioned file URL for
+            // openvsx, verbatim URL for url). Without this, a red result
+            // from the three fault cases above could be the emitter broken
+            // on clean entries rather than on the plant.
+            name: 'declared extensions resolve to exact versioned URLs',
+            probe: () => extensionUrlsControl,
+            holds: 'a theiaPlugins block with the two exact URLs',
+            resolved: () => extensionUrlsControl.length === 0,
+        },
+        {
+            // D-07 for the extensions array: an explicitly emptied list is a
+            // declared empty list, not an unknown setting -- restating the
+            // list without its entries is how a downstream drops them all.
+            // (The empty assignment sits BEFORE every section header: TOML
+            // keys after a [table] header belong to that table, so placing
+            // it after [legal] or [[variants]] would test a nested path.)
+            name: 'downstream empty extensions array resolves to no entries',
+            toml: `extensions = []\n${FIXTURE_BASE}\n${FIXTURE_VARIANT}`,
+            holds: 'zero entries, not an unknown-setting failure',
+            resolved: c => Array.isArray(c.extensions) && c.extensions.length === 0,
         },
     ];
 
