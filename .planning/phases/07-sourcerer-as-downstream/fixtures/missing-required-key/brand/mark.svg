@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fixture artwork for plan 07-03 (missing-required-key). ORIGINAL geometry: a
+  hexagon ring (even-odd cutout), not the platform's power-glyph construction
+  of arc plus bar and not the other fixtures' diamond, triangle, or stripes.
+  Square viewBox and valid on purpose: this fixture must fail ONLY on its
+  absent identity.display_name, so the artwork gives the run nothing else to
+  refuse. The <svg> element below is ONE LINE starting with the literal open
+  tag -- the runtime-channel contract readMarkSvgElement enforces.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><defs><style>.k{fill:#7c2d12;}@media (prefers-color-scheme: dark){.k{fill:#fdba74;}}</style></defs><path class="k" fill-rule="evenodd" d="M64 14L107 39L107 89L64 114L21 89L21 39Z M64 40L85 52L85 76L64 88L43 76L43 52Z"/></svg>
