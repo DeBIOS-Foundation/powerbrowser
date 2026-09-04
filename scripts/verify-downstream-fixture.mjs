@@ -36,8 +36,10 @@
 //
 // EXPECTED-FAIL (needed by plan 07-03): exit non-zero with stderr carrying
 // <substring>, plain-words copy shape (names the setting or asset, ends with
-// the re-run next step, no stack), and the generated/ snapshot byte-identical
-// before and after. Under --all, a fixture dir holding an expect-fail.txt
+// the re-run next step in either of the generator's two canonical casings --
+// "Then run:" for required-setting failures, "then run:" for artwork ones --
+// matched case-insensitively, no stack), and the generated/ snapshot
+// byte-identical before and after. Under --all, a fixture dir holding an expect-fail.txt
 // file runs in expect-fail mode with its trimmed content as the substring
 // (CLI --expect-fail overrides); absent file means expected-pass.
 //
@@ -383,7 +385,7 @@ function driveFixture(sourceDir, { expectFail } = {}) {
             note(run.status !== 0, `expected-fail fixture exited 0, want non-zero carrying ${JSON.stringify(expectFail)}`);
             if (run.status !== 0) {
                 note(run.stderr.includes(expectFail), `stderr does not carry ${JSON.stringify(expectFail)}; it was:\n${run.stderr.split('\n').slice(0, 12).join('\n')}`);
-                note(run.stderr.includes('then run:'), 'failure does not end with the re-run next step (plain-words copy shape)');
+                note(/then run:/i.test(run.stderr), 'failure does not end with the re-run next step (plain-words copy shape)');
                 note(!/^\s+at /m.test(run.stderr) && !run.stderr.includes('Traceback'), 'failure carries a stack trace (plain-words copy shape forbids it)');
                 const afterHashes = snapshotHashes(GENERATED_ROOT);
                 note(snapshotsEqual(beforeHashes, afterHashes), 'generated/ changed during a failing run -- a failed run must leave the output tree exactly as it found it');

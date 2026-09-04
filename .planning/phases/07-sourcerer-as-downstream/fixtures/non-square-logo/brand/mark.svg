@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PLANTED DEFECT for plan 07-03 (non-square-logo): viewBox "0 0 128 64" is 128
+  wide by 64 tall. The generator's squareness rule must refuse this file --
+  never stretch, letterbox, or substitute it -- naming brand/mark.svg and the
+  square-artwork rule with generated/ untouched.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 64"><defs><style>.n{fill:#0f3d2e;}@media (prefers-color-scheme: dark){.n{fill:#8fe3bd;}}</style></defs><path class="n" fill-rule="evenodd" d="M64 8L120 32L64 56L8 32Z M64 22L92 32L64 42L36 32Z"/></svg>
