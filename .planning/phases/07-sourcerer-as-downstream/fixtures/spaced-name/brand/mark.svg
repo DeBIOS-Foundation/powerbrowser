@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fixture artwork for plan 07-03 (spaced-name). ORIGINAL geometry: a triangle
+  ring (even-odd cutout), not the platform's power-glyph construction of arc
+  plus bar and not the 07-02 fixture's diamond ring. Square viewBox; the <svg>
+  element below is ONE LINE starting with the literal open tag -- the
+  runtime-channel contract readMarkSvgElement enforces.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><defs><style>.c{fill:#1d4ed8;}@media (prefers-color-scheme: dark){.c{fill:#93c5fd;}}</style></defs><path class="c" fill-rule="evenodd" d="M64 14L114 110L14 110Z M64 52L88 94L40 94Z"/></svg>

@@ -1,0 +1,46 @@
+# Adversarial EXPECTED-PASS fixture for plan 07-03 (VER-03 hostile half).
+#
+# This is TEST DATA, not a real product: every value is invented ("Cedar
+# Falls") and no real-world product name, vendor, URL, or trademark appears
+# here. Cloned from the 07-02 fixture with surgical diffs; lives under
+# .planning/ so both tree scanners exclude it by committed table.
+#
+# HOSTILITY: display_name carries two interior spaces across three words
+# ("Cedar Falls Browser"). The display pattern allows spaces, so this is the
+# hardest in-contract spacing form: the exact bytes must survive into the
+# double-quoted shell assignment, the desktop Name key, both locale files per
+# variant, and the installer defines with no collapse, trim, or split.
+# vendor_machine stays spaceless ("CedarFalls") while vendor_display carries
+# a space, proving the two-vendor split holds the profile path safe.
+#
+# SHAPE: same carve-outs as the 07-02 fixture (theia_release platform-
+# identical, [[variants]]/cosmetic keys omitted to exercise the default-echo
+# path). Every required key differs from the platform's and from every other
+# fixture's.
+
+[product]
+vendor_machine = "CedarFalls"
+vendor_display = "Cedar Falls Collective"
+
+[identity]
+display_name = "Cedar Falls Browser"
+app_basename = "cedar-falls-browser"
+binary_name = "cedar-falls"
+remoting_name = "cedar-falls"
+distribution_id = "org.cedarfalls"
+
+[legal]
+license = "MIT"
+copyright_holder = "Cedar Falls Collective"
+trademark_notice = "Cedar Falls Browser is a trademark of Cedar Falls Collective."
+
+[installer]
+support_url = "https://cedarfalls.example.org"
+
+[telemetry]
+level = "error"
+endpoint = "https://telemetry.cedarfalls.example.org/v1/events"
+
+[upstreams]
+firefox_esr_tag = "FIREFOX_154_1_0esr_RELEASE"
+theia_release = "1.74.1"
