@@ -855,7 +855,7 @@
       "case_form": "literal",
       "class": "frozen",
       "target": "pref(\"",
-      "expected_count": 67,
+      "expected_count": 69,
       "expected_files": [
         "powerbrowser/branding/dev/pref/firefox-branding.js",
         "powerbrowser/branding/release/pref/firefox-branding.js"
@@ -864,7 +864,7 @@
         "powerbrowser/branding/dev/pref/firefox-branding.js",
         "powerbrowser/branding/release/pref/firefox-branding.js"
       ],
-      "reason": "Every Gecko pref key under branding/*/pref/firefox-branding.js is upstream's, not ours -- and none of them contains a brand token, so the only thing the rename touches in these two files is comment text naming the product or a repo path. This row's count is the assertion that the pref statements themselves came through untouched; verify-endpoints.sh layer 1 asserts each key's value against endpoint-allowlist.json on the installed, unpreprocessed copy."
+      "reason": "Every Gecko pref key under branding/*/pref/firefox-branding.js is upstream's, not ours -- and none of them contains a brand token, so the only thing the rename touches in these two files is comment text naming the product or a repo path. This row's count is the assertion that the pref statements themselves came through untouched; verify-endpoints.sh layer 1 asserts each key's value against endpoint-allowlist.json on the installed, unpreprocessed copy. COUNT MOVED 67 -> 69 (plan 04-04): +2 from the TEL-03 manifest-driven breakpad.reportURL line, one per variant -- the pref KEY is upstream's (browser/app/profile/firefox.js:1551), only its blanked value is ours."
     }
   ]
 }

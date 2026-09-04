@@ -3654,7 +3654,7 @@ run_own_checks() {
     #
     # generate-self-test rides alongside for the reason every other self-test
     # row in this array gives, and here it carries more weight than most:
-    # thirty-eight planted faults -- a missing required key, an invalid basename,
+    # thirty-nine planted faults -- a missing required key, an invalid basename,
     # a misspelled section header, a whitespace-only value, a short downstream
     # array, an incomplete variant, a duplicated variant id, an unused variant
     # id, a partially-stated identity table, a stale generated file, an absent
@@ -3675,8 +3675,10 @@ run_own_checks() {
     # telemetry endpoint outside https, the telemetry fragment carrying
     # the stated pair and defaulting an unset section to off, a theia theme
     # outside the builtin theme ids, a markup-bearing theia welcome text, a
-    # crash-report URL outside https, and the theia branding riding the
-    # runtime channel fragments and defaulting unset texts to null -- each required
+    # crash-report URL outside https, the theia branding riding the
+    # runtime channel fragments and defaulting unset texts to null, and the
+    # manifest endpoint hosts deriving the stated hosts with the prefs
+    # repointed -- each required
     # to go red NAMING the drift (or resolve as pinned), plus a
     # cross-cutting assertion that no case's output carries a stack frame, a
     # module specifier, or this machine's path to the project. Every one of the
@@ -3926,6 +3928,38 @@ run_own_checks() {
     # tsc half. No build, no browser, no display, no network.
     "theia-branding|node $REPO_ROOT/scripts/verify-theia-branding.mjs"
     "theia-branding-self-test|node $REPO_ROOT/scripts/verify-theia-branding.mjs --self-test"
+
+    # NEW (04-04): TEL-03's endpoint-allowlist coverage gate -- every host
+    # the manifest names (telemetry endpoint, [urls] values, support URL)
+    # is present in powerbrowser/endpoint-allowlist.json, and the two
+    # manifest-driven pref expects stay in sync with the manifest
+    # derivation.
+    #
+    # It asserts something DIFFERENT from the rows above it, which is why
+    # another pair of rows exists rather than none. verify-endpoints.sh
+    # layer 1 compares the INSTALLED pref files against the allowlist's
+    # `expect` values, but it needs the built binary; without this row a
+    # manifest repoint that nobody carried into the allowlist would stay
+    # green through every --quick row and fail only after a tier-3 build.
+    # This row derives the expected hosts and pref values from the
+    # manifest at check time (the same derivation the generator emits
+    # from -- one source, so the two gates cannot disagree) and compares
+    # as set equality in both directions for marked entries
+    # (generated fragment, tracked allowlist), requires every derived
+    # host present in the allowlist naming the host, and requires the
+    # driven pref expects to agree naming the pref.
+    #
+    # theia-endpoints-self-test rides alongside for the reason every other
+    # self-test row in this array gives: it plants a manifest endpoint
+    # host absent from the allowlist and a marked allowlist entry covering
+    # no manifest host, each requiring red naming the drift -- with the
+    # unmutated control green first.
+    #
+    # Both are honestly --quick: text off disk only, with the same absent
+    # fragment SKIP as every other fragment gate (generate-check's own
+    # rule). No build, no browser, no display, no network.
+    "theia-endpoints|node $REPO_ROOT/scripts/verify-theia-endpoints.mjs"
+    "theia-endpoints-self-test|node $REPO_ROOT/scripts/verify-theia-endpoints.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
