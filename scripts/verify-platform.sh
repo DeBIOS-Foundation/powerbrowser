@@ -3654,15 +3654,17 @@ run_own_checks() {
     #
     # generate-self-test rides alongside for the reason every other self-test
     # row in this array gives, and here it carries more weight than most:
-    # twenty planted faults -- a missing required key, an invalid basename,
+    # twenty-three planted faults -- a missing required key, an invalid basename,
     # a misspelled section header, a whitespace-only value, a short downstream
     # array, an incomplete variant, a duplicated variant id, an unused variant
     # id, a partially-stated identity table, a stale generated file, an absent
     # generated directory, a malformed manifest, a drifted locale full name,
     # the locale agreement holding on the emitted pairs, a non-square icon
     # source, a missing icon source, a drifted icon raster, the container
-    # writers holding on the emitted buffers, a truncated ICO payload and a
-    # wrong-magic ICNS -- each required
+    # writers holding on the emitted buffers, a truncated ICO payload, a
+    # wrong-magic ICNS, a hostile double quote in the display name, a hostile
+    # variable reference in the support URL and a hostile ampersand in the
+    # display name -- each required
     # to go red NAMING the drift (or resolve as pinned), plus a
     # cross-cutting assertion that no case's output carries a stack frame, a
     # module specifier, or this machine's path to the project. Every one of the
@@ -3672,7 +3674,7 @@ run_own_checks() {
     #
     # Both are honestly --quick. The generator reads configuration.toml and a
     # JSON schema and writes under generated/; the self-test emits into mkdtemp
-    # directories and spawns one short-lived node child. No build, no browser,
+    # directories and spawns short-lived node children. No build, no browser,
     # no display, no network.
     "generate-check|node $REPO_ROOT/scripts/generate.mjs --check"
     "generate-self-test|node $REPO_ROOT/scripts/generate.mjs --self-test"
@@ -3752,6 +3754,51 @@ run_own_checks() {
     # browser, no display, no network.
     "icon-ihdr|node $REPO_ROOT/scripts/verify-icon-ihdr.mjs"
     "icon-ihdr-self-test|node $REPO_ROOT/scripts/verify-icon-ihdr.mjs --self-test"
+
+    # NEW (03-03): the installer-fragment gate -- the NSIS defines, MSIX
+    # fields, macOS bundle fields and tile manifest the generator emits are
+    # present and schema-complete.
+    #
+    # It asserts something DIFFERENT from the three pairs above it, which is
+    # why another pair of rows exists rather than none. generated-byte-identity
+    # proves each emitted file equals its hand-written counterpart,
+    # branding-dir-agreement proves the directory holds the declared set, and
+    # icon-ihdr proves the rasters and containers are structurally valid --
+    # but the eight installer fragments have no hand-written originals, so no
+    # per-file comparison can see a dropped !define, a malformed XML document,
+    # or a BackgroundColor line that defies the manifest's tile_color state.
+    # This row derives the fragment set from the generator's frozen TARGETS
+    # table at check time and compares as set equality in both directions;
+    # asserts each branding.nsi carries all six !define names with non-empty
+    # values; asserts each AppxManifest fragment is tag-balanced XML carrying
+    # DisplayName, Description and Identity Name; asserts each Info-plist
+    # fragment carries CFBundleName and CFBundleIdentifier; and asserts each
+    # tile manifest is tag-balanced XML whose BackgroundColor presence matches
+    # the tile_color set-or-unset state read from configuration.toml at check
+    # time. An empty derived set is its own failure, never a pass.
+    #
+    # Schema-complete ONLY, never build-verified -- GEN-03's honest split for
+    # the foreign hosts, whose builds land with the packaging hosts under v2
+    # PKG-01. No row label or message here claims a Windows or macOS build.
+    #
+    # ON A TREE WITH NO generated/branding/ AND NO generated/installer/, THIS
+    # ROW SKIPS AND PASSES, for the same reason generate-check does:
+    # generated/ is git-ignored, so that is the state of every fresh clone,
+    # and a tree that has never generated cannot disagree with itself. A
+    # PRESENT tree yielding no installer fragments is a defect and fails --
+    # the self-test's plants pin the distinction.
+    #
+    # installer-schema-self-test rides alongside for the reason every other
+    # self-test row in this array gives: it mirrors the real installer set
+    # into mkdtemp, asserts the unmutated control is green first, then plants
+    # one mutation per case (a dropped !define, malformed XML, a tile-color
+    # state mismatch) requiring red naming the file and both values.
+    #
+    # Both are honestly --quick. The check reads text files off disk only;
+    # the self-test mirrors into mkdtemp directories. No build, no browser,
+    # no display, no network.
+    "installer-schema|node $REPO_ROOT/scripts/verify-installer-schema.mjs"
+    "installer-schema-self-test|node $REPO_ROOT/scripts/verify-installer-schema.mjs --self-test"
 
     # NEW: the vendored settings parser's provenance record, machine-checked.
     #
