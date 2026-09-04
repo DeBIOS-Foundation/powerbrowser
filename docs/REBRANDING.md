@@ -161,6 +161,66 @@ the executable (a `powerbrowser` binary present, no `firefox` remaining),
 launch sentinel, `brand-full-name` agreeing across `brand.ftl` and
 `brand.properties`, the `desktop-entry` name, and `version`.
 
+## Rebranding from an external config directory
+
+The walkthrough above edits the platform tree's own `configuration.toml`
+and `brand/` in place. A downstream that keeps its brand in its own repo
+does the same rebrand without touching the platform tree at all: the two
+inputs live in an outside directory, and the `PB_CONFIG_DIR` variable points
+the generator at them. This section was carried through against a scratch
+outside directory holding a copy of a fixture brand before it was written,
+so every command below is pasted, not reviewed.
+
+### Layout
+
+The outside directory mirrors the in-tree layout with exactly two entries:
+
+```sh
+<dir>/configuration.toml
+<dir>/brand/mark.svg
+```
+
+A space-free path (for example `~/coding/Acme-Brand`) keeps every shell
+paste below free of quoting hazards.
+
+### Generate and check
+
+Prefix the step 2 and step 4 commands with the directory. Everything else
+about those steps is unchanged — generate first, before
+`scripts/fetch-upstream.sh`, re-run after every edit, then prove freshness:
+
+```sh
+PB_CONFIG_DIR=<dir> node scripts/generate.mjs
+PB_CONFIG_DIR=<dir> node scripts/generate.mjs --check
+```
+
+Nothing is written beside the outside config: `generated/` stays in the
+platform tree, and the fetch script reads its default tag out of the
+platform tree's `generated/upstream-pins.env`, which carries the staged
+`upstreams.firefox_esr_tag` after a prefixed generate. With `PB_CONFIG_DIR`
+unset, the generator reads the platform tree's own `configuration.toml`
+and `brand/`, exactly as the walkthrough shows.
+
+### What still applies unchanged
+
+- The two-input rule: from outside the tree, the inputs are still only
+  `configuration.toml` and `brand/mark.svg`. The step 6 companion file is
+  the same single exception.
+- Required keys stay required: omitting `identity.display_name` (or any
+  other required setting) under the outside directory is the same hard
+  failure naming the setting, never a quiet fallback to Power Browser's
+  values.
+- The fixed identifiers from step 5 stay fixed: the `powerbrowser/` source
+  tree, the `@powerbrowser` npm scope, the `chrome://powerbrowser/content/`
+  package, the `Firefox` user-agent name, the `Firefox` product-name
+  compatibility term, the `unofficial` installer channel, and the untouched
+  application ID. A downstream renames its brand, never these.
+- Profile migration crosses the same substitution: the profile directory
+  path embeds the lowercased `product.vendor_machine` alongside
+  `identity.app_basename`, so a downstream that changes either carries its
+  profile across by substituting the new values into the path and copying
+  before first launch, as the obligations section describes.
+
 ## Reference: every `configuration.toml` field
 
 One row per setting the generator's schema knows. The coverage gate
