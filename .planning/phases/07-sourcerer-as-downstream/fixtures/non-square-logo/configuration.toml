@@ -1,0 +1,37 @@
+# Intended-FAILURE plant for plan 07-03 (VER-03 hostile half).
+#
+# This is TEST DATA. Manifest is a verbatim clone of the 07-02 fixture (same
+# invented Northlight values, so the ONLY defect in this fixture is the
+# artwork below): the failure must attribute to the square-artwork rule, not
+# to any manifest value. Drive with --expect-fail square.
+#
+# PLANT: brand/mark.svg declares viewBox "0 0 128 64" (128 wide by 64 tall).
+# The generator must refuse -- no stretch, no letterbox, no substitution --
+# naming the asset and the square-artwork rule, with generated/ untouched.
+
+[product]
+vendor_machine = "Northlight"
+vendor_display = "Northlight Collective"
+
+[identity]
+display_name = "Northlight Browser"
+app_basename = "northlight-browser"
+binary_name = "northlight"
+remoting_name = "northlight"
+distribution_id = "org.northlight"
+
+[legal]
+license = "Apache License 2.0"
+copyright_holder = "Northlight Collective"
+trademark_notice = "Northlight Browser is a trademark of Northlight Collective."
+
+[installer]
+support_url = "https://northlight.example.org"
+
+[telemetry]
+level = "error"
+endpoint = "https://telemetry.northlight.example.org/v1/events"
+
+[upstreams]
+firefox_esr_tag = "FIREFOX_154_0esr_RELEASE"
+theia_release = "1.74.1"

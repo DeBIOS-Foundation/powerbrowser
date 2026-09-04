@@ -1,0 +1,37 @@
+# Intended-FAILURE plant for plan 07-03 (VER-03 hostile half).
+#
+# This is TEST DATA. Manifest is identical to the 07-02 fixture (same
+# invented Northlight values) EXCEPT identity.display_name is removed
+# entirely -- not blanked, not commented with a value, absent. Drive with
+# --expect-fail identity.display_name.
+#
+# The required-setting check must fire (masked-defaults behavior: a required
+# key can never silently inherit the platform's name), naming the exact
+# dotted key in plain words with generated/ untouched -- never a silent
+# wrong build shipping the platform's display name under this mark.
+
+[product]
+vendor_machine = "Northlight"
+vendor_display = "Northlight Collective"
+
+[identity]
+app_basename = "northlight-browser"
+binary_name = "northlight"
+remoting_name = "northlight"
+distribution_id = "org.northlight"
+
+[legal]
+license = "Apache License 2.0"
+copyright_holder = "Northlight Collective"
+trademark_notice = "Northlight Browser is a trademark of Northlight Collective."
+
+[installer]
+support_url = "https://northlight.example.org"
+
+[telemetry]
+level = "error"
+endpoint = "https://telemetry.northlight.example.org/v1/events"
+
+[upstreams]
+firefox_esr_tag = "FIREFOX_154_0esr_RELEASE"
+theia_release = "1.74.1"
