@@ -2,7 +2,9 @@
 /**
  * GEN-04's byte-identity gate: what the generator emits from
  * configuration.toml is byte-for-byte the thirty-three build surfaces Phase 1
- * wrote by hand.
+ * wrote by hand -- plus the one declared exception EXPECTED marks MIG-05:
+ * the identity carrier never had a hand-written original, so its comparand
+ * is a frozen copy of the emission rather than an independent original.
  *
  * This is the phase's acceptance test made mechanical. Phase 1 deliberately
  * wrote every branding value as a hand-written literal -- CLAUDE.md says so in
@@ -113,6 +115,16 @@ const EXPECTED = Object.freeze([
     'powerbrowser/branding/release/default48.png',
     'powerbrowser/branding/release/default64.png',
     'powerbrowser/branding/release/default128.png',
+    // NEW (05-01, MIG-05): the identity carrier's declared bytes. Unlike
+    // every entry above this one is NOT a Phase-1 hand-written original --
+    // the carrier never had one -- it is a frozen copy of the emission,
+    // authored once from the emitter and committed, so emitter drift on the
+    // relocated telemetry-policy lines goes red here. Same contract as the
+    // hand-written files: on a red, the emitter is what changes; this file
+    // is never edited to make the gate green. It is a comparand, not a
+    // build input: the build reads generated/identity.configure through the
+    // upstream/identity.configure symlink, never this path.
+    'powerbrowser/identity.configure.comparand',
 ]);
 
 /** Set difference reported by name, so a failure says WHICH path drifted. */
@@ -555,7 +567,7 @@ function main() {
 
     if (failures.length > 0) {
         console.error(`${NAME}: FAIL -- ${failures.length} problem(s) with the generator's byte-identity to the hand-written build surfaces.`);
-        console.error(`These ${EXPECTED.length} tracked files are the INDEPENDENT comparand Phase 1 wrote by hand for exactly this test. Do not edit them to make this green -- change the emitter in scripts/generate.mjs, or, if the difference is a deliberate contract change, change EXPECTED in this script in the same commit.`);
+        console.error(`These ${EXPECTED.length} tracked files are the INDEPENDENT comparand Phase 1 wrote by hand for exactly this test (plus the MIG-05 identity-carrier comparand EXPECTED declares as the one exception). Do not edit them to make this green -- change the emitter in scripts/generate.mjs, or, if the difference is a deliberate contract change, change EXPECTED in this script in the same commit.`);
         failures.forEach(f => console.error(`  ${f}`));
         return 1;
     }

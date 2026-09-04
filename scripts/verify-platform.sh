@@ -3508,6 +3508,14 @@ run_own_checks() {
     # from verify-phase-03.sh
     "check-patch-surface|bash $REPO_ROOT/scripts/check-patch-surface.sh"
     "check-patch-surface-self-test|bash $REPO_ROOT/scripts/check-patch-surface.sh --self-test"
+    # NEW (05-01): the brand-value mode's own rows. The default
+    # check-patch-surface row above already runs both modes, but --only
+    # sampling needs a label per mode: --brand-values runs the
+    # manifest-derived scan alone, and its self-test plants a display-name
+    # offender (red, naming patch and value) with the shipped hook-only
+    # stack as the clean control proving the red is plant-caused.
+    "check-patch-surface-brand-values|bash $REPO_ROOT/scripts/check-patch-surface.sh --brand-values"
+    "check-patch-surface-brand-values-self-test|bash $REPO_ROOT/scripts/check-patch-surface.sh --self-test-brand"
     "fetch-upstream-self-test|bash $REPO_ROOT/scripts/fetch-upstream.sh --self-test"
     "allowlist-schema|check_allowlist_schema"
     "allowlist-doc-consistency|check_allowlist_doc_consistency"

@@ -2828,12 +2828,16 @@ export const TARGETS = Object.freeze([
         variant: 'dev',
         emit: emitMozconfig,
     }),
-    // 03-04: the GEN-01 identity carrier. No tracked comparand -- there is
-    // no hand-written original (patch 010 used to hard-code these lines
-    // inline); the agreement and byte-identity gates skip rows without one,
-    // and --check still covers the row through the frozen table.
+    // 03-04: the GEN-01 identity carrier. 05-01: the relocated
+    // telemetry-policy lines are byte-identity gated through the tracked
+    // comparand below -- a frozen copy of the emission, authored once from
+    // the emitter and never edited to make the gate green (same contract
+    // as the hand-written files: on a red, the emitter is what changes).
+    // --check still covers the row through the frozen table, and rows
+    // without a tracked path keep skipping the byte-identity comparison.
     Object.freeze({
         generated: 'identity.configure',
+        tracked: 'powerbrowser/identity.configure.comparand',
         variant: 'dev',
         emit: emitIdentityConfigure,
     }),
