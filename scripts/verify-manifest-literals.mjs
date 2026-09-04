@@ -118,6 +118,7 @@ const EXCLUDED_LINES = [
 
 const ALLOWLIST = [
   { slot: 'variant-display:release', file: 'CLAUDE.md', reason: 'project instructions prose naming the product' },
+  { slot: 'variant-display:release', file: 'brand/HUMAN-REVIEW.md', reason: 'review record prose and confirmations naming the product (06-03)' },
   { slot: 'variant-display:release', file: 'brand/mark.svg', reason: 'artwork header comment for the placeholder mark' },
   { slot: 'variant-display:release', file: 'docs/BUILD.md', reason: 'build-guide prose naming the product tree' },
   { slot: 'variant-display:dev', file: 'powerbrowser/branding/dev/configure.sh', reason: 'hand-written dev display name; byte-identity comparand owned by the manifest' },
