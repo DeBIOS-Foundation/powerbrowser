@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 04
 current_phase_name: Theia Surface — Branding, Extensions, Telemetry
 status: executing
-stopped_at: Completed 05-hook-only-patches-and-upstream-uptake-03-PLAN.md
-last_updated: "2026-09-04T08:32:44.885Z"
+stopped_at: Completed 05-hook-only-patches-and-upstream-uptake-04-PLAN.md
+last_updated: "2026-09-04T08:37:09.058Z"
 last_activity: 2026-09-04
 last_activity_desc: Phase 03 plan 04 execution completed
-state_head: 6c04960b5308158538373c66b3bba812354befe8
+state_head: 783199069ffe99ed74b4d4f82b483b57cca22aab
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 42
-  completed_plans: 41
+  completed_plans: 42
 milestone_name: milestone
 ---
 
@@ -93,6 +93,7 @@ Progress: [█████████░] 93%
 | Phase 05-hook-only-patches-and-upstream-uptake P01 | 12min | 3 tasks | 7 files |
 | Phase 05-hook-only-patches-and-upstream-uptake P02 | 6min | 3 tasks | 9 files |
 | Phase 05-hook-only-patches-and-upstream-uptake P03 | 9min | 2 tasks | 6 files |
+| Phase 05-hook-only-patches-and-upstream-uptake P04 | 10min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -220,6 +221,9 @@ Recent decisions affecting current work:
 - [Phase 04]: 05-02: ESR pin is schema-required (masked from defaults) so a downstream must state its own tag, never inherit this project's
 - [Phase 04]: 05-02: tag-literal sweep shape is FIREFOX_-plus-digit; fixtures outside the checker use a shape-valid Acme pin to stay sweep-clean
 - [Phase 04]: 05-03: theia_release schema-required (masked); fixture 0.0.0; generator emits nothing (GEN-04); lockfile asserts stanza version only; no new registry rows
+- [Phase 04]: 05-04: real-conflict drift gets a permanent self-test case; silent-adoption and dirt classes cited from existing output, not duplicated
+- [Phase 04]: 05-04: 3-way-clean context shift is correct-apply behavior; backstops are the post-replay surface, brand, and fetch re-check chain in rebase-upstream.sh
+- [Phase 04]: 05-04: workflow read-through clean so task 2 commits nothing; live rebase plus tier-3 build staged as UNEXECUTED commands pending a next ESR tag
 
 ### Pending Todos
 
@@ -257,6 +261,6 @@ real problem needs human help.
 
 ## Session Continuity
 
-Last session: 2026-09-04T08:32:44.799Z
-Stopped at: Completed 05-hook-only-patches-and-upstream-uptake-03-PLAN.md
+Last session: 2026-09-04T08:37:08.975Z
+Stopped at: Completed 05-hook-only-patches-and-upstream-uptake-04-PLAN.md
 Resume file: None
