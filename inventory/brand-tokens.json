@@ -101,8 +101,7 @@
     "distribution_id": "org.debios",
     "domain": "powerbrowser.org",
     "identifier_form": "PowerBrowser",
-    "identifier_form_reason": "D-10's TitleCase identifier prefix. It is listed here as the value that must NEVER appear in a display string -- the preflight asserts its absence from every display surface, because `PowerBrowser Dev` is exactly what a token-boundary rename produces and exactly what nothing else in the tree would object to.",
-    "repo_root": "/home/chris/coding/Power-Browser"
+    "identifier_form_reason": "D-10's TitleCase identifier prefix. It is listed here as the value that must NEVER appear in a display string -- the preflight asserts its absence from every display surface, because `PowerBrowser Dev` is exactly what a token-boundary rename produces and exactly what nothing else in the tree would object to."
   },
   "hand_write": {
     "$comment": "Surfaces rename-brand.mjs is forbidden to touch, in addition to every `brand-display` and `frozen` row, which it skips by class. These are hand-written in plan 01-03. The display literals are Pitfall 1: `Sourcerer` here means `Power Browser` (two words, with the space), and a mechanical pass gets them wrong while the verifier that checks them AGREES, because the same pass rewrote both sides. The `.desktop` files are excluded for a second, independent reason (Pitfall 4): three tokens on one `Icon=`/`Exec=` line with three different correct targets, which no token-boundary rule can get right.",

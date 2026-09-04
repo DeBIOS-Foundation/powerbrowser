@@ -46,8 +46,9 @@
 //
 // The repo root is derived from this file's own location, never from the
 // working directory -- scripts/verify-platform.sh invokes every check with
-// absolute paths, and this same root is the base for the absolute Exec and Icon
-// lines a later plan emits.
+// absolute paths. The desktop-entry emitter carries a placeholder token in
+// place of that root (see emitDesktopEntry): no emitted byte may depend on
+// where this checkout happens to live.
 //
 // Usage:
 //   node scripts/generate.mjs
@@ -742,18 +743,30 @@ function emitMozconfig(config, variant) {
 }
 
 /**
- * A freedesktop .desktop entry: the shared generated-from banner, then nine
- * lines against the files Phase 1 wrote by hand. One emitter, both variants;
- * the dev and release files differ in exactly three lines and all three
- * differences come from the variant.
+ * The placeholder standing in for the checkout's absolute path in both
+ * emitted .desktop entries (02-DESIGN-G-02-11.md, option-4-placeholder). The
+ * `POWERBROWSER_` prefix already appears literally in tracked files
+ * (POWERBROWSER_OBJDIR and POWERBROWSER_BRANDING in .mozconfig), so the token
+ * introduces no new residue class for scripts/scan-brand-residue.mjs.
+ */
+const DESKTOP_ROOT_TOKEN = '@POWERBROWSER_REPO_ROOT@';
+
+/**
+ * A freedesktop .desktop entry: the shared generated-from banner, one
+ * install-substitution comment line, then nine lines against the files Phase 1
+ * wrote by hand. One emitter, both variants; the dev and release files differ
+ * in exactly three lines and all three differences come from the variant.
  *
- * THE ABSOLUTE PATHS ARE DERIVED, NOT CONFIGURED (D-04). A desktop entry must
- * name an absolute executable, so Exec and Icon carry the repo root -- but the
- * root comes from REPO_ROOT, which this file derives from its OWN location, not
- * from the working directory and not from a manifest key. Putting a host path
- * in configuration.toml would make the manifest machine-specific, which is the
- * one thing D-04 forbids; deriving it from process.cwd() would make the emitted
- * bytes depend on where the generator was invoked from.
+ * THE ABSOLUTE PATHS ARE A TOKEN, NOT A PATH (D-04 as amended in
+ * 02-DESIGN-G-02-11.md). A desktop entry must name an absolute executable, but
+ * a tracked file carrying this checkout's absolute path is wrong at every
+ * other checkout -- and the byte-identity gate comparing the tracked file
+ * against the emitter output would then be red everywhere but here. So Exec
+ * and Icon carry the token above followed by the variant's relative objdir /
+ * branding_dir, and the substitution to a real absolute path happens at
+ * install time (see the emitted comment line and docs/BUILD.md). No
+ * machine-specific value enters configuration.toml -- that half of D-04 is
+ * unchanged -- and the root is still never derived from the working directory.
  *
  * The header, Terminal, Type, Categories and the MimeType list are freedesktop
  * platform constants, not rebrand inputs, and are emitted literally.
@@ -764,22 +777,24 @@ function emitDesktopEntry(config, variant) {
     // its own Exec= line -- a launcher that runs an attacker-chosen command on
     // click. Every value below therefore passes the sink guard, and the two
     // folder paths are resolved and required to stay inside the project.
-    const exec = join(
-        assertUnderRepo(variantPath(variant, 'objdir'), assertEmittable(variantPath(variant, 'objdir'), variant.objdir)),
-        'dist/bin',
-        assertEmittable('identity.binary_name', config.identity.binary_name),
-    );
-    const icon = join(
-        assertUnderRepo(variantPath(variant, 'branding_dir'), assertEmittable(variantPath(variant, 'branding_dir'), variant.branding_dir)),
-        'default128.png',
-    );
+    const objdir = assertEmittable(variantPath(variant, 'objdir'), variant.objdir);
+    const brandingDir = assertEmittable(variantPath(variant, 'branding_dir'), variant.branding_dir);
+    // Resolved and required to stay inside the project, exactly as before --
+    // but the resolved ABSOLUTE value no longer reaches the emitted line. The
+    // guard stays because a manifest folder path escaping the tree must still
+    // be refused; only the interpolation target changed to the token, which
+    // carries no path and therefore cannot smuggle one past the guard.
+    assertUnderRepo(variantPath(variant, 'objdir'), objdir);
+    assertUnderRepo(variantPath(variant, 'branding_dir'), brandingDir);
+    const binary = assertEmittable('identity.binary_name', config.identity.binary_name);
     const lines = [
         ...GENERATED_BANNER,
+        `# Before installing, replace ${DESKTOP_ROOT_TOKEN} with this checkout's absolute path (docs/BUILD.md names the command).`,
         '[Desktop Entry]',
         `Name=${assertEmittable('identity.display_name', config.identity.display_name)}`
         + `${assertEmittable(variantPath(variant, 'name_suffix'), variant.name_suffix)}`,
-        `Exec=${exec} %u`,
-        `Icon=${icon}`,
+        `Exec=${DESKTOP_ROOT_TOKEN}/${objdir}/dist/bin/${binary} %u`,
+        `Icon=${DESKTOP_ROOT_TOKEN}/${brandingDir}/default128.png`,
         'Terminal=false',
         'Type=Application',
         'Categories=Development;IDE;',

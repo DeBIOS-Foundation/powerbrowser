@@ -47,6 +47,14 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const NAME = 'verify-branding-preflight';
 
+// The install-time placeholder the tracked .desktop entries carry in place of
+// a checkout's absolute path (02-DESIGN-G-02-11.md, option-4-placeholder).
+// A single literal, not derived from configuration.toml or generate.mjs:
+// Pitfall 7 forbids this gate reading its expectation from the source the
+// generator writes from, and the token is a fixed contract string, not a
+// manifest value.
+const DESKTOP_ROOT_TOKEN = '@POWERBROWSER_REPO_ROOT@';
+
 const args = process.argv.slice(2);
 const SELF_TEST = args.includes('--self-test');
 for (const a of args) {
@@ -240,10 +248,12 @@ function runChecks(root) {
 
         // --- 3. the desktop entry (Pitfall 4) --------------------------------
         //
-        // Exec= and Icon= each carry THREE tokens with three different correct
-        // targets: the absolute repo root, the objdir, and the binary basename.
-        // A token-boundary rename produces a path that does not exist, reports
-        // success, and the entry silently does nothing when clicked.
+        // Exec= and Icon= each carry the install-time placeholder token plus
+        // the variant's relative objdir / branding_dir -- never a resolved
+        // absolute path (02-DESIGN-G-02-11.md, option-4-placeholder). A tracked
+        // entry carrying a real absolute path is wrong at every checkout but
+        // the one that wrote it, so any `/`-leading segment outside the token
+        // is a drift this section rejects by name below.
         const deskPath = variant.desktop_entry;
         const desk = readText(root, deskPath);
         if (desk === null) {
@@ -253,12 +263,33 @@ function runChecks(root) {
             r.eq(`variant ${variantId} desktop StartupWMClass`, desktopKey(desk, 'StartupWMClass'), exp.app_basename, deskPath);
 
             const execLine = desktopKey(desk, 'Exec');
-            const wantExec = `${exp.repo_root}/${variant.objdir}/dist/bin/${exp.app_basename} %u`;
+            const wantExec = `${DESKTOP_ROOT_TOKEN}/${variant.objdir}/dist/bin/${exp.app_basename} %u`;
             r.eq(`variant ${variantId} desktop Exec`, execLine, wantExec, deskPath);
 
             const iconLine = desktopKey(desk, 'Icon');
-            const wantIcon = `${exp.repo_root}/${variant.branding_dir}/default128.png`;
+            const wantIcon = `${DESKTOP_ROOT_TOKEN}/${variant.branding_dir}/default128.png`;
             r.eq(`variant ${variantId} desktop Icon`, iconLine, wantIcon, deskPath);
+            // The drift this branch can still catch, and what keeps this row
+            // from being a tautology in the other direction: the expectation
+            // above is token-shaped, so a whole-line equality alone is the
+            // only thing standing between a planted absolute path and a green
+            // run. A whitespace-separated fragment that starts with `/` yet
+            // carries no token is a checkout-specific literal in a file that
+            // must be identical at every checkout -- the legitimate
+            // `@TOKEN@/relative/suffix` fragments all carry the token, and
+            // the `%u` trailer starts with `%`, so neither trips this.
+            // The offending fragment is reported, never the whole line.
+            for (const [key, line] of [['Exec', execLine], ['Icon', iconLine]]) {
+                if (line === null) continue;
+                const stray = line.split(/\s+/).find((f) => f.startsWith('/') && !f.includes(DESKTOP_ROOT_TOKEN));
+                if (stray !== undefined) {
+                    r.fail(
+                        `variant ${variantId} desktop ${key}: ${deskPath} carries an absolute path ` +
+                        `${JSON.stringify(stray)} outside ${DESKTOP_ROOT_TOKEN}. The tracked entry ` +
+                        'must be identical at every checkout; substitute the token at install time instead.',
+                    );
+                }
+            }
             // The Exec target does not exist until the tree is built, and that
             // residual is accepted. The Icon target is a checked-in file, so a
             // broken one is a defect available now and is asserted now.
