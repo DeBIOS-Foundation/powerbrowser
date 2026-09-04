@@ -921,6 +921,29 @@ function selfTest() {
             console.log(`${NAME}: --self-test -- planted the identifier form in ${shellRel}'s title and it was REJECTED by the DERIVED shell-markup set: ${shellMsg}`);
         }
         writeFileSync(shellPath, shellOriginal);
+
+        // Sixth plant (02-08, option-4-placeholder): a literal absolute path
+        // where the install-time token belongs -- the drift the token design
+        // can still catch, and the reason the desktop row is not a tautology
+        // in the other direction. The foreign root is derived from REPO_ROOT,
+        // never typed as a literal, so no machine path is spelled out here --
+        // and it is a sibling this tree has never lived at, so no line of
+        // this output carries this checkout's own path either.
+        const deskRel = 'powerbrowser/powerbrowser.desktop';
+        const deskPath = join(dir, deskRel);
+        const deskOriginal = readFileSync(deskPath, 'utf8');
+        const foreignRoot = `${dirname(REPO_ROOT)}/foreign-checkout-pb`;
+        writeFileSync(deskPath, deskOriginal.split(DESKTOP_ROOT_TOKEN).join(foreignRoot));
+        const deskPlanted = runChecks(dir);
+        const deskMsg = deskPlanted.failures.find((f) => f.includes(deskRel) && f.includes(foreignRoot));
+        if (!deskMsg) {
+            console.error(`${NAME}: --self-test FAIL -- a literal absolute path planted where ${DESKTOP_ROOT_TOKEN} belongs (${deskRel}) was NOT rejected naming the file and the offending value`);
+            for (const f of deskPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- planted a literal absolute path where the token belongs in ${deskRel} and it was REJECTED naming the file and the offending value: ${deskMsg}`);
+        }
+        writeFileSync(deskPath, deskOriginal);
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }

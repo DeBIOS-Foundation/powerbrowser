@@ -117,9 +117,15 @@ const variantOf = (config, id) => (config.variants ?? []).find(v => v.id === id)
  * the thing being proved and the thing being run drift apart, and the planted
  * faults would then prove nothing about the check that actually gates.
  *
+ * `readTracked` is a parameter for the same reason: the different-root cases
+ * substitute the tracked side in memory rather than editing one of the five
+ * tracked files -- even temporarily, even restoring it afterwards -- which
+ * would be one interrupted run away from corrupting the independent comparand
+ * this phase's acceptance test rests on.
+ *
  * @returns {string[]} failure messages -- empty means byte-identity holds.
  */
-function compareAgainstTracked(targets, config) {
+function compareAgainstTracked(targets, config, readTracked = (p) => readFileSync(p)) {
     const failures = [];
     // Never OUTPUT_ROOT. The comparand is emitted here and destroyed in the
     // finally below; nothing under generated/ is read or written by this file.
@@ -162,7 +168,7 @@ function compareAgainstTracked(targets, config) {
             // about the same path would read as a second problem.
             if (temp === undefined) continue;
             const want = readFileSync(temp);
-            const have = readFileSync(join(REPO_ROOT, tracked));
+            const have = Buffer.from(readTracked(join(REPO_ROOT, tracked)));
             if (Buffer.compare(want, have) !== 0) {
                 const at = firstDifferingLine(have.toString('utf8'), want.toString('utf8'));
                 failures.push(`${tracked}: the generator's output is NOT byte-identical to it, from line ${at}`);
@@ -260,6 +266,49 @@ function withDriftAt(index) {
 }
 
 /**
+ * The foreign root the different-root cases substitute. A fixed literal, never
+ * derived from this machine -- the one case that distinguishes this fix from
+ * deleting the comparison must be checkable at any checkout, and a root read
+ * off this tree would make it pass only here.
+ */
+const FOREIGN_SELFTEST_ROOT = '/foreign/checkout/pb';
+
+/** The install-time placeholder both tracked .desktop entries carry. */
+const DESKTOP_TOKEN = '@POWERBROWSER_REPO_ROOT@';
+
+/**
+ * The landed-guard for the `readTracked` cases, alongside `mutationLanded`.
+ *
+ * A substitution whose anchor occurs in no tracked file changes nothing the
+ * check can see, and a case built on it printing `ok` is the vacuous green
+ * this file exists to prevent one level up. Reported as broken
+ * instrumentation, not as a pass -- and for the green case in particular the
+ * anchor also proves the contract still holds: the token must still be in the
+ * tracked files for "the substitution changed nothing" to mean "there is
+ * nothing checkout-specific to change" rather than "the token already left".
+ */
+function trackedAnchorLanded(anchor) {
+    return EXPECTED.some((tracked) => readFileSync(join(REPO_ROOT, tracked), 'utf8').includes(anchor));
+}
+
+/**
+ * How many times this checkout's absolute root occurs across all five emitted
+ * outputs. Under the placeholder design the answer must be zero: an emitted
+ * byte carrying the checkout path is what made this gate red everywhere but
+ * here, and the relocated case below would be vacuous over an emitter that
+ * still bakes one in.
+ */
+function emittedRootHits(config) {
+    let hits = 0;
+    for (const target of TARGETS) {
+        const variant = variantOf(config, target.variant);
+        if (variant === undefined) continue;
+        hits += target.emit(config, variant).split(REPO_ROOT).length - 1;
+    }
+    return hits;
+}
+
+/**
  * Proves the comparison discriminates before it is trusted. A check that can
  * only go green is not a check -- CLAUDE.md's verification rules say so, and
  * 01-05 shipped two assertions resting on a non-discriminating instrument
@@ -307,10 +356,86 @@ function selfTest() {
             targets: TARGETS.slice(1),
             expect: TARGETS[0].tracked,
         },
+        // 02-08, option-4-placeholder: the case the seven above could not
+        // express. The emitted bytes carry no checkout path, so a substitution
+        // standing in for a foreign checkout changes nothing and the run must
+        // stay GREEN -- reported with its polarity, because a set that can
+        // only ever go red is the defect's mirror image.
+        {
+            name: 'relocated checkout',
+            targets: TARGETS,
+            readTracked: (p) => readFileSync(p, 'utf8').split(REPO_ROOT).join(FOREIGN_SELFTEST_ROOT),
+            anchor: DESKTOP_TOKEN,
+            expectGreen: true,
+        },
+        // 02-08, option-4-placeholder: the drift this branch can still catch,
+        // and the reason the row is not a tautology in the other direction. A
+        // literal absolute path where the token belongs must go RED naming
+        // the tracked file.
+        {
+            name: 'a literal absolute path planted where the token belongs',
+            targets: TARGETS,
+            readTracked: (p) => readFileSync(p, 'utf8').split(DESKTOP_TOKEN).join(FOREIGN_SELFTEST_ROOT),
+            anchor: DESKTOP_TOKEN,
+            expect: 'powerbrowser/powerbrowser.desktop',
+        },
     ]);
 
     let failed = 0;
+    // THE CROSS-CUTTING ASSERTION, applied to every case's text in the loop
+    // rather than written as an extra case -- a case could only ever check its
+    // own fixture. No PASS or FAIL line this gate prints may carry this
+    // checkout's absolute path (CLAUDE.md's no-internals copy rule). The
+    // non-emptiness assertion runs FIRST: the red cases demonstrably print a
+    // failure line naming a tracked path and the green case prints its
+    // stayed-green detail, so this predicate is applied to text the code under
+    // test really emits, never to an absence over nothing.
+    const checkNoCheckoutPath = (caseName, lines) => {
+        const text = lines.join('\n');
+        if (text.length === 0) {
+            console.error(`${NAME}: --self-test FAIL -- '${caseName}' produced no output text at all, so the no-path predicate would pass vacuously`);
+            return false;
+        }
+        if (text.includes(REPO_ROOT)) {
+            console.error(`${NAME}: --self-test FAIL -- '${caseName}' leaked this checkout's path into its output: ${text}`);
+            return false;
+        }
+        return true;
+    };
     for (const testCase of cases) {
+        if (testCase.readTracked !== undefined) {
+            if (!trackedAnchorLanded(testCase.anchor)) {
+                console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' substituted ${JSON.stringify(testCase.anchor)} but that anchor occurs in no tracked file; the case is vacuous and the contract it edits has drifted`);
+                failed++;
+                continue;
+            }
+            const failures = compareAgainstTracked(testCase.targets, config, testCase.readTracked);
+            if (testCase.expectGreen === true) {
+                const hits = emittedRootHits(config);
+                if (hits !== 0) {
+                    console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' found ${hits} occurrence(s) of this checkout's root in the emitted bytes; the emitter still bakes in a checkout path`);
+                    failed++;
+                    continue;
+                }
+                if (failures.length !== 0) {
+                    console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' did not stay green at a different root; got: ${failures.join(' | ')}`);
+                    failed++;
+                    continue;
+                }
+                const detail = `emitted bytes carry no checkout path across ${TARGETS.length} targets; a foreign-root substitution changed nothing`;
+                console.log(`  ok  ${testCase.name} -> stayed green at a different root (${detail})`);
+                if (!checkNoCheckoutPath(testCase.name, [detail])) failed++;
+                continue;
+            }
+            if (failures.some(f => f.includes(testCase.expect))) {
+                console.log(`  ok  ${testCase.name} -> red, naming '${testCase.expect}'`);
+                if (!checkNoCheckoutPath(testCase.name, failures)) failed++;
+            } else {
+                console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' did not go red naming '${testCase.expect}'; got: ${failures.join(' | ') || '(no failures at all)'}`);
+                failed++;
+            }
+            continue;
+        }
         if (!mutationLanded(testCase.targets, config)) {
             console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' changed nothing the check can see; the case is vacuous and the anchor it edits has drifted`);
             failed++;
@@ -322,6 +447,7 @@ function selfTest() {
         // on the thing that actually drifted.
         if (failures.some(f => f.includes(testCase.expect))) {
             console.log(`  ok  ${testCase.name} -> red, naming '${testCase.expect}'`);
+            if (!checkNoCheckoutPath(testCase.name, failures)) failed++;
         } else {
             console.error(`${NAME}: --self-test FAIL -- '${testCase.name}' did not go red naming '${testCase.expect}'; got: ${failures.join(' | ') || '(no failures at all)'}`);
             failed++;
@@ -329,7 +455,7 @@ function selfTest() {
     }
 
     if (failed > 0) return 1;
-    console.log(`${NAME}: --self-test PASS -- ${cases.length} planted faults all went red naming the drift`);
+    console.log(`${NAME}: --self-test PASS -- ${cases.length} cases behaved as pinned (1 stayed green at a different root, the rest went red naming the drift)`);
     return 0;
 }
 
