@@ -285,6 +285,14 @@ Plans:
   4. Both verification layers plus `generate --check` run in CI and pass on Power Browser's own build
 
 **Plans**: TBD
+
+- [x] 06-01-PLAN.md
+- [x] 06-02-PLAN.md
+- [ ] 06-03-PLAN.md
+- [ ] 06-04-PLAN.md
+- [ ] 06-05-PLAN.md
+- [ ] 06-06-PLAN.md
+
 **Research**: verify — the Mozilla and Eclipse Foundation trademark findings are LOW-confidence and web-sourced; re-check against primary policy text before any gate depends on them, and record the named human review of every file in `brand/` (opened, not judged by filename) with reviewer and date.
 
 ### Phase 7: Sourcerer as Downstream
@@ -319,7 +327,7 @@ than noisy.
 | 3. Firefox Branding Emitter and Icon Pipeline | 3/4 | In Progress|  |
 | 4. Theia Surface — Branding, Extensions, Telemetry | 4/4 | In Progress|  |
 | 5. Hook-Only Patches and Upstream Uptake | 4/4 | In Progress|  |
-| 6. Two-Layer Verification and Rebranding Docs | 0/TBD | Not started | - |
+| 6. Two-Layer Verification and Rebranding Docs | 2/6 | In Progress|  |
 | 7. Sourcerer as Downstream | 0/TBD | Not started | - |
 
 ## Coverage
