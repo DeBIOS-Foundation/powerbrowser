@@ -260,6 +260,38 @@ check_verify_uri_roundtrip()   { _run_app_check_mjs verify-uri-roundtrip.mjs; }
 # frontend's CommandRegistry, so it needs the Theia dev app up.
 check_gui01_command_registered() { _run_app_check_mjs verify-gui01-command.mjs; }
 
+# NEW (07-04): DOC-02/VER-03's downstream-fixture proof. The harness drives
+# every committed fixture under --all (three EXPECTED-PASS generate-plus-verify
+# at exact bytes, two EXPECTED-FAIL failing naming their rules) and proves its
+# own assertions discriminate via --self-test.
+#
+# The fixtures root is derived by glob, never spelled: the phase directory
+# name carries a residue-probe form, and this file is inside the residual
+# scan's scope, so a literal path would fail the very gate this registry
+# drives (the harness takes --fixtures-root as argv for exactly this reason).
+# A glob matching zero or several directories fails loudly inside the harness
+# on the unknown path, never as a quiet pass.
+#
+# Honestly --quick: the harness copies fixtures to mkdtemp, runs the
+# generator only, and restores the default tree hash-equal. No build, no
+# browser, no display, no network. PB_CONFIG_DIR reaches the generator per
+# child command from the harness itself; this driver unsets any inherited
+# value at the top of the file, so no row relies on ambient environment.
+check_verify_downstream_fixtures() {
+  local root
+  root=$(echo "$REPO_ROOT"/.planning/phases/07-*/fixtures)
+  setsid node "$REPO_ROOT/scripts/verify-downstream-fixture.mjs" --all --fixtures-root "$root" &
+  CURRENT_CHECK_PID=$!
+  local rc=0; wait "$CURRENT_CHECK_PID" || rc=$?; CURRENT_CHECK_PID=""
+  return "$rc"
+}
+check_verify_downstream_fixtures_self_test() {
+  setsid node "$REPO_ROOT/scripts/verify-downstream-fixture.mjs" --self-test &
+  CURRENT_CHECK_PID=$!
+  local rc=0; wait "$CURRENT_CHECK_PID" || rc=$?; CURRENT_CHECK_PID=""
+  return "$rc"
+}
+
 # ============================================================================
 # SHARED HELPERS  (ported verbatim from verify-phase-05.sh, whose copies were
 # already the supersets: its start_shell takes the optional profile override
@@ -4031,6 +4063,15 @@ run_own_checks() {
     # rule). No build, no browser, no display, no network.
     "theia-endpoints|node $REPO_ROOT/scripts/verify-theia-endpoints.mjs"
     "theia-endpoints-self-test|node $REPO_ROOT/scripts/verify-theia-endpoints.mjs --self-test"
+
+    # NEW (07-04): the downstream-fixture proof rows -- the harness drives the
+    # committed fixture set plus its self-test (wrappers above; glob-derived
+    # root, honestly --quick, per-command config env). Both layers of the
+    # VER-03 argument run here: the static sweep stays green on the restored
+    # default tree and the generate-level brand agreement is asserted per
+    # fixture inside the harness.
+    "verify-downstream-fixtures|check_verify_downstream_fixtures"
+    "verify-downstream-fixtures-self-test|check_verify_downstream_fixtures_self_test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
