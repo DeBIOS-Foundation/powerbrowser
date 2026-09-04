@@ -59,6 +59,7 @@ platform. If a rebrand ever requires editing a second file, that is a bug.
 | Identity fields required, no silent fallback | A downstream omitting `vendor` must hard-fail, not ship under Power Browser's mark; cosmetic fields default with an echo | — Pending |
 | Extensions declared in `configuration.toml` with sources | Each entry: id + source (Open VSX / npm / URL / local path) + pin | — Pending |
 | Adversarial review enabled | plan_check + verifier on; /gsd-plan-review-convergence on risky phases (rename pass, generator) | — Pending |
+| Canonical product name from v2: **PowerBrowser** (accepted variants **Powerbrowser** / **powerbrowser** for identifier-class surfaces) | v1 shipped the spaced display form "Power Browser" across generated surfaces; the canonical form + re-pinned gates land as v2 NAME-01 so the v1 archive stays faithful to what was verified | — Decided 2026-09-04 |
 
 ## configuration.toml planned sections
 
@@ -88,26 +89,41 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
       the only files touched for a rebrand — Validated in Phase 2: Configuration
       Manifest and Generator Core (CFG-01..04, GEN-04; generator reproduces the five
       Phase 1 hand-written build surfaces byte-for-byte, gated by
-      `generated-byte-identity` in `scripts/verify-platform.sh --quick`)
+      `generated-byte-identity` in `scripts/verify-platform.sh --quick`) — v1.0
+- [x] Internal identifiers fixed everywhere (`powerbrowser/` tree,
+      `@powerbrowser/*`, `PowerBrowserAPI.sys.mjs`, `chrome://powerbrowser/`)
+      — MIG-03 — v1.0
+- [x] Renamed tree builds and boots on Linux with six branding surfaces green
+      on the built artifact — MIG-04 — v1.0
+- [x] Hook-only patch stack preserving the 3-way-merge hash chain — MIG-05 — v1.0
+- [x] Upstream pins declared once in `configuration.toml` and consumed by
+      fetch/build scripts; ESR/Theia uptake tooling with red-capable drift
+      classes — CFG-06, UPD-01/02 (live drills staged) — v1.0
+- [x] Runtime verification by exact equality from manifest expectations
+      (VER-02) and adversarial fixture configs proving no single-config
+      keying (VER-03) — v1.0
+- [x] External-config builds (`PB_CONFIG_DIR`) with Sourcerer reproduced as a
+      pure downstream from an untouched tree — CFG-05, DOC-02 — v1.0
+- [x] Theia backend credential-gated and fail-closed via `token-gate` — SEC-01 — v1.0
+- [x] Trademark human ritual signed (Chris, 2026-09-04, CONFIRMED) with the
+      mechanical gate green — v1.0
 
 ### Active
 
-- [ ] Platform code migrated from sourcerer and debranded: `powerbrowser/`
-      tree, `@powerbrowser/*` extension scope, `PowerBrowserAPI.sys.mjs`
-- [ ] Build-time generator materializes all branding surfaces (Firefox
-      branding dir, desktop files, installer name, icons, Theia welcome/about)
-      from `configuration.toml`
-- [ ] Two-layer verification: static scoped brand-literal scan (committed
-      scope list, boundary-matched tokens, stale-allowlist-entry fails) +
-      runtime six-surface exact-equality checks reading expectations from
-      `configuration.toml` (evolve existing `verify-branding*.mjs`)
-- [ ] Telemetry level + endpoint wired through `configuration.toml`
-- [ ] Extension declarations (id + source + pin) installed into the Theia
-      sidecar at build time
-- [ ] `docs/REBRANDING.md` walks a stranger through a full rebrand
-- [ ] Sourcerer reproduced as a downstream config: its own
-      `configuration.toml` + logos yields the Sourcerer-branded product,
-      proving the mechanism
+- [ ] Formal sign-off on generator surfaces (GEN-01, GEN-02, GEN-03) and Theia
+      surface (GEN-05) pending the human/tier-3 half (pixel look, render
+      drill, release build)
+- [ ] Telemetry and extension live drills (TEL-01..03, EXT-01) pending
+      collector-backed runs
+- [ ] VER-01 fleet proof and DOC-01 formal sign-off pending fixture-build tier
+- [ ] **NAME-01**: canonical display form **PowerBrowser** applied across all
+      generated surfaces with gates re-pinned (v2)
+- [ ] **PKG-01**: Windows/macOS installer builds verified on real packaging
+      hosts (v2)
+- [ ] **EXT-02**: npm and local-path extension source kinds (v2)
+- [ ] **TEL-04**: crash-report pipeline beyond endpoint repointing (v2)
+- [ ] **GUI-02**: in-Theia web tabs via `<xul:browser>`; **GUI-05**: unified
+      tab strip (v2)
 
 ### Out of Scope
 
@@ -119,6 +135,25 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - Moving every conceivable setting into `configuration.toml` in milestone 1 —
   the file grows toward "everything configurable" incrementally
 - npm and local-path extension source kinds — Open VSX + URL cover v1
+
+## Current State (v1.0 shipped 2026-09-04)
+
+v1.0 PowerBrowser is archived (override closeout):
+`.planning/milestones/v1.0-ROADMAP.md`,
+`.planning/milestones/v1.0-REQUIREMENTS.md`, tag `v1.0`. All 52 plans
+executed; `--quick` 95 PASS; 19/19 launch-lifecycle checks green on the dev
+binary; trademark ritual signed. Known gaps carried to v2: human-eyes drills
+(icon pixel look, welcome/about render drill), heavy-machine drills (release
+build, per-fixture tier-3 builds, live ESR rebase, Theia re-pin), WINDOWS
+#13/#14. v1 shipped the spaced display form "Power Browser"; the canonical
+**PowerBrowser** form lands in v2 (NAME-01).
+
+## Next Milestone Goals
+
+v2 (inputs frozen in `.planning/NEXT-MILESTONE-INPUTS.md`): NAME-01 rename
+slice, PKG-01 real installer builds (+ WR-04/WR-07 hardening), EXT-02 +
+TEL-04, GUI-02 in-Theia tabs, GUI-05 unified tab strip. Backlog 999.1
+SQL-browser-memory stays backlog.
 
 ## Evolution
 
@@ -138,4 +173,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-01 after Phase 2 (Configuration Manifest and Generator Core) completion — generator core, byte-identity gate, four new `--quick` rows*
+*Last updated: 2026-09-04 after v1.0 PowerBrowser milestone close (override) — generator core, byte-identity gate, four new `--quick` rows; v1 archived, v2 inputs frozen*

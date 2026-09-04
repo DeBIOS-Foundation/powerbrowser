@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.0
 current_phase: 07
 current_phase_name: Sourcerer as Downstream
-status: executing
-stopped_at: Completed 07-sourcerer-as-downstream-04-PLAN.md
-last_updated: "2026-09-04T10:26:49.946Z"
+status: milestone_complete
+stopped_at: Archived v1.0 PowerBrowser (override closeout)
+last_updated: "2026-09-04T00:00:00.000Z"
 last_activity: 2026-09-04
-last_activity_desc: Phase 03 plan 04 execution completed
+last_activity_desc: v1.0 milestone archived, tag v1.0
 state_head: abc62dce3a33742a3534de40172e43ae7b6d8681
 progress:
   total_phases: 7
@@ -24,15 +24,15 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Human verification batch — all automated verification passes, 0 gaps; only human-eyes/heavy-machine items remain
+**Current focus:** v2 planning — inputs frozen in `.planning/NEXT-MILESTONE-INPUTS.md` (NAME-01 rename slice first)
 
 ## Current Position
 
-Phase: 07 (Sourcerer as Downstream) — VERIFIED 4/4 (human_needed: 3 staged tier-3 fixture-build drills)
-Status: End-of-roadmap verification batch complete. All phases 03–07 verified 4/4 statically with 0 gaps; `verify-platform.sh --quick` 95 PASS, 0 FAIL. Remaining items all require human eyes, display, or heavy builds — listed below.
-Last activity: 2026-09-04 — Phase 07 verification completed
+Phase: — (v1.0 PowerBrowser SHIPPED 2026-09-04, override closeout)
+Status: Milestone archived to `.planning/milestones/`; tag `v1.0`. Next: `/gsd-new-milestone` for v2.
+Last activity: 2026-09-04 — v1.0 archived
 
-Progress: [█████████░] 93%
+Progress: [██████████] 100% (52/52 plans; formal requirements sign-off partially staged — see Deferred Items)
 
 ## Performance Metrics
 
@@ -270,6 +270,22 @@ real problem needs human help.
 | 05 | verification_deferred (plans executed; live rebase + tier-3 build staged unexecuted) | /gsd-verify-work 05 |
 | 06 | verification_deferred (plans executed; 6-surface dev PASS live, release + CI-runtime drills staged; human trademark ritual deferred) | /gsd-verify-work 06 |
 | 07 | verification_deferred (plans executed; harness --all 210 assertions PASS; tier-3 drills staged unexecuted) | /gsd-verify-work 07 |
+
+## Deferred Items
+
+Items acknowledged and deferred at milestone close, most recent first:
+
+| Category | Item | Status | Deferred At | Milestone |
+|----------|------|--------|-------------|-----------|
+| verification_gaps | 03/icon-pixel-sign-off | human-eyes staged | 2026-09-04 | v1.0 |
+| verification_gaps | 04/live-render-drill | human-eyes staged | 2026-09-04 | v1.0 |
+| verification_gaps | release build + release-variant rows (WINDOWS #10) | heavy-machine staged | 2026-09-04 | v1.0 |
+| verification_gaps | tier-3 per-fixture builds (07) | heavy-machine staged | 2026-09-04 | v1.0 |
+| verification_gaps | live ESR rebase drill (05) | needs next ESR tag | 2026-09-04 | v1.0 |
+| verification_gaps | Theia re-pin proof (05) | needs nix Theia shell | 2026-09-04 | v1.0 |
+| verification_gaps | 16 unchecked requirements (GEN-01/02/03/05, TEL-01..03, EXT-01, VER-01, DOC-01, MIG-01/02, GUI-01/03/04) | code green, formal sign-off staged | 2026-09-04 | v1.0 |
+| deferred_items | WINDOWS #13 registerWindowActor boundary hole | open code deviation, v2 scope | 2026-09-04 | v1.0 |
+| deferred_items | WINDOWS #14 BiDi double-window | open code deviation, v2 scope | 2026-09-04 | v1.0 |
 
 ## Session Continuity
 

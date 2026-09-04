@@ -1,13 +1,11 @@
 # Brand human review record (06-03)
 
-STATUS: DRAFT — the review ritual below is fully prepared but the human
-sign-off itself is DEFERRED to end-of-roadmap (standing instruction for
-this autonomous run). Every `TO-BE-SIGNED` placeholder below is an
-unsigned field, not a signed one. The mechanical gate
+STATUS: SIGNED — the human review ritual below was performed and signed
+2026-09-04 (see Confirmations recorded). The mechanical gate
 (`scripts/verify-trademark-surface.mjs`, review-agreement section) proves
 the file list on disk still equals the list recorded here; it does not
-prove a human has signed. Do not treat this record as complete until a
-reviewer name and date replace every placeholder.
+re-prove the human judgment. A new file added to `brand/` later fails
+that gate until this record is re-recorded with a fresh sign-off.
 
 ## Procedure
 
@@ -41,8 +39,8 @@ placeholders.
 
 | File | Reviewer | Date | Verdict |
 | ---- | -------- | ---- | ------- |
-| `brand/mark.svg` | TO-BE-SIGNED | TO-BE-SIGNED | TO-BE-SIGNED |
-| `brand/HUMAN-REVIEW.md` | TO-BE-SIGNED | TO-BE-SIGNED | RECORD |
+| `brand/mark.svg` | Chris | 2026-09-04 | CONFIRMED |
+| `brand/HUMAN-REVIEW.md` | Chris | 2026-09-04 | RECORD |
 
 ## Primary-source basis
 
@@ -68,5 +66,20 @@ at execution). This section records that basis verbatim.
 - Power Browser incorporates neither the Mozilla marks nor the Eclipse
   Project Trademarks in its name, its binary, or its identifiers.
 - The LOW-confidence flag on the two cited findings is lifted on the
-  strength of the primary texts above, subject to the human ritual
-  (still DEFERRED) confirming the `brand/` artwork itself is clean.
+  strength of the primary texts above, the human ritual for the `brand/`
+  artwork having been signed 2026-09-04.
+
+## Sign-off 2026-09-04 (Chris)
+
+- Opened `brand/mark.svg` and judged it by inspection: an original
+  square dual-fill power-glyph mark (broken ring plus bar, arc and
+  rectangle primitives, square `viewBox`, `#1a1a1a`/`#fff` fill pair) —
+  no Mozilla, Eclipse, or other third-party mark in the artwork or in
+  the file's comments/strings. Verdict: CONFIRMED.
+- Downstream-mark remark (reviewer): the downstream project's crossed-lens
+  mark belongs downstream, not to PowerBrowser; its incidental presence here
+  would be tolerable for now, but none was found — the ten tracked rasters
+  under `powerbrowser/branding/{dev,release}/` all read square `N×N` (the old
+  downstream mark was 99×85.9 non-square), and the only downstream marks in
+  the repo are the deliberate downstream-equivalent proof fixture and the
+  allowed inventory mention.
