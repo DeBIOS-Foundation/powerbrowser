@@ -3654,7 +3654,7 @@ run_own_checks() {
     #
     # generate-self-test rides alongside for the reason every other self-test
     # row in this array gives, and here it carries more weight than most:
-    # thirty planted faults -- a missing required key, an invalid basename,
+    # thirty-four planted faults -- a missing required key, an invalid basename,
     # a misspelled section header, a whitespace-only value, a short downstream
     # array, an incomplete variant, a duplicated variant id, an unused variant
     # id, a partially-stated identity table, a stale generated file, an absent
@@ -3669,8 +3669,11 @@ run_own_checks() {
     # as valid JSON on the emitted pairs, an extension entry without its
     # version pin, an extension entry with an unimplemented source, an
     # extension entry with a malformed sha256 pin, the declared extensions
-    # resolving to their exact versioned URLs, and an emptied downstream
-    # extensions array resolving to zero entries -- each required
+    # resolving to their exact versioned URLs, an emptied downstream
+    # extensions array resolving to zero entries, a telemetry level enabled
+    # without an endpoint, a telemetry level outside the four-value enum, a
+    # telemetry endpoint outside https, and the telemetry fragment carrying
+    # the stated pair and defaulting an unset section to off -- each required
     # to go red NAMING the drift (or resolve as pinned), plus a
     # cross-cutting assertion that no case's output carries a stack frame, a
     # module specifier, or this machine's path to the project. Every one of the
