@@ -5,7 +5,7 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT COVERS. Forty-six targets: thirty-three byte-identical to the
+// WHAT IT COVERS. Forty-seven targets: thirty-three byte-identical to the
 // file Phase 1 wrote by hand -- the five Phase 2 build surfaces (the two
 // branding configure.sh files, .mozconfig, and the two .desktop files), the
 // eighteen GEN-01 branding-directory surfaces (per variant: brand.ftl,
@@ -19,7 +19,11 @@
 // branding.nsi, firefox.VisualElementsManifest.xml, installer
 // AppxManifest-fields.xml and Info-plist-fields.xml), plus the GEN-01
 // identity carrier (generated/identity.configure: the two imply_option
-// lines patch 010 used to hard-code, pulled in by its include hook).
+// lines patch 010 used to hard-code, pulled in by its include hook), plus
+// the GEN-05 Theia frontend-config fragment
+// (generated/theia-frontend-config.json: the brand-owned keys of the
+// application package.json's theia.frontend.config block, today only
+// applicationName).
 // That byte-identity IS
 // the acceptance test for the thirty-three,
 // which is why no emitter here is allowed to reformat, reorder or "tidy" what
@@ -971,6 +975,54 @@ function emitIdentityConfigure(config, variant) {
         '',
         `imply_option("MOZ_APP_VENDOR", "${vendor}")`,
         `imply_option("MOZ_APP_UA_NAME", "${ua}")`,
+    ];
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * The Theia application frontend-config fragment (04-01, GEN-05 tracer):
+ * the brand-owned keys of theia/applications/browser/package.json's
+ * `theia.frontend.config` block, today exactly one -- `applicationName`
+ * from identity.display_name.
+ *
+ * WHICH DISPLAY FORM. identity.display_name is the BASE name -- the release
+ * short name the preflight pins on the tracked package.json against the
+ * inventory, never the manifest. The dev name_suffix never reaches the
+ * Theia window title: there is one application manifest, not one per
+ * variant, so a suffixed name would brand every window Dev.
+ *
+ * FRAGMENT, NOT THE WHOLE BLOCK. The tracked package.json carries sibling
+ * keys no rebrand owns -- powerbrowserPrivilegedJs, the preferences map --
+ * so emitting the whole object would make this file's literals the owner
+ * of Theia behaviour flags. The copy-over is surgical instead: set ONLY
+ * applicationName from this fragment and leave every sibling
+ * byte-identical. Whole-file byte-identity is brittle here anyway -- yarn
+ * rewrites that file -- which is why the contract is block-level equality
+ * on this one key rather than a tracked comparand row.
+ *
+ * WHY NO GENERATED_BANNER. Strict JSON carries no comment, and a `_comment`
+ * key would pollute the block a reader copies from. The derivation is
+ * stated here instead; freshness is generate --check's contract through
+ * the frozen TARGETS row below, and the tracked side is
+ * verify-branding-preflight.mjs's applicationName assertion.
+ *
+ * The value passes the shell sink guard. A JSON string value must refuse a
+ * double quote and a backslash or one value rewrites the document around
+ * it; the dollar/backtick/tab/newline rejections cost nothing here and keep
+ * every interpolation in this file under one rule, exactly as emitBrandFtl
+ * already does for Fluent terms. The schema patterns already exclude all
+ * of these, so on a validated manifest this guard never fires -- it is
+ * what fires if a future schema edit drops the display_name pattern.
+ *
+ * Joined with a literal newline, never the platform line-ending constant.
+ */
+export function emitTheiaFrontendConfig(config, variant) {
+    void variant;
+    const name = assertEmittable('identity.display_name', config.identity.display_name);
+    const lines = [
+        '{',
+        `  "applicationName": ${JSON.stringify(name)}`,
+        '}',
     ];
     return lines.join('\n') + '\n';
 }
@@ -2083,6 +2135,19 @@ export const TARGETS = Object.freeze([
         variant: 'dev',
         emit: emitIdentityConfigure,
     }),
+    // NEW (04-01): GEN-05's Theia frontend-config fragment. No tracked
+    // comparand -- the tracked theia/applications/browser/package.json is
+    // yarn-managed, so whole-file byte-identity is brittle there; the
+    // copy-over sets ONLY the applicationName key from this fragment, and
+    // the byte-identity gate skips rows without a tracked path while
+    // --check still covers the row through the frozen table. The tracked
+    // side is pinned by verify-branding-preflight.mjs against the
+    // inventory, never the manifest.
+    Object.freeze({
+        generated: 'theia-frontend-config.json',
+        variant: 'dev',
+        emit: emitTheiaFrontendConfig,
+    }),
     Object.freeze({
         generated: 'branding/dev/configure.sh',
         tracked: 'powerbrowser/branding/dev/configure.sh',
@@ -2462,7 +2527,7 @@ function firstDifferingLine(a, b) {
  *
  * THREE OUTCOMES, THREE MESSAGES, deliberately not one. An absent generated/ is
  * the state every fresh copy of the project and every automated run begins in;
- * reporting it as forty-six stale files reads as forty-six problems and sends the reader
+ * reporting it as forty-seven stale files reads as forty-seven problems and sends the reader
  * hunting a mismatch that does not exist.
  *
  * The set comparison runs in BOTH directions. A per-target loop alone sees a
@@ -2739,7 +2804,7 @@ function probeStaleOutput(config) {
  * Ask the freshness comparison about a directory that is not there -- the state
  * every fresh copy of the project and every CI runner starts in, because
  * generated/ is git-ignored. The distinct message this must produce is the
- * whole point: forty-six phantom stale paths would read as forty-six defects on a tree
+ * whole point: forty-seven phantom stale paths would read as forty-seven defects on a tree
  * with none, and a gate red for a non-defect is a gate its readers skip.
  *
  * The EXIT CODE is asserted here too, and separately from the message, because
@@ -2908,6 +2973,28 @@ function probeHostileSupportUrl() {
 }
 
 /**
+ * GEN-05. A double quote in the display name, driven at the frontend-config
+ * emitter PAST validation -- the schema would already refuse it upstream of
+ * here, so only a directly-called emitter proves the SINK guard (not just
+ * the pattern) refuses it, naming the dotted path. In JSON the quote would
+ * close the applicationName string and rewrite the fragment.
+ *
+ * A child process, like probeHostileSupportUrl's: the guard reports through
+ * report(), which exits, so driving the emitter in-process would take the
+ * self-test down with it.
+ */
+function probeHostileFrontendConfigName() {
+    const child = spawnSync(process.execPath, [
+        '--input-type=module',
+        '-e',
+        `import { emitTheiaFrontendConfig } from ${JSON.stringify(import.meta.url)};`
+        + `process.stdout.write(emitTheiaFrontendConfig({ identity: { display_name: 'Acme"Browser' } }, { id: 'dev' }));`,
+    ], { encoding: 'utf8' });
+    if (child.status === 0) return [`${BROKEN} the hostile display_name emitted cleanly into the frontend config fragment`];
+    return `${child.stderr}${child.stdout}`.split('\n').filter(line => line !== '');
+}
+
+/**
  * A manifest that is not valid TOML, read by a CHILD process.
  *
  * It has to be a child: an unparseable layer exits from inside loadLayer rather
@@ -3032,6 +3119,31 @@ function selfTest() {
         ),
     ];
 
+    // GEN-05's green control, computed once: the frontend-config fragment
+    // the emitter actually produces must parse as JSON and carry the
+    // manifest's display name as applicationName. Without this, a red
+    // result from the hostile case below could be the emitter broken on the
+    // unmodified value rather than on the plant. The baseline above is
+    // already established green, so a non-empty result here is a broken
+    // emitter, not a broken manifest.
+    const frontendConfigControl = (() => {
+        const dev = baseline.config.variants.find(v => v.id === 'dev');
+        if (dev === undefined) return ['the resolved config has no dev variant'];
+        let parsed;
+        try {
+            parsed = JSON.parse(emitTheiaFrontendConfig(baseline.config, dev));
+        } catch {
+            return ['the emitted theia frontend-config fragment is not valid JSON'];
+        }
+        if (parsed?.applicationName !== baseline.config.identity.display_name) {
+            return [
+                `the emitted theia frontend-config fragment carries applicationName ${JSON.stringify(parsed?.applicationName)} `
+                + `instead of the manifest display name ${JSON.stringify(baseline.config.identity.display_name)}`,
+            ];
+        }
+        return [];
+    })();
+
     const cases = [
         {
             // D-10. A whitespace-only value is not a value.
@@ -3135,7 +3247,7 @@ function selfTest() {
             expect: TARGETS[0].generated,
         },
         {
-            // The absent-directory outcome is a DISTINCT message, not forty-six
+            // The absent-directory outcome is a DISTINCT message, not forty-seven
             // stale paths, AND it is not a failure. Asserted from three sides:
             // the message is there, no target path is, and the exit code was
             // zero -- so a future collapse of the three outcomes into one goes
@@ -3255,6 +3367,28 @@ function selfTest() {
             toml: FIXTURE_BASE.replace('display_name = "Acme Browser"', 'display_name = "Acme & Sons"'),
             expect: 'identity.display_name',
             also: ['&'],
+        },
+        {
+            // GEN-05. A double quote in the display name, driven past
+            // validation straight at the frontend-config emitter, must fail
+            // naming the dotted path -- in JSON the quote would close the
+            // applicationName string and rewrite the fragment. The GEN-03
+            // hostile-quote case above proves the schema refuses it; this
+            // one proves the sink guard does.
+            name: 'hostile double quote in theia frontend config name',
+            probe: probeHostileFrontendConfigName,
+            expect: 'identity.display_name',
+        },
+        {
+            // GEN-05's control: the fragment the emitter actually produces --
+            // on the unmodified manifest -- parses as JSON and carries the
+            // manifest display name. Without this, a red result from the
+            // hostile case above could be the emitter broken on the clean
+            // value rather than on the plant.
+            name: 'theia frontend config fragment parses and names the display name',
+            probe: () => frontendConfigControl,
+            holds: 'valid JSON carrying the manifest display name',
+            resolved: () => frontendConfigControl.length === 0,
         },
     ];
 
