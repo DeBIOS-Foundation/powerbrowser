@@ -17,7 +17,8 @@
 // asserts each Info-plist fragment carries CFBundleName and
 // CFBundleIdentifier; and asserts each tile manifest is tag-balanced XML
 // whose BackgroundColor presence matches the manifest's tile_color
-// set-or-unset state read from configuration.toml at check time.
+// set-or-unset state read from the checked root's configuration.toml at
+// check time.
 //
 // WHAT THIS DOES NOT ASSERT. Schema-complete only -- never build-verified.
 // No Windows host compiles the NSIS defines, no MSIX packager signs the
@@ -284,9 +285,9 @@ function checkTile(r, root, rel, tileColor) {
     }
 }
 
-/** installer.tile_color as stated, or undefined when unset -- read at check time. */
-function readTileColor() {
-    const manifest = parse(readFileSync(join(REPO_ROOT, 'configuration.toml'), 'utf8'));
+/** installer.tile_color as stated, or undefined when unset -- read at check time under the passed root, so a fixture manifest disagreeing with its own tile XML is checked against itself, never the live tree. */
+function readTileColor(root) {
+    const manifest = parse(readFileSync(join(root, 'configuration.toml'), 'utf8'));
     const value = manifest.installer?.tile_color;
     return (typeof value === 'string' && value.trim() !== '') ? value : undefined;
 }
@@ -348,7 +349,7 @@ function runChecks(root) {
     // Reported and read paths keep the `generated/` prefix: that prefix
     // names the output surface a reader has to go and fix, matching the
     // convention generate --check's own messages keep.
-    const tileColor = readTileColor();
+    const tileColor = readTileColor(root);
     for (const rel of actual) {
         if (!declared.has(rel)) continue;
         const show = `generated/${rel}`;
@@ -383,6 +384,11 @@ function selfTest() {
                 mkdirSync(dirname(out), { recursive: true });
                 writeFileSync(out, readFileSync(join(REPO_ROOT, 'generated', rel)));
             }
+            // WR-07: the tile check reads the manifest under the passed
+            // root, so the mirror carries the manifest the fragments were
+            // generated from -- plants below diverge the two sides
+            // deliberately, and restoring them is one mirror() call.
+            writeFileSync(join(dir, 'configuration.toml'), readFileSync(join(REPO_ROOT, 'configuration.toml')));
         };
         mirror();
 
@@ -440,7 +446,7 @@ function selfTest() {
         // a future manifest sets the key.
         const tileRel = 'generated/branding/dev/firefox.VisualElementsManifest.xml';
         const tilePath = join(dir, tileRel);
-        const stated = readTileColor();
+        const stated = readTileColor(dir);
         if (stated === undefined) {
             writeFileSync(tilePath, readFileSync(tilePath, 'utf8').replace(' />', '\n      BackgroundColor="#123abc"\n />'));
         } else {
@@ -455,6 +461,55 @@ function selfTest() {
         } else {
             console.log(`${NAME}: --self-test -- flipped the tile-color state in ${tileRel} and it was REJECTED naming the file and the state: ${mismatchedMsg}`);
         }
+        mirror();
+
+        // Plant 4: divergent-manifest tile states in BOTH polarities -- the
+        // WR-07 hole itself. readTileColor used to read the live manifest,
+        // so a fixture manifest disagreeing with its own tile XML was
+        // checked against the wrong file and could pass either way. Each
+        // polarity must go red naming the file and the state.
+        const manifestPath = join(dir, 'configuration.toml');
+        const manifestOriginal = readFileSync(manifestPath, 'utf8');
+        const manifestWithoutTile = manifestOriginal.split('\n').filter((line) => !line.trim().startsWith('tile_color')).join('\n');
+        const manifestWithTile = manifestWithoutTile.replace(/^(\[installer\])$/m, '$1\ntile_color = "#123abc"');
+        if (!manifestWithTile.includes('tile_color = "#123abc"')) {
+            console.error(`${NAME}: --self-test FAIL -- the divergent-manifest plant did not land: no [installer] section to carry tile_color`);
+            ok = false;
+        } else {
+            const tileText = readFileSync(tilePath, 'utf8');
+            const tileWithout = tileText.split('\n').filter((line) => !line.includes('BackgroundColor')).join('\n');
+            const tileWith = tileWithout.replace(' />', '\n      BackgroundColor="#123abc"\n />');
+            if (!tileWith.includes('BackgroundColor="#123abc"')) {
+                console.error(`${NAME}: --self-test FAIL -- the divergent-manifest plant did not land: no self-closing tag to carry BackgroundColor`);
+                ok = false;
+            } else {
+                // Polarity one: manifest WITH tile_color facing XML WITHOUT it.
+                writeFileSync(manifestPath, manifestWithTile);
+                writeFileSync(tilePath, tileWithout);
+                const setVsAbsent = runChecks(dir);
+                const setVsAbsentMsg = setVsAbsent.failures.find(f => f.includes(tileRel) && f.includes('BackgroundColor'));
+                if (!setVsAbsentMsg) {
+                    console.error(`${NAME}: --self-test FAIL -- the tile_color-set manifest facing tile XML without BackgroundColor (${tileRel}) was NOT rejected naming the file and the state`);
+                    for (const f of setVsAbsent.failures) console.error(`  - ${f}`);
+                    ok = false;
+                } else {
+                    console.log(`${NAME}: --self-test -- set tile_color against tile XML without BackgroundColor in ${tileRel} and it was REJECTED naming the file and the state: ${setVsAbsentMsg}`);
+                }
+                // Polarity two: manifest WITHOUT tile_color facing XML WITH it.
+                writeFileSync(manifestPath, manifestWithoutTile);
+                writeFileSync(tilePath, tileWith);
+                const unsetVsPresent = runChecks(dir);
+                const unsetVsPresentMsg = unsetVsPresent.failures.find(f => f.includes(tileRel) && f.includes('BackgroundColor'));
+                if (!unsetVsPresentMsg) {
+                    console.error(`${NAME}: --self-test FAIL -- the tile_color-unset manifest facing tile XML with BackgroundColor (${tileRel}) was NOT rejected naming the file and the state`);
+                    for (const f of unsetVsPresent.failures) console.error(`  - ${f}`);
+                    ok = false;
+                } else {
+                    console.log(`${NAME}: --self-test -- unset tile_color against tile XML with BackgroundColor in ${tileRel} and it was REJECTED naming the file and the state: ${unsetVsPresentMsg}`);
+                }
+            }
+        }
+        mirror();
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
@@ -463,7 +518,7 @@ function selfTest() {
         console.error(`${NAME}: --self-test FAIL`);
         process.exit(1);
     }
-    console.log(`${NAME}: --self-test PASS -- control green first, then 3 planted faults all behaved as pinned`);
+    console.log(`${NAME}: --self-test PASS -- control green first, then 4 planted faults all behaved as pinned`);
     process.exit(0);
 }
 

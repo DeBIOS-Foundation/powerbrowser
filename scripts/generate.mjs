@@ -860,8 +860,11 @@ function assertEmittable(path, value) {
 
 /**
  * Characters a manifest value may never carry into a Windows installer
- * define. A double quote closes the quoted !define value; a dollar-brace
- * sequence is NSIS variable/define expansion at compile time; a line break
+ * define. A double quote closes the quoted !define value; a dollar sign
+ * that is not part of a doubled-dollar escape is NSIS variable/define
+ * expansion at compile time -- a bare $NAME expands exactly like ${NAME},
+ * so the guard refuses both in one class and only $$ (the NSIS literal
+ * escape for one dollar sign) passes; a line break
  * ends the define and starts a new installer statement; NUL truncates.
  *
  * DEFENCE IN DEPTH, NOT THE PRIMARY GUARD -- same contract as
@@ -870,7 +873,7 @@ function assertEmittable(path, value) {
  * future schema edit from silently reopening the sink. CFG-03: rejection
  * only, never escaping -- an escaped URL is not the manifest's URL.
  */
-const NSIS_UNEMITTABLE = /"|\$\{|\r|\n|\0/;
+const NSIS_UNEMITTABLE = /"|(?<!\$)\$(?!\$)|\r|\n|\0/;
 
 /**
  * A manifest value on its way into a Windows installer !define line.
@@ -881,7 +884,7 @@ function assertNsisEmittable(path, value) {
     if (typeof value !== 'string' || NSIS_UNEMITTABLE.test(value)) {
         report([
             `${path} cannot be written into a Windows installer setting as it stands. A brand value may not `
-            + 'contain a double quote, a dollar-brace variable reference, or a line break. '
+            + 'contain a double quote, a bare dollar sign (write $$ for a literal dollar), or a line break. '
             + `Open ${MANIFEST_NAME}, correct it, then run: ${RERUN}`,
         ]);
     }
@@ -3926,6 +3929,82 @@ function probeHostileSupportUrl() {
 }
 
 /**
+ * WR-04. A bare dollar-name in installer.support_url -- no brace -- is a
+ * legal URL character, so the schema admits it, and NSIS expands $NAME at
+ * compile time exactly like ${NAME}. The pre-fix sink guard only refused
+ * the braced form, so this value emitted silently into a define and
+ * compiled into the wrong links with exit 0.
+ *
+ * A child process, like probeHostileSupportUrl's: the guard reports through
+ * report(), which exits, so driving the emitter in-process would take the
+ * self-test down with it.
+ */
+function probeHostileBareDollarUrl() {
+    const dir = mkdtempSync(join(tmpdir(), 'generate-selftest-nsis-bare-'));
+    try {
+        const fixturePath = join(dir, 'case-nsis-bare.toml');
+        writeFileSync(
+            fixturePath,
+            `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[installer]\nsupport_url = "https://example.org/$INSTDIR/x"\n`,
+            'utf8',
+        );
+        const child = spawnSync(process.execPath, [
+            '--input-type=module',
+            '-e',
+            `import { resolveConfig, emitBrandingNsi } from ${JSON.stringify(import.meta.url)};`
+            + `const r = resolveConfig(undefined, ${JSON.stringify(fixturePath)});`
+            + `if (r.failures.length > 0) { console.log('UNEXPECTED-VALIDATE-RED'); process.exit(2); }`
+            + `process.stdout.write(emitBrandingNsi(r.config, r.config.variants.find(v => v.id === 'dev')));`,
+        ], { encoding: 'utf8' });
+        if (child.status === 0) return [`${BROKEN} the hostile bare-dollar support_url emitted cleanly`];
+        return `${child.stderr}${child.stdout}`.split('\n').filter(line => line !== '');
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+/**
+ * WR-04's control: a doubled dollar for a literal dollar must still emit
+ * with its dollars intact. NSIS renders $$ as one literal $, so refusing
+ * it would forbid every value that names a price -- the guard refuses the
+ * expansion, never the escape. Without this, a stricter guard that rejects
+ * every $ would pass the fault case above while breaking legitimate
+ * values.
+ *
+ * A child process, like probeHostileSupportUrl's: the emitter is driven
+ * past validation, and a rejection exits the child with the message --
+ * never the self-test.
+ */
+function probeEscapedDollarUrl() {
+    const dir = mkdtempSync(join(tmpdir(), 'generate-selftest-nsis-escape-'));
+    try {
+        const fixturePath = join(dir, 'case-nsis-escape.toml');
+        writeFileSync(
+            fixturePath,
+            `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[installer]\nsupport_url = "https://example.org/$$PRICE/x"\n`,
+            'utf8',
+        );
+        const child = spawnSync(process.execPath, [
+            '--input-type=module',
+            '-e',
+            `import { resolveConfig, emitBrandingNsi } from ${JSON.stringify(import.meta.url)};`
+            + `const r = resolveConfig(undefined, ${JSON.stringify(fixturePath)});`
+            + `if (r.failures.length > 0) { console.log('UNEXPECTED-VALIDATE-RED'); process.exit(2); }`
+            + `process.stdout.write(emitBrandingNsi(r.config, r.config.variants.find(v => v.id === 'dev')));`,
+        ], { encoding: 'utf8' });
+        if (child.status !== 0) {
+            return [`the escaped-dollar support_url was rejected but must emit: ${`${child.stderr}${child.stdout}`.split('\n').filter(line => line !== '').join(' | ')}`];
+        }
+        if (!child.stdout.includes('!define URLInfoAbout "https://example.org/$$PRICE/x"')) {
+            return [`${BROKEN} the escaped-dollar support_url emitted without its literal dollars intact`];
+        }
+        return [];
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+/**
  * GEN-05. A double quote in the display name, driven at the frontend-config
  * emitter PAST validation -- the schema would already refuse it upstream of
  * here, so only a directly-called emitter proves the SINK guard (not just
@@ -4610,6 +4689,25 @@ function selfTest() {
             name: 'hostile variable reference in support URL',
             probe: probeHostileSupportUrl,
             expect: 'installer.support_url',
+        },
+        {
+            // WR-04. A bare dollar-name in the support URL passes the schema
+            // (it is a legal URL character) and must be refused by the NSIS
+            // sink guard at emission, naming the key -- in NSIS $NAME
+            // expands at compile time exactly like ${NAME}.
+            name: 'hostile bare dollar-name in support URL',
+            probe: probeHostileBareDollarUrl,
+            expect: 'installer.support_url',
+        },
+        {
+            // WR-04's control: a doubled dollar for a literal dollar must
+            // still emit with its dollars intact. Without this, a guard
+            // that rejects every $ would pass the fault case above while
+            // breaking legitimate values.
+            name: 'escaped doubled dollar in support URL still emits',
+            probe: probeEscapedDollarUrl,
+            holds: 'the escaped URL emitted with its literal dollars intact',
+            resolved: () => true,
         },
         {
             // GEN-03, T-03-08. An ampersand in the display name must fail
