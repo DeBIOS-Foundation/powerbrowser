@@ -175,7 +175,7 @@ needs `git`, which the host already provides, so it is not run inside
 either `nix develop` shell. It is safely re-runnable: if `upstream/`
 already exists at the pinned tag it no-ops instead of re-cloning.
 
-Run `node scripts/generate.mjs` before `./mach configure`: `generated/` is gitignored, and a stale or absent tree misbrands with exit 0, because `--with-branding` resolves through a symlink into it and configure succeeds against whatever it finds there.
+Run `node scripts/generate.mjs` before `./mach configure`: `generated/` is gitignored, and a stale or absent tree misbrands with exit 0, because `--with-branding` resolves through a symlink into it and `browser/moz.configure` includes `generated/identity.configure` through one, so configure succeeds against whatever it finds there.
 
 **Measured on the reference host:** the clone took 438s and produced a
 5.6 G `upstream/` tree (re-measured 2026-08-30 on `legion`: 677s, same

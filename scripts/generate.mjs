@@ -5,7 +5,7 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT COVERS. Forty-five targets: thirty-three byte-identical to the
+// WHAT IT COVERS. Forty-six targets: thirty-three byte-identical to the
 // file Phase 1 wrote by hand -- the five Phase 2 build surfaces (the two
 // branding configure.sh files, .mozconfig, and the two .desktop files), the
 // eighteen GEN-01 branding-directory surfaces (per variant: brand.ftl,
@@ -17,11 +17,15 @@
 // firefox.ico and firefox.icns, wrapped from those same rasters by pure-Node
 // writers) and the eight GEN-03 installer fields (per variant:
 // branding.nsi, firefox.VisualElementsManifest.xml, installer
-// AppxManifest-fields.xml and Info-plist-fields.xml). That byte-identity IS
+// AppxManifest-fields.xml and Info-plist-fields.xml), plus the GEN-01
+// identity carrier (generated/identity.configure: the two imply_option
+// lines patch 010 used to hard-code, pulled in by its include hook).
+// That byte-identity IS
 // the acceptance test for the thirty-three,
 // which is why no emitter here is allowed to reformat, reorder or "tidy" what
-// it reproduces; the four containers and the eight installer fragments have
-// no hand-written originals and are structurally checked instead.
+// it reproduces; the four containers, the eight installer fragments and the
+// identity carrier have no hand-written originals and are structurally
+// checked instead.
 //
 // WHY THE PIPELINE ORDER IS LOAD-BEARING. Parse, then reject unknown settings,
 // then mask, then merge, then validate, then emit, then write -- in that order
@@ -664,7 +668,7 @@ function assertXmlEmittable(path, value) {
  * equally hand-editable and equally silent about it -- and a reader could no
  * longer tell generated from hand-written by opening the file, which is the
  * banner's whole purpose. A shared constant is also what stops the
- * forty-five files drifting into forty-five wordings.
+ * forty-six files drifting into forty-six wordings.
  *
  * `#` is a comment in all three formats: mozconfig is shell, configure.sh is
  * shell, and freedesktop permits comment lines in a .desktop file including
@@ -920,6 +924,53 @@ function emitMozconfig(config, variant) {
         'ac_add_options --with-ccache=sccache',
         'ac_add_options --with-branding=${POWERBROWSER_BRANDING:-powerbrowser/branding-generated/dev}',
         `mk_add_options "export MOZ_APP_REMOTINGNAME=${assertEmittable('identity.remoting_name', config.identity.remoting_name)}"`,
+    ];
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * The Gecko identity carrier (03-04, GEN-01 close-out): the two
+ * project_flag values patch 010 used to hard-code, emitted as
+ * imply_option lines for the build to include.
+ *
+ * WHY AN INCLUDE, NOT MOZCONFIG EXPORTS. MOZ_APP_VENDOR and MOZ_APP_UA_NAME
+ * are project_flag() values, whose template pins possible_origins to
+ * ("implied",) -- only imply_option inside a moz.configure file can set
+ * them. A mozconfig export line is the environment origin and configure
+ * rejects it ("can not be set by environment. Values are accepted from:
+ * implied", proven red by a forced configure during this plan). So the
+ * carrier is a generated moz.configure fragment, pulled into the build by
+ * the single include() hook patch 010 carries in place of the two
+ * hard-codes. MOZ_APP_ID stays patch-carried: it is a fixed platform
+ * constant shared with upstream, not a downstream brand value.
+ *
+ * WHY ONE FILE, NOT ONE PER VARIANT. Vendor and UA name do not vary by
+ * variant -- the dev/release split is name_suffix, which reaches the build
+ * as MOZ_APP_DISPLAYNAME through configure.sh. One fragment on the dev
+ * variant row, like the single .mozconfig.
+ *
+ * UA_NAME takes no manifest key by design -- it is the D-78 compat literal
+ * (same rationale as -brand-product-name = Firefox in emitBrandFtl).
+ * Both lines pass the sink guard: the fragment executes in the configure
+ * sandbox, so a quote in either value would break out of its string.
+ *
+ * The fragment reaches the build through the topsrcdir-internal symlink
+ * upstream/identity.configure (setup-created by fetch-upstream.sh
+ * alongside the branding overlay, never committed), which the patch
+ * includes as ../identity.configure -- lexically inside topsrcdir for the
+ * sandbox's basedir check, resolving to this file outside it.
+ *
+ * Joined with a literal newline, never the platform line-ending constant.
+ */
+function emitIdentityConfigure(config, variant) {
+    void variant;
+    const vendor = assertEmittable('product.vendor_machine', config.product.vendor_machine);
+    const ua = assertEmittable('product.ua_name', 'Firefox');
+    const lines = [
+        ...GENERATED_BANNER,
+        '',
+        `imply_option("MOZ_APP_VENDOR", "${vendor}")`,
+        `imply_option("MOZ_APP_UA_NAME", "${ua}")`,
     ];
     return lines.join('\n') + '\n';
 }
@@ -2023,6 +2074,15 @@ export const TARGETS = Object.freeze([
         variant: 'dev',
         emit: emitMozconfig,
     }),
+    // 03-04: the GEN-01 identity carrier. No tracked comparand -- there is
+    // no hand-written original (patch 010 used to hard-code these two lines
+    // inline); the agreement and byte-identity gates skip rows without one,
+    // and --check still covers the row through the frozen table.
+    Object.freeze({
+        generated: 'identity.configure',
+        variant: 'dev',
+        emit: emitIdentityConfigure,
+    }),
     Object.freeze({
         generated: 'branding/dev/configure.sh',
         tracked: 'powerbrowser/branding/dev/configure.sh',
@@ -2402,7 +2462,7 @@ function firstDifferingLine(a, b) {
  *
  * THREE OUTCOMES, THREE MESSAGES, deliberately not one. An absent generated/ is
  * the state every fresh copy of the project and every automated run begins in;
- * reporting it as forty-five stale files reads as forty-five problems and sends the reader
+ * reporting it as forty-six stale files reads as forty-six problems and sends the reader
  * hunting a mismatch that does not exist.
  *
  * The set comparison runs in BOTH directions. A per-target loop alone sees a
@@ -2679,7 +2739,7 @@ function probeStaleOutput(config) {
  * Ask the freshness comparison about a directory that is not there -- the state
  * every fresh copy of the project and every CI runner starts in, because
  * generated/ is git-ignored. The distinct message this must produce is the
- * whole point: forty-five phantom stale paths would read as forty-five defects on a tree
+ * whole point: forty-six phantom stale paths would read as forty-six defects on a tree
  * with none, and a gate red for a non-defect is a gate its readers skip.
  *
  * The EXIT CODE is asserted here too, and separately from the message, because
@@ -3075,7 +3135,7 @@ function selfTest() {
             expect: TARGETS[0].generated,
         },
         {
-            // The absent-directory outcome is a DISTINCT message, not forty-five
+            // The absent-directory outcome is a DISTINCT message, not forty-six
             // stale paths, AND it is not a failure. Asserted from three sides:
             // the message is there, no target path is, and the exit code was
             // zero -- so a future collapse of the three outcomes into one goes

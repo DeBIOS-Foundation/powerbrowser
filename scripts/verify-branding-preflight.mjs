@@ -364,10 +364,35 @@ function runChecks(root) {
     }
     const patch = readText(root, 'patches/010-powerbrowser-identity.patch');
     if (patch === null) {
-        r.fail('patches/010-powerbrowser-identity.patch does not exist -- MOZ_APP_VENDOR has no declared site');
-    } else if (!patch.includes(`+imply_option("MOZ_APP_VENDOR", "${exp.vendor_machine}")`)) {
+        r.fail('patches/010-powerbrowser-identity.patch does not exist -- the identity include hook has no declared site');
+    } else {
+        // 03-04: the machine-side vendor no longer lives in the patch stack.
+        // The patch carries a single include() hook into generated output;
+        // the value itself is asserted on the fragment below.
+        if (!patch.includes('include("../identity.configure")')) {
+            r.fail(
+                'patches/010-powerbrowser-identity.patch does not carry the generated-identity include hook. ' +
+                'The machine-side vendor must reach the build from generated output, not from a hard-coded patch line.',
+            );
+        }
+        // Added lines only: the patch's own `-` removal of the upstream
+        // Mozilla default is the de-configuration itself, not a hard-code.
+        const addedHardCode = patch.split('\n').some(
+            (l) => l.startsWith('+') && (l.includes('imply_option("MOZ_APP_VENDOR"') || l.includes('imply_option("MOZ_APP_UA_NAME"')),
+        );
+        if (addedHardCode) {
+            r.fail(
+                'patches/010-powerbrowser-identity.patch still hard-codes an identity brand value. ' +
+                'Vendor and UA name live in generated/identity.configure now; the patch carries only the hook.',
+            );
+        }
+    }
+    const identityConfigure = readText(root, 'generated/identity.configure');
+    if (identityConfigure === null) {
+        r.fail('generated/identity.configure does not exist -- MOZ_APP_VENDOR has no declared site (run: node scripts/generate.mjs)');
+    } else if (!identityConfigure.includes(`imply_option("MOZ_APP_VENDOR", "${exp.vendor_machine}")`)) {
         r.fail(
-            `patches/010-powerbrowser-identity.patch does not set MOZ_APP_VENDOR to ${JSON.stringify(exp.vendor_machine)}. ` +
+            `generated/identity.configure does not set MOZ_APP_VENDOR to ${JSON.stringify(exp.vendor_machine)}. ` +
             'This is the compiled, path-forming vendor; the display-side value belongs only in the branding files.',
         );
     }
@@ -741,6 +766,11 @@ function selfTest() {
             'inventory/brand-tokens.json',
             '.mozconfig',
             'patches/010-powerbrowser-identity.patch',
+            // Section 5 reads the generated identity carrier alongside the
+            // patch hook (03-04): the fixture carries the fragment so the
+            // unmutated control stays green and the hook plant below has a
+            // carrier to corrupt.
+            'generated/identity.configure',
             'scripts/verify-branding-identity.mjs',
             'theia/applications/browser/package.json',
             'brand/mark.svg',
@@ -944,6 +974,29 @@ function selfTest() {
             console.log(`${NAME}: --self-test -- planted a literal absolute path where the token belongs in ${deskRel} and it was REJECTED naming the file and the offending value: ${deskMsg}`);
         }
         writeFileSync(deskPath, deskOriginal);
+
+        // Seventh plant (03-04): the pre-deconfiguration patch shape -- the
+        // include hook stripped back out, so the carrier the build actually
+        // reads has no hook reaching it. Section 5 must go red NAMING the
+        // patch; a red that only says the vendor disagrees would not tell
+        // anyone the hook is what went missing.
+        const hookPatchRel = 'patches/010-powerbrowser-identity.patch';
+        const hookPatchPath = join(dir, hookPatchRel);
+        const hookPatchOriginal = readFileSync(hookPatchPath, 'utf8');
+        writeFileSync(
+            hookPatchPath,
+            hookPatchOriginal.split('\n').filter((l) => !l.includes('include("../identity.configure")')).join('\n'),
+        );
+        const hookPlanted = runChecks(dir);
+        const hookMsg = hookPlanted.failures.find((f) => f.includes(hookPatchRel) && f.includes('include hook'));
+        if (!hookMsg) {
+            console.error(`${NAME}: --self-test FAIL -- the include hook stripped from ${hookPatchRel} (the pre-03-04 shape) was NOT rejected naming the file and the hook`);
+            for (const f of hookPlanted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- stripped the include hook from ${hookPatchRel} and it was REJECTED by name: ${hookMsg}`);
+        }
+        writeFileSync(hookPatchPath, hookPatchOriginal);
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
