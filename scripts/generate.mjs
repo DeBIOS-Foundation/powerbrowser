@@ -3980,6 +3980,31 @@ function probeMalformedManifest() {
 }
 
 /**
+ * CFG-05 (07-01). The variable naming a folder with no manifest in it, run
+ * as a CHILD process.
+ *
+ * It has to be a child: the missing-manifest failure exits from inside
+ * main() through report(), and driving main() in-process would take the
+ * self-test down with it -- the same reason probeMalformedManifest is a
+ * child. What is asserted is the copy, not just the redness: the failure
+ * must name PB_CONFIG_DIR (the variable the reader goes and fixes), in the
+ * file's plain-words shape the cross-cutting no-internals assertion owns.
+ */
+function probeExternalConfigMissing() {
+    const dir = mkdtempSync(join(tmpdir(), 'generate-selftest-extmissing-'));
+    try {
+        const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], {
+            encoding: 'utf8',
+            env: { ...process.env, PB_CONFIG_DIR: dir },
+        });
+        if (child.status === 0) return [`${BROKEN} a PB_CONFIG_DIR with no ${MANIFEST_NAME} generated cleanly`];
+        return `${child.stderr}${child.stdout}`.split('\n').filter(line => line !== '');
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+/**
  * THE CROSS-CUTTING ASSERTION, applied to every case's output rather than
  * written as one more case -- because it is a property of every case, and a case
  * of its own would only ever check whatever fixture that case happened to use.
@@ -4334,6 +4359,40 @@ function selfTest() {
             ];
         } finally {
             rmSync(fixtureDir, { recursive: true, force: true });
+        }
+    })();
+
+    // CFG-05's green control, computed once: a complete downstream manifest
+    // staged under a throwaway directory resolves -- through the same
+    // externalConfigDir derivation main() uses, plus the shipped merge -- to
+    // its own display values rather than this project's. The expected value
+    // is a literal: deriving it through the merge would make the control
+    // agree with the derivation no matter how wrong both were. Resolves
+    // only: no asset root is switched and nothing is rasterized, so the
+    // icon cache the later probes warm is untouched.
+    const externalConfigControl = (() => {
+        const dir = mkdtempSync(join(tmpdir(), 'generate-selftest-extdir-'));
+        try {
+            writeFileSync(join(dir, MANIFEST_NAME), `${FIXTURE_BASE}\n${FIXTURE_VARIANT}`, 'utf8');
+            const saved = process.env.PB_CONFIG_DIR;
+            process.env.PB_CONFIG_DIR = dir;
+            try {
+                const extDir = externalConfigDir();
+                if (extDir === undefined) return ['PB_CONFIG_DIR was not picked up'];
+                const staged = resolveConfig(MANIFEST_PATH, join(extDir, MANIFEST_NAME));
+                if (staged.failures.length > 0) {
+                    return [`the staged external manifest failed validation: ${staged.failures.join(' | ')}`];
+                }
+                if (staged.config?.identity?.display_name !== 'Acme Browser') {
+                    return [`the staged external manifest resolved to ${JSON.stringify(staged.config?.identity?.display_name)} instead of "Acme Browser"`];
+                }
+                return [];
+            } finally {
+                if (saved === undefined) delete process.env.PB_CONFIG_DIR;
+                else process.env.PB_CONFIG_DIR = saved;
+            }
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
         }
     })();
 
@@ -4719,6 +4778,27 @@ function selfTest() {
             probe: () => endpointHostsControl,
             holds: 'the stated hosts sorted, the prefs repointed, and blanks when unstated',
             resolved: () => endpointHostsControl.length === 0,
+        },
+        {
+            // CFG-05 (07-01). The derivation main() uses, driven in-process:
+            // a staged external manifest resolves to its own display values
+            // through externalConfigDir plus the shipped merge -- not a
+            // restatement of either. Without this, a red result from the
+            // failure case below could be the derivation broken on a clean
+            // manifest rather than on the plant.
+            name: 'external config dir resolves its own manifest',
+            probe: () => externalConfigControl,
+            holds: 'the staged display values',
+            resolved: () => externalConfigControl.length === 0,
+        },
+        {
+            // CFG-05 (07-01). The variable naming a folder with no manifest
+            // in it fails naming the variable -- the re-run next step, in
+            // the plain-words shape, with no host path of this checkout
+            // (the cross-cutting assertion above owns that half).
+            name: 'external config dir without a manifest',
+            probe: probeExternalConfigMissing,
+            expect: 'PB_CONFIG_DIR',
         },
     ];
 
