@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 03
 current_phase_name: Firefox Branding Emitter and Icon Pipeline
 status: executing
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-09-04T06:36:05.485Z"
+stopped_at: Completed 04-theia-surface-branding-extensions-telemetry-04-PLAN.md
+last_updated: "2026-09-04T07:33:51.486Z"
 last_activity: 2026-09-04
 last_activity_desc: Phase 03 plan 04 execution completed
-state_head: c98436d0999dd0c2532dcb025b02810e10f7425d
+state_head: 81c47ea3b0c671616af5458b082719e900463e7f
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 38
-  completed_plans: 36
+  completed_plans: 38
 milestone_name: milestone
 ---
 
@@ -89,6 +89,7 @@ Progress: [█████████░] 93%
 | Phase 03-firefox-branding-emitter-and-icon-pipeline P02 | 8min | 3 tasks | 4 files |
 | Phase 03-firefox-branding-emitter-and-icon-pipeline P04 | 30min | 3 tasks | 6 files |
 | Phase 04-theia-surface-branding-extensions-telemetry P02 | 14min | 3 tasks | 6 files |
+| Phase 04-theia-surface-branding-extensions-telemetry P04 | 19min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -209,6 +210,9 @@ Recent decisions affecting current work:
 - [Phase 03]: [03-04]: release tree still never built -- full-suite release rows fail pre-existing (documented since 03-01); tier-3 proof is dev-variant per plan
 - [Phase 03]: 04-02 D-04-02-01: build downloads Theia plugins --packed (stock default decompresses, leaving no hashable artifact); side benefit is no unpinned transitive auto-resolution
 - [Phase 03]: 04-02: entry-free manifest requires NO theiaPlugins block (strict), every extensions validation failure names the entry id
+- [Phase 03]: 04-04: logo rides the runtime channel as SVG text (D-04-04-01); PNG rasters stay in the Phase-3 icon pipeline
+- [Phase 03]: 04-04: allowlist stale direction scoped to manifest-marked entries; derivation owned by generate.mjs with the new check asserting sync (D-04-04-06/07)
+- [Phase 03]: 04-04: breakpad.reportURL confirmed at upstream firefox.js:1551, always emitted blank-by-default; shipped welcome/about texts null (D-04-04-04/05)
 
 ### Pending Todos
 
@@ -245,6 +249,6 @@ real problem needs human help.
 
 ## Session Continuity
 
-Last session: 2026-09-04T06:36:05.405Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-09-04T07:33:51.410Z
+Stopped at: Completed 04-theia-surface-branding-extensions-telemetry-04-PLAN.md
 Resume file: None

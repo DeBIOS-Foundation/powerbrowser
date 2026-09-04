@@ -242,6 +242,12 @@ Plans:
   4. Configured telemetry and URL hosts appear in the generated endpoint allowlist so `verify-endpoints` passes for an arbitrary downstream, and Mozilla's telemetry and crash endpoints are repointed or disabled per the manifest
 
 **Plans**: TBD
+
+- [x] 04-01-PLAN.md
+- [x] 04-02-PLAN.md
+- [x] 04-03-PLAN.md
+- [x] 04-04-PLAN.md
+
 **UI hint**: yes
 **Research**: recommended — `theia download:plugins` and Open VSX pin semantics are entirely unexercised in this tree (no `theiaPlugins` block has ever existed here); whether a pin can be hash-verified is unknown. Highest-unknown phase.
 
@@ -306,7 +312,7 @@ than noisy.
 | 1. Platform Extraction and Rename | 21/21 | In Progress|  |
 | 2. Configuration Manifest and Generator Core | 9/9 | Complete    | 2026-09-04 |
 | 3. Firefox Branding Emitter and Icon Pipeline | 3/4 | In Progress|  |
-| 4. Theia Surface — Branding, Extensions, Telemetry | 0/TBD | Not started | - |
+| 4. Theia Surface — Branding, Extensions, Telemetry | 4/4 | In Progress|  |
 | 5. Hook-Only Patches and Upstream Uptake | 0/TBD | Not started | - |
 | 6. Two-Layer Verification and Rebranding Docs | 0/TBD | Not started | - |
 | 7. Sourcerer as Downstream | 0/TBD | Not started | - |
