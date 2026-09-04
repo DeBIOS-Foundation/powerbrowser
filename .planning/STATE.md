@@ -1,8 +1,8 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-current_phase: 05
-current_phase_name: Hook-Only Patches and Upstream Uptake
+current_phase: 06
+current_phase_name: Two-Layer Verification and Rebranding Docs
 status: executing
 stopped_at: Completed 06-two-layer-verification-and-rebranding-docs-02-PLAN.md
 last_updated: "2026-09-04T09:02:15.226Z"
@@ -24,14 +24,14 @@ milestone_name: milestone
 See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 06 — Two-Layer Verification and Rebranding Docs (Phase 05 plans 01–04 executed, verification deferred)
+**Current focus:** Phase 07 — Sourcerer as Downstream (Phase 06 plans 01–06 executed, verification deferred)
 
 ## Current Position
 
-Phase: 05 (Hook-Only Patches and Upstream Uptake) — PLANS COMPLETE (verification deferred per standing instruction)
-Plan: 4 of 4
-Status: Executed Phase 05 plans 01–04 (010 hook-only, ESR pin, Theia pin, UPD-01 hermetic proof; live rebase/build staged unexecuted)
-Last activity: 2026-09-04 — Phase 05 plan 04 completed
+Phase: 06 (Two-Layer Verification and Rebranding Docs) — PLANS COMPLETE (verification deferred per standing instruction)
+Plan: 6 of 6
+Status: Executed Phase 06 plans 01–06 (manifest-literals scan, VER-02 retarget with live dev 6-surface PASS, trademark gate with ritual deferred, legal notices, REBRANDING.md, verify.yml CI)
+Last activity: 2026-09-04 — Phase 06 plan 06 completed
 
 Progress: [█████████░] 93%
 
@@ -261,6 +261,7 @@ real problem needs human help.
 | 03 | verification_deferred_human | /gsd-verify-work 03 |
 | 04 | verification_deferred (no VERIFICATION.md yet — plans executed, verifier not run) | /gsd-verify-work 04 |
 | 05 | verification_deferred (plans executed; live rebase + tier-3 build staged unexecuted) | /gsd-verify-work 05 |
+| 06 | verification_deferred (plans executed; 6-surface dev PASS live, release + CI-runtime drills staged; human trademark ritual deferred) | /gsd-verify-work 06 |
 
 ## Session Continuity
 
