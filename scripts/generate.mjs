@@ -5,7 +5,7 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT COVERS. Thirty-seven targets: thirty-three byte-identical to the
+// WHAT IT COVERS. Forty-five targets: thirty-three byte-identical to the
 // file Phase 1 wrote by hand -- the five Phase 2 build surfaces (the two
 // branding configure.sh files, .mozconfig, and the two .desktop files), the
 // eighteen GEN-01 branding-directory surfaces (per variant: brand.ftl,
@@ -15,10 +15,13 @@
 // default16/32/48/64/128.png, drawn from the single brand/mark.svg through
 // the system inkscape) -- plus the four GEN-02 containers (per variant:
 // firefox.ico and firefox.icns, wrapped from those same rasters by pure-Node
-// writers). That byte-identity IS the acceptance test for the thirty-three,
+// writers) and the eight GEN-03 installer fields (per variant:
+// branding.nsi, firefox.VisualElementsManifest.xml, installer
+// AppxManifest-fields.xml and Info-plist-fields.xml). That byte-identity IS
+// the acceptance test for the thirty-three,
 // which is why no emitter here is allowed to reformat, reorder or "tidy" what
-// it reproduces; the four containers have no hand-written originals and are
-// structurally checked instead. The installer fields are plan 03-03 (GEN-03).
+// it reproduces; the four containers and the eight installer fragments have
+// no hand-written originals and are structurally checked instead.
 //
 // WHY THE PIPELINE ORDER IS LOAD-BEARING. Parse, then reject unknown settings,
 // then mask, then merge, then validate, then emit, then write -- in that order
@@ -593,6 +596,67 @@ function assertEmittable(path, value) {
 }
 
 /**
+ * Characters a manifest value may never carry into a Windows installer
+ * define. A double quote closes the quoted !define value; a dollar-brace
+ * sequence is NSIS variable/define expansion at compile time; a line break
+ * ends the define and starts a new installer statement; NUL truncates.
+ *
+ * DEFENCE IN DEPTH, NOT THE PRIMARY GUARD -- same contract as
+ * assertEmittable: the schema regexes are what reject these values in
+ * validate() with the whole list reported at once, and this is what stops a
+ * future schema edit from silently reopening the sink. CFG-03: rejection
+ * only, never escaping -- an escaped URL is not the manifest's URL.
+ */
+const NSIS_UNEMITTABLE = /"|\$\{|\r|\n|\0/;
+
+/**
+ * A manifest value on its way into a Windows installer !define line.
+ * Reports through report() in the same plain-words shape as
+ * assertEmittable: the TOML dotted path, the rule, the re-run command.
+ */
+function assertNsisEmittable(path, value) {
+    if (typeof value !== 'string' || NSIS_UNEMITTABLE.test(value)) {
+        report([
+            `${path} cannot be written into a Windows installer setting as it stands. A brand value may not `
+            + 'contain a double quote, a dollar-brace variable reference, or a line break. '
+            + `Open ${MANIFEST_NAME}, correct it, then run: ${RERUN}`,
+        ]);
+    }
+    return value;
+}
+
+/**
+ * Characters a manifest value may never carry into an XML installer
+ * document (MSIX fields, plist fields, tile manifest). An ampersand opens
+ * an entity, angle brackets open or close an element, a double quote closes
+ * a quoted attribute, and a control character is not representable -- any of
+ * them lets one value rewrite the document around it.
+ *
+ * DEFENCE IN DEPTH, NOT THE PRIMARY GUARD -- same contract as above. Every
+ * value that reaches an XML sink today also carries a schema regex that
+ * excludes these characters, so on a validated manifest this guard never
+ * fires; it is what fires if a future schema edit drops one of those
+ * patterns. CFG-03: rejection only, never escaping.
+ */
+const XML_UNEMITTABLE = /[&<>"\x00-\x1f\x7f]/;
+
+/**
+ * A manifest value on its way into an XML installer document. Reports
+ * through report() in the same plain-words shape: the TOML dotted path,
+ * the rule, the re-run command.
+ */
+function assertXmlEmittable(path, value) {
+    if (typeof value !== 'string' || XML_UNEMITTABLE.test(value)) {
+        report([
+            `${path} cannot be written into an installer document as it stands. A brand value may not `
+            + 'contain an ampersand, an angle bracket, a double quote, or a control character. '
+            + `Open ${MANIFEST_NAME}, correct it, then run: ${RERUN}`,
+        ]);
+    }
+    return value;
+}
+
+/**
  * The "this file is derived" banner, carried by EVERY generated target.
  *
  * ONE constant, not one per emitter. It went in as three lines on configure.sh
@@ -600,7 +664,7 @@ function assertEmittable(path, value) {
  * equally hand-editable and equally silent about it -- and a reader could no
  * longer tell generated from hand-written by opening the file, which is the
  * banner's whole purpose. A shared constant is also what stops the
- * thirty-seven files drifting into thirty-seven wordings.
+ * forty-five files drifting into forty-five wordings.
  *
  * `#` is a comment in all three formats: mozconfig is shell, configure.sh is
  * shell, and freedesktop permits comment lines in a .desktop file including
@@ -1765,6 +1829,171 @@ function emitFirefoxIcnsFile(config, variant) {
 }
 
 /**
+ * The installer support address both NSIS URL defines carry.
+ *
+ * installer.support_url first; product.homepage as the fallback, so a
+ * downstream that states no [installer] section still ships working links
+ * rather than empty defines. When BOTH are unset the emitter hard-fails
+ * naming both keys: an empty URLInfoAbout is a broken installer page, not a
+ * default. The returned value passes the NSIS sink guard on the way out --
+ * whichever key supplied it.
+ */
+function installerSupportUrl(config) {
+    const direct = config.installer?.support_url;
+    if (typeof direct === 'string' && !isUnset(direct)) {
+        return assertNsisEmittable('installer.support_url', direct);
+    }
+    const home = config.product?.homepage;
+    if (typeof home === 'string' && !isUnset(home)) {
+        return assertNsisEmittable('product.homepage', home);
+    }
+    report([
+        'installer.support_url and product.homepage are both unset, and the Windows installer defines need one of them. '
+        + `Open ${MANIFEST_NAME}, give one of those two settings a value, then run: ${RERUN}`,
+    ]);
+}
+
+/**
+ * The per-downstream subset of branding.nsi: the six defines that vary with
+ * the manifest. Everything else in upstream's file -- dialog units, fonts,
+ * colors, stub URLs, certificate names -- is installer layout constant and
+ * stays with the packager (v2 PKG-01), which splices these six lines into
+ * the full file.
+ *
+ * BrandFullNameInternal and BrandFullName carry display_name plus the
+ * variant's name_suffix (the unofficial split the RESEARCH excerpt records);
+ * CompanyName reuses product.vendor_display and introduces no second vendor
+ * string; URLInfoAbout and HelpLink carry the support address resolved
+ * above; Channel is the literal unofficial -- never release, never official.
+ * Every interpolated value passes the NSIS sink guard.
+ */
+export function emitBrandingNsi(config, variant) {
+    const base = assertNsisEmittable('identity.display_name', config.identity.display_name);
+    const suffix = assertNsisEmittable(variantPath(variant, 'name_suffix'), variant.name_suffix);
+    const vendor = assertNsisEmittable('product.vendor_display', config.product.vendor_display);
+    const url = installerSupportUrl(config);
+    const lines = [
+        '# This Source Code Form is subject to the terms of the Mozilla Public',
+        '# License, v. 2.0. If a copy of the MPL was not distributed with this',
+        '# file, You can obtain one at http://mozilla.org/MPL/2.0/.',
+        '',
+        '# The per-downstream subset of branding.nsi (GEN-03, schema-complete only).',
+        `!define BrandFullNameInternal "${base}${suffix}"`,
+        `!define BrandFullName "${base}${suffix}"`,
+        `!define CompanyName "${vendor}"`,
+        `!define URLInfoAbout "${url}"`,
+        `!define HelpLink "${url}"`,
+        '!define Channel "unofficial"',
+    ];
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * The per-downstream MSIX fields as a fragment: DisplayName and Description
+ * from display_name plus the variant's name_suffix, Identity Name from
+ * distribution_id plus app_basename. The MSIX publisher, version and
+ * architecture attributes are packager inputs, not brand values, and stay
+ * out -- the v2 packager splices this fragment into AppxManifest.xml.in.
+ * Schema-complete only: no Windows host builds or signs this in v1.
+ * Every interpolated value passes the XML sink guard.
+ */
+export function emitAppxManifestFields(config, variant) {
+    const base = assertXmlEmittable('identity.display_name', config.identity.display_name);
+    const suffix = assertXmlEmittable(variantPath(variant, 'name_suffix'), variant.name_suffix);
+    const identityName = `${assertXmlEmittable('identity.distribution_id', config.identity.distribution_id)}`
+        + `.${assertXmlEmittable('identity.app_basename', config.identity.app_basename)}`;
+    const lines = [
+        '<!-- This Source Code Form is subject to the terms of the Mozilla Public',
+        '   - License, v. 2.0. If a copy of the MPL was not distributed with this file,',
+        '   - You can obtain one at http://mozilla.org/MPL/2.0/. -->',
+        '<!-- The per-downstream MSIX fields (GEN-03, schema-complete only). -->',
+        '<AppxManifestFields>',
+        `  <DisplayName>${base}${suffix}</DisplayName>`,
+        `  <Description>${base}${suffix}</Description>`,
+        `  <Identity Name="${identityName}" />`,
+        '</AppxManifestFields>',
+    ];
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * The per-downstream macOS bundle fields as a fragment: CFBundleName from
+ * the display name plus the variant's name_suffix, CFBundleIdentifier as
+ * distribution_id plus the sanitized display form -- upstream derives the
+ * bundle id as the lowercased display name with everything outside [a-z-]
+ * stripped (toolkit/moz.configure), so the derivation is reproduced here
+ * rather than minted as a new manifest key. The firefox.icns and
+ * document.icns file names are literals: the application icon ships from
+ * this phase's icon step, and the document icon is a PKG-01 input (T-03-10)
+ * the v2 packager expands into CFBundleDocumentTypes.
+ * Schema-complete only: no macOS host builds or signs this in v1.
+ * Every interpolated value passes the XML sink guard.
+ */
+export function emitInfoPlistFields(config, variant) {
+    const base = assertXmlEmittable('identity.display_name', config.identity.display_name);
+    const suffix = assertXmlEmittable(variantPath(variant, 'name_suffix'), variant.name_suffix);
+    const sanitized = `${base}${suffix}`.toLowerCase().replace(/[^a-z-]/g, '');
+    if (sanitized === '') {
+        report([
+            `identity.display_name is ${JSON.stringify(config.identity.display_name)}, which leaves nothing `
+            + 'once lowercased for the macOS bundle identifier. Give the display name a letter, '
+            + `then run: ${RERUN}`,
+        ]);
+    }
+    const bundleId = `${assertXmlEmittable('identity.distribution_id', config.identity.distribution_id)}.${sanitized}`;
+    const lines = [
+        '<!-- This Source Code Form is subject to the terms of the Mozilla Public',
+        '   - License, v. 2.0. If a copy of the MPL was not distributed with this file,',
+        '   - You can obtain one at http://mozilla.org/MPL/2.0/. -->',
+        '<!-- The per-downstream macOS bundle fields (GEN-03, schema-complete only). -->',
+        '<InfoPlistFields>',
+        `  <CFBundleName>${base}${suffix}</CFBundleName>`,
+        `  <CFBundleIdentifier>${bundleId}</CFBundleIdentifier>`,
+        '  <CFBundleIconFile>firefox.icns</CFBundleIconFile>',
+        '  <DocumentIconFile>document.icns</DocumentIconFile>',
+        '</InfoPlistFields>',
+    ];
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * The Windows tile manifest, whole: the upstream
+ * firefox.VisualElementsManifest.xml layout with the per-downstream value
+ * filled in. BackgroundColor carries installer.tile_color when set; when
+ * unset the whole attribute line is omitted -- valid per the Windows tile
+ * schema, falling back to the app tile default -- and no color is invented.
+ * The logo paths are upstream literals the v2 packager provides; the tile
+ * rasters are PKG-01 inputs alongside the document icon above.
+ *
+ * ONE emitter serves BOTH variants: [installer] is a global table, not a
+ * per-variant one, so the two files are byte-identical -- the same trade the
+ * ICO/ICNS rows make, with the same uniformity reason.
+ * Schema-complete only: no Windows host reads this in v1.
+ */
+export function emitVisualElementsManifest(config, variant) {
+    void variant;
+    const tileColor = config.installer?.tile_color;
+    const colorLine = (typeof tileColor === 'string' && !isUnset(tileColor))
+        ? [`      BackgroundColor="${assertXmlEmittable('installer.tile_color', tileColor)}"`]
+        : [];
+    const lines = [
+        '<!-- This Source Code Form is subject to the terms of the Mozilla Public',
+        '   - License, v. 2.0. If a copy of the MPL was not distributed with this file,',
+        '   - You can obtain one at http://mozilla.org/MPL/2.0/. -->',
+        "<Application xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'>",
+        '  <VisualElements',
+        "      ShowNameOnSquare150x150Logo='on'",
+        "      Square150x150Logo='browser\\VisualElements\\VisualElements_150.png'",
+        "      Square70x70Logo='browser\\VisualElements\\VisualElements_70.png'",
+        "      ForegroundText='light'",
+        ...colorLine,
+        ' />',
+        '</Application>',
+    ];
+    return lines.join('\n') + '\n';
+}
+
+/**
  * Every output path lives here and nowhere else, and the default run, --check
  * and plan 02-05's byte-identity gate all iterate this one array.
  *
@@ -2017,6 +2246,52 @@ export const TARGETS = Object.freeze([
         variant: 'release',
         emit: emitFirefoxIcnsFile,
     }),
+    // NEW (03-03): GEN-03's installer branding fields. Two NSIS/tile files
+    // per variant under branding/ plus two XML field fragments per variant
+    // under installer/. No tracked comparand: no hand-written originals
+    // exist, so the byte-identity gate skips these rows and
+    // scripts/verify-installer-schema.mjs owns their schema (presence,
+    // well-formedness, value derivation, tile-color omission).
+    Object.freeze({
+        generated: 'branding/dev/branding.nsi',
+        variant: 'dev',
+        emit: emitBrandingNsi,
+    }),
+    Object.freeze({
+        generated: 'branding/dev/firefox.VisualElementsManifest.xml',
+        variant: 'dev',
+        emit: emitVisualElementsManifest,
+    }),
+    Object.freeze({
+        generated: 'installer/dev/AppxManifest-fields.xml',
+        variant: 'dev',
+        emit: emitAppxManifestFields,
+    }),
+    Object.freeze({
+        generated: 'installer/dev/Info-plist-fields.xml',
+        variant: 'dev',
+        emit: emitInfoPlistFields,
+    }),
+    Object.freeze({
+        generated: 'branding/release/branding.nsi',
+        variant: 'release',
+        emit: emitBrandingNsi,
+    }),
+    Object.freeze({
+        generated: 'branding/release/firefox.VisualElementsManifest.xml',
+        variant: 'release',
+        emit: emitVisualElementsManifest,
+    }),
+    Object.freeze({
+        generated: 'installer/release/AppxManifest-fields.xml',
+        variant: 'release',
+        emit: emitAppxManifestFields,
+    }),
+    Object.freeze({
+        generated: 'installer/release/Info-plist-fields.xml',
+        variant: 'release',
+        emit: emitInfoPlistFields,
+    }),
 ]);
 
 function variantById(config, id) {
@@ -2127,7 +2402,7 @@ function firstDifferingLine(a, b) {
  *
  * THREE OUTCOMES, THREE MESSAGES, deliberately not one. An absent generated/ is
  * the state every fresh copy of the project and every automated run begins in;
- * reporting it as thirty-seven stale files reads as thirty-seven problems and sends the reader
+ * reporting it as forty-five stale files reads as forty-five problems and sends the reader
  * hunting a mismatch that does not exist.
  *
  * The set comparison runs in BOTH directions. A per-target loop alone sees a
@@ -2404,7 +2679,7 @@ function probeStaleOutput(config) {
  * Ask the freshness comparison about a directory that is not there -- the state
  * every fresh copy of the project and every CI runner starts in, because
  * generated/ is git-ignored. The distinct message this must produce is the
- * whole point: thirty-seven phantom stale paths would read as thirty-seven defects on a tree
+ * whole point: forty-five phantom stale paths would read as forty-five defects on a tree
  * with none, and a gate red for a non-defect is a gate its readers skip.
  *
  * The EXIT CODE is asserted here too, and separately from the message, because
@@ -2535,6 +2810,41 @@ function probeWrongMagicIcns() {
         return [`${BROKEN} the planted magic did not land in branding/dev/firefox.icns`];
     }
     return icnsStructureFailures(bad, 'branding/dev/firefox.icns');
+}
+
+/**
+ * GEN-03, T-03-07. A dollar-brace sequence in installer.support_url is a
+ * legal URL character, so the schema admits it -- and the NSIS sink guard
+ * must refuse it at emission, naming the key. In NSIS ${} expands at
+ * compile time, so an uninterpolated support URL would build the wrong
+ * links with exit 0.
+ *
+ * A child process, like probeMalformedManifest's: the guard reports through
+ * report(), which exits, so driving the emitter in-process would take the
+ * self-test down with it.
+ */
+function probeHostileSupportUrl() {
+    const dir = mkdtempSync(join(tmpdir(), 'generate-selftest-nsis-'));
+    try {
+        const fixturePath = join(dir, 'case-nsis.toml');
+        writeFileSync(
+            fixturePath,
+            `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[installer]\nsupport_url = "https://example.org/\${HOME}/support"\n`,
+            'utf8',
+        );
+        const child = spawnSync(process.execPath, [
+            '--input-type=module',
+            '-e',
+            `import { resolveConfig, emitBrandingNsi } from ${JSON.stringify(import.meta.url)};`
+            + `const r = resolveConfig(undefined, ${JSON.stringify(fixturePath)});`
+            + `if (r.failures.length > 0) { console.log('UNEXPECTED-VALIDATE-RED'); process.exit(2); }`
+            + `process.stdout.write(emitBrandingNsi(r.config, r.config.variants.find(v => v.id === 'dev')));`,
+        ], { encoding: 'utf8' });
+        if (child.status === 0) return [`${BROKEN} the hostile support_url emitted cleanly`];
+        return `${child.stderr}${child.stdout}`.split('\n').filter(line => line !== '');
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
 }
 
 /**
@@ -2765,7 +3075,7 @@ function selfTest() {
             expect: TARGETS[0].generated,
         },
         {
-            // The absent-directory outcome is a DISTINCT message, not thirty-seven
+            // The absent-directory outcome is a DISTINCT message, not forty-five
             // stale paths, AND it is not a failure. Asserted from three sides:
             // the message is there, no target path is, and the exit code was
             // zero -- so a future collapse of the three outcomes into one goes
@@ -2859,6 +3169,32 @@ function selfTest() {
             probe: probeWrongMagicIcns,
             expect: 'branding/dev/firefox.icns',
             also: ['icns'],
+        },
+        {
+            // GEN-03, T-03-07. A double quote in the display name must fail
+            // naming the key -- it would close the quoted NSIS !define value
+            // the name is interpolated into.
+            name: 'hostile double quote in display name',
+            toml: FIXTURE_BASE.replace('display_name = "Acme Browser"', 'display_name = "Acme \\"Browser"'),
+            expect: 'identity.display_name',
+        },
+        {
+            // GEN-03, T-03-07. A dollar-brace variable reference in the
+            // support URL passes the schema (it is a legal URL character)
+            // and must be refused by the NSIS sink guard at emission, naming
+            // the key -- in NSIS ${} expands at compile time.
+            name: 'hostile variable reference in support URL',
+            probe: probeHostileSupportUrl,
+            expect: 'installer.support_url',
+        },
+        {
+            // GEN-03, T-03-08. An ampersand in the display name must fail
+            // naming the key -- it would open an entity in the MSIX, plist
+            // and tile documents the name is interpolated into.
+            name: 'hostile ampersand in display name',
+            toml: FIXTURE_BASE.replace('display_name = "Acme Browser"', 'display_name = "Acme & Sons"'),
+            expect: 'identity.display_name',
+            also: ['&'],
         },
     ];
 
