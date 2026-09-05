@@ -32,10 +32,10 @@ at all for this schema. Zero frozen-class change.
 
 ```sql
 CREATE TABLE tabs (
-  uri         TEXT PRIMARY KEY,
+  uri         TEXT PRIMARY KEY CHECK(length(uri) > 0),
   url         TEXT NOT NULL,
   title       TEXT NOT NULL DEFAULT '',
-  last_active INTEGER NOT NULL
+  last_active INTEGER NOT NULL CHECK(last_active >= 0)
 );
 
 CREATE INDEX idx_tabs_last_active ON tabs (last_active);
@@ -67,10 +67,10 @@ carries the 5-minute stuck-transaction rollback; bound parameters via
 
 | Column | Type / constraint | Phase 12 consumer |
 |---|---|---|
-| `uri` | `TEXT PRIMARY KEY` | Join lookup: the opaque registry emission is the join key between Theia tabs and chrome rows; point reads/writes keyed by URI (`get/set/remove/list` by URI) |
+| `uri` | `TEXT PRIMARY KEY CHECK(length(uri) > 0)` | Join lookup: the opaque registry emission is the join key between Theia tabs and chrome rows; point reads/writes keyed by URI (`get/set/remove/list` by URI) |
 | `url` | `TEXT NOT NULL` | Read projection: the page address served to Theia UI reads and to future cross-surface joins against history/bookmark projections |
 | `title` | `TEXT NOT NULL DEFAULT ''` | Read projection: the tab title served to Theia UI reads; empty-string default keeps rows writable before a title is known |
-| `last_active` | `INTEGER NOT NULL` | Ordering with bounded closed-retention pruning: `ORDER BY last_active` for recency plus `DELETE … WHERE last_active < ?` retention statements, served by `idx_tabs_last_active` |
+| `last_active` | `INTEGER NOT NULL CHECK(last_active >= 0)` | Ordering with bounded closed-retention pruning: `ORDER BY last_active` for recency plus `DELETE … WHERE last_active < ?` retention statements, served by `idx_tabs_last_active` |
 
 Workload fit: tens to hundreds of live rows of short human-scale
 identifiers. A TEXT primary key plus one `last_active` index covers
