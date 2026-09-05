@@ -120,4 +120,10 @@ its catalogue rows, proving the patch surface and boundary still hold.
 
 ## 7. Closeout
 
-PENDING — appended by the final sweep on the final tree (task 2).
+CLOSED 2026-09-05 — final sweep on the final tree: quick gate PASS,
+registry-shape PASS, catalogue PASS, both RECORDED approvals confirmed,
+manifest-key absence and refined engine-surface absence clean. Design-only
+confirmation: zero new files outside the planning record (committed surface
+confined to the phase-directory listing in §3; no powerbrowser/, theia/,
+upstream/, patches/, or scripts/ change). SQL-02 and SQL-03 close; Phase 12
+starts from this signed design via the §6 handoff.
