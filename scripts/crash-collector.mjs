@@ -176,6 +176,9 @@ export function createThrottleState() {
  * accepted submits count toward the cap (docs/CRASH-POLICY.md).
  */
 export function wouldThrottle(state, nowMs) {
+    // Fail closed: a non-finite clock would make the window filter drop
+    // every entry and silently disable throttling, so refuse instead.
+    if (!Number.isFinite(nowMs)) return THROTTLE_RULE;
     state.acceptedAt = state.acceptedAt.filter(t => t > nowMs - THROTTLE_WINDOW_MS);
     if (state.acceptedAt.length >= THROTTLE_MAX_SUBMITS) return THROTTLE_RULE;
     return null;
@@ -229,12 +232,21 @@ function sweepRetention(storeDir, nowMs, onDiagnostic) {
  */
 export function handleSubmit({ body, contentType, storeDir, throttle, nowMs, onDiagnostic }) {
     const diagnose = onDiagnostic ?? (() => undefined);
+    // The clock is injected, so default and validate it here: an undefined
+    // or non-finite clock would silently disable throttling (every window
+    // comparison is false against NaN) and throw out of the accept path.
+    // Refuse loud rather than accept unthrottled.
+    const at = nowMs ?? Date.now();
+    if (!Number.isFinite(at)) {
+        diagnose(`${NAME}: submit refused -- the injected clock is not finite (${String(nowMs)}), so throttling cannot be enforced. Next step: pass Date.now() or a fixed test clock.`);
+        return { status: 500, body: buildDiscardResponse(REASON_STORE_UNAVAILABLE), crashId: null };
+    }
     const parsed = parseMultipart(body, contentType);
     if (!parsed.ok) {
         const status = parsed.reason === REASON_OVERSIZED ? 413 : 400;
         return { status, body: buildDiscardResponse(parsed.reason), crashId: null };
     }
-    const rule = wouldThrottle(throttle, nowMs);
+    const rule = wouldThrottle(throttle, at);
     if (rule) {
         return { status: 200, body: buildDiscardResponse(rule), crashId: null };
     }
@@ -249,7 +261,7 @@ export function handleSubmit({ body, contentType, storeDir, throttle, nowMs, onD
     }
     const record = {
         id: crashId,
-        receivedAt: new Date(nowMs).toISOString(),
+        receivedAt: new Date(at).toISOString(),
         annotations,
         minidumpBytes: minidump.data.length,
         partNames: parsed.parts.map(part => part.name),
@@ -262,8 +274,8 @@ export function handleSubmit({ body, contentType, storeDir, throttle, nowMs, onD
         diagnose(`${NAME}: store write failed in ${storeDir}: ${err && err.message ? err.message : String(err)}`);
         return { status: 500, body: buildDiscardResponse(REASON_STORE_UNAVAILABLE), crashId: null };
     }
-    sweepRetention(storeDir, nowMs, diagnose);
-    recordAccept(throttle, nowMs);
+    sweepRetention(storeDir, at, diagnose);
+    recordAccept(throttle, at);
     return { status: 200, body: buildCrashIdResponse(crashId), crashId };
 }
 
