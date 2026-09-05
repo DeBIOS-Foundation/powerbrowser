@@ -20,8 +20,8 @@ affects: [10-02 live drills, 10-03 gates-green sweep]
 # Actuals (#2632) — pairs with the plan's `estimate` to calibrate future estimates.
 actuals:
   tokens: 0
-  tasks: 1
-  commits: 1
+  tasks: 3
+  commits: 4
 
 # Tech tracking
 tech-stack:
@@ -29,7 +29,7 @@ tech-stack:
   patterns: [record-close box with cited evidence, staged-with-unblock runbook]
 
 key-files:
-  created: [.planning/phases/10-sign-off-closeout/10-01-SUMMARY.md]
+  created: [.planning/phases/10-sign-off-closeout/10-01-SUMMARY.md, .planning/phases/10-sign-off-closeout/10-UAT.md]
   modified: []
 
 key-decisions:
@@ -85,19 +85,22 @@ status: complete
 
 # Phase 10 Plan 01: Record-Close Tracer Summary
 
-**GUI-04 bridge-landability record-close box wired end-to-end: archive cite plus live gate re-run plus written box**
+**Six record-close boxes with cited evidence plus the 16-vs-15 reconciliation plus five staged UAT sheets, --quick green**
 
 ## Performance
 
 - **Duration:** see final task commit
 - **Started:** 2026-09-05T17:58:08Z
 - **Completed:** 2026-09-05
-- **Tasks:** 1 of 3 (tracer slice)
-- **Files modified:** 1
+- **Tasks:** 3 of 3
+- **Files modified:** 2
 
 ## Accomplishments
 - GUI-04 record-close box complete with archive pointers, row ids, dates, and live re-run outcome on the current tree
-- Tracer proves the record-close routing works before replication to the five remaining boxes
+- Five further boxes (MIG-01, MIG-02, GEN-01 credit, GEN-03 credit, TEL-03 derivation) each with archive pointers plus row ids plus dates plus live delta outcomes
+- 16-vs-15 reconciliation recorded with three pointer lines, enumeration declared source of truth
+- Five staged human UAT sheets (GUI-01, GUI-03, GEN-02, GEN-05, DOC-01) with exact runbooks, result pending, source human, no executor-filled signature
+- `verify-platform.sh --quick` green on the final tree with no sibling driver created
 
 ## Record-Close Boxes
 
@@ -209,10 +212,12 @@ The 2026-09-01 01-UAT human passes for GUI-01 (test 2) and GUI-03 (test 6) remai
 ## Task Commits
 
 1. **Task 1: End-to-end record-close slice — GUI-04 landability box** - `36c5031` (docs)
-2. **Task 2: Remaining record-close boxes plus count reconciliation** - `TBD` (docs)
+2. **Task 2: Remaining record-close boxes plus count reconciliation** - `8377903` (docs)
+3. **Task 3: Five staged human UAT runbook sheets** - `e4d7bb5` (docs)
 
 ## Files Created/Modified
-- `.planning/phases/10-sign-off-closeout/10-01-SUMMARY.md` - GUI-04 record-close box (this file, working draft)
+- `.planning/phases/10-sign-off-closeout/10-01-SUMMARY.md` - six record-close boxes plus reconciliation plus freshness check (this file)
+- `.planning/phases/10-sign-off-closeout/10-UAT.md` - five staged human UAT runbook sheets with automatable-half outcomes
 
 ## Decisions Made
 - Credit-don't-reprove: the tracer re-runs only the gui04 rows live and cites the archives for the rest; no tier-3 rebuild, no re-proof of what 08/09 proved.
@@ -226,6 +231,12 @@ None.
 
 ## Next Phase Readiness
 - Tracer routing proven; Task 2 replicates the box pattern to the five remaining boxes plus reconciliation.
+
+## Self-Check: PASSED
+
+- Files: 10-UAT.md FOUND, 10-01-SUMMARY.md FOUND
+- Commits: 36c5031, 8377903, e4d7bb5 all FOUND in git log
+- Verifies: gui04 pair, seven record-close delta rows, seven automatable-half rows, sheet-shape counts (coverage_id 5, result pending 5, STAGED-awaiting-signature 5), --quick green — all observed PASS this session
 
 ---
 *Phase: 10-sign-off-closeout*
