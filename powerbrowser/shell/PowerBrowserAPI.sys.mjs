@@ -1002,14 +1002,11 @@ export const PowerBrowserAPI = Object.freeze({
       PowerBrowserAPI.log("error", `[ensureTabStore] open failed: ${err && err.message ? err.message : err}`);
       return "degraded";
     }
-    let ok = false;
-    try {
-      const conn = await PowerBrowserAPI.openTabStore();
-      const rows = await conn.execute("PRAGMA quick_check");
-      ok = rows.length === 1 && rows[0].getString(0) === "ok";
-    } catch {
-      ok = false;
-    }
+    // WR-05 (12-CODE-REVIEW.md): the tripwire lives in
+    // checkTabStoreIntegrity -- call it rather than re-implementing the
+    // exact-single-ok keying here, so the two can never drift apart. It
+    // never throws (answers true/false only), so no guard is needed.
+    const ok = await PowerBrowserAPI.checkTabStoreIntegrity();
     if (ok) {
       return "ready";
     }
