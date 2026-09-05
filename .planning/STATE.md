@@ -4,12 +4,12 @@ milestone: v1.1
 milestone_name: Hardening and SQL Tabs
 current_phase: 08
 current_phase_name: Installer Hardening + Canonical Rename
-status: planning
+status: executing
 stopped_at: Completed 07-sourcerer-as-downstream-04-PLAN.md
-last_updated: "2026-09-04T23:24:03.807Z"
+last_updated: "2026-09-04T23:25:29.666Z"
 last_activity: 2026-09-04
-last_activity_desc: v1.1 roadmap created (Phases 08–09)
-state_head: 346306f58b7ff21aa9825dd0dccfac1c1403b370
+last_activity_desc: Phase 08 execution started
+state_head: 107963b75f9049d63a50e1e2fdafe108f7443c59
 progress:
   total_phases: 2
   completed_phases: 0
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** v1.1 Hardening and SQL Tabs — roadmap awaiting approval (Phases 08–09, hardening-only: no GUI, no SQL tabs this cycle)
+**Current focus:** Phase 08 — Installer Hardening + Canonical Rename
 
 ## Current Position
 
-Phase: 08 (Installer Hardening + Canonical Rename) — READY TO EXECUTE
-Plan: —
-Status: Roadmap awaiting approval
-Last activity: 2026-09-04 — v1.1 roadmap created (Phases 08–09)
+Phase: 08 (Installer Hardening + Canonical Rename) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 08
+Last activity: 2026-09-04 — Phase 08 execution started
 
 ## Performance Metrics
 
