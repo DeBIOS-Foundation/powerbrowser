@@ -72,11 +72,11 @@ Plans:
   2. A schema + migration plan exists showing the tabs table on URI primary key, `schema_version`/`user_version` from day one, forward-only migrations exercised against fixture DBs, a quarantine-not-delete corruption path, the private-tab exclusion rule, and the fixed `tabs.sqlite` filename as platform content (not manifest) — reviewed and signed
   3. SQLite is the only engine in the design (per `.planning/research/duckdb-vs-sqlite/VERDICT.md`); no DuckDB surface, no `[features]`/`[sql]` manifest flag (ARCHITECTURE.md Anti-Pattern 6), no GUI surface
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 Plans:
 
-- [ ] 11-01-PLAN.md — Authority/invariant table plus recorded sign-off (SQL-02)
+- [x] 11-01-PLAN.md — Authority/invariant table plus recorded sign-off (SQL-02)
 - [ ] 11-02-PLAN.md — Schema plus migration plan with fixture exercise plus recorded sign-off (SQL-03)
 - [ ] 11-03-PLAN.md — Review-sign gate with green static gates and Phase 12 handoff (SQL-02, SQL-03)
 
@@ -99,7 +99,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 10. Sign-off Closeout | 3/3 | Implemented, verification deferred |  |
-| 11. SQL Store Design | 0/0 | Not started | - |
+| 11. SQL Store Design | 1/3 | In Progress|  |
 | 12. SQL Store Build | 0/0 | Not started | - |
 
 ## Inherited network egress (carried through the migration, not decided here)
