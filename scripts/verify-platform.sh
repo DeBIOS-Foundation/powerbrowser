@@ -296,8 +296,14 @@ check_verify_downstream_fixtures() {
   # path, and the harness fails loudly on an unknown or empty root. Both
   # drives run even when the first is red, so one failing set cannot mask the
   # other; the row fails when either drive fails.
+  # v1.1 closeout archived the 09 phase under milestones/ (v1.0 precedent
+  # above): fall back to the archived fixtures root when the live phases dir
+  # no longer carries one.
   local extroot
   extroot=$(echo "$REPO_ROOT"/.planning/phases/09-*/fixtures)
+  if [ ! -d "$extroot" ]; then
+    extroot=$(echo "$REPO_ROOT"/.planning/milestones/v1.1-phases/09-*/fixtures)
+  fi
   setsid node "$REPO_ROOT/scripts/verify-downstream-fixture.mjs" --all --fixtures-root "$extroot" &
   CURRENT_CHECK_PID=$!
   rc_ext=0; wait "$CURRENT_CHECK_PID" || rc_ext=$?; CURRENT_CHECK_PID=""
