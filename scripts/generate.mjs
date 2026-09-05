@@ -5061,6 +5061,54 @@ function selfTest() {
             expect: 'acme.npmpack',
         },
         {
+            // EXT-02. An npm entry stating a range must fail NAMING the
+            // entry -- here via the version schema shape, which admits exact
+            // pins only.
+            name: 'npm extension entry with a ranged version',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "^2.4.1"\n')}`,
+            expect: 'acme.npmpack',
+        },
+        {
+            // EXT-02. An npm entry without its version pin must fail NAMING
+            // the entry -- the tarball URL cannot be built without it.
+            name: 'npm extension entry without its version pin',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', '')}`,
+            expect: 'acme.npmpack',
+        },
+        {
+            // EXT-02. An npm entry without its integrity digest must fail
+            // NAMING the entry -- the digest guards a republication under
+            // the pinned version, so version alone is not a pin.
+            name: 'npm extension entry without its integrity digest',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace(`integrity = "${FIXTURE_EXTENSION_INTEGRITY}"\n`, '')}`,
+            expect: 'acme.npmpack',
+        },
+        {
+            // EXT-02. An npm entry with a malformed integrity digest must
+            // fail NAMING the entry, not just the dotted path -- with
+            // several entries, `extensions[].integrity` does not say which
+            // one is malformed.
+            name: 'npm extension entry with a malformed integrity digest',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace(FIXTURE_EXTENSION_INTEGRITY, 'not-an-sri-digest')}`,
+            expect: 'acme.npmpack',
+        },
+        {
+            // EXT-02. A local-path entry without its path must fail NAMING
+            // the entry -- there is nothing to pack without it.
+            name: 'local-path extension entry without its path',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('path = "extensions/acme-local"\n', '')}`,
+            expect: 'acme.localtool',
+        },
+        {
+            // EXT-02. A local-path entry with an absolute path must fail
+            // NAMING the entry -- the path is project-relative by schema
+            // shape, so an absolute one escapes the project it must pack
+            // from.
+            name: 'local-path extension entry with an absolute path',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('path = "extensions/acme-local"\n', 'path = "/abs/acme-local"\n')}`,
+            expect: 'acme.localtool',
+        },
+        {
             // EXT-01. A sha256 of the wrong shape must fail NAMING the entry,
             // not just the dotted path -- with several entries,
             // `extensions[].sha256` does not say which one is malformed.
