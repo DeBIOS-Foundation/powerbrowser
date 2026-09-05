@@ -1,0 +1,48 @@
+# Canonical-form EXPECTED-PASS fixture for plan 08-02 (NAME-01 follow-through).
+#
+# This is TEST DATA, not a real product: every value is invented ("Ironwood")
+# and no real-world product name, vendor, URL, or trademark appears here.
+# Cloned from the spaced-name fixture with surgical diffs; lives under
+# .planning/ so both tree scanners exclude it by committed table.
+#
+# HOSTILITY (inverted from spaced-name): display_name is a SINGLE token with
+# no interior space ("Ironwood"). Where spaced-name proves multi-word spacing
+# survives emission, this fixture proves the no-space canonical form emits
+# cleanly: the exact bytes must survive into the double-quoted shell
+# assignment, the desktop Name key, both locale files per variant, and the
+# installer defines with no split, trim-to-empty, or spaceless-join
+# confusion. vendor_machine stays spaceless ("Ironwood") while
+# vendor_display carries a space, proving the two-vendor split holds the
+# profile path safe.
+#
+# SHAPE: same carve-outs as the 07-02 fixture (theia_release platform-
+# identical, [[variants]]/cosmetic keys omitted to exercise the default-echo
+# path). Every required key differs from the platform's and from every other
+# fixture's.
+
+[product]
+vendor_machine = "Ironwood"
+vendor_display = "Ironwood Collective"
+
+[identity]
+display_name = "Ironwood"
+app_basename = "ironwood-browser"
+binary_name = "ironwood"
+remoting_name = "ironwood"
+distribution_id = "org.ironwood"
+
+[legal]
+license = "MPL-2.0"
+copyright_holder = "Ironwood Collective"
+trademark_notice = "Ironwood is a trademark of Ironwood Collective."
+
+[installer]
+support_url = "https://ironwood.example.org"
+
+[telemetry]
+level = "error"
+endpoint = "https://telemetry.ironwood.example.org/v1/events"
+
+[upstreams]
+firefox_esr_tag = "FIREFOX_154_2_0esr_RELEASE"
+theia_release = "1.74.1"
