@@ -779,7 +779,31 @@ literals (`AppName`, certificate names, Mozilla telemetry URL) that a
 Windows shippable must replace. The row's PASS line says the compile
 only.
 
-### VM paths (08-05, not this phase)
+### Packaging hosts (08-05): capability record
+
+One row per host. Every later task cites its host by name; no artifact work
+starts on an unnamed host. MSIX and DMG are never attempted on Linux: the
+pinned tree's own tooling is the authority — `msix.py` raises without
+`makeappx.exe`/`signtool.exe` from the Windows SDK, and `dmg.py` shells out
+to macOS-only `hdiutil`/`SetFile`.
+
+Numbered versions on `staged-unexecuted` rows are the REQUIRED spec (floor),
+not observations: the exact media, OS, and SDK builds are recorded here at
+provision time. Observed facts carry their evidence inline.
+
+| Host | OS / toolchain (numbered) | makensis | State | Evidence / unblock |
+|---|---|---|---|---|
+| nix-linux (legion) | NixOS 26.05.8954 (Yarara), x86_64, `nix develop .#firefox` toolchain per toolchain-baseline.txt | makensis 3.12 (`nix shell nixpkgs#nsis --command makensis -VERSION` gives `v3.12`, re-verified 2026-09-05) | reachable | Proof: 08-04 `installer-build-proof` PASS — the pinned installer.nsi compiled with the generated branding.nsi into setup.exe in 3.4s |
+| pkg-win11 | Windows 11 23H2+ install media (required) + Windows SDK 10.0 with makeappx.exe and signtool.exe via WINDOWSSDKDIR or PATH (required) + NSIS 3.12 (required) | n/a until provisioned (Windows-side NSIS after the guest exists) | staged-unexecuted | Provisioning error (observed 2026-09-05): `sudo -n true` fails (`sudo: a password is required`), so qemu:///system is unmanageable — no domain can be defined, no NAT network created, and the root-owned `/var/lib/libvirt/images/win11.qcow2` is unreadable; `virsh list --all` shows zero defined domains; that qcow2 is 200704 bytes (a fresh-image stub, no installed guest OS); no guest agent, no guest credentials, and no Windows SDK/NSIS on any reachable guest exist. Media present and verified listable: `win11-install.iso` (8471603200 bytes, UDF volume `CCCOMA_X64FRE_EN-US_DV9`, 2026-03-07) with EFI boot plus `sources/install.wim` (7.5 GB) plus `sources/setup.exe`, and `virtio-win.iso` (1435727872 bytes), both 2026-07-29. A genuine MSIX proof additionally needs a full Windows Gecko build (multi-hour Windows compile) that no host can run yet. Unblock (operator, needs privilege): create the libvirt NAT network, define the pkg-win11 domain from the verified media above, run an unattended install, install the QEMU guest agent plus Windows SDK 10.0 plus NSIS 3.12, build the Windows dist, then hand the agent guest access — or provision any Windows 11 host with SDK plus NSIS and name it pkg-win11. Dependent cells (Windows MSIX build, Windows install/launch/uninstall/no-residue, Windows N to N-plus-1 hop, Windows alongside-stock-Firefox) stay staged-unexecuted until then. |
+| pkg-macos | macOS 14+ with Xcode command-line tools (required; hdiutil and SetFile are system tools) | n/a (no NSIS role on macOS) | staged-unexecuted | Provisioning error (observed 2026-09-05): no macOS install image exists anywhere reachable — `/var/lib/libvirt/images/` holds only the Windows media and stub above, and a filesystem-wide `*.dmg` search returns nothing; no Apple hardware; no lawful download path for a macOS image from Linux. Unblock (operator): provision a real Mac (or lawful macOS VM) with Xcode command-line tools, build the macOS dist on it, and hand the agent access as pkg-macos. Dependent cells (DMG build, macOS install/launch/uninstall/no-residue, macOS N to N-plus-1 hop, macOS alongside-stock-Firefox) stay staged-unexecuted until then. |
+
+Test-signing posture (T-08-05a, accepted): when the staged hosts provision,
+matrix proofs run test-signed (`signtool` test cert on pkg-win11, ad-hoc
+`codesign` on pkg-macos) with the expected SmartScreen and Gatekeeper
+friction documented per cell. Production certificate procurement is a later
+decision per RESEARCH open question 1 and is NOT procured in this phase.
+
+### MSIX / DMG mechanics (for the staged hosts)
 
 - MSIX: `upstream/python/mozbuild/mozbuild/repackaging/msix.py`
   raises without `makeappx.exe`/`signtool.exe` from the Windows SDK —
@@ -787,7 +811,8 @@ only.
 - DMG: `upstream/python/mozbuild/mozpack/dmg.py` shells out to
   macOS-only `hdiutil`/`SetFile` — a real macOS host/VM.
 - The per-OS install → launch → uninstall → no-residue matrix, plus the
-  alongside-stock-Firefox interleaved launch, run there.
+  alongside-stock-Firefox interleaved launch, run there (matrix section
+  below records the Linux cells green and the staged cells with unblocks).
 
 ### Packaging timings (attributed: tree plus host plus toolchain)
 
