@@ -21,12 +21,40 @@ ChromeUtils.defineESModuleGetters(lazy, {
   // (FORBIDDEN_PATTERNS), so it is reached here, in the one lazy-getter
   // block, rather than imported anywhere else.
   AppConstants: "resource://gre/modules/AppConstants.sys.mjs",
+  // SQL-01 (12-01): the tab-store writer's three reach-throughs. Sqlite
+  // opens tabs.sqlite, PrivateBrowsingUtils filters private windows before
+  // upsert, SessionStore sources quarantine rebuilds and the sweep.
+  Sqlite: "resource://gre/modules/Sqlite.sys.mjs",
+  PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+  SessionStore: "resource:///modules/sessionstore/SessionStore.sys.mjs",
 });
 
 // Strong references to in-flight one-shot timers created by sleep(). See the
 // comment in sleep() -- without this they can be garbage-collected before they
 // fire and the awaiting promise never settles.
 const pendingTimers = new Set();
+
+// SQL-01 (12-01): v1 tab-store schema carried verbatim from SCHEMA.md. The
+// roundtrip proof (scripts/verify-sql-store-roundtrip.mjs) extracts the text
+// between the DDL markers at check time and fails distinctly when they are
+// absent -- the DDL lives here once, never as a copy. No private, window,
+// pinned, or credential-shaped column exists by construction.
+const TAB_STORE_SCHEMA_HEAD = 1;
+const TABS_STORE_V1_DDL = /* PB-SQL-TABS-DDL-START */ `CREATE TABLE tabs (
+  uri         TEXT PRIMARY KEY CHECK(length(uri) > 0),
+  url         TEXT NOT NULL,
+  title       TEXT NOT NULL DEFAULT '',
+  last_active INTEGER NOT NULL CHECK(last_active >= 0)
+);
+
+CREATE INDEX idx_tabs_last_active ON tabs (last_active);` /* PB-SQL-TABS-DDL-END */;
+
+const TAB_STORE_FILE_NAME = "tabs.sqlite";
+
+// SQL-01 (12-01): the single chrome-side tab-store connection. Module-level
+// (never a property on the frozen PowerBrowserAPI object -- assignment to a
+// frozen object throws), one writer only.
+let tabStoreConn = null;
 
 export const PowerBrowserAPI = Object.freeze({
   /**
@@ -530,6 +558,339 @@ export const PowerBrowserAPI = Object.freeze({
       "chrome,dialog=no,all",
       arg
     );
+  },
+
+  /**
+   * SQL-01 (12-01): the row key for a stock browser tab. One line: the
+   * `webview:` scheme spelling from existing-scheme-coverage plus the tab
+   * URL spec, bound opaquely and never parsed chrome-side. The same one-line
+   * rule lives in theia/extensions/tab-uris/src/browser/browser-tab-uri.ts;
+   * the roundtrip proof asserts both spell the same scheme.
+   */
+  browserTabKey(urlSpec) {
+    return "webview:" + urlSpec;
+  },
+
+  /**
+   * SQL-01 (12-01): opens the single chrome-side tab-store connection.
+   * Relative `tabs.sqlite` resolves against ProfD by construction, so the
+   * own-file rule needs no hand-rolled path join. WAL is pinned OUTSIDE any
+   * transaction (journal_mode is immutable inside one -- a silent no-op),
+   * with a journal_mode read-back assert rather than an assumption. Version
+   * guard: zero or stale runs the forward migration in one transaction with
+   * tableExists/indexExists pre-checks; newer-than-head refuses loudly,
+   * leaving the file untouched. Loud-write convention: throws naming the
+   * method and cause, never masks a failure as success.
+   */
+  async openTabStore() {
+    if (tabStoreConn) {
+      return tabStoreConn;
+    }
+    const conn = await lazy.Sqlite.openConnection({ path: TAB_STORE_FILE_NAME });
+    const modeRows = await conn.execute("PRAGMA journal_mode=WAL;");
+    const mode = modeRows.length ? modeRows[0].getString(0) : "";
+    if (mode !== "wal") {
+      try {
+        await conn.close();
+      } catch {
+        // Close is best-effort here; the pin failure below is the error.
+      }
+      throw new Error(`openTabStore: journal_mode pin failed (got ${mode})`);
+    }
+    const schemaVersion = await conn.getSchemaVersion();
+    if (schemaVersion > TAB_STORE_SCHEMA_HEAD) {
+      try {
+        await conn.close();
+      } catch {
+        // Close is best-effort here; the refusal below is the error.
+      }
+      throw new Error(
+        `openTabStore: refusing downgrade: user_version=${schemaVersion} is newer than chain head ${TAB_STORE_SCHEMA_HEAD}`
+      );
+    }
+    if (schemaVersion < TAB_STORE_SCHEMA_HEAD) {
+      await PowerBrowserAPI.migrateTabStoreToV1(conn);
+    }
+    tabStoreConn = conn;
+    return conn;
+  },
+
+  /**
+   * SQL-01 (12-01): the single forward migration (v0/stale to v1). Pre-checks
+   * run first; the DDL statements (split from the marker-delimited constant,
+   * never a copy) plus the version bump run inside exactly one
+   * executeTransaction. A database whose work is already done is a no-op
+   * success that only stamps the version.
+   */
+  async migrateTabStoreToV1(conn) {
+    const statements = TABS_STORE_V1_DDL.split(";")
+      .map(s => s.trim())
+      .filter(Boolean);
+    const createTable = statements.find(s => /^create table\b/i.test(s));
+    const createIndex = statements.find(s => /^create index\b/i.test(s));
+    if (!createTable || !createIndex) {
+      throw new Error("migrateTabStoreToV1: DDL marker content missing CREATE TABLE or CREATE INDEX");
+    }
+    const tableDone = await conn.tableExists("tabs");
+    const indexDone = await conn.indexExists("idx_tabs_last_active");
+    if (tableDone && indexDone) {
+      await conn.setSchemaVersion(TAB_STORE_SCHEMA_HEAD);
+      return;
+    }
+    await conn.executeTransaction(async () => {
+      if (!tableDone) {
+        await conn.execute(createTable);
+      }
+      if (!indexDone) {
+        await conn.execute(createIndex);
+      }
+      await conn.setSchemaVersion(TAB_STORE_SCHEMA_HEAD);
+    });
+  },
+
+  /**
+   * SQL-01 (12-01): the single write path. The PrivateBrowsingUtils private-
+   * window check runs BEFORE the upsert -- a private tab never reaches SQL,
+   * and no private column exists to select on (exclusion total). Every value
+   * crosses as a bound parameter, never interpolated. Constraint violations
+   * throw naming the method and URI.
+   */
+  async writeTabRow({ uri, url, title, lastActive, chromeWin }) {
+    if (chromeWin && lazy.PrivateBrowsingUtils.isWindowPrivate(chromeWin)) {
+      return "skipped-private";
+    }
+    const conn = await PowerBrowserAPI.openTabStore();
+    try {
+      await conn.executeCached(
+        `INSERT INTO tabs (uri, url, title, last_active) VALUES (:uri, :url, :title, :last_active)
+         ON CONFLICT (uri) DO UPDATE SET url=excluded.url, title=excluded.title, last_active=excluded.last_active`,
+        { uri, url, title: title ?? "", last_active: lastActive ?? Date.now() }
+      );
+    } catch (err) {
+      throw new Error(`writeTabRow: upsert failed for ${uri}: ${err && err.message ? err.message : err}`);
+    }
+    return "written";
+  },
+
+  /**
+   * SQL-01 (12-01): removes one row by opaque URI key. Bound parameter, loud
+   * errors.
+   */
+  async removeTabRow(uri) {
+    const conn = await PowerBrowserAPI.openTabStore();
+    await conn.execute("DELETE FROM tabs WHERE uri = :uri", { uri });
+  },
+
+  /**
+   * SQL-01 (12-01): point read by opaque URI key. Never-throw read
+   * convention: resolves null on any failure, matching getStringPref above.
+   */
+  async readTabRow(uri) {
+    try {
+      const conn = await PowerBrowserAPI.openTabStore();
+      const rows = await conn.execute(
+        "SELECT uri, url, title, last_active FROM tabs WHERE uri = :uri",
+        { uri }
+      );
+      if (!rows.length) {
+        return null;
+      }
+      return {
+        uri: rows[0].getString(0),
+        url: rows[0].getString(1),
+        title: rows[0].getString(2),
+        last_active: rows[0].getInt64(3),
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * SQL-01 (12-01): lists all rows in URI order. Never-throw: resolves [] on
+   * any failure.
+   */
+  async listTabRows() {
+    try {
+      const conn = await PowerBrowserAPI.openTabStore();
+      const rows = await conn.execute("SELECT uri, url, title, last_active FROM tabs ORDER BY uri");
+      return rows.map(row => ({
+        uri: row.getString(0),
+        url: row.getString(1),
+        title: row.getString(2),
+        last_active: row.getInt64(3),
+      }));
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * SQL-01 (12-01): bounded closed-retention prune. Deletes rows whose URI is
+   * absent from the live set AND whose last_active predates the cutoff, so a
+   * transiently-missing open tab is never pruned by identity alone. Bound
+   * parameters throughout; an empty live set still prunes only before the
+   * cutoff. Loud errors.
+   */
+  async pruneClosedTabRows(openUris, activeSince) {
+    const conn = await PowerBrowserAPI.openTabStore();
+    const live = [...new Set(openUris)];
+    if (live.length) {
+      const placeholders = live.map((_, i) => `:live${i}`).join(", ");
+      const params = { cutoff: activeSince };
+      live.forEach((uri, i) => {
+        params[`live${i}`] = uri;
+      });
+      await conn.execute(
+        `DELETE FROM tabs WHERE last_active < :cutoff AND uri NOT IN (${placeholders})`,
+        params
+      );
+    } else {
+      await conn.execute("DELETE FROM tabs WHERE last_active < :cutoff", { cutoff: activeSince });
+    }
+  },
+
+  /**
+   * SQL-01 (12-01): startup integrity tripwire. Keying is exact: the result
+   * must be a single row with the value 'ok' and nothing else. An unopenable
+   * file counts as tripped. Never throws -- answers true/false only.
+   */
+  async checkTabStoreIntegrity() {
+    try {
+      const conn = await PowerBrowserAPI.openTabStore();
+      const rows = await conn.execute("PRAGMA quick_check");
+      return rows.length === 1 && rows[0].getString(0) === "ok";
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * SQL-01 (12-01): shapes the quarantine rebuild source from the restore
+   * authority. SessionStore.getBrowserState returns a JSON STRING, so this
+   * parses it; each open entry becomes a row keyed by the one-line
+   * browserTabKey rule. Never throws -- a missing or malformed state rebuilds
+   * zero rows rather than crashing startup.
+   */
+  parseSessionStoreTabRows() {
+    try {
+      const state = JSON.parse(lazy.SessionStore.getBrowserState());
+      const now = Date.now();
+      const rows = [];
+      for (const win of state.windows ?? []) {
+        for (const tab of win.tabs ?? []) {
+          const entry = tab.entries?.[tab.index - 1];
+          if (!entry || !entry.url) {
+            continue;
+          }
+          rows.push({
+            uri: PowerBrowserAPI.browserTabKey(entry.url),
+            url: entry.url,
+            title: entry.title ?? "",
+            last_active: now,
+          });
+        }
+      }
+      return rows;
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * SQL-01 (12-01): quarantine, not delete. Copies the tripped file to the
+   * next free corrupt-suffixed name (N = max existing suffix + 1, starting at
+   * 1 -- never reuse a suffix) via backupToFile, removes dependent sidecar
+   * state (-wal, -shm, -journal), then rebuilds the live rows FROM the
+   * sessionstore restore authority inside exactly one transaction. The corrupt
+   * copy is never deleted. Continues degraded with the rebuilt file.
+   */
+  async quarantineAndRebuildTabStore(restoreRows) {
+    const profileDir = PowerBrowserAPI.getProfileDir();
+    const livePath = `${profileDir}/${TAB_STORE_FILE_NAME}`;
+    let next = 0;
+    try {
+      const children = await IOUtils.getChildren(profileDir);
+      for (const child of children) {
+        const base = child.slice(child.lastIndexOf("/") + 1);
+        const match = /^tabs\.sqlite\.corrupt-(\d+)$/.exec(base);
+        if (match) {
+          next = Math.max(next, Number(match[1]));
+        }
+      }
+    } catch {
+      next = 0;
+    }
+    const corruptPath = `${livePath}.corrupt-${next + 1}`;
+    if (tabStoreConn) {
+      try {
+        await tabStoreConn.backupToFile(corruptPath);
+      } catch (err) {
+        throw new Error(`quarantineAndRebuildTabStore: backupToFile failed: ${err && err.message ? err.message : err}`);
+      }
+      try {
+        await tabStoreConn.close();
+      } catch {
+        // Close is best-effort; the rebuild below reopens.
+      }
+      tabStoreConn = null;
+    }
+    for (const suffix of ["-wal", "-shm", "-journal"]) {
+      try {
+        await IOUtils.remove(`${livePath}${suffix}`, { ignoreAbsent: true });
+      } catch {
+        // Sidecar removal is best-effort; a missing sidecar is the goal.
+      }
+    }
+    const conn = await lazy.Sqlite.openConnection({ path: TAB_STORE_FILE_NAME });
+    await conn.execute("PRAGMA journal_mode=WAL;");
+    await conn.executeTransaction(async () => {
+      await PowerBrowserAPI.migrateTabStoreToV1(conn);
+      for (const row of restoreRows) {
+        await conn.execute(
+          `INSERT INTO tabs (uri, url, title, last_active) VALUES (:uri, :url, :title, :last_active)
+           ON CONFLICT (uri) DO UPDATE SET url=excluded.url, title=excluded.title, last_active=excluded.last_active`,
+          { uri: row.uri, url: row.url, title: row.title, last_active: row.last_active }
+        );
+      }
+    });
+    tabStoreConn = conn;
+    return corruptPath;
+  },
+
+  /**
+   * SQL-01 (12-01): startup orchestration. Opens the store (running the
+   * version guard), fires the tripwire, and on any trip quarantines and
+   * rebuilds from sessionstore before continuing degraded. Resolves
+   * 'ready' | 'rebuilt' | 'degraded' -- never throws, so startup never
+   * stalls on the store.
+   */
+  async ensureTabStore() {
+    try {
+      await PowerBrowserAPI.openTabStore();
+    } catch (err) {
+      PowerBrowserAPI.log("error", `[ensureTabStore] open failed: ${err && err.message ? err.message : err}`);
+      return "degraded";
+    }
+    let ok = false;
+    try {
+      const conn = await PowerBrowserAPI.openTabStore();
+      const rows = await conn.execute("PRAGMA quick_check");
+      ok = rows.length === 1 && rows[0].getString(0) === "ok";
+    } catch {
+      ok = false;
+    }
+    if (ok) {
+      return "ready";
+    }
+    try {
+      const restoreRows = PowerBrowserAPI.parseSessionStoreTabRows();
+      await PowerBrowserAPI.quarantineAndRebuildTabStore(restoreRows);
+      return "rebuilt";
+    } catch (err) {
+      PowerBrowserAPI.log("error", `[ensureTabStore] rebuild failed: ${err && err.message ? err.message : err}`);
+      return "degraded";
+    }
   },
 
   /**
