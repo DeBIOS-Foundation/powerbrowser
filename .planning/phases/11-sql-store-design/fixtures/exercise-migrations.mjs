@@ -102,6 +102,9 @@ function migrateToV1(db) {
   }
   if (v === CURRENT_SCHEMA_VERSION) {
     // Idempotent re-run: pre-checks, create-if-missing inside one transaction.
+    // WAL pin precedes the transaction: journal_mode cannot change inside
+    // a transaction (silent no-op), so it is set outside it.
+    db.exec('PRAGMA journal_mode=WAL');
     db.exec('BEGIN');
     try {
       if (!tableExists(db, 'tabs')) db.exec(CREATE_TABS_V1_SQL);
@@ -114,6 +117,8 @@ function migrateToV1(db) {
     return 'rerun';
   }
   // v === 0: fresh-create or stale-version advance through the same v1 step.
+  // WAL pin precedes the DDL transaction (journal_mode is immutable inside one).
+  db.exec('PRAGMA journal_mode=WAL');
   db.exec('BEGIN');
   try {
     if (!tableExists(db, 'tabs')) db.exec(CREATE_TABS_V1_SQL);
@@ -186,6 +191,8 @@ function quarantineAndRebuild(path, restoreRows) {
   }
   try { rmSync(path, { force: true }); } catch {}
   const fresh = new DatabaseSync(path);
+  // WAL pin precedes the rebuild transaction (immutable inside one).
+  fresh.exec('PRAGMA journal_mode=WAL');
   try {
     fresh.exec(CREATE_TABS_V1_SQL);
     fresh.exec(CREATE_INDEX_V1_SQL);
@@ -244,6 +251,8 @@ try {
       check('fresh-create-shape', tableExists(db, 'tabs') && indexExists(db, 'idx_tabs_last_active'),
         'tabs table or last_active index missing after fresh-create');
       check('fresh-create-integrity', integrityOk(db), 'quick_check is not exactly [ok] after fresh-create');
+      check('fresh-create-wal', db.prepare('PRAGMA journal_mode').get().journal_mode === 'wal',
+        'journal mode is not WAL after fresh-create');
     } finally {
       db.close();
     }
@@ -286,6 +295,8 @@ try {
       check('quarantine-rebuilds-live-rows', getUserVersion(rebuilt) === 1 && JSON.stringify(rows) === JSON.stringify(expectedRows),
         `rebuilt state wrong: version=${getUserVersion(rebuilt)} rows=${JSON.stringify(rows)}`);
       check('quarantine-rebuilt-integrity', integrityOk(rebuilt), 'rebuilt copy fails quick_check');
+      check('quarantine-rebuilt-wal', rebuilt.prepare('PRAGMA journal_mode').get().journal_mode === 'wal',
+        'journal mode is not WAL after quarantine rebuild');
     } finally {
       rebuilt.close();
     }

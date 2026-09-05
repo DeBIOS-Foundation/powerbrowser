@@ -8,7 +8,9 @@ copies without shipping store code.
 ## Forward-only chain procedure
 
 1. `tabs.sqlite` is created with `user_version = 1` in the same
-   transaction as the v1 DDL (`SCHEMA.md`). Version 1 exists from day
+   transaction as the v1 DDL (`SCHEMA.md`). `PRAGMA journal_mode=WAL`
+   is set at creation outside that transaction (journal_mode is
+   immutable inside one). Version 1 exists from day
    one — there is no unversioned production database.
 2. Every later schema change is a numbered migration (`-- v2: …`, …,
    `vN`), applied in ascending order. Each migration runs inside exactly

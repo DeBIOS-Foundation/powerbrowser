@@ -48,6 +48,11 @@ DDL above):
 PRAGMA user_version = 1;
 ```
 
+WAL pin (`PRAGMA journal_mode=WAL`) is set at creation and at every
+quarantine rebuild, executed outside the DDL transaction — journal_mode
+cannot change inside a transaction (silent no-op), so it precedes the
+`BEGIN`.
+
 In-tree wrapper pins (pinned `upstream/` tree, cited from
 `.planning/phases/11-sql-store-design/11-RESEARCH.md`): open via
 `Sqlite.openConnection({ path })` with profile-directory-relative
@@ -141,7 +146,9 @@ suffix + 1 starting at 1 (never reuse a suffix; full procedure in
 
 Journal mode: write-ahead-logging (WAL) is pinned — it is the mode that
 supports the decided topology of one chrome writer plus N cross-process
-readers (Theia backend readonly handle, offline gates). All remaining
+readers (Theia backend readonly handle, offline gates). The writer sets
+`PRAGMA journal_mode=WAL` at creation and at every quarantine rebuild,
+outside the DDL transaction. All remaining
 pragmas stay at engine defaults. Soak-on-defaults note: Phase 12's soak
 test runs engine defaults first and only pins a further pragma on
 measured evidence, recorded in the same commit as the pin.
