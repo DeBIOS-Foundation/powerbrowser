@@ -23,7 +23,7 @@ current_phase: 09
 See: .planning/PROJECT.md (updated 2026-09-05)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 09 — Extensions + Crash Pipeline
+**Current focus:** Planning next milestone (v1.1 shipped; backlog 999.1 SQL-browser-memory + deferred GUI-02/GUI-05 candidates)
 
 ## Current Position
 
