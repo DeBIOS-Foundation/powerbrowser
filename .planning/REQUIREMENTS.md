@@ -29,7 +29,7 @@ Credit policy (decided 2026-09-05): halves that Phases 08/09 proved live close o
 
 ### SQL Store Design — Phase 11
 
-- [ ] **SQL-02**: Authority/invariant table written and reviewed BEFORE schema — single chrome-side writer, sessionstore authoritative for restore, registry URIs as join key, Theia backend never opens profile SQLite, own-file rule
+- [x] **SQL-02**: Authority/invariant table written and reviewed BEFORE schema — single chrome-side writer, sessionstore authoritative for restore, registry URIs as join key, Theia backend never opens profile SQLite, own-file rule
 - [ ] **SQL-03**: Schema + migration plan reviewed — tabs table on URI PK, `schema_version`/`user_version` from day one, forward-only migrations exercised against fixture DBs, quarantine-not-delete corruption path, private-tab exclusion rule, fixed `tabs.sqlite` filename as platform content (not manifest)
 
 ### SQL Store Build — Phase 12
@@ -110,7 +110,7 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
 | TEL-03 | Phase 10 | Complete |
 | VER-01 | Phase 10 | Complete |
 | DOC-01 | Phase 10 | Complete |
-| SQL-02 | Phase 11 | Pending |
+| SQL-02 | Phase 11 | Complete |
 | SQL-03 | Phase 11 | Pending |
 | SQL-01 | Phase 12 | Pending |
 | SQL-04 | Phase 12 | Pending |

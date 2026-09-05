@@ -4,16 +4,16 @@ milestone: v1.2
 current_phase: 10
 current_phase_name: roadmap created, not started
 status: planning
-stopped_at: Completed 10-sign-off-closeout-03-PLAN.md
-last_updated: "2026-09-05T18:22:15.438Z"
+stopped_at: Completed 11-sql-store-design-01-PLAN.md
+last_updated: "2026-09-05T18:41:57.856Z"
 last_activity: 2026-09-05
 last_activity_desc: v1.2 roadmap created (Phases 10–12)
-state_head: ed2dbef81e6af47f17e1011aada501d2e0f2af05
+state_head: 2184e0beee0fe1701c8c84086790ff99c14cb650
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 6
+  completed_plans: 4
 milestone_name: Sign-off Closeout and SQL Store
 ---
 
@@ -100,6 +100,7 @@ Last activity: 2026-09-05 — Phase 10 executed (3/3 plans, review clean, verifi
 | Phase 07-sourcerer-as-downstream P04 | ~10min | 3 tasks | 5 files |
 | Phase 10-sign-off-closeout P02 | 20min | 3 tasks | 1 files |
 | Phase 10-sign-off-closeout P03 | 25min | 2 tasks | 1 files |
+| Phase 11-sql-store-design P01 | 12min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -243,6 +244,8 @@ Recent decisions affecting current work:
 - [Phase 10]: 10-02 sync-don't-rebuild: inert policies.json key synced byte-identical into objdirs, no tier-3 rebuild
 - [Phase 10]: 10-03: re-run beats re-cite at closeout — every cited row re-executed on the final tree including full-tier drill rows
 - [Phase 10]: 10-03: zero staged drills to carry — carry list is exactly the five human UAT sheets
+- [Phase 10]: 11-01: no AUTHORITY.md defects in reviewer pass — six rows confirmed as written
+- [Phase 10]: 11-01: assumed inputs A1-A5 deferred with pinning procedures, A6 pinned by construction
 
 ### Pending Todos
 
@@ -326,8 +329,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-05T18:22:15.410Z
-Stopped at: Completed 10-sign-off-closeout-03-PLAN.md
+Last session: 2026-09-05T18:41:57.833Z
+Stopped at: Completed 11-sql-store-design-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
