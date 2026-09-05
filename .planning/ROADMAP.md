@@ -106,7 +106,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 10. Sign-off Closeout | 3/3 | Implemented, verification deferred |  |
 | 11. SQL Store Design | 3/3 | Implemented, verification deferred |  |
-| 12. SQL Store Build | 2/3 | In Progress|  |
+| 12. SQL Store Build | 3/3 | Implemented, verification deferred |  |
 
 ## Inherited network egress (carried through the migration, not decided here)
 
