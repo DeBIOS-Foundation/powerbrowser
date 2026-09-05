@@ -123,4 +123,4 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
 
 ---
 *Requirements defined: 2026-09-05*
-*Last updated: 2026-09-05 at v1.2 definition (credit-v1.1 + split-design scope)*
+*Last updated: 2026-09-05 at v1.2 roadmap creation (Phases 10–12 mapped, 20/20 covered, all Pending)*

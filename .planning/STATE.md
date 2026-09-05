@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-09-05T16:12:56.948Z"
 last_activity: 2026-09-05
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-05)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Planning next milestone (v1.1 shipped; backlog 999.1 SQL-browser-memory + deferred GUI-02/GUI-05 candidates)
+**Current focus:** v1.2 Sign-off Closeout and SQL Store — Phases 10 (sign-off closeout), 11 (SQL store design), 12 (SQL store build). No GUI work this cycle.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 10 (Sign-off Closeout) — roadmap created, not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-09-05 — Milestone v1.2 started
+Status: Roadmap complete, awaiting approval to plan Phase 10
+Last activity: 2026-09-05 — v1.2 roadmap created (Phases 10–12)
 
 ## Performance Metrics
 
