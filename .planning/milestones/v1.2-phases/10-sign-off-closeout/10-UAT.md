@@ -5,6 +5,10 @@ source: [10-01-SUMMARY.md]
 started: 2026-09-05T00:00:00Z
 updated: 2026-09-05T00:00:00Z
 executed_by: claude (static gates re-run live; all five perceptual drills reserved for human hands)
+audit_acknowledged:
+  milestone: v1.2
+  at: 2026-09-05
+  gap_snapshot: "pending-human::scenarios=5"
 ---
 
 ## Current Test

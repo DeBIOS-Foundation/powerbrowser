@@ -75,6 +75,42 @@ Canonical PowerBrowser rename with re-pinned gates; self-hosted MAR updates with
 
 ---
 
+## Milestone: v1.2 — Sign-off Closeout and SQL Store
+
+**Shipped:** 2026-09-05
+**Phases:** 3 | **Plans:** 9 (10: 3, 11: 3, 12: 3) | **Tasks:** 22 | **Commits:** 80 milestone-scoped (v1.1..v1.2) | **Closeout:** override (audit `tech_debt`, accepted per standing nonstop rule)
+
+### What Was Built
+- 15-box sign-off assembly with the 16-vs-15 count reconciliation recorded and five human UAT sheets staged as runbooks; every cited row re-executed on the final tree, `--quick` green, no sibling driver
+- SQL authority/invariant table (six rows) with recorded sign-off governing schema; tabs schema + forward-only migration plan exercised against fixture DBs (23/23) with recorded sign-off
+- Chrome-side SQLite writer behind the sole boundary into own `tabs.sqlite` (roundtrip 24/24); readonly `better-sqlite3` query API beside the frozen registry, chrome-side Places + sessionstore reads, emitter-exercising private-absence instrument; nine store gates green (second-writer scan, integrity soak 14/14, ESR rebase drill at live newer tag)
+
+### What Worked
+- Re-run beats re-cite at closeout: the 10-03 sweep re-ran every cited row (including full-tier drill rows) on the final tree instead of trusting plan-time citations
+- Probe-first staging kept live drills honest — environment-bound halves staged with unblocks rather than fake-green
+- Design-before-code ordering held: authority signed before schema, schema exercised before writer
+
+### What Was Inefficient
+- Doc-sync drifted from execution three times (3 unchecked boxes + 3 missing summaries + checkbox/Progress-table mismatch) — summaries and box flips should ride the plan-complete commit, not a later pass
+- audit-open acknowledge still cannot match archived deferred-item text — 13 v1.0 items carried by disclosure for the second straight close (tooling gap, not process)
+- Verifier never ran on any v1.2 phase (standing deferral) — the Nyquist board reads not-validated across all three phases by design
+
+### Patterns Established
+- Sync-don't-rebuild for inert packaged data (byte-identical sync into objdirs, no tier-3 rebuild)
+- Honest tier placement for gates: static-by-default rows with opt-in `--live` halves, self-exempting scans with plants elsewhere
+
+### Key Lessons
+1. Reconciliation beats renumbering — the v1.0 "16" overcount stays on record with the explanation, not silently corrected.
+2. An absence test must exercise the emitter — the private-tab instrument stages honestly until startup wiring lands rather than asserting over a path nothing calls.
+3. Doc-sync is execution's shadow — if the SUMMARY/box-flip is not in the plan-complete commit, assume it is missing.
+
+### Cost Observations
+- Model mix: planner/checker/verifier/reviewer/fixer subagents (Muse Spark), zero human turns during the run
+- Sessions: 1 continuous autonomous session, 2026-09-05 (single-day milestone)
+- Notable: 80 commits in one day; static gates in seconds carried the closeout — no tier-3 build spent this cycle (ESR drill ran dry-run at live tag)
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -82,6 +118,8 @@ Canonical PowerBrowser rename with re-pinned gates; self-hosted MAR updates with
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
 | v1.0 | batch + drill session | 7 | baseline: generator-core + two-layer verification pattern established |
+| v1.1 | 1 continuous autonomous | 2 | nonstop defaults + falsification-branch planning for host work |
+| v1.2 | 1 continuous autonomous (single day) | 3 | closeout discipline: re-run-beats-re-cite sweep + design-before-code store |
 
 ### Cumulative Quality
 

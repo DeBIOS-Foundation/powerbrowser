@@ -2,11 +2,27 @@
   "contract": "1.0.0",
   "flavor": "core",
   "milestone": "v1.2",
-  "phases": [],
+  "phases": [
+    {
+      "number": "10",
+      "name": "Sign-off Closeout",
+      "status": "pending"
+    },
+    {
+      "number": "11",
+      "name": "SQL Store Design",
+      "status": "pending"
+    },
+    {
+      "number": "12",
+      "name": "SQL Store Build",
+      "status": "pending"
+    }
+  ],
   "next": {
-    "command": "/gsd:discuss-phase",
-    "label": "Discuss the first phase",
-    "reason": "Project initialized — plan your first phase"
+    "command": "/gsd:progress",
+    "label": "Show progress",
+    "reason": "Unsure of state — showing progress"
   },
-  "updated_at": "2026-09-05T16:12:56.955Z"
+  "updated_at": "2026-09-05T20:44:32.810Z"
 }
