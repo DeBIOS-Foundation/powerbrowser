@@ -871,6 +871,14 @@ export const PowerBrowserAPI = Object.freeze({
       const now = Date.now();
       const rows = [];
       for (const win of state.windows ?? []) {
+        // CR-01 (12-CODE-REVIEW.md): getBrowserState includes private
+        // windows (upstream filters them only on save/close paths, never in
+        // getCurrentState), so the store-side skip lives here -- the single
+        // parse every consumer (sweep, quarantine rebuild, read projection)
+        // routes through. No private-marker column exists to filter on later.
+        if (win.isPrivate) {
+          continue;
+        }
         for (const tab of win.tabs ?? []) {
           const entry = tab.entries?.[tab.index - 1];
           if (!entry || !entry.url) {

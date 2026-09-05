@@ -154,12 +154,33 @@ function checkFilterOrdering(source) {
   return [];
 }
 
+// CR-01 follow-up (12-CODE-REVIEW.md): the writeTabRow ordering half above
+// cannot see the sweep or the quarantine rebuild -- both route through
+// parseSessionStoreTabRows, which iterates getBrowserState() windows that
+// include private ones. This half pins the parser's own isPrivate skip at
+// check time, failing distinctly when either side is unlocatable.
+function checkParseFiltersPrivate(source) {
+  const start = source.indexOf('parseSessionStoreTabRows()');
+  if (start === -1) fail('parser parseSessionStoreTabRows unlocatable (want `parseSessionStoreTabRows()`)');
+  const end = source.indexOf('async quarantineAndRebuildTabStore(', start);
+  const body = end === -1 ? source.slice(start) : source.slice(start, end);
+  const skip = body.indexOf('isPrivate');
+  if (skip === -1) {
+    return ['sessionstore parser carries no isPrivate skip -- private-window tabs flow into the sweep and the quarantine rebuild'];
+  }
+  const loop = body.indexOf('state.windows');
+  if (loop === -1 || skip < loop) {
+    return ['sessionstore parser isPrivate skip unlocatable inside the windows loop -- the private-window filter drifted'];
+  }
+  return [];
+}
+
 function readWriterSource() {
   return readFileSync(WRITER, 'utf8');
 }
 
 function runStatic() {
-  const failures = [...checkColumns(readWriterSource()), ...checkFilterOrdering(readWriterSource())];
+  const failures = [...checkColumns(readWriterSource()), ...checkFilterOrdering(readWriterSource()), ...checkParseFiltersPrivate(readWriterSource())];
   if (failures.length) {
     console.error(`${NAME}: FAIL -- private-exclusion static half is red:`);
     failures.forEach(f => console.error(`  ${f}`));
