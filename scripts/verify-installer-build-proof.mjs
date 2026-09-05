@@ -160,16 +160,16 @@ function readVersionFile(p, r, label) {
     return lastLine(p);
 }
 
-/** Flat KEY = VALUE scan over objdir/config.status for build-derived defines. */
-function configStatusValue(key) {
-    const p = join(REPO_ROOT, 'objdir', 'config.status');
+/** Flat KEY = VALUE scan over objdir/config.status for build-derived defines. Rooted: the caller stages every input under root, so the status read must follow it. */
+function configStatusValue(key, root) {
+    const p = join(root, 'objdir', 'config.status');
     if (!existsSync(p)) return undefined;
     const m = readText(p).match(new RegExp(`'${key}': '([^']*)'`));
     return m ? m[1] : undefined;
 }
 
-function buildId(r) {
-    const p = join(REPO_ROOT, 'objdir', 'buildid.h');
+function buildId(r, root) {
+    const p = join(root, 'objdir', 'buildid.h');
     if (!existsSync(p)) {
         r.fail(`objdir/buildid.h is absent, so MOZ_BUILDID cannot be derived -- the tree was never built. Next step: run the tier-3 build per docs/BUILD.md`);
         return null;
@@ -182,11 +182,11 @@ function buildId(r) {
     return m[1];
 }
 
-/** Display identity from the manifest through the generator's own resolver -- one derivation, shared with the build. */
-function manifestIdentity(r) {
+/** Display identity from the manifest through the generator's own resolver -- one derivation, shared with the build. Rooted like the callers above. */
+function manifestIdentity(r, root) {
     let resolved;
     try {
-        resolved = resolveConfig(undefined, join(REPO_ROOT, 'configuration.toml'));
+        resolved = resolveConfig(undefined, join(root, 'configuration.toml'));
     } catch (e) {
         r.fail(`configuration.toml failed to resolve: ${String(e).split('\n')[0]}. Next step: fix the manifest, then run: node scripts/generate.mjs`);
         return null;
@@ -227,10 +227,10 @@ function runChecks(root) {
     }
     const appVersion = readVersionFile(join(root, 'upstream', 'browser', 'config', 'version.txt'), r, 'APP_VERSION');
     const greVersion = readVersionFile(join(root, 'upstream', 'config', 'milestone.txt'), r, 'GRE_MILESTONE');
-    const bid = buildId(r);
-    const ident = manifestIdentity(r);
+    const bid = buildId(r, root);
+    const ident = manifestIdentity(r, root);
     if (r.failures.length > 0) return { skipped: false, failures: r.failures };
-    const channel = configStatusValue('MOZ_UPDATE_CHANNEL') ?? 'default';
+    const channel = configStatusValue('MOZ_UPDATE_CHANNEL', root) ?? 'default';
 
     // Stage, fresh: no leftovers from a previous run may survive, and every
     // staged byte is recorded with the tree source it must equal.
