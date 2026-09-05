@@ -13,18 +13,18 @@ Credit policy (decided 2026-09-05): halves that Phases 08/09 proved live close o
 
 - [ ] **MIG-01** [credit]: Platform migration proof recorded from v1.0 tree + re-fetch history — formal sign-off, no new drill
 - [ ] **MIG-02** [record]: Token-inventory audit pass over the committed classification — sign-off that the box holds for audit
-- [ ] **GUI-01** [live]: Browser-window toggle manual UAT run (5 steps) and signed
+- [x] **GUI-01** [live]: Browser-window toggle manual UAT run (5 steps) and signed
 - [ ] **GUI-03** [live]: Customize-bridge perceptual restyle UAT run (3 steps) and signed
 - [ ] **GUI-04** [live]: Bridge-landability statement recorded against the green registry-shape gate
-- [ ] **GEN-01** [credit + delta]: Release-variant half credited to BLD-01; only emitter deltas since v1.0 re-proven
+- [x] **GEN-01** [credit + delta]: Release-variant half credited to BLD-01; only emitter deltas since v1.0 re-proven
 - [ ] **GEN-02** [live human]: Icon pixel-look sign-off on real rasters
-- [ ] **GEN-03** [credit + delta]: Windows/macOS host-build half credited to PKG-01; only schema deltas re-proven
+- [x] **GEN-03** [credit + delta]: Windows/macOS host-build half credited to PKG-01; only schema deltas re-proven
 - [ ] **GEN-05** [live human]: Theia welcome/about live render drill and signed
-- [ ] **EXT-01** [live]: Open VSX + URL declaration bundle+load drill on a real sidecar build
-- [ ] **TEL-01** [live]: Telemetry level + endpoint declaration live drill against the running sidecar
-- [ ] **TEL-02** [live]: Telemetry pipeline live delivery drill (batched, retrying, level-honoring; silence when off)
-- [ ] **TEL-03** [live]: Installed-binary allowlist layer proven (derivation already green statically)
-- [ ] **VER-01** [live]: Full-fleet brand-literal proof run with the fixture tier (now runnable per BLD-02)
+- [x] **EXT-01** [live]: Open VSX + URL declaration bundle+load drill on a real sidecar build
+- [x] **TEL-01** [live]: Telemetry level + endpoint declaration live drill against the running sidecar
+- [x] **TEL-02** [live]: Telemetry pipeline live delivery drill (batched, retrying, level-honoring; silence when off)
+- [x] **TEL-03** [live]: Installed-binary allowlist layer proven (derivation already green statically)
+- [x] **VER-01** [live]: Full-fleet brand-literal proof run with the fixture tier (now runnable per BLD-02)
 - [ ] **DOC-01** [live]: Stranger carry-test of REBRANDING.md recorded and formal sign-off
 
 ### SQL Store Design — Phase 11
@@ -97,18 +97,18 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
 |-------------|-------|--------|
 | MIG-01 | Phase 10 | Pending |
 | MIG-02 | Phase 10 | Pending |
-| GUI-01 | Phase 10 | Pending |
+| GUI-01 | Phase 10 | Complete |
 | GUI-03 | Phase 10 | Pending |
 | GUI-04 | Phase 10 | Pending |
-| GEN-01 | Phase 10 | Pending |
+| GEN-01 | Phase 10 | Complete |
 | GEN-02 | Phase 10 | Pending |
-| GEN-03 | Phase 10 | Pending |
+| GEN-03 | Phase 10 | Complete |
 | GEN-05 | Phase 10 | Pending |
-| EXT-01 | Phase 10 | Pending |
-| TEL-01 | Phase 10 | Pending |
-| TEL-02 | Phase 10 | Pending |
-| TEL-03 | Phase 10 | Pending |
-| VER-01 | Phase 10 | Pending |
+| EXT-01 | Phase 10 | Complete |
+| TEL-01 | Phase 10 | Complete |
+| TEL-02 | Phase 10 | Complete |
+| TEL-03 | Phase 10 | Complete |
+| VER-01 | Phase 10 | Complete |
 | DOC-01 | Phase 10 | Pending |
 | SQL-02 | Phase 11 | Pending |
 | SQL-03 | Phase 11 | Pending |
@@ -117,6 +117,7 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
 | SQL-05 | Phase 12 | Pending |
 
 **Coverage:**
+
 - v1.2 requirements: 20 total
 - Mapped to phases: 20
 - Unmapped: 0 ✓
