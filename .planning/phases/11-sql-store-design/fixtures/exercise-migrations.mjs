@@ -233,8 +233,12 @@ console.log(`${NAME}: stage ${stage} (space-free, outside repo)`);
 try {
   const fixtureHash = snapshotFile(FIXTURE_V1);
   console.log(`${NAME}: committed fixture sha256 ${fixtureHash}`);
-  // Expectations derived at run time from the committed fixture itself.
-  const probe = new DatabaseSync(FIXTURE_V1, { readOnly: true });
+  // Expectations derived at run time from a stage copy of the committed
+  // fixture: opening the committed file itself (even readonly) materializes
+  // -wal/-shm sidecars beside it, so the probe never touches it directly.
+  const probeCopy = join(stage, 'probe.sqlite');
+  copyFileSync(FIXTURE_V1, probeCopy);
+  const probe = new DatabaseSync(probeCopy, { readOnly: true });
   let expectedRows;
   let expectedVersion;
   try {
@@ -374,6 +378,13 @@ try {
   check('assertions-nonvacuous', assertions > 0, 'zero assertions ran -- a drive that asserts nothing proves nothing');
 } finally {
   rmSync(stage, { recursive: true, force: true });
+  // Defensive: remove any stray fixture sidecars from runs that predated
+  // the probe-on-copy rule. All handles are closed here, and the fixture
+  // wal (if any) carries no uncheckpointed frames from a readonly open,
+  // so unlink-after-close is safe.
+  for (const suffix of ['-wal', '-shm']) {
+    try { rmSync(FIXTURE_V1 + suffix, { force: true }); } catch {}
+  }
 }
 
 const failed = results.filter((r) => !r.pass);
