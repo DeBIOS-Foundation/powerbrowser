@@ -54,3 +54,41 @@ Probes recorded and emitter plus installer deltas re-proven on the current tree.
 ### Task 2 done
 
 Fleet proof and allowlist binary layer closed green on the current tree with observed counts. Nothing staged, no rebuild.
+
+## Task 3 — TEL-01 plus TEL-02 plus EXT-01 sidecar drills and GUI-01 automated rows
+
+### TEL-01 declaration drill (2026-09-05, this session) — GREEN on the declaration chain
+
+- Declaration: `configuration.toml [telemetry] level = "off"`, endpoint deliberately unset ("with level off there is nowhere to send and nothing ever leaves the application").
+- Generated: `generated/theia-telemetry.json` = `{"level":"off","endpoint":null}` — the declaration reaches the sidecar fragment (freshness proven by Task 1 `generate-check` PASS, 53 files).
+- Sidecar consumption: `theia/applications/browser/package.json` carries the `powerbrowserTelemetry` block, and `scripts/verify-platform.sh --only telemetry` — **PASS** (`verify-telemetry: PASS -- telemetry fragment, block, compile and suite all green`) asserts the block equals the emitted map, so a manifest at level off with a block still carrying an endpoint would fail — it does not.
+- Running-sidecar half: the built binary booted the sidecar to a ready workbench on these exact generated prefs three times today (Task 2 layer-3 runs, `verify-endpoints` layer 3 PASS each run).
+- Level gating (silence when off) is sender-side behavior, proven by the suite test `off sends nothing (with a same-run on-level control)` — 9/9 below.
+- Not re-run: the 04-UAT drill 4 per-level live-traffic exercise (mutate level to `all` + regenerate + sidecar rebuild + headed traffic inspection). It would cost a config mutation plus a sidecar rebuild for zero new signal — every link of the chain is green above — so the composition stands and no tree file was mutated for this drill.
+
+### TEL-02 delivery drill (2026-09-05, this session) — GREEN (suite + fresh live round-trip)
+
+- `node theia/extensions/telemetry/test/telemetry-sender.test.mjs` — **SUITE PASS, 9/9**: off sends nothing (with same-run on-level control); batch flushes on size; batch flushes on interval; retry then drop with a diagnostic; runtime level change takes effect without restart; crash error events ride the ping sender to the telemetry endpoint; crash usage events stay dropped from the ping sender; unknown levels fail closed to the off behavior; minidump bytes have no path into the ping sender, reports go to the collector contract.
+- `scripts/verify-platform.sh --only crash-collector` — **PASS** (`policy states the enforced contract and the response shapes hold`).
+- Fresh live loopback round-trip (one-off scratch script, real multipart encoding, ephemeral-port `startCollector`, removed after the run — 09-02 precedent): `submit answer: 200 CrashID=<uuid>`; store `<uuid>.dmp, <uuid>.json`; `record id match: true, annotations: {"ProductName":"PowerBrowser"}, dump bytes match: true`; verdict **`ROUNDTRIP_OK`**.
+- 09-02's independent loopback re-proof cited by pointer as the second witness (09-VERIFICATION.md behavioral spot-checks); this session re-proved it live rather than only citing.
+
+### EXT-01 bundle-plus-load drill (2026-09-05, this session) — GREEN on the real tree + 09-04 live proof cited
+
+- `scripts/verify-platform.sh --only extension-pins` — **PASS** (`every declared extension resolves to its pinned bytes, or nothing is declared and no block exists`). This project declares no `[[extensions]]` (`configuration.toml:89-94` — "This project declares none, so the block stays absent"), so the bundle half over the real declaration set is vacuous-pass by gate design.
+- The non-vacuous bundle proof is 09-04's staged-manifest live drill on nix-linux (stock vsix download, per-target hashes, `theia build` 0 errors, `.mozbuild/0904/build-sidecar.log`), cited by pointer per the credit policy — not re-run, and the tree was restored byte-identical there.
+- No sidecar rebuild attempted in this task (plan prohibition); sidecar sources are unchanged since 09-04 except the test-only telemetry suite file, which runs from the current tree.
+
+### GUI-01 automated rows against the built binary (2026-09-05, headed session, display probe PASS) — ALL GREEN
+
+- `scripts/verify-platform.sh --only gui01-single-shell-window` — **PASS**.
+- `scripts/verify-platform.sh --only gui01-browser-close-does-not-quit` — **PASS** (`window.open opened a stock browser window (popup not blocked, no second shell), and closing it left the application running`).
+- `scripts/verify-platform.sh --only gui01-command-registered` — **PASS** (`'powerbrowser.open-browser-window' is registered and palette-reachable as "Open Browser Window"`).
+
+### Task 3 verify chain
+
+- `scripts/verify-platform.sh --quick` — **PASS** (all checks passed).
+
+### Task 3 done
+
+Sidecar drills and automated window rows closed green on the current tree. Nothing rebuilt, nothing staged, no tree file mutated for drill purposes (one-off scratch script removed immediately; store records lived in the system temp dir).
