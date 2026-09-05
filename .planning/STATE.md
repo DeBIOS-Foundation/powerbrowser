@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Hardening and SQL Tabs
-current_phase: 09
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 09 complete — all phases complete
-last_updated: "2026-09-05T09:22:56.433Z"
+last_updated: "2026-09-05T09:30:44.764Z"
 last_activity: 2026-09-05
-last_activity_desc: Phase 09 complete
-state_head: c33b8a7f8d8ded360ffada2f6db3caf3f0114cda
+last_activity_desc: Milestone v1.1 completed and archived
+state_head: 7c6478a900489fa28ac4de683a71620b82283f1f
 progress:
   total_phases: 2
   completed_phases: 2
   total_plans: 9
   completed_plans: 9
+current_phase: 09
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-09-05)
 
 ## Current Position
 
-Phase: 09
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-09-05 — Phase 09 complete
+Phase: Milestone v1.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-09-05 — Milestone v1.1 completed and archived
 
 ## Performance Metrics
 
@@ -292,18 +292,37 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 | Category | Item | Status | Deferred At | Milestone |
 |----------|------|--------|-------------|-----------|
+| debug_sessions | about-dialog-stock-links | diagnosed Bohrbug, acknowledged | 2026-09-05 | v1.1 |
+| debug_sessions | shell-title-identifier-form | diagnosed Bohrbug, acknowledged | 2026-09-05 | v1.1 |
+| uat_gaps | 03/03-UAT.md (archived v1.0) | testing, carried | 2026-09-05 | v1.1 |
+| uat_gaps | 04/04-UAT.md (archived v1.0) | pending-human, carried | 2026-09-05 | v1.1 |
+| uat_gaps | 05/05-UAT.md (archived v1.0) | unknown, carried | 2026-09-05 | v1.1 |
+| uat_gaps | 06/06-UAT.md (archived v1.0) | unknown, carried | 2026-09-05 | v1.1 |
+| uat_gaps | 07/07-UAT.md (archived v1.0) | unknown, carried | 2026-09-05 | v1.1 |
+| verification_gaps | 03/03-VERIFICATION.md (archived v1.0) | human_needed, carried | 2026-09-05 | v1.1 |
+| verification_gaps | 04/04-VERIFICATION.md (archived v1.0) | human_needed, carried | 2026-09-05 | v1.1 |
+| verification_gaps | 05/05-VERIFICATION.md (archived v1.0) | human_needed, carried | 2026-09-05 | v1.1 |
+| verification_gaps | 06/06-VERIFICATION.md (archived v1.0) | human_needed, carried | 2026-09-05 | v1.1 |
+| verification_gaps | 07/07-VERIFICATION.md (archived v1.0) | human_needed, carried | 2026-09-05 | v1.1 |
+| deferred_items | Phase 02 WINDOWS.md frontmatter staleness (archived v1.0) | acknowledged, carried | 2026-09-05 | v1.1 |
+| deferred_items | Phase 02 02-03 registry-row item (archived v1.0) | acknowledged, carried | 2026-09-05 | v1.1 |
+| deferred_items | Phase 01 items 1-13 (archived v1.0) | disclosed in v1.0 archive; acknowledge-call cannot match archived text (tooling), carried without re-suppression | 2026-09-05 | v1.1 |
 | verification_gaps | 03/icon-pixel-sign-off | human-eyes staged | 2026-09-04 | v1.0 |
 | verification_gaps | 04/live-render-drill | human-eyes staged | 2026-09-04 | v1.0 |
-| verification_gaps | release build + release-variant rows (WINDOWS #10) | heavy-machine staged | 2026-09-04 | v1.0 |
-| verification_gaps | tier-3 per-fixture builds (07) | heavy-machine staged | 2026-09-04 | v1.0 |
-| verification_gaps | live ESR rebase drill (05) | needs next ESR tag | 2026-09-04 | v1.0 |
-| verification_gaps | Theia re-pin proof (05) | needs nix Theia shell | 2026-09-04 | v1.0 |
+| verification_gaps | release build + release-variant rows (WINDOWS #10) | CLOSED by v1.1 Phase 08 (was heavy-machine staged) | 2026-09-05 | v1.1 |
+| verification_gaps | tier-3 per-fixture builds (07) | CLOSED by v1.1 Phases 08/09 (was heavy-machine staged) | 2026-09-05 | v1.1 |
+| verification_gaps | live ESR rebase drill (05) | CLOSED by v1.1 Phase 08 (was needs-next-tag; drill ran live) | 2026-09-05 | v1.1 |
+| verification_gaps | Theia re-pin proof (05) | CLOSED by v1.1 Phase 09 (was needs-nix-shell; proof ran, token-gate intact) | 2026-09-05 | v1.1 |
 | verification_gaps | 16 unchecked requirements (GEN-01/02/03/05, TEL-01..03, EXT-01, VER-01, DOC-01, MIG-01/02, GUI-01/03/04) | code green, formal sign-off staged | 2026-09-04 | v1.0 |
-| deferred_items | WINDOWS #13 registerWindowActor boundary hole | open code deviation, v2 scope | 2026-09-04 | v1.0 |
-| deferred_items | WINDOWS #14 BiDi double-window | open code deviation, v2 scope | 2026-09-04 | v1.0 |
+| deferred_items | WINDOWS #13 registerWindowActor boundary hole | CLOSED by v1.1 Phase 08 (was open, v2 scope) | 2026-09-05 | v1.1 |
+| deferred_items | WINDOWS #14 BiDi double-window | CLOSED by v1.1 Phase 08 (was open, v2 scope) | 2026-09-05 | v1.1 |
 
 ## Session Continuity
 
 Last session: 2026-09-05T00:00:00.000Z
 Stopped at: Phase 09 complete — all phases complete
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
