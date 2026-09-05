@@ -62,6 +62,8 @@ platform. If a rebrand ever requires editing a second file, that is a bug.
 | Autonomous nonstop default | every `/gsd-autonomous` runs without human pauses (verify→defer+continue, gaps→one retry then defer+continue, audit→accept, cleanup→approve, plan with `--no-reversibility-gates`); only a 3-retry-exhausted blocker halts `needs_human` | — Decided 2026-09-04 |
 | Self-hosted MAR rung: HTTPS-only interim | updater flipped with `--enable-unverified-updates`; docs claim only TLS (no code signature verified) until a fork-signing rung lands | — Decided Phase 08 |
 | NSIS-on-Nix proven, MSIX/DMG need real hosts | makensis 3.12 builds setup.exe on Linux; Windows SDK + hdiutil are host-bound, staged with operator unblocks | — Decided Phase 08 |
+| Antenna collector stdlib-only, throttle on success only | failed (500) store writes must not consume throttle budget; CrashID only after durable write | — Decided Phase 09 |
+| ExtensionSettings over extensions-dir | declared WebExtensions land via policy `force_installed`/`install_url`; curated set stays out of the tree | — Decided Phase 09 |
 | Canonical product name from v2: **PowerBrowser** (accepted variants **Powerbrowser** / **powerbrowser** for identifier-class surfaces) | v1 shipped the spaced display form "Power Browser" across generated surfaces; the canonical form + re-pinned gates land as v2 NAME-01 so the v1 archive stays faithful to what was verified | — Decided 2026-09-04 |
 
 ## configuration.toml planned sections
@@ -122,6 +124,16 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
       rebase drill passed — BLD-01, UPD-03 — Phase 08
 - [x] WINDOWS #13 (`registerWindowActor` boundary hole) and #14 (BiDi
       double-window) closed with green gates — SEC-02, SHELL-01 — Phase 08
+- [x] npm + local-path extension sources (exact pins, integrity digests,
+      fail-loud) reusing the EXT-01 chain — EXT-02 — Phase 09
+- [x] WebExtensions declaration via `ExtensionSettings` in
+      `distribution/policies.json` (mechanism only, no bundled set) —
+      EXT-03 — Phase 09
+- [x] Minimal Antenna-protocol crash collector with ping/report split and
+      PII/retention/throttle policy; native reporter stays compiled out —
+      TEL-04 — Phase 09
+- [x] Tier-3 per-fixture builds over the new source kinds; Theia re-pin
+      proof with token-gate intact — BLD-02, UPD-04 — Phase 09
 
 ### Active
 
@@ -131,8 +143,6 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - [ ] Telemetry and extension live drills (TEL-01..03, EXT-01) pending
       collector-backed runs
 - [ ] VER-01 fleet proof and DOC-01 formal sign-off pending fixture-build tier
-- [ ] **EXT-02**: npm and local-path extension source kinds (Phase 09)
-- [ ] **TEL-04**: crash-report pipeline beyond endpoint repointing (Phase 09)
 - [ ] **GUI-02**: in-Theia web tabs via `<xul:browser>`; **GUI-05**: unified
       tab strip — DEFERRED (no GUI work in v1.1 per 2026-09-04 scoping;
       SQL tabs still precede them when scheduled)
@@ -207,4 +217,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-05 after Phase 08 (5/5 plans, verification passed) — NAME-01/PKG/BLD/UPD-03/SEC-02/SHELL-01 validated; win/mac cells staged*
+*Last updated: 2026-09-05 after Phase 09 (4/4 plans, verification passed) — EXT-02/03, TEL-04, BLD-02, UPD-04 validated; v1.1 complete pending lifecycle*

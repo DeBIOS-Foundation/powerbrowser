@@ -34,19 +34,19 @@ deferred, with SQL tabs still preceding them when scheduled.)
 
 ### Extensions (EXT)
 
-- [ ] **EXT-02**: npm and local-path extension source kinds ship — exact
+- [x] **EXT-02**: npm and local-path extension source kinds ship — exact
       pins with integrity digests, fail-loud on mismatch — reusing the
       EXT-01 chain (pinned URL resolution for npm, hashable packed content
       for local-path, one `theiaPlugins`-fragment → copy-over → pin-verify
       path) with per-target `${targetPlatform}` resolution
-- [ ] **EXT-03**: The WebExtensions declaration sibling ships via
+- [x] **EXT-03**: The WebExtensions declaration sibling ships via
       `ExtensionSettings` in the already-emitted
       `distribution/policies.json` (not `distribution/extensions/`), closing
       the STATE.md pending todo
 
 ### Crash Pipeline (TEL)
 
-- [ ] **TEL-04**: A minimal Antenna-protocol crash collector ships
+- [x] **TEL-04**: A minimal Antenna-protocol crash collector ships
       (multipart POST, `upload_file_minidump`, `CrashID=` responses) with
       crash-ping/report separation and a PII/retention/throttle policy; the
       native reporter stays compiled out (`--disable-crashreporter`), and
@@ -56,14 +56,14 @@ deferred, with SQL tabs still preceding them when scheduled.)
 
 - [x] **BLD-01**: A release `objdir-release` build passes with the
       release-variant verify rows green (WINDOWS #10)
-- [ ] **BLD-02**: Tier-3 per-fixture builds pass (07 — adversarial Zebra et
+- [x] **BLD-02**: Tier-3 per-fixture builds pass (07 — adversarial Zebra et
       al. proven on real built artifacts, not schema alone)
 
 ### Upstream Uptake Drills (UPD)
 
 - [x] **UPD-03**: A live ESR rebase drill against the next ESR tag passes
       through the existing rebase/conflict tooling (05)
-- [ ] **UPD-04**: A Theia re-pin proof passes with the token-gate backend
+- [x] **UPD-04**: A Theia re-pin proof passes with the token-gate backend
       intact (05)
 
 ### Hardening Fixes (SEC / SHELL)
@@ -135,12 +135,12 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
 | PKG-01 | Phase 08 | Complete |
 | PKG-02 | Phase 08 | Complete |
 | PKG-03 | Phase 08 | Complete |
-| EXT-02 | Phase 09 | Pending |
-| EXT-03 | Phase 09 | Pending |
-| TEL-04 | Phase 09 | Pending |
+| EXT-02 | Phase 09 | Complete |
+| EXT-03 | Phase 09 | Complete |
+| TEL-04 | Phase 09 | Complete |
 | BLD-01 | Phase 08 | Complete |
-| BLD-02 | Phase 09 | Pending |
+| BLD-02 | Phase 09 | Complete |
 | UPD-03 | Phase 08 | Complete |
-| UPD-04 | Phase 09 | Pending |
+| UPD-04 | Phase 09 | Complete |
 | SEC-02 | Phase 08 | Complete |
 | SHELL-01 | Phase 08 | Complete |
