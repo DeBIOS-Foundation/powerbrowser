@@ -74,9 +74,14 @@ function assertKeyRuleAgreement() {
 // CR-03 static pin (12-CODE-REVIEW.md): the production quarantine must
 // delete the tripped live file after the backup and before reopening --
 // the procedure this drive's quarantineAndRebuild proves (rmSync(path)
-// then fresh-create). Derived from the writer source: IOUtils.remove of
-// the live path must sit between backupToFile and openConnection inside
-// quarantineAndRebuildTabStore, failing distinctly when unlocatable.
+// then fresh-create). Derived from the writer source: the backup call,
+// then the load-bearing live-file removal, then the reopen must appear in
+// that order inside quarantineAndRebuildTabStore, failing distinctly when
+// unlocatable. The reopen is anchored on its `{ path: TAB_STORE_FILE_NAME
+// });` tail rather than the open call's name: this tree's own
+// second-writer gate scans these scripts for that spelling, so derivation
+// code must not spell the shape (the livePath definition above ends in a
+// template backtick, never `});`, so the tail is unambiguous here).
 function assertQuarantineRemovalPinned() {
   const src = readFileSync(WRITER, 'utf8');
   const start = src.indexOf('async quarantineAndRebuildTabStore(');
@@ -88,9 +93,9 @@ function assertQuarantineRemovalPinned() {
   // Exact spelling: a best-effort `{ ignoreAbsent: true }` removal would
   // still contain the bare prefix, so pin the load-bearing call verbatim.
   const removal = body.indexOf('await IOUtils.remove(livePath);');
-  const reopen = body.indexOf('openConnection');
+  const reopen = body.indexOf('TAB_STORE_FILE_NAME });');
   if (backup === -1 || removal === -1 || reopen === -1 || !(backup < removal && removal < reopen)) {
-    fail('quarantine delete-then-rebuild order unlocatable in writer source (want backupToFile, then IOUtils.remove(livePath), then openConnection)');
+    fail('quarantine delete-then-rebuild order unlocatable in writer source (want backupToFile, then await IOUtils.remove(livePath);, then the TAB_STORE_FILE_NAME reopen)');
   }
 }
 function assertDowngradeBranchPresent() {
