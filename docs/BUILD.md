@@ -228,6 +228,132 @@ vendored Theia monorepo, or a `--latest` float anywhere. `yarn upgrade
 newest rather than to the declared pin, which is the unpinned behavior
 the manifest exists to forbid.
 
+### Extension tier-3 drill (09-04, BLD-02): new source kinds on real artifacts
+
+Drilled 2026-09-05 on nix-linux (x86_64-linux; theia dev shell node
+v22.23.2 plus yarn 1.22.22) over a STAGED five-entry `[[extensions]]`
+manifest covering every source kind. The root manifest stays entry-free in
+the committed tree (no bundled extensions per the Theia-half rule above);
+the drill staged the entries, proved them, then restored the tracked files
+byte-identical from backups. The staged download map is kept for reference
+at (.mozbuild/0904/theia-plugins.drill.json). Every pin below is the sha256
+of bytes fetched at drill time on this host:
+
+- openvsx, live registry path: akamud.vscode-theme-onedark 2.3.0, pin
+  46b7471523cc2c0fcf526ed63b87b502e4102f3c3cde68d9f2eae9c9887a2e85
+  (18955-byte vsix, zip magic verified before pinning)
+- url with the downloader placeholder: rust-lang.rust-analyzer 0.4.3038 via
+  a URL carrying `${targetPlatform}` in both the path and the file name,
+  pin eddd3dbe75b9c5505acdce1a43c7e03cb9ea20ca727bb843d8192374fd9cd968
+  (16117795-byte linux-x64 vsix, the placeholder resolved for this host)
+- npm, live registry tarball: chart.js 4.5.1, pin
+  f540d98468457ac7a0aabb32006dfb066297e096c5ea063a5d80aa973d1c337a
+  (1576314-byte tgz; the integrity digest recorded from npm view sits
+  alongside the pin in the staged entry)
+- npm, synthetic shape twin: acme.drillpack 2.4.2, pin
+  1c96947d436a14bdbc1b61bb41ff76f08c97e14f529d00f2b5514d413d88c063
+  (394-byte packed tgz served over loopback at drill time; the id is
+  unclaimed, so the registry tarball URL answers 404 — recorded in the
+  drill transcript — and no real package name is shadowed. The twin is
+  deliberately NOT named acme.npmpack: the task-1 npm-kind fixture owns
+  that id, and the downstream-fixture absence sweep reads the staged
+  manifest as platform truth while the drill is staged, so a shared id
+  goes red naming the entry. The harness caught the first attempt live;
+  the drill twin carries the drill prefix for exactly that reason.)
+- local-path packed at drill time: acme.drilltool from extensions/acme-drill,
+  pin 83a7aa2976d890b4adac05f420112b656929a4f2a3eb6e2f2a5f91b44f437e05
+  (packed with npm pack; the pin covers the packed bytes, never the dir.
+  Same drill-prefix reason as above: the task-1 local-path-kind fixture
+  owns acme.localtool and extensions/acme-local.)
+
+Per-target resolution evidence. The stock downloader expands
+`${targetPlatform}` to linux-x64 on this host; the win32-x64 and
+darwin-arm64 bytes below were retrieved live on nix-linux for pin
+documentation, with their build and install cells staged per the host
+record that follows:
+
+- linux-x64 vsix through the stock download step, hash-matched to the staged pin (evidence log at (.mozbuild/0904/download-stock.log), hash record at (.mozbuild/0904/plugins-hashes.log))
+- win32-x64 vsix bytes retrieved live (19001308 bytes, sha256
+  b7c12c0e226e72eb4ca7bb0886412e65457d58dc1c02c65bb5e7d4b1604b2ab8,
+  kept target-qualified with the drill archives)
+- darwin-arm64 vsix bytes retrieved live (15327866 bytes, sha256
+  193dda6d277567e6acdcd1ba502b88c50fa9fa34d16b811e52bd963d3d7cab3e,
+  kept target-qualified with the drill archives)
+
+Download-path split, by downloader capability (read off the installed
+`@theia/cli` fetcher at drill time): the stock `theia download:plugins --packed` step carries the two vsix entries, placeholder expansion included — the emitted fragment holds `${targetPlatform}` byte-verbatim (see the staged map at (.mozbuild/0904/theia-plugins.drill.json)) and the placed linux-x64 archive hashes to the staged pin. Tarball URLs ending in
+`.tgz` and local-path pack references travel out of band by necessity (the
+stock fetcher switches only on tar.gz, vsix and theia endings, so a `.tgz`
+URL is an unsupported file type there): the drill curled each tarball over
+HTTPS (the synthetic twin over loopback HTTP), packed the local folder
+with `npm pack`, and placed all three archives into the plugins dir under
+the `.tar.gz` slots the pin gate hashes. The hop-equivalent pin re-proof
+is `node scripts/verify-extension-pins.mjs` green over the staged set
+(fragment equality plus block equality plus the npm `-<version>.tgz`
+suffix guard plus sha256 over the placed archives with the local-path
+presence leg), run at drill time before the build below.
+
+Sidecar build over the downloaded set: `theia build --app-target=browser
+--mode development` inside the theia shell finished with 0 errors on both the browser and node targets over the five-archive vsix-plus-tarball set (incremental over the prebuilt tree, 4.9s wall; full log at (.mozbuild/0904/build-sidecar.log)). The full `yarn
+build` wrapper is not part of this cell: it re-runs the stock download
+over the whole block, which aborts on the pack references by the design
+above. A pack-aware download wrapper is follow-up work, not a drill
+failure.
+
+Staged host cells (the 08-05 capability record re-read, not re-proven):
+
+- Windows 11 sidecar build plus install over the win32-x64-resolved vsix
+  set: staged-unexecuted. Provisioning error (08-05 record, still
+  current): no reachable Windows host exists — qemu:///system is
+  unmanageable without privilege and no guest is defined. Unblock
+  (operator): provision pkg-win11 per the 08-05 capability record, then
+  run the download-plus-build procedure below with the placeholder
+  resolved to win32-x64 and the win32-x64 vsix pin above.
+- macOS sidecar build plus install over the darwin-arm64-resolved vsix
+  set: staged-unexecuted. Provisioning error (08-05 record, still
+  current): no macOS image exists anywhere reachable, no Apple hardware,
+  and no lawful download path for a macOS image from Linux. Unblock
+  (operator): provision pkg-macos per the 08-05 capability record, then
+  run the download-plus-build procedure below with the placeholder
+  resolved to darwin-arm64 and the darwin-arm64 vsix pin above.
+
+Verbatim drill transcript (nix-linux; run from the repo root):
+
+```
+# 0. back up the two tracked files the drill stages:
+cp configuration.toml .mozbuild/0904/configuration.toml.drill-backup
+cp theia/applications/browser/package.json .mozbuild/0904/browser-package.json.drill-backup
+# 1. fetch the live bytes and record the pins (akamud theme, three rust
+#    targets, chart.js tarball); confirm the synthetic npm id is unclaimed:
+curl -sSL -o .mozbuild/0904/akamud.vscode-theme-onedark-2.3.0.vsix <open-vsx-file-url>
+curl -sSL -o .mozbuild/0904/rust-lang.rust-analyzer@linux-x64.vsix <linux-x64-open-vsx-file-url>
+# (repeat the rust-analyzer fetch for win32-x64 and darwin-arm64 into
+# like-named target-qualified archives)
+curl -sSL -o .mozbuild/0904/chart.js-4.5.1.tgz https://registry.npmjs.org/chart.js/-/chart.js-4.5.1.tgz
+curl -sSL -o /dev/null -w "%{http_code}\n" https://registry.npmjs.org/acme.drillpack/-/acme.drillpack-2.4.2.tgz
+sha256sum .mozbuild/0904/*
+# 2. pack the synthetic sources (npm shape twin plus local-path folder):
+npm pack .mozbuild/0904/synth-npm/acme-npmpack --pack-destination .mozbuild/0904
+npm pack ./extensions/acme-drill --pack-destination .mozbuild/0904
+# 3. stage the five-entry manifest, generate, and check the fragment keeps
+#    the placeholder verbatim:
+node scripts/generate.mjs
+node -e "JSON.parse(require('fs').readFileSync('generated/theia-plugins.json','utf8'))"
+# 4. stock download over the vsix-backed entries (placeholder expands here):
+nix develop .#theia --command bash -c 'yarn --cwd theia/applications/browser download:plugins'
+# 5. out-of-band tarball placement plus hash-to-pin proof for all five:
+#    (see the hash record at (.mozbuild/0904/plugins-hashes.log))
+# 6. pin re-proof, then the sidecar build over the downloaded set:
+node scripts/verify-extension-pins.mjs
+nix develop .#theia --command bash -c 'yarn --cwd theia/applications/browser theia build --app-target=browser --mode development'
+# 7. restore the tracked tree byte-identical and reprove the default:
+cp .mozbuild/0904/configuration.toml.drill-backup configuration.toml
+cp .mozbuild/0904/browser-package.json.drill-backup theia/applications/browser/package.json
+rm -rf extensions/acme-drill theia/applications/browser/plugins
+node scripts/generate.mjs && node scripts/generate.mjs --check
+git status --short
+```
+
 ## Firefox half
 
 ```
