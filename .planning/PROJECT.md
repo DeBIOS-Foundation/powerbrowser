@@ -65,6 +65,7 @@ platform. If a rebrand ever requires editing a second file, that is a bug.
 | Antenna collector stdlib-only, throttle on success only | failed (500) store writes must not consume throttle budget; CrashID only after durable write | — Decided Phase 09 |
 | ExtensionSettings over extensions-dir | declared WebExtensions land via policy `force_installed`/`install_url`; curated set stays out of the tree | — Decided Phase 09 |
 | Canonical product name from v2: **PowerBrowser** (accepted variants **Powerbrowser** / **powerbrowser** for identifier-class surfaces) | v1 shipped the spaced display form "Power Browser" across generated surfaces; the canonical form + re-pinned gates land as v2 NAME-01 so the v1 archive stays faithful to what was verified | — Decided 2026-09-04 |
+| v1.2 scope: sign-off closeout + SQL store only, SQL GUI deferred | v1.2 closes formal sign-off on the 16 Open v1 requirements then ships the SQL-01 store/DB layer with no GUI surface; SQL GUI, GUI-02, and GUI-05 move to v1.3+ so the milestone stays shippable | — Decided 2026-09-05 |
 
 ## configuration.toml planned sections
 
@@ -135,69 +136,61 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - [x] Tier-3 per-fixture builds over the new source kinds; Theia re-pin
       proof with token-gate intact — BLD-02, UPD-04 — Phase 09
 
-### Active
+### Active (v1.2)
 
-- [ ] Formal sign-off on generator surfaces (GEN-01, GEN-02, GEN-03) and Theia
-      surface (GEN-05) pending the human/tier-3 half (pixel look, render
-      drill, release build)
-- [ ] Telemetry and extension live drills (TEL-01..03, EXT-01) pending
-      collector-backed runs
-- [ ] VER-01 fleet proof and DOC-01 formal sign-off pending fixture-build tier
-- [ ] **GUI-02**: in-Theia web tabs via `<xul:browser>`; **GUI-05**: unified
-      tab strip — DEFERRED (no GUI work in v1.1 per 2026-09-04 scoping;
-      SQL tabs still precede them when scheduled)
+- [ ] Formal sign-off closeout on the 16 Open v1 requirements —
+      migration/inventory (MIG-01, MIG-02), GUI survivals (GUI-01, GUI-03,
+      GUI-04), generator surfaces (GEN-01, GEN-02, GEN-03, GEN-05),
+      telemetry/extension live drills (TEL-01..03, EXT-01), fleet proof
+      (VER-01), rebranding doc (DOC-01)
+- [ ] **SQL-01 store/DB layer only**: every tab a SQL row on
+      `TabUriRegistry` identity (plus bookmarks/sessions exposure) — single
+      chrome-side writer behind `PowerBrowserAPI` in its own SQLite file;
+      sessionstore stays authoritative for restore; registry URIs are the
+      join key. No GUI surface this milestone.
 
 ### Out of Scope
 
+- SQL GUI surface, GUI-02 in-Theia web tabs, GUI-05 unified tab strip —
+      deferred to v1.3+ per 2026-09-05 scoping (v1.2 is store-only)
 - Unified tab strip where web pages and editors are peers — the mirror/proxy
-  bridge stays a later milestone, as in the upstream plan; v1's browser access
-  is the toggle + browsing inside Theia
+  bridge stays a later milestone, as in the upstream plan; current browser
+  access is the toggle + browsing inside Theia
 - Databasise and the curated addon set — composed in downstream, never in the
   platform tree
 - Moving every conceivable setting into `configuration.toml` in milestone 1 —
   the file grows toward "everything configurable" incrementally
-- npm and local-path extension source kinds — Open VSX + URL cover v1
 
-## Current State (v1.0 shipped 2026-09-04)
+## Current State (v1.1 shipped 2026-09-05)
 
-v1.0 PowerBrowser is archived (override closeout):
-`.planning/milestones/v1.0-ROADMAP.md`,
-`.planning/milestones/v1.0-REQUIREMENTS.md`, tag `v1.0`. All 52 plans
-executed; `--quick` 95 PASS; 19/19 launch-lifecycle checks green on the dev
-binary; trademark ritual signed. Known gaps carried to v2: human-eyes drills
-(icon pixel look, welcome/about render drill), heavy-machine drills (release
-build, per-fixture tier-3 builds, live ESR rebase, Theia re-pin), WINDOWS
-#13/#14. v1 shipped the spaced display form "Power Browser"; the canonical
-**PowerBrowser** form lands in v2 (NAME-01).
+v1.1 Hardening is archived:
+`.planning/milestones/v1.1-ROADMAP.md`,
+`.planning/milestones/v1.1-REQUIREMENTS.md`,
+`.planning/milestones/v1.1-MILESTONE-AUDIT.md`, tag `v1.1`. Phases 08–09
+(9/9 plans) executed: NAME-01 canonical **PowerBrowser**, PKG-01/02/03
+real installers + self-hosted MAR + `docs/BUILD.md`, BLD-01/02 release +
+per-fixture builds, UPD-03/04 live rebase + re-pin proofs, SEC-02/SHELL-01
+WINDOWS #13/#14 closures, EXT-02/03 npm/local-path + WebExtensions policy,
+TEL-04 crash collector. Carried to v1.2: formal sign-off on the 16 Open v1
+requirements still staged (human/tier-3 halves).
 
-## Next Milestone Goals
+## Current Milestone: v1.2 Sign-off Closeout + SQL Store
 
-v2 (inputs frozen in `.planning/NEXT-MILESTONE-INPUTS.md`): NAME-01 rename
-slice, PKG-01 real installer builds (+ WR-04/WR-07 hardening), EXT-02 +
-TEL-04, GUI-02 in-Theia tabs, GUI-05 unified tab strip. Backlog 999.1
-SQL-browser-memory stays backlog.
-
-## Current Milestone: v1.1 Hardening and SQL Tabs
-
-**Goal:** Harden real installer builds and the extensions/crash pipelines,
-and promote SQL-backed tabs — no GUI work this cycle.
+**Goal:** Close formal sign-off on the v1 carry-overs and ship the SQL-01
+tab-store/DB layer with no GUI surface.
 
 **Target features:**
-- Real installer builds (PKG-01) on packaging hosts (+ WR-04/WR-07
-  hardening, `docs/BUILD.md` procedure), with the NAME-01 canonical
-  **PowerBrowser** rename slice folded in and gates re-pinned.
-  Self-hosted MAR updates (fork signing); Nix-built Windows/macOS
-  packaging tried first, agent-driven VMs as fallback
-- Extensions + crash pipeline (EXT-02 npm/local-path sources, pinned and
-  fail-loud, plus the WebExtensions declaration sibling; TEL-04 minimal
-  crash collector, reporter stays compiled out)
-- v1 carry-overs ride along: release `objdir-release` build, tier-3
-  per-fixture builds, live ESR rebase drill, Theia re-pin proof, WINDOWS
-  #13 (`registerWindowActor` boundary hole) and #14 (BiDi double-window)
+- Sign-off closeout: MIG-01/02, GUI-01/03/04 survivals, GEN-01/02/03/05,
+  TEL-01..03 + EXT-01 live drills, VER-01 fleet proof, DOC-01 stranger
+  carry-test — every box checked with live evidence.
+- SQL-01 store: tabs as SQL rows on `TabUriRegistry` identity
+  (bookmarks/sessions exposure alongside); single chrome-side writer behind
+  `PowerBrowserAPI` in its own SQLite file; sessionstore stays authoritative
+  for restore; registry URIs are the join key. Boundary per ARCHITECTURE.md
+  Anti-Pattern 6: extension point, not a `[features]` flag.
 
-No GUI work and no SQL tabs this cycle: GUI-02/GUI-05 stay deferred, and
-backlog 999.1 SQL-browser-memory stays backlog (confirmed 2026-09-04 —
-v1.1 is hardening-only).
+No GUI work this cycle: SQL GUI surface, GUI-02, and GUI-05 stay deferred
+to v1.3+ (confirmed 2026-09-05 — v1.2 is closeout + store-only).
 
 ## Evolution
 
@@ -217,4 +210,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-05 after Phase 09 (4/4 plans, verification passed) — EXT-02/03, TEL-04, BLD-02, UPD-04 validated; v1.1 complete pending lifecycle*
+*Last updated: 2026-09-05 at v1.2 start (sign-off closeout + SQL store scope)*
