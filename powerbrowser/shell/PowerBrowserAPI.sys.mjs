@@ -788,6 +788,10 @@ export const PowerBrowserAPI = Object.freeze({
   listBookmarkFolder(folderGuid) {
     try {
       const root = lazy.PlacesUtils.getFolderContents(folderGuid, false, false).root;
+      // WR-01 (12-CODE-REVIEW.md): a closed container exposes no children
+      // (upstream opens it first: PlacesUtils.sys.mjs:1390) -- without this
+      // the listing silently resolves [].
+      root.containerOpen = true;
       const rows = [];
       try {
         const count = root.childCount;
