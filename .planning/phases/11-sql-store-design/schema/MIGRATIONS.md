@@ -49,9 +49,11 @@ T-11-11).
 On any other result — including an unopenable file, which counts as
 tripped:
 
-1. Copy the database file to a corrupt-suffixed name
-   (`tabs.sqlite.corrupt-<N>`) via the `backupToFile` primitive. Copy
-   first; the corrupt file is forensics.
+1. Copy the database file to the next free corrupt-suffixed name
+   (`tabs.sqlite.corrupt-<N>`, N = max existing suffix + 1, starting at 1)
+   via the `backupToFile` primitive. Never reuse a suffix: if
+   `tabs.sqlite.corrupt-1` exists, write `tabs.sqlite.corrupt-2`.
+   Copy first; the corrupt file is forensics.
 2. Remove dependent sidecar state (`-wal`, `-shm`, `-journal`).
 3. Rebuild the live rows FROM sessionstore plus the registry — the
    restore authority. Sessionstore stays authoritative for restore
