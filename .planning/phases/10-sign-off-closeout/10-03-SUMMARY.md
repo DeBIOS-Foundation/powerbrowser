@@ -316,7 +316,7 @@ None - no external service configuration required. Human signatures remain as th
 ## Self-Check: PASSED
 
 - Files: 10-03-SUMMARY.md FOUND; sole tree change (no product code, no sibling driver).
-- Commits: d5d2923 FOUND in git log; Task 2 hash recorded in Task Commits above.
+- Commits: d5d2923, ed2dbef both FOUND in git log.
 - Verifies: --quick PASS; 26 cited --only rows PASS; 8 self-test twins PASS with planted-drift reds observed; untracked-under-scripts/ clean; 15 IDs grep-present; coverage_id present (11); staged routing present; scan-brand-residue PASS over staged files.
 
 ---
