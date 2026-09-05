@@ -336,7 +336,77 @@ function checkPlatformAbsence(treeTexts, defaultTreeTexts, swept, otherLeaves, e
     return { failures, count, ok: failures.length === 0 };
 }
 
-// --- one fixture drive --------------------------------------------------------
+// --- the extension-fragment check (09-04, BLD-02 generate-level cells) ------
+//
+// Every [[extensions]] entry the staged manifest declares must reach
+// generated/theia-plugins.json under its kind's pinned URL shape. The shapes
+// below are stated INDEPENDENTLY of scripts/generate.mjs's resolvers (not
+// imported from them): deriving the expectation through the emitter would
+// compare the emitter against itself and a resolver regression would pass.
+// A resolver shape change must update both this oracle and the generator's
+// self-test -- that duplication is the gate, exactly like the pin gate's
+// float guards. Entries of an unknown source are the generator validator's
+// failure, not this sweep's: they are skipped here so each failure has one
+// owner.
+
+function expectedExtensionUrl(entry) {
+    if (entry === null || typeof entry !== 'object') return null;
+    if (entry.source === 'openvsx' && typeof entry.id === 'string' && typeof entry.version === 'string') {
+        const dot = entry.id.indexOf('.');
+        if (dot <= 0) return null;
+        return `https://open-vsx.org/api/${entry.id.slice(0, dot)}/${entry.id.slice(dot + 1)}/${entry.version}/file/${entry.id}-${entry.version}.vsix`;
+    }
+    if (entry.source === 'url' && typeof entry.url === 'string') return entry.url;
+    if (entry.source === 'npm' && typeof entry.id === 'string' && typeof entry.version === 'string') {
+        return `https://registry.npmjs.org/${entry.id}/-/${entry.id}-${entry.version}.tgz`;
+    }
+    if (entry.source === 'local-path' && typeof entry.path === 'string') return `${entry.path}.tgz`;
+    return null;
+}
+
+/**
+ * The emitted download map agrees with the staged manifest's entries, in
+ * both directions: every known-kind entry present with its exact pinned URL
+ * (a direct-URL entry carrying the downloader placeholder reaches it
+ * byte-verbatim), and no fragment id the manifest does not declare. Returns
+ * { failures, count } -- count is zero when the manifest declares no
+ * known-kind entries, so brand-only fixtures stay exactly as assertive as
+ * before.
+ */
+function checkExtensionFragment(treeRoot, fxConfig) {
+    const failures = [];
+    let count = 0;
+    const entries = Array.isArray(fxConfig.extensions) ? fxConfig.extensions : [];
+    const known = entries.filter((e) => expectedExtensionUrl(e) !== null);
+    if (known.length === 0) return { failures, count, ok: true };
+    let fragment = null;
+    try {
+        fragment = JSON.parse(readFileSync(join(treeRoot, 'theia-plugins.json'), 'utf8'));
+    } catch (err) {
+        failures.push(`theia-plugins.json carries no readable download map for ${known.length} declared [[extensions]] entr${known.length === 1 ? 'y' : 'ies'} (${known.map((e) => JSON.stringify(e.id)).join(', ')}): ${err.message}`);
+        return { failures, count: count + 1, ok: false };
+    }
+    if (fragment === null || typeof fragment !== 'object' || Array.isArray(fragment)) {
+        failures.push('theia-plugins.json is not a JSON object, so the declared entries cannot be compared against it');
+        return { failures, count: count + 1, ok: false };
+    }
+    for (const entry of known) {
+        const want = expectedExtensionUrl(entry);
+        count += 1;
+        if (!Object.hasOwn(fragment, entry.id)) {
+            failures.push(`theia-plugins.json is missing the [[extensions]] entry with id ${JSON.stringify(entry.id)} -- stale output. Next step: run node scripts/generate.mjs with the staged config, then re-run this check.`);
+        } else if (fragment[entry.id] !== want) {
+            failures.push(`theia-plugins.json carries ${JSON.stringify(fragment[entry.id])} for the entry with id ${JSON.stringify(entry.id)} but the entry resolves to ${JSON.stringify(want)} -- the resolver drifted. Next step: compare against scripts/generate.mjs's resolver for that source kind.`);
+        }
+    }
+    count += 1;
+    for (const id of Object.keys(fragment)) {
+        if (!known.some((e) => e.id === id)) {
+            failures.push(`theia-plugins.json carries an entry with id ${JSON.stringify(id)} that the staged manifest no longer declares -- stale output left behind by a removed entry.`);
+        }
+    }
+    return { failures, count, ok: failures.length === 0 };
+}
 
 function driveFixture(sourceDir, { expectFail } = {}) {
     const failures = [];
@@ -417,6 +487,10 @@ function driveFixture(sourceDir, { expectFail } = {}) {
         assertions += surfaces.count;
         failures.push(...surfaces.failures);
 
+        const extFragment = checkExtensionFragment(GENERATED_ROOT, fxConfig);
+        assertions += extFragment.count;
+        failures.push(...extFragment.failures);
+
         const devFull = `${defConfig.identity.display_name}${(defConfig.variants || []).find((v) => v.id === 'dev')?.name_suffix ?? ''}`;
         const releaseFull = `${defConfig.identity.display_name}${(defConfig.variants || []).find((v) => v.id === 'release')?.name_suffix ?? ''}`;
         const swept = [...new Set([devFull, releaseFull, defConfig.product.vendor_display, defConfig.product.vendor_machine, defConfig.legal.trademark_notice])];
@@ -480,8 +554,11 @@ function discoverFixtures(root) {
 // assertion functions: green control first, then a platform-valued tree going
 // red naming file and value, an ftl/properties drift going red, a missing-
 // artwork stage going red in pass mode and green in expect-fail mode, a wrong
-// expect-fail substring going red, and the three non-vacuity cases each
-// failing distinctly.
+// expect-fail substring going red, the extension-fragment oracle going green
+// per kind (npm, local-path, openvsx, direct URL with the downloader
+// placeholder verbatim) plus drifted/missing/stale ids each going red naming
+// the id, a brand-only manifest adding no fragment assertions, and the three
+// non-vacuity cases each failing distinctly.
 
 const SELFTEST_MANIFEST = [
     '[product]',
@@ -579,6 +656,40 @@ function runSelfTest() {
         const zeroFail = assertNonZeroAssertions(0);
         const fiveFail = assertNonZeroAssertions(5);
         check('zero-assertions-red', zeroFail !== null && zeroFail.includes('zero assertions') && fiveFail === null, `want the zero-assertion guard to fire on 0 and stay quiet on 5, got: ${JSON.stringify(zeroFail)} / ${JSON.stringify(fiveFail)}`);
+
+        // S7: the extension-fragment oracle agrees per kind on a matching tree.
+        const extTree = join(scratchRoot, 'ext-tree');
+        mkdirSync(extTree, { recursive: true });
+        const extEntries = [
+            { id: 'acme.npmpack', source: 'npm', version: '2.4.1' },
+            { id: 'acme.localtool', source: 'local-path', path: 'extensions/acme-local' },
+            { id: 'acme.theme', source: 'openvsx', version: '1.0.0' },
+            { id: 'acme.targeted', source: 'url', url: 'https://example.org/acme-target-${targetPlatform}-1.0.0.vsix' },
+        ];
+        const extMap = {};
+        for (const e of extEntries) extMap[e.id] = expectedExtensionUrl(e);
+        writeFileSync(join(extTree, 'theia-plugins.json'), `${JSON.stringify(extMap, null, 2)}\n`);
+        const extGreen = checkExtensionFragment(extTree, { extensions: extEntries });
+        check('extension-fragment-green', extGreen.ok && extGreen.count === extEntries.length + 1, `want pass with ${extEntries.length + 1} assertions, got ok=${extGreen.ok} assertions=${extGreen.count}: ${extGreen.failures.slice(0, 3).join(' | ')}`);
+
+        // S8: a drifted URL, a missing id, and a stale id each go red naming the id.
+        const driftMap = { ...extMap, 'acme.npmpack': 'https://registry.npmjs.org/acme.npmpack/-/acme.npmpack-9.9.9.tgz' };
+        writeFileSync(join(extTree, 'theia-plugins.json'), `${JSON.stringify(driftMap, null, 2)}\n`);
+        const extDrift = checkExtensionFragment(extTree, { extensions: extEntries });
+        check('extension-fragment-drift-red', !extDrift.ok && extDrift.failures.some((f) => f.includes('acme.npmpack')), `want a drift failure naming acme.npmpack, got: ${extDrift.failures.slice(0, 3).join(' | ')}`);
+        const missingMap = { ...extMap };
+        delete missingMap['acme.localtool'];
+        writeFileSync(join(extTree, 'theia-plugins.json'), `${JSON.stringify(missingMap, null, 2)}\n`);
+        const extMissing = checkExtensionFragment(extTree, { extensions: extEntries });
+        check('extension-fragment-missing-red', !extMissing.ok && extMissing.failures.some((f) => f.includes('acme.localtool') && f.includes('missing')), `want a missing-id failure naming acme.localtool, got: ${extMissing.failures.slice(0, 3).join(' | ')}`);
+        const staleMap = { ...extMap, 'acme.gone': 'https://example.org/acme-gone-1.0.0.vsix' };
+        writeFileSync(join(extTree, 'theia-plugins.json'), `${JSON.stringify(staleMap, null, 2)}\n`);
+        const extStale = checkExtensionFragment(extTree, { extensions: extEntries });
+        check('extension-fragment-stale-red', !extStale.ok && extStale.failures.some((f) => f.includes('acme.gone')), `want a stale-id failure naming acme.gone, got: ${extStale.failures.slice(0, 3).join(' | ')}`);
+
+        // S9: a brand-only manifest adds no fragment assertions (still non-vacuous overall).
+        const brandOnly = checkExtensionFragment(extTree, {});
+        check('extension-fragment-brand-only-quiet', brandOnly.ok && brandOnly.count === 0, `want pass with zero added assertions, got ok=${brandOnly.ok} assertions=${brandOnly.count}`);
     } finally {
         rmSync(scratchRoot, { recursive: true, force: true });
     }

@@ -1,0 +1,49 @@
+# Synthetic downstream manifest for plan 09-04 (BLD-02 generate-level cell:
+# local-path source kind).
+#
+# This is TEST DATA, not a real product: every value is invented ("Acme")
+# and no real-world product name, vendor, URL, or trademark appears here. It
+# proves that an [[extensions]] entry with source "local-path" generates its
+# packed-archive fragment line through the drill-then-restore harness. The
+# stated folder need not exist at generate level: absence fails loud at the
+# pin gate, which is the check that can see the filesystem, so this cell
+# names a project-relative folder with no bytes behind it. The sha256 pin is
+# a valid shape over no particular bytes at generate level. Lives under
+# .planning/ so both tree scanners exclude it by committed table.
+#
+# SHAPE: full downstream manifest (required keys differ from the platform's)
+# plus one local-path [[extensions]] entry. Variants omitted on purpose: the
+# cell inherits the platform's two, exercising the default-echo path.
+
+[product]
+vendor_machine = "Acme"
+vendor_display = "Acme Collective"
+
+[identity]
+display_name = "Acme Browser"
+app_basename = "acme-browser"
+binary_name = "acme"
+remoting_name = "acme"
+distribution_id = "org.acme"
+
+[legal]
+license = "MIT"
+copyright_holder = "Acme Collective"
+trademark_notice = "Acme Browser is a trademark of Acme Collective."
+
+[installer]
+support_url = "https://acme.example.org"
+
+[telemetry]
+level = "error"
+endpoint = "https://telemetry.acme.example.org/v1/events"
+
+[upstreams]
+firefox_esr_tag = "FIREFOX_154_0esr_RELEASE"
+theia_release = "1.74.1"
+
+[[extensions]]
+id = "acme.localtool"
+source = "local-path"
+path = "extensions/acme-local"
+sha256 = "b7dd35157e24f36e69957dc38d17c66b73b12ba55fe552bf86f64de16a994623"

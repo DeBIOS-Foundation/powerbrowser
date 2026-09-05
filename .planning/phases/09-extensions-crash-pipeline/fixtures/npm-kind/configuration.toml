@@ -1,0 +1,49 @@
+# Synthetic downstream manifest for plan 09-04 (BLD-02 generate-level cell:
+# npm source kind).
+#
+# This is TEST DATA, not a real product: every value is invented ("Acme")
+# and no real-world product name, vendor, URL, or trademark appears here. It
+# proves that an [[extensions]] entry with source "npm" generates its pinned
+# registry-tarball fragment line through the drill-then-restore harness. The
+# tarball URL is synthetic by design (the plan proves the npm SHAPE without
+# depending on third-party package availability); the sha256/integrity pins
+# are valid shapes over no particular bytes at generate level. Lives under
+# .planning/ so both tree scanners exclude it by committed table.
+#
+# SHAPE: full downstream manifest (required keys differ from the platform's)
+# plus one npm [[extensions]] entry. Variants omitted on purpose: the cell
+# inherits the platform's two, exercising the default-echo path.
+
+[product]
+vendor_machine = "Acme"
+vendor_display = "Acme Collective"
+
+[identity]
+display_name = "Acme Browser"
+app_basename = "acme-browser"
+binary_name = "acme"
+remoting_name = "acme"
+distribution_id = "org.acme"
+
+[legal]
+license = "MIT"
+copyright_holder = "Acme Collective"
+trademark_notice = "Acme Browser is a trademark of Acme Collective."
+
+[installer]
+support_url = "https://acme.example.org"
+
+[telemetry]
+level = "error"
+endpoint = "https://telemetry.acme.example.org/v1/events"
+
+[upstreams]
+firefox_esr_tag = "FIREFOX_154_0esr_RELEASE"
+theia_release = "1.74.1"
+
+[[extensions]]
+id = "acme.npmpack"
+source = "npm"
+version = "2.4.1"
+integrity = "sha512-BKocyzdpSTplczautfv652NqIOUqwbliMII9uK4VitqjusOvY1INqgr6WQ31YMsYCLfUxRH8HB8rW2cj+xLEXg=="
+sha256 = "0b087a555ea3fee84ec5f0724795642389a43187d0a98ac7ace63f863ce7afb8"
