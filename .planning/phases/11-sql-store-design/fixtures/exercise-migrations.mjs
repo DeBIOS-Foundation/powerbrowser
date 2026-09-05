@@ -193,12 +193,20 @@ function quarantineAndRebuild(path, restoreRows) {
   const fresh = new DatabaseSync(path);
   // WAL pin precedes the rebuild transaction (immutable inside one).
   fresh.exec('PRAGMA journal_mode=WAL');
+  // Rebuild runs inside exactly one transaction (MIGRATIONS.md
+  // one-transaction-per-mutation rule): a crash mid-rebuild must not leave
+  // a version-stamped but row-partial database.
+  fresh.exec('BEGIN');
   try {
     fresh.exec(CREATE_TABS_V1_SQL);
     fresh.exec(CREATE_INDEX_V1_SQL);
     fresh.exec(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
     const ins = fresh.prepare('INSERT INTO tabs (uri, url, title, last_active) VALUES (?, ?, ?, ?)');
     for (const r of restoreRows) ins.run(r.uri, r.url, r.title, r.last_active);
+    fresh.exec('COMMIT');
+  } catch (err) {
+    try { fresh.exec('ROLLBACK'); } catch {}
+    throw err;
   } finally {
     fresh.close();
   }

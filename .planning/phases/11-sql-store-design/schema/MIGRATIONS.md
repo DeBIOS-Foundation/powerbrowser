@@ -60,7 +60,9 @@ tripped:
 3. Rebuild the live rows FROM sessionstore plus the registry — the
    restore authority. Sessionstore stays authoritative for restore
    throughout (authority row 2); the store never sources a restart, so
-   the first corruption always has a rebuild source.
+   the first corruption always has a rebuild source. The rebuild runs
+   inside exactly one transaction (DDL plus version bump plus row
+   inserts).
 4. Continue degraded with the rebuilt file at the current chain version.
 5. Never delete the corrupt copy. Deletion is data loss wearing a
    recovery costume.
