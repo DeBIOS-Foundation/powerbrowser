@@ -41,7 +41,10 @@ import {
     LOOPBACK_HOST,
     MAX_ANNOTATION_BYTES,
     MAX_BODY_BYTES,
+    MAX_BODY_MIB,
     MAX_PARTS,
+    MAX_PART_BYTES,
+    MAX_PART_MIB,
     MINIDUMP_PART_NAME,
     REASON_NO_MINIDUMP,
     REASON_OVERSIZED,
@@ -123,6 +126,8 @@ function runChecks(root) {
     states(String(THROTTLE_MAX_SUBMITS), 'the throttle budget');
     states(String(THROTTLE_WINDOW_MS / 1000), 'the throttle window seconds');
     states(String(MAX_PARTS), 'the part-count cap');
+    states(`${MAX_PART_MIB} MiB`, 'the per-part size cap');
+    states(`${MAX_BODY_MIB} MiB`, 'the total-body cap');
     states(String(MAX_ANNOTATION_BYTES), 'the annotation value cap');
     states(LOOPBACK_HOST, 'the loopback bind');
     for (const field of ANNOTATION_ALLOWLIST) {
