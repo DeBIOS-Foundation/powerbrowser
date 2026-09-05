@@ -92,7 +92,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 10. Sign-off Closeout | 3/3 | In Progress|  |
+| 10. Sign-off Closeout | 3/3 | Implemented, verification deferred |  |
 | 11. SQL Store Design | 0/0 | Not started | - |
 | 12. SQL Store Build | 0/0 | Not started | - |
 
