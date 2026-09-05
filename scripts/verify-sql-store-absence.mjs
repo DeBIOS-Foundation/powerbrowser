@@ -393,7 +393,15 @@ function readStoreRows(profileDir) {
 // binary with the same headless flags as scripts/lib/firefox-bidi.mjs,
 // wait for the shell-ready sentinel, settle past the sweep, then SIGTERM
 // and read the rows the session wrote.
-async function driveOnce({ profileDir, args, settleMs = 10000, readyTimeoutMs = 120000 }) {
+//
+// Settle is 60s, not 10s (12-CODE-REVIEW.md CR-04): the sweep rides
+// sessionstore-state-write-complete, and a live drive measured the first
+// sweep landing between 40-55s after launch in headless -- a 10s settle
+// reads before any sweep fired, passing the private half vacuously and
+// failing the public positive control. Rows are read only after SIGTERM:
+// mid-session readonly opens contend with the writer's WAL lock and throw
+// SQLITE_BUSY intermittently, while post-shutdown reads are deterministic.
+async function driveOnce({ profileDir, args, settleMs = 60000, readyTimeoutMs = 120000 }) {
   const child = spawn(BIN, ['--headless', '--profile', profileDir, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
   let output = '';
   if (child.stdout) child.stdout.on('data', c => { output += c.toString(); });

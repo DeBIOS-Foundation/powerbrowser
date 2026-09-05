@@ -1082,17 +1082,38 @@ export const PowerBrowserAPI = Object.freeze({
       }
     };
     const stockWindows = Services.wm.getEnumerator("navigator:browser");
-    while (stockWindows.hasMoreElements()) {
-      const win = stockWindows.getNext();
+    const attachToWindow = win => {
+      // CR-04 follow-up: windows opened after this enumeration (the common
+      // case -- startup runs before later windows exist) arrive via the
+      // delayed-startup observer below and share this one attach path, so
+      // the TabClose removal half can never silently cover only the windows
+      // that happened to exist at startup while the sweep's 7-day retention
+      // prune leaves their closed rows stale for a week.
       const container = win.gBrowser && win.gBrowser.tabContainer;
       if (!container) {
-        continue;
+        return;
       }
       for (const name of TAB_STORE_EVENTS) {
         container.addEventListener(name, onTabEvent);
         attached.push([container, name]);
       }
+    };
+    while (stockWindows.hasMoreElements()) {
+      attachToWindow(stockWindows.getNext());
     }
+    // Pinned upstream (browser/base/content/browser-init.js:792): each
+    // stock window fires browser-delayed-startup-finished with itself as
+    // the subject once delayed startup completes.
+    const windowObserver = {
+      observe: subject => {
+        try {
+          attachToWindow(subject);
+        } catch (err) {
+          PowerBrowserAPI.log("error", `[tab-store-trigger] late-window attach failed: ${err && err.message ? err.message : err}`);
+        }
+      },
+    };
+    Services.obs.addObserver(windowObserver, "browser-delayed-startup-finished");
     const sweepObserver = {
       observe: () => {
         PowerBrowserAPI.sweepTabStoreFromSessionStore().catch(err => {
@@ -1111,6 +1132,11 @@ export const PowerBrowserAPI = Object.freeze({
       }
       try {
         Services.obs.removeObserver(sweepObserver, "sessionstore-state-write-complete");
+      } catch {
+        // Observer removal is best-effort on teardown.
+      }
+      try {
+        Services.obs.removeObserver(windowObserver, "browser-delayed-startup-finished");
       } catch {
         // Observer removal is best-effort on teardown.
       }
