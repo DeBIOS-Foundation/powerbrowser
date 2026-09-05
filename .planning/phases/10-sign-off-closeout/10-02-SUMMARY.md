@@ -1,3 +1,117 @@
+---
+phase: 10-sign-off-closeout
+plan: "02"
+subsystem: sign-off
+tags: [live-drills, verify-platform, telemetry, gui01, verify-endpoints, downstream-fixtures]
+
+# Dependency graph
+requires:
+  - phase: 09-extensions-crash-pipeline
+    provides: [09-04 sidecar-build proof plus staged-manifest bundle drill, 09-02 loopback re-proof]
+  - phase: 08-installer-hardening-canonical-rename
+    provides: [release plus dev built binaries, BLD-01 release rows, PKG-01 NSIS proof]
+  - phase: 10-sign-off-closeout
+    provides: [10-01 record-close boxes plus staged UAT runbooks this plan's drills build on]
+provides:
+  - Probe outcomes with staleness ruling (one inert key synced, no rebuild)
+  - GEN-01/GEN-03 delta re-proofs green on the current tree
+  - VER-01 fleet evidence (literals plus 9 fixtures, 466 assertions)
+  - TEL-01/TEL-02/EXT-01/TEL-03/GUI-01 drill records green with logs
+affects: [10-03 gates-green sweep]
+
+# Actuals (#2632)
+actuals:
+  tokens: 4541
+  tasks: 3
+  commits: 3
+
+# Tech tracking
+tech-stack:
+  added: []
+  patterns: [probe-first staging discipline, one-off scratch round-trip proof removed after run]
+
+key-files:
+  created: [.planning/phases/10-sign-off-closeout/10-02-SUMMARY.md]
+  modified: []
+
+key-decisions:
+  - "Sync-don't-rebuild: one inert packaged-data key refreshed by byte-identical cp into both gitignored objdirs with diff proof, not a 47-minute tier-3 rebuild"
+  - "Compose-don't-remutate: 04-UAT drill 4 live-traffic exercise covered by the green chain (suite plus round-trip plus declaration flow plus booted sidecar), no config mutation plus rebuild for zero new signal"
+
+patterns-established:
+  - "Staleness ruling before drills: diff post-build history against compiled surfaces, rule explicitly, sync data files byte-faithfully or schedule a rebuild with attributed timing"
+
+requirements-completed: [GUI-01, GEN-01, GEN-03, EXT-01, TEL-01, TEL-02, TEL-03, VER-01]
+
+# Coverage metadata (#1602)
+coverage:
+  - id: D1
+    description: "Display/shell/staleness probes recorded; GEN-01 emitter delta (53 files) and byte-identity (34 files) plus GEN-03 installer-schema green"
+    requirement: "GEN-01"
+    verification:
+      - kind: unit
+        ref: "scripts/verify-platform.sh --only harness-display-available#PASS headed"
+        status: pass
+      - kind: unit
+        ref: "scripts/verify-platform.sh --only generate-check#PASS 53 files match configuration.toml"
+        status: pass
+      - kind: unit
+        ref: "scripts/verify-platform.sh --only generated-byte-identity#PASS 34 files byte-identical"
+        status: pass
+      - kind: unit
+        ref: "scripts/verify-platform.sh --only installer-schema#PASS fragments present and schema-complete"
+        status: pass
+    human_judgment: false
+  - id: D2
+    description: "VER-01 fleet proof (manifest literals plus 9-fixture BLD-02 tier) and TEL-03 installed-binary layer (all 3 endpoint layers) green"
+    requirement: "VER-01"
+    verification:
+      - kind: unit
+        ref: "scripts/verify-platform.sh --only verify-manifest-literals#PASS 160 files, 29 occurrences, 21 entries"
+        status: pass
+      - kind: integration
+        ref: "scripts/verify-platform.sh --only verify-downstream-fixtures#PASS 9 fixtures, 268+198 assertions"
+        status: pass
+      - kind: integration
+        ref: "scripts/verify-platform.sh --only verify-endpoints#PASS layers 1-3 incl. live binary run"
+        status: pass
+    human_judgment: false
+  - id: D3
+    description: "TEL-01 declaration chain, TEL-02 suite plus live loopback round-trip, EXT-01 pins plus cited 09-04 proof, GUI-01 automated rows green"
+    requirement: "TEL-01"
+    verification:
+      - kind: unit
+        ref: "node theia/extensions/telemetry/test/telemetry-sender.test.mjs#SUITE PASS 9/9"
+        status: pass
+      - kind: unit
+        ref: "scripts/verify-platform.sh --only telemetry#PASS fragment, block, compile and suite green"
+        status: pass
+      - kind: unit
+        ref: "scripts/verify-platform.sh --only extension-pins#PASS nothing declared and no block exists"
+        status: pass
+      - kind: unit
+        ref: "scripts/verify-platform.sh --only crash-collector#PASS contract and response shapes hold"
+        status: pass
+      - kind: integration
+        ref: "one-off loopback round-trip#ROUNDTRIP_OK 200 CrashID plus matching .dmp/.json"
+        status: pass
+      - kind: integration
+        ref: "scripts/verify-platform.sh --only gui01-single-shell-window#PASS"
+        status: pass
+      - kind: integration
+        ref: "scripts/verify-platform.sh --only gui01-browser-close-does-not-quit#PASS stock window, app survives close"
+        status: pass
+      - kind: integration
+        ref: "scripts/verify-platform.sh --only gui01-command-registered#PASS open-browser-window palette-reachable"
+        status: pass
+    human_judgment: false
+
+# Metrics
+duration: 20min
+completed: 2026-09-05
+status: complete
+---
+
 # Phase 10 Plan 02: Live Drills Summary
 
 **Probe-first live drills green on the current tree where runnable, staged-with-unblock where environment-bound; one inert packaged-data delta synced byte-faithfully, no rebuild**
@@ -92,3 +206,56 @@ Fleet proof and allowlist binary layer closed green on the current tree with obs
 ### Task 3 done
 
 Sidecar drills and automated window rows closed green on the current tree. Nothing rebuilt, nothing staged, no tree file mutated for drill purposes (one-off scratch script removed immediately; store records lived in the system temp dir).
+
+## Task Commits
+
+Each task was committed atomically:
+
+1. **Task 1: Environment probes plus GEN-01 and GEN-03 delta re-proofs** - `0f69be8` (docs)
+2. **Task 2: VER-01 fleet proof plus TEL-03 installed-binary layer** - `b23559b` (docs)
+3. **Task 3: TEL-01 plus TEL-02 plus EXT-01 sidecar drills and GUI-01 automated rows** - `6b98adb` (docs)
+
+## Files Created/Modified
+
+- `.planning/phases/10-sign-off-closeout/10-02-SUMMARY.md` - drill evidence record with green logs (this file; sole tree change)
+
+## Decisions Made
+
+- Sync-don't-rebuild: the single post-build delta onto a packaged surface (one inert `ExtensionSettings: {}` key) was closed by byte-identical `cp` into both gitignored objdirs with empty-diff proof, not by a ~47–54 min tier-3 rebuild. Compiled surfaces (shell sources, patch stack, branding inputs) had zero deltas.
+- Compose-don't-remutate: the 04-UAT drill 4 per-level live-traffic exercise was not re-run with a config mutation plus sidecar rebuild; every link (declaration flow, suite gating, live round-trip delivery, booted sidecar on current prefs) is green with logs, so the composition is the evidence.
+
+## Deviations from Plan
+
+None - plan executed exactly as written. (The objdir data-file sync and the composition ruling are Task 1's explicit staleness-ruling mandate working as designed, not deviations. No Rule 1–4 fix was needed; no checkpoint was hit.)
+
+## Issues Encountered
+
+None. Display was available (probe PASS), so no drill needed staged-with-unblock routing; the `yarn`-not-on-host-PATH observation is expected per CLAUDE.md and blocked nothing.
+
+## Threat Flags
+
+None — no product code written or changed; the only tree change is this planning prose. The objdir sync touched gitignored build output with byte-identical data-file bytes, inside the plan's T-10-05 ruling (no surprise rebuilds).
+
+## Known Stubs
+
+None — no code written; stub scan not applicable to a prose evidence record.
+
+## User Setup Required
+
+None - no external service configuration required.
+
+## Next Phase Readiness
+
+- All 10-02 live halves closed green with logs; 10-03 gates-green sweep can re-run `--quick` plus the cited `--only` rows on the final tree with no open drill.
+- Deferred human signatures remain exactly the five staged UAT sheets from 10-UAT.md (10-01) — unchanged by this plan.
+
+## Self-Check: PASSED
+
+- Files: 10-02-SUMMARY.md FOUND; no other tree files created or modified (`git status` shows only pre-existing untracked research-cache entries plus `.gsd-allow-shrink`).
+- Commits: 0f69be8, b23559b, 6b98adb all FOUND in git log.
+- Verifies: harness-display-available, generate-check, generated-byte-identity, installer-schema, verify-manifest-literals, verify-downstream-fixtures, verify-endpoints (3 layers), telemetry-sender suite 9/9, telemetry, extension-pins, crash-collector, loopback ROUNDTRIP_OK, gui01 all three rows, --quick after every task — all observed PASS this session.
+- No sibling driver created; every drill outcome is a `--only` row run plus observed result.
+
+---
+*Phase: 10-sign-off-closeout*
+*Completed: 2026-09-05*
