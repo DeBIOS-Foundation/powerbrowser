@@ -463,6 +463,21 @@ const WEBEXTENSIONS_PREFIX = 'webextensions[].';
 const EXTENSION_SOURCES = Object.freeze(['openvsx', 'url', 'npm', 'local-path']);
 
 /**
+ * The keys each `source` actually reads, besides the always-allowed
+ * id/source/sha256. A valid key on the wrong source (a `version` on a
+ * direct-URL entry) is silently dropped by the resolver dispatch, so it
+ * fails here naming the entry rather than passing as a pin it is not.
+ * (Genuinely unknown keys are still caught by the schema's unknown-key
+ * rejection -- this is only about known keys on the wrong source.)
+ */
+const EXTENSION_SOURCE_KEYS = Object.freeze({
+    openvsx: ['version'],
+    url: ['url'],
+    npm: ['version', 'integrity'],
+    'local-path': ['path'],
+});
+
+/**
  * What an npm version may be: the exact published version, full X.Y.Z with
  * an optional prerelease/build suffix -- the only form that names one
  * tarball. The schema shape admits `latest` (it is alphanumeric),
@@ -726,6 +741,21 @@ function validateExtensionElements(doc) {
                 + `there is nothing to pack. Open ${MANIFEST_NAME}, find that [[extensions]] entry, and give `
                 + `path a project-relative folder. Then run: ${RERUN}`,
             );
+        }
+
+        // Source-irrelevant keys: the resolver dispatch reads only the
+        // current source's keys, so anything else on the entry is dead
+        // text an operator may believe is operative.
+        if (source !== undefined && Object.hasOwn(EXTENSION_SOURCE_KEYS, source)) {
+            const allowed = new Set([...EXTENSION_SOURCE_KEYS[source], 'id', 'source', 'sha256']);
+            for (const key of Object.keys(entry)) {
+                if (!allowed.has(key)) {
+                    failures.push(
+                        `${label}: ${key} is set but a ${JSON.stringify(source)} entry never reads it -- the resolver silently drops it. `
+                        + `Remove it in ${MANIFEST_NAME} (it is not pinning anything), then run: ${RERUN}`,
+                    );
+                }
+            }
         }
 
         // Shapes, against each key's own schema pattern, naming the entry.
@@ -5404,6 +5434,21 @@ function selfTest() {
             // one is malformed.
             name: 'npm extension entry with a malformed integrity digest',
             toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace(FIXTURE_EXTENSION_INTEGRITY, 'not-an-sri-digest')}`,
+            expect: 'acme.npmpack',
+        },
+        {
+            // A direct-URL entry carrying a `version` must fail NAMING the
+            // entry -- the resolver never reads it, so without this branch
+            // an operator's believed pin passes silent and dead.
+            name: 'extension entry with a source-irrelevant version pin',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('url = "https://example.org/acme-widget-2.0.0.vsix"\n', 'url = "https://example.org/acme-widget-2.0.0.vsix"\nversion = "9.9.9"\n')}`,
+            expect: 'acme.widget',
+        },
+        {
+            // An npm entry carrying a `path` must fail NAMING the entry --
+            // the pack step never reads it on an npm source.
+            name: 'extension entry with a source-irrelevant path',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "2.4.1"\npath = "extensions/acme-sneaky"\n')}`,
             expect: 'acme.npmpack',
         },
         {
