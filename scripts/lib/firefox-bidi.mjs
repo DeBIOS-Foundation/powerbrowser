@@ -22,7 +22,7 @@
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
 import { existsSync, createWriteStream } from 'node:fs';
@@ -537,7 +537,19 @@ async function runSelfTest() {
     console.log('firefox-bidi: --self-test PASS');
 }
 
-if (process.argv.slice(2).includes('--self-test')) {
+// Import guard: importing this module (six live scripts reuse withFirefoxPage
+// and friends) must not run the self-test or exit the importer. An
+// importer's own flags are not this file's (scripts/generate.mjs:153-156
+// documents the prohibition); only a direct invocation honours --self-test,
+// following the verify-mar-update-hop.mjs INVOKED_DIRECTLY pattern.
+const INVOKED_DIRECTLY = (() => {
+    try {
+        return process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+    } catch {
+        return false;
+    }
+})();
+if (INVOKED_DIRECTLY && process.argv.slice(2).includes('--self-test')) {
     await runSelfTest();
     process.exit(process.exitCode || 0);
 }
