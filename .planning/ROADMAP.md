@@ -99,7 +99,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 10. Sign-off Closeout | 3/3 | Implemented, verification deferred |  |
-| 11. SQL Store Design | 1/3 | In Progress|  |
+| 11. SQL Store Design | 3/3 | Implemented, verification deferred |  |
 | 12. SQL Store Build | 0/0 | Not started | - |
 
 ## Inherited network egress (carried through the migration, not decided here)
