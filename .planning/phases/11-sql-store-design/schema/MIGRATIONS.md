@@ -23,7 +23,9 @@ copies without shipping store code.
    rewriting history.
 5. Never destructive rewrites: migrations add (tables, columns, indexes);
    any removal first proves no Phase 12 reader projects the removed
-   shape, and the corrupt-file path below never deletes.
+   shape — proof is a grep over the reader surface plus a failing-first
+   drive, both recorded in the migration entry — and the corrupt-file
+   path below never deletes.
 
 Source pins for the primitives (pinned `upstream/` tree, via
 `.planning/phases/11-sql-store-design/11-RESEARCH.md`): open with
@@ -90,46 +92,67 @@ write path (threat T-11-07). Fixture sha256 at exercise time:
 Run: `node .planning/phases/11-sql-store-design/fixtures/exercise-migrations.mjs`
 (engine: standard-library `node:sqlite`; no install. Fixtures copied to a
 mktemp stage outside the repo at a space-free path; only the copies are
-mutated. Expectations derived at run time from the committed
-`tabs-v1.sqlite` itself: final version, single-`ok` integrity result, row
-preservation by exact set equality, index presence.)
+mutated. Expectations derived at run time from a stage copy of the
+committed `tabs-v1.sqlite`: final version, single-`ok` integrity result,
+row preservation by exact set equality, index presence, WAL pin, CHECK
+enforcement.)
 
 ```text
-exercise-migrations: stage /tmp/pb-tabs-migrate-1eseZ4 (space-free, outside repo)
+exercise-migrations: stage /tmp/pb-tabs-migrate-d22rki (space-free, outside repo)
 exercise-migrations: committed fixture sha256 9daab2d5b09a5b843d1fdecba0410346b0b5969a6d16cd2a35ff67f4f2e7e73f
 exercise-migrations: drive PASS -- fixture-probe-nonvacuous
 exercise-migrations: drive PASS -- fresh-create-advances
 exercise-migrations: drive PASS -- fresh-create-shape
 exercise-migrations: drive PASS -- fresh-create-integrity
+exercise-migrations: drive PASS -- fresh-create-wal
+exercise-migrations: drive PASS -- fresh-create-rejects-empty-uri
+exercise-migrations: drive PASS -- fresh-create-rejects-negative-last-active
 exercise-migrations: drive PASS -- rerun-idempotent
 exercise-migrations: drive PASS -- rerun-rows-preserved
 exercise-migrations: drive PASS -- rerun-integrity
 exercise-migrations: drive PASS -- rerun-index-present
+exercise-migrations: tripwire open failed: database disk image is malformed
 exercise-migrations: drive PASS -- tamper-tripwire-fires
 exercise-migrations: drive PASS -- quarantine-preserves-corrupt-copy
 exercise-migrations: drive PASS -- quarantine-rebuilds-live-rows
 exercise-migrations: drive PASS -- quarantine-rebuilt-integrity
+exercise-migrations: drive PASS -- quarantine-rebuilt-wal
+exercise-migrations: tripwire open failed: database disk image is malformed
+exercise-migrations: drive PASS -- quarantine-second-incident-advances
+exercise-migrations: drive PASS -- quarantine-preserves-both-copies
 exercise-migrations: drive PASS -- stale-version-advances
 exercise-migrations: drive PASS -- stale-rows-preserved
+exercise-migrations: drive PASS -- newer-version-refuses
+exercise-migrations: drive PASS -- newer-version-untouched
 exercise-migrations: drive PASS -- assertions-nonvacuous
-exercise-migrations: PASS -- 15 drives, 15 assertions
+exercise-migrations: PASS -- 23 drives, 23 assertions
 ```
 
 Drive map:
 
 - Fresh-create (A): an unset version (0, no tables) migrates to version
-  1 with table plus index present and `quick_check` exactly `['ok']`.
+  1 with table plus index present, `quick_check` exactly `['ok']`, WAL
+  pinned, and the `CHECK(length(uri) > 0)` / `CHECK(last_active >= 0)`
+  constraints rejecting an empty URI and a negative `last_active`.
 - Idempotent re-run (B): the version-1 fixture copy re-runs cleanly at
   version 1 with the row set byte-equal and the index present.
 - Non-vacuity control C: a deliberately tampered copy (body page filled
   with `0xff`) trips the wire — the quarantine path runs, the
   corrupt-suffixed copy survives (no deletion), and the rebuilt file is
-  back at version 1 with the live rows restored and `quick_check` clean.
-  A tripwire that never fires proves nothing; this one fired.
+  back at version 1 with the live rows restored, `quick_check` clean,
+  and WAL pinned. A tripwire that never fires proves nothing; this one
+  fired (readonly handle; open failure is logged, unopenable counts as
+  tripped).
+- Second-incident control C2: re-tampering the rebuilt file allocates
+  `..corrupt-2` without overwriting `..corrupt-1` — both forensics
+  survive with the first byte-identical.
 - Non-vacuity control D: a stale-version copy (v1 tables present,
   version reset to 0) advances through the chain to version 1 with rows
   intact. A chain that only handles the empty case proves nothing; this
   one advanced a stale database.
+- Non-vacuity control E: a newer-than-chain copy (`user_version = 99`)
+  is refused (`/refusing downgrade/`) with version and rows untouched —
+  the never-downgrades rule is exercised, not just specified.
 
 Fixture byte-identity: the committed `tabs-v1.sqlite` hash before the
 run equals the hash after the run (`sha256sum -c` OK) — the script
