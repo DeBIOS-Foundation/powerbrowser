@@ -8,10 +8,11 @@
 // copies the committed v1 fixture to a mktemp stage outside the repo at a
 // space-free path and mutates the copy only -- the committed file's hash
 // before the run must equal its hash after. Two read-write handles on the
-// stage copy interleave tab upserts (bound parameters, including the
-// quote-plus-unicode title that proves binding) with bookmark-shape writes
-// into a stage-only witness table, exercising WAL multi-handle traffic the
-// way a tab burst beside Places traffic does. The run ends asserting the
+// stage copy take turns (IN-01: sequential dual-handle interleave -- Node
+// runs each awaited statement to completion, so no lock, busy-handler, or
+// checkpoint contention is stressed) issuing tab upserts (bound parameters,
+// including the quote-plus-unicode title that proves binding) with
+// bookmark-shape writes into a stage-only witness table. The run ends asserting the
 // integrity result is exactly single-ok, with a deliberately tampered copy
 // tripping distinctly (a tripwire that never fires proves nothing).
 // Sidecars are removed checkpoint-then-clean after every handle closes, and
@@ -159,8 +160,10 @@ function runStatic() {
     copyFileSync(FIXTURE, p);
     check('stage-seed-equal', sha256Of(p) === hashBefore, 'stage copy differs from the committed fixture right after copying');
 
-    // Two handles, one file: tab upserts on A interleave bookmark-shape
-    // writes on B, the way a tab burst beside Places traffic does.
+    // Two handles, one file, sequential turns: tab upserts on A alternate
+    // with bookmark-shape writes on B (IN-01: no overlapping transaction is
+    // ever attempted, so this proves binding and integrity under
+    // dual-handle use, not lock contention).
     const a = new DatabaseSync(p);
     const b = new DatabaseSync(p);
     try {
