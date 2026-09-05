@@ -188,7 +188,8 @@ function quarantineAndRebuild(path, restoreRows) {
     } finally {
       db.close();
     }
-  } catch {
+  } catch (e) {
+    console.log(`${NAME}: tripwire open failed: ${e.message}`);
     ok = false; // unopenable counts as tripped, same as not-ok
   }
   if (ok) return { quarantined: false };
