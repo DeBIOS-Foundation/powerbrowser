@@ -6,7 +6,7 @@
     {
       "number": "08",
       "name": "Installer Hardening + Canonical Rename",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "09",
@@ -16,8 +16,8 @@
   ],
   "next": {
     "command": "/gsd:progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 8 of 2 · executing"
+    "label": "Advance to the next step (plan phase 9)",
+    "reason": "Phase 9 of 2 — needs a plan"
   },
-  "updated_at": "2026-09-04T23:25:29.677Z"
+  "updated_at": "2026-09-05T07:21:59.454Z"
 }
