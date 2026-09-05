@@ -30,9 +30,11 @@ DEFAULT_SCAN_DIR="$REPO_ROOT/powerbrowser/shell"
 # The one file exempt from every forbidden pattern below (D-96/D-97).
 BOUNDARY_FILE_BASENAME="PowerBrowserAPI.sys.mjs"
 
-# Forbidden pattern set, D-96 verbatim. The two ChromeUtils.* entries are
-# conditional (see is_conditional_pattern below); every other entry is an
-# unconditional offense wherever it appears on a non-comment line.
+# Forbidden pattern set, D-96 verbatim. ChromeUtils.import and
+# ChromeUtils.defineESModuleGetters are conditional (see
+# is_conditional_pattern below); every other entry -- including the second
+# ChromeUtils.* entry -- is an unconditional offense wherever it appears on
+# a non-comment line.
 FORBIDDEN_PATTERNS=(
   'Services.'
   'Cc['
@@ -45,6 +47,13 @@ FORBIDDEN_PATTERNS=(
   'AppConstants'
   'ChromeUtils.import'
   'ChromeUtils.defineESModuleGetters'
+  # Actor registration is not Services/Cc/Ci-shaped and so slipped the list
+  # above (WINDOWS 13): adopting any JSWindowActor pair (candidate B, NOT
+  # adopted in 01-05 -- see scripts/verify-gui01-window.mjs) obliges this
+  # entry in the same commit. Unconditional -- registering an actor crosses
+  # the privilege boundary no matter which chrome URL it names, so no
+  # chrome://powerbrowser/ exemption applies here.
+  'ChromeUtils.registerWindowActor'
   # Privileged chrome API that is not Services/Cc/Ci-shaped and so slipped the
   # list above: powerbrowser.js reached for both directly, with a comment saying
   # it did so to avoid PowerBrowserAPI -- a real internals touch living outside
@@ -251,6 +260,32 @@ EOF
   else
     echo "check-internals-boundary: --self-test FAIL -- rejected, but message doesn't name the planted path" >&2
     cat "$tmp/self-test.err" >&2
+    overall=1
+  fi
+
+  # WINDOWS 13 plant: a ChromeUtils.registerWindowActor call outside the
+  # boundary file. The fixture names a chrome://powerbrowser/ module on
+  # purpose -- registration is unconditional, so a chrome-scheme URL must
+  # NOT exempt it. Rejection must name both the file and the pattern.
+  cat > "$tmp/planted-actor-violation.sys.mjs" <<'EOF'
+// planted-actor-violation.sys.mjs -- check-internals-boundary.sh --self-test
+// fixture. One unconditional forbidden pattern below, deliberately.
+ChromeUtils.registerWindowActor("PowerBrowserSelfTestActor", {
+  parent: { esModuleURI: "chrome://powerbrowser/content/SelfTestActor.sys.mjs" },
+  child: { esModuleURI: "chrome://powerbrowser/content/SelfTestActorChild.sys.mjs" },
+});
+EOF
+
+  if scan_internals_boundary "$tmp" >/dev/null 2>"$tmp/self-test-actor.err"; then
+    echo "check-internals-boundary: --self-test FAIL -- planted actor registration was NOT rejected" >&2
+    cat "$tmp/self-test-actor.err" >&2
+    overall=1
+  elif grep -q 'planted-actor-violation.sys.mjs' "$tmp/self-test-actor.err" \
+    && grep -q 'ChromeUtils.registerWindowActor' "$tmp/self-test-actor.err"; then
+    echo "check-internals-boundary: --self-test PASS -- planted actor registration (planted-actor-violation.sys.mjs, ChromeUtils.registerWindowActor) was correctly rejected"
+  else
+    echo "check-internals-boundary: --self-test FAIL -- actor rejection doesn't name the planted path and pattern" >&2
+    cat "$tmp/self-test-actor.err" >&2
     overall=1
   fi
 
