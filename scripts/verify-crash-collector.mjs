@@ -17,7 +17,9 @@
 //     temp dir and no sockets: well-formed input answers the CrashID body
 //     plus a matching store record, each malformed class answers its named
 //     discard reason on the rejection status, over-cap input answers the
-//     oversized rejection, and a tripped throttle rule answers the
+//     oversized rejection in every direction (total-body, part-count, and
+//     per-part caps), an unwritable store answers the 500 reason without
+//     consuming throttle budget, and a tripped throttle rule answers the
 //     soft-reject body on the success status -- with the store dir proven
 //     empty after every rejection, so no plant passes vacuously.
 //
@@ -31,7 +33,7 @@
 // The self-test runs a green control first, then one plant per contract
 // direction, each required to go red naming its rule.
 
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -351,6 +353,73 @@ function selfTest() {
                 THROTTLE_RULE,
                 storeDir,
             );
+        }
+
+        // Plant 6: one part past the per-part cap in a body well under the
+        // total cap -- the oversized rejection on 413. Proves the per-part
+        // cap is not the total-body cap wearing a second message.
+        expectVerdict(
+            'over-size part',
+            handleSubmit({
+                body: buildMultipart([
+                    { name: MINIDUMP_PART_NAME, filename: 'big.dmp', data: Buffer.alloc(MAX_PART_BYTES + 1, 0x42) },
+                ]),
+                contentType: SELFTEST_CONTENT_TYPE,
+                storeDir: storeOf('part-size'),
+                throttle: createThrottleState(),
+                nowMs: NOW,
+            }),
+            413,
+            REASON_OVERSIZED,
+            storeOf('part-size'),
+        );
+
+        // Plant 7: a store dir that cannot be created -- the
+        // store-unavailable reason on 500. A path under a regular file
+        // makes mkdirSync throw ENOTDIR. The failed writes must consume no
+        // throttle budget (only accepted submits count): after a full
+        // budget's worth of failed submits the same throttle state still
+        // accepts a well-formed one.
+        {
+            const blocker = join(dir, 'store-blocker');
+            writeFileSync(blocker, 'not-a-directory');
+            const unwritable = join(blocker, 'store');
+            const throttle = createThrottleState();
+            expectVerdict(
+                'unwritable store',
+                handleSubmit({
+                    body: wellFormedBody(),
+                    contentType: SELFTEST_CONTENT_TYPE,
+                    storeDir: unwritable,
+                    throttle,
+                    nowMs: NOW,
+                }),
+                500,
+                REASON_STORE_UNAVAILABLE,
+                unwritable,
+            );
+            for (let i = 1; i < THROTTLE_MAX_SUBMITS; i++) {
+                handleSubmit({
+                    body: wellFormedBody(),
+                    contentType: SELFTEST_CONTENT_TYPE,
+                    storeDir: unwritable,
+                    throttle,
+                    nowMs: NOW,
+                });
+            }
+            const retry = handleSubmit({
+                body: wellFormedBody(),
+                contentType: SELFTEST_CONTENT_TYPE,
+                storeDir: storeOf('store-retry'),
+                throttle,
+                nowMs: NOW,
+            });
+            if (retry.status !== 200 || !retry.body.startsWith('CrashID=')) {
+                console.error(`${NAME}: --self-test FAIL -- ${THROTTLE_MAX_SUBMITS} failed store writes consumed throttle budget: the retry answered ${retry.status} ${JSON.stringify(retry.body)}, want 200 CrashID=`);
+                ok = false;
+            } else {
+                console.log(`${NAME}: --self-test -- failed store writes consumed no throttle budget (retry accepted)`);
+            }
         }
     } finally {
         rmSync(dir, { recursive: true, force: true });
