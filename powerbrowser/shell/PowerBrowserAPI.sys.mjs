@@ -908,6 +908,12 @@ export const PowerBrowserAPI = Object.freeze({
    */
   async quarantineAndRebuildTabStore(restoreRows) {
     const profileDir = PowerBrowserAPI.getProfileDir();
+    // IN-03 (12-CODE-REVIEW.md): getProfileDir resolves "" on any failure,
+    // which would anchor forensics at the filesystem root. Refuse before
+    // touching anything so the caller degrades cleanly.
+    if (!profileDir) {
+      throw new Error("quarantineAndRebuildTabStore: unknown profile dir");
+    }
     const livePath = `${profileDir}/${TAB_STORE_FILE_NAME}`;
     let next = 0;
     try {
@@ -923,19 +929,24 @@ export const PowerBrowserAPI = Object.freeze({
       next = 0;
     }
     const corruptPath = `${livePath}.corrupt-${next + 1}`;
-    if (tabStoreConn) {
-      try {
-        await tabStoreConn.backupToFile(corruptPath);
-      } catch (err) {
-        throw new Error(`quarantineAndRebuildTabStore: backupToFile failed: ${err && err.message ? err.message : err}`);
-      }
-      try {
-        await tabStoreConn.close();
-      } catch {
-        // Close is best-effort; the rebuild below reopens.
-      }
-      tabStoreConn = null;
+    // Quarantine-not-delete invariant: the live file below is removed only
+    // after forensics land at corruptPath. Without an open connection there
+    // is no backupToFile source, so refusing here beats deleting the only
+    // copy.
+    if (!tabStoreConn) {
+      throw new Error("quarantineAndRebuildTabStore: no open store to quarantine");
     }
+    try {
+      await tabStoreConn.backupToFile(corruptPath);
+    } catch (err) {
+      throw new Error(`quarantineAndRebuildTabStore: backupToFile failed: ${err && err.message ? err.message : err}`);
+    }
+    try {
+      await tabStoreConn.close();
+    } catch {
+      // Close is best-effort; the rebuild below reopens.
+    }
+    tabStoreConn = null;
     for (const suffix of ["-wal", "-shm", "-journal"]) {
       try {
         await IOUtils.remove(`${livePath}${suffix}`, { ignoreAbsent: true });
@@ -943,6 +954,14 @@ export const PowerBrowserAPI = Object.freeze({
         // Sidecar removal is best-effort; a missing sidecar is the goal.
       }
     }
+    // CR-03 (12-CODE-REVIEW.md): the backup above preserved forensics at
+    // corruptPath, so the tripped live file is removed BEFORE reopening --
+    // reopening it would run the migration's tableExists/indexExists
+    // pre-checks against a corrupt-but-readable file (no-op success stamping
+    // the version) and land live rows in the tripped file. This matches the
+    // roundtrip proof's delete-then-rebuild procedure. Removal is
+    // load-bearing, never best-effort: a failure throws into degraded.
+    await IOUtils.remove(livePath);
     const conn = await lazy.Sqlite.openConnection({ path: TAB_STORE_FILE_NAME });
     await conn.execute("PRAGMA journal_mode=WAL;");
     // CR-02 (12-CODE-REVIEW.md): migrateTabStoreToV1 runs its own
