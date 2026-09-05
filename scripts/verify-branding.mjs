@@ -126,7 +126,8 @@ async function checkWelcome({ evaluate, waitFor }) {
         }
     })()`);
 
-    // The DISPLAY form, with the space. Until 01-07 this expected the
+    // The DISPLAY form, spaceless since NAME-01 carried it to `PowerBrowser`.
+    // Until 01-07 this expected the
     // IDENTIFIER form and the widget rendered it -- the mechanical rename had
     // rewritten both the literal and the expectation that checks it, so they
     // agreed and the wrong product name shipped unnoticed. That is Pitfall 1
@@ -198,10 +199,11 @@ async function main() {
     const result = await withFirefoxPage(url, async ({ evaluate, waitFor }) => {
         await waitFor('window.theia && window.theia.container ? true : false');
 
-        // The DISPLAY form, with the space. Theia derives document.title from
+        // The DISPLAY form, spaceless since NAME-01 carried it to
+        // `PowerBrowser`. Theia derives document.title from
         // `applicationName` in theia/applications/browser/package.json, which
         // the inventory's brand_display_expectations pins to the release
-        // brand_short_name `Power Browser` -- and verify-branding-preflight.mjs
+        // brand_short_name `PowerBrowser` -- and verify-branding-preflight.mjs
         // asserts that pinning. This expectation said `PowerBrowser` until
         // 01-07: the rename had rewritten it to the identifier form while the
         // package.json literal was hand-written correctly, so the two
