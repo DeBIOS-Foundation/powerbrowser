@@ -578,6 +578,48 @@ function selfTest() {
             console.log(`${NAME}: --self-test -- removed the acme.localtool source folder and it was REJECTED naming the entry: ${localAbsentMsg}`);
         }
         writeFixture();
+
+        // Plant 6: one flipped byte in the npm packed archive. The pin check
+        // must go red NAMING the entry -- this is the plant that proves the
+        // `.tgz`-to-`.tar.gz` suffix mapping above actually routes the npm
+        // entry to a hashed slot, rather than the entry passing vacuously
+        // with no archive ever read.
+        const badNpm = Buffer.from(bytesC);
+        badNpm[badNpm.length - 1] ^= 0xff;
+        writeFileSync(tgzC, badNpm);
+        const npmCorrupted = runChecks(dir);
+        const npmCorruptedMsg = npmCorrupted.failures.find(
+            f => f.includes('acme.npmpack') && f.includes('hashes to'),
+        );
+        if (!npmCorruptedMsg) {
+            console.error(`${NAME}: --self-test FAIL -- a corrupted byte in acme.npmpack.tar.gz was NOT rejected naming the entry and both digests`);
+            for (const f of npmCorrupted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- corrupted one byte in acme.npmpack.tar.gz and it was REJECTED naming the entry: ${npmCorruptedMsg}`);
+        }
+        writeFixture();
+
+        // Plant 7: npm block drift -- the block resolves the entry to a
+        // well-formed but WRONG pinned version while the fragment stays at
+        // the manifest pin. The block-equality rule must go red NAMING the
+        // entry and both URLs: this is the tarball-URL equality half of the
+        // npm control, complementing plant 4's suffix half.
+        const npmDriftedRaw = JSON.parse(readFileSync(appPkgPath, 'utf8'));
+        npmDriftedRaw.theiaPlugins['acme.npmpack'] = 'https://registry.npmjs.org/acme.npmpack/-/acme.npmpack-9.9.9.tgz';
+        writeFileSync(appPkgPath, `${JSON.stringify(npmDriftedRaw, null, 2)}\n`, 'utf8');
+        const npmDrifted = runChecks(dir);
+        const npmDriftedMsg = npmDrifted.failures.find(
+            f => f.includes('acme.npmpack') && f.includes('theiaPlugins block carries'),
+        );
+        if (!npmDriftedMsg) {
+            console.error(`${NAME}: --self-test FAIL -- a drifted theiaPlugins block for acme.npmpack was NOT rejected naming the entry and both URLs`);
+            for (const f of npmDrifted.failures) console.error(`  - ${f}`);
+            ok = false;
+        } else {
+            console.log(`${NAME}: --self-test -- drifted the block URL for acme.npmpack and it was REJECTED naming the entry: ${npmDriftedMsg}`);
+        }
+        writeFixture();
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
