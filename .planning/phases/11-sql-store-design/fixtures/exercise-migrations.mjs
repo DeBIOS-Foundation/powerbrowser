@@ -42,6 +42,10 @@ const CREATE_INDEX_V1_SQL = `CREATE INDEX idx_tabs_last_active ON tabs (last_act
 // --- engine probe: standard library first ----------------------------------
 
 let DatabaseSync = null;
+// better-sqlite3 spells the readonly open `{ readonly: true }`
+// (all-lowercase); node:sqlite spells it `{ readOnly: true }`. Branch once
+// here so every readonly open below uses the engine-correct spelling.
+let readOnlyOption = { readOnly: true };
 try {
   ({ DatabaseSync } = await import('node:sqlite'));
 } catch {
@@ -72,6 +76,7 @@ if (!DatabaseSync) {
   }
   const { default: Better } = await import(join(stage, 'node_modules', 'better-sqlite3', 'lib', 'index.js'));
   DatabaseSync = Better;
+  readOnlyOption = { readonly: true };
   console.log(`${NAME}: note -- standard-library support absent, using stage-confined ephemeral install at ${stage}`);
 }
 
@@ -238,7 +243,7 @@ try {
   // -wal/-shm sidecars beside it, so the probe never touches it directly.
   const probeCopy = join(stage, 'probe.sqlite');
   copyFileSync(FIXTURE_V1, probeCopy);
-  const probe = new DatabaseSync(probeCopy, { readOnly: true });
+  const probe = new DatabaseSync(probeCopy, readOnlyOption);
   let expectedRows;
   let expectedVersion;
   try {
