@@ -15,6 +15,7 @@
 // CLAUDE.md absence-of-log-line lesson).
 
 import { PowerBrowserTelemetrySender } from '../src/browser/telemetry-sender.ts';
+import * as senderModule from '../src/browser/telemetry-sender.ts';
 import { MINIDUMP_PART_NAME, buildCrashIdResponse, buildDiscardResponse } from '../../../../scripts/crash-collector.mjs';
 
 const BROKEN = process.env.TELEMETRY_TEST_STUB === 'always-send';
@@ -292,6 +293,27 @@ const tests = [
             // the separation claim is narrower: no minidump/upload/report
             // member anywhere on it.
             assert(!surface.some(m => /minidump|upload|dump|report/i.test(m)), `sender surface names a report path: ${JSON.stringify(surface)}`);
+            // Class-field arrow functions live on the instance, not the
+            // prototype -- a report path added in the modern idiom would
+            // pass the prototype scan above. Scan an instance's own
+            // properties too (a null interval: never arm the real clock).
+            const inst = new PowerBrowserTelemetrySender({
+                endpoint: 'https://example.org/x',
+                getLevel: () => 'off',
+                fetchFn: async () => ({ ok: true }),
+                setIntervalFn: () => null,
+                clearIntervalFn: () => undefined,
+            });
+            try {
+                const names = [...surface, ...Object.keys(inst)].sort();
+                assert(!names.some(m => /minidump|upload|dump|report/i.test(m)), `sender instance names a report path: ${JSON.stringify(names)}`);
+            } finally {
+                inst.dispose();
+            }
+            // A report path added as a module-scope export would pass both
+            // scans above -- pin the module surface too.
+            const exported = Object.keys(senderModule).sort();
+            assert(!exported.some(m => /minidump|upload|dump|report/i.test(m)), `telemetry-sender module exports a report path: ${JSON.stringify(exported)}`);
             assert(MINIDUMP_PART_NAME === 'upload_file_minidump', `collector contract moved the minidump part name to ${JSON.stringify(MINIDUMP_PART_NAME)}`);
             assert(buildCrashIdResponse('x') === 'CrashID=x', 'collector accept shape drifted');
             assert(buildDiscardResponse('r') === 'Discarded=r', 'collector reject shape drifted');
