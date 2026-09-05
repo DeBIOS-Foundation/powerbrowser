@@ -830,13 +830,14 @@
       "case_form": "literal",
       "class": "frozen",
       "target": "MOZ_APP_ID",
-      "expected_count": 4,
+      "expected_count": 6,
       "expected_files": [
         "patches/010-powerbrowser-identity.patch",
         "scripts/generate.mjs",
-        "scripts/check-patch-surface.sh"
+        "scripts/check-patch-surface.sh",
+        "defs.mk"
       ],
-      "reason": "COUNT MOVED 2 -> 1 (plan 01-08). Same tree change as the MOZ_APP_UA_NAME row above and for the same reason: the second occurrence was a context line in patch 020, and patch 020 was regenerated during plan 01-05's browser-window work, which changed its hunk context and dropped the line. The define is untouched at its one real site, which expected_files now names. Original rationale: deliberately Firefox's own app id {ec8030f7-c20a-464f-9b0e-13a3a9e97384}, so installed extensions keep resolving. Changing it silently breaks extension compatibility with no build failure. COUNT MOVED 1 -> 2 (plan 03-04): emitIdentityConfigure's doc records that MOZ_APP_ID stays patch-carried (a fixed platform constant, not a downstream brand value), so the token occurs once more, inside scripts/generate.mjs. COUNT MOVED 2 -> 4 (plan 05-01): the new brand-value scan documents its added-lines-only rule twice inside scripts/check-patch-surface.sh, naming the stock app-ID context line 010 keeps as the reason context is never read. Both new occurrences are comments; the define itself is untouched at its patch site, and the 05-01 audit proved the GUID line is byte-identical stock the patch never changed."
+      "reason": "COUNT MOVED 2 -> 1 (plan 01-08). Same tree change as the MOZ_APP_UA_NAME row above and for the same reason: the second occurrence was a context line in patch 020, and patch 020 was regenerated during plan 01-05's browser-window work, which changed its hunk context and dropped the line. The define is untouched at its one real site, which expected_files now names. Original rationale: deliberately Firefox's own app id {ec8030f7-c20a-464f-9b0e-13a3a9e97384}, so installed extensions keep resolving. Changing it silently breaks extension compatibility with no build failure. COUNT MOVED 1 -> 2 (plan 03-04): emitIdentityConfigure's doc records that MOZ_APP_ID stays patch-carried (a fixed platform constant, not a downstream brand value), so the token occurs once more, inside scripts/generate.mjs. COUNT MOVED 2 -> 4 (plan 05-01): the new brand-value scan documents its added-lines-only rule twice inside scripts/check-patch-surface.sh, naming the stock app-ID context line 010 keeps as the reason context is never read. Both new occurrences are comments; the define itself is untouched at its patch site, and the 05-01 audit proved the GUID line is byte-identical stock the patch never changed. COUNT MOVED 4 -> 6 (plan 08-04): the new repo-root defs.mk carries the token twice -- once as the make-variable reference XPI_ROOT_APPID=$(MOZ_APP_ID) (resolved from configure at build time, no ID literal duplicated; without this file mach package fails in the branding locales with 'XPI_ROOT_APPID is not defined', proved by removing the file and re-running package 08-04) and once in the header comment naming patch 010 as the single source. Both new occurrences are reference-or-comment; the GUID literal appears nowhere in the file and the define stays pinned at its patch site."
     },
     {
       "token": "-PLAN.md",

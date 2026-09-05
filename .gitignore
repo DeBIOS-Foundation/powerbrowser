@@ -20,6 +20,7 @@ plugins/
 upstream/
 objdir/
 objdir-release/
+objdir-nplus1/
 .mozbuild/
 
 # Generator output (GEN-04, D-16)
