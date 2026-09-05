@@ -23,7 +23,7 @@ Archive: `.planning/milestones/v1.0-ROADMAP.md` · Requirements: `.planning/mile
 
 </details>
 
-- [ ] **Phase 08: Installer Hardening + Canonical Rename** - Real Windows/macOS installers, self-hosted MAR updates, canonical PowerBrowser name, release build
+- [x] **Phase 08: Installer Hardening + Canonical Rename** - Real Windows/macOS installers, self-hosted MAR updates, canonical PowerBrowser name, release build (completed 2026-09-05)
 - [ ] **Phase 09: Extensions + Crash Pipeline** - npm/local-path extension sources, WebExtensions policy, minimal crash collector, tier-3 fixtures
 
 ## Phase Details
@@ -53,20 +53,20 @@ See `.planning/milestones/v1.0-ROADMAP.md`.
 Plans:
 **Wave 1**
 
-- [ ] 08-01-PLAN.md — WR-04 + WR-07 pre-fixes plus NAME-01 rename slice through byte-identity (tracer)
+- [x] 08-01-PLAN.md — WR-04 + WR-07 pre-fixes plus NAME-01 rename slice through byte-identity (tracer)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 08-02-PLAN.md — NAME-01 propagation completion: gate re-pins, canonical fixture, proof
-- [ ] 08-03-PLAN.md — WINDOWS #13 boundary guard plus #14 BiDi context fix
+- [x] 08-02-PLAN.md — NAME-01 propagation completion: gate re-pins, canonical fixture, proof
+- [x] 08-03-PLAN.md — WINDOWS #13 boundary guard plus #14 BiDi context fix
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 08-04-PLAN.md — Updater enablement, Linux MAR hop, NSIS on Nix, registry rows, procedure
+- [x] 08-04-PLAN.md — Updater enablement, Linux MAR hop, NSIS on Nix, registry rows, procedure
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 08-05-PLAN.md — MSIX/DMG on named hosts, per-OS matrix, release build, rebase drill
+- [x] 08-05-PLAN.md — MSIX/DMG on named hosts, per-OS matrix, release build, rebase drill
 
 ### Phase 09: Extensions + Crash Pipeline
 
@@ -84,7 +84,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 08. Installer Hardening + Canonical Rename | 0/0 | Not started | - |
+| 08. Installer Hardening + Canonical Rename | 5/5 | Complete    | 2026-09-05 |
 | 09. Extensions + Crash Pipeline | 0/0 | Not started | - |
 
 ## Inherited network egress (carried through the migration, not decided here)

@@ -60,6 +60,8 @@ platform. If a rebrand ever requires editing a second file, that is a bug.
 | Extensions declared in `configuration.toml` with sources | Each entry: id + source (Open VSX / npm / URL / local path) + pin | — Pending |
 | Adversarial review enabled | plan_check + verifier on; /gsd-plan-review-convergence on risky phases (rename pass, generator) | — Pending |
 | Autonomous nonstop default | every `/gsd-autonomous` runs without human pauses (verify→defer+continue, gaps→one retry then defer+continue, audit→accept, cleanup→approve, plan with `--no-reversibility-gates`); only a 3-retry-exhausted blocker halts `needs_human` | — Decided 2026-09-04 |
+| Self-hosted MAR rung: HTTPS-only interim | updater flipped with `--enable-unverified-updates`; docs claim only TLS (no code signature verified) until a fork-signing rung lands | — Decided Phase 08 |
+| NSIS-on-Nix proven, MSIX/DMG need real hosts | makensis 3.12 builds setup.exe on Linux; Windows SDK + hdiutil are host-bound, staged with operator unblocks | — Decided Phase 08 |
 | Canonical product name from v2: **PowerBrowser** (accepted variants **Powerbrowser** / **powerbrowser** for identifier-class surfaces) | v1 shipped the spaced display form "Power Browser" across generated surfaces; the canonical form + re-pinned gates land as v2 NAME-01 so the v1 archive stays faithful to what was verified | — Decided 2026-09-04 |
 
 ## configuration.toml planned sections
@@ -108,6 +110,18 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - [x] Theia backend credential-gated and fail-closed via `token-gate` — SEC-01 — v1.0
 - [x] Trademark human ritual signed (Chris, 2026-09-04, CONFIRMED) with the
       mechanical gate green — v1.0
+- [x] Canonical display form **PowerBrowser** applied across all generated
+      surfaces with gates re-pinned and propagation proof re-run live —
+      NAME-01 — Phase 08
+- [x] Real installer builds: NSIS proven on Nix, updater flipped to
+      self-hosted MAR with a real Linux N→N+1 hop, `docs/BUILD.md`
+      procedure written, WR-04/WR-07 pre-fixes landed — PKG-01/02/03
+      (Windows MSIX + macOS DMG cells staged-unexecuted with recorded
+      provisioning errors + operator unblocks in 08-05) — Phase 08
+- [x] Release `objdir-release` build + release-variant rows green; live ESR
+      rebase drill passed — BLD-01, UPD-03 — Phase 08
+- [x] WINDOWS #13 (`registerWindowActor` boundary hole) and #14 (BiDi
+      double-window) closed with green gates — SEC-02, SHELL-01 — Phase 08
 
 ### Active
 
@@ -117,12 +131,8 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - [ ] Telemetry and extension live drills (TEL-01..03, EXT-01) pending
       collector-backed runs
 - [ ] VER-01 fleet proof and DOC-01 formal sign-off pending fixture-build tier
-- [ ] **NAME-01**: canonical display form **PowerBrowser** applied across all
-      generated surfaces with gates re-pinned (v2)
-- [ ] **PKG-01**: Windows/macOS installer builds verified on real packaging
-      hosts (v2)
-- [ ] **EXT-02**: npm and local-path extension source kinds (v2)
-- [ ] **TEL-04**: crash-report pipeline beyond endpoint repointing (v2)
+- [ ] **EXT-02**: npm and local-path extension source kinds (Phase 09)
+- [ ] **TEL-04**: crash-report pipeline beyond endpoint repointing (Phase 09)
 - [ ] **GUI-02**: in-Theia web tabs via `<xul:browser>`; **GUI-05**: unified
       tab strip — DEFERRED (no GUI work in v1.1 per 2026-09-04 scoping;
       SQL tabs still precede them when scheduled)
@@ -197,4 +207,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-04 — v1.1 Hardening and SQL Tabs started (NAME-01 folded into installer work; GUI deferred until after SQL tabs)*
+*Last updated: 2026-09-05 after Phase 08 (5/5 plans, verification passed) — NAME-01/PKG/BLD/UPD-03/SEC-02/SHELL-01 validated; win/mac cells staged*
