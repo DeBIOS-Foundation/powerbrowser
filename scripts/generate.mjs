@@ -1160,6 +1160,16 @@ function emitBrandProperties(config, variant) {
  * entry and one emitter line -- so the cheap direction is to leave them literal
  * until a downstream actually needs to differ.
  *
+ * THE UPDATER LINE IS A FORK-POLICY LITERAL, NOT A BRAND DEFAULT (08-04,
+ * PKG-02). --disable-updater compiled the updater out of every build, so no
+ * build in this tree could consume a MAR at all; --enable-unverified-updates
+ * is the documented fork path (Mozilla's MAR signing key is unobtainable by
+ * design) and lets fork builds consume locally-signed MARs. MAR signing-key
+ * custody rung: fork key plus HTTPS plus hash-pinned update descriptors
+ * (docs/BUILD.md's packaging procedure cites the commit carrying this line).
+ * Still no [build] table: the value is platform policy, identical for every
+ * downstream, so it stays literal like the other five.
+ *
  * Built by concatenation rather than by template interpolation on the two
  * expansion lines: `${...}` inside a JS template literal is JS interpolation,
  * and the shell-default syntax has to survive to the emitted bytes intact.
@@ -1177,7 +1187,7 @@ function emitMozconfig(config, variant) {
         '',
         'mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/../${POWERBROWSER_OBJDIR:-' + objdir + '}',
         'ac_add_options --enable-application=browser',
-        'ac_add_options --disable-updater',
+        'ac_add_options --enable-unverified-updates',
         'ac_add_options --without-wasm-sandboxed-libraries',
         'ac_add_options --with-libclang-path="$LIBCLANG_PATH"',
         `ac_add_options --with-app-basename=${assertEmittable('identity.app_basename', config.identity.app_basename)}`,
