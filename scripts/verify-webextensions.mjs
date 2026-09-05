@@ -49,12 +49,15 @@
 //   node scripts/verify-webextensions.mjs
 //   node scripts/verify-webextensions.mjs --self-test
 //
-// The self-test plants four faults and requires each to go red: a drifted
+// The self-test plants six faults and requires each to go red: a drifted
 // tracked key (naming the add-on id -- proves the check reads the tracked
 // file, not the fragment), a drifted fragment (naming the add-on id --
 // proves the check reads the fragment, not the tracked file), a tracked
-// key outliving its manifest entry (naming the id), and a fixture
-// install_url origin absent from the allowlist (naming the host). Each
+// key outliving its manifest entry (naming the id), a fixture
+// install_url origin absent from the allowlist (naming the host), a
+// fragment missing a declared id (naming the id -- proves the
+// fragment-missing loop runs), and a fragment carrying an undeclared id
+// (naming the id -- proves the fragment-extra loop runs). Each
 // runs with the unmutated control green first, so a red is plant-caused.
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, copyFileSync } from 'node:fs';
@@ -445,8 +448,64 @@ function selfTest() {
         }
     }
 
+    // Plant 5: a fragment missing a declared id must go red naming the
+    // id -- proves the fragment-missing loop runs. The tracked key stays
+    // emitted, so only the fragment half can fire.
+    {
+        const dir = mkdtempSync(join(tmpdir(), 'webextensions-selftest-'));
+        try {
+            const setup = setupFixture(dir, fixtureManifest(bothEntries), ['addons.example.org']);
+            if (setup.error) {
+                complain('fragment missing id', setup.error);
+            } else {
+                const target = join(dir, FRAGMENT_REL);
+                const fragment = JSON.parse(readFileSync(target, 'utf8'));
+                delete fragment['acme-helper@example.org'];
+                writeFileSync(target, `${JSON.stringify(fragment, null, 2)}\n`, 'utf8');
+                const { failures } = runChecks(dir);
+                if (!failures.some(f => f.includes('acme-helper@example.org') && f.includes(FRAGMENT_REL))) {
+                    complain('fragment missing id', `did not go red naming 'acme-helper@example.org'; got: ${failures.join(' | ') || '(no failures at all)'}`);
+                } else {
+                    console.log(`  ok  fragment missing id -> red, naming 'acme-helper@example.org'`);
+                }
+            }
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    }
+
+    // Plant 6: a fragment carrying an id the manifest no longer declares
+    // must go red naming the id -- proves the fragment-extra loop runs
+    // (the stale-output direction of step 1, mirroring plant 3's tracked
+    // direction of step 2).
+    {
+        const dir = mkdtempSync(join(tmpdir(), 'webextensions-selftest-'));
+        try {
+            const setup = setupFixture(dir, fixtureManifest(bothEntries), ['addons.example.org']);
+            if (setup.error) {
+                complain('fragment extra id', setup.error);
+            } else {
+                const target = join(dir, FRAGMENT_REL);
+                const fragment = JSON.parse(readFileSync(target, 'utf8'));
+                fragment['ghost-plant@example.org'] = {
+                    installation_mode: 'normal_installed',
+                    install_url: 'file:///opt/downstream/extensions/ghost-plant.xpi',
+                };
+                writeFileSync(target, `${JSON.stringify(fragment, null, 2)}\n`, 'utf8');
+                const { failures } = runChecks(dir);
+                if (!failures.some(f => f.includes('ghost-plant@example.org') && f.includes(FRAGMENT_REL))) {
+                    complain('fragment extra id', `did not go red naming 'ghost-plant@example.org'; got: ${failures.join(' | ') || '(no failures at all)'}`);
+                } else {
+                    console.log(`  ok  fragment extra id -> red, naming 'ghost-plant@example.org'`);
+                }
+            }
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    }
+
     if (failed > 0) return 1;
-    console.log(`${NAME}: --self-test PASS -- 4 planted faults all behaved as pinned`);
+    console.log(`${NAME}: --self-test PASS -- 6 planted faults all behaved as pinned`);
     return 0;
 }
 
