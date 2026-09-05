@@ -255,7 +255,7 @@ numbers; do not be surprised if a first-time contributor's build takes an
 hour. The resulting binary reports **`DeBIOS powerbrowser 153.1.0esr`** via
 `./mach run --version` — `--version` concatenates `MOZ_APP_VENDOR` with the
 app **basename** (`MOZ_APP_NAME`, the fixed lowercase platform name), not
-with the display name, so `Power Browser` correctly does **not** appear
+with the display name, so `PowerBrowser` correctly does **not** appear
 here. The display name is asserted on its own surfaces
 (`brand-full-name`, `desktop-entry`) by
 `scripts/verify-branding-identity.mjs`.
