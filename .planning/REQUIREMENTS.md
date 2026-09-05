@@ -36,7 +36,7 @@ Credit policy (decided 2026-09-05): halves that Phases 08/09 proved live close o
 
 - [ ] **SQL-01**: Chrome-side writer ships — `Sqlite.sys.mjs` behind `PowerBrowserAPI.sys.mjs` (sole boundary, new INTERNAL-APIS.md rows), own `tabs.sqlite` in profile dir, sessionstore stays authoritative for restore, registry URIs are the join key
 - [ ] **SQL-04**: Read paths ship — bookmarks/history exposed via Places APIs (never raw places writes), sessionstore read projection, query API on `@powerbrowser/tab-uris`, private-browsing exclusion with absence test (emitter-exercising, per the project's absence-assertion rule)
-- [ ] **SQL-05**: Store gates green — second-writer negative scan (no profile-DB opens outside `powerbrowser/shell/`), interleaved tab+bookmark write soak with `PRAGMA integrity_check` clean, URI→row→restart→reopen roundtrip on a temp DB, registry-shape gate untouched, live ESR rebase drill over the new touchpoints
+- [x] **SQL-05**: Store gates green — second-writer negative scan (no profile-DB opens outside `powerbrowser/shell/`), interleaved tab+bookmark write soak with `PRAGMA integrity_check` clean, URI→row→restart→reopen roundtrip on a temp DB, registry-shape gate untouched, live ESR rebase drill over the new touchpoints
 
 Engine (decided 2026-09-05, `.planning/research/duckdb-vs-sqlite/VERDICT.md`): SQLite. Gecko `Sqlite.sys.mjs` writes; Theia backend reads the dedicated file only via `better-sqlite3@13.0.3` (`readonly: true`); `node:sqlite` revisit at next Node re-pin. DuckDB rejected (process-sharing topology, OLTP mismatch, vendoring cost, format instability).
 
@@ -114,7 +114,7 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
 | SQL-03 | Phase 11 | Pending |
 | SQL-01 | Phase 12 | Pending |
 | SQL-04 | Phase 12 | Pending |
-| SQL-05 | Phase 12 | Pending |
+| SQL-05 | Phase 12 | Complete |
 
 **Coverage:**
 
