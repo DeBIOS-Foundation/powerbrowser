@@ -71,10 +71,32 @@ function assertKeyRuleAgreement() {
   return chromeScheme;
 }
 
-// T-12-05 static pin: the downgrade-refusal branch is derived from the
-// writer source (getSchemaVersion compared against the chain head with a
-// refusing error), failing distinctly when unlocatable.
+// CR-03 static pin (12-CODE-REVIEW.md): the production quarantine must
+// delete the tripped live file after the backup and before reopening --
+// the procedure this drive's quarantineAndRebuild proves (rmSync(path)
+// then fresh-create). Derived from the writer source: IOUtils.remove of
+// the live path must sit between backupToFile and openConnection inside
+// quarantineAndRebuildTabStore, failing distinctly when unlocatable.
+function assertQuarantineRemovalPinned() {
+  const src = readFileSync(WRITER, 'utf8');
+  const start = src.indexOf('async quarantineAndRebuildTabStore(');
+  if (start === -1) {
+    fail('quarantine removal unlocatable in writer source (want `async quarantineAndRebuildTabStore(`)');
+  }
+  const body = src.slice(start, src.indexOf('async ensureTabStore(', start));
+  const backup = body.indexOf('backupToFile');
+  // Exact spelling: a best-effort `{ ignoreAbsent: true }` removal would
+  // still contain the bare prefix, so pin the load-bearing call verbatim.
+  const removal = body.indexOf('await IOUtils.remove(livePath);');
+  const reopen = body.indexOf('openConnection');
+  if (backup === -1 || removal === -1 || reopen === -1 || !(backup < removal && removal < reopen)) {
+    fail('quarantine delete-then-rebuild order unlocatable in writer source (want backupToFile, then IOUtils.remove(livePath), then openConnection)');
+  }
+}
 function assertDowngradeBranchPresent() {
+  // T-12-05 static pin: the downgrade-refusal branch is derived from the
+  // writer source (getSchemaVersion compared against the chain head with a
+  // refusing error), failing distinctly when unlocatable.
   const src = readFileSync(WRITER, 'utf8');
   const compared = /getSchemaVersion\(\)[\s\S]{0,300}?>\s*TAB_STORE_SCHEMA_HEAD/.test(src)
     || /schemaVersion\s*>\s*TAB_STORE_SCHEMA_HEAD/.test(src);
@@ -257,6 +279,8 @@ function main() {
       'derived DDL lacks one of the two CHECK constraints');
     assertDowngradeBranchPresent();
     check('downgrade-branch-pinned', true, 'unreachable');
+    assertQuarantineRemovalPinned();
+    check('quarantine-removal-pinned', true, 'unreachable');
     const scheme = assertKeyRuleAgreement();
     check('key-rule-agreement', true, 'unreachable');
 
