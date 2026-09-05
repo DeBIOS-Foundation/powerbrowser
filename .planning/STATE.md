@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-09-05)
 
 ## Current Position
 
-Phase: 12 (SQL Store Build) — Plan 12-02 executed (SQL-04 read paths)
-Plan: 12-02 complete (3/3 tasks, 3 commits)
-Status: Phase 12 in progress, advancing to 12-03 (gate promotion)
-Last activity: 2026-09-05 — Phase 12 Plan 02 executed (readonly query API, Places plus sessionstore reads, absence instrument STAGED pending startup wiring)
+Phase: — (v1.2 implementation complete Phases 10-12, verifications deferred per nonstop rule)
+Plan: —
+Status: All phases executed, starting lifecycle audit → complete → cleanup
+Last activity: 2026-09-05 — Phase 12 executed (3/3 plans, 12 blockers fixed, verification deferred)
 
 ## Performance Metrics
 
@@ -301,6 +301,7 @@ with "autonomous interactive".
 | 07 | verification_deferred (plans executed; harness --all 210 assertions PASS; tier-3 drills staged unexecuted) | /gsd-verify-work 07 |
 | 10 | verification_deferred_human (3/3 plans executed, code review clean; 5 human UAT sheets staged pending signature, verifier not run per nonstop rule) | /gsd-verify-work 10 |
 | 11 | verification_deferred (3/3 plans executed, code review clean after 12-fix sweep; authority+schema recorded approvals, verifier not run per nonstop rule) | /gsd-verify-work 11 |
+| 12 | verification_deferred (3/3 plans executed, code review clean after 12 blockers fixed; roundtrip 24/24, absence LIVE, soak 14/14, verifier not run per nonstop rule) | /gsd-verify-work 12 |
 
 ## Deferred Items
 
