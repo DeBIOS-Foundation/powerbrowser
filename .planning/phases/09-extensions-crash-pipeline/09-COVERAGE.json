@@ -1,0 +1,58 @@
+{
+  "items": [
+    {
+      "requirement_id": "EXT-02",
+      "category": "unclassified",
+      "status": "unresolved",
+      "verification": null,
+      "resolution": null,
+      "reason": null,
+      "probe": "unclassified — review manually"
+    },
+    {
+      "requirement_id": "EXT-03",
+      "category": "unclassified",
+      "status": "unresolved",
+      "verification": null,
+      "resolution": null,
+      "reason": null,
+      "probe": "unclassified — review manually"
+    },
+    {
+      "requirement_id": "TEL-04",
+      "category": "unclassified",
+      "status": "unresolved",
+      "verification": null,
+      "resolution": null,
+      "reason": null,
+      "probe": "unclassified — review manually"
+    },
+    {
+      "requirement_id": "BLD-02",
+      "category": "unclassified",
+      "status": "unresolved",
+      "verification": null,
+      "resolution": null,
+      "reason": null,
+      "probe": "unclassified — review manually"
+    },
+    {
+      "requirement_id": "UPD-04",
+      "category": "unclassified",
+      "status": "unresolved",
+      "verification": null,
+      "resolution": null,
+      "reason": null,
+      "probe": "unclassified — review manually"
+    }
+  ],
+  "coverage": {
+    "applicable": 5,
+    "resolved": 0,
+    "unresolved": 5,
+    "byVerification": {
+      "explicit": 0,
+      "backstop": 0
+    }
+  }
+}
