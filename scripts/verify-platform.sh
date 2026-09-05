@@ -317,6 +317,27 @@ check_verify_downstream_fixtures_self_test() {
   return "$rc"
 }
 
+# NEW (12-CODE-REVIEW.md WR-03): the @powerbrowser/tab-uris reader must
+# compile against its own shipped d.ts. The committed tree once carried a
+# `Database.Database` spelling its local better-sqlite3.d.ts cannot resolve
+# (plus the fix as an unstaged edit the residue scan cannot see), red under
+# tsc while every gate stayed green. This runs the extension's own
+# toolchain (theia/node_modules/.bin/tsc, installed by the same yarn
+# install smoke-theia assumes) in --noEmit over the extension project only
+# -- seconds, text off disk, no build output, no browser, no display, no
+# network. A missing tsc is a named FAIL (run yarn install in theia/),
+# never a skip: a typecheck that goes green because it could not find its
+# own compiler is the green-by-construction shape the empty-registry guard
+# below exists to reject.
+check_tab_uris_typecheck() {
+  local tsc="$REPO_ROOT/theia/node_modules/.bin/tsc"
+  if [ ! -x "$tsc" ]; then
+    echo "tab-uris-typecheck: FAIL -- $tsc absent (run yarn install in theia/ first)" >&2
+    return 1
+  fi
+  "$tsc" --noEmit -p "$REPO_ROOT/theia/extensions/tab-uris"
+}
+
 # ============================================================================
 # SHARED HELPERS  (ported verbatim from verify-phase-05.sh, whose copies were
 # already the supersets: its start_shell takes the optional profile override
@@ -4219,6 +4240,10 @@ run_own_checks() {
     "sql-store-second-writer-self-test|node $REPO_ROOT/scripts/verify-sql-store-second-writer.mjs --self-test"
     "sql-store-soak|node $REPO_ROOT/scripts/verify-sql-store-soak.mjs"
     "sql-store-soak-self-test|node $REPO_ROOT/scripts/verify-sql-store-soak.mjs --self-test"
+    # NEW (12-CODE-REVIEW.md WR-03): the tab-uris reader typecheck. Honestly
+    # --quick per the function comment above: the extension's own tsc over
+    # its own project, --noEmit, seconds, no build/browser/display/network.
+    "tab-uris-typecheck|check_tab_uris_typecheck"
   )
 
   if [ "$QUICK" -eq 0 ]; then

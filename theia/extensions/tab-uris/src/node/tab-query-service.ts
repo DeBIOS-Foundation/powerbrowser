@@ -36,7 +36,7 @@ export const TAB_QUERY_FILE_NAME = 'tabs.sqlite';
 
 @injectable()
 export class TabQueryService {
-    private db: Database.Database | null = null;
+    private db: Database | null = null;
 
     constructor(private profileDir: string = process.env.POWERBROWSER_PROFILE_DIR ?? '') {}
 
@@ -59,7 +59,7 @@ export class TabQueryService {
      * no profile directory is known or the file is not yet readable --
      * callers serve empty answers in that case.
      */
-    private openIfNeeded(): Database.Database | null {
+    private openIfNeeded(): Database | null {
         if (this.db) {
             return this.db;
         }
@@ -67,7 +67,7 @@ export class TabQueryService {
             return null;
         }
         try {
-            const db: Database.Database = new Database(join(this.profileDir, TAB_QUERY_FILE_NAME), { readonly: true });
+            const db: Database = new Database(join(this.profileDir, TAB_QUERY_FILE_NAME), { readonly: true });
             if (!db.readonly) {
                 try {
                     db.close();
