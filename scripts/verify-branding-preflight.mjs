@@ -1247,27 +1247,34 @@ function selfTest() {
 
         // The plant: the OLD spaced display form in a display literal, which
         // is exactly what a stale surface carries after the NAME-01 rename.
+        // The mutation target is derived from the fixture inventory at
+        // self-test time, never pinned as a literal here: a copied literal
+        // can only ever agree with the tree it was copied from. The stale
+        // replacement stays a hardcoded hostile -- it is wrong by
+        // construction, the shape a pre-rename surface still carries.
         const ftlRel = 'powerbrowser/branding/dev/locales/en-US/brand.ftl';
         const ftlPath = join(dir, ftlRel);
+        const devFull = JSON.parse(readFileSync(join(dir, 'inventory/brand-tokens.json'), 'utf8'))
+            .brand_display_expectations.variants.dev.brand_full_name;
         writeFileSync(
             ftlPath,
-            readFileSync(ftlPath, 'utf8').replace('-brand-full-name = PowerBrowser Dev', '-brand-full-name = Power Browser Dev'),
+            readFileSync(ftlPath, 'utf8').replace(`-brand-full-name = ${devFull}`, '-brand-full-name = Power Browser Dev'),
         );
 
         const planted = runChecks(dir);
         if (planted.failures.length === 0) {
-            console.error(`${NAME}: --self-test FAIL -- the planted mismatch (\`Power Browser Dev\` for \`PowerBrowser Dev\`) was NOT rejected`);
+            console.error(`${NAME}: --self-test FAIL -- the planted mismatch (\`Power Browser Dev\` for \`${devFull}\`) was NOT rejected`);
             ok = false;
         } else {
             const all = planted.failures.join('\n');
             const namesFile = all.includes(ftlRel);
             const namesActual = all.includes('Power Browser Dev');
-            const namesExpected = all.includes('PowerBrowser Dev');
+            const namesExpected = all.includes(devFull);
             if (!namesFile || !namesActual || !namesExpected) {
                 console.error(`${NAME}: --self-test FAIL -- the rejection message must name the offending file and BOTH disagreeing values`);
                 console.error(`  names the file (${ftlRel}): ${namesFile}`);
                 console.error(`  names the actual value ("Power Browser Dev"): ${namesActual}`);
-                console.error(`  names the expected value ("PowerBrowser Dev"): ${namesExpected}`);
+                console.error(`  names the expected value ("${devFull}"): ${namesExpected}`);
                 for (const f of planted.failures) console.error(`  - ${f}`);
                 ok = false;
             } else {
