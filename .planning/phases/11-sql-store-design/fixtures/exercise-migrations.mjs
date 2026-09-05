@@ -20,9 +20,9 @@
 // assertions can fail (tripwire fires, versions advance) rather than
 // passing on an empty drive.
 
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -150,6 +150,22 @@ function snapshotFile(path) {
 // (chrome rebuilds FROM sessionstore plus the registry — here the caller
 // passes the pre-tamper live rows as that authority), continue degraded.
 // Never deletes: the corrupt copy must still exist afterwards.
+// Allocate the next free corrupt-suffixed name: N = max existing suffix + 1,
+// starting at 1. Never reuse a suffix — a second incident must not overwrite
+// the first forensics (MIGRATIONS.md corruption step 1).
+function nextCorruptPath(path) {
+  const dir = dirname(path);
+  const base = basename(path);
+  const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`^${escaped}\\.corrupt-(\\d+)$`);
+  let n = 0;
+  for (const f of readdirSync(dir)) {
+    const m = f.match(re);
+    if (m) n = Math.max(n, Number(m[1]));
+  }
+  return `${path}.corrupt-${n + 1}`;
+}
+
 function quarantineAndRebuild(path, restoreRows) {
   let ok = false;
   try {
@@ -163,7 +179,7 @@ function quarantineAndRebuild(path, restoreRows) {
     ok = false; // unopenable counts as tripped, same as not-ok
   }
   if (ok) return { quarantined: false };
-  const corruptPath = `${path}.corrupt-1`;
+  const corruptPath = nextCorruptPath(path);
   copyFileSync(path, corruptPath); // backup-primitive stand-in: copy, then rebuild
   for (const suffix of ['-wal', '-shm', '-journal']) {
     try { rmSync(path + suffix, { force: true }); } catch {}
@@ -272,6 +288,20 @@ try {
       check('quarantine-rebuilt-integrity', integrityOk(rebuilt), 'rebuilt copy fails quick_check');
     } finally {
       rebuilt.close();
+    }
+    // Second incident: re-tamper the rebuilt file — the allocator must write
+    // .corrupt-2 without overwriting .corrupt-1 forensics.
+    {
+      const firstCorrupt = outcome.corruptPath;
+      const firstBytes = readFileSync(firstCorrupt);
+      const bytes2 = readFileSync(p);
+      bytes2.fill(0xff, 100, 612);
+      writeFileSync(p, bytes2);
+      const outcome2 = quarantineAndRebuild(p, expectedRows);
+      check('quarantine-second-incident-advances', outcome2.quarantined === true && !!outcome2.corruptPath && outcome2.corruptPath !== firstCorrupt,
+        `second quarantine did not allocate a new suffix: got ${outcome2.corruptPath}`);
+      check('quarantine-preserves-both-copies', existsSync(firstCorrupt) && existsSync(outcome2.corruptPath) && readFileSync(firstCorrupt).equals(firstBytes),
+        'first forensics overwritten or missing after second incident');
     }
   }
 

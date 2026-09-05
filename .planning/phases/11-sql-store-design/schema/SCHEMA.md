@@ -135,6 +135,10 @@ platform content: never manifest keys, never per-downstream settings,
 never feature flags. A downstream changing platform behavior needs an
 extension point, not a flag.
 
+Quarantine copies use `tabs.sqlite.corrupt-<N>` with N = max existing
+suffix + 1 starting at 1 (never reuse a suffix; full procedure in
+`MIGRATIONS.md`).
+
 Journal mode: write-ahead-logging (WAL) is pinned — it is the mode that
 supports the decided topology of one chrome writer plus N cross-process
 readers (Theia backend readonly handle, offline gates). All remaining
