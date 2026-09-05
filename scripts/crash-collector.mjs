@@ -66,8 +66,11 @@ export const THROTTLE_WINDOW_MS = 60_000;
 export const THROTTLE_MAX_SUBMITS = 60;
 /** Ingestion caps: part count, bytes per part, bytes per whole body. */
 export const MAX_PARTS = 16;
-export const MAX_PART_BYTES = 8 * 1024 * 1024;
-export const MAX_BODY_BYTES = 20 * 1024 * 1024;
+/** MiB-denominated cap literals the policy gate pins, so code and doc cannot drift numerically. */
+export const MAX_PART_MIB = 8;
+export const MAX_BODY_MIB = 20;
+export const MAX_PART_BYTES = MAX_PART_MIB * 1024 * 1024;
+export const MAX_BODY_BYTES = MAX_BODY_MIB * 1024 * 1024;
 /** Bounded retention: records older than this are deleted on each accept. */
 export const RETENTION_DAYS = 30;
 /** Annotation allowlist: the ONLY submitter-supplied fields ever stored. */
