@@ -945,8 +945,14 @@ export const PowerBrowserAPI = Object.freeze({
     }
     const conn = await lazy.Sqlite.openConnection({ path: TAB_STORE_FILE_NAME });
     await conn.execute("PRAGMA journal_mode=WAL;");
+    // CR-02 (12-CODE-REVIEW.md): migrateTabStoreToV1 runs its own
+    // executeTransaction, and upstream forbids nesting them (the inner call
+    // blocks behind the outer until TRANSACTIONS_TIMEOUT_MS, then the outer
+    // rolls back). So the migration runs first as its own top-level
+    // transaction and the row inserts follow in a second one -- sequential,
+    // never nested.
+    await PowerBrowserAPI.migrateTabStoreToV1(conn);
     await conn.executeTransaction(async () => {
-      await PowerBrowserAPI.migrateTabStoreToV1(conn);
       for (const row of restoreRows) {
         await conn.execute(
           `INSERT INTO tabs (uri, url, title, last_active) VALUES (:uri, :url, :title, :last_active)
