@@ -45,7 +45,11 @@ const NAME = 'verify-sql-store-soak';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, '..');
 const WRITER = join(REPO_ROOT, 'powerbrowser/shell/PowerBrowserAPI.sys.mjs');
-const FIXTURE = join(REPO_ROOT, '.planning/phases/11-sql-store-design/fixtures/tabs-v1.sqlite');
+// v1.2 closeout archived the 11 phase under milestones/ (v1.0/v1.1 precedent):
+// fall back to the archived fixture when the live phases dir no longer carries one.
+const LIVE_FIXTURE = join(REPO_ROOT, '.planning/phases/11-sql-store-design/fixtures/tabs-v1.sqlite');
+const ARCHIVED_FIXTURE = join(REPO_ROOT, '.planning/milestones/v1.2-phases/11-sql-store-design/fixtures/tabs-v1.sqlite');
+const FIXTURE = existsSync(LIVE_FIXTURE) ? LIVE_FIXTURE : ARCHIVED_FIXTURE;
 const BIN = join(REPO_ROOT, 'objdir/dist/bin/powerbrowser');
 const GITIGNORE = join(REPO_ROOT, '.gitignore');
 const SHELL_READY = 'POWERBROWSER_SHELL_READY';
