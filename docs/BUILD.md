@@ -216,6 +216,13 @@ node scripts/verify-upstream-pins.mjs
 node scripts/verify-upstream-pins.mjs --self-test
 # 5. prove core untouched, full stages now that the fresh install exists:
 bash scripts/diff-theia-core.sh
+# 6. prove the token gate intact at the new pin (UPD-04): compile every
+#    extension including the token-gate backend modules, then run all
+#    plain-node suites. The gate is green only when the backend compiles
+#    AND its suites pass -- a re-pin that silences the credential gate is
+#    a failed re-pin, not a clean one:
+nix develop .#theia --command bash -c 'node theia/node_modules/typescript/bin/tsc -b theia/extensions/token-gate'
+node theia/extensions/telemetry/test/telemetry-sender.test.mjs
 ```
 
 Expect the lock diff to show the `@theia` moves plus their transitive
@@ -227,6 +234,26 @@ vendored Theia monorepo, or a `--latest` float anywhere. `yarn upgrade
 --latest` is specifically NOT this procedure: it resolves to whatever is
 newest rather than to the declared pin, which is the unpinned behavior
 the manifest exists to forbid.
+
+**UPD-04 proof record (09-04).** Agreement proven at the stated pin
+`theia_release = "1.74.1"` on 2026-09-05: `node
+scripts/verify-upstream-pins.mjs --self-test` PASS (4 planted faults red
+naming the file) and the `verify-upstream-pins` registry row PASS
+(resolutions plus member files plus lockfile stanzas, `@theia/monaco-editor-core`
+excepted by exact name). Token-gate intactness at the same pin: `tsc -b
+theia/extensions/token-gate` exits 0 with no errors, and the telemetry
+suite passes 9/9 (ping/report separation included). No framework source
+was edited for any of this — pins and lockfile only, per hard rule 1.
+
+**Live bump staged, not executed.** A newer stable upstream tag exists
+(1.75.0 observed on the registry 2026-09-05; the pin is 1.74.1), so the
+runbook above is staged for it, not run against it: a minor-line re-pin
+rewrites every `@theia/*` pin, re-resolves the lockfile, reinstalls
+`node_modules`, and recompiles every extension — adoption-scale work with
+real breakage risk that no phase-09 requirement demands. Unblock
+(operator): when the 1.75.0 line (or later) is adopted, run steps 1-6
+above verbatim at that pin, keep the `monaco-editor-core` exception, and
+re-record this section with the new agreement-plus-token-gate evidence.
 
 ### Extension tier-3 drill (09-04, BLD-02): new source kinds on real artifacts
 
