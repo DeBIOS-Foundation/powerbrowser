@@ -11,11 +11,15 @@
     "@theia/plugin-ext-vscode": "1.74.1",
     "@theia/preferences": "1.74.1",
     "@theia/terminal": "1.74.1",
-    "@theia/vsx-registry": "1.74.1"
+    "@theia/vsx-registry": "1.74.1",
+    "better-sqlite3": "13.0.3"
   },
   "theiaExtensions": [
     {
       "frontend": "lib/browser/tab-uris-frontend-module"
+    },
+    {
+      "backend": "lib/node/tab-query-backend-module"
     }
   ],
   "files": [
