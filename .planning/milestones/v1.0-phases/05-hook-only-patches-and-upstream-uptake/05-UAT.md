@@ -1,3 +1,10 @@
+---
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-05
+  gap_snapshot: "unknown::scenarios=0"
+---
+
 # Phase 5: Hook-Only Patches and Upstream Uptake — UAT (human items)
 
 All static checks pass (`verify-platform.sh --quick`: 95 PASS, 0 FAIL). These 3 items need a human
@@ -17,8 +24,11 @@ gh workflow run "Rebase upstream" --ref <default-branch> -f tag=<new-pin>
 **Test (local equivalent):**
 
 ```sh
+
 # Manifest first: edit configuration.toml [upstreams] firefox_esr_tag, mirror the
+
 # .github/workflows/rebase-upstream.yml input default, then:
+
 node scripts/generate.mjs
 TAG=<new-pin> bash scripts/rebase-upstream.sh --tag <new-pin>
 ```

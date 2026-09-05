@@ -3,6 +3,10 @@ status: diagnosed
 trigger: "G-01-25 (UAT test 25, deliverable 01-03 D2): Theia shell main window title bar reads 'PowerBrowser' (identifier form, no space) instead of 'Power Browser'"
 created: 2026-08-31T00:00:00Z
 updated: 2026-08-31T00:00:00Z
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-05
+  status: diagnosed
 ---
 
 ## Current Focus
@@ -30,6 +34,7 @@ reasoning_checkpoint:
   and_gate: "no — the wrong literal is sufficient alone. The absence of content-title propagation is ratified design context (the chrome-owned deck/window model), not a co-cause; with a correct literal the title bar is correct."
 
 ## Symptoms
+
 <!-- prefilled from UAT gap G-01-25; IMMUTABLE -->
 
 expected: Main shell window title bar reads "Power Browser" (or a title containing the spaced display form). Truth: display name reads "Power Browser" with a space on every user-facing surface; the identifier form never leaks into a display string.

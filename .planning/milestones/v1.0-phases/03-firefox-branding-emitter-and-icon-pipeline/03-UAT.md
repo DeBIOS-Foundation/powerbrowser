@@ -4,6 +4,10 @@ phase: 03-firefox-branding-emitter-and-icon-pipeline
 source: [03-VERIFICATION.md]
 started: 2026-09-04T06:30:00Z
 updated: 2026-09-04T06:30:00Z
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-05
+  gap_snapshot: "testing::scenarios=1"
 ---
 
 ## Current Test
@@ -17,6 +21,7 @@ awaiting: user response
 ## Tests
 
 ### 1. Launch objdir/dist/bin/powerbrowser on a graphical session and inspect the window, launcher/dock entry, and desktop entry
+
 expected: The downstream mark renders at correct density in all three places and the title carries the suffixed display name (Power Browser Dev)
 result: [pending]
 

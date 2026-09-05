@@ -3,6 +3,10 @@ status: diagnosed
 trigger: "G-01-3 (UAT test 3, minor): In the firefox about it looks good but I would get rid of these links"
 created: 2026-08-31T00:00:00Z
 updated: 2026-08-31T00:00:00Z
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-05
+  status: diagnosed
 ---
 
 ## Current Focus
@@ -92,6 +96,7 @@ root_cause: |
   Two contributing conditions (AND-gate):
   1. upstream/browser/base/content/aboutDialog.xhtml hard-codes the link rows unconditionally — #contributeDesc (:131-133, donate/get-involved) and the #bottomBox hbox (:139-142, license/terms/privacy) — with Mozilla-destined literal hrefs; labels come from upstream aboutDialog.ftl (helpus, bottomLinks-license, bottom-links-terms, bottom-links-privacy). #communityDesc (:127-130) additionally renders a mozilla.org link labelled "DeBIOS Foundation" and an about:credits link labelled "global community".
   2. The branding-side suppression channel is inert: aboutDialog.xhtml links chrome://branding/content/aboutDialog.css, but powerbrowser/branding/{dev,release}/content/jar.mn (stale "Phase 3 scope" stub) packages only icons, so the aboutDialog.css that exists in both branding dirs never ships and never loads.
+
 fix: (not applied — goal find_root_cause_only) Suggested direction recorded below for /gsd-plan-phase --gaps.
 verification:
 files_changed: []
@@ -99,10 +104,13 @@ files_changed: []
 ## Suggested Fix Direction (for planner)
 
 Minimal, entirely inside powerbrowser/ (no Gecko patch, no patch-stack change):
+
 1. Add `content/branding/aboutDialog.css (aboutDialog.css)` to BOTH powerbrowser/branding/dev/content/jar.mn and powerbrowser/branding/release/content/jar.mn; update each stub's stale "deliberately does not reference aboutDialog.css" comment.
 2. Append suppression rules to both aboutDialog.css files: `#contributeDesc, #bottomBox > hbox { display: none; }` — and decide on `#communityDesc` (its "DeBIOS Foundation" label links to mozilla.org; either hide the row or accept until a Phase-2 string/markup decision).
 3. Side effect (desirable): the dark-neutral restyle already written in those css files finally applies.
+
 Planner decisions to surface:
+
 - "Licensing Information" targets internal about:license (MPL attribution), not Mozilla outbound; user asked to remove it anyway — hiding the row is user-requested, and about:license stays reachable by URL, so MPL notice obligations are unaffected.
 - If the G-01-3 truth is read as requiring the DOM rows GONE (not hidden), the heavier path is a new regenerated patch (e.g. 030) deleting the rows from aboutDialog.xhtml — only take that if hidden-not-removed fails UAT.
 - Verification hook: extend a --quick check (or verify-branding.mjs) to assert chrome://branding/content/aboutDialog.css is packaged, since its silent-404 failure mode is what let the dead CSS go unnoticed. Remember: scan-brand-residue iterates git ls-files — stage new files before trusting a green scan.

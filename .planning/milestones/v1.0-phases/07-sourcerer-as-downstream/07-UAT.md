@@ -1,3 +1,10 @@
+---
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-05
+  gap_snapshot: "unknown::scenarios=0"
+---
+
 # Phase 7: Sourcerer as Downstream — UAT (human items)
 
 All automated checks pass (harness `--all`: 5 fixtures, 210 assertions; full `--quick`:
