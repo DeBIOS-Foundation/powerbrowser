@@ -127,7 +127,10 @@ Drive map:
 
 Fixture byte-identity: the committed `tabs-v1.sqlite` hash before the
 run equals the hash after the run (`sha256sum -c` OK) — the script
-mutated copies only.
+mutated copies only. WAL sidecar note: opening the committed fixture
+(even readonly) may materialize `-wal`/`-shm` sidecars beside it; those
+are runtime state, never committed, and are removed after every run —
+only `tabs-v1.sqlite` itself is tracked.
 
 ## Test-scaffolding note (explicitly not a registry row)
 
