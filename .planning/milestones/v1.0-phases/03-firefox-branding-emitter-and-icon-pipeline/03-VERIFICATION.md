@@ -6,9 +6,14 @@ score: 5/5 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
+
   - test: "Launch objdir/dist/bin/powerbrowser on a graphical session and inspect the window, launcher/dock entry, and desktop entry"
     expected: "The downstream mark renders at correct density in all three places and the title carries the suffixed display name (Power Browser Dev)"
     why_human: "No pixel judge exists in this runtime; the automated surrogate (headless launch + byte-identical installed rasters + desktop Name assertion) cannot judge rendered visuals"
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-05
+  status: human_needed
 ---
 
 # Phase 3: Firefox Branding Emitter and Icon Pipeline Verification Report

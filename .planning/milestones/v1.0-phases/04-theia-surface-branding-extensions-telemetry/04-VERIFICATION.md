@@ -6,6 +6,7 @@ score: 4/4 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
+
   - test: "Fixture rebrand + app-bundle build + live render drill (welcome, about, favicon, theme)"
     expected: "Welcome tab, about dialog, favicon and default theme show the fixture values with zero modified theia/**/src/**/*.ts"
     why_human: "No app-bundle build or browser boot ran in this pass (per instruction: no builds); static gates prove emission and read sites but never observed a rendered pixel"
@@ -15,6 +16,10 @@ human_verification:
   - test: "Telemetry live-delivery drill against a local collector at each of the four levels, then scripts/verify-platform.sh --gate"
     expected: "Level off sends zero POSTs; crash/error/all deliver the correct event kinds with batching and retry; --gate (browser-boot layers incl. verify-endpoints layer 1) green"
     why_human: "Needs a running sidecar plus a collector endpoint; layer 1 needs the tier-3 Gecko build — none runnable in this static pass"
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-05
+  status: human_needed
 ---
 
 # Phase 4: Theia Surface — Branding, Extensions, Telemetry Verification Report
@@ -178,7 +183,9 @@ unreachable-URL failure was observed by the executor, not re-run here.
 
 **Test:** Set `[telemetry] level = "all"`, endpoint at a local
 collector; regenerate + surgical apply; start the app; exercise usage
+
 + error paths at each of the four levels. Then run
+
 `scripts/verify-platform.sh --gate`.
 **Expected:** Level `off` produces zero POSTs; `crash`/`error`/`all`
 deliver exactly the paths their level admits with batching and retry

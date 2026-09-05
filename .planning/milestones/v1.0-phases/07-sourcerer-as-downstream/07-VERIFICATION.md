@@ -3,6 +3,10 @@ phase: 07-sourcerer-as-downstream
 verified: 2026-09-04T00:00:00Z
 status: human_needed
 score: 4/4 must-haves verified (static + generate level); 0 gaps; 3 live-build drills open for human
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-05
+  status: human_needed
 ---
 
 # Phase 7: Sourcerer as Downstream — Verification Report

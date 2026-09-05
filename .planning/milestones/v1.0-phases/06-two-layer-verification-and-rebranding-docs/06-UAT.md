@@ -1,3 +1,10 @@
+---
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-05
+  gap_snapshot: "unknown::scenarios=0"
+---
+
 # Phase 6: Two-Layer Verification and Rebranding Docs — UAT (human items)
 
 All automated checks pass (`verify-platform.sh --quick`: 95 PASS, 0 FAIL; dev-variant six-surface run green).

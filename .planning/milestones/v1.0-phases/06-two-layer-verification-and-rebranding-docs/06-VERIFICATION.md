@@ -3,6 +3,10 @@ phase: 06-two-layer-verification-and-rebranding-docs
 verified: 2026-09-04T00:00:00Z
 status: human_needed
 score: 4/4 must-haves verified (static + dev-live); 0 gaps; 4 live/ritual drills open for human
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-05
+  status: human_needed
 ---
 
 # Phase 6: Two-Layer Verification and Rebranding Docs — Verification Report

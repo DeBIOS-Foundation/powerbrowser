@@ -3,6 +3,10 @@ phase: 05-hook-only-patches-and-upstream-uptake
 verified: 2026-09-04T00:00:00Z
 status: human_needed
 score: 4/4 must-haves verified (static); 0 gaps; 3 live drills open for human
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-05
+  status: human_needed
 ---
 
 # Phase 5: Hook-Only Patches and Upstream Uptake — Verification Report

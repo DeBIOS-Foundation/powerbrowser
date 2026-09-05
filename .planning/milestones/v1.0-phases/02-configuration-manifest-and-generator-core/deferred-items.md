@@ -3,6 +3,7 @@
 Out-of-scope discoveries logged during execution. Not fixed here.
 
 - **.planning/WINDOWS.md frontmatter counts are stale** (found during 02-01, appending a ledger entry). `gsd-tools windows append` refuses to write: frontmatter declares open/waived/fixed/total = 5/0/16/21 but the entries yield 7/0/14/21. Pre-existing, unrelated to this plan, and it silently blocks every ledger append until reconciled.
+  status: acknowledged
 
 ## 02-03 — scripts/generate.mjs is not a verify-platform.sh row
 
@@ -16,3 +17,4 @@ inconsistent and `gsd-tools windows append` refuses to write to it.
 
 - **G-02-11 design ratified 2026-09-03** (02-07 checkpoint): `option-4-placeholder` — see `02-DESIGN-G-02-11.md` `## Verdict`; 02-08 implements it.
 - **No Phase 2 deferral remains open after G-02-11/G-02-12 closure (2026-09-04, 02-09):** the 02-03 registry-row item was resolved within the phase (02-05/02-06 rows, confirmed by 02-VERIFICATION.md); the WINDOWS.md frontmatter staleness above is cross-phase tooling, not a Phase 2 deferral.
+  status: acknowledged
