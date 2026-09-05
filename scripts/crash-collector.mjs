@@ -126,7 +126,16 @@ export function parseMultipart(body, contentType) {
     if (!match) return { ok: false, reason: REASON_WRONG_CONTENT_TYPE };
     const boundary = match[1] ?? match[2];
     if (body.length > MAX_BODY_BYTES) return { ok: false, reason: REASON_OVERSIZED };
-    const chunks = splitBuffer(body, Buffer.from(`--${boundary}`));
+    // Split on the CRLF-anchored delimiter the multipart grammar requires,
+    // so minidump bytes that merely contain the boundary sequence cannot
+    // mis-parse a valid report. Prepending the first delimiter's missing
+    // CRLF lets it match the same split with no special case (chunks[0] is
+    // the empty preamble, as before).
+    const chunks = splitBuffer(Buffer.concat([Buffer.from('\r\n'), body]), Buffer.from(`\r\n--${boundary}`));
+    // Cap the raw delimiter count BEFORE parsing: headerless sections that
+    // parse to no part must still count, or a body of many of them evades
+    // MAX_PARTS. Each part opens with one delimiter plus the closing one.
+    if (chunks.length - 1 > MAX_PARTS + 1) return { ok: false, reason: REASON_OVERSIZED };
     const parts = [];
     for (let i = 1; i < chunks.length; i++) {
         let chunk = chunks[i];
