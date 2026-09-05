@@ -92,7 +92,13 @@ Plans:
   3. The store gates are green: the second-writer negative scan finds no profile-DB opens outside `powerbrowser/shell/`, an interleaved tab+bookmark write soak ends with `PRAGMA integrity_check` clean, a URI→row→restart→reopen roundtrip passes on a temp DB, the registry-shape gate is untouched, and a live ESR rebase drill runs over the new touchpoints
   4. Theia backend reads the dedicated file only via `better-sqlite3@13.0.3` (`readonly: true`); Theia core is unpatched and no Gecko change lands outside the patch stack
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+
+- [ ] 12-01-PLAN.md — Chrome-side writer tracer plus triggers, beside-registry key rule, and temp-DB roundtrip proof
+- [ ] 12-02-PLAN.md — Readonly query API, chrome-side Places plus sessionstore reads, and emitter-exercising absence instrument
+- [ ] 12-03-PLAN.md — Store gates as registry rows with self-tests plus ESR rebase drill over the new touchpoints
 
 ## Progress
 
