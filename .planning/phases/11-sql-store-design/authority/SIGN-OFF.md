@@ -1,7 +1,9 @@
 # Authority table review record (11-01, SQL-02)
 
-STATUS: DRAFT — awaiting review. The procedure below was performed against
-`AUTHORITY.md`; no approval is recorded yet (see Signature).
+STATUS: RECORDED — the human review ritual below was performed and
+approved by Chris on 2026-09-05 (see Signature). The reviewer read
+`AUTHORITY.md` end to end and confirmed the six invariants match SQL-02
+with each enforcement pointer correct.
 
 ## Procedure
 
@@ -32,8 +34,8 @@ For the file listed under Reviewed files:
 
 | File | Reviewer | Date | Verdict |
 | ---- | -------- | ---- | ------- |
-| `authority/AUTHORITY.md` | (pending) | (pending) | DRAFT |
-| `authority/SIGN-OFF.md` | (pending) | (pending) | RECORD |
+| `authority/AUTHORITY.md` | Chris | 2026-09-05 | CONFIRMED |
+| `authority/SIGN-OFF.md` | Chris | 2026-09-05 | RECORD |
 
 ## Evidence basis
 
@@ -58,14 +60,24 @@ LOW-confidence inputs re-checked or explicitly deferred at review time:
 
 | Item | Result |
 | ---- | ------ |
-| Six invariants present, each naming Phase 12 enforcement | (pending) |
-| No brand token in either file | (pending) |
-| Engine SQLite only, no rejected-engine surface | (pending) |
-| No manifest or configuration keys | (pending) |
-| No GUI surface | (pending) |
-| No internal identifier in user-facing prose | (pending) |
+| Six invariants present, each naming Phase 12 enforcement | PASS — rows 1–6 each carry a scan, gate, or review pointer |
+| No brand token in either file | PASS — `scan-brand-residue` green over the staged docs inside `--quick` |
+| Engine SQLite only, no rejected-engine surface | PASS — engine paragraph names SQLite only; no other engine appears |
+| No manifest or configuration keys | PASS — filename and version appear only as fixed platform content |
+| No GUI surface | PASS — no window, strip, toolbar, bar, menu, or user-facing string authorized |
+| No internal identifier in user-facing prose | PASS — neither file carries user-facing strings by construction |
 | Assumed inputs recorded as pinned-or-deferred | recorded above |
 
 ## Signature
 
-(empty — approval recorded by Task 2)
+RECORDED approval 2026-09-05 (Chris):
+
+- Read `authority/AUTHORITY.md` end to end: six invariant rows present
+  (single chrome-side writer; sessionstore restore authority; registry-URI
+  opaque join key; backend-never-opens-profile-databases; own-file rule;
+  token-never-in-SQL), each naming its Phase 12 enforcement. Verdict:
+  CONFIRMED.
+- Checklist above: all items PASS, including brand-token absence via the
+  green residue row inside the quick gate.
+- Assumed-items disposition accepted as recorded (A6 pinned, A1–A5 deferred
+  with pinning procedures owned by plan 11-02 / Phase 12).
