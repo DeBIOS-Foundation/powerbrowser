@@ -30,7 +30,10 @@
 // there is no fixed key to read from an external evaluation context. It is
 // found instead via `Object.getOwnPropertySymbols(window)`.
 //
-// Usage: node scripts/verify-branding.mjs [url]   (default http://localhost:3000)
+// Usage: node scripts/verify-branding.mjs
+//
+// Reads the shell's own supervised frontend; takes no URL argument (WINDOWS
+// 14 -- a URL would open a redundant stock window beside the shell).
 //
 // Later plans extend this same file rather than adding sibling scripts.
 
@@ -39,8 +42,6 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { withFirefoxPage } from './lib/firefox-bidi.mjs';
-
-const url = process.argv[2] || 'http://localhost:3000';
 
 // -- Expected values come from the inventory, not from this file (01-08) --
 // This file's own comments already argued that inventory/brand-tokens.json is
@@ -196,7 +197,8 @@ async function checkAbout({ evaluate, waitFor }) {
 async function main() {
     const surfacesRun = [];
 
-    const result = await withFirefoxPage(url, async ({ evaluate, waitFor }) => {
+    // WINDOWS 14: empty URL -- this check reads the shell, never a URL page.
+    const result = await withFirefoxPage('', async ({ evaluate, waitFor }) => {
         await waitFor('window.theia && window.theia.container ? true : false');
 
         // The DISPLAY form, spaceless since NAME-01 carried it to

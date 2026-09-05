@@ -3346,7 +3346,11 @@ if (!existsSync(xhtmlPath)) {
 }
 
 try {
-  await withFirefoxPage('about:blank', async ({ evaluate, waitFor }) => {
+  // WINDOWS 14 (08-03): empty URL -- this check reads the shell's own swap,
+  // never a URL page. An 'about:blank' argument would open a second window
+  // carrying the same URL the shell starts at, leaving evaluate's target
+  // ambiguous; with no argument there is exactly one context.
+  await withFirefoxPage('', async ({ evaluate, waitFor }) => {
     // SHELL-05 requires the shell to paint BEFORE the backend is ready, so the
     // swap to the Theia URL is necessarily asynchronous and the first context
     // URL seen here is the shell's own about:blank placeholder. Poll for the
