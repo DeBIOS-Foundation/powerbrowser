@@ -50,7 +50,12 @@ Archive: `.planning/milestones/v1.1-ROADMAP.md` · Requirements: `.planning/mile
   3. Record-close boxes each cite their prior live evidence: platform migration proof (MIG-01), token-inventory audit (MIG-02), release-variant emitter deltas only (GEN-01), Windows/macOS schema deltas only (GEN-03), bridge-landability statement against the green registry-shape gate (GUI-04), installed-binary allowlist layer (TEL-03)
   4. The count reconciliation is recorded: the v1.0 archive's "16" against this milestone's 15-item enumeration, with the discrepancy explained, not silently renumbered
   5. `scripts/verify-platform.sh --quick` is green at closeout with no sibling driver created — any new check landed as a registry row with a `--self-test`
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — Record-close tracer plus reconciliation plus five staged UAT runbooks
+- [ ] 10-02-PLAN.md — Live drills on the built tree with probe-first staging
+- [ ] 10-03-PLAN.md — Gates-green sweep plus 15-box sign-off assembly
 
 ### Phase 11: SQL Store Design
 **Goal**: The store's authority rules and schema are written down and reviewed before any store code exists
