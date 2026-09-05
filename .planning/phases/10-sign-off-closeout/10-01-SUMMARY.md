@@ -19,7 +19,7 @@ affects: [10-02 live drills, 10-03 gates-green sweep]
 
 # Actuals (#2632) — pairs with the plan's `estimate` to calibrate future estimates.
 actuals:
-  tokens: 0
+  tokens: unknown
   tasks: 3
   commits: 4
 
@@ -78,7 +78,7 @@ coverage:
     human_judgment: false
 
 # Metrics
-duration: 0min
+duration: unknown
 completed: 2026-09-05
 status: complete
 ---
