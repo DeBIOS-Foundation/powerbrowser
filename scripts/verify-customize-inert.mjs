@@ -53,7 +53,9 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 
-const url = process.argv[2] || 'http://localhost:3000';
+// WINDOWS 14 (08-03): this check reads the shell's own supervised frontend
+// and takes no URL argument -- a URL would open a redundant stock browser
+// window beside the shell.
 
 // Past the CSS layer's ~150ms hot-reload debounce, with margin.
 const SETTLE_MS = 2000;
@@ -98,7 +100,8 @@ async function main() {
 
         const surfacesRun = [];
 
-        await withFirefoxPage(url, async ({ waitFor, screenshot }) => {
+        // WINDOWS 14: empty URL -- this check reads the shell, never a URL page.
+        await withFirefoxPage('', async ({ waitFor, screenshot }) => {
             await waitFor("document.getElementById('theia-app-shell') ? true : false", { timeoutMs: 20000 });
 
             // State 1: no customize.css.

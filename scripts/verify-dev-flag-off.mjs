@@ -36,21 +36,23 @@
 // must run it.
 //
 // Usage:
-//   node scripts/verify-dev-flag-off.mjs [url] [--expect-bound]
+//   node scripts/verify-dev-flag-off.mjs [--expect-bound]
 //   node scripts/verify-dev-flag-off.mjs --help
+//
+// Reads the shell's own supervised frontend; takes no URL argument (WINDOWS
+// 14 -- a URL would open a redundant stock window beside the shell).
 //
 // No import/require of any package name -- only Node built-ins and
 // scripts/lib/firefox-bidi.mjs (D-69: zero test dependencies).
 
 import { withFirefoxPage } from './lib/firefox-bidi.mjs';
 
-const HELP = `Usage: node scripts/verify-dev-flag-off.mjs [url] [--expect-bound]
+const HELP = `Usage: node scripts/verify-dev-flag-off.mjs [--expect-bound]
 
 Asserts window.theia.container.isBound(Symbol.for('PowerBrowserPrivilegedJs'))
 in the running page. Default mode expects false (dev flag off); --expect-bound
 inverts the assertion (positive control).
 
-  [url]            App URL to check (default http://localhost:3000)
   --expect-bound   Assert the binding is PRESENT instead of absent
   --help           Print this message and exit 0
 `;
@@ -63,12 +65,12 @@ if (args.includes('--help')) {
 }
 
 const expectBound = args.includes('--expect-bound');
-const url = args.find(a => !a.startsWith('--')) || 'http://localhost:3000';
 
 const CHECK_BINDING = "window.theia.container.isBound(Symbol.for('PowerBrowserPrivilegedJs'))";
 
 async function main() {
-    return withFirefoxPage(url, async ({ evaluate, waitFor }) => {
+    // WINDOWS 14: empty URL -- this check reads the shell, never a URL page.
+    return withFirefoxPage('', async ({ evaluate, waitFor }) => {
         await waitFor('window.theia && window.theia.container ? true : false');
         const isBound = await evaluate(CHECK_BINDING);
         return isBound;

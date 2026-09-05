@@ -140,6 +140,29 @@ class BiDiClient {
 }
 
 /**
+ * Poll topLevelContexts() for a context whose url is exactly the requested
+ * one and return its context id. Throws naming the URL and the contexts seen
+ * when nothing matches within timeoutMs -- it never falls back to the first
+ * context, because silent fallback to contexts[0] is the WINDOWS-14 defect
+ * this helper exists to close.
+ */
+async function resolveUrlContext(topLevelContexts, requestedUrl, { timeoutMs = 10000, intervalMs = 250 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+        const seen = await topLevelContexts();
+        const match = seen.find(c => c.url === requestedUrl);
+        if (match) return match.context;
+        if (Date.now() >= deadline) {
+            throw new Error(
+                `firefox-bidi: requested URL ${JSON.stringify(requestedUrl)} matched no top-level browsing context `
+                + `(saw: ${JSON.stringify(seen.map(c => c.url))})`
+            );
+        }
+        await new Promise(r => setTimeout(r, intervalMs));
+    }
+}
+
+/**
  * Poll `evaluate(expression)` until it returns a truthy value or the
  * timeout elapses. Used to wait for `window.theia?.container` to exist --
  * the page is a single-page app and the container appears after load, not
@@ -353,8 +376,39 @@ export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN, st
 
         client = new BiDiClient(ws);
         await client.send('session.new', { capabilities: {} });
-        const tree = await client.send('browsingContext.getTree', {});
-        const context = tree.result.contexts[0].context;
+
+        // GUI-01 (01-05): the top-level browsing contexts this session can
+        // see, url and context id only. A caller asserting that a SECOND
+        // window opened has no other way to see it -- and the chrome window
+        // wrapping it is invisible on this platform (WINDOWS.md 7), so the
+        // content context it owns is the only observable.
+        const topLevelContexts = async () => {
+            const tree = await client.send('browsingContext.getTree', {});
+            return tree.result.contexts.map(c => ({ context: c.context, url: c.url }));
+        };
+
+        // WINDOWS 14 (08-03): a URL on the command line opens a stock
+        // browser window IN ADDITION to the shell, so contexts[0] is the
+        // shell's own supervised frontend rather than the requested page.
+        // Select the context carrying the requested URL; with no URL passed
+        // there is only the shell context, taken with a logged note. Launch
+        // semantics and process hygiene below are untouched -- only which
+        // context evaluate/screenshot target changes.
+        const requestedUrl = url || '';
+        let context;
+        if (requestedUrl) {
+            context = await resolveUrlContext(topLevelContexts, requestedUrl);
+        } else {
+            const seen = await topLevelContexts();
+            if (seen.length === 0) {
+                throw new Error('firefox-bidi: browsingContext.getTree returned zero top-level contexts');
+            }
+            context = seen[0].context;
+            console.warn(
+                `firefox-bidi: no URL requested, evaluating against the first of `
+                + `${seen.length} top-level context(s)`
+            );
+        }
 
         const evaluate = async expression => {
             const result = await client.send('script.evaluate', {
@@ -370,17 +424,12 @@ export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN, st
             return Buffer.from(result.result.data, 'base64');
         };
 
-        // GUI-01 (01-05): the top-level browsing contexts this session can
-        // see, url and context id only. `evaluate` above is pinned to the one
-        // context found at session start, so a caller asserting that a SECOND
-        // window opened has no other way to see it -- and the chrome window
-        // wrapping it is invisible on this platform (WINDOWS.md 7), so the
-        // content context it owns is the only observable.
-        const topLevelContexts = async () => {
-            const tree = await client.send('browsingContext.getTree', {});
-            return tree.result.contexts.map(c => ({ context: c.context, url: c.url }));
-        };
-
+        // GUI-01 (01-05): the same top-level-context listing the
+        // evaluate/screenshot target above was selected from, exposed so a
+        // caller asserting that a SECOND window opened can observe it -- and
+        // the chrome window wrapping it is invisible on this platform
+        // (WINDOWS.md 7), so the content context it owns is the only
+        // observable.
         return await callback({
             evaluate,
             waitFor: (expr, opts) => waitFor(evaluate, expr, opts),
@@ -397,4 +446,98 @@ export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN, st
         }
         await cleanup();
     }
+}
+
+// --- --self-test (08-03, WINDOWS 14) --------------------------------------
+//
+// Live two-context session assertion plus single-context positive control.
+// A URL argument opens a stock browser window alongside the shell, so this
+// needs the built binary like every other live check -- and is deliberately
+// NOT registered in verify-platform.sh, so --quick never pays for a browser
+// launch. Needs no network and no Theia backend: the probe URL is a fragment
+// (same rationale as verify-gui01-window.mjs's PROBE_URL) and neither case
+// waits for the frontend.
+const SELF_TEST_PROBE_URL = 'about:blank#firefox-bidi-self-test';
+
+async function runSelfTest() {
+    const failures = [];
+    const fail = message => {
+        failures.push(message);
+        console.error(`firefox-bidi: --self-test FAIL -- ${message}`);
+    };
+
+    // Case 1: two-context session. evaluate and screenshot must run against
+    // the URL-bearing context, not the shell context.
+    try {
+        await withFirefoxPage(SELF_TEST_PROBE_URL, async ({ evaluate, screenshot, topLevelContexts }) => {
+            const deadline = Date.now() + 15000;
+            let seen = [];
+            for (;;) {
+                seen = await topLevelContexts();
+                if (seen.length >= 2 && seen.some(c => c.url === SELF_TEST_PROBE_URL)) break;
+                if (Date.now() >= deadline) break;
+                await new Promise(r => setTimeout(r, 250));
+            }
+            if (seen.length < 2 || !seen.some(c => c.url === SELF_TEST_PROBE_URL)) {
+                fail(
+                    `expected a two-context session carrying ${SELF_TEST_PROBE_URL}, saw `
+                    + `${seen.length}: ${JSON.stringify(seen.map(c => c.url))}`
+                );
+                return;
+            }
+            const href = await evaluate('location.href');
+            if (href !== SELF_TEST_PROBE_URL) {
+                fail(
+                    `evaluate ran against ${JSON.stringify(href)}, expected the URL-bearing context `
+                    + JSON.stringify(SELF_TEST_PROBE_URL)
+                );
+                return;
+            }
+            const png = await screenshot();
+            if (!Buffer.isBuffer(png) || png.length === 0) {
+                fail('screenshot did not return a non-empty Buffer from the URL-bearing context');
+                return;
+            }
+            console.log(
+                `firefox-bidi: --self-test PASS -- two-context session targets the URL-bearing context `
+                + `(${seen.length} contexts, evaluate + screenshot)`
+            );
+        });
+    } catch (err) {
+        fail(`two-context session threw: ${err.message}`);
+    }
+
+    // Case 2: single-context positive control. No URL argument means the
+    // shell alone; the first (only) context must still resolve.
+    try {
+        await withFirefoxPage('', async ({ evaluate, topLevelContexts }) => {
+            const seen = await topLevelContexts();
+            if (seen.length !== 1) {
+                fail(
+                    `expected a single-context session on a bare launch, saw `
+                    + `${seen.length}: ${JSON.stringify(seen.map(c => c.url))}`
+                );
+                return;
+            }
+            const href = await evaluate('location.href');
+            if (typeof href !== 'string' || href === '') {
+                fail(`evaluate on the single context returned ${JSON.stringify(href)}`);
+                return;
+            }
+            console.log('firefox-bidi: --self-test PASS -- single-context positive control resolves');
+        });
+    } catch (err) {
+        fail(`single-context session threw: ${err.message}`);
+    }
+
+    if (failures.length !== 0) {
+        process.exitCode = 1;
+        return;
+    }
+    console.log('firefox-bidi: --self-test PASS');
+}
+
+if (process.argv.slice(2).includes('--self-test')) {
+    await runSelfTest();
+    process.exit(process.exitCode || 0);
 }

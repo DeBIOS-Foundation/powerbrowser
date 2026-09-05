@@ -61,22 +61,24 @@
 // does not provide.
 //
 // Usage:
-//   node scripts/verify-uri-roundtrip.mjs [url] [--scheme <view|settings|terminal>]
+//   node scripts/verify-uri-roundtrip.mjs [--scheme <view|settings|terminal>]
 //   node scripts/verify-uri-roundtrip.mjs --help
+//
+// Reads the shell's own supervised frontend; takes no URL argument (WINDOWS
+// 14 -- a URL would open a redundant stock window beside the shell).
 //
 // No import/require of any package name -- only Node built-ins and
 // scripts/lib/firefox-bidi.mjs (D-69).
 
 import { withFirefoxPage } from './lib/firefox-bidi.mjs';
 
-const HELP = `Usage: node scripts/verify-uri-roundtrip.mjs [url] [--scheme <scheme>]
+const HELP = `Usage: node scripts/verify-uri-roundtrip.mjs [--scheme <scheme>]
 
 Table-driven URI-01..URI-04 round-trip proof against @powerbrowser/tab-uris.
 
-  [url]              App URL to check (default http://localhost:3000)
   --scheme <scheme>  Run only one scheme's rows: view, settings, or terminal
-                      (default: run everything, including the four D-51
-                      carve-outs)
+                       (default: run everything, including the four D-51
+                       carve-outs)
   --help             Print this message and exit 0
 `;
 
@@ -146,7 +148,6 @@ if (args.includes('--help')) {
 }
 const schemeIdx = args.indexOf('--scheme');
 const onlyScheme = schemeIdx !== -1 ? args[schemeIdx + 1] : null;
-const url = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--scheme') || 'http://localhost:3000';
 
 // -- Page-eval helpers (all embedded as source text -- see the reflection
 // note above for why) --
@@ -361,7 +362,8 @@ function buildNotebookCellCarveOutExpression() {
 async function main() {
     const results = [];
 
-    await withFirefoxPage(url, async ({ evaluate, waitFor }) => {
+    // WINDOWS 14: empty URL -- this check reads the shell, never a URL page.
+    await withFirefoxPage('', async ({ evaluate, waitFor }) => {
         await waitFor('window.theia && window.theia.container ? true : false');
 
         const rows = [];

@@ -29,8 +29,11 @@
 // future inversify bump renaming `_bindingDictionary` breaks this file first.
 //
 // Usage:
-//   node scripts/verify-gui01-command.mjs [url]
+//   node scripts/verify-gui01-command.mjs
 //   node scripts/verify-gui01-command.mjs --help
+//
+// Reads the shell's own supervised frontend; takes no URL argument (WINDOWS
+// 14 -- a URL would open a redundant stock window beside the shell).
 //
 // No import/require of any package name -- only Node built-ins and
 // scripts/lib/firefox-bidi.mjs (D-69).
@@ -40,13 +43,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { withFirefoxPage } from './lib/firefox-bidi.mjs';
 
-const HELP = `Usage: node scripts/verify-gui01-command.mjs [url]
+const HELP = `Usage: node scripts/verify-gui01-command.mjs
 
 GUI-01: asserts the "Open Browser Window" command is registered in the live
 Theia frontend's CommandRegistry, with the id and label
 theia/extensions/tab-uris/src/browser/browser-window-command.ts exports.
 
-  [url]    App URL to check (default http://localhost:3000)
   --help   Print this message and exit 0
 `;
 
@@ -55,7 +57,6 @@ if (args.includes('--help')) {
     console.log(HELP.trimEnd());
     process.exit(0);
 }
-const url = args.find(a => !a.startsWith('--')) || 'http://localhost:3000';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE = join(REPO_ROOT, 'theia', 'extensions', 'tab-uris', 'src', 'browser', 'browser-window-command.ts');
@@ -111,7 +112,8 @@ const REGISTRY_READY = `(() => {
     } catch (e) { return false; }
 })()`;
 
-await withFirefoxPage(url, async ({ evaluate, waitFor }) => {
+// WINDOWS 14: empty URL -- this check reads the shell, never a URL page.
+await withFirefoxPage('', async ({ evaluate, waitFor }) => {
     await waitFor('window.theia && window.theia.container ? true : false', { timeoutMs: 60000 });
     await waitFor('!!document.querySelector("#theia-app-shell")', { timeoutMs: 60000 });
     await waitFor(REGISTRY_READY, { timeoutMs: 60000 }).catch(() => undefined);
