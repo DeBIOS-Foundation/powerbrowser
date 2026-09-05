@@ -23,7 +23,7 @@
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 
@@ -74,7 +74,7 @@ if (!DatabaseSync) {
     console.error(`${NAME}: FAIL -- no standard-library database support and ephemeral install failed; refusing to touch repo manifests`);
     process.exit(1);
   }
-  const { default: Better } = await import(join(stage, 'node_modules', 'better-sqlite3', 'lib', 'index.js'));
+  const { default: Better } = await import(pathToFileURL(join(stage, 'node_modules', 'better-sqlite3', 'lib', 'index.js')).href);
   DatabaseSync = Better;
   readOnlyOption = { readonly: true };
   console.log(`${NAME}: note -- standard-library support absent, using stage-confined ephemeral install at ${stage}`);
