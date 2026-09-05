@@ -74,21 +74,21 @@
     "$comment": "THE EXPECTED-VALUE SOURCE for scripts/verify-branding-preflight.mjs, and the reason that script is not a tautology. Authored by hand in plan 01-03 from the RECORDED IDENTITY DECISIONS (01-CONTEXT.md D-09 as amended, D-10, D-12, D-13) -- not read back out of the branding files, not produced by scripts/rename-brand.mjs, and not derived from scripts/verify-branding-identity.mjs's VARIANTS descriptor. That independence is the whole point: Pitfall 1's failure mode is a mechanical pass that rewrites BOTH a display literal and the expectation that checks it, so the build succeeds, the window title is wrong, and the verifier agrees. It actually happened -- the rename left verify-branding-identity.mjs expecting `PowerBrowser Dev`, the space-less identifier form, and nothing in the tree disagreed with it. A third source that no pass writes is the only thing that catches that. The `tokens` rows below carry the same targets as COUNTS (how many occurrences per file); this block carries them as VALUES (which literal at which named key), and the preflight asserts both.",
     "variants": {
       "dev": {
-        "brand_full_name": "Power Browser Dev",
-        "brand_short_name": "Power Browser",
-        "brand_shorter_name": "Power Browser",
-        "brand_shortcut_name": "Power Browser",
-        "app_display_name": "Power Browser Dev",
+        "brand_full_name": "PowerBrowser Dev",
+        "brand_short_name": "PowerBrowser",
+        "brand_shorter_name": "PowerBrowser",
+        "brand_shortcut_name": "PowerBrowser",
+        "app_display_name": "PowerBrowser Dev",
         "branding_dir": "powerbrowser/branding/dev",
         "objdir": "objdir",
         "desktop_entry": "powerbrowser/powerbrowser.desktop"
       },
       "release": {
-        "brand_full_name": "Power Browser",
-        "brand_short_name": "Power Browser",
-        "brand_shorter_name": "Power Browser",
-        "brand_shortcut_name": "Power Browser",
-        "app_display_name": "Power Browser",
+        "brand_full_name": "PowerBrowser",
+        "brand_short_name": "PowerBrowser",
+        "brand_shorter_name": "PowerBrowser",
+        "brand_shortcut_name": "PowerBrowser",
+        "app_display_name": "PowerBrowser",
         "branding_dir": "powerbrowser/branding/release",
         "objdir": "objdir-release",
         "desktop_entry": "powerbrowser/powerbrowser-release.desktop"
@@ -105,7 +105,7 @@
     },
     "theia_reason": "GEN-05 (04-04): the Theia sidecar's default theme id, owned by the [theia] default_theme manifest key and emitted into the application package.json's theia.frontend.config.defaultTheme. One of Theia's own builtin theme ids (@theia/core 1.74.1 theming.ts BuiltinThemeProvider); the preflight pins the tracked package.json value against this declaration, never against the manifest the generator also reads.",
     "identifier_form": "PowerBrowser",
-    "identifier_form_reason": "D-10's TitleCase identifier prefix. It is listed here as the value that must NEVER appear in a display string -- the preflight asserts its absence from every display surface, because `PowerBrowser Dev` is exactly what a token-boundary rename produces and exactly what nothing else in the tree would object to."
+    "identifier_form_reason": "D-10's TitleCase identifier prefix. NAME-01 (08-01) re-scoped this entry's role: the canonical display form is now exactly this value, so no absence-assertion over the bare identifier form can discriminate -- `PowerBrowser Dev` and `PowerBrowser\"` are legitimate display content. The preflight's section 6 therefore asserts the absence of the SPACELESS JOIN of each multi-word variant full name (`PowerBrowserDev`), the under-spacing token-boundary failure mode, derived per variant from the full names above -- never the bare form, which the release surfaces carry by design. The identifier uses that continue into a longer identifier (class names, PowerBrowserAPI) stay untouched by the same terminator logic."
   },
   "hand_write": {
     "$comment": "Surfaces rename-brand.mjs is forbidden to touch, in addition to every `brand-display` and `frozen` row, which it skips by class. These are hand-written in plan 01-03. The display literals are Pitfall 1: `Sourcerer` here means `Power Browser` (two words, with the space), and a mechanical pass gets them wrong while the verifier that checks them AGREES, because the same pass rewrote both sides. The `.desktop` files are excluded for a second, independent reason (Pitfall 4): three tokens on one `Icon=`/`Exec=` line with three different correct targets, which no token-boundary rule can get right.",
@@ -394,7 +394,7 @@
       "token": "Sourcerer",
       "case_form": "title",
       "class": "brand-display",
-      "target": "Power Browser",
+      "target": "PowerBrowser",
       "expected_count": 5,
       "expected_files": [
         "powerbrowser/branding/dev/locales/en-US/brand.ftl"
@@ -402,13 +402,13 @@
       "only_in": [
         "powerbrowser/branding/dev/locales/en-US/brand.ftl"
       ],
-      "reason": "sourcerer/branding/dev/locales/en-US/brand.ftl:5-8,11 -- -brand-shorter-name, -brand-short-name, -brand-shortcut-name, -brand-full-name, and the D-78 rationale comment naming the product. Display literal: the target is `Power Browser`, TWO WORDS WITH A SPACE, not the identifier `PowerBrowser`. Hand-written in plan 01-03. This is Pitfall 1's exact trap: a mechanical pass writes `PowerBrowser Dev`, the build succeeds, and verify-branding-identity.mjs surface 4 AGREES because the same pass rewrote the descriptor it compares against."
+      "reason": "sourcerer/branding/dev/locales/en-US/brand.ftl:5-8,11 -- -brand-shorter-name, -brand-short-name, -brand-shortcut-name, -brand-full-name, and the D-78 rationale comment naming the product. Display literal: NAME-01 (08-01) re-pinned the target to the canonical single word `PowerBrowser` -- the dev composition is `PowerBrowser Dev`, and the header comment above the terms says so. Hand-written in plan 01-03. This is Pitfall 1's exact trap: a mechanical pass writes `PowerBrowser Dev`, the build succeeds, and verify-branding-identity.mjs surface 4 AGREES because the same pass rewrote the descriptor it compares against."
     },
     {
       "token": "Sourcerer",
       "case_form": "title",
       "class": "brand-display",
-      "target": "Power Browser",
+      "target": "PowerBrowser",
       "expected_count": 5,
       "expected_files": [
         "powerbrowser/branding/release/locales/en-US/brand.ftl"
@@ -416,13 +416,13 @@
       "only_in": [
         "powerbrowser/branding/release/locales/en-US/brand.ftl"
       ],
-      "reason": "sourcerer/branding/release/locales/en-US/brand.ftl:5-8,11 -- the release variant of the same four terms plus the D-78 comment. -brand-full-name here is bare `Sourcerer` (no \" Dev\"), so the release display name is `Power Browser` and the dev one is `Power Browser Dev`; D-13 keeps both presentations."
+      "reason": "sourcerer/branding/release/locales/en-US/brand.ftl:5-8,11 -- the release variant of the same four terms plus the D-78 comment. -brand-full-name here is the bare base (no suffix), so the release display name is `PowerBrowser` and the dev one is `PowerBrowser Dev`; D-13 keeps both presentations. NAME-01 (08-01) re-pinned both to the canonical single-word base."
     },
     {
       "token": "Sourcerer",
       "case_form": "title",
       "class": "brand-display",
-      "target": "Power Browser",
+      "target": "PowerBrowser",
       "expected_count": 3,
       "expected_files": [
         "powerbrowser/branding/dev/locales/en-US/brand.properties"
@@ -430,13 +430,13 @@
       "only_in": [
         "powerbrowser/branding/dev/locales/en-US/brand.properties"
       ],
-      "reason": "sourcerer/branding/dev/locales/en-US/brand.properties:5-7 -- brandShorterName, brandShortName, brandFullName. The .properties file is the second half of the same display surface as brand.ftl and verify-branding-identity.mjs asserts BOTH against the variant's expected value, so they must be hand-written to the same literal."
+      "reason": "sourcerer/branding/dev/locales/en-US/brand.properties:5-7 -- brandShorterName, brandShortName, brandFullName. The .properties file is the second half of the same display surface as brand.ftl and verify-branding-identity.mjs asserts BOTH against the variant's expected value, so they must be hand-written to the same literal. NAME-01 (08-01) re-pinned the three keys to the canonical base (`PowerBrowser`, `PowerBrowser Dev`)."
     },
     {
       "token": "Sourcerer",
       "case_form": "title",
       "class": "brand-display",
-      "target": "Power Browser",
+      "target": "PowerBrowser",
       "expected_count": 3,
       "expected_files": [
         "powerbrowser/branding/release/locales/en-US/brand.properties"
@@ -444,13 +444,13 @@
       "only_in": [
         "powerbrowser/branding/release/locales/en-US/brand.properties"
       ],
-      "reason": "sourcerer/branding/release/locales/en-US/brand.properties:5-7 -- the release variant of the same three keys."
+      "reason": "sourcerer/branding/release/locales/en-US/brand.properties:5-7 -- the release variant of the same three keys. NAME-01 (08-01) re-pinned the three keys likewise."
     },
     {
       "token": "Sourcerer",
       "case_form": "title",
       "class": "brand-display",
-      "target": "Power Browser",
+      "target": "PowerBrowser",
       "expected_count": 1,
       "expected_files": [
         "powerbrowser/branding/dev/configure.sh"
@@ -458,13 +458,13 @@
       "only_in": [
         "powerbrowser/branding/dev/configure.sh"
       ],
-      "reason": "sourcerer/branding/dev/configure.sh:5 -- MOZ_APP_DISPLAYNAME=\"Sourcerer Dev\". A COMPILED define: Pitfall 6 measures a full tier-3 rebuild at ~39 minutes, so a typo here costs 40 minutes, which is why every display literal is hand-written and cross-checked before the first build rather than iterated on."
+      "reason": "sourcerer/branding/dev/configure.sh:5 -- MOZ_APP_DISPLAYNAME=\"Sourcerer Dev\". A COMPILED define: Pitfall 6 measures a full tier-3 rebuild at ~39 minutes, so a typo here costs 40 minutes, which is why every display literal is hand-written and cross-checked before the first build rather than iterated on. NAME-01 (08-01) re-pinned the literal to `PowerBrowser Dev`."
     },
     {
       "token": "Sourcerer",
       "case_form": "title",
       "class": "brand-display",
-      "target": "Power Browser",
+      "target": "PowerBrowser",
       "expected_count": 1,
       "expected_files": [
         "powerbrowser/branding/release/configure.sh"
@@ -472,13 +472,13 @@
       "only_in": [
         "powerbrowser/branding/release/configure.sh"
       ],
-      "reason": "sourcerer/branding/release/configure.sh:5 -- MOZ_APP_DISPLAYNAME=\"Sourcerer\", the release variant."
+      "reason": "sourcerer/branding/release/configure.sh:5 -- MOZ_APP_DISPLAYNAME=\"Sourcerer\", the release variant. NAME-01 (08-01) re-pinned the literal to `PowerBrowser`."
     },
     {
       "token": "Sourcerer",
       "case_form": "title",
       "class": "brand-display",
-      "target": "Power Browser",
+      "target": "PowerBrowser",
       "expected_count": 1,
       "expected_files": [
         "powerbrowser/powerbrowser.desktop"
@@ -486,13 +486,13 @@
       "only_in": [
         "powerbrowser/powerbrowser.desktop"
       ],
-      "reason": "sourcerer/sourcerer.desktop:2 -- `Name=Sourcerer Dev` takes the DISPLAY form while `StartupWMClass=sourcerer` on line 8 takes the identifier form, in the same nine-line file. The whole file is hand-written in plan 01-03 (see hand_write.files) for the separate Pitfall 4 reason."
+      "reason": "sourcerer/sourcerer.desktop:2 -- `Name=Sourcerer Dev` takes the DISPLAY form while `StartupWMClass=sourcerer` on line 8 takes the identifier form, in the same nine-line file. The whole file is hand-written in plan 01-03 (see hand_write.files) for the separate Pitfall 4 reason. NAME-01 (08-01) re-pinned Name= to `PowerBrowser Dev`; StartupWMClass stays the frozen identifier."
     },
     {
       "token": "Sourcerer",
       "case_form": "title",
       "class": "brand-display",
-      "target": "Power Browser",
+      "target": "PowerBrowser",
       "expected_count": 1,
       "expected_files": [
         "powerbrowser/powerbrowser-release.desktop"
@@ -500,35 +500,35 @@
       "only_in": [
         "powerbrowser/powerbrowser-release.desktop"
       ],
-      "reason": "sourcerer/sourcerer-release.desktop:2 -- the release desktop entry's Name=. Same split as the dev entry."
+      "reason": "sourcerer/sourcerer-release.desktop:2 -- the release desktop entry's Name=. Same split as the dev entry. NAME-01 (08-01) re-pinned Name= to `PowerBrowser`."
     },
     {
       "token": "Sourcerer",
       "case_form": "title",
       "class": "brand-display",
-      "target": "Power Browser",
-      "expected_count": 3,
+      "target": "PowerBrowser",
+      "expected_count": 2,
       "expected_files": [
         "theia/applications/browser/package.json"
       ],
       "only_in": [
         "theia/applications/browser/package.json"
       ],
-      "reason": "theia/applications/browser/package.json:13 -- `\"applicationName\": \"Sourcerer\"` is the Theia frontend's window/title display name -- plus :29-30, the first two powerbrowserBranding legal notices (06-04: the own-trademark notice and the Mozilla non-association sentence, both carrying the display form). The rest of this file carries ordinary lowercase identifier occurrences the rename script DOES handle, so the exclusion is line-scoped in hand_write.line_contains rather than whole-file."
+      "reason": "theia/applications/browser/package.json:13 -- `\"applicationName\": \"Sourcerer\"` is the Theia frontend's window/title display name -- plus :30, the Mozilla non-association sentence now carrying `PowerBrowser Dev` (:29, the own-trademark notice, keeps the spaced legal copy frozen out of NAME-01's slice scope, so it no longer counts toward this target). NAME-01 (08-01) re-pinned applicationName and the :30 sentence; count 3->2. The rest of this file carries ordinary lowercase identifier occurrences the rename script DOES handle, so the exclusion is line-scoped in hand_write.line_contains rather than whole-file."
     },
     {
       "token": "Sourcerer",
       "case_form": "title",
       "class": "brand-display",
-      "target": "Power Browser",
-      "expected_count": 1,
+      "target": "PowerBrowser",
+      "expected_count": 0,
       "expected_files": [
         "LICENSE"
       ],
       "only_in": [
         "LICENSE"
       ],
-      "reason": "LICENSE:133 -- the MPL Exhibit B \"Required Notice\" line, `Copyright Deocracy Institute Corporation (Sourcerer)`. A legal notice, not an identifier: the whole line is rewritten by hand in plan 01-03 to the DeBIOS Foundation's own notice. Held out of the script because a token-wise pass would produce \"DeBIOS Foundation Institute Corporation\", which is not a legal entity."
+      "reason": "LICENSE:133 -- the MPL Exhibit B \"Required Notice\" line, `Copyright Deocracy Institute Corporation (Sourcerer)`. A legal notice, not an identifier: the whole line is rewritten by hand in plan 01-03 to the DeBIOS Foundation's own notice. Held out of the script because a token-wise pass would produce \"DeBIOS Foundation Institute Corporation\", which is not a legal entity. NAME-01 (08-01) froze this notice out of the rename slice -- the DeBIOS legal notice keeps its spaced product copy -- so the canonical target occurs here zero times and the row pins that absence."
     },
     {
       "token": "Deocracy",

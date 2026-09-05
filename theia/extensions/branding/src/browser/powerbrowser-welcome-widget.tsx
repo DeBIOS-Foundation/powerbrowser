@@ -32,7 +32,7 @@ export const POWERBROWSER_REPO_URL = 'https://powerbrowser.org/';
 // bootable where the provider is unset (specs, stories outside the built
 // app): it must stay exactly one quoted occurrence, which
 // scripts/verify-branding-preflight.mjs asserts from the inventory value.
-const FALLBACK_DISPLAY_NAME = 'Power Browser';
+const FALLBACK_DISPLAY_NAME = 'PowerBrowser';
 
 @injectable()
 export class PowerBrowserWelcomeWidget extends ReactWidget {

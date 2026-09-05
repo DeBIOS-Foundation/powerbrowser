@@ -92,7 +92,7 @@ scan_patch_surface() {
 # keeps hook syntax green: 020's DIRS += ["../powerbrowser/shell"] carries
 # the tree name as path segments, never as a value, and the shipped-stack
 # control in --self-test proves it stays green. A planted
-# +imply_option("MOZ_APP_DISPLAYNAME", "Power Browser") is quote-bounded
+# +imply_option("MOZ_APP_DISPLAYNAME", "PowerBrowser") is quote-bounded
 # and goes red naming the patch and the value.
 #
 # ADDED LINES ONLY. Context lines and the +++ header paths are never read:

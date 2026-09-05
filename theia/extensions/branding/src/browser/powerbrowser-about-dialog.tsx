@@ -13,7 +13,7 @@ import { readBrandingConfig } from './powerbrowser-branding-config';
 // app-bundle step, never a .ts edit. Must stay exactly one quoted
 // occurrence, which scripts/verify-branding-preflight.mjs asserts from the
 // inventory value.
-const FALLBACK_DISPLAY_NAME = 'Power Browser';
+const FALLBACK_DISPLAY_NAME = 'PowerBrowser';
 
 // GEN-05 legal-notice channel (06-04): the boot fallback for the three
 // About-dialog notices, and the ONLY notice literals this file carries.
@@ -25,7 +25,7 @@ const FALLBACK_DISPLAY_NAME = 'Power Browser';
 // from the manifest through the emitter.
 const FALLBACK_LEGAL_NOTICES = [
     'Power Browser is a trademark of DeBIOS Foundation.',
-    'Power Browser Dev is not officially associated with Mozilla or its products.',
+    'PowerBrowser Dev is not officially associated with Mozilla or its products.',
     'This product (powerbrowser.org) includes Eclipse Theia, a trademark of Eclipse Foundation AISBL.',
 ];
 

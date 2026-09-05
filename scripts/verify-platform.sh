@@ -2724,8 +2724,8 @@ check_allowlist_doc_consistency_self_test() {
 # Shared inner helper: takes four path arguments -- dev brand.properties,
 # release brand.properties, dev branding pref file, release branding pref
 # file -- so the self-test can point it at temp files without ever touching
-# the real tree. Asserts all four of: (1) dev brandFullName == "Power
-# Browser Dev", (2) release brandFullName == "Power Browser", (3) the dev pref
+# the real tree. Asserts all four of: (1) dev brandFullName == "PowerBrowser
+# Dev", (2) release brandFullName == "PowerBrowser", (3) the dev pref
 # file sets
 # browser.tabs.inTitlebar to 0 via a pref() call, (4) the release pref file
 # sets no value for that same pref name. A missing/unreadable input path is
@@ -2800,11 +2800,11 @@ _branding_variant_divergence_impl() {
     const relTitlebar = readTitlebarPref(relPrefPath);
 
     const failures = [];
-    if (devValue !== "Power Browser Dev") {
-      failures.push(`dev brand.properties brandFullName=${JSON.stringify(devValue)} (expected "Power Browser Dev") at ${devPropPath}`);
+    if (devValue !== "PowerBrowser Dev") {
+      failures.push(`dev brand.properties brandFullName=${JSON.stringify(devValue)} (expected "PowerBrowser Dev") at ${devPropPath}`);
     }
-    if (relValue !== "Power Browser") {
-      failures.push(`release brand.properties brandFullName=${JSON.stringify(relValue)} (expected "Power Browser") at ${relPropPath}`);
+    if (relValue !== "PowerBrowser") {
+      failures.push(`release brand.properties brandFullName=${JSON.stringify(relValue)} (expected "PowerBrowser") at ${relPropPath}`);
     }
     if (devTitlebar !== "0") {
       failures.push(`dev pref file browser.tabs.inTitlebar=${JSON.stringify(devTitlebar)} (expected a pref() call setting 0) at ${devPrefPath}`);
@@ -2849,8 +2849,8 @@ check_branding_variant_divergence_self_test() {
   dev_pref="$(mktemp)"; track_temp "$dev_pref"
   rel_pref="$(mktemp)"; track_temp "$rel_pref"
 
-  printf 'brandFullName=Power Browser Dev\n' > "$dev_props"
-  printf 'brandFullName=Power Browser\n' > "$rel_props"
+  printf 'brandFullName=PowerBrowser Dev\n' > "$dev_props"
+  printf 'brandFullName=PowerBrowser\n' > "$rel_props"
   printf 'pref("browser.tabs.inTitlebar", 0);\n' > "$dev_pref"
   printf '// release: no titlebar override\n' > "$rel_pref"
 
@@ -2864,7 +2864,7 @@ check_branding_variant_divergence_self_test() {
   # Mutation 1: strip the dev suffix.
   local dev_props_bad
   dev_props_bad="$(mktemp)"; track_temp "$dev_props_bad"
-  printf 'brandFullName=Power Browser\n' > "$dev_props_bad"
+  printf 'brandFullName=PowerBrowser\n' > "$dev_props_bad"
   local out1
   if out1="$(_branding_variant_divergence_impl "$dev_props_bad" "$rel_props" "$dev_pref" "$rel_pref" 2>&1)"; then
     echo "branding-variant-divergence-self-test: FAIL -- planted properties-suffix mutation was NOT rejected" >&2

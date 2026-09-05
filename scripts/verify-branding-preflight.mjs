@@ -146,25 +146,25 @@ function escapeForRegExp(value) {
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// `-brand-full-name = Power Browser Dev` -> "Power Browser Dev"
+// `-brand-full-name = PowerBrowser Dev` -> "PowerBrowser Dev"
 function ftlTerm(text, term) {
     const m = text.match(new RegExp(`^${term}\\s*=\\s*(.*)$`, 'm'));
     return m ? m[1].trim() : null;
 }
 
-// `brandFullName=Power Browser Dev` -> "Power Browser Dev"
+// `brandFullName=PowerBrowser Dev` -> "PowerBrowser Dev"
 function propTerm(text, key) {
     const m = text.match(new RegExp(`^${key}\\s*=\\s*(.*)$`, 'm'));
     return m ? m[1].trim() : null;
 }
 
-// `MOZ_APP_DISPLAYNAME="Power Browser Dev"` -> "Power Browser Dev"
+// `MOZ_APP_DISPLAYNAME="PowerBrowser Dev"` -> "PowerBrowser Dev"
 function shellAssign(text, name) {
     const m = text.match(new RegExp(`^${name}="([^"]*)"`, 'm'));
     return m ? m[1] : null;
 }
 
-// `Name=Power Browser Dev` in a .desktop entry.
+// `Name=PowerBrowser Dev` in a .desktop entry.
 function desktopKey(text, key) {
     const m = text.match(new RegExp(`^${key}=(.*)$`, 'm'));
     return m ? m[1].trim() : null;
@@ -459,12 +459,16 @@ function runChecks(root) {
         }
     }
 
-    // --- 6. the identifier form must never reach a display string ------------
+    // --- 6. the spaceless join must never reach a display string -------------
     //
-    // `PowerBrowser Dev` is exactly what a token-boundary rename produces, and
-    // exactly what nothing else in this tree objects to. Matched with a
-    // trailing space or quote so the legitimate identifier uses (class names,
-    // symbol keys, PowerBrowserAPI) are untouched.
+    // NAME-01 re-scoped this section (see the inventory identifier_form
+    // reason): the canonical display form IS the identifier form now, so an
+    // absence-assertion over the bare `PowerBrowser` matches legitimate
+    // display content and cannot discriminate. The token-boundary failure
+    // mode is now the UNDER-SPACED join -- `PowerBrowserDev` where the dev
+    // composition needs its space -- which nothing else in this tree
+    // objects to. One needle per multi-word variant full name, derived from
+    // the inventory values at check time, never kept here.
     const displaySurfaces = [];
     for (const variant of Object.values(exp.variants || {})) {
         displaySurfaces.push(
@@ -520,8 +524,8 @@ function runChecks(root) {
     //
     // G-01-25: `<title>PowerBrowser</title>` sat in the shell's chrome document
     // through the entire rename and shipped as the OS window title -- the one
-    // OS-level statement of which application owns the window. The leak pattern
-    // below already matched it exactly (`PowerBrowser<` is a text node closing
+    // OS-level statement of which application owns the window. The pre-NAME-01
+    // leak pattern matched it exactly (`PowerBrowser<` is a text node closing
     // its tag). The ONLY reason nothing went red is that this file was never in
     // the read set. The fix is therefore a READ SET, not a pattern.
     //
@@ -532,9 +536,9 @@ function runChecks(root) {
     //
     // RESTRICTED TO MARKUP, deliberately. The same manifest also packages
     // powerbrowser.js, PowerBrowserAPI.sys.mjs and TheiaService.sys.mjs, whose
-    // prose comments legitimately spell the identifier form followed by a space.
-    // Widening the derivation to them would manufacture a false red rather than
-    // close a hole, and a checker that cries wolf gets switched off. Markup is
+    // prose comments spell identifier prose the display needles were never
+    // shaped for. Widening the derivation to them risks a false red rather than
+    // closing a hole, and a checker that cries wolf gets switched off. Markup is
     // where user-facing chrome text is authored, which is exactly the surface
     // class this section exists for.
     const SHELL_DIR = 'powerbrowser/shell';
@@ -554,26 +558,35 @@ function runChecks(root) {
         );
     }
     displaySurfaces.push(...shellMarkup);
-    // `<` joins the space and the quote as a terminator for the same reason:
-    // `PowerBrowser<` is a JSX text node closing its tag, i.e. a rendered
-    // string, while `PowerBrowserWelcomeWidget` (a class name) and
-    // `PowerBrowserAPI` remain untouched because the next character is a
-    // letter. The identifier form's legitimate uses all continue into an
-    // identifier; its illegitimate ones all end.
-    // ESCAPED before interpolation. identifier_form is unconstrained in the
-    // inventory, so a value carrying `(`, `[` or `+` either changed the match
-    // semantics silently or threw SyntaxError at construction, uncaught. This
-    // one genuinely needs pattern semantics for the `[ "<]` terminator class,
-    // so escaping is the fix rather than a literal comparison.
-    const leak = new RegExp(`${escapeForRegExp(exp.identifier_form)}[ "<]`);
+    // One needle per multi-word variant full name: the full name with its
+    // whitespace removed. A plain substring match -- no pattern semantics,
+    // so no escaping sink and nothing unconstrained to interpolate: the
+    // needles are compared with String.includes, never compiled. A
+    // single-word full name (release `PowerBrowser`) yields no needle: its
+    // join is itself, which the release surfaces carry by design, so
+    // asserting its absence would fail the unmutated tree.
+    const joinNeedles = Object.values(exp.variants || {})
+        .map((v) => (v && typeof v.brand_full_name === 'string' ? v.brand_full_name : ''))
+        .filter((name) => /\s/.test(name))
+        .map((name) => name.replace(/\s+/g, ''));
+    if (joinNeedles.length === 0) {
+        // Same non-vacuity rule as the walks above: a scan with no needle
+        // has proven nothing, and a future single-word-only inventory must
+        // fail loudly here rather than pass silently.
+        r.fail(
+            'the inventory declares no multi-word variant full name, so the spaceless-join scan has no needle. ' +
+            'A scan that cannot match proves nothing -- it is indistinguishable from a clean one.',
+        );
+    }
     for (const rel of displaySurfaces) {
         const text = readText(root, rel);
         if (text === null) continue;
         for (const [i, line] of text.split('\n').entries()) {
-            if (leak.test(line)) {
+            const hit = joinNeedles.find((needle) => needle !== '' && line.includes(needle));
+            if (hit !== undefined) {
                 r.fail(
-                    `${rel}:${i + 1} leaks the IDENTIFIER form ${JSON.stringify(exp.identifier_form)} into a display ` +
-                    `surface: ${JSON.stringify(line.trim())}. The display form has a space.`,
+                    `${rel}:${i + 1} carries the spaceless join ${JSON.stringify(hit)} in a display ` +
+                    `surface: ${JSON.stringify(line.trim())}. The dev composition keeps its space.`,
                 );
             }
         }
@@ -838,9 +851,9 @@ function runChecks(root) {
                     'Without it the tree cannot boot where the provider is unset.',
                 );
             }
-            // ESCAPED before interpolation, like the section 6 leak pattern:
-            // brand_short_name is hand-authored and unconstrained, so a value
-            // carrying pattern syntax must not change the match semantics.
+            // ESCAPED before interpolation: brand_short_name is
+            // hand-authored and unconstrained, so a value carrying pattern
+            // syntax must not change the match semantics.
             const rendered = new RegExp(`>\\s*${escapeForRegExp(runtimeName)}\\s*<`);
             for (const [i, line] of welcomeWidget.split('\n').entries()) {
                 if (rendered.test(line)) {
@@ -899,9 +912,9 @@ function runChecks(root) {
                     'Without it the tree cannot boot where the provider is unset.',
                 );
             }
-            // ESCAPED before interpolation, like the section 6 leak pattern:
-            // brand_short_name is hand-authored and unconstrained, so a value
-            // carrying pattern syntax must not change the match semantics.
+            // ESCAPED before interpolation: brand_short_name is
+            // hand-authored and unconstrained, so a value carrying pattern
+            // syntax must not change the match semantics.
             const aboutRendered = new RegExp(`>\\s*${escapeForRegExp(aboutName)}\\s*<`);
             for (const [i, line] of aboutDialog.split('\n').entries()) {
                 if (aboutRendered.test(line)) {
@@ -1232,60 +1245,60 @@ function selfTest() {
             ok = false;
         }
 
-        // The plant: the space-less identifier form in a display literal, which
-        // is exactly what a token-boundary rename produces.
+        // The plant: the OLD spaced display form in a display literal, which
+        // is exactly what a stale surface carries after the NAME-01 rename.
         const ftlRel = 'powerbrowser/branding/dev/locales/en-US/brand.ftl';
         const ftlPath = join(dir, ftlRel);
         writeFileSync(
             ftlPath,
-            readFileSync(ftlPath, 'utf8').replace('-brand-full-name = Power Browser Dev', '-brand-full-name = PowerBrowser Dev'),
+            readFileSync(ftlPath, 'utf8').replace('-brand-full-name = PowerBrowser Dev', '-brand-full-name = Power Browser Dev'),
         );
 
         const planted = runChecks(dir);
         if (planted.failures.length === 0) {
-            console.error(`${NAME}: --self-test FAIL -- the planted mismatch (\`PowerBrowser Dev\` for \`Power Browser Dev\`) was NOT rejected`);
+            console.error(`${NAME}: --self-test FAIL -- the planted mismatch (\`Power Browser Dev\` for \`PowerBrowser Dev\`) was NOT rejected`);
             ok = false;
         } else {
             const all = planted.failures.join('\n');
             const namesFile = all.includes(ftlRel);
-            const namesActual = all.includes('PowerBrowser Dev');
-            const namesExpected = all.includes('Power Browser Dev');
+            const namesActual = all.includes('Power Browser Dev');
+            const namesExpected = all.includes('PowerBrowser Dev');
             if (!namesFile || !namesActual || !namesExpected) {
                 console.error(`${NAME}: --self-test FAIL -- the rejection message must name the offending file and BOTH disagreeing values`);
                 console.error(`  names the file (${ftlRel}): ${namesFile}`);
-                console.error(`  names the actual value ("PowerBrowser Dev"): ${namesActual}`);
-                console.error(`  names the expected value ("Power Browser Dev"): ${namesExpected}`);
+                console.error(`  names the actual value ("Power Browser Dev"): ${namesActual}`);
+                console.error(`  names the expected value ("PowerBrowser Dev"): ${namesExpected}`);
                 for (const f of planted.failures) console.error(`  - ${f}`);
                 ok = false;
             } else {
-                console.log(`${NAME}: --self-test -- planted \`PowerBrowser Dev\` in ${ftlRel} and it was REJECTED, naming the file and both values:`);
+                console.log(`${NAME}: --self-test -- planted \`Power Browser Dev\` in ${ftlRel} and it was REJECTED, naming the file and both values:`);
                 for (const f of planted.failures) console.log(`  - ${f}`);
             }
         }
 
-        // Second plant (01-08): the identifier form as a JSX text node in the
-        // About dialog's copy. This is the same plant-and-require-red shape as
-        // the branding-term plant above, aimed at the DERIVED half of the
-        // display-surface set: the About dialog is reached only because section
-        // 6 walks the branding browser directory, never because anyone
-        // remembered to append its path. It is also the exact defect this plan
-        // closes -- `<h3>PowerBrowser</h3>` shipped as rendered display text
-        // while both guards that should have seen it stayed green.
+        // Second plant (01-08, re-scoped NAME-01): the spaceless join as a
+        // JSX text node in the About dialog's copy. This is the same
+        // plant-and-require-red shape as the branding-term plant above,
+        // aimed at the DERIVED half of the display-surface set: the About
+        // dialog is reached only because section 6 walks the branding
+        // browser directory, never because anyone remembered to append its
+        // path. The planted value is the under-spaced dev composition --
+        // the token-boundary defect section 6 now owns.
         // (04-04: the dialog title resolves at runtime, so the plant targets
         // the runtime render line rather than the pre-channel literal.)
         writeFileSync(ftlPath, readFileSync(join(REPO_ROOT, ftlRel)));
         const aboutRel = 'theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx';
         const aboutPath = join(dir, aboutRel);
         const aboutOriginal = readFileSync(aboutPath, 'utf8');
-        writeFileSync(aboutPath, aboutOriginal.replace('<h3>{this.displayName}</h3>', '<h3>PowerBrowser</h3>'));
+        writeFileSync(aboutPath, aboutOriginal.replace('<h3>{this.displayName}</h3>', '<h3>PowerBrowserDev</h3>'));
         const aboutPlanted = runChecks(dir);
-        const aboutMsg = aboutPlanted.failures.find((f) => f.includes(aboutRel) && f.includes('IDENTIFIER form'));
+        const aboutMsg = aboutPlanted.failures.find((f) => f.includes(aboutRel) && f.includes('spaceless join'));
         if (!aboutMsg) {
-            console.error(`${NAME}: --self-test FAIL -- the identifier form planted as a JSX text node in ${aboutRel} was NOT rejected; the derived display-surface walk did not reach it`);
+            console.error(`${NAME}: --self-test FAIL -- the spaceless join planted as a JSX text node in ${aboutRel} was NOT rejected; the derived display-surface walk did not reach it`);
             for (const f of aboutPlanted.failures) console.error(`  - ${f}`);
             ok = false;
         } else {
-            console.log(`${NAME}: --self-test -- planted the identifier form in ${aboutRel} and it was REJECTED by the DERIVED surface walk: ${aboutMsg}`);
+            console.log(`${NAME}: --self-test -- planted the spaceless join in ${aboutRel} and it was REJECTED by the DERIVED surface walk: ${aboutMsg}`);
         }
         writeFileSync(aboutPath, aboutOriginal);
 
@@ -1330,28 +1343,27 @@ function selfTest() {
         }
         writeFileSync(jarPath, jarOriginal);
 
-        // Fifth plant (01-19): the EXACT pre-fix state of the G-01-25 defect --
-        // the identifier form back in the shell chrome document's title, which
-        // is the literal Gecko's AppWindow hands the window manager for the
+        // Fifth plant (01-19, re-scoped NAME-01): the under-spaced dev
+        // composition in the shell chrome document's title, which is the
+        // literal Gecko's AppWindow hands the window manager for the
         // window's whole lifetime. Section 6 must go red NAMING the file, the
         // line number and the offending text. The shell markup is reached only
         // because that set is DERIVED from powerbrowser/shell/jar.mn, never
-        // because anyone remembered to append the path -- which is precisely
-        // why this leak survived the rename.
+        // because anyone remembered to append the path.
         const shellRel = 'powerbrowser/shell/powerbrowser.xhtml';
         const shellPath = join(dir, shellRel);
         const shellOriginal = readFileSync(shellPath, 'utf8');
-        writeFileSync(shellPath, shellOriginal.replace('<title>Power Browser</title>', '<title>PowerBrowser</title>'));
+        writeFileSync(shellPath, shellOriginal.replace('<title>PowerBrowser</title>', '<title>PowerBrowserDev</title>'));
         const shellPlanted = runChecks(dir);
         const shellMsg = shellPlanted.failures.find(
-            (f) => f.includes(`${shellRel}:`) && f.includes('IDENTIFIER form') && f.includes('<title>PowerBrowser</title>'),
+            (f) => f.includes(`${shellRel}:`) && f.includes('spaceless join') && f.includes('<title>PowerBrowserDev</title>'),
         );
         if (!shellMsg) {
-            console.error(`${NAME}: --self-test FAIL -- the identifier form planted in ${shellRel}'s chrome document title (the pre-fix G-01-25 state) was NOT rejected naming the file and the offending line; the derived shell-markup set did not reach it`);
+            console.error(`${NAME}: --self-test FAIL -- the spaceless join planted in ${shellRel}'s chrome document title was NOT rejected naming the file and the offending line; the derived shell-markup set did not reach it`);
             for (const f of shellPlanted.failures) console.error(`  - ${f}`);
             ok = false;
         } else {
-            console.log(`${NAME}: --self-test -- planted the identifier form in ${shellRel}'s title and it was REJECTED by the DERIVED shell-markup set: ${shellMsg}`);
+            console.log(`${NAME}: --self-test -- planted the spaceless join in ${shellRel}'s title and it was REJECTED by the DERIVED shell-markup set: ${shellMsg}`);
         }
         writeFileSync(shellPath, shellOriginal);
 
@@ -1409,10 +1421,10 @@ function selfTest() {
         const widgetRel = 'theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx';
         const widgetPath = join(dir, widgetRel);
         const widgetOriginal = readFileSync(widgetPath, 'utf8');
-        writeFileSync(widgetPath, widgetOriginal.replace('<h1>{this.displayName}</h1>', '<h1>Power Browser</h1>'));
+        writeFileSync(widgetPath, widgetOriginal.replace('<h1>{this.displayName}</h1>', '<h1>PowerBrowser</h1>'));
         const widgetPlanted = runChecks(dir);
         const widgetMsg = widgetPlanted.failures.find(
-            (f) => f.includes(`${widgetRel}:`) && f.includes('rendered text') && f.includes('<h1>Power Browser</h1>'),
+            (f) => f.includes(`${widgetRel}:`) && f.includes('rendered text') && f.includes('<h1>PowerBrowser</h1>'),
         );
         if (!widgetMsg) {
             console.error(`${NAME}: --self-test FAIL -- the display literal planted as rendered JSX text in ${widgetRel} (the pre-04-01 shape) was NOT rejected naming the file, the line and the offending text`);
@@ -1451,10 +1463,10 @@ function selfTest() {
         // literal gone while the runtime read still stands. Section 10 must
         // go red NAMING the file and the missing fallback value; without it
         // the tree cannot boot where the provider is unset.
-        writeFileSync(widgetPath, widgetOriginal.replace(`= 'Power Browser';`, `= '';`));
+        writeFileSync(widgetPath, widgetOriginal.replace(`= 'PowerBrowser';`, `= '';`));
         const fallbackPlanted = runChecks(dir);
         const fallbackMsg = fallbackPlanted.failures.find(
-            (f) => f.includes(widgetRel) && f.includes('boot fallback') && f.includes('"Power Browser"'),
+            (f) => f.includes(widgetRel) && f.includes('boot fallback') && f.includes('"PowerBrowser"'),
         );
         if (!fallbackMsg) {
             console.error(`${NAME}: --self-test FAIL -- the boot fallback deleted from ${widgetRel} was NOT rejected naming the file and the missing value`);
@@ -1468,10 +1480,10 @@ function selfTest() {
         // Eleventh plant (04-04): the about title back as a rendered display
         // literal, the exact line the runtime read replaced. Section 11 must
         // go red NAMING the file, the line number and the offending text.
-        writeFileSync(aboutPath, aboutOriginal.replace('<h3>{this.displayName}</h3>', '<h3>Power Browser</h3>'));
+        writeFileSync(aboutPath, aboutOriginal.replace('<h3>{this.displayName}</h3>', '<h3>PowerBrowser</h3>'));
         const aboutLiteralPlanted = runChecks(dir);
         const aboutLiteralMsg = aboutLiteralPlanted.failures.find(
-            (f) => f.includes(`${aboutRel}:`) && f.includes('rendered text') && f.includes('<h3>Power Browser</h3>'),
+            (f) => f.includes(`${aboutRel}:`) && f.includes('rendered text') && f.includes('<h3>PowerBrowser</h3>'),
         );
         if (!aboutLiteralMsg) {
             console.error(`${NAME}: --self-test FAIL -- the display literal planted as rendered text in ${aboutRel} (the pre-04-04 shape) was NOT rejected naming the file, the line and the offending text`);
@@ -1509,10 +1521,10 @@ function selfTest() {
         // Thirteenth plant (04-04): the about boot fallback deleted -- the
         // quoted literal gone while the runtime read still stands. Section
         // 11 must go red NAMING the file and the missing fallback value.
-        writeFileSync(aboutPath, aboutOriginal.replace(`= 'Power Browser';`, `= '';`));
+        writeFileSync(aboutPath, aboutOriginal.replace(`= 'PowerBrowser';`, `= '';`));
         const aboutFallbackPlanted = runChecks(dir);
         const aboutFallbackMsg = aboutFallbackPlanted.failures.find(
-            (f) => f.includes(aboutRel) && f.includes('boot fallback') && f.includes('"Power Browser"'),
+            (f) => f.includes(aboutRel) && f.includes('boot fallback') && f.includes('"PowerBrowser"'),
         );
         if (!aboutFallbackMsg) {
             console.error(`${NAME}: --self-test FAIL -- the boot fallback deleted from ${aboutRel} was NOT rejected naming the file and the missing value`);
@@ -1673,7 +1685,7 @@ function selfTest() {
             writeFileSync(manifestPath, manifestOriginal.replace(manifestAnchor, 'display_name = "Planted Manifest Drift"'));
             const manifestPlanted = runChecks(dir);
             const manifestMsg = manifestPlanted.failures.find(
-                (f) => f.includes('manifest-vs-inventory variant dev') && f.includes('Planted Manifest Drift Dev') && f.includes('"Power Browser Dev"'),
+                (f) => f.includes('manifest-vs-inventory variant dev') && f.includes('Planted Manifest Drift Dev') && f.includes('"PowerBrowser Dev"'),
             );
             if (!manifestMsg) {
                 console.error(`${NAME}: --self-test FAIL -- the manifest/inventory disagreement planted in ${manifestRel} was NOT rejected naming the variant and both values`);

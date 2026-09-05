@@ -13,9 +13,18 @@
 // configuration.toml through scripts/generate.mjs's own resolver -- never
 // kept here:
 //
-//  1. The literal set is derived per run: one full display string per
-//     [[variants]] entry (identity.display_name plus that variant's
-//     name_suffix), product.vendor_display, and legal.trademark_notice.
+//  1. The literal set is derived per run: one MULTI-WORD full display
+//     string per [[variants]] entry (identity.display_name plus that
+//     variant's name_suffix), product.vendor_display, and
+//     legal.trademark_notice -- each only when it carries whitespace (see
+//     deriveLiterals). Single-token values are not boundary-distinguishable
+//     from identifier text: since NAME-01 the release display form IS the
+//     identifier prefix, so scanning for it would flag every
+//     `PowerBrowserAPI`, every prose mention, and every doc title in the
+//     tree. The dev composition (base plus suffix) stays fully covered,
+//     and the hand-written display files stay pinned exactly -- value by
+//     value, both variants -- by scripts/verify-branding-preflight.mjs
+//     sections 2-4, which compare each term rather than scanning for it.
 //     Fixed internal identifiers (app_basename, binary_name, remoting_name,
 //     vendor_machine) are deliberately NOT in the set: they are
 //     platform-fixed, occur legitimately everywhere, and are out of scope.
@@ -65,6 +74,9 @@
 // value, an identifier-form control stays green proving the boundary rule,
 // and one stale allowlist entry of each kind (slot gone from the derived
 // set, file rewritten clean, file deleted) goes red naming the entry.
+// A single-word display name derives no release literal at all (the
+// single-token rule), proved by derivation assertion plus an
+// identifier-led control that stays green with no allowlist entry.
 // Every verdict below is a count or set comparison with the compared
 // values named; nothing asserts on the absence of a log line.
 
@@ -117,49 +129,27 @@ const EXCLUDED_LINES = [
 // ---------------------------------------------------------------------------
 
 const ALLOWLIST = [
-  { slot: 'variant-display:release', file: 'CLAUDE.md', reason: 'project instructions prose naming the product' },
-  { slot: 'variant-display:release', file: 'README.md', reason: 'readme prose naming the product it documents' },
   { slot: 'product.vendor_display', file: 'README.md', reason: 'readme footer attributing the project to the foundation' },
-  { slot: 'variant-display:release', file: 'brand/HUMAN-REVIEW.md', reason: 'review record prose and confirmations naming the product (06-03)' },
-  { slot: 'variant-display:release', file: 'brand/mark.svg', reason: 'artwork header comment for the placeholder mark' },
-  { slot: 'variant-display:release', file: 'docs/BUILD.md', reason: 'build-guide prose naming the product tree' },
+  { slot: 'variant-display:dev', file: 'docs/BUILD.md', reason: 'build-guide prose quoting the dev display composition' },
   { slot: 'variant-display:dev', file: 'powerbrowser/branding/dev/configure.sh', reason: 'hand-written dev display name; byte-identity comparand owned by the manifest' },
-  { slot: 'variant-display:release', file: 'powerbrowser/branding/dev/configure.sh', reason: 'same line carries the base display form as a substring of the dev form' },
-  { slot: 'variant-display:release', file: 'powerbrowser/branding/dev/content/aboutDialog.css', reason: 'comment locating the file inside the branding directory' },
   { slot: 'variant-display:dev', file: 'powerbrowser/branding/dev/locales/en-US/brand.ftl', reason: 'hand-written dev full-name term; byte-identity comparand owned by the manifest' },
-  { slot: 'variant-display:release', file: 'powerbrowser/branding/dev/locales/en-US/brand.ftl', reason: 'hand-written release-form terms plus the frozen-name rationale comment' },
   { slot: 'product.vendor_display', file: 'powerbrowser/branding/dev/locales/en-US/brand.ftl', reason: 'hand-written vendor short-name term owned by the manifest' },
   { slot: 'variant-display:dev', file: 'powerbrowser/branding/dev/locales/en-US/brand.properties', reason: 'hand-written dev full-name key; byte-identity comparand owned by the manifest' },
-  { slot: 'variant-display:release', file: 'powerbrowser/branding/dev/locales/en-US/brand.properties', reason: 'hand-written base-name keys owned by the manifest' },
-  { slot: 'variant-display:release', file: 'powerbrowser/branding/release/configure.sh', reason: 'hand-written release display name; byte-identity comparand owned by the manifest' },
-  { slot: 'variant-display:release', file: 'powerbrowser/branding/release/content/aboutDialog.css', reason: 'comment locating the file inside the branding directory' },
-  { slot: 'variant-display:release', file: 'powerbrowser/branding/release/locales/en-US/brand.ftl', reason: 'hand-written display terms plus the frozen-name rationale comment' },
-  { slot: 'product.vendor_display', file: 'powerbrowser/branding/release/locales/en-US/brand.ftl', reason: 'hand-written vendor short-name term owned by the manifest' },
-  { slot: 'variant-display:release', file: 'powerbrowser/branding/release/locales/en-US/brand.properties', reason: 'hand-written display keys; byte-identity comparand owned by the manifest' },
-  { slot: 'variant-display:release', file: 'powerbrowser/powerbrowser-release.desktop', reason: 'hand-written release desktop entry name owned by the manifest' },
   { slot: 'variant-display:dev', file: 'powerbrowser/powerbrowser.desktop', reason: 'hand-written dev desktop entry name owned by the manifest' },
-  { slot: 'variant-display:release', file: 'powerbrowser/powerbrowser.desktop', reason: 'same line carries the base display form as a substring of the dev form' },
-  { slot: 'variant-display:release', file: 'powerbrowser/shell/TheiaService.sys.mjs', reason: 'user-facing shell copy; the UI contract requires the product named with a next step' },
-  { slot: 'variant-display:release', file: 'powerbrowser/shell/powerbrowser.xhtml', reason: 'hand-written shell title and loading text owned by the manifest' },
-  { slot: 'variant-display:release', file: 'scripts/check-patch-surface.sh', reason: 'comment quoting the value shape the patch scan hunts' },
   { slot: 'product.vendor_display', file: 'scripts/check-patch-surface.sh', reason: 'comment on longest-first ordering against the vendor prefix' },
   { slot: 'variant-display:dev', file: 'scripts/generate.mjs', reason: 'generator self-test fixture carrying the derived dev form' },
-  { slot: 'variant-display:release', file: 'scripts/generate.mjs', reason: 'emitter comments and messages quoting the value shape they derive' },
-  { slot: 'variant-display:release', file: 'scripts/rename-brand.mjs', reason: 'rename header documenting the two-word display target' },
-  { slot: 'variant-display:release', file: 'scripts/scan-brand-residue.mjs', reason: 'scan comments distinguishing the display value from the identifier' },
+  { slot: 'variant-display:dev', file: 'scripts/rename-brand.mjs', reason: 'rename header documenting the token-boundary trap with the dev composition' },
   { slot: 'variant-display:dev', file: 'scripts/verify-branding-preflight.mjs', reason: 'preflight comments and plants quoting the dev derivation chain' },
-  { slot: 'variant-display:release', file: 'scripts/verify-branding-preflight.mjs', reason: 'preflight comments and plants quoting the release derivation chain' },
-  { slot: 'variant-display:release', file: 'scripts/verify-branding.mjs', reason: 'comment citing the display form the live check asserts' },
+  { slot: 'variant-display:dev', file: 'scripts/verify-manifest-literals.mjs', reason: 'contract comment quoting the dev composition the single-token rule exists to protect' },
   { slot: 'variant-display:dev', file: 'scripts/verify-platform.sh', reason: 'registry self-test fixtures writing dev brandFullName values' },
-  { slot: 'variant-display:release', file: 'scripts/verify-platform.sh', reason: 'inline checks and fixtures comparing release brandFullName values' },
-  { slot: 'variant-display:release', file: 'scripts/verify-shell-error-contract.mjs', reason: 'contract self-test stub identity carrying the display form' },
-  { slot: 'variant-display:release', file: 'scripts/verify-shell-error-copy.mjs', reason: 'copy-gate assertions and fixtures requiring the product named' },
-  { slot: 'variant-display:release', file: 'theia/applications/browser/package.json', reason: 'hand-written applicationName key; generator-owned derivation target' },
-  { slot: 'variant-display:release', file: 'theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx', reason: 'boot fallback for the dialog heading owned by the generator derivation' },
-  { slot: 'variant-display:release', file: 'theia/extensions/branding/src/browser/powerbrowser-mark.ts', reason: 'artwork comment for the placeholder mark' },
-  { slot: 'variant-display:release', file: 'theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx', reason: 'boot fallback for the welcome heading owned by the generator derivation' },
+  { slot: 'variant-display:dev', file: 'theia/applications/browser/package.json', reason: 'mozilla non-association sentence carrying the dev composition; copy-over target owned by the manifest' },
+  { slot: 'product.vendor_display', file: 'theia/applications/browser/package.json', reason: 'own-trademark notice naming the holder; fallback owned by the generator derivation' },
+  { slot: 'legal.trademark_notice', file: 'theia/applications/browser/package.json', reason: 'own-trademark notice fallback owned by the generator derivation' },
+  { slot: 'variant-display:dev', file: 'theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx', reason: 'mozilla non-association fallback sentence carrying the dev composition' },
+  { slot: 'product.vendor_display', file: 'theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx', reason: 'own-trademark notice naming the holder; fallback owned by the generator derivation' },
+  { slot: 'legal.trademark_notice', file: 'theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx', reason: 'own-trademark notice fallback owned by the generator derivation' },
   { slot: 'product.vendor_display', file: 'theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx', reason: 'comment recording why the inherited org URL was replaced' },
-  { slot: 'variant-display:release', file: 'theia/extensions/telemetry/src/browser/telemetry-preferences.ts', reason: 'user-facing preference description naming the product' },
+  { slot: 'product.vendor_display', file: 'powerbrowser/branding/release/locales/en-US/brand.ftl', reason: 'hand-written vendor short-name term owned by the manifest' },
 ];
 
 const args = process.argv.slice(2);
@@ -196,20 +186,34 @@ function isExcludedLine(file, lineText) {
  * plus that variant's suffix), the vendor display string, and the trademark
  * notice. Empty or non-string values are dropped so the non-vacuity guard
  * below sees a missing derivation rather than an empty match-everything.
+ *
+ * SINGLE-TOKEN VALUES ARE NEVER DERIVED, whichever slot states them. The
+ * boundary rule this check reuses (findMatches) refuses a lowercase-or-digit
+ * join on the right but allows an uppercase one, and refuses nothing on
+ * prose boundaries -- so a one-word value matches every identifier it
+ * prefixes (`PowerBrowserAPI`) and every prose mention (`Customizing
+ * PowerBrowser`). Scanning for such a value would either flag the whole
+ * tree or, once allowlisted file by file, guard nothing: any genuine leak
+ * in an allowlisted file would be invisible. Multi-word values do not have
+ * this problem -- no identifier spells `PowerBrowser Dev` -- so they carry
+ * the gate. (Since NAME-01 the release display form is the single word
+ * `PowerBrowser`: its occurrences are pinned exactly, term by term, by
+ * verify-branding-preflight.mjs sections 2-4 instead.)
  */
 export function deriveLiterals(config) {
   const out = [];
+  const keep = (value) => typeof value === 'string' && value !== '' && /\s/.test(value);
   const base = config?.identity?.display_name;
   for (const variant of config?.variants ?? []) {
     const value = `${base ?? ''}${variant?.name_suffix ?? ''}`;
-    if (typeof base === 'string' && base !== '' && typeof variant?.name_suffix === 'string' && value !== '') {
+    if (typeof base === 'string' && base !== '' && typeof variant?.name_suffix === 'string' && keep(value)) {
       out.push({ slot: `variant-display:${variant.id}`, value });
     }
   }
-  if (typeof config?.product?.vendor_display === 'string' && config.product.vendor_display !== '') {
+  if (keep(config?.product?.vendor_display)) {
     out.push({ slot: 'product.vendor_display', value: config.product.vendor_display });
   }
-  if (typeof config?.legal?.trademark_notice === 'string' && config.legal.trademark_notice !== '') {
+  if (keep(config?.legal?.trademark_notice)) {
     out.push({ slot: 'legal.trademark_notice', value: config.legal.trademark_notice });
   }
   return out;
@@ -551,10 +555,54 @@ function selfTest() {
     }
   }
 
+  // Plant 6: a single-word display name derives no release literal, and
+  // identifier-led text stays green with no allowlist entry -- the
+  // single-token rule. A one-word value is not boundary-distinguishable
+  // from the identifiers it prefixes, so deriving it would flag the whole
+  // tree (or, once allowlisted file by file, guard nothing); the dev
+  // composition here stays multi-word and keeps its coverage, proved by
+  // plant 1's shape above.
+  {
+    const derived = deriveLiterals({
+      identity: { display_name: 'Acme' },
+      variants: [{ id: 'dev', name_suffix: ' Dev' }, { id: 'release', name_suffix: '' }],
+      product: { vendor_display: 'Acme Works' },
+      legal: { trademark_notice: 'Acme notice words here.' },
+    });
+    const slots = derived.map((l) => l.slot).sort();
+    const want = ['legal.trademark_notice', 'product.vendor_display', 'variant-display:dev'].sort();
+    if (JSON.stringify(slots) !== JSON.stringify(want)) {
+      complain('single-token skip', `derived [${slots.join(', ')}], want [${want.join(', ')}]`);
+    } else {
+      console.log('  ok  single-token display name -> release literal skipped, dev/vendor/notice kept');
+    }
+  }
+  {
+    const singleManifest = FIXTURE_MANIFEST.replace('display_name = "Acme Browser"', 'display_name = "Acme"');
+    const dir = track(mkdtempSync(join(tmpdir(), 'manifest-literals-selftest-')));
+    writeFileSync(join(dir, MANIFEST_REL), singleManifest, 'utf8');
+    writeFileSync(join(dir, 'app.txt'), 'title Acme Dev\n', 'utf8');
+    writeFileSync(join(dir, 'id.txt'), 'AcmeWidget renders Acme\n', 'utf8');
+    const { failures } = checkTree({
+      root: dir,
+      files: [MANIFEST_REL, 'app.txt', 'id.txt'],
+      manifestRel: MANIFEST_REL,
+      allowlist: [{ slot: 'variant-display:dev', file: 'app.txt' }],
+    });
+    const flagged = failures.filter((f) => f.includes('id.txt'));
+    if (flagged.length > 0) {
+      complain('single-token identifier control', `identifier-led text was flagged: ${flagged.join(' | ')}`);
+    } else if (failures.length > 0) {
+      complain('single-token identifier control', `unexpected failures: ${failures.join(' | ')}`);
+    } else {
+      console.log('  ok  single-token display -> identifier-led text stays green with no entry');
+    }
+  }
+
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
 
   if (failed > 0) return 1;
-  console.log(`${NAME}: --self-test PASS -- 7 planted faults all behaved as pinned`);
+  console.log(`${NAME}: --self-test PASS -- 9 planted faults all behaved as pinned`);
   return 0;
 }
 
