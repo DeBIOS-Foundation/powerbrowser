@@ -83,9 +83,17 @@ Plans:
 **Plans**: 4 plans in 3 waves
 
 Plans:
+**Wave 1**
+
 - [ ] 09-01-PLAN.md — EXT-02 static tracer: synthetic npm plus local-path slice through schema, resolver, and pin gate
 - [ ] 09-02-PLAN.md — TEL-04 crash collector with contract gate, written policy, and ping/report separation
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 09-03-PLAN.md — EXT-03 WebExtensions via ExtensionSettings agreement gate (closes pending-todo mechanism half)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 09-04-PLAN.md — BLD-02 tier-3 fixture matrix plus UPD-04 re-pin proof with token-gate intact
 
 | Phase | Plans Complete | Status | Completed |
