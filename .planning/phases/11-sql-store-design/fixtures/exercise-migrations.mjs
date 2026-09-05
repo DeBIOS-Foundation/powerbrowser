@@ -326,6 +326,32 @@ try {
     }
   }
 
+  // Control E: newer-than-chain copy — the writer refuses rather than
+  // rewriting history (MIGRATIONS.md never-downgrades rule). Version and
+  // rows must be untouched afterwards.
+  {
+    const p = join(stage, 'newer.sqlite');
+    copyFileSync(FIXTURE_V1, p);
+    const v = new DatabaseSync(p);
+    v.exec('PRAGMA user_version = 99');
+    v.close();
+    const db = new DatabaseSync(p);
+    let threw = false;
+    try {
+      migrateToV1(db);
+    } catch (e) {
+      threw = /refusing downgrade/.test(e.message);
+    }
+    try {
+      const rows = readRows(db);
+      check('newer-version-refuses', threw, 'chain head did not refuse a newer user_version');
+      check('newer-version-untouched', getUserVersion(db) === 99 && JSON.stringify(rows) === JSON.stringify(expectedRows),
+        `newer copy mutated: version=${getUserVersion(db)} rows=${JSON.stringify(rows)}`);
+    } finally {
+      db.close();
+    }
+  }
+
   check('assertions-nonvacuous', assertions > 0, 'zero assertions ran -- a drive that asserts nothing proves nothing');
 } finally {
   rmSync(stage, { recursive: true, force: true });
