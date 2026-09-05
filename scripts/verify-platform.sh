@@ -4152,6 +4152,35 @@ run_own_checks() {
     # No build, no browser, no display, no network.
     "crash-collector|node $REPO_ROOT/scripts/verify-crash-collector.mjs"
     "crash-collector-self-test|node $REPO_ROOT/scripts/verify-crash-collector.mjs --self-test"
+
+    # NEW (09-03): the WebExtensions declaration rows -- the manifest's
+    # [[webextensions]] table reaches the policy engine as the tracked
+    # ExtensionSettings key.
+    #
+    # It asserts something DIFFERENT from the rows above it, which is why
+    # another pair of rows exists rather than none. Every row above pins
+    # manifest-derived fragments, tracked blocks, downloaded bytes, or the
+    # collector's wire vocabulary, and none of them reads the distribution
+    # policy at all. This row derives the expected ExtensionSettings map
+    # from the manifest at check time through the generator's own emitter
+    # and requires the tracked key to equal it in both directions (a key
+    # outliving its manifest entry goes red naming the add-on id), plus
+    # install_url origin coverage against the endpoint allowlist naming
+    # the host -- so a declared add-on the policy engine would fetch from
+    # an untracked host goes red here in seconds rather than at runtime.
+    #
+    # webextensions-self-test rides alongside for the reason every other
+    # self-test row in this array gives: it proves the unmutated control
+    # green first, then requires red naming the defect for a drifted
+    # tracked key, a drifted fragment, a stale tracked key, and an
+    # uncovered fixture origin -- with all fixtures synthetic Acme data in
+    # mkdtemp, so the tracked allowlist stays free of fixture hosts.
+    #
+    # Both are honestly --quick: text off disk only, with the same absent
+    # fragment SKIP as every other fragment gate (generate-check's own
+    # rule). No build, no browser, no display, no network.
+    "webextensions|node $REPO_ROOT/scripts/verify-webextensions.mjs"
+    "webextensions-self-test|node $REPO_ROOT/scripts/verify-webextensions.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then

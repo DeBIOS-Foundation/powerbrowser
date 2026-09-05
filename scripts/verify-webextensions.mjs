@@ -30,6 +30,21 @@
 // Honestly --quick: it reads text files off disk only. No build, no
 // browser, no display, no network.
 //
+// INSTALL MECHANISM (EXT-03, confirmed against the pinned ESR tag -- the
+// [upstreams] firefox_esr_tag this tree fetches, read from
+// generated/upstream-pins.env, never restated here): self-hosted
+// install_url XPIs install unsigned with
+// xpinstall.signatures.required=false -- upstream/toolkit/moz.configure's
+// require_signing returns `milestone.is_release_or_beta and not
+// milestone.is_esr`, so MOZ_REQUIRE_SIGNING defaults off on ESR and
+// AddonSettings.REQUIRE_SIGNING stays a flippable pref
+// (upstream/toolkit/mozapps/extensions/internal/AddonSettings.sys.mjs)
+// rather than a locked true. No AMO publication is required for
+// downstream XPIs; AMO-unlisted-signed is the documented alternative only
+// for stricter postures. A downstream flips the pref in its own branding
+// pref file; this tree ships zero declared add-ons, so it states no such
+// pref here.
+//
 // Usage:
 //   node scripts/verify-webextensions.mjs
 //   node scripts/verify-webextensions.mjs --self-test
