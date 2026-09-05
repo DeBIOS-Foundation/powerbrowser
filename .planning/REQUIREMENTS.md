@@ -8,7 +8,7 @@ deferred, with SQL tabs still preceding them when scheduled.)
 
 ### Canonical Name (NAME)
 
-- [ ] **NAME-01**: The canonical display form **PowerBrowser** is applied
+- [x] **NAME-01**: The canonical display form **PowerBrowser** is applied
       across all generated surfaces (`identity.display_name` →
       `PowerBrowser` in `configuration.toml`), every gate asserting the
       spaced form is re-pinned (generate `--self-test` byte-identity
@@ -19,15 +19,15 @@ deferred, with SQL tabs still preceding them when scheduled.)
 
 ### Installer Builds (PKG)
 
-- [ ] **PKG-01**: Windows (NSIS/MSIX) and macOS (DMG/`.icns`) installers are
+- [x] **PKG-01**: Windows (NSIS/MSIX) and macOS (DMG/`.icns`) installers are
       actually built on packaging hosts — Nix-built packaging tried first,
       agent-driven VMs as fallback — from the generated branding
       (branding.nsi, `.ico`/`.icns`, `wiz*.bmp`, dsstore, stubinstaller/,
       msix)
-- [ ] **PKG-02**: The update story is self-hosted MAR updates under fork
+- [x] **PKG-02**: The update story is self-hosted MAR updates under fork
       signing (no Mozilla phone-home, no dead updater); the per-OS
       install/uninstall matrix is the exit gate
-- [ ] **PKG-03**: `docs/BUILD.md` documents the packaging procedure, and the
+- [x] **PKG-03**: `docs/BUILD.md` documents the packaging procedure, and the
       WR-04 (reject bare `$VAR` in NSIS defines) + WR-07 (thread fixture
       `root` through the installer verifier) pre-fixes land before the
       first real-host build so the gates discriminate before binaries exist
@@ -54,23 +54,23 @@ deferred, with SQL tabs still preceding them when scheduled.)
 
 ### Release & Fixture Builds (BLD)
 
-- [ ] **BLD-01**: A release `objdir-release` build passes with the
+- [x] **BLD-01**: A release `objdir-release` build passes with the
       release-variant verify rows green (WINDOWS #10)
 - [ ] **BLD-02**: Tier-3 per-fixture builds pass (07 — adversarial Zebra et
       al. proven on real built artifacts, not schema alone)
 
 ### Upstream Uptake Drills (UPD)
 
-- [ ] **UPD-03**: A live ESR rebase drill against the next ESR tag passes
+- [x] **UPD-03**: A live ESR rebase drill against the next ESR tag passes
       through the existing rebase/conflict tooling (05)
 - [ ] **UPD-04**: A Theia re-pin proof passes with the token-gate backend
       intact (05)
 
 ### Hardening Fixes (SEC / SHELL)
 
-- [ ] **SEC-02**: WINDOWS #13 is closed — the `registerWindowActor` hole in
+- [x] **SEC-02**: WINDOWS #13 is closed — the `registerWindowActor` hole in
       the internals-boundary guard
-- [ ] **SHELL-01**: WINDOWS #14 is fixed — BiDi double-window /
+- [x] **SHELL-01**: WINDOWS #14 is fixed — BiDi double-window /
       `contexts[0]` mis-resolution
 
 #### Inherited Mozilla egress carve-out (Remote Settings)
@@ -131,16 +131,16 @@ Repointing or disabling these per a downstream's manifest is TEL-03's job.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NAME-01 | Phase 08 | Pending |
-| PKG-01 | Phase 08 | Pending |
-| PKG-02 | Phase 08 | Pending |
-| PKG-03 | Phase 08 | Pending |
+| NAME-01 | Phase 08 | Complete |
+| PKG-01 | Phase 08 | Complete |
+| PKG-02 | Phase 08 | Complete |
+| PKG-03 | Phase 08 | Complete |
 | EXT-02 | Phase 09 | Pending |
 | EXT-03 | Phase 09 | Pending |
 | TEL-04 | Phase 09 | Pending |
-| BLD-01 | Phase 08 | Pending |
+| BLD-01 | Phase 08 | Complete |
 | BLD-02 | Phase 09 | Pending |
-| UPD-03 | Phase 08 | Pending |
+| UPD-03 | Phase 08 | Complete |
 | UPD-04 | Phase 09 | Pending |
-| SEC-02 | Phase 08 | Pending |
-| SHELL-01 | Phase 08 | Pending |
+| SEC-02 | Phase 08 | Complete |
+| SHELL-01 | Phase 08 | Complete |
