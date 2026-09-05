@@ -27,6 +27,11 @@ ChromeUtils.defineESModuleGetters(lazy, {
   Sqlite: "resource://gre/modules/Sqlite.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   SessionStore: "resource:///modules/sessionstore/SessionStore.sys.mjs",
+  // SQL-04 (12-02): read-only reach-throughs. PlacesUtils backs the
+  // history, bookmark, and folder-listing readers (fetch and
+  // getFolderContents only -- never a raw places file open); the
+  // sessionstore projection reuses the SessionStore line above.
+  PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
 });
 
 // Strong references to in-flight one-shot timers created by sleep(). See the
@@ -729,6 +734,88 @@ export const PowerBrowserAPI = Object.freeze({
     } catch {
       return [];
     }
+  },
+
+  /**
+   * SQL-04 (12-02): history point read via the History fetch API keyed by
+   * URL. Never-throw read convention: resolves null when the page is
+   * unknown or Places is unreachable. Platform API only -- no raw places
+   * file access, and the projected fields carry no credential or secret.
+   */
+  async readHistoryEntry(url) {
+    try {
+      const info = await lazy.PlacesUtils.history.fetch(url);
+      if (!info) {
+        return null;
+      }
+      return {
+        url: info.url ?? url,
+        title: info.title ?? "",
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * SQL-04 (12-02): bookmark point read via the Bookmarks fetch API keyed
+   * by URL. The fetch resolves an object, an array, or null; the first
+   * item wins. Never throws: resolves null on any failure.
+   */
+  async readBookmarkByUrl(url) {
+    try {
+      const found = await lazy.PlacesUtils.bookmarks.fetch({ url });
+      const item = Array.isArray(found) ? found[0] : found;
+      if (!item) {
+        return null;
+      }
+      return {
+        guid: item.guid ?? "",
+        title: item.title ?? "",
+        url: item.url ?? url,
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * SQL-04 (12-02): bookmark folder listing via getFolderContents.
+   * Enumerates the open result root's children into guid/title/url rows
+   * and always closes the container again. Never throws: resolves [] on
+   * any failure.
+   */
+  listBookmarkFolder(folderGuid) {
+    try {
+      const root = lazy.PlacesUtils.getFolderContents(folderGuid, false, false).root;
+      const rows = [];
+      try {
+        const count = root.childCount;
+        for (let i = 0; i < count; i++) {
+          const node = root.getChild(i);
+          rows.push({
+            guid: node.bookmarkGuid ?? "",
+            title: node.title ?? "",
+            url: node.uri ?? "",
+          });
+        }
+      } finally {
+        root.containerOpen = false;
+      }
+      return rows;
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * SQL-04 (12-02): sessionstore read projection for consumers. Delegates
+   * to the 12-01 parser -- the single JSON-string parse -- so the rebuild
+   * source, the sweep input, and this read surface can never disagree on
+   * shape. Tab address/title fields only, never credentials.
+   */
+  projectSessionStoreTabs() {
+    return PowerBrowserAPI.parseSessionStoreTabRows();
   },
 
   /**
