@@ -169,14 +169,35 @@ export function createThrottleState() {
 }
 
 /**
- * Returns the throttle rule name when the submit must be soft-rejected,
- * else records the acceptance and returns null. nowMs is injected so the
- * gate trips the rule deterministically with no sleeps.
+ * Non-mutating throttle probe: returns the throttle rule name when the
+ * submit must be soft-rejected, else null. handleSubmit probes BEFORE the
+ * store write and records the accept only after it succeeds, so a submit
+ * that fails with 500 store_unavailable never consumes budget -- only
+ * accepted submits count toward the cap (docs/CRASH-POLICY.md).
  */
-export function checkThrottle(state, nowMs) {
+export function wouldThrottle(state, nowMs) {
     state.acceptedAt = state.acceptedAt.filter(t => t > nowMs - THROTTLE_WINDOW_MS);
     if (state.acceptedAt.length >= THROTTLE_MAX_SUBMITS) return THROTTLE_RULE;
+    return null;
+}
+
+/** Record one accepted submit. Call only after the submit is durably stored. */
+export function recordAccept(state, nowMs) {
     state.acceptedAt.push(nowMs);
+}
+
+/**
+ * Probe-and-record in one step: returns the throttle rule name when the
+ * submit must be soft-rejected, else records the acceptance and returns
+ * null. nowMs is injected so the gate trips the rule deterministically
+ * with no sleeps. For direct callers that store nothing (the gate's
+ * throttle plant); handleSubmit uses the split form so failed writes
+ * consume no budget.
+ */
+export function checkThrottle(state, nowMs) {
+    const rule = wouldThrottle(state, nowMs);
+    if (rule) return rule;
+    recordAccept(state, nowMs);
     return null;
 }
 
@@ -213,7 +234,7 @@ export function handleSubmit({ body, contentType, storeDir, throttle, nowMs, onD
         const status = parsed.reason === REASON_OVERSIZED ? 413 : 400;
         return { status, body: buildDiscardResponse(parsed.reason), crashId: null };
     }
-    const rule = checkThrottle(throttle, nowMs);
+    const rule = wouldThrottle(throttle, nowMs);
     if (rule) {
         return { status: 200, body: buildDiscardResponse(rule), crashId: null };
     }
@@ -242,6 +263,7 @@ export function handleSubmit({ body, contentType, storeDir, throttle, nowMs, onD
         return { status: 500, body: buildDiscardResponse(REASON_STORE_UNAVAILABLE), crashId: null };
     }
     sweepRetention(storeDir, nowMs, diagnose);
+    recordAccept(throttle, nowMs);
     return { status: 200, body: buildCrashIdResponse(crashId), crashId };
 }
 
