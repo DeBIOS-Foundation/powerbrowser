@@ -97,6 +97,17 @@ function isTable(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+/**
+ * Canonical form for one ExtensionSettings entry ({installation_mode,
+ * install_url}). JSON.stringify is insertion-order sensitive, so any
+ * key-sorting formatter applied to policies.json would red this gate on
+ * semantically identical content -- sort one level before comparing.
+ */
+function canonEntry(value) {
+    if (!isTable(value)) return JSON.stringify(value);
+    return JSON.stringify(Object.keys(value).sort().reduce((acc, k) => ((acc[k] = value[k]), acc), {}));
+}
+
 function runChecks(root) {
     const failures = [];
     const skipped = [];
@@ -135,7 +146,7 @@ function runChecks(root) {
                         `${FRAGMENT_REL} is missing the [[webextensions]] entry with id ${JSON.stringify(id)} -- stale output. `
                         + `Next step: run ${RERUN_GENERATE}, then re-run this check.`,
                     );
-                } else if (JSON.stringify(fragment[id]) !== JSON.stringify(expected[id])) {
+                } else if (canonEntry(fragment[id]) !== canonEntry(expected[id])) {
                     failures.push(
                         `${FRAGMENT_REL} carries ${JSON.stringify(fragment[id])} for the entry with id ${JSON.stringify(id)} `
                         + `but ${MANIFEST_REL} emits ${JSON.stringify(expected[id])} -- stale output. `
@@ -178,7 +189,7 @@ function runChecks(root) {
                         + `stale output. Next step: copy the key from ${FRAGMENT_REL} (that key only; leave every sibling key byte-identical), `
                         + `then re-run this check.`,
                     );
-                } else if (JSON.stringify(tracked[id]) !== JSON.stringify(expected[id])) {
+                } else if (canonEntry(tracked[id]) !== canonEntry(expected[id])) {
                     failures.push(
                         `${POLICY_REL}'s ExtensionSettings key carries ${JSON.stringify(tracked[id])} for the entry with id `
                         + `${JSON.stringify(id)} but ${MANIFEST_REL} emits ${JSON.stringify(expected[id])} -- stale output. `
