@@ -4,16 +4,16 @@ milestone: v1.2
 current_phase: 10
 current_phase_name: roadmap created, not started
 status: planning
-stopped_at: Completed 11-sql-store-design-01-PLAN.md
-last_updated: "2026-09-05T18:41:57.856Z"
+stopped_at: Completed 12-sql-store-build-03-PLAN.md
+last_updated: "2026-09-05T20:04:31.343Z"
 last_activity: 2026-09-05
 last_activity_desc: v1.2 roadmap created (Phases 10–12)
-state_head: 2184e0beee0fe1701c8c84086790ff99c14cb650
+state_head: d0492b5b1a25b7d16a0e209fd5fd13dfcef71a6a
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 6
-  completed_plans: 4
+  total_plans: 9
+  completed_plans: 6
 milestone_name: Sign-off Closeout and SQL Store
 ---
 
@@ -102,6 +102,7 @@ Last activity: 2026-09-05 — Phase 12 Plan 02 executed (readonly query API, Pla
 | Phase 10-sign-off-closeout P02 | 20min | 3 tasks | 1 files |
 | Phase 10-sign-off-closeout P03 | 25min | 2 tasks | 1 files |
 | Phase 11-sql-store-design P01 | 12min | 2 tasks | 2 files |
+| Phase 12-sql-store-build P03 | ~5min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -247,6 +248,9 @@ Recent decisions affecting current work:
 - [Phase 10]: 10-03: zero staged drills to carry — carry list is exactly the five human UAT sheets
 - [Phase 10]: 11-01: no AUTHORITY.md defects in reviewer pass — six rows confirmed as written
 - [Phase 10]: 11-01: assumed inputs A1-A5 deferred with pinning procedures, A6 pinned by construction
+- [Phase 10]: 12-03: scan exact-paren spelling keeps DatabaseSync scaffolding green by construction; scan self-exempts by basename with plants elsewhere
+- [Phase 10]: 12-03: soak default static-only keeps base row honestly quick; live half opt-in --live
+- [Phase 10]: 12-03: drill dry-run at live newer tag FIREFOX_153_2_0esr_RELEASE, destructive re-clone staged per shared-state rule
 
 ### Pending Todos
 
@@ -331,8 +335,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-05T18:41:57.833Z
-Stopped at: Completed 11-sql-store-design-01-PLAN.md
+Last session: 2026-09-05T20:04:31.322Z
+Stopped at: Completed 12-sql-store-build-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
