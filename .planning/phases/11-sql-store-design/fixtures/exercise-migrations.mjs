@@ -179,7 +179,10 @@ function nextCorruptPath(path) {
 function quarantineAndRebuild(path, restoreRows) {
   let ok = false;
   try {
-    const db = new DatabaseSync(path);
+    // Readonly check: a read-write open performs recovery writes that would
+    // mutate the evidence before the forensics copy below. Phase 12 runs the
+    // tripwire off the already-open write connection or a readonly handle.
+    const db = new DatabaseSync(path, readOnlyOption);
     try {
       ok = integrityOk(db);
     } finally {
