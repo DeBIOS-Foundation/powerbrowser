@@ -116,7 +116,7 @@ Each task was committed atomically:
 2. **Task 2: Schema key shapes for npm integrity and local-path plus webextensions-ready conditional logic** - `7726324` (feat)
 3. **Task 3: Pin-gate plants for npm float and local-path absence with byte-identity held** - `d3d14a8` (feat)
 
-**Plan metadata:** `{summary-commit}` (docs: complete plan)
+**Plan metadata:** `fae5952` (docs: complete plan)
 
 ## Files Created/Modified
 - `scripts/lib/config-schema.json` - `extensions[].integrity` (SRI sha512 shape) and `extensions[].path` (relative-path shape) keys
