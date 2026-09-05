@@ -454,8 +454,17 @@ function isUnset(value) {
 const VARIANT_PREFIX = 'variants[].';
 const EXTENSIONS_PREFIX = 'extensions[].';
 
-/** The two `source` values EXT-01 implements. Anything else is a v2 kind (EXT-02) or a typo. */
-const EXTENSION_SOURCES = Object.freeze(['openvsx', 'url']);
+/** The four `source` values EXT-01 through EXT-02 implement. Anything else is a typo. */
+const EXTENSION_SOURCES = Object.freeze(['openvsx', 'url', 'npm', 'local-path']);
+
+/**
+ * Characters and tags that make an npm version float. The schema shape admits
+ * `latest` (it is alphanumeric), so the npm conditional-pin branch owns this
+ * rejection: a floating version resolves to whatever is newest at download
+ * time, which is the unpinned behavior the pin gate cannot catch by hash
+ * alone (a fresh float hashes clean on first download).
+ */
+const NPM_FLOAT_CHARS = /[\^~*|<>=,\s]/;
 
 /** The four telemetry levels TEL-01 implements: Theia's real enum, default `off`. */
 const TELEMETRY_LEVELS = Object.freeze(['off', 'crash', 'error', 'all']);
@@ -577,13 +586,20 @@ function ordinal(n) {
  *
  * CONDITIONAL PINS. `version` is required when source is `openvsx` (it builds
  * the exact versioned file URL -- latest-resolution is the unpinned behavior
- * EXT-01 forbids) and `url` is required when source is `url`. Both carry
- * `required: false` in the schema so this function, which sees the source, is
- * the only place that demands them; `id`, `source` and `sha256` carry
- * `required: true` and are enforced by the loop below exactly like the variant
- * elements above. A `url` that stock `theia download:plugins` would refuse
- * (anything not ending in .vsix/.theia/.tar.gz) fails HERE, at generate time,
- * rather than after the download step -- same entry-naming shape.
+ * EXT-01 forbids) and `url` is required when source is `url`. Source `npm`
+ * (EXT-02) requires `version` too, but exact: `latest` and every range
+ * character would resolve to whatever is newest at download time, so they
+ * fail here even though the schema shape alone would admit `latest`. It also
+ * requires `integrity`, the registry SRI digest recorded at pin time. Source
+ * `local-path` (EXT-02) requires `path`, the project-relative folder the
+ * download step packs; an absent folder fails loud at the pin gate, which is
+ * the check that can see the filesystem. All four carry `required: false` in
+ * the schema so this function, which sees the source, is the only place that
+ * demands them; `id`, `source` and `sha256` carry `required: true` and are
+ * enforced by the loop below exactly like the variant elements above. A `url`
+ * that stock `theia download:plugins` would refuse (anything not ending in
+ * .vsix/.theia/.tar.gz) fails HERE, at generate time, rather than after the
+ * download step -- same entry-naming shape.
  *
  * SHAPES ARE DERIVED, NOT RESTATED. Each value is tested against its own
  * schema `regex`, read out of SCHEMA_KEYS, so the pattern lives in exactly
@@ -638,8 +654,7 @@ function validateExtensionElements(doc) {
         if (source !== undefined && !EXTENSION_SOURCES.includes(source)) {
             failures.push(
                 `${label}: source is ${JSON.stringify(source)}, which this project does not implement. `
-                + `Write it as one of ${EXTENSION_SOURCES.map(s => JSON.stringify(s)).join(' or ')} -- anything else `
-                + `(npm, local paths) is a later phase. Correct it in ${MANIFEST_NAME}, then run: ${RERUN}`,
+                + `Write it as one of ${EXTENSION_SOURCES.map(s => JSON.stringify(s)).join(' or ')}. Correct it in ${MANIFEST_NAME}, then run: ${RERUN}`,
             );
             continue;
         }
@@ -659,9 +674,39 @@ function validateExtensionElements(doc) {
                 + `url a value. Then run: ${RERUN}`,
             );
         }
+        if (source === 'npm' && entry.version === undefined) {
+            failures.push(
+                `${label}: version ${UNSET_MARK} An npm entry without an exact version would resolve to `
+                + `whatever is latest, which is the unpinned behavior this setting forbids. Open ${MANIFEST_NAME}, `
+                + `find that [[extensions]] entry, and pin version. Then run: ${RERUN}`,
+            );
+        }
+        if (source === 'npm' && typeof entry.version === 'string'
+            && (entry.version === 'latest' || NPM_FLOAT_CHARS.test(entry.version))) {
+            failures.push(
+                `${label}: version is ${JSON.stringify(entry.version)}, which floats -- it resolves to whatever is `
+                + `newest at download time. Pin the exact version instead: confirm it with npm view ${entry.id}@<version> `
+                + `dist.tarball, then run: ${RERUN}`,
+            );
+        }
+        if (source === 'npm' && entry.integrity === undefined) {
+            failures.push(
+                `${label}: integrity ${UNSET_MARK} An npm entry pins its bytes twice: the exact version names the `
+                + `tarball and the registry integrity digest guards a republication under that version. Open `
+                + `${MANIFEST_NAME}, find that [[extensions]] entry, and record integrity from `
+                + `npm view ${entry.id}@${entry.version ?? '<version>'} dist.integrity. Then run: ${RERUN}`,
+            );
+        }
+        if (source === 'local-path' && entry.path === undefined) {
+            failures.push(
+                `${label}: path ${UNSET_MARK} A local-path entry packs its folder at download time, so without one `
+                + `there is nothing to pack. Open ${MANIFEST_NAME}, find that [[extensions]] entry, and give `
+                + `path a project-relative folder. Then run: ${RERUN}`,
+            );
+        }
 
         // Shapes, against each key's own schema pattern, naming the entry.
-        for (const key of ['id', 'version', 'url', 'sha256']) {
+        for (const key of ['id', 'version', 'url', 'integrity', 'path', 'sha256']) {
             const value = entry[key];
             if (value === undefined) continue;
             const spec = SCHEMA_KEYS[`${EXTENSIONS_PREFIX}${key}`];
@@ -1573,10 +1618,61 @@ export function openVsxFileUrl(entry) {
 }
 
 /**
- * The declared-extensions map (04-02, EXT-01): the application
+ * The registry tarball URL for a pinned npm entry (EXT-02).
+ *
+ * The conventional registry layout `https://registry.npmjs.org/<pkg>/-/<pkg>-<version>.tgz`,
+ * with the entry id as the package name. The registry is authoritative for
+ * this shape: at pin-bootstrap time the operator confirms it with
+ * `npm view <id>@<version> dist.tarball dist.integrity` and records the
+ * integrity digest alongside. After that the pin gate holds the line two
+ * ways -- the emitted URL must equal the recorded one (block equality) and
+ * must end in `-<version>.tgz` (the float guard) -- so a proxy-moved tarball
+ * or a re-resolved float goes red rather than downloading silently.
+ *
+ * The id and version pass the sink guard on the way in: both schema shapes
+ * already exclude every sink metacharacter, so on a validated manifest these
+ * guards never fire -- they stop a future schema loosening from emitting a
+ * hostile URL. The composed URL itself carries no downloader placeholder;
+ * per-target npm layouts are not a shape this pipeline names.
+ */
+export function npmDistTarballUrl(entry) {
+    const id = assertEmittable(`${EXTENSIONS_PREFIX}id`, entry.id);
+    const version = assertEmittable(`${EXTENSIONS_PREFIX}version`, entry.version);
+    return `https://registry.npmjs.org/${id}/-/${id}-${version}.tgz`;
+}
+
+/**
+ * The packed-archive reference for a local-path entry (EXT-02).
+ *
+ * The download step packs the stated folder to canonical bytes and keeps
+ * them under this reference; the manifest pin (sha256) covers those packed
+ * bytes, never a raw directory listing. The `.tgz` ending routes the pin
+ * gate to the same `.tar.gz` archive slot every other kind hashes.
+ *
+ * The path passes the sink guard on the way in, for the same defence-in-depth
+ * reason as the npm resolver above. The relative-path schema shape already
+ * excludes `$`, so no downloader placeholder can smuggle through here --
+ * placeholder passthrough is the direct-URL kind's alone.
+ */
+export function localPackRef(entry) {
+    const path = assertEmittable(`${EXTENSIONS_PREFIX}path`, entry.path);
+    return `${path}.tgz`;
+}
+
+/**
+ * The declared-extensions map (04-02, EXT-01; npm/local-path EXT-02): the application
  * package.json's `theiaPlugins` block, one exact download URL per
  * [[extensions]] entry -- the versioned file URL above for source =
- * "openvsx", the stated URL verbatim for source = "url".
+ * "openvsx", the stated URL verbatim for source = "url", the registry
+ * tarball URL for source = "npm", the packed-archive reference for source =
+ * "local-path".
+ *
+ * A direct URL carrying the downloader placeholder `${targetPlatform}` passes
+ * through byte-verbatim: it names the machine that runs the download, never
+ * the machine that runs the generator, so expanding it here would pin one
+ * platform's bytes under a universal pin. The sink guard is therefore applied
+ * to resolver INPUTS (npm id/version, local path -- all `$`-free by schema
+ * shape), never to an emitted URL.
  *
  * FRAGMENT, NOT THE WHOLE MANIFEST (04-01's rule carried over). The tracked
  * package.json is yarn-managed, so whole-file byte-identity is brittle
@@ -1609,13 +1705,16 @@ export function emitTheiaPlugins(config, variant) {
     const lines = ['{'];
     for (const entry of config.extensions ?? []) {
         if (typeof entry?.id !== 'string' || !entry.id.includes('.')
-            || (entry.source !== 'openvsx' && entry.source !== 'url')) {
+            || !EXTENSION_SOURCES.includes(entry.source)) {
             report([
                 `the [[extensions]] entry with id ${JSON.stringify(entry?.id ?? '')} cannot be resolved to a download URL as it stands. `
                 + `Open ${MANIFEST_NAME}, correct it, then run: ${RERUN}`,
             ]);
         }
-        const url = entry.source === 'openvsx' ? openVsxFileUrl(entry) : entry.url;
+        const url = entry.source === 'openvsx' ? openVsxFileUrl(entry)
+            : entry.source === 'npm' ? npmDistTarballUrl(entry)
+            : entry.source === 'local-path' ? localPackRef(entry)
+            : entry.url;
         lines.push(`  ${JSON.stringify(entry.id)}: ${JSON.stringify(url)},`);
     }
     // A trailing comma after the last entry is NOT valid strict JSON, and the
@@ -3682,15 +3781,20 @@ const FIXTURE_VARIANT = [
 ].join('\n');
 
 /**
- * TWO complete [[extensions]] entries, stated once because several cases
+ * FOUR complete [[extensions]] entries, stated once because several cases
  * below need them -- one whole for the URL-exactness control, one with a
  * single pin removed or corrupted for each planted fault. One `openvsx`
- * entry (pinned version + sha256) and one `url` entry (verbatim URL +
- * sha256), so the control proves both resolution paths and every fault
- * below breaks exactly one thing.
+ * entry (pinned version + sha256), one `url` entry (verbatim URL +
+ * sha256), one synthetic Acme `npm` entry (exact version + registry
+ * integrity + sha256) and one synthetic Acme `local-path` entry (relative
+ * path + sha256), so the control proves all four resolution paths and every
+ * fault below breaks exactly one thing.
  */
 const FIXTURE_EXTENSION_PIN_A = 'a'.repeat(64);
 const FIXTURE_EXTENSION_PIN_B = 'b'.repeat(64);
+const FIXTURE_EXTENSION_PIN_C = 'c'.repeat(64);
+const FIXTURE_EXTENSION_PIN_D = 'd'.repeat(64);
+const FIXTURE_EXTENSION_INTEGRITY = `sha512-${'E'.repeat(86)}`;
 const FIXTURE_EXTENSIONS = [
     '[[extensions]]',
     'id = "acme.gadget"',
@@ -3703,6 +3807,19 @@ const FIXTURE_EXTENSIONS = [
     'source = "url"',
     'url = "https://example.org/acme-widget-2.0.0.vsix"',
     `sha256 = "${FIXTURE_EXTENSION_PIN_B}"`,
+    '',
+    '[[extensions]]',
+    'id = "acme.npmpack"',
+    'source = "npm"',
+    'version = "2.4.1"',
+    `integrity = "${FIXTURE_EXTENSION_INTEGRITY}"`,
+    `sha256 = "${FIXTURE_EXTENSION_PIN_C}"`,
+    '',
+    '[[extensions]]',
+    'id = "acme.localtool"',
+    'source = "local-path"',
+    'path = "extensions/acme-local"',
+    `sha256 = "${FIXTURE_EXTENSION_PIN_D}"`,
     '',
 ].join('\n');
 
@@ -4304,15 +4421,17 @@ function selfTest() {
         return [];
     })();
 
-    // EXT-01's green control, computed once: the two-entry fixture below must
-    // resolve with zero failures and emit a theiaPlugins block with the two
+    // EXT-01's green control, computed once: the four-entry fixture below must
+    // resolve with zero failures and emit a theiaPlugins block with the four
     // EXACT URLs -- the versioned Open VSX file URL for the openvsx entry
-    // (no latest-resolution anywhere in the pipeline) and the stated URL
-    // verbatim for the url entry. The expected URLs are literals: deriving
-    // them through openVsxFileUrl would make the control agree with the
-    // emitter no matter how wrong both were. Without this, a red result from
-    // the fault cases below could be the emitter broken on clean entries
-    // rather than on the plant.
+    // (no latest-resolution anywhere in the pipeline), the stated URL
+    // verbatim for the url entry, the conventional registry tarball URL for
+    // the npm entry, and the packed-archive reference for the local-path
+    // entry. The expected URLs are literals: deriving them through
+    // openVsxFileUrl (or the npm/local resolvers) would make the control
+    // agree with the emitter no matter how wrong both were. Without this, a
+    // red result from the fault cases below could be the emitter broken on
+    // clean entries rather than on the plant.
     const extensionUrlsControl = (() => {
         const fixtureDir = mkdtempSync(join(tmpdir(), 'generate-selftest-extensions-'));
         try {
@@ -4334,10 +4453,62 @@ function selfTest() {
             const want = {
                 'acme.gadget': 'https://open-vsx.org/api/acme/gadget/1.2.3/file/acme.gadget-1.2.3.vsix',
                 'acme.widget': 'https://example.org/acme-widget-2.0.0.vsix',
+                'acme.npmpack': 'https://registry.npmjs.org/acme.npmpack/-/acme.npmpack-2.4.1.tgz',
+                'acme.localtool': 'extensions/acme-local.tgz',
             };
             const keys = Object.keys(parsed ?? {});
-            if (keys.length !== 2 || keys.some(k => parsed[k] !== want[k])) {
-                return [`the emitted theiaPlugins block is not the two exact URLs: ${JSON.stringify(parsed)}`];
+            if (keys.length !== 4 || keys.some(k => parsed[k] !== want[k])) {
+                return [`the emitted theiaPlugins block is not the four exact URLs: ${JSON.stringify(parsed)}`];
+            }
+            return [];
+        } finally {
+            rmSync(fixtureDir, { recursive: true, force: true });
+        }
+    })();
+
+    // EXT-02's placeholder control, computed once: a target-specific direct
+    // URL carrying the downloader placeholder `${targetPlatform}` must reach
+    // the emitted fragment byte-verbatim -- the placeholder names the machine
+    // that runs the download, never the generator host, so expanding it here
+    // would pin one platform's bytes under a universal pin. The expected URL
+    // is a literal, and the control additionally refuses any platform literal
+    // the generator host could have substituted (its own platform string and
+    // the three stock target triples).
+    const targetPlaceholderControl = (() => {
+        const fixtureDir = mkdtempSync(join(tmpdir(), 'generate-selftest-placeholder-'));
+        try {
+            const placeholderUrl = 'https://example.org/acme-target-${targetPlatform}-1.0.0.vsix';
+            const fixturePath = join(fixtureDir, 'placeholder.toml');
+            writeFileSync(
+                fixturePath,
+                `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n`
+                + '[[extensions]]\n'
+                + 'id = "acme.targeted"\n'
+                + 'source = "url"\n'
+                + `url = "${placeholderUrl}"\n`
+                + `sha256 = "${FIXTURE_EXTENSION_PIN_A}"\n`,
+                'utf8',
+            );
+            const resolved = resolveConfig(MANIFEST_PATH, fixturePath);
+            if (resolved.failures.length > 0) {
+                return [`the placeholder fixture failed validation: ${resolved.failures.join(' | ')}`];
+            }
+            let parsed;
+            try {
+                parsed = JSON.parse(emitTheiaPlugins(
+                    resolved.config,
+                    resolved.config.variants.find(v => v.id === 'dev'),
+                ));
+            } catch {
+                return ['the emitted theiaPlugins fragment is not valid JSON'];
+            }
+            if (parsed?.['acme.targeted'] !== placeholderUrl) {
+                return [`the placeholder URL did not reach the fragment verbatim: ${JSON.stringify(parsed)}`];
+            }
+            const hostLiterals = [process.platform, 'linux-x64', 'darwin-arm64', 'darwin-x64', 'win32-x64'];
+            const leaked = hostLiterals.filter(literal => parsed['acme.targeted'].includes(literal));
+            if (leaked.length > 0) {
+                return [`the emitted URL carries generator-host platform literals: ${leaked.join(', ')}`];
             }
             return [];
         } finally {
@@ -4872,13 +5043,22 @@ function selfTest() {
             expect: 'acme.gadget',
         },
         {
-            // EXT-01. A source outside the v1 pair (npm and local paths are
-            // EXT-02) must fail NAMING the entry, with the implemented pair
-            // stated -- not a generic schema complaint.
+            // EXT-02. A source outside the four implemented kinds must fail
+            // NAMING the entry, with the implemented set stated -- not a
+            // generic schema complaint.
             name: 'extension entry with an unimplemented source',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('source = "openvsx"', 'source = "npm"')}`,
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('source = "openvsx"', 'source = "pluggy"')}`,
             expect: 'acme.gadget',
             also: ['"openvsx"'],
+        },
+        {
+            // EXT-02. An npm entry stating `latest` must fail NAMING the
+            // entry -- the schema shape alone admits it (it is
+            // alphanumeric), so without this branch the float would resolve
+            // to whatever is newest at download time.
+            name: 'npm extension entry with a floating latest version',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "latest"\n')}`,
+            expect: 'acme.npmpack',
         },
         {
             // EXT-01. A sha256 of the wrong shape must fail NAMING the entry,
@@ -4889,15 +5069,28 @@ function selfTest() {
             expect: 'acme.gadget',
         },
         {
-            // EXT-01's control: the two-entry fixture resolves with zero
-            // failures and emits the two exact URLs (versioned file URL for
-            // openvsx, verbatim URL for url). Without this, a red result
-            // from the three fault cases above could be the emitter broken
-            // on clean entries rather than on the plant.
+            // EXT-01/EXT-02's control: the four-entry fixture resolves with
+            // zero failures and emits the four exact URLs (versioned file URL
+            // for openvsx, verbatim URL for url, registry tarball URL for
+            // npm, packed-archive reference for local-path). Without this, a
+            // red result from the fault cases above could be the emitter
+            // broken on clean entries rather than on the plant.
             name: 'declared extensions resolve to exact versioned URLs',
             probe: () => extensionUrlsControl,
-            holds: 'a theiaPlugins block with the two exact URLs',
+            holds: 'a theiaPlugins block with the four exact URLs',
             resolved: () => extensionUrlsControl.length === 0,
+        },
+        {
+            // EXT-02's placeholder control: the downloader placeholder in a
+            // target-specific URL reaches the fragment byte-verbatim, with no
+            // generator-host platform literal substituted. Without this, a
+            // red result from a future placeholder fault could be the
+            // emitter broken on the clean placeholder rather than on the
+            // plant.
+            name: 'target placeholder in a direct URL reaches the fragment verbatim',
+            probe: () => targetPlaceholderControl,
+            holds: 'the placeholder URL byte-verbatim with no host platform literal',
+            resolved: () => targetPlaceholderControl.length === 0,
         },
         {
             // D-07 for the extensions array: an explicitly emptied list is a
