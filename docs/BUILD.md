@@ -845,6 +845,7 @@ invocations, not asserted from absence.
 | N-plus-1 fresh build (`objdir-nplus1/`, separate objdir) | same plus test version files | legion, `nix develop .#firefox` | 54m (mach wall 54:28, `.mozbuild/task2-nplus1-build.log`; 18:19→19:13 wall — a full tier-3 despite sccache, since the version bump recompiles version-stamped objects) |
 | `installer.nsi` compile via makensis 3.12 | Power Browser @ 08-04 spike stage | legion, `nix shell nixpkgs#nsis` | 3.4s |
 | MAR emit plus serve plus hop drive | same | legion | MAR emit ≈2 min; one check→stage→apply cycle ≈8 min (78 MB loopback download plus stage ~3 min, updater stage ~1 min, replace at next startup <1 min, remainder client timer scheduling); full evidence wall 19:15–20:35 including three false-start drives (empty `--backgroundtask` task name, Marionette shell-window crash, `.net` resolver-log silencing — all recorded in 08-04-SUMMARY.md) |
+| Release build (`objdir-release/`, fresh) | Power Browser post-rename plus updater flag, 08-05 task 3 | legion, `nix develop .#firefox` | 54m40s mach wall (`.mozbuild/release-build-0805.log`); same updater flag set as dev via the shared `.mozconfig` (config.status carries `--enable-unverified-updates`, updater binary present); `application.ini` `Name=powerbrowser Version=153.1.0 BuildID=20260904213953`; release rows green same day (see matrix section) |
 
 No inherited number is presented as fresh: the tier-3 table above keeps
 its own attributed rows; these rows were measured in 08-04 execution.
@@ -870,6 +871,25 @@ replay has just rewritten (an absent or empty extra root is itself a failure,
 never a skip) — or the git-excluded branding-overlay symlink
 (`upstream/powerbrowser`) failing to resolve back to this repo's
 `powerbrowser/` directory after the rebase.
+
+**Live drill (08-05, UPD-03).** Ran for real against
+`FIREFOX_153_2_0esr_RELEASE` — the newest tag in the 153 ESR series newer
+than the pinned `FIREFOX_153_1_0esr_RELEASE` (155/156 tags are different
+release trains, out of scope for this drill). Result: PASS —
+`rebase-upstream.sh` re-materialized upstream/, replayed the patch stack
+verified non-vacuous, `check-patch-surface.sh` accepted it, the
+residual-brand scan passed over 146 tracked files plus 460674 files under
+`--extra-root upstream/`, the classifier reported fully-applied with dirt
+matching the patch stack exactly, the branding overlay resolved, and
+`installer-schema` passed over the rebased tree. The PITFALLS #2 operator
+follow-up ran clean: `toolchain-baseline.sh` output diffed empty against
+the committed baseline (no FFI drift at the new tag). Full log:
+`.mozbuild/rebase-drill-0805.log` (untracked proof artifact).
+The tree was then restored to the pinned tag through the same tooling
+(`fetch-upstream.sh` at the manifest pin plus `apply-patches.sh`), so the
+pin, the tree, and every phase proof agree: drills rehearse, pins decide.
+Adopting 153.2.0esr is a future rebase-adoption task (pin move plus full
+tier-3 rebuilds), not part of this drill.
 
 **CI story:** `.github/workflows/rebase-upstream.yml` is `workflow_dispatch`-only
 (no `schedule:` — the ~4-weekly ESR cadence is a standing post-v4.0 operational

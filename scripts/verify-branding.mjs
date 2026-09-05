@@ -55,7 +55,32 @@ const EXPECT = JSON.parse(
     readFileSync(join(REPO_ROOT, 'inventory/brand-tokens.json'), 'utf8')
 ).brand_display_expectations;
 const DISPLAY_FORM = EXPECT.variants.release.brand_short_name;
-const IDENTIFIER_FORM = new RegExp(EXPECT.identifier_form);
+// NAME-01 re-scope of the identifier assertion (08-05; inventory
+// identifier_form_reason states the principle): the canonical display value
+// IS the identifier form, so a bare absence-assertion over it is jointly
+// unsatisfiable with the display-presence assertion on any correct tree
+// (observed red on the all-green tree: welcome textContent legitimately
+// carries "PowerBrowser"). What still discriminates is the token-boundary
+// failure mode -- the identifier adjoined to other alphanumerics inside a
+// SINGLE text node ("PowerBrowserDev", "myPowerBrowser"). Node-boundary
+// concatenation ("PowerBrowser" + "Version 1.74.1" as sibling nodes, which
+// textContent flattens separator-free) is legitimate display content and
+// must pass, so the check runs per text node, never over the joined text.
+function escapeRegExp(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+const IDENTIFIER_EMBEDDED = new RegExp(
+    `[A-Za-z0-9]${escapeRegExp(EXPECT.identifier_form)}|${escapeRegExp(EXPECT.identifier_form)}[A-Za-z0-9]`
+);
+// Collects the surface's direct text-node data (TreeWalker SHOW_TEXT): one
+// entry per DOM text node, so node-boundary concatenation stays separable.
+const COLLECT_TEXT_NODES = `(function(root) {
+    const out = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walker.nextNode())) out.push(n.data);
+    return out;
+})`;
 
 const FIND_FRONTEND_CONFIG =
     "Object.getOwnPropertySymbols(window).map(s => window[s])" +
@@ -76,6 +101,33 @@ function __getByName(container, name) {
 
 const NO_STOCK_IDENTITY = /Theia|Eclipse/i;
 
+// Legal-notice exemption for the stock-identity assertion (08-05): the
+// About dialog is REQUIRED to render the three generator-owned legal
+// notices (06-04 -- own trademark, Mozilla non-association, Eclipse
+// attribution), so a blanket /Theia|Eclipse/i absence over the raw surface
+// has been unsatisfiable since 06-04 landed (observed red on the all-green
+// tree). The exemption is derived, never hand-kept: the exact notice
+// strings are read at check time from generated/theia-branding.json (the
+// dev fragment TARGETS runs on, the same artifact the running build
+// renders through the powerbrowserBranding channel) and stripped before
+// the stock-identity test. A notice edit follows automatically; a stray
+// "Theia"/"Eclipse" OUTSIDE the notices still goes red. Absent or empty
+// notices fail loud -- never a skip.
+function readLegalNotices() {
+    const path = join(REPO_ROOT, 'generated', 'theia-branding.json');
+    let parsed;
+    try {
+        parsed = JSON.parse(readFileSync(path, 'utf8'));
+    } catch (err) {
+        throw new Error(`legal notices unreadable at ${path}: ${err.message} -- run: node scripts/generate.mjs`);
+    }
+    if (!Array.isArray(parsed?.legalNotices) || parsed.legalNotices.length === 0) {
+        throw new Error(`legal notices absent in ${path}: expected a non-empty legalNotices array`);
+    }
+    return parsed.legalNotices;
+}
+const LEGAL_NOTICES = readLegalNotices();
+
 /**
  * The three assertions EVERY display surface must satisfy, applied through one
  * function so a surface cannot pass by carrying fewer of them than its sibling.
@@ -88,18 +140,25 @@ const NO_STOCK_IDENTITY = /Theia|Eclipse/i;
  * to it. Fixed here, where both callers route through, so a third display
  * surface added later inherits the assertion instead of having to remember it.
  */
-function assertDisplayForm(surface, text) {
+function assertDisplayForm(surface, text, textNodes) {
     if (typeof text !== 'string') {
         throw new Error(`${surface} textContent was never read: ${JSON.stringify(text)}`);
+    }
+    if (!Array.isArray(textNodes)) {
+        throw new Error(`${surface} text nodes were never read: per-node collection is the token-boundary evidence`);
     }
     if (!text.includes(DISPLAY_FORM)) {
         throw new Error(`${surface} textContent missing the display form ${JSON.stringify(DISPLAY_FORM)}: ${JSON.stringify(text)}`);
     }
-    if (IDENTIFIER_FORM.test(text)) {
-        throw new Error(`${surface} textContent leaks the IDENTIFIER form ${JSON.stringify(EXPECT.identifier_form)} into a display surface: ${JSON.stringify(text)}`);
+    for (const nodeText of textNodes) {
+        if (IDENTIFIER_EMBEDDED.test(nodeText)) {
+            throw new Error(`${surface} text node adjoins the IDENTIFIER form ${JSON.stringify(EXPECT.identifier_form)} to other alphanumerics: ${JSON.stringify(nodeText)} (full surface: ${JSON.stringify(text)})`);
+        }
     }
-    if (NO_STOCK_IDENTITY.test(text)) {
-        throw new Error(`${surface} textContent matched /Theia|Eclipse/i: ${JSON.stringify(text)}`);
+    let scannable = text;
+    for (const notice of LEGAL_NOTICES) scannable = scannable.split(notice).join('');
+    if (NO_STOCK_IDENTITY.test(scannable)) {
+        throw new Error(`${surface} textContent matched /Theia|Eclipse/i outside the generator-owned legal notices: ${JSON.stringify(text)}`);
     }
 }
 
@@ -116,12 +175,14 @@ async function checkWelcome({ evaluate, waitFor }) {
         return true;
     })()`);
 
-    const text = await waitFor(`(function() {
+    const found = await waitFor(`(function() {
         ${PRELUDE}
         try {
             const widgetManager = __getByName(window.theia.container, 'WidgetManager');
             const widgets = widgetManager.getWidgets('welcome');
-            return widgets.length === 1 ? widgets[0].node.textContent : false;
+            if (widgets.length !== 1) return false;
+            const root = widgets[0].node;
+            return JSON.stringify({ text: root.textContent, nodes: (${COLLECT_TEXT_NODES})(root) });
         } catch (e) {
             return false;
         }
@@ -134,7 +195,8 @@ async function checkWelcome({ evaluate, waitFor }) {
     // agreed and the wrong product name shipped unnoticed. That is Pitfall 1
     // exactly, and it is why the inventory is a third source neither side
     // writes.
-    assertDisplayForm('welcome widget', text);
+    const { text, nodes } = JSON.parse(found);
+    assertDisplayForm('welcome widget', text, nodes);
 
     const version = await evaluate(`(async function() {
         ${PRELUDE}
@@ -158,14 +220,19 @@ async function checkAbout({ evaluate, waitFor }) {
         return true;
     })()`);
 
-    const text = await waitFor(
-        "document.querySelector('.theia-aboutDialog')?.textContent || false"
+    const aboutFound = await waitFor(
+        `(function() {
+            const node = document.querySelector('.theia-aboutDialog');
+            if (!node) return false;
+            return JSON.stringify({ text: node.textContent, nodes: (${COLLECT_TEXT_NODES})(node) });
+        })()`
     );
+    const { text, nodes } = JSON.parse(aboutFound);
 
     // The same three assertions the welcome surface carries, through the same
     // function -- this is the fix for the gap that let this dialog render the
     // identifier form while the check printed a pass.
-    assertDisplayForm('about dialog', text);
+    assertDisplayForm('about dialog', text, nodes);
 
     // The two below have no welcome counterpart: they are specific to D-35's
     // dropped renderExtensions()/renderHeader(), so they stay local.

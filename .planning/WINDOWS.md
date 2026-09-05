@@ -1,8 +1,8 @@
 ---
 schema_version: 1
-open_count: 3
+open_count: 2
 waived_count: 0
-fixed_count: 18
+fixed_count: 19
 total_count: 21
 last_updated: 2026-09-01T00:00:00.000Z
 ---
@@ -24,7 +24,7 @@ last_updated: 2026-09-01T00:00:00.000Z
 | 7 | 01 | unrun-verify | scripts/verify-platform.sh |  | 31 of verify-platform.sh's 48 checks could not run: they need a built tree, a launched browser, or a display. objdir/ does not exist yet (plan 01-04). | fixed |  | 2026-08-30T20:49:13.526Z | 2026-08-30T22:00:29.468Z |
 | 8 | 01 | unrun-verify | scripts/verify-platform.sh |  | apply-patches-self-test cannot run: it derives its fixture from upstream/browser/moz.configure and upstream/ is a git-ignored 1.1 GB clone absent on a fresh checkout. Pre-existing, rename-independent. | fixed |  | 2026-08-30T20:49:13.628Z | 2026-08-30T22:00:12.915Z |
 | 9 | 01 | deviation | .planning/REQUIREMENTS.md |  | MIG-04 was auto-checked from plan 01-03's frontmatter but nothing has been built; reverted to unchecked. Plan 01-04 owns the build that closes it. | fixed |  | 2026-08-30T20:49:13.723Z | 2026-08-30T22:00:13.014Z |
-| 10 | 01 | unrun-verify | scripts/verify-platform.sh |  | verify-branding-identity-release and branding-variant-divergence still unrun: both read objdir-release/dist/bin, i.e. a second full ~47m release build that 01-04-PLAN.md explicitly declined to spend. Runnable the moment a release objdir exists. | open |  | 2026-08-30T22:00:29.574Z |  |
+| 10 | 01 | unrun-verify | scripts/verify-platform.sh |  | verify-branding-identity-release and branding-variant-divergence still unrun: both read objdir-release/dist/bin, i.e. a second full ~47m release build that 01-04-PLAN.md explicitly declined to spend. Runnable the moment a release objdir exists. | fixed | Closed by plan 08-05 Task 3. Release objdir-release built 2026-09-05 (mach wall 54:40, same updater flag set as dev via shared .mozconfig, config.status carries --enable-unverified-updates, updater binary present, application.ini Name=powerbrowser Version=153.1.0 BuildID=20260904213953). Gate evidence: verify-branding-identity --variant release PASS all six surfaces (desktop Name=PowerBrowser, --version DeBIOS powerbrowser 153.1.0esr), branding-variant-divergence PASS. The --gate exclusions keyed on this entry stop applying. | 2026-08-30T22:00:29.574Z | 2026-09-05T04:45:00.000Z |
 | 11 | 01 | unrun-verify | scripts/verify-platform.sh |  | The ~20 launch-lifecycle checks (side03-*, side04-*, side05-*, shell03-*, shell04-diagnostics-with-backend-down, cr01-*, harness-display-available) became RUNNABLE with 01-04's build but were not run: none is named by 01-04-PLAN.md's verify blocks and each launches a real browser. Not blocked -- unexercised. | open |  | 2026-08-30T22:00:29.678Z |  |
 | 12 | 01 | stub | powerbrowser/shell/powerbrowser.js |  | Env-gated POWERBROWSER_SPIKE_GUI01 instrumentation left in the shell bootstrap by plan 01-05 Task 1; it is spike scaffolding and Task 3 of the same plan removes it | fixed |  | 2026-08-30T23:38:09.088Z | 2026-08-31T00:39:32.952Z |
 | 13 | 01 | deviation | scripts/check-internals-boundary.sh |  | ChromeUtils.registerWindowActor is absent from FORBIDDEN_PATTERNS. Latent, not exploited: candidate B (the JSWindowActor pair) was NOT adopted in 01-05, so nothing in-tree uses it. Any future actor pair must add it in the same commit or the boundary guard has a hole. | fixed | Closed by plan 08-03 Task 1. ChromeUtils.registerWindowActor added to FORBIDDEN_PATTERNS as an unconditional entry with no chrome-scheme exemption. Gate evidence: check-internals-boundary.sh --self-test PASS (Services. plant, actor plant naming file and pattern, catalogue mutation), --catalogue PASS, verify-platform.sh --only internals-boundary PASS. Zero WindowActor occurrences in PowerBrowserAPI.sys.mjs and INTERNAL-APIS.md, so no catalogue row owed; single-touchpoint invariant holds. | 2026-08-31T00:39:33.061Z | 2026-09-05T00:24:03.000Z |
@@ -154,10 +154,10 @@ last_updated: 2026-09-01T00:00:00.000Z
     "file": "scripts/verify-platform.sh",
     "line": null,
     "description": "verify-branding-identity-release and branding-variant-divergence still unrun: both read objdir-release/dist/bin, i.e. a second full ~47m release build that 01-04-PLAN.md explicitly declined to spend. Runnable the moment a release objdir exists.",
-    "status": "open",
-    "reason": "",
+    "status": "fixed",
+    "reason": "Closed by plan 08-05 Task 3: objdir-release built 2026-09-05 (mach wall 54:40), both rows PASS.",
     "recorded_at": "2026-08-30T22:00:29.574Z",
-    "resolved_at": null
+    "resolved_at": "2026-09-05T04:45:00.000Z"
   },
   {
     "id": 11,
