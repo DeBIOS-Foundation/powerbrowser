@@ -2,42 +2,42 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Hardening and SQL Tabs
-current_phase: 08
-current_phase_name: Installer Hardening + Canonical Rename
-status: executing
-stopped_at: Completed 07-sourcerer-as-downstream-04-PLAN.md
-last_updated: "2026-09-04T23:25:29.666Z"
-last_activity: 2026-09-04
-last_activity_desc: Phase 08 execution started
-state_head: 107963b75f9049d63a50e1e2fdafe108f7443c59
+current_phase: 09
+current_phase_name: Extensions + Crash Pipeline
+status: planning
+stopped_at: Phase 08 complete, ready to plan Phase 09
+last_updated: "2026-09-05T07:21:59.443Z"
+last_activity: 2026-09-05
+last_activity_desc: Phase 08 complete, transitioned to Phase 09
+state_head: 898ec8f8fc0dfd38b39219481d31c6c209caaba5
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 0
+  completed_plans: 5
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-29)
+See: .planning/PROJECT.md (updated 2026-09-05)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 08 — Installer Hardening + Canonical Rename
+**Current focus:** Phase 09 — Extensions + Crash Pipeline
 
 ## Current Position
 
-Phase: 08 (Installer Hardening + Canonical Rename) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 08
-Last activity: 2026-09-04 — Phase 08 execution started
+Phase: 09 — Extensions + Crash Pipeline
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-05 — Phase 08 complete, transitioned to Phase 09
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 6
+- Total plans completed: 11
 - Average duration: —
 - Total execution time: 0.0 hours
 
@@ -46,6 +46,7 @@ Last activity: 2026-09-04 — Phase 08 execution started
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 02 | 6 | - | - |
+| 08 | 5 | - | - |
 
 **Recent Trend:**
 
@@ -103,6 +104,10 @@ Last activity: 2026-09-04 — Phase 08 execution started
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- [Phase 08]: Self-hosted MAR rung is HTTPS-only interim — docs claim only TLS until fork-signing lands
+- [Phase 08]: NSIS builds on Nix (makensis 3.12); MSIX/DMG staged with operator unblocks (no sudo for libvirt, no macOS image)
+- [Phase 08]: WR-04 guard strips `$$` pairs then rejects survivors; BiDi self-test uses INVOKED_DIRECTLY guard
 
 - [Roadmap]: Phase 1 ships with no generator — hand-written branding literals — so Phase 2's acceptance test is byte-identical generated output
 - [Roadmap]: GUI requirements (GUI-01..04) fold into Phase 1; the customize bridge and browser toggle already exist in sourcerer, so their v1 requirement is surviving the migration as platform features
@@ -299,6 +304,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-04T10:26:49.856Z
-Stopped at: Completed 07-sourcerer-as-downstream-04-PLAN.md
+Last session: 2026-09-05T00:00:00.000Z
+Stopped at: Phase 08 complete, ready to plan Phase 09
 Resume file: None
