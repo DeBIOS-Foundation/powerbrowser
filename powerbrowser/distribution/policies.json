@@ -1,6 +1,6 @@
 {
   "policies": {
-    "DisableAppUpdate": true,
+    "AppUpdateURL": "https://updates.powerbrowser.org/update.xml",
     "DisableTelemetry": true,
     "DisableFirefoxStudies": true
   }

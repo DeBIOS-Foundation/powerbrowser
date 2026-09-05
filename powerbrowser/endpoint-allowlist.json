@@ -19,7 +19,12 @@
     {
       "host": "aus5.mozilla.org",
       "disposition": "deny",
-      "reason": "Mozilla's AUS (Application Update Service) host. The updater is disabled (--disable-updater, already in .mozconfig) and media.gmp-manager.url / extensions.systemAddon.update.url are blanked (D-84/D-86) so this build never has a reason to resolve it."
+      "reason": "Mozilla's AUS (Application Update Service) host. The updater is compiled IN since 08-04 (--enable-unverified-updates, self-hosted MAR under fork signing), but the effective update URL is fork-controlled: shipped installs carry the AppUpdateURL enterprise policy (powerbrowser/distribution/policies.json) pointing at updates.powerbrowser.org, which getUpdateURL prefers over the baked application.ini URL. A resolution of aus5 therefore means the fork policy is missing or bypassed -- fail-loud by design (layer 3 catches a policy-less install red). media.gmp-manager.url / extensions.systemAddon.update.url stay blanked (D-84/D-86) so no other path can name this host."
+    },
+    {
+      "host": "updates.powerbrowser.org",
+      "disposition": "allow",
+      "reason": "08-04 (PKG-02, T-08-04a): the fork's own update-descriptor host. The only unattended callout the enabled updater may make: AppUpdateURL policy and the hash-pinned update.xml it serves, fetched over HTTPS from infrastructure this project controls. Deliberate waiver in the same category as the Safe Browsing entries -- a real capability (self-update), not an inherited default. Until the static file host exists the name does not resolve and checks fail closed; scripts/verify-mar-update-hop.mjs proves each hop with zero *.mozilla.org / *.mozilla.net resolutions."
     },
     {
       "host": "normandy.cdn.mozilla.net",
