@@ -4125,6 +4125,33 @@ run_own_checks() {
     # runs are local) -- absent tooling fails naming the shell, never
     # skips green. The full row is emphatically not --quick.
     "installer-build-proof-self-test|node $REPO_ROOT/scripts/verify-installer-build-proof.mjs --self-test"
+
+    # NEW (09-02): the crash-collector contract rows -- the Antenna-protocol
+    # surface stays pinned while the native reporter stays compiled out.
+    #
+    # It asserts something DIFFERENT from the rows above it, which is why
+    # another pair of rows exists rather than none. Every row above pins
+    # manifest-derived fragments, tracked blocks, or downloaded bytes, and
+    # none of them reads the collector's wire vocabulary at all. This row
+    # derives the expected literals from the collector's own exports at
+    # check time and requires the written policy to state each one (submit
+    # path, minidump part name, CrashID=/Discarded= shapes, rejection
+    # reasons, retention window, throttle rule and budget, annotation
+    # allowlist), so a policy edit that drops a literal goes red naming it.
+    #
+    # crash-collector-self-test rides alongside for the reason every other
+    # self-test row in this array gives: it answers a well-formed submit
+    # with CrashID plus a matching store record first (control green),
+    # then requires red naming the rule for a non-multipart submit, a
+    # submit with no minidump part, an over-cap body, an over-count part
+    # set, and a tripped throttle (soft-reject on the success status) --
+    # with the store dir proven empty after every rejection, so no plant
+    # passes vacuously.
+    #
+    # Both are honestly --quick: node:crypto plus text/bytes in mkdtemp.
+    # No build, no browser, no display, no network.
+    "crash-collector|node $REPO_ROOT/scripts/verify-crash-collector.mjs"
+    "crash-collector-self-test|node $REPO_ROOT/scripts/verify-crash-collector.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
