@@ -4083,6 +4083,48 @@ run_own_checks() {
     # fixture inside the harness.
     "verify-downstream-fixtures|check_verify_downstream_fixtures"
     "verify-downstream-fixtures-self-test|check_verify_downstream_fixtures_self_test"
+
+    # NEW (08-04): the self-hosted MAR-hop proof rows. The full row
+    # re-verifies a completed N to N-plus-1 proof from its evidence files
+    # (.mozbuild/mar-hop/): distinct versions and build IDs, hash-pinned
+    # descriptor byte-identical to a fresh emission, fork-server access-log
+    # entries for descriptor and MAR, and zero Mozilla hosts in the
+    # client resolver log. It FAILS when the evidence is absent -- a check
+    # that goes green because it could not find its own subject is the
+    # green-by-construction shape, so the full row names docs/BUILD.md's
+    # packaging procedure instead of skipping.
+    #
+    # mar-update-hop-self-test rides alongside for the reason every other
+    # self-test row in this array gives: it runs a mock proof through the
+    # same runChecks (control green first), then requires red naming file
+    # and values for a same-version loop, a stale-hash descriptor, and a
+    # Mozilla host in the resolver log.
+    #
+    # Honestly --quick for the twin only: node:crypto plus text files in
+    # mkdtemp. No build, no browser, no display, no network. The full row
+    # is emphatically not --quick.
+    "mar-update-hop-self-test|node $REPO_ROOT/scripts/verify-mar-update-hop.mjs --self-test"
+
+    # NEW (08-04): the NSIS-on-Nix build-proof rows. The full row stages
+    # the pinned installer inputs from the tree at check time (real
+    # installer.nsi plus includes, toolkit files, plugin DLLs, the real
+    # generated branding.nsi, defines.nsi preprocessed with check-time
+    # values, locales through the real preprocess-locale.py), compiles
+    # with makensis, and requires setup.exe. Stand-ins stay labeled, never
+    # blessed: wizard bitmaps plus defines.nsi Mozilla literals are
+    # upstream's, and the PASS line says the compile only.
+    #
+    # installer-build-proof-self-test rides alongside: a synthetic script
+    # plus a copy of the real generated branding.nsi (control green
+    # first), then red for a dropped !define, a missing include, and a
+    # deleted artifact.
+    #
+    # Honestly --quick for the twin only: one local makensis compile in
+    # mkdtemp, seconds. The compiler is host tooling, self-provided via
+    # nix shell nixpkgs#nsis when not on PATH (first run fetches, later
+    # runs are local) -- absent tooling fails naming the shell, never
+    # skips green. The full row is emphatically not --quick.
+    "installer-build-proof-self-test|node $REPO_ROOT/scripts/verify-installer-build-proof.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
@@ -4170,6 +4212,27 @@ run_own_checks() {
       "smoke-firefox|bash $REPO_ROOT/scripts/smoke-firefox.sh"
       "verify-endpoints|bash $REPO_ROOT/scripts/verify-endpoints.sh"
       "verify-endpoints-interrupt-self-test|bash $REPO_ROOT/scripts/verify-endpoints.sh --interrupt-self-test"
+
+      # NEW (08-04): the self-hosted MAR-hop proof (PKG-02, T-08-04a). Reads
+      # the effective update URL from powerbrowser/distribution/policies.json
+      # (never user-branch prefs) and re-verifies the .mozbuild/mar-hop/
+      # evidence of one real Linux N to N-plus-1 hop: two distinct versions
+      # and build IDs, a hash-pinned descriptor byte-identical to a fresh
+      # emission from the MAR bytes, fork-server access-log entries, and a
+      # zero-Mozilla-host resolver log. Needs the proof run (tier-3 N and
+      # N-plus-1 builds plus the hop drive per docs/BUILD.md), so it lives
+      # in the full set and FAILS when the evidence is absent.
+      "mar-update-hop|node $REPO_ROOT/scripts/verify-mar-update-hop.mjs"
+
+      # NEW (08-04): the NSIS-on-Nix build proof (PKG-01). Stages the
+      # pinned installer inputs from the tree at check time and compiles
+      # installer.nsi with makensis, requiring setup.exe. Needs makensis
+      # on PATH (nix shell nixpkgs#nsis), python3, a generated/ tree and a
+      # built objdir, so it lives in the full set and FAILS naming each
+      # missing prerequisite. Wizard bitmaps and defines.nsi Mozilla
+      # literals stay labeled upstream stand-ins (see the script header);
+      # fork wizard artwork plus the defines rebrand are 08-05 work.
+      "installer-build-proof|node $REPO_ROOT/scripts/verify-installer-build-proof.mjs"
 
       # from verify-phase-04.sh
       "side02-token-negative|check_side02_token_negative"
