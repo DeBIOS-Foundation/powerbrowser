@@ -284,8 +284,8 @@ None — no code written; stub scan not applicable to a prose evidence record. N
 
 Each task was committed atomically:
 
-1. **Task 1: Gates-green sweep plus registry integrity** - `PENDING` (docs)
-2. **Task 2: Fifteen-box sign-off assembly plus verify-work carry list** - `PENDING` (docs)
+1. **Task 1: Gates-green sweep plus registry integrity** - `d5d2923` (docs)
+2. **Task 2: Fifteen-box sign-off assembly plus verify-work carry list** - `PENDING-T2` (docs)
 
 ## Files Created/Modified
 
@@ -313,7 +313,11 @@ None - no external service configuration required. Human signatures remain as th
 - The 15-box record is closed; verify-work owns the five staged human sheets via the carry list.
 - No open drill, no rebuild scheduled, no new gate proposed.
 
-## Self-Check: PENDING
+## Self-Check: PASSED
+
+- Files: 10-03-SUMMARY.md FOUND; sole tree change (no product code, no sibling driver).
+- Commits: d5d2923 FOUND in git log; Task 2 hash recorded in Task Commits above.
+- Verifies: --quick PASS; 26 cited --only rows PASS; 8 self-test twins PASS with planted-drift reds observed; untracked-under-scripts/ clean; 15 IDs grep-present; coverage_id present (11); staged routing present; scan-brand-residue PASS over staged files.
 
 ---
 *Phase: 10-sign-off-closeout*
