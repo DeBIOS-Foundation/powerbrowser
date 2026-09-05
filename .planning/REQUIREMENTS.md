@@ -1,77 +1,44 @@
-# Requirements — Power Browser v1.1 Hardening and SQL Tabs
+# Requirements — Power Browser v1.2 Sign-off Closeout and SQL Store
 
-(No GUI work, no SQL tabs this cycle — v1.1 is hardening-only per 2026-09-04
-scoping. Backlog 999.1 SQL-browser-memory stays backlog; GUI-02/GUI-05 stay
-deferred, with SQL tabs still preceding them when scheduled.)
+**Defined:** 2026-09-05
+**Core Value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
 
-## v1.1 Requirements
+(No GUI work this cycle — v1.2 is closeout + store-only per 2026-09-05 scoping. SQL GUI surface, GUI-02, GUI-05 deferred to v1.3+.)
 
-### Canonical Name (NAME)
+## v1.2 Requirements
 
-- [x] **NAME-01**: The canonical display form **PowerBrowser** is applied
-      across all generated surfaces (`identity.display_name` →
-      `PowerBrowser` in `configuration.toml`), every gate asserting the
-      spaced form is re-pinned (generate `--self-test` byte-identity
-      comparands, preflight `brand_display_expectations`,
-      trademark-surface display-field scan, downstream fixtures), and the
-      single-edit propagation proof is re-run live with a tier-3 Linux
-      build re-verifying the built artifact surfaces
+### Sign-off Closeout (existing v1 IDs) — Phase 10
 
-### Installer Builds (PKG)
+Credit policy (decided 2026-09-05): halves that Phases 08/09 proved live close on record with evidence cited; only the still-staged halves run. Closeout covers every still-Open v1 ID, enumerated below (the v1.0 archive says 16; enumeration is the source of truth — Phase 10 reconciles the count).
 
-- [x] **PKG-01**: Windows (NSIS/MSIX) and macOS (DMG/`.icns`) installers are
-      actually built on packaging hosts — Nix-built packaging tried first,
-      agent-driven VMs as fallback — from the generated branding
-      (branding.nsi, `.ico`/`.icns`, `wiz*.bmp`, dsstore, stubinstaller/,
-      msix)
-- [x] **PKG-02**: The update story is self-hosted MAR updates under fork
-      signing (no Mozilla phone-home, no dead updater); the per-OS
-      install/uninstall matrix is the exit gate
-- [x] **PKG-03**: `docs/BUILD.md` documents the packaging procedure, and the
-      WR-04 (reject bare `$VAR` in NSIS defines) + WR-07 (thread fixture
-      `root` through the installer verifier) pre-fixes land before the
-      first real-host build so the gates discriminate before binaries exist
+- [ ] **MIG-01** [credit]: Platform migration proof recorded from v1.0 tree + re-fetch history — formal sign-off, no new drill
+- [ ] **MIG-02** [record]: Token-inventory audit pass over the committed classification — sign-off that the box holds for audit
+- [ ] **GUI-01** [live]: Browser-window toggle manual UAT run (5 steps) and signed
+- [ ] **GUI-03** [live]: Customize-bridge perceptual restyle UAT run (3 steps) and signed
+- [ ] **GUI-04** [live]: Bridge-landability statement recorded against the green registry-shape gate
+- [ ] **GEN-01** [credit + delta]: Release-variant half credited to BLD-01; only emitter deltas since v1.0 re-proven
+- [ ] **GEN-02** [live human]: Icon pixel-look sign-off on real rasters
+- [ ] **GEN-03** [credit + delta]: Windows/macOS host-build half credited to PKG-01; only schema deltas re-proven
+- [ ] **GEN-05** [live human]: Theia welcome/about live render drill and signed
+- [ ] **EXT-01** [live]: Open VSX + URL declaration bundle+load drill on a real sidecar build
+- [ ] **TEL-01** [live]: Telemetry level + endpoint declaration live drill against the running sidecar
+- [ ] **TEL-02** [live]: Telemetry pipeline live delivery drill (batched, retrying, level-honoring; silence when off)
+- [ ] **TEL-03** [live]: Installed-binary allowlist layer proven (derivation already green statically)
+- [ ] **VER-01** [live]: Full-fleet brand-literal proof run with the fixture tier (now runnable per BLD-02)
+- [ ] **DOC-01** [live]: Stranger carry-test of REBRANDING.md recorded and formal sign-off
 
-### Extensions (EXT)
+### SQL Store Design — Phase 11
 
-- [x] **EXT-02**: npm and local-path extension source kinds ship — exact
-      pins with integrity digests, fail-loud on mismatch — reusing the
-      EXT-01 chain (pinned URL resolution for npm, hashable packed content
-      for local-path, one `theiaPlugins`-fragment → copy-over → pin-verify
-      path) with per-target `${targetPlatform}` resolution
-- [x] **EXT-03**: The WebExtensions declaration sibling ships via
-      `ExtensionSettings` in the already-emitted
-      `distribution/policies.json` (not `distribution/extensions/`), closing
-      the STATE.md pending todo
+- [ ] **SQL-02**: Authority/invariant table written and reviewed BEFORE schema — single chrome-side writer, sessionstore authoritative for restore, registry URIs as join key, Theia backend never opens profile SQLite, own-file rule
+- [ ] **SQL-03**: Schema + migration plan reviewed — tabs table on URI PK, `schema_version`/`user_version` from day one, forward-only migrations exercised against fixture DBs, quarantine-not-delete corruption path, private-tab exclusion rule, fixed `tabs.sqlite` filename as platform content (not manifest)
 
-### Crash Pipeline (TEL)
+### SQL Store Build — Phase 12
 
-- [x] **TEL-04**: A minimal Antenna-protocol crash collector ships
-      (multipart POST, `upload_file_minidump`, `CrashID=` responses) with
-      crash-ping/report separation and a PII/retention/throttle policy; the
-      native reporter stays compiled out (`--disable-crashreporter`), and
-      no Socorro self-host or `mini-breakpad-server` is adopted
+- [ ] **SQL-01**: Chrome-side writer ships — `Sqlite.sys.mjs` behind `PowerBrowserAPI.sys.mjs` (sole boundary, new INTERNAL-APIS.md rows), own `tabs.sqlite` in profile dir, sessionstore stays authoritative for restore, registry URIs are the join key
+- [ ] **SQL-04**: Read paths ship — bookmarks/history exposed via Places APIs (never raw places writes), sessionstore read projection, query API on `@powerbrowser/tab-uris`, private-browsing exclusion with absence test (emitter-exercising, per the project's absence-assertion rule)
+- [ ] **SQL-05**: Store gates green — second-writer negative scan (no profile-DB opens outside `powerbrowser/shell/`), interleaved tab+bookmark write soak with `PRAGMA integrity_check` clean, URI→row→restart→reopen roundtrip on a temp DB, registry-shape gate untouched, live ESR rebase drill over the new touchpoints
 
-### Release & Fixture Builds (BLD)
-
-- [x] **BLD-01**: A release `objdir-release` build passes with the
-      release-variant verify rows green (WINDOWS #10)
-- [x] **BLD-02**: Tier-3 per-fixture builds pass (07 — adversarial Zebra et
-      al. proven on real built artifacts, not schema alone)
-
-### Upstream Uptake Drills (UPD)
-
-- [x] **UPD-03**: A live ESR rebase drill against the next ESR tag passes
-      through the existing rebase/conflict tooling (05)
-- [x] **UPD-04**: A Theia re-pin proof passes with the token-gate backend
-      intact (05)
-
-### Hardening Fixes (SEC / SHELL)
-
-- [x] **SEC-02**: WINDOWS #13 is closed — the `registerWindowActor` hole in
-      the internals-boundary guard
-- [x] **SHELL-01**: WINDOWS #14 is fixed — BiDi double-window /
-      `contexts[0]` mis-resolution
+Engine (decided 2026-09-05, `.planning/research/duckdb-vs-sqlite/VERDICT.md`): SQLite. Gecko `Sqlite.sys.mjs` writes; Theia backend reads the dedicated file only via `better-sqlite3@13.0.3` (`readonly: true`); `node:sqlite` revisit at next Node re-pin. DuckDB rejected (process-sharing topology, OLTP mismatch, vendoring cost, format instability).
 
 #### Inherited Mozilla egress carve-out (Remote Settings)
 
@@ -99,48 +66,61 @@ cadence, lives in each host's `reason` field in
 `powerbrowser/endpoint-allowlist.json`, which stays the single source of truth.
 Repointing or disabling these per a downstream's manifest is TEL-03's job.
 
-## Future Requirements
+## Future Requirements (v1.3+)
 
-- **SQL-01**: SQL-backed tabs — every tab a SQL row (plus
-  bookmarks/sessions exposure) on `TabUriRegistry` identity, promoted from
-  backlog 999.1. Single chrome-side writer behind `PowerBrowserAPI` in its
-  own SQLite file; sessionstore stays authoritative for restore; registry
-  URIs are the join key. Next cycle, before any GUI work.
+- **SQL-GUI**: SQL GUI surface — tab data rendered and operable in the UI on the v1.2 store
 - **GUI-02**: The user can open and browse web pages inside Theia as tabs
   (URL-addressable `<xul:browser>`-backed tabs, not mini-browser). Deferred
-  until after SQL-01.
+  until after the store + GUI surface.
 - **GUI-05**: Unified tab strip where web pages and Theia editors are peers
   (chrome-owned tab model, mirror/proxy bridge). Deferred until after
   GUI-02.
 
 ## Out of Scope
 
-- Any GUI tab-strip rendering or in-Theia browser tabs this cycle
-- SQL tab store schema or query API this cycle (next cycle's work)
-- Socorro self-host, `mini-breakpad-server`, or re-enabling the native
-  crash reporter
-- Cross-compiled macOS signing (DMG/signing needs macOS hosts or VMs)
-- Databasise and the curated addon set — downstream compositions, never in
-  the platform tree
-- Forking/patching Theia core or modifying Gecko outside the patch stack —
-  inherited hard rules
-- Moving every conceivable Firefox pref into `configuration.toml` — the
-  manifest covers identity, branding, telemetry, extensions, URLs, pins
+| Feature | Reason |
+|---------|--------|
+| Any GUI tab rendering or in-Theia browser tabs this cycle | v1.2 is closeout + store-only; GUI surface is v1.3+ |
+| A second SQLite writer in any process | Corruption class (PITFALLS Pitfall 8); single chrome-side writer is invariant |
+| New tables inside `places.sqlite` | Upstream-owned schema; every ESR rebase may migrate it |
+| Replacing sessionstore as restore authority | Needs a dual-write + restore-parity proof first |
+| A `[features]` / `[sql]` manifest flag | ARCHITECTURE.md Anti-Pattern 6 — extension point, not a flag |
+| DuckDB as the tab store | Rejected 2026-09-05 (topology, workload, cost, format — see VERDICT.md) |
+| Socorro self-host or re-enabling the native crash reporter | Standing v1 exclusion, unchanged |
+| Databasise and the curated addon set | Downstream compositions, never in the platform tree |
+| Forking/patching Theia core or modifying Gecko outside the patch stack | Inherited hard rules |
+| Moving every conceivable Firefox pref into `configuration.toml` | Manifest covers identity, branding, telemetry, extensions, URLs, pins |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NAME-01 | Phase 08 | Complete |
-| PKG-01 | Phase 08 | Complete |
-| PKG-02 | Phase 08 | Complete |
-| PKG-03 | Phase 08 | Complete |
-| EXT-02 | Phase 09 | Complete |
-| EXT-03 | Phase 09 | Complete |
-| TEL-04 | Phase 09 | Complete |
-| BLD-01 | Phase 08 | Complete |
-| BLD-02 | Phase 09 | Complete |
-| UPD-03 | Phase 08 | Complete |
-| UPD-04 | Phase 09 | Complete |
-| SEC-02 | Phase 08 | Complete |
-| SHELL-01 | Phase 08 | Complete |
+| MIG-01 | Phase 10 | Pending |
+| MIG-02 | Phase 10 | Pending |
+| GUI-01 | Phase 10 | Pending |
+| GUI-03 | Phase 10 | Pending |
+| GUI-04 | Phase 10 | Pending |
+| GEN-01 | Phase 10 | Pending |
+| GEN-02 | Phase 10 | Pending |
+| GEN-03 | Phase 10 | Pending |
+| GEN-05 | Phase 10 | Pending |
+| EXT-01 | Phase 10 | Pending |
+| TEL-01 | Phase 10 | Pending |
+| TEL-02 | Phase 10 | Pending |
+| TEL-03 | Phase 10 | Pending |
+| VER-01 | Phase 10 | Pending |
+| DOC-01 | Phase 10 | Pending |
+| SQL-02 | Phase 11 | Pending |
+| SQL-03 | Phase 11 | Pending |
+| SQL-01 | Phase 12 | Pending |
+| SQL-04 | Phase 12 | Pending |
+| SQL-05 | Phase 12 | Pending |
+
+**Coverage:**
+- v1.2 requirements: 20 total
+- Mapped to phases: 20
+- Unmapped: 0 ✓
+
+---
+*Requirements defined: 2026-09-05*
+*Last updated: 2026-09-05 at v1.2 definition (credit-v1.1 + split-design scope)*
