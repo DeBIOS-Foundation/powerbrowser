@@ -15,6 +15,7 @@
 // CLAUDE.md absence-of-log-line lesson).
 
 import { PowerBrowserTelemetrySender } from '../src/browser/telemetry-sender.ts';
+import { MINIDUMP_PART_NAME, buildCrashIdResponse, buildDiscardResponse } from '../../../../scripts/crash-collector.mjs';
 
 const BROKEN = process.env.TELEMETRY_TEST_STUB === 'always-send';
 
@@ -218,6 +219,82 @@ const tests = [
             } finally {
                 t.sender.dispose();
             }
+        },
+    },
+    {
+        // Crash-ping half of the TEL-04 separation: error events at the
+        // crash level ride the ping sender to the telemetry endpoint as a
+        // JSON batch -- the same transport every other ping uses.
+        name: 'crash error events ride the ping sender to the telemetry endpoint',
+        run: async () => {
+            const t = makeSender({ level: 'crash', sender: { maxBatchSize: 1, flushIntervalMs: 0 } });
+            try {
+                t.sender.sendErrorData(new Error('crash-boom'));
+                await drain();
+                assert(t.fetch.calls.length === 1, `crash dropped the error path (${t.fetch.calls.length} POST(s), want 1)`);
+                assert(t.fetch.calls[0].url === 'https://example.org/telemetry/v1/events', `crash error went to ${t.fetch.calls[0].url}, want the telemetry endpoint`);
+                assert(t.fetch.calls[0].body.events.length === 1 && t.fetch.calls[0].body.events[0].kind === 'error', `ping batch carries ${JSON.stringify(t.fetch.calls[0].body.events)}, want one error event`);
+            } finally {
+                t.sender.dispose();
+            }
+        },
+    },
+    {
+        // Usage at crash stays dropped from the ping sender. Same-run
+        // on-level control, per the off-test idiom above: a zero-call pass
+        // must prove the stub records, or it proves nothing.
+        name: 'crash usage events stay dropped from the ping sender',
+        run: async () => {
+            const t = makeSender({ level: 'crash', sender: { maxBatchSize: 1, flushIntervalMs: 0 } });
+            try {
+                t.sender.sendEventData('usage.while-crash');
+                await drain();
+                assert(t.fetch.calls.length === 0, `crash admitted a usage event (${t.fetch.calls.length} POST(s))`);
+                t.setLevel('all');
+                t.sender.sendEventData('control.event');
+                await drain();
+                assert(t.fetch.calls.length >= 1, 'on-level control recorded no POST -- the stub is broken, not the sender');
+            } finally {
+                t.sender.dispose();
+            }
+        },
+    },
+    {
+        // An unrecognized level fails CLOSED to off: neither path sends.
+        // Same-run control as above.
+        name: 'unknown levels fail closed to the off behavior',
+        run: async () => {
+            const t = makeSender({ level: 'bogus-level', sender: { maxBatchSize: 1, flushIntervalMs: 0 } });
+            try {
+                t.sender.sendErrorData(new Error('while-bogus'));
+                t.sender.sendEventData('usage.while-bogus');
+                await drain();
+                assert(t.fetch.calls.length === 0, `unknown level delivered ${t.fetch.calls.length} POST(s), want zero`);
+                t.setLevel('error');
+                t.sender.sendErrorData(new Error('control.error'));
+                await drain();
+                assert(t.fetch.calls.length >= 1, 'on-level control recorded no POST -- the stub is broken, not the sender');
+            } finally {
+                t.sender.dispose();
+            }
+        },
+    },
+    {
+        // Crash-report half of the TEL-04 separation: minidump bytes have
+        // no path into the ping sender -- its public surface carries no
+        // minidump/upload/report member and its transport is JSON POSTs
+        // only -- and the report path IS the collector contract, asserted
+        // here from the collector's own exports rather than a kept copy.
+        name: 'minidump bytes have no path into the ping sender; reports go to the collector contract',
+        run: async () => {
+            const surface = Object.getOwnPropertyNames(PowerBrowserTelemetrySender.prototype).sort();
+            // The surface carries queue machinery (enqueue, sendNext) --
+            // the separation claim is narrower: no minidump/upload/report
+            // member anywhere on it.
+            assert(!surface.some(m => /minidump|upload|dump|report/i.test(m)), `sender surface names a report path: ${JSON.stringify(surface)}`);
+            assert(MINIDUMP_PART_NAME === 'upload_file_minidump', `collector contract moved the minidump part name to ${JSON.stringify(MINIDUMP_PART_NAME)}`);
+            assert(buildCrashIdResponse('x') === 'CrashID=x', 'collector accept shape drifted');
+            assert(buildDiscardResponse('r') === 'Discarded=r', 'collector reject shape drifted');
         },
     },
 ];
