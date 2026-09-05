@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-09-05)
 
 ## Current Position
 
-Phase: 12 (SQL Store Build) — Phases 10-11 implementation complete, verifications deferred per nonstop rule
-Plan: —
-Status: Phases 10-11 executed, advancing to Phase 12
-Last activity: 2026-09-05 — Phase 11 executed (3/3 plans, review clean after fixes, verification deferred)
+Phase: 12 (SQL Store Build) — Plan 12-02 executed (SQL-04 read paths)
+Plan: 12-02 complete (3/3 tasks, 3 commits)
+Status: Phase 12 in progress, advancing to 12-03 (gate promotion)
+Last activity: 2026-09-05 — Phase 12 Plan 02 executed (readonly query API, Places plus sessionstore reads, absence instrument STAGED pending startup wiring)
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Last activity: 2026-09-05 — Phase 11 executed (3/3 plans, review clean after f
 
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
+| Phase 12 P02 | ~45min | 3 tasks | 9 files |
 | Phase 01 P01 | 35min | 2 tasks | 116 files |
 | Phase 01 P02 | 2h25m | 2 tasks | 61 files |
 | Phase 01 P03 | ~18m | 3 tasks | 45 files |
