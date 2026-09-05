@@ -814,6 +814,29 @@ decision per RESEARCH open question 1 and is NOT procured in this phase.
   alongside-stock-Firefox interleaved launch, run there (matrix section
   below records the Linux cells green and the staged cells with unblocks).
 
+### Per-OS install matrix with update hops (08-05)
+
+Rows `installer-build-proof` and `mar-update-hop` both re-run PASS on the
+current tree 2026-09-05 (nix-linux). The Linux cells below ran live the same
+day via `.mozbuild/matrix/run-matrix.sh` (untracked proof tooling, same
+standing as `drive-hop.py`); Windows and macOS cells are staged-unexecuted
+per the capability record above, never green without their logs.
+
+| OS / host | install | launch | alongside stock Firefox | uninstall + no-residue | N to N-plus-1 hop |
+|---|---|---|---|---|---|
+| Linux / nix-linux | GREEN: packaged `powerbrowser-153.1.0.en-US.linux-x86_64.tar.xz` extracted to a test prefix; fork `distribution/policies.json` installed per the post-build step; staged `application.ini` reads `Vendor=DeBIOS`, `Name=powerbrowser`, `Version=153.1.0`, `BuildID=20260904184538` | GREEN: staged binary alive 25s headless (`MOZ_HEADLESS=1 --profile <test> --no-remote about:blank` inside `nix develop .#firefox`) | GREEN: stock firefox (system 155.0) wrote a 20146-byte headless screenshot while the fork build stayed alive — distinct binaries, profiles, and frozen remoting names (`powerbrowser` vs `firefox`), no profile or remoting collision | GREEN: prefix plus both test profiles removed; `ls ~` before/after diff empty; no `~/.powerbrowser`, no `~/.mozilla` | GREEN: N `153.1.0`/`20260904184538` to N-plus-1 `153.1.1`/`20260904191328`, result `applied` (hop.json); descriptor `update.xml` hash-pinned sha512 `d1184023cbab2e8dc587f7238e890a93cda8f1078bb87284f84c252908c0ec6fb4e2c31106b86ba01171b3637bc7b80a0b38c997de373fe1f4a4ec972c41a3a0` (full value in `.mozbuild/mar-hop/serve/update.xml`), size 78654141; fork-server access log shows the descriptor plus MAR GETs over loopback; client resolver log sifted to zero `*.mozilla.org` / `*.mozilla.net` (only Safe Browsing `update.googleapis.com`) — zero-Mozilla-host proof |
+| Windows 11 / pkg-win11 | staged-unexecuted | staged-unexecuted | staged-unexecuted (must prove no collision against stock Firefox with the frozen remoting and window-class pins) | staged-unexecuted (must include the no-residue check after uninstall) | staged-unexecuted (must cite two distinct versions and build IDs plus fork-server log entries) — unblock for the whole row: capability record above |
+| macOS / pkg-macos | staged-unexecuted | staged-unexecuted | staged-unexecuted | staged-unexecuted | staged-unexecuted — unblock for the whole row: capability record above |
+
+Two harness faults found and fixed while driving the Linux cells (test-side
+only, no product change): the driver first leaked the fork-prefix
+`LD_LIBRARY_PATH` into the stock-firefox invocation (stock `libxul.so`
+refused the fork `libnss3.so` with `NSS_3.126 not found`) — the stock launch
+now runs under `env -u LD_LIBRARY_PATH`; and stock firefox 155 requires a
+pre-created `--profile` dir (`Could not find profile folder`) — both test
+profiles are now pre-created. The reds were read directly off the failing
+invocations, not asserted from absence.
+
 ### Packaging timings (attributed: tree plus host plus toolchain)
 
 | Build / step | Tree | Host / toolchain | Wall |
