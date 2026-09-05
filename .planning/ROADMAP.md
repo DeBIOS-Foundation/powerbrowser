@@ -24,7 +24,7 @@ Archive: `.planning/milestones/v1.0-ROADMAP.md` · Requirements: `.planning/mile
 </details>
 
 - [x] **Phase 08: Installer Hardening + Canonical Rename** - Real Windows/macOS installers, self-hosted MAR updates, canonical PowerBrowser name, release build (completed 2026-09-05)
-- [ ] **Phase 09: Extensions + Crash Pipeline** - npm/local-path extension sources, WebExtensions policy, minimal crash collector, tier-3 fixtures
+- [x] **Phase 09: Extensions + Crash Pipeline** - npm/local-path extension sources, WebExtensions policy, minimal crash collector, tier-3 fixtures (completed 2026-09-05)
 
 ## Phase Details
 
@@ -85,21 +85,21 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 09-01-PLAN.md — EXT-02 static tracer: synthetic npm plus local-path slice through schema, resolver, and pin gate
-- [ ] 09-02-PLAN.md — TEL-04 crash collector with contract gate, written policy, and ping/report separation
+- [x] 09-01-PLAN.md — EXT-02 static tracer: synthetic npm plus local-path slice through schema, resolver, and pin gate
+- [x] 09-02-PLAN.md — TEL-04 crash collector with contract gate, written policy, and ping/report separation
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 09-03-PLAN.md — EXT-03 WebExtensions via ExtensionSettings agreement gate (closes pending-todo mechanism half)
+- [x] 09-03-PLAN.md — EXT-03 WebExtensions via ExtensionSettings agreement gate (closes pending-todo mechanism half)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 09-04-PLAN.md — BLD-02 tier-3 fixture matrix plus UPD-04 re-pin proof with token-gate intact
+- [x] 09-04-PLAN.md — BLD-02 tier-3 fixture matrix plus UPD-04 re-pin proof with token-gate intact
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 08. Installer Hardening + Canonical Rename | 5/5 | Complete    | 2026-09-05 |
-| 09. Extensions + Crash Pipeline | 0/0 | Not started | - |
+| 09. Extensions + Crash Pipeline | 4/4 | Complete    | 2026-09-05 |
 
 ## Inherited network egress (carried through the migration, not decided here)
 
