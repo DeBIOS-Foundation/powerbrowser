@@ -204,7 +204,13 @@ The 2026-09-01 01-UAT human passes for GUI-01 (test 2) and GUI-03 (test 6) remai
 
 - `git log --since=2026-09-01 -- theia/extensions/tab-uris/src/browser/browser-window-command.ts powerbrowser/shell/PowerBrowserAPI.sys.mjs` — empty. The GUI-01 affordance source (`OPEN_BROWSER_WINDOW_COMMAND_ID`, `window.open(url,'_blank')` channel) and every boundary browser-window row are untouched since the human pass.
 - `git log --since=2026-09-01 -- theia/extensions/customize/` — empty. The customize-bridge sources (CSS contribution, privileged-JS contribution, frontend module) are untouched since the human pass.
-- `git log --since=2026-09-01 -- powerbrowser/shell/` names exactly two commits, `bb92d6e` (08-01 canonical rename) and `00378c0` (01-19 shell title-bar display form), each touching only `powerbrowser/shell/powerbrowser.xhtml` (2-line display literals). Neither the 5-step window-toggle walkthrough nor the 3-step restyle walkthrough depends on the shell title literal.
+- `git log --since=2026-09-01 -- powerbrowser/shell/` names exactly one commit,
+  `bb92d6e` (08-01 canonical rename), touching only
+  `powerbrowser/shell/powerbrowser.xhtml` (2-line display literals).
+  `00378c0` (01-19 shell title-bar display form, 2026-08-31) predates the
+  2026-09-01 human passes and is already covered by them; it also adjusted the
+  divergence-checker expectation in `scripts/verify-platform.sh`.
+  Neither the 5-step window-toggle walkthrough nor the 3-step restyle walkthrough depends on the shell title literal.
 - WINDOWS.md ledger items 15 (GUI-01 five steps) and 16 (GUI-03 three steps) read `fixed` with the 2026-09-01 human record as the closing evidence.
 
 **Freshness verdict:** no GUI-01/GUI-03 functional surface changed since 2026-09-01; the prior evidence stands and is cited inside the Task 3 sheets, never as a signature.
