@@ -860,12 +860,18 @@ function assertEmittable(path, value) {
 
 /**
  * Characters a manifest value may never carry into a Windows installer
- * define. A double quote closes the quoted !define value; a dollar sign
- * that is not part of a doubled-dollar escape is NSIS variable/define
- * expansion at compile time -- a bare $NAME expands exactly like ${NAME},
- * so the guard refuses both in one class and only $$ (the NSIS literal
- * escape for one dollar sign) passes; a line break
+ * define. A double quote closes the quoted !define value; a line break
  * ends the define and starts a new installer statement; NUL truncates.
+ *
+ * Dollar signs are refused by hasBareDollar below, NOT by this pattern: a
+ * lookaround class cannot see $-runs of length 3+ at odd alignment (every
+ * position sits beside another $, so $$$INSTDIR passed while $INSTDIR did
+ * not) -- and NSIS folds $$ to one literal $ before expansion, so
+ * $$$INSTDIR compiles to a literal $ followed by the expansion of
+ * $INSTDIR. Stripping the $$ escapes first leaves exactly the dollars
+ * NSIS would expand: a bare $NAME expands exactly like ${NAME}, so the
+ * guard refuses both in one class and only $$ (the NSIS literal escape
+ * for one dollar sign) passes.
  *
  * DEFENCE IN DEPTH, NOT THE PRIMARY GUARD -- same contract as
  * assertEmittable: the schema regexes are what reject these values in
@@ -873,7 +879,16 @@ function assertEmittable(path, value) {
  * future schema edit from silently reopening the sink. CFG-03: rejection
  * only, never escaping -- an escaped URL is not the manifest's URL.
  */
-const NSIS_UNEMITTABLE = /"|(?<!\$)\$(?!\$)|\r|\n|\0/;
+const NSIS_UNEMITTABLE = /"|\r|\n|\0/;
+
+/**
+ * True when the value carries a dollar NSIS would expand at compile time.
+ * The $$ pairs are the NSIS literal-dollar escape and are stripped first;
+ * any $ that survives is an expansion. Non-overlapping stripping is the
+ * correct alignment: $$$$$ is two escapes plus one bare dollar, and one
+ * $ does survive, so it is refused.
+ */
+const hasBareDollar = (s) => s.replaceAll('$$', '').includes('$');
 
 /**
  * A manifest value on its way into a Windows installer !define line.
@@ -881,7 +896,7 @@ const NSIS_UNEMITTABLE = /"|(?<!\$)\$(?!\$)|\r|\n|\0/;
  * assertEmittable: the TOML dotted path, the rule, the re-run command.
  */
 function assertNsisEmittable(path, value) {
-    if (typeof value !== 'string' || NSIS_UNEMITTABLE.test(value)) {
+    if (typeof value !== 'string' || NSIS_UNEMITTABLE.test(value) || hasBareDollar(value)) {
         report([
             `${path} cannot be written into a Windows installer setting as it stands. A brand value may not `
             + 'contain a double quote, a bare dollar sign (write $$ for a literal dollar), or a line break. '
@@ -4015,6 +4030,81 @@ function probeEscapedDollarUrl() {
 }
 
 /**
+ * WR-01 (08 review). A three-dollar run in installer.support_url -- NSIS
+ * folds the leading $$ to one literal $ and then expands $INSTDIR, so
+ * $$$INSTDIR compiles to a literal $ followed by the install directory.
+ * The pre-fix lookaround guard matched nothing at odd alignment inside a
+ * 3+ run, so this exact value emitted silently. A legal URL character, so
+ * the schema admits it; the sink guard must refuse it, naming the key.
+ *
+ * A child process, like probeHostileSupportUrl's: the guard reports through
+ * report(), which exits, so driving the emitter in-process would take the
+ * self-test down with it.
+ */
+function probeHostileTripleDollarUrl() {
+    const dir = mkdtempSync(join(tmpdir(), 'generate-selftest-nsis-triple-'));
+    try {
+        const fixturePath = join(dir, 'case-nsis-triple.toml');
+        writeFileSync(
+            fixturePath,
+            `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[installer]\nsupport_url = "https://example.org/$$$INSTDIR/x"\n`,
+            'utf8',
+        );
+        const child = spawnSync(process.execPath, [
+            '--input-type=module',
+            '-e',
+            `import { resolveConfig, emitBrandingNsi } from ${JSON.stringify(import.meta.url)};`
+            + `const r = resolveConfig(undefined, ${JSON.stringify(fixturePath)});`
+            + `if (r.failures.length > 0) { console.log('UNEXPECTED-VALIDATE-RED'); process.exit(2); }`
+            + `process.stdout.write(emitBrandingNsi(r.config, r.config.variants.find(v => v.id === 'dev')));`,
+        ], { encoding: 'utf8' });
+        if (child.status === 0) return [`${BROKEN} the hostile triple-dollar support_url emitted cleanly`];
+        return `${child.stderr}${child.stdout}`.split('\n').filter(line => line !== '');
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+/**
+ * WR-01's control: two doubled dollars for two literal dollars must still
+ * emit with their dollars intact. Stripping the $$ pairs leaves no $ behind,
+ * so the guard passes it -- without this, a guard that rejects every $
+ * would pass the fault case above while breaking legitimate values.
+ *
+ * A child process, like probeEscapedDollarUrl's: the emitter is driven
+ * past validation, and a rejection exits the child with the message --
+ * never the self-test.
+ */
+function probeQuadrupleDollarUrl() {
+    const dir = mkdtempSync(join(tmpdir(), 'generate-selftest-nsis-quad-'));
+    try {
+        const fixturePath = join(dir, 'case-nsis-quad.toml');
+        writeFileSync(
+            fixturePath,
+            `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[installer]\nsupport_url = "https://example.org/$$$$PRICE/x"\n`,
+            'utf8',
+        );
+        const child = spawnSync(process.execPath, [
+            '--input-type=module',
+            '-e',
+            `import { resolveConfig, emitBrandingNsi } from ${JSON.stringify(import.meta.url)};`
+            + `const r = resolveConfig(undefined, ${JSON.stringify(fixturePath)});`
+            + `if (r.failures.length > 0) { console.log('UNEXPECTED-VALIDATE-RED'); process.exit(2); }`
+            + `process.stdout.write(emitBrandingNsi(r.config, r.config.variants.find(v => v.id === 'dev')));`,
+        ], { encoding: 'utf8' });
+        if (child.status !== 0) {
+            return [`the quadruple-dollar support_url was rejected but must emit: ${`${child.stderr}${child.stdout}`.split('\n').filter(line => line !== '').join(' | ')}`];
+        }
+        if (!child.stdout.includes('!define URLInfoAbout "https://example.org/$$$$PRICE/x"')) {
+            return [`${BROKEN} the quadruple-dollar support_url emitted without its literal dollars intact`];
+        }
+        return [];
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+/**
  * GEN-05. A double quote in the display name, driven at the frontend-config
  * emitter PAST validation -- the schema would already refuse it upstream of
  * here, so only a directly-called emitter proves the SINK guard (not just
@@ -4717,6 +4807,25 @@ function selfTest() {
             name: 'escaped doubled dollar in support URL still emits',
             probe: probeEscapedDollarUrl,
             holds: 'the escaped URL emitted with its literal dollars intact',
+            resolved: () => true,
+        },
+        {
+            // WR-01 (08 review). A three-dollar run passes a lookaround
+            // guard at odd alignment (every position sits beside another
+            // $) while NSIS still folds the leading $$ and expands the
+            // rest -- it must be refused by the sink guard, naming the key.
+            name: 'hostile triple-dollar run in support URL',
+            probe: probeHostileTripleDollarUrl,
+            expect: 'installer.support_url',
+        },
+        {
+            // WR-01's control: two doubled dollars are two literal dollars
+            // and must still emit intact. Without this, a guard that
+            // rejects every $ would pass the fault case above while
+            // breaking legitimate values.
+            name: 'escaped quadruple dollar in support URL still emits',
+            probe: probeQuadrupleDollarUrl,
+            holds: 'the quadruple-dollar URL emitted with its literal dollars intact',
             resolved: () => true,
         },
         {
