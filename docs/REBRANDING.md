@@ -315,9 +315,11 @@ states one must complete it.
 | Setting | Required? | If omitted | Reaches |
 |---|---|---|---|
 | `extensions[].id` | Required | Hard failure | `generated/theia-plugins.json` download map, one exact URL per entry |
-| `extensions[].source` | Required | Hard failure | URL construction: `openvsx` builds the versioned file URL, `url` uses the stated address verbatim |
-| `extensions[].version` | Required when `extensions[].source` is `openvsx` | Hard failure for Open VSX entries (latest-resolution is the unpinned behavior this forbids) | Pinned version inside the download URL |
-| `extensions[].url` | Required when `extensions[].source` is `url` | Hard failure for direct-URL entries (nothing to download) | Download address verbatim (must be a downloadable archive) |
+| `extensions[].source` | Required | Hard failure | URL construction: `openvsx` builds the versioned file URL, `url` uses the stated address verbatim, `npm` builds the registry tarball URL, `local-path` builds the packed-archive reference |
+| `extensions[].version` | Required when `extensions[].source` is `openvsx` or `npm` | Hard failure for Open VSX and npm entries (latest-resolution is the unpinned behavior this forbids; npm additionally rejects `latest` and range characters) | Pinned version inside the download URL |
+| `extensions[].url` | Required when `extensions[].source` is `url` | Hard failure for direct-URL entries (nothing to download) | Download address verbatim (must be a downloadable archive; may carry the `${targetPlatform}` downloader placeholder, which passes through unexpanded) |
+| `extensions[].integrity` | Required when `extensions[].source` is `npm` | Hard failure for npm entries (guards a registry republication under the pinned version) | Registry SRI digest recorded at pin time (`npm view <id>@<version> dist.integrity`) |
+| `extensions[].path` | Required when `extensions[].source` is `local-path` | Hard failure for local-path entries (nothing to pack); an absent folder additionally fails the pin gate naming the entry | Project-relative folder the download step packs to hashable bytes (packed reference is `<path>.tgz`) |
 | `extensions[].sha256` | Required | Hard failure | Hash of the download archive bytes |
 
 This project declares none, so the block stays absent. A downstream drops

@@ -221,6 +221,20 @@
       "regex_help": "a web address starting with https:// and containing no spaces or control characters",
       "regex_example": "https://example.org/acme-widget-2.0.0.vsix"
     },
+    "extensions[].integrity": {
+      "type": "string",
+      "required": false,
+      "regex": "^sha512-[A-Za-z0-9+/]+={0,2}$",
+      "regex_help": "a registry integrity digest in SRI form: the characters sha512-, then the base64 digest, then up to two equals signs",
+      "regex_example": "sha512-z4PhNX7vuL3xVChQ1m2AB9Yg5AULVxXcg/SpIdNs6c5H0NE8XYXysP+DGNKHfuwvY7kxvUdBeoGlODJ6+SfaPg=="
+    },
+    "extensions[].path": {
+      "type": "string",
+      "required": false,
+      "regex": "^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$",
+      "regex_help": "a folder path inside the project, written relative to it, with no leading slash and no '..' step; letters, digits, dots, underscores, hyphens and slashes only",
+      "regex_example": "extensions/acme-local"
+    },
     "extensions[].sha256": {
       "type": "string",
       "required": true,
