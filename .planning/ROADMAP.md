@@ -4,14 +4,10 @@
 
 - ✅ **v1.0 PowerBrowser** — Phases 1–7 (shipped 2026-09-04, override closeout — see `.planning/milestones/v1.0-ROADMAP.md`)
 - ✅ **v1.1 Hardening and SQL Tabs** — Phases 08–09 (shipped 2026-09-05, hardening-only — see `.planning/milestones/v1.1-ROADMAP.md`)
-- 🔄 **v1.2 Sign-off Closeout and SQL Store** — Phases 10–12 (active)
+- ✅ **v1.2 Sign-off Closeout and SQL Store** — Phases 10–12 (shipped 2026-09-05, override closeout — see `.planning/milestones/v1.2-ROADMAP.md`)
 - 📋 **Future** — SQL GUI surface, GUI-02 in-Theia web tabs, GUI-05 unified tab strip (v1.3+)
 
 ## Phases
-
-- [ ] **Phase 10: Sign-off Closeout** - Formal sign-off on the carried v1 requirements (~6 close on record, ~10 run live)
-- [ ] **Phase 11: SQL Store Design** - Authority/invariant table + schema/migration plan reviewed before code
-- [ ] **Phase 12: SQL Store Build** - Chrome-side SQLite writer, read paths, and store gates green
 
 <details>
 <summary>✅ v1.0 PowerBrowser (Phases 1–7) — SHIPPED 2026-09-04</summary>
@@ -38,75 +34,16 @@ Archive: `.planning/milestones/v1.1-ROADMAP.md` · Requirements: `.planning/mile
 
 </details>
 
-## Phase Details
+<details>
+<summary>✅ v1.2 Sign-off Closeout and SQL Store (Phases 10–12) — SHIPPED 2026-09-05</summary>
 
-### Phase 10: Sign-off Closeout
+- [x] Phase 10: Sign-off Closeout (3/3 plans) — completed 2026-09-05
+- [x] Phase 11: SQL Store Design (3/3 plans) — completed 2026-09-05
+- [x] Phase 12: SQL Store Build (3/3 plans) — completed 2026-09-05
 
-**Goal**: Every carried v1 requirement is formally signed off — halves Phases 08/09 proved live close on record with evidence cited, only the still-staged halves run
-**Depends on**: Phase 09 (v1.1 shipped)
-**Requirements**: MIG-01, MIG-02, GUI-01, GUI-03, GUI-04, GEN-01, GEN-02, GEN-03, GEN-05, EXT-01, TEL-01, TEL-02, TEL-03, VER-01, DOC-01
-**Success Criteria** (what must be TRUE):
+Archive: `.planning/milestones/v1.2-ROADMAP.md` · Requirements: `.planning/milestones/v1.2-REQUIREMENTS.md` · Audit: `.planning/milestones/v1.2-MILESTONE-AUDIT.md` · Tag: `v1.2`
 
-  1. Human UAT sheets are signed for the browser-window toggle run (GUI-01, 5 steps), the customize-bridge restyle run (GUI-03, 3 steps), the icon pixel look (GEN-02), the Theia welcome/about live render (GEN-05), and the REBRANDING.md stranger carry-test (DOC-01)
-  2. Live drills run green for the telemetry declaration (TEL-01), telemetry pipeline delivery (TEL-02), Open VSX + URL bundle+load on a real sidecar build (EXT-01), and the full-fleet brand-literal proof on the now-runnable fixture tier (VER-01)
-  3. Record-close boxes each cite their prior live evidence: platform migration proof (MIG-01), token-inventory audit (MIG-02), release-variant emitter deltas only (GEN-01), Windows/macOS schema deltas only (GEN-03), bridge-landability statement against the green registry-shape gate (GUI-04), installed-binary allowlist layer (TEL-03)
-  4. The count reconciliation is recorded: the v1.0 archive's "16" against this milestone's 15-item enumeration, with the discrepancy explained, not silently renumbered
-  5. `scripts/verify-platform.sh --quick` is green at closeout with no sibling driver created — any new check landed as a registry row with a `--self-test`
-
-**Plans**: 3/3 plans executed
-
-Plans:
-
-- [x] 10-01-PLAN.md — Record-close tracer plus reconciliation plus five staged UAT runbooks
-- [x] 10-02-PLAN.md — Live drills on the built tree with probe-first staging
-- [x] 10-03-PLAN.md — Gates-green sweep plus 15-box sign-off assembly
-
-### Phase 11: SQL Store Design
-
-**Goal**: The store's authority rules and schema are written down and reviewed before any store code exists
-**Depends on**: Phase 10
-**Requirements**: SQL-02, SQL-03
-**Success Criteria** (what must be TRUE):
-
-  1. An authority/invariant table exists stating the single chrome-side writer, sessionstore authoritative for restore, registry URIs as the join key, Theia backend never opening profile SQLite, and the own-file rule — reviewed and signed before schema work
-  2. A schema + migration plan exists showing the tabs table on URI primary key, `schema_version`/`user_version` from day one, forward-only migrations exercised against fixture DBs, a quarantine-not-delete corruption path, the private-tab exclusion rule, and the fixed `tabs.sqlite` filename as platform content (not manifest) — reviewed and signed
-  3. SQLite is the only engine in the design (per `.planning/research/duckdb-vs-sqlite/VERDICT.md`); no DuckDB surface, no `[features]`/`[sql]` manifest flag (ARCHITECTURE.md Anti-Pattern 6), no GUI surface
-
-**Plans**: 1/3 plans executed
-
-Plans:
-
-- [x] 11-01-PLAN.md — Authority/invariant table plus recorded sign-off (SQL-02)
-- [ ] 11-02-PLAN.md — Schema plus migration plan with fixture exercise plus recorded sign-off (SQL-03)
-- [ ] 11-03-PLAN.md — Review-sign gate with green static gates and Phase 12 handoff (SQL-02, SQL-03)
-
-### Phase 12: SQL Store Build
-
-**Goal**: Tabs persist as SQL rows behind the platform boundary with read paths and green gates — no GUI surface
-**Depends on**: Phase 11 (design reviewed before code)
-**Requirements**: SQL-01, SQL-04, SQL-05
-**Success Criteria** (what must be TRUE):
-
-  1. Every tab is a SQL row written only by the chrome-side writer (`Sqlite.sys.mjs` behind `PowerBrowserAPI.sys.mjs`, the sole boundary, with new INTERNAL-APIS.md rows) into its own `tabs.sqlite` in the profile dir, while sessionstore stays authoritative for restore and registry URIs are the join key
-  2. Bookmarks/history are exposed via Places APIs (never raw places writes), a sessionstore read projection and a query API on `@powerbrowser/tab-uris` answer reads, and private tabs are absent from the store under an emitter-exercising absence test (per the project's absence-assertion rule)
-  3. The store gates are green: the second-writer negative scan finds no profile-DB opens outside `powerbrowser/shell/`, an interleaved tab+bookmark write soak ends with `PRAGMA integrity_check` clean, a URI→row→restart→reopen roundtrip passes on a temp DB, the registry-shape gate is untouched, and a live ESR rebase drill runs over the new touchpoints
-  4. Theia backend reads the dedicated file only via `better-sqlite3@13.0.3` (`readonly: true`); Theia core is unpatched and no Gecko change lands outside the patch stack
-
-**Plans**: 2/3 plans executed
-
-Plans:
-
-- [ ] 12-01-PLAN.md — Chrome-side writer tracer plus triggers, beside-registry key rule, and temp-DB roundtrip proof
-- [x] 12-02-PLAN.md — Readonly query API, chrome-side Places plus sessionstore reads, and emitter-exercising absence instrument
-- [x] 12-03-PLAN.md — Store gates as registry rows with self-tests plus ESR rebase drill over the new touchpoints
-
-## Progress
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 10. Sign-off Closeout | 3/3 | Implemented, verification deferred |  |
-| 11. SQL Store Design | 3/3 | Implemented, verification deferred |  |
-| 12. SQL Store Build | 3/3 | Implemented, verification deferred |  |
+</details>
 
 ## Inherited network egress (carried through the migration, not decided here)
 

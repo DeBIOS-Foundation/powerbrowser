@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.2
-current_phase: 10
-current_phase_name: roadmap created, not started
-status: planning
+status: Awaiting next milestone
 stopped_at: Completed 12-sql-store-build-03-PLAN.md
-last_updated: "2026-09-05T20:04:31.343Z"
+last_updated: "2026-09-05T20:44:32.800Z"
 last_activity: 2026-09-05
-last_activity_desc: v1.2 roadmap created (Phases 10–12)
-state_head: d0492b5b1a25b7d16a0e209fd5fd13dfcef71a6a
+last_activity_desc: Milestone v1.2 completed and archived
+state_head: 0f56ed9cffaf38c05458c378761df3d68589f85e
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 9
   completed_plans: 6
 milestone_name: Sign-off Closeout and SQL Store
+current_phase: 10
+current_phase_name: roadmap created, not started
 ---
 
 # Project State
@@ -24,14 +24,14 @@ milestone_name: Sign-off Closeout and SQL Store
 See: .planning/PROJECT.md (updated 2026-09-05)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** v1.2 Sign-off Closeout and SQL Store — Phases 10 (sign-off closeout), 11 (SQL store design), 12 (SQL store build). No GUI work this cycle.
+**Current focus:** Planning next milestone (v1.3+ candidates: SQL GUI surface, GUI-02, GUI-05) — run `/gsd-new-milestone`. Carried: `/gsd-verify-work 10/11/12`, doc-sync pass (SQL-01/SQL-03/SQL-04 boxes, 11-02/11-03/12-01 summaries).
 
 ## Current Position
 
-Phase: — (v1.2 implementation complete Phases 10-12, verifications deferred per nonstop rule)
+Phase: Milestone v1.2 complete (override closeout, audit tech_debt accepted)
 Plan: —
-Status: All phases executed, starting lifecycle audit → complete → cleanup
-Last activity: 2026-09-05 — Phase 12 executed (3/3 plans, 12 blockers fixed, verification deferred)
+Status: Awaiting next milestone — phases archived to `.planning/milestones/v1.2-phases/`
+Last activity: 2026-09-05 — Milestone v1.2 completed and archived (3 phases, 9 plans, 22 tasks; tag v1.2)
 
 ## Performance Metrics
 
@@ -309,6 +309,10 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 | Category | Item | Status | Deferred At | Milestone |
 |----------|------|--------|-------------|-----------|
+| uat_gaps | 10/10-UAT.md | pending-human, 5 scenarios staged (newly acknowledged at close) | 2026-09-05 | v1.2 |
+| deferred_items | Phase 01 items 1-13 (archived v1.0) | disclosed in v1.0 archive; acknowledge-call cannot match archived text (tooling, same as v1.1), carried without re-suppression | 2026-09-05 | v1.2 |
+| verification | 10/11/12 verifier runs | deferred per standing nonstop rule; resume /gsd-verify-work 10, /gsd-verify-work 11, /gsd-verify-work 12 | 2026-09-05 | v1.2 |
+| tech_debt | SQL-03/SQL-01/SQL-04 boxes unchecked + 11-02/11-03/12-01 summaries absent | doc-sync debt, not missing code (see v1.2 audit); flip/write in next-milestone doc pass | 2026-09-05 | v1.2 |
 | debug_sessions | about-dialog-stock-links | diagnosed Bohrbug, acknowledged | 2026-09-05 | v1.1 |
 | debug_sessions | shell-title-identifier-form | diagnosed Bohrbug, acknowledged | 2026-09-05 | v1.1 |
 | uat_gaps | 03/03-UAT.md (archived v1.0) | testing, carried | 2026-09-05 | v1.1 |
@@ -336,8 +340,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-05T20:04:31.322Z
-Stopped at: Completed 12-sql-store-build-03-PLAN.md
+Last session: 2026-09-05T20:44:32.800Z
+Stopped at: Milestone v1.2 archived and tagged (override closeout)
 Resume file: None
 
 ## Operator Next Steps

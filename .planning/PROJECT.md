@@ -66,6 +66,8 @@ platform. If a rebrand ever requires editing a second file, that is a bug.
 | ExtensionSettings over extensions-dir | declared WebExtensions land via policy `force_installed`/`install_url`; curated set stays out of the tree | — Decided Phase 09 |
 | Canonical product name from v2: **PowerBrowser** (accepted variants **Powerbrowser** / **powerbrowser** for identifier-class surfaces) | v1 shipped the spaced display form "Power Browser" across generated surfaces; the canonical form + re-pinned gates land as v2 NAME-01 so the v1 archive stays faithful to what was verified | — Decided 2026-09-04 |
 | v1.2 scope: sign-off closeout + SQL store only, SQL GUI deferred | v1.2 closes formal sign-off on the 16 Open v1 requirements then ships the SQL-01 store/DB layer with no GUI surface; SQL GUI, GUI-02, and GUI-05 move to v1.3+ so the milestone stays shippable | — Decided 2026-09-05 |
+| SQLite is the only store engine; single chrome-side writer behind the sole boundary | `.planning/research/duckdb-vs-sqlite/VERDICT.md` unanimous for SQLite (topology, OLTP, vendoring, format); writer is `Sqlite.sys.mjs` behind `PowerBrowserAPI.sys.mjs` into own `tabs.sqlite`, sessionstore stays restore authority, registry URIs are the join key, Theia reads readonly via `better-sqlite3` | — Decided v1.2 |
+| v1.2 closeout accepted as override with doc-sync debt carried | 20/20 requirements implemented with evidence; 3 boxes unchecked + 3 summaries absent are doc-sync, not missing code; verifications 10/11/12 deferred per standing nonstop rule | — Decided 2026-09-05 |
 
 ## configuration.toml planned sections
 
@@ -136,18 +138,17 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - [x] Tier-3 per-fixture builds over the new source kinds; Theia re-pin
       proof with token-gate intact — BLD-02, UPD-04 — Phase 09
 
-### Active (v1.2)
+### Active (v1.3+ planning)
 
-- [ ] Formal sign-off closeout on the 16 Open v1 requirements —
-      migration/inventory (MIG-01, MIG-02), GUI survivals (GUI-01, GUI-03,
-      GUI-04), generator surfaces (GEN-01, GEN-02, GEN-03, GEN-05),
-      telemetry/extension live drills (TEL-01..03, EXT-01), fleet proof
-      (VER-01), rebranding doc (DOC-01)
-- [ ] **SQL-01 store/DB layer only**: every tab a SQL row on
-      `TabUriRegistry` identity (plus bookmarks/sessions exposure) — single
-      chrome-side writer behind `PowerBrowserAPI` in its own SQLite file;
-      sessionstore stays authoritative for restore; registry URIs are the
-      join key. No GUI surface this milestone.
+- [ ] SQL GUI surface, GUI-02 in-Theia web tabs, GUI-05 unified tab strip (v1.3+ candidates — next milestone defines requirements)
+- [ ] Doc-sync pass: 11-02/11-03 and 12-01 summaries from landed commits; flip SQL-01/SQL-03/SQL-04 boxes + traceability rows once reviewed
+- [ ] Deferred verifications: `/gsd-verify-work 10`, `/gsd-verify-work 11`, `/gsd-verify-work 12` (5 human UAT signatures in 10-UAT.md runbooks)
+
+### Validated (v1.2 — shipped 2026-09-05, override closeout, verifications deferred)
+
+- [x] Formal sign-off closeout on the carried v1 requirements — migration/inventory (MIG-01, MIG-02), GUI survivals (GUI-01, GUI-03, GUI-04), generator surfaces (GEN-01, GEN-02, GEN-03, GEN-05), telemetry/extension live drills (TEL-01..03, EXT-01), fleet proof (VER-01), rebranding doc (DOC-01) — 15/15 implemented with evidence (5 human UAT sheets staged, verifier deferred) — Phase 10
+- [x] SQL store design reviewed before code — authority/invariant table + recorded sign-off (SQL-02); schema + migration plan exercised against fixture DBs with recorded sign-off (SQL-03 implemented, box unchecked — doc-sync debt) — Phase 11
+- [x] SQL store build with no GUI surface — chrome-side writer behind the sole boundary in its own `tabs.sqlite` (SQL-01 implemented, box unchecked — doc-sync debt); readonly query API + Places/sessionstore reads + emitter-exercising absence instrument (SQL-04 implemented, box unchecked — doc-sync debt); store gates green — second-writer scan, integrity soak, URI→row→restart→reopen roundtrip, registry-shape untouched, live ESR rebase drill (SQL-05) — Phase 12
 
 ### Out of Scope
 
@@ -161,7 +162,25 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - Moving every conceivable setting into `configuration.toml` in milestone 1 —
   the file grows toward "everything configurable" incrementally
 
-## Current State (v1.1 shipped 2026-09-05)
+## Current State (v1.2 shipped 2026-09-05)
+
+v1.2 Sign-off Closeout and SQL Store is archived:
+`.planning/milestones/v1.2-ROADMAP.md`,
+`.planning/milestones/v1.2-REQUIREMENTS.md`,
+`.planning/milestones/v1.2-MILESTONE-AUDIT.md` (status `tech_debt`,
+accepted per standing nonstop instruction), tag `v1.2`. Phases 10–12
+(9/9 plans executed per git, 6/9 summaries present, 22 tasks) delivered:
+15-box sign-off assembly with 16-vs-15 reconciliation and five staged
+human UAT sheets; SQL authority + schema + migration plan with fixture
+exercise and recorded sign-offs; chrome-side writer, readonly query API
+with Places/sessionstore reads, and nine green store gates with a live
+ESR rebase drill. No GUI surface this cycle. Carried forward:
+`/gsd-verify-work 10/11/12`, the three doc-sync box flips
+(SQL-01/SQL-03/SQL-04), and the three missing plan summaries
+(11-02, 11-03, 12-01).
+
+<details>
+<summary>Previous state (v1.1 shipped 2026-09-05)</summary>
 
 v1.1 Hardening is archived:
 `.planning/milestones/v1.1-ROADMAP.md`,
@@ -174,9 +193,16 @@ WINDOWS #13/#14 closures, EXT-02/03 npm/local-path + WebExtensions policy,
 TEL-04 crash collector. Carried to v1.2: formal sign-off on the 16 Open v1
 requirements still staged (human/tier-3 halves).
 
-## Current Milestone: v1.2 Sign-off Closeout + SQL Store
+</details>
 
-**Goal:** Close formal sign-off on the v1 carry-overs and ship the SQL-01
+## Next Milestone Goals (v1.3+ candidates)
+
+- SQL GUI surface on the v1.2 store; GUI-02 in-Theia web tabs; GUI-05 unified tab strip (order and scope defined by `/gsd-new-milestone`)
+- Doc-sync pass and deferred verifications listed above ride the next milestone intake, not a v1.2 follow-up
+
+## Retired Milestone Section (v1.2 active scope, superseded by Current State above)
+
+**Goal (was):** Close formal sign-off on the v1 carry-overs and ship the SQL-01
 tab-store/DB layer with no GUI surface.
 
 **Target features:**
@@ -210,4 +236,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-05 at v1.2 start (sign-off closeout + SQL store scope)*
+*Last updated: 2026-09-05 after v1.2 milestone*
