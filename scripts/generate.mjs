@@ -219,7 +219,7 @@ function loadLayer(path) {
         // text carries a caret diagram and parser vocabulary and is never shown.
         const at = `line ${err.line}, column ${err.column}`;
         console.error(`${NAME}: FAIL -- ${MANIFEST_NAME} could not be read as a settings file (${at}).`);
-        console.error('  A setting is written as a name, an equals sign, and a value in double quotes, all on one line, like this: display_name = "Power Browser"');
+        console.error('  A setting is written as a name, an equals sign, and a value in double quotes, all on one line, like this: display_name = "PowerBrowser"');
         console.error('  A section header is written as the section name in square brackets, alone on its own line, like this: [identity]');
         console.error(`  Next step: open ${MANIFEST_NAME}, correct line ${err.line}, then run: ${RERUN}`);
         process.exit(1);
@@ -1061,9 +1061,9 @@ function emitBrandFtl(config, variant) {
         '# License, v. 2.0. If a copy of the MPL was not distributed with this',
         '# file, You can obtain one at http://mozilla.org/MPL/2.0/.',
         '',
-        '# Display literals, hand-written (plan 01-03, Pitfall 1). The product name is',
-        '# TWO WORDS WITH A SPACE here; the space-less `PowerBrowser` is the identifier',
-        '# form and must never appear in a display string.',
+        '# Display literals, hand-written (plan 01-03, Pitfall 1; canonical',
+        '# single-word form pinned by NAME-01 in 08-01). The product name here is',
+        '# `PowerBrowser`, composed with the variant suffix where one is declared.',
         `-brand-shorter-name = ${base}`,
         `-brand-short-name = ${base}`,
         `-brand-shortcut-name = ${base}`,
@@ -4606,7 +4606,7 @@ function selfTest() {
             name: 'locale agreement rejects a drifted full name',
             probe: probeLocaleAgreementDrift,
             expect: 'brand.ftl',
-            also: ['brand.properties', 'Planted Drift', 'Power Browser Dev'],
+            also: ['brand.properties', 'Planted Drift', 'PowerBrowser Dev'],
         },
         {
             // GEN-01's control: the pairs the emitters actually produce --

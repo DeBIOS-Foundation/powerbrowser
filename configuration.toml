@@ -35,7 +35,7 @@ description = "A rebrandable browser platform: a Gecko shell hosting an Eclipse 
 homepage = "https://powerbrowser.org"
 
 [identity]
-display_name = "Power Browser"
+display_name = "PowerBrowser"
 app_basename = "powerbrowser"
 binary_name = "powerbrowser"
 remoting_name = "powerbrowser"

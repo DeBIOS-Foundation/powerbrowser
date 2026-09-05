@@ -4,7 +4,7 @@
 # A disagreement reddens: scripts/verify-platform.sh --only generated-byte-identity
 # Before installing, replace @POWERBROWSER_REPO_ROOT@ with this checkout's absolute path (docs/BUILD.md names the command).
 [Desktop Entry]
-Name=Power Browser Dev
+Name=PowerBrowser Dev
 Exec=@POWERBROWSER_REPO_ROOT@/objdir/dist/bin/powerbrowser %u
 Icon=@POWERBROWSER_REPO_ROOT@/powerbrowser/branding/dev/default128.png
 Terminal=false

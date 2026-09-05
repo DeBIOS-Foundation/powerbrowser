@@ -2,13 +2,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# Display literals, hand-written (plan 01-03, Pitfall 1). The product name is
-# TWO WORDS WITH A SPACE here; the space-less `PowerBrowser` is the identifier
-# form and must never appear in a display string.
--brand-shorter-name = Power Browser
--brand-short-name = Power Browser
--brand-shortcut-name = Power Browser
--brand-full-name = Power Browser
+# Display literals, hand-written (plan 01-03, Pitfall 1; canonical
+# single-word form pinned by NAME-01 in 08-01). The product name here is
+# `PowerBrowser`, composed with the variant suffix where one is declared.
+-brand-shorter-name = PowerBrowser
+-brand-short-name = PowerBrowser
+-brand-shortcut-name = PowerBrowser
+-brand-full-name = PowerBrowser
 # This brand name can be used in messages where the product name needs to
 # remain unchanged across different versions (Nightly, Beta, etc.). Kept at
 # Firefox (not Power Browser) per D-78: a small set of "requires Firefox"
