@@ -631,6 +631,14 @@ export const TheiaService = {
       // at module load: an inherited "1" would be captured before the scrub
       // and would disable the gate for that whole process lifetime.
       POWERBROWSER_TOKEN_DISABLE: "",
+      // SQL-04 (12-CODE-REVIEW.md WR-04): the profile directory the
+      // chrome-side tab store lives under, for the Theia backend's readonly
+      // tab query service (TabQueryService defaults to this key). A path,
+      // not a credential, so environ visibility is irrelevant; the backend
+      // captures and deletes it at module load with every other
+      // POWERBROWSER_* key, and the service reads it from there once its
+      // first consumer lands (still STAGED -- see the service header).
+      POWERBROWSER_PROFILE_DIR: PowerBrowserAPI.getProfileDir(),
     };
 
     let proc;

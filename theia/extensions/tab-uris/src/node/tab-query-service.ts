@@ -1,6 +1,14 @@
 /**
  * SQL-04 (12-02): readonly tab-row query service, beside the registry.
  *
+ * STAGED (12-CODE-REVIEW.md WR-04): this service is bound but has no
+ * consumer yet -- nothing injects it, no route serves it, and the first
+ * consumer (frontend RPC binding or backend route plus a setProfileDir
+ * call from the backend's captured POWERBROWSER_PROFILE_DIR, which the
+ * supervisor already passes on every spawn) has not landed. Presented as
+ * staged, not shipped: do not cite it as the query-API delivery until that
+ * consumer exists.
+ *
  * Holds the single Theia-backend handle on the dedicated `tabs.sqlite`
  * file, opened with the engine readonly flag at open time and asserted via
  * the handle's own readonly property -- never a read-write open, never any
