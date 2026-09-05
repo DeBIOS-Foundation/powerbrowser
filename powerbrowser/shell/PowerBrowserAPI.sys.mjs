@@ -719,7 +719,11 @@ export const PowerBrowserAPI = Object.freeze({
 
   /**
    * SQL-01 (12-01): lists all rows in URI order. Never-throw: resolves [] on
-   * any failure.
+   * any failure. Ordering contract (IN-02, 12-CODE-REVIEW.md): URI order
+   * serves the sweep's set-equality and the roundtrip comparator -- the
+   * canonical order for store-to-store comparison. Recency for UI reads
+   * lives on the Theia side (TabQueryService.listByRecency); the two
+   * surfaces order differently on purpose, each for its named consumer.
    */
   async listTabRows() {
     try {

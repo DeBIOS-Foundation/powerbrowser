@@ -116,7 +116,10 @@ export class TabQueryService {
 
     /**
      * Recency-ordered listing, newest first, capped at `limit` rows.
-     * Resolves [] when the store is not yet readable.
+     * Resolves [] when the store is not yet readable. Ordering contract
+     * (IN-02, 12-CODE-REVIEW.md): recency serves UI reads; the chrome-side
+     * listTabRows orders by URI for sweep set-equality instead. One order
+     * per consumer, documented at both sites.
      */
     listByRecency(limit: number): TabQueryRow[] {
         const db = this.openIfNeeded();
