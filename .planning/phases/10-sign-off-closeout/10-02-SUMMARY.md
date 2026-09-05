@@ -31,3 +31,26 @@
 ### Task 1 done
 
 Probes recorded and emitter plus installer deltas re-proven on the current tree. BLD-01 (release-variant) and PKG-01 (host-build) halves credited by pointer to 10-01-SUMMARY.md, not re-run.
+
+## Task 2 — VER-01 fleet proof plus TEL-03 installed-binary layer
+
+### VER-01 chain on the current tree (2026-09-05, this session)
+
+- `scripts/verify-platform.sh --only verify-manifest-literals` — **PASS** (`160 file(s) scanned, 29 occurrence(s) all allowlisted, 21 allowlist entrie(s) all fresh`).
+- `scripts/verify-platform.sh --only verify-downstream-fixtures` — **PASS** (BLD-02 fixture tier: v1.0 set `6 fixture(s), 268 assertions` — canonical-name 64, late-sort-name 64, missing-required-key 6, non-square-logo 6, sourcerer-equivalent 64, spaced-name 64; v1.1 set `3 fixture(s), 198 assertions` — local-path-kind 66, npm-kind 66, openvsx-pinned 66).
+
+### TEL-03 installed-binary layer on the current tree (allowlist-schema derivation half credited to 10-01 by pointer)
+
+- `scripts/verify-platform.sh --only verify-endpoints` against the existing dev binary (`objdir/dist/bin/powerbrowser`, freshly synced — see Task 1 staleness ruling) — **PASS**, all three layers:
+  - Layer 1 (static prefs) PASS — 28 prefs incl. `toolkit.telemetry.server`, `breakpad.reportURL`, `datareporting.*`, captive-portal/connectivity URLs.
+  - Layer 2 (filesystem, strace) PASS — `$HOME activity observed (1370 line(s)), zero touches to $HOME/.mozilla/firefox`.
+  - Layer 3 (network, MOZ_LOG) PASS — `all resolved hosts are allowlisted` (live browser launch; console noise from upstream `BackupService`/`browser-custom-element` log lines is Firefox log chatter, not gate signal — the row exited PASS).
+- MSIX/DMG cells stay out of scope: PKG-01 staged host cells already routed as not-gaps (10-RESEARCH.md Pitfall 1), not GEN-03 or TEL-03 scope.
+
+### Task 2 verify chain
+
+- `scripts/verify-platform.sh --quick` — **PASS** (all checks passed).
+
+### Task 2 done
+
+Fleet proof and allowlist binary layer closed green on the current tree with observed counts. Nothing staged, no rebuild.
