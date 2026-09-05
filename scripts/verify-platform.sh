@@ -278,7 +278,7 @@ check_gui01_command_registered() { _run_app_check_mjs verify-gui01-command.mjs; 
 # child command from the harness itself; this driver unsets any inherited
 # value at the top of the file, so no row relies on ambient environment.
 check_verify_downstream_fixtures() {
-  local root
+  local root rc_brand rc_ext
   root=$(echo "$REPO_ROOT"/.planning/phases/07-*/fixtures)
   # v1.0 closeout archived the 07 phase under milestones/: fall back to the
   # archived fixtures root when the live phases dir no longer carries one.
@@ -289,8 +289,20 @@ check_verify_downstream_fixtures() {
   fi
   setsid node "$REPO_ROOT/scripts/verify-downstream-fixture.mjs" --all --fixtures-root "$root" &
   CURRENT_CHECK_PID=$!
-  local rc=0; wait "$CURRENT_CHECK_PID" || rc=$?; CURRENT_CHECK_PID=""
-  return "$rc"
+  rc_brand=0; wait "$CURRENT_CHECK_PID" || rc_brand=$?; CURRENT_CHECK_PID=""
+  # NEW (09-04): the extension-kind fixture cells (npm, local-path, one real
+  # pinned Open VSX entry) live under the 09 phase, so this row drives a
+  # second --all over that root too -- same glob idiom, never a spelled phase
+  # path, and the harness fails loudly on an unknown or empty root. Both
+  # drives run even when the first is red, so one failing set cannot mask the
+  # other; the row fails when either drive fails.
+  local extroot
+  extroot=$(echo "$REPO_ROOT"/.planning/phases/09-*/fixtures)
+  setsid node "$REPO_ROOT/scripts/verify-downstream-fixture.mjs" --all --fixtures-root "$extroot" &
+  CURRENT_CHECK_PID=$!
+  rc_ext=0; wait "$CURRENT_CHECK_PID" || rc_ext=$?; CURRENT_CHECK_PID=""
+  if [ "$rc_brand" -ne 0 ]; then return "$rc_brand"; fi
+  return "$rc_ext"
 }
 check_verify_downstream_fixtures_self_test() {
   setsid node "$REPO_ROOT/scripts/verify-downstream-fixture.mjs" --self-test &
@@ -4081,6 +4093,11 @@ run_own_checks() {
     # VER-03 argument run here: the static sweep stays green on the restored
     # default tree and the generate-level brand agreement is asserted per
     # fixture inside the harness.
+    # NEW (09-04): the wrapper above drives a second --all over the 09
+    # extension-kind fixture cells (npm, local-path, one real pinned Open VSX
+    # entry) with the per-kind download-map oracle, so this same full row is
+    # the enforcement for the BLD-02 generate-level cells, never the
+    # self-tests alone.
     "verify-downstream-fixtures|check_verify_downstream_fixtures"
     "verify-downstream-fixtures-self-test|check_verify_downstream_fixtures_self_test"
 

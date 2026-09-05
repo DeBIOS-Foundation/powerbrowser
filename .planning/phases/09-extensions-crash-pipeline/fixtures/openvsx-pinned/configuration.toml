@@ -1,0 +1,48 @@
+# Downstream manifest for plan 09-04 (BLD-02 generate-level cell: one REAL
+# pinned Open VSX entry).
+#
+# Brand values are TEST DATA ("Acme", invented). The [[extensions]] entry is
+# REAL: akamud.vscode-theme-onedark at exact version 2.3.0 with the sha256 of
+# the bytes served by open-vsx.org at drill time (see .mozbuild/0904/ for the
+# fetched archive and the task-2 download evidence). It proves the live
+# registry path at generate level: the emitted fragment line must equal the
+# versioned file URL below, and the task-2 tier-3 cell re-downloads these
+# exact bytes and hashes them against this pin. Lives under .planning/ so
+# both tree scanners exclude it by committed table.
+#
+# SHAPE: full downstream manifest (required keys differ from the platform's)
+# plus one openvsx [[extensions]] entry. Variants omitted on purpose: the
+# cell inherits the platform's two, exercising the default-echo path.
+
+[product]
+vendor_machine = "Acme"
+vendor_display = "Acme Collective"
+
+[identity]
+display_name = "Acme Browser"
+app_basename = "acme-browser"
+binary_name = "acme"
+remoting_name = "acme"
+distribution_id = "org.acme"
+
+[legal]
+license = "MIT"
+copyright_holder = "Acme Collective"
+trademark_notice = "Acme Browser is a trademark of Acme Collective."
+
+[installer]
+support_url = "https://acme.example.org"
+
+[telemetry]
+level = "error"
+endpoint = "https://telemetry.acme.example.org/v1/events"
+
+[upstreams]
+firefox_esr_tag = "FIREFOX_154_0esr_RELEASE"
+theia_release = "1.74.1"
+
+[[extensions]]
+id = "akamud.vscode-theme-onedark"
+source = "openvsx"
+version = "2.3.0"
+sha256 = "46b7471523cc2c0fcf526ed63b87b502e4102f3c3cde68d9f2eae9c9887a2e85"
