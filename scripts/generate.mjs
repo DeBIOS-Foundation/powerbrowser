@@ -463,13 +463,18 @@ const WEBEXTENSIONS_PREFIX = 'webextensions[].';
 const EXTENSION_SOURCES = Object.freeze(['openvsx', 'url', 'npm', 'local-path']);
 
 /**
- * Characters and tags that make an npm version float. The schema shape admits
- * `latest` (it is alphanumeric), so the npm conditional-pin branch owns this
- * rejection: a floating version resolves to whatever is newest at download
- * time, which is the unpinned behavior the pin gate cannot catch by hash
- * alone (a fresh float hashes clean on first download).
+ * What an npm version may be: the exact published version, full X.Y.Z with
+ * an optional prerelease/build suffix -- the only form that names one
+ * tarball. The schema shape admits `latest` (it is alphanumeric),
+ * partials (`1`, `1.2`), x-wildcards (`1.x`, `1.2.x`), and spaceless
+ * hyphen forms, so the npm conditional-pin branch owns exactness: anything
+ * else resolves to whatever is newest at download time, which is the
+ * unpinned behavior the pin gate cannot catch by hash alone (a fresh float
+ * hashes clean on first download). An exactness test rather than a
+ * float-character class, so exact prereleases (`1.2.3-beta.1`) stay pinned
+ * while partials and wildcards fail.
  */
-const NPM_FLOAT_CHARS = /[\^~*|<>=,\s]/;
+const NPM_EXACT_VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
 
 /** The four telemetry levels TEL-01 implements: Theia's real enum, default `off`. */
 const TELEMETRY_LEVELS = Object.freeze(['off', 'crash', 'error', 'all']);
@@ -604,9 +609,10 @@ function ordinal(n) {
  * CONDITIONAL PINS. `version` is required when source is `openvsx` (it builds
  * the exact versioned file URL -- latest-resolution is the unpinned behavior
  * EXT-01 forbids) and `url` is required when source is `url`. Source `npm`
- * (EXT-02) requires `version` too, but exact: `latest` and every range
- * character would resolve to whatever is newest at download time, so they
- * fail here even though the schema shape alone would admit `latest`. It also
+ * (EXT-02) requires `version` too, but an exact full X.Y.Z (with optional
+ * prerelease/build suffix): `latest`, partials, x-wildcards, and every
+ * range form would resolve to whatever is newest at download time, so they
+ * fail here even though the schema shape alone would admit several of them. It also
  * requires `integrity`, the registry SRI digest recorded at pin time. Source
  * `local-path` (EXT-02) requires `path`, the project-relative folder the
  * download step packs; an absent folder fails loud at the pin gate, which is
@@ -699,7 +705,7 @@ function validateExtensionElements(doc) {
             );
         }
         if (source === 'npm' && typeof entry.version === 'string'
-            && (entry.version === 'latest' || NPM_FLOAT_CHARS.test(entry.version))) {
+            && !NPM_EXACT_VERSION.test(entry.version)) {
             failures.push(
                 `${label}: version is ${JSON.stringify(entry.version)}, which floats -- it resolves to whatever is `
                 + `newest at download time. Pin the exact version instead: confirm it with npm view ${entry.id}@<version> `
@@ -5353,10 +5359,27 @@ function selfTest() {
         },
         {
             // EXT-02. An npm entry stating a range must fail NAMING the
-            // entry -- here via the version schema shape, which admits exact
-            // pins only.
+            // entry -- here via the exact-version rule (and the version
+            // schema shape, which admits exact pins only).
             name: 'npm extension entry with a ranged version',
             toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "^2.4.1"\n')}`,
+            expect: 'acme.npmpack',
+        },
+        {
+            // EXT-02. An npm entry stating an x-wildcard must fail NAMING
+            // the entry -- the schema shape admits it (dots and letters),
+            // and only the exact-version rule catches it.
+            name: 'npm extension entry with an x-wildcard version',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "1.2.x"\n')}`,
+            expect: 'acme.npmpack',
+        },
+        {
+            // EXT-02. An npm entry stating a partial version must fail
+            // NAMING the entry -- npm resolves `1.2` as a range (floating),
+            // and the schema shape admits it, so only the exact-version
+            // rule catches it.
+            name: 'npm extension entry with a partial version',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "1.2"\n')}`,
             expect: 'acme.npmpack',
         },
         {
