@@ -80,7 +80,13 @@ Plans:
   3. A crashing browser build submits through the minimal Antenna-protocol collector (multipart POST with upload_file_minidump, CrashID returned, about:crashes lists the crash) under the written PII/retention/throttle policy, with the native reporter still compiled out
   4. Tier-3 per-fixture builds pass over the new source kinds on real built artifacts, and the Theia re-pin proof passes with the token-gate backend intact
 
-**Plans**: TBD
+**Plans**: 4 plans in 3 waves
+
+Plans:
+- [ ] 09-01-PLAN.md — EXT-02 static tracer: synthetic npm plus local-path slice through schema, resolver, and pin gate
+- [ ] 09-02-PLAN.md — TEL-04 crash collector with contract gate, written policy, and ping/report separation
+- [ ] 09-03-PLAN.md — EXT-03 WebExtensions via ExtensionSettings agreement gate (closes pending-todo mechanism half)
+- [ ] 09-04-PLAN.md — BLD-02 tier-3 fixture matrix plus UPD-04 re-pin proof with token-gate intact
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
