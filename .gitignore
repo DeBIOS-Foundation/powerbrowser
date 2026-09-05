@@ -42,6 +42,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# SQLite runtime sidecars (WAL index + frames beside fixture copies)
+*.sqlite-wal
+*.sqlite-shm
+
 # Secrets
 .env
 .env.*
