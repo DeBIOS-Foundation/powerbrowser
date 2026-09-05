@@ -1175,15 +1175,18 @@ function emitBrandProperties(config, variant) {
  * entry and one emitter line -- so the cheap direction is to leave them literal
  * until a downstream actually needs to differ.
  *
- * THE UPDATER LINE IS A FORK-POLICY LITERAL, NOT A BRAND DEFAULT (08-04,
- * PKG-02). --disable-updater compiled the updater out of every build, so no
- * build in this tree could consume a MAR at all; --enable-unverified-updates
- * is the documented fork path (Mozilla's MAR signing key is unobtainable by
- * design) and lets fork builds consume locally-signed MARs. MAR signing-key
- * custody rung: fork key plus HTTPS plus hash-pinned update descriptors
- * (docs/BUILD.md's packaging procedure cites the commit carrying this line).
- * Still no [build] table: the value is platform policy, identical for every
- * downstream, so it stays literal like the other five.
+  * THE UPDATER LINE IS A FORK-POLICY LITERAL, NOT A BRAND DEFAULT (08-04,
+  * PKG-02). --disable-updater compiled the updater out of every build, so no
+  * build in this tree could consume a MAR at all; --enable-unverified-updates
+  * is the documented fork path (Mozilla's MAR signing key is unobtainable by
+  * design) and lets fork builds consume unsigned, hash-pinned MARs -- the
+  * flag drops every signature check (the MAR signature and MAR-channel
+  * checks sit inside #ifdef MOZ_VERIFY_MAR_SIGNATURE, updater.cpp:3063,
+  * 3329), so no signature of any key is verified and MAR integrity is the
+  * HTTPS-only interim (docs/BUILD.md's packaging procedure cites the commit
+  * carrying this line; full key ceremony is RESEARCH open question 2).
+  * Still no [build] table: the value is platform policy, identical for every
+  * downstream, so it stays literal like the other five.
  *
  * Built by concatenation rather than by template interpolation on the two
  * expansion lines: `${...}` inside a JS template literal is JS interpolation,
