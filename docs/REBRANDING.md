@@ -326,6 +326,20 @@ This project declares none, so the block stays absent. A downstream drops
 an inherited entry by restating the list without it — arrays replace, never
 merge.
 
+### `[[webextensions]]` — declared WebExtensions (absent table means none)
+
+| Setting | Required? | If omitted | Reaches |
+|---|---|---|---|
+| `webextensions[].id` | Required | Hard failure | `generated/webextensions-settings.json` ExtensionSettings map, one entry per add-on id |
+| `webextensions[].installation_mode` | Required | Hard failure (no silent default; an unknown mode fails naming the id) | ExtensionSettings entry mode, one of `force_installed` or `normal_installed` |
+| `webextensions[].install_url` | Required | Hard failure | ExtensionSettings entry URL (must be `https://` or `file:///`); an `https` origin must be covered in `powerbrowser/endpoint-allowlist.json`, which `verify-webextensions` fails naming the host |
+
+This project declares none, so the tracked `ExtensionSettings` key rests at
+the empty object. A downstream drops an entry by restating the list without
+it — arrays replace, never merge. No add-on binary is ever vendored into
+the tree: the mechanism (declaration plus policy) is platform work, the
+curated list stays downstream data.
+
 ## Downstream obligations
 
 - **Own unique identity.** State every required key for yourself. Required

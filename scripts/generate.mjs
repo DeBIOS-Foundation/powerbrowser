@@ -5,7 +5,7 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT COVERS. Fifty-two targets: thirty-three byte-identical to the
+// WHAT IT COVERS. Fifty-three targets: thirty-three byte-identical to the
 // file Phase 1 wrote by hand -- the five Phase 2 build surfaces (the two
 // branding configure.sh files, .mozconfig, and the two .desktop files), the
 // eighteen GEN-01 branding-directory surfaces (per variant: brand.ftl,
@@ -36,7 +36,11 @@
 // (generated/theia-plugins.json: the application package.json's theiaPlugins
 // block, one exact download URL per [[extensions]] entry -- a versioned
 // Open VSX file URL for source = "openvsx", the stated URL verbatim for
-// source = "url"), plus the UPD-01 pin fragment
+// source = "url"), plus the EXT-03 WebExtensions declaration
+// (generated/webextensions-settings.json: the distribution policies.json's
+// ExtensionSettings key, one force/normal install entry per
+// [[webextensions]] declaration -- the add-on id, its installation mode,
+// and its self-hosted install URL), plus the UPD-01 pin fragment
 // (generated/upstream-pins.env: the [upstreams] tag as one shell
 // assignment, sourced by scripts/fetch-upstream.sh as its default).
 // That byte-identity IS
@@ -453,6 +457,7 @@ function isUnset(value) {
 
 const VARIANT_PREFIX = 'variants[].';
 const EXTENSIONS_PREFIX = 'extensions[].';
+const WEBEXTENSIONS_PREFIX = 'webextensions[].';
 
 /** The four `source` values EXT-01 through EXT-02 implement. Anything else is a typo. */
 const EXTENSION_SOURCES = Object.freeze(['openvsx', 'url', 'npm', 'local-path']);
@@ -468,6 +473,18 @@ const NPM_FLOAT_CHARS = /[\^~*|<>=,\s]/;
 
 /** The four telemetry levels TEL-01 implements: Theia's real enum, default `off`. */
 const TELEMETRY_LEVELS = Object.freeze(['off', 'crash', 'error', 'all']);
+/**
+ * The two installation modes EXT-03 implements: the policy engine's
+ * force/normal install pair for a declared add-on id.
+ *
+ * No schema `regex` by design -- a mode is an enum, not a shape -- so
+ * validateWebExtensionElements below owns this list, the same split
+ * validateTelemetry keeps for the telemetry level. Anything else (a
+ * block/allow default, a typo) fails generate naming the add-on id: an
+ * unlisted mode would otherwise ship an entry the policy engine cannot
+ * honour.
+ */
+const WEBEXTENSION_INSTALLATION_MODES = Object.freeze(['force_installed', 'normal_installed']);
 /**
  * The theme ids the `[theia] default_theme` setting may name (04-04, GEN-05).
  *
@@ -738,6 +755,112 @@ function validateExtensionElements(doc) {
 }
 
 /**
+ * The required-setting check for the elements of the `[[webextensions]]
+ * array (EXT-03), plus the two checks no scalar loop can express: the
+ * installation_mode enum and the install_url scheme rule.
+ *
+ * WHY A SECOND LOOP (same reason as validateExtensionElements).
+ * `webextensions[].id` is one setting per element and readPath cannot
+ * address any of them.
+ *
+ * WHY EVERY FAILURE NAMES THE ADD-ON ID. The generic regex loop below
+ * reports a dotted path, and `webextensions[].install_url` does not say
+ * WHICH of several entries carries the bad URL. Every failure here names
+ * the entry's id (or its ordinal where the id itself is what is missing),
+ * so a manifest with five entries fails on the one that is wrong.
+ *
+ * MODES ARE VALIDATED HERE, NOT IN THE SCHEMA. `installation_mode` carries
+ * no schema `regex` -- its two values are an enum, not a shape -- so the
+ * generic regex loop below cannot express it, the same split
+ * validateTelemetry keeps for the telemetry level. An absent mode fails as
+ * a missing required key; a stated-but-unknown mode fails listing the two
+ * this project implements. There is deliberately no silent default: an
+ * entry the policy engine cannot honour must never build.
+ *
+ * SHAPES ARE DERIVED, NOT RESTATED. The id and install_url values are
+ * tested against their own schema `regex`, read out of SCHEMA_KEYS, so the
+ * pattern lives in exactly one place. The generic regex loop skips
+ * `webextensions[].*` paths for the same reason: one value, one failure,
+ * naming the entry.
+ */
+function validateWebExtensionElements(doc) {
+    const failures = [];
+    const webextensions = readPath(doc, 'webextensions');
+    if (!Array.isArray(webextensions)) return failures;
+
+    const labelOf = (entry, index) => (isTable(entry) && typeof entry.id === 'string' && entry.id !== ''
+        ? `the [[webextensions]] entry with id ${JSON.stringify(entry.id)}`
+        : `the ${ordinal(index + 1)} [[webextensions]] entry (no id stated)`);
+
+    const seen = new Map();
+    for (const [index, entry] of webextensions.entries()) {
+        if (isTable(entry) && typeof entry.id === 'string' && entry.id !== '') {
+            seen.set(entry.id, (seen.get(entry.id) ?? 0) + 1);
+        }
+    }
+    for (const [id, count] of seen) {
+        if (count > 1) {
+            failures.push(
+                `two or more [[webextensions]] entries both use the id ${JSON.stringify(id)}, and only one ExtensionSettings `
+                + `entry can be emitted for it. Give each entry its own id in ${MANIFEST_NAME}, then run: ${RERUN}`,
+            );
+        }
+    }
+
+    for (const [index, entry] of webextensions.entries()) {
+        if (!isTable(entry)) {
+            failures.push(
+                `the ${ordinal(index + 1)} [[webextensions]] entry is not a section of settings. `
+                + `Open ${MANIFEST_NAME}, write it as a [[webextensions]] section with id, installation_mode and install_url, then run: ${RERUN}`,
+            );
+            continue;
+        }
+        const label = labelOf(entry, index);
+
+        for (const [path, spec] of Object.entries(SCHEMA_KEYS)) {
+            if (!path.startsWith(WEBEXTENSIONS_PREFIX) || !spec.required) continue;
+            const key = path.slice(WEBEXTENSIONS_PREFIX.length);
+            if (entry[key] !== undefined) continue;
+            failures.push(
+                `${label}: ${key} ${UNSET_MARK} Open ${MANIFEST_NAME}, find that [[webextensions]] entry, and give `
+                + `${key} a value. Then run: ${RERUN}`,
+            );
+        }
+
+        // The mode enum: the schema carries no pattern for it by design, so
+        // this check owns the allowed pair. Absence is already reported
+        // above; only a stated-but-unknown value lands here.
+        if (entry.installation_mode !== undefined && !WEBEXTENSION_INSTALLATION_MODES.includes(entry.installation_mode)) {
+            failures.push(
+                `${label}: installation_mode is ${JSON.stringify(entry.installation_mode)}, which is not an installation mode this project implements. `
+                + `Write it as one of ${WEBEXTENSION_INSTALLATION_MODES.map(m => JSON.stringify(m)).join(' or ')} in ${MANIFEST_NAME}, then run: ${RERUN}`,
+            );
+        }
+
+        // Shapes, against each key's own schema pattern, naming the entry.
+        for (const key of ['id', 'install_url']) {
+            const value = entry[key];
+            if (value === undefined) continue;
+            const spec = SCHEMA_KEYS[`${WEBEXTENSIONS_PREFIX}${key}`];
+            if (typeof value !== 'string') {
+                failures.push(
+                    `${label}: ${key} is ${JSON.stringify(value)}, but this setting has to be text written inside double `
+                    + `quotes. Open ${MANIFEST_NAME}, quote the value, then run: ${RERUN}`,
+                );
+                continue;
+            }
+            if (spec.regex && !new RegExp(spec.regex).test(value)) {
+                failures.push(
+                    `${label}: ${key} is ${JSON.stringify(value)}, which is not allowed here. Write it as ${spec.regex_help}. `
+                    + `Allowed form: ${spec.regex} . A valid value looks like ${JSON.stringify(spec.regex_example)}. `
+                    + `Correct it in ${MANIFEST_NAME}, then run: ${RERUN}`,
+                );
+            }
+        }
+    }
+    return failures;
+}
+/**
  * The `[telemetry]` level enum and the endpoint rule (04-03, TEL-01/TEL-02).
  *
  * WHY A DEDICATED FUNCTION (same reason as validateExtensionElements).
@@ -818,15 +941,17 @@ function validate(doc, leaves) {    const failures = [];
     failures.push(...validateVariantElements(doc));
     failures.push(...validateVariantIds(doc));
     failures.push(...validateExtensionElements(doc));
+    failures.push(...validateWebExtensionElements(doc));
     failures.push(...validateTelemetry(doc));
     failures.push(...validateTheia(doc));
 
     for (const { path, value } of leaves) {
-        // EXT-01 (04-02). extensions[] leaves are validated by
-        // validateExtensionElements above, which names the ENTRY id -- the
+        // EXT-01 (04-02) and EXT-03. extensions[] and webextensions[]
+        // leaves are validated by validateExtensionElements and
+        // validateWebExtensionElements above, which name the ENTRY id -- the
         // generic shape below can only name the dotted path, so letting both
         // run would report one value twice.
-        if (path.startsWith(EXTENSIONS_PREFIX)) continue;
+        if (path.startsWith(EXTENSIONS_PREFIX) || path.startsWith(WEBEXTENSIONS_PREFIX)) continue;
         // An explicitly emptied array (extensions = []) carries no spec by
         // construction -- rejectUnknown vetted it above, and there is no
         // value to check a pattern against. Without this guard the spec
@@ -1726,6 +1851,72 @@ export function emitTheiaPlugins(config, variant) {
     return lines.join('\n') + '\n';
 }
 
+/**
+ * The declared-WebExtensions map (EXT-03): the distribution
+ * policies.json's `ExtensionSettings` key, one force/normal install entry
+ * per [[webextensions]] declaration -- the add-on id, its installation
+ * mode, and the self-hosted install URL the policy engine installs and
+ * updates from.
+ *
+ * FRAGMENT, NOT THE WHOLE POLICY FILE. The tracked
+ * powerbrowser/distribution/policies.json carries sibling keys the
+ * manifest does not own (AppUpdateURL, DisableTelemetry,
+ * DisableFirefoxStudies); whole-file byte-identity would wed those keys
+ * to this emitter. The copy-over sets ONLY the ExtensionSettings key from
+ * this fragment and leaves every sibling byte-identical. No tracked
+ * comparand row -- the byte-identity gate skips rows without one, --check
+ * still covers the row through the frozen table, and the tracked side is
+ * pinned by scripts/verify-webextensions.mjs (key equality against this
+ * emission, stale-key rejection, install_url origin coverage).
+ *
+ * WHY NO GENERATED_BANNER. Same reason as the theiaPlugins fragment:
+ * strict JSON carries no comment, and a `_comment` key would pollute the
+ * key a reader copies from. Derivation lives here; freshness is
+ * generate --check's contract.
+ *
+ * An absent [[webextensions]] list emits the empty object: the
+ * no-declared-add-on tree is today's tree, and its correct tracked state
+ * is an empty ExtensionSettings key. A downstream drops an entry by
+ * restating the list without it (D-07 array-replace) -- restating an
+ * empty list drops them all.
+ *
+ * Runs AFTER validate(), so every entry below carries a known mode in the
+ * schema's shapes. The mode re-check is defence in depth for a future
+ * edit that loosens the validator: without a known mode there is no
+ * policy entry to emit. Every emitted value passes the sink guard on the
+ * way out -- the key lands in a JSON document the policy engine reads, so
+ * a quote, a backslash or a line break in any value rewrites it.
+ *
+ * Joined with a literal newline, never the platform line-ending constant.
+ */
+export function emitWebExtensionSettings(config, variant) {
+    void variant;
+    const lines = ['{'];
+    for (const entry of config.webextensions ?? []) {
+        if (typeof entry?.id !== 'string' || entry.id === ''
+            || !WEBEXTENSION_INSTALLATION_MODES.includes(entry.installation_mode)) {
+            report([
+                `the [[webextensions]] entry with id ${JSON.stringify(entry?.id ?? '')} cannot be resolved to an ExtensionSettings entry as it stands. `
+                + `Open ${MANIFEST_NAME}, correct it, then run: ${RERUN}`,
+            ]);
+        }
+        const id = assertEmittable(`${WEBEXTENSIONS_PREFIX}id`, entry.id);
+        const mode = assertEmittable(`${WEBEXTENSIONS_PREFIX}installation_mode`, entry.installation_mode);
+        const url = assertEmittable(`${WEBEXTENSIONS_PREFIX}install_url`, entry.install_url);
+        lines.push(`  ${JSON.stringify(id)}: {`);
+        lines.push(`    "installation_mode": ${JSON.stringify(mode)},`);
+        lines.push(`    "install_url": ${JSON.stringify(url)}`);
+        lines.push('  },');
+    }
+    // A trailing comma after the last entry is NOT valid strict JSON, and
+    // the copy-over reads this file with JSON.parse -- so the final comma
+    // comes off. (Built per line rather than via JSON.stringify of the
+    // whole map to keep the one-entry-per-block shape the fragment readers
+    // expect.)
+    if (lines.length > 1) lines[lines.length - 1] = lines[lines.length - 1].replace(/,$/, '');
+    lines.push('}');
+    return lines.join('\n') + '\n';
+}
 /**
  * The telemetry fragment (04-03, TEL-01/TEL-02): the level the sender
  * enforces and the downstream's own endpoint it delivers to, as
@@ -3134,6 +3325,21 @@ export const TARGETS = Object.freeze([
         variant: 'dev',
         emit: emitTheiaPlugins,
     }),
+    // NEW (EXT-03): the declared-WebExtensions map. No tracked
+    // comparand -- the tracked powerbrowser/distribution/policies.json
+    // carries sibling keys the manifest does not own, so whole-file
+    // byte-identity is brittle there; the copy-over sets ONLY the
+    // ExtensionSettings key from this fragment, and the byte-identity gate
+    // skips rows without a tracked path while --check still covers the row
+    // through the frozen table. The tracked side is pinned by
+    // scripts/verify-webextensions.mjs (key equality against this
+    // emission, stale-key rejection, install_url origin coverage), never
+    // the manifest.
+    Object.freeze({
+        generated: 'webextensions-settings.json',
+        variant: 'dev',
+        emit: emitWebExtensionSettings,
+    }),
     // NEW (04-03): TEL-01/TEL-02's telemetry fragment. No tracked
     // comparand -- the tracked theia/applications/browser/package.json is
     // yarn-managed, so whole-file byte-identity is brittle there; the
@@ -3823,6 +4029,26 @@ const FIXTURE_EXTENSIONS = [
     '',
 ].join('\n');
 
+/**
+ * TWO complete [[webextensions]] entries, stated once because several cases
+ * below need them -- one whole for the emission-exactness control, one with
+ * a single value corrupted for each planted fault. One force-installed
+ * Acme entry over https and one normally-installed Acme entry over
+ * file:///, so the control proves both sanctioned schemes and both modes.
+ */
+const FIXTURE_WEBEXTENSIONS = [
+    '[[webextensions]]',
+    'id = "acme-tool@example.org"',
+    'installation_mode = "force_installed"',
+    'install_url = "https://example.org/acme-tool-1.2.3.xpi"',
+    '',
+    '[[webextensions]]',
+    'id = "acme-helper@example.org"',
+    'installation_mode = "normal_installed"',
+    'install_url = "file:///opt/downstream/extensions/acme-helper.xpi"',
+    '',
+].join('\n');
+
 /** Does `text` carry `needle`, which is either a literal or a pattern? */
 function carries(text, needle) {
     return needle instanceof RegExp ? needle.test(text) : text.includes(needle);
@@ -4466,6 +4692,71 @@ function selfTest() {
         }
     })();
 
+    // EXT-03's green control, computed once: the two-entry fixture below
+    // must resolve with zero failures and emit an ExtensionSettings block
+    // with the two EXACT entries -- the stated mode and URL per add-on id.
+    // The expected block is a literal: deriving it through
+    // emitWebExtensionSettings would make the control agree with the
+    // emitter no matter how wrong both were. Without this, a red result
+    // from the fault cases below could be the emitter broken on clean
+    // entries rather than on the plant.
+    const webExtensionsControl = (() => {
+        const fixtureDir = mkdtempSync(join(tmpdir(), 'generate-selftest-webextensions-'));
+        try {
+            const fixturePath = join(fixtureDir, 'webextensions.toml');
+            writeFileSync(fixturePath, `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_WEBEXTENSIONS}`, 'utf8');
+            const resolved = resolveConfig(MANIFEST_PATH, fixturePath);
+            if (resolved.failures.length > 0) {
+                return [`the webextensions fixture failed validation: ${resolved.failures.join(' | ')}`];
+            }
+            let parsed;
+            try {
+                parsed = JSON.parse(emitWebExtensionSettings(
+                    resolved.config,
+                    resolved.config.variants.find(v => v.id === 'dev'),
+                ));
+            } catch {
+                return ['the emitted webextensions-settings fragment is not valid JSON'];
+            }
+            const want = {
+                'acme-tool@example.org': {
+                    installation_mode: 'force_installed',
+                    install_url: 'https://example.org/acme-tool-1.2.3.xpi',
+                },
+                'acme-helper@example.org': {
+                    installation_mode: 'normal_installed',
+                    install_url: 'file:///opt/downstream/extensions/acme-helper.xpi',
+                },
+            };
+            if (JSON.stringify(parsed) !== JSON.stringify(want)) {
+                return [`the emitted ExtensionSettings block is not the two exact entries: ${JSON.stringify(parsed)}`];
+            }
+            return [];
+        } finally {
+            rmSync(fixtureDir, { recursive: true, force: true });
+        }
+    })();
+
+    // EXT-03's empty control, computed once: the entry-free manifest (this
+    // project's own tree, which declares no [[webextensions]]) must emit
+    // the empty object -- the correct tracked state of a tree with nothing
+    // declared. Without this, the gate's tracked-key equality on the real
+    // tree would rest on an unproved emitter default.
+    const webExtensionsEmptyControl = (() => {
+        let parsed;
+        try {
+            parsed = JSON.parse(emitWebExtensionSettings(
+                baseline.config,
+                baseline.config.variants.find(v => v.id === 'dev'),
+            ));
+        } catch {
+            return ['the emitted entry-free webextensions-settings fragment is not valid JSON'];
+        }
+        if (JSON.stringify(parsed) !== '{}') {
+            return [`the emitted entry-free ExtensionSettings block is not the empty object: ${JSON.stringify(parsed)}`];
+        }
+        return [];
+    })();
     // EXT-02's placeholder control, computed once: a target-specific direct
     // URL carrying the downloader placeholder `${targetPlatform}` must reach
     // the emitted fragment byte-verbatim -- the placeholder names the machine
@@ -5139,6 +5430,54 @@ function selfTest() {
             probe: () => targetPlaceholderControl,
             holds: 'the placeholder URL byte-verbatim with no host platform literal',
             resolved: () => targetPlaceholderControl.length === 0,
+        },
+        {
+            // EXT-03. An installation mode outside the force/normal pair
+            // must fail NAMING the add-on id -- the schema carries no
+            // pattern for the mode by design (an enum is not a shape), so
+            // without this branch the unknown mode would emit an entry the
+            // policy engine cannot honour.
+            name: 'webextension entry with an unknown installation mode',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_WEBEXTENSIONS.replace('installation_mode = "force_installed"', 'installation_mode = "auto_installed"')}`,
+            expect: 'acme-tool@example.org',
+            also: ['"force_installed"'],
+        },
+        {
+            // EXT-03. An install URL outside the two sanctioned schemes must
+            // fail NAMING the add-on id, via the schema pattern -- a plain
+            // http URL names no origin the allowlist leg could cover.
+            name: 'webextension entry with an install URL outside https and file',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_WEBEXTENSIONS.replace('install_url = "https://example.org/acme-tool-1.2.3.xpi"', 'install_url = "http://example.org/acme-tool-1.2.3.xpi"')}`,
+            expect: 'acme-tool@example.org',
+        },
+        {
+            // EXT-03. A webextension entry without its installation mode
+            // must fail NAMING the add-on id -- there is deliberately no
+            // silent default, so an unstated mode is a hard failure.
+            name: 'webextension entry without its installation mode',
+            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_WEBEXTENSIONS.replace('installation_mode = "force_installed"\n', '')}`,
+            expect: 'acme-tool@example.org',
+        },
+        {
+            // EXT-03's control: the two-entry fixture resolves with zero
+            // failures and emits the two exact ExtensionSettings entries
+            // (stated mode and URL per add-on id, both schemes). Without
+            // this, a red result from the fault cases above could be the
+            // emitter broken on clean entries rather than on the plant.
+            name: 'declared webextensions resolve to exact ExtensionSettings entries',
+            probe: () => webExtensionsControl,
+            holds: 'an ExtensionSettings block with the two exact entries',
+            resolved: () => webExtensionsControl.length === 0,
+        },
+        {
+            // EXT-03's empty control: the entry-free manifest emits the
+            // empty object -- the correct tracked state of a tree with
+            // nothing declared. Without this, the tracked-key equality on
+            // the real tree would rest on an unproved emitter default.
+            name: 'entry-free manifest emits the empty ExtensionSettings object',
+            probe: () => webExtensionsEmptyControl,
+            holds: 'the empty object',
+            resolved: () => webExtensionsEmptyControl.length === 0,
         },
         {
             // D-07 for the extensions array: an explicitly emptied list is a
