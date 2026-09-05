@@ -53,13 +53,13 @@ Archive: `.planning/milestones/v1.1-ROADMAP.md` · Requirements: `.planning/mile
   4. The count reconciliation is recorded: the v1.0 archive's "16" against this milestone's 15-item enumeration, with the discrepancy explained, not silently renumbered
   5. `scripts/verify-platform.sh --quick` is green at closeout with no sibling driver created — any new check landed as a registry row with a `--self-test`
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans executed
 
 Plans:
 
 - [x] 10-01-PLAN.md — Record-close tracer plus reconciliation plus five staged UAT runbooks
 - [x] 10-02-PLAN.md — Live drills on the built tree with probe-first staging
-- [ ] 10-03-PLAN.md — Gates-green sweep plus 15-box sign-off assembly
+- [x] 10-03-PLAN.md — Gates-green sweep plus 15-box sign-off assembly
 
 ### Phase 11: SQL Store Design
 
@@ -92,7 +92,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 10. Sign-off Closeout | 2/3 | In Progress|  |
+| 10. Sign-off Closeout | 3/3 | In Progress|  |
 | 11. SQL Store Design | 0/0 | Not started | - |
 | 12. SQL Store Build | 0/0 | Not started | - |
 

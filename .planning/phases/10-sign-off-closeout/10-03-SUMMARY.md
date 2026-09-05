@@ -285,7 +285,7 @@ None — no code written; stub scan not applicable to a prose evidence record. N
 Each task was committed atomically:
 
 1. **Task 1: Gates-green sweep plus registry integrity** - `d5d2923` (docs)
-2. **Task 2: Fifteen-box sign-off assembly plus verify-work carry list** - `PENDING-T2` (docs)
+2. **Task 2: Fifteen-box sign-off assembly plus verify-work carry list** - `ed2dbef` (docs)
 
 ## Files Created/Modified
 
