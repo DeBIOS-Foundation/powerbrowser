@@ -51,6 +51,12 @@ CREATE INDEX idx_tabs_last_active ON tabs (last_active);` /* PB-SQL-TABS-DDL-END
 
 const TAB_STORE_FILE_NAME = "tabs.sqlite";
 
+// SQL-01 (12-01): sweep bounds. The reconciliation sweep caps its per-run
+// writes so a pathological session state cannot stall the observer, and
+// prunes rows closed longer than the retention window.
+const TAB_STORE_SWEEP_MAX_WRITES = 500;
+const TAB_STORE_CLOSED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
 // SQL-01 (12-01): the single chrome-side tab-store connection. Module-level
 // (never a property on the frozen PowerBrowserAPI object -- assignment to a
 // frozen object throws), one writer only.
@@ -891,6 +897,104 @@ export const PowerBrowserAPI = Object.freeze({
       PowerBrowserAPI.log("error", `[ensureTabStore] rebuild failed: ${err && err.message ? err.message : err}`);
       return "degraded";
     }
+  },
+
+  /**
+   * SQL-01 (12-01): bounded reconciliation sweep. Diffs the sessionstore
+   * browser state against store rows: upserts missing rows (capped at
+   * TAB_STORE_SWEEP_MAX_WRITES per run) and prunes rows absent from the live
+   * set before the retention cutoff. This sweep is also what makes the
+   * roundtrip gate deterministic. Loud errors propagate to the caller.
+   */
+  async sweepTabStoreFromSessionStore() {
+    const live = PowerBrowserAPI.parseSessionStoreTabRows();
+    const liveUris = live.map(row => row.uri);
+    for (const row of live.slice(0, TAB_STORE_SWEEP_MAX_WRITES)) {
+      await PowerBrowserAPI.writeTabRow({
+        uri: row.uri,
+        url: row.url,
+        title: row.title,
+        lastActive: row.last_active,
+      });
+    }
+    await PowerBrowserAPI.pruneClosedTabRows(liveUris, Date.now() - TAB_STORE_CLOSED_RETENTION_MS);
+  },
+
+  /**
+   * SQL-01 (12-01): live triggers, chrome-observable only. Attaches the
+   * TabOpen, TabClose, TabSelect, and TabAttrModified family on every stock
+   * browser window's tab container (enumerated via the window service; the
+   * shell window carries no tab browser, so it never matches), each calling
+   * the write or remove wrapper keyed by the one-line browserTabKey rule,
+   * plus a sessionstore-state-write-complete observer running the bounded
+   * reconciliation sweep. No Theia-to-chrome channel is created and no actor
+   * is registered. Returns a stop function removing every listener and
+   * observer added here.
+   */
+  startTabStoreTriggers() {
+    const TAB_STORE_EVENTS = ["TabOpen", "TabClose", "TabSelect", "TabAttrModified"];
+    const attached = [];
+    const onTabEvent = event => {
+      try {
+        const tab = event.target;
+        const browser = tab && tab.linkedBrowser;
+        const spec = browser && browser.currentURI && browser.currentURI.spec;
+        if (!spec) {
+          return;
+        }
+        const uri = PowerBrowserAPI.browserTabKey(spec);
+        if (event.type === "TabClose") {
+          PowerBrowserAPI.removeTabRow(uri).catch(err => {
+            PowerBrowserAPI.log("error", `[tab-store-trigger] remove failed: ${err && err.message ? err.message : err}`);
+          });
+          return;
+        }
+        PowerBrowserAPI.writeTabRow({
+          uri,
+          url: spec,
+          title: (tab && tab.label) || "",
+          chromeWin: tab && tab.ownerDocument && tab.ownerDocument.defaultView,
+        }).catch(err => {
+          PowerBrowserAPI.log("error", `[tab-store-trigger] write failed: ${err && err.message ? err.message : err}`);
+        });
+      } catch (err) {
+        PowerBrowserAPI.log("error", `[tab-store-trigger] ${err && err.message ? err.message : err}`);
+      }
+    };
+    const stockWindows = Services.wm.getEnumerator("navigator:browser");
+    while (stockWindows.hasMoreElements()) {
+      const win = stockWindows.getNext();
+      const container = win.gBrowser && win.gBrowser.tabContainer;
+      if (!container) {
+        continue;
+      }
+      for (const name of TAB_STORE_EVENTS) {
+        container.addEventListener(name, onTabEvent);
+        attached.push([container, name]);
+      }
+    }
+    const sweepObserver = {
+      observe: () => {
+        PowerBrowserAPI.sweepTabStoreFromSessionStore().catch(err => {
+          PowerBrowserAPI.log("error", `[tab-store-sweep] ${err && err.message ? err.message : err}`);
+        });
+      },
+    };
+    Services.obs.addObserver(sweepObserver, "sessionstore-state-write-complete");
+    return () => {
+      for (const [container, name] of attached) {
+        try {
+          container.removeEventListener(name, onTabEvent);
+        } catch {
+          // Listener removal is best-effort on teardown.
+        }
+      }
+      try {
+        Services.obs.removeObserver(sweepObserver, "sessionstore-state-write-complete");
+      } catch {
+        // Observer removal is best-effort on teardown.
+      }
+    };
   },
 
   /**
