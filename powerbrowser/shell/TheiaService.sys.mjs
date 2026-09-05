@@ -101,6 +101,12 @@ export const TheiaService = {
   _healthy: false,
   _restartCount: 0,
 
+  // SQL-01 (12-CODE-REVIEW.md CR-04): the unregister function
+  // PowerBrowserAPI.startTabStoreTriggers returns, retained so the sweep
+  // observer and tab listeners detach on stop(). Null until start() wires
+  // the writer below.
+  _tabStoreTriggersOff: null,
+
   // SHELL-03 (05-02) give-up/error-state fields.
   // _errorShown guards _showError/_hideError the same way _swapped guards
   // _swap() -- repeated calls for the same state paint once and emit one
@@ -252,6 +258,28 @@ export const TheiaService = {
       this._reapLog(`Leftover reap failed: ${err.message} -- best-effort cleanup of a previous launch, continuing to this launch's own spawn.`);
     }
 
+    // SQL-01 (12-CODE-REVIEW.md CR-04): start the chrome-side tab-store
+    // writer. ensureTabStore opens (migrating), tripwires, and rebuilds from
+    // sessionstore when tripped -- resolving ready/rebuilt/degraded, never
+    // throwing, so startup never stalls on the store. startTabStoreTriggers
+    // then attaches the tab-event family plus the sessionstore-write sweep
+    // observer that keeps later windows covered. Both calls go through
+    // PowerBrowserAPI (D-96: this file imports nothing else), and both live
+    // in existing shell files -- no new XPCOM, no Gecko outside the stack.
+    try {
+      const storeState = await PowerBrowserAPI.ensureTabStore();
+      this._pushLog(`Tab store: ${storeState}.`);
+    } catch (err) {
+      // ensureTabStore promises never to throw; this is belt-and-braces so
+      // a store failure can never block the first backend spawn below.
+      this._pushLog(`Tab store degraded: ${err && err.message ? err.message : err}`);
+    }
+    try {
+      this._tabStoreTriggersOff = PowerBrowserAPI.startTabStoreTriggers();
+    } catch (err) {
+      this._pushLog(`Tab triggers not attached: ${err && err.message ? err.message : err}`);
+    }
+
     // SHELL-03: the very first spawn attempt is folded into _restart()'s
     // own bounded give-up loop (D-103 was Phase 4's indefinite-retry
     // default) rather than being a separate uncounted attempt outside the
@@ -285,6 +313,17 @@ export const TheiaService = {
     }
     this._proc = null;
     this._healthy = false;
+
+    // SQL-01 (12-CODE-REVIEW.md CR-04): detach the tab-store triggers wired
+    // in start(), best-effort like every other teardown here.
+    if (this._tabStoreTriggersOff) {
+      try {
+        this._tabStoreTriggersOff();
+      } catch {
+        // Listener removal is best-effort on teardown.
+      }
+      this._tabStoreTriggersOff = null;
+    }
 
     // D-110: a clean stop must leave nothing for the next startup's
     // _reapLeftover() to find -- a normal quit followed by a normal start
