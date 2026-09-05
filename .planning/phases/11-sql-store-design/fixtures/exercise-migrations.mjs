@@ -32,10 +32,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_V1 = join(HERE, 'tabs-v1.sqlite');
 const CURRENT_SCHEMA_VERSION = 1;
 const CREATE_TABS_V1_SQL = `CREATE TABLE tabs (
-  uri         TEXT PRIMARY KEY,
+  uri         TEXT PRIMARY KEY CHECK(length(uri) > 0),
   url         TEXT NOT NULL,
   title       TEXT NOT NULL DEFAULT '',
-  last_active INTEGER NOT NULL
+  last_active INTEGER NOT NULL CHECK(last_active >= 0)
 )`;
 const CREATE_INDEX_V1_SQL = `CREATE INDEX idx_tabs_last_active ON tabs (last_active)`;
 
@@ -270,6 +270,13 @@ try {
       check('fresh-create-integrity', integrityOk(db), 'quick_check is not exactly [ok] after fresh-create');
       check('fresh-create-wal', db.prepare('PRAGMA journal_mode').get().journal_mode === 'wal',
         'journal mode is not WAL after fresh-create');
+      // Contract CHECKs: empty URI and negative last_active must reject.
+      let emptyRejected = false;
+      try { db.prepare('INSERT INTO tabs (uri, url, title, last_active) VALUES (?, ?, ?, ?)').run('', 'u', 't', 0); } catch { emptyRejected = true; }
+      check('fresh-create-rejects-empty-uri', emptyRejected, 'empty-string URI accepted despite CHECK(length(uri) > 0)');
+      let negativeRejected = false;
+      try { db.prepare('INSERT INTO tabs (uri, url, title, last_active) VALUES (?, ?, ?, ?)').run('check:negative', 'u', 't', -1); } catch { negativeRejected = true; }
+      check('fresh-create-rejects-negative-last-active', negativeRejected, 'negative last_active accepted despite CHECK(last_active >= 0)');
     } finally {
       db.close();
     }
