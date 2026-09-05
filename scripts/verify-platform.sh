@@ -4204,6 +4204,21 @@ run_own_checks() {
     # rule). No build, no browser, no display, no network.
     "webextensions|node $REPO_ROOT/scripts/verify-webextensions.mjs"
     "webextensions-self-test|node $REPO_ROOT/scripts/verify-webextensions.mjs --self-test"
+
+    # NEW (12-03): SQL-05's store gates, static halves. Honestly --quick: the
+    # second-writer scan reads tracked source only (git ls-files, never the
+    # upstream clone), and the soak default entry runs the static fixture
+    # interleave only -- stage copies under mktemp, never a profile path, and
+    # it never launches anything (the live half is the separate --live row in
+    # the full set below). No build, no browser, no display, no network. Each
+    # self-test rides alongside for the reason every other self-test row in
+    # this array gives: a gate that can only go green is not a check, and both
+    # instruments prove both directions (planted open plus stripped flag;
+    # tampered copy tripping plus clean copy single-ok).
+    "sql-store-second-writer|node $REPO_ROOT/scripts/verify-sql-store-second-writer.mjs"
+    "sql-store-second-writer-self-test|node $REPO_ROOT/scripts/verify-sql-store-second-writer.mjs --self-test"
+    "sql-store-soak|node $REPO_ROOT/scripts/verify-sql-store-soak.mjs"
+    "sql-store-soak-self-test|node $REPO_ROOT/scripts/verify-sql-store-soak.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
@@ -4378,6 +4393,30 @@ run_own_checks() {
       "gui01-single-shell-window|check_gui01_single_shell_window"
       "gui01-browser-close-does-not-quit|node $REPO_ROOT/scripts/verify-gui01-window.mjs"
       "gui01-command-registered|check_gui01_command_registered"
+
+      # NEW (12-03): SQL-05's store gates, live halves. All five rows need the
+      # built binary, so none is --quick; STAGED-exit-clean (binary or startup
+      # wiring absent) counts as registration proof, a real drive counts as
+      # the gate. The soak live entry runs the temp-profile interleave through
+      # the binary once startup wiring lands (shares its one self-test row
+      # with the static half above -- the self-test proves the static
+      # procedure plus the tamper predicate both halves rely on). The
+      # roundtrip rows promote the plan 12-01 proof script by invocation only:
+      # the committed drive replays restart→reopen over throwaway databases,
+      # and it registers at the tier of the live restart proof it belongs to
+      # (temp-profile restart through the real writer) rather than moving
+      # tiers when that drive lands. The absence rows promote the plan 12-02
+      # instrument the same way: its static halves read the writer source,
+      # but the default invocation also attempts the live private-window run,
+      # which needs the binary and a launch-capable harness (headless-first,
+      # Xvfb fallback per harness-display-available), so the whole script
+      # rides full-tier. No logic duplicated -- the registry invokes, the
+      # scripts prove.
+      "sql-store-soak-live|node $REPO_ROOT/scripts/verify-sql-store-soak.mjs --live"
+      "sql-store-roundtrip|node $REPO_ROOT/scripts/verify-sql-store-roundtrip.mjs"
+      "sql-store-roundtrip-self-test|node $REPO_ROOT/scripts/verify-sql-store-roundtrip.mjs --self-test"
+      "sql-store-absence|node $REPO_ROOT/scripts/verify-sql-store-absence.mjs"
+      "sql-store-absence-self-test|node $REPO_ROOT/scripts/verify-sql-store-absence.mjs --self-test"
     )
   fi
 
