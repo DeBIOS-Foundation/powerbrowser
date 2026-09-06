@@ -310,6 +310,7 @@ with "autonomous interactive".
 | 10 | verification_deferred_human (3/3 plans executed, code review clean; 5 human UAT sheets staged pending signature, verifier not run per nonstop rule) | /gsd-verify-work 10 |
 | 11 | verification_deferred (3/3 plans executed, code review clean after 12-fix sweep; authority+schema recorded approvals, verifier not run per nonstop rule) | /gsd-verify-work 11 |
 | 12 | verification_deferred (3/3 plans executed, code review clean after 12 blockers fixed; roundtrip 24/24, absence LIVE, soak 14/14, verifier not run per nonstop rule) | /gsd-verify-work 12 |
+| 13 | verification_deferred (3/3 plans executed, code review 10/10 fixed, spike verdict RED→Variant-A fallback; verifier not run per nonstop rule) | /gsd-verify-work 13 |
 
 ## Deferred Items
 
