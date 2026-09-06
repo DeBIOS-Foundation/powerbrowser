@@ -41,7 +41,8 @@
  * navigate through the existing opener path. The widget lands in 13-03, so
  * with no activation call site present this prints STAGED with the exact
  * rerun command and exits cleanly -- a loud held-out check, never a silent
- * pass. Once a call site exists, it must route through `OpenerService.open`.
+ *  pass. Once a call site exists, it must route through
+ *  `OpenerService.getOpener` plus `handler.open`.
  *
  *  Honestly --quick: reads text sources, runs a scratch fixture through the
  *  stdlib engine, touches no build, no browser, no display, no network.

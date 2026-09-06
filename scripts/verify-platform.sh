@@ -3701,8 +3701,8 @@ run_own_checks() {
     # NEW (13-02): GUI-06's suggestion-search gate. Static half derives the
     # search statement from the query-service source and compares
     # projection/escape/order/limit as set equality; live half runs the
-    # derived statement against a scratch fixture through the vendored
-    # engine, plus the held-out activation backstop (STAGED until the 13-03
+    # derived statement against a scratch fixture through the stdlib
+    # `node:sqlite` engine (second-writer carve-out), plus the held-out activation backstop (STAGED until the 13-03
     # widget lands). Honestly --quick: text reads plus a mkdtemp fixture
     # only. No build, no browser, no display, no network. The self-test
     # rides alongside for the reason every other self-test row in this
