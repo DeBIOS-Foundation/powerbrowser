@@ -68,12 +68,15 @@ REQUIREMENTS.md; behavior brief:
    - Acceptance: `verify-platform.sh --quick` green including the
      no-core-edit check; backend on/off via `configuration.toml`.
 
-5. **MCP bridge (slice 0)**: Opencode consumes the Theia MCP server
-   endpoint as one of its configured MCP servers and reads workspace
-   context through it.
-   - Current: No documented bridge config.
-   - Target: Checked-in config + docs pointing opencode at the
-     sidecar `/mcp` endpoint for workspace context reads.
+5. **MCP bridge (slice 0)**: The sidecar exposes a minimal MCP
+   endpoint and opencode consumes it as one of its configured MCP
+   servers to read workspace context. (Research 2026-09-06 refuted
+   the config-only premise: no `/mcp` endpoint exists in 1.74.1, so
+   this requirement BUILDS the endpoint, scoped to workspace-context
+   reads.)
+   - Current: No MCP endpoint in the sidecar; no bridge config.
+   - Target: Minimal sidecar MCP endpoint (workspace-context reads)
+     + checked-in opencode config consuming it.
    - Acceptance: From opencode, an MCP workspace-context read
      returns live sidecar state; reads are point-in-time (no
      snapshot guarantee).

@@ -64,11 +64,11 @@ any Theia core fork or Gecko change.
   session-history surfaces; no bespoke history widget this phase. [auto]
 
 ### Slice-0 bridge auth
-- **D-07:** Bridge config uses the loopback `/mcp` URL with auth via
-  the supervisor-issued token path; the token is never hardcoded in
-  checked-in config (powerbrowser-env scrub precedent applies).
-  Researcher verifies the child-process accommodation with
-  token-gate before planner commits. [auto]
+- **D-07:** Bridge auth uses per-spawn env injection via opencode
+  `{env:VAR}` interpolation; the token is never hardcoded in
+  checked-in config and never inherited (no supervisor token path
+  exists for grandchildren by design — research 2026-09-06).
+  [auto]
 
 ### Claude's Discretion
 All of the above were auto-selected in automatic mode; the user reviews
