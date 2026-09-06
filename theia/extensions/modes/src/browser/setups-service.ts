@@ -732,7 +732,7 @@ export class SetupsService implements FrontendApplicationContribution {
             // First-ever read: absence is the untouched default, never created.
             return;
         }
-        this.applyStoreText(raw, false);
+        this.applyStoreText(raw);
     }
 
     protected async reloadSetups(): Promise<void> {
@@ -744,7 +744,7 @@ export class SetupsService implements FrontendApplicationContribution {
             // the session untouched.
             return;
         }
-        this.applyStoreText(raw, true);
+        this.applyStoreText(raw);
     }
 
     protected handleStoreDeleted(): void {
@@ -753,7 +753,7 @@ export class SetupsService implements FrontendApplicationContribution {
     }
 
     /** Corrupt data degrades to the contracted empty state: zero rows, no marker, never a throw. */
-    protected applyStoreText(raw: string, _reload: boolean): void {
+    protected applyStoreText(raw: string): void {
         const parsed = parseSetupStore(raw);
         if (!parsed.ok) {
             this.lastGoodSetups = [];
