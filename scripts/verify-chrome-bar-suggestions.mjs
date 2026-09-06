@@ -37,12 +37,18 @@
  *  three spellings in source; the --self-test's discrimination proof shows
  *  this live half CAN go red on an unescaped implementation.
  *
- * Activation backstop (13-UI-SPEC.md): committing a suggestion must
- * navigate through the existing opener path. The widget lands in 13-03, so
- * with no activation call site present this prints STAGED with the exact
- * rerun command and exits cleanly -- a loud held-out check, never a silent
- *  pass. Once a call site exists, it must route through
- *  `OpenerService.getOpener` plus `handler.open`.
+ * Activation routing (13-04, G-13-3 facet 1): committing a suggestion
+ * must navigate through its row URL on the stock-window channel. Derived
+ * from the chrome-bar browser sources at check time: the widget imports
+ * OPEN_BROWSER_WINDOW_COMMAND_ID and never re-spells the window-command id
+ * string; the commit path references the row url field and never feeds the
+ * opaque row key into a commit or open call (the React list key is the one
+ * sanctioned row.uri use); no bare window.open literal and no search-engine
+ * host literal (a small frozen list plus a query-param search pattern) may
+ * appear in any chrome-bar browser source. An empty derivation -- zero
+ * browser sources, or no widget source -- fails as a broken instrument,
+ * never passes as clean. Zero routed call sites is a loud failure: call
+ * sites exist, so there is no held-out STAGED pass.
  *
  *  Honestly --quick: reads text sources, runs a scratch fixture through the
  *  stdlib engine, touches no build, no browser, no display, no network.
@@ -66,7 +72,6 @@ const TOKEN_REL = 'theia/extensions/chrome-bar/src/browser/chrome-bar-suggestion
 const IMPL_REL = 'theia/extensions/chrome-bar/src/node/chrome-bar-suggestion-service-impl.ts';
 const FRONTEND_MODULE_REL = 'theia/extensions/chrome-bar/src/browser/chrome-bar-frontend-module.ts';
 const BACKEND_MODULE_REL = 'theia/extensions/chrome-bar/src/node/chrome-bar-backend-module.ts';
-const RERUN = `node scripts/${NAME}.mjs`;
 
 /**
  * The declared search contract. The ONE hand-kept list in the static half:
@@ -360,41 +365,109 @@ function checkLive() {
 }
 
 /**
- * Activation backstop (13-UI-SPEC.md, held-out): a committed suggestion
- * must navigate through the existing tab-URI opener path. Scans every
- * chrome-bar browser source for an `.open(` call site: with none present
- * (widget lands in 13-03) the caller reports STAGED loudly -- never a
- * silent pass. A call site that commits without the OpenerService (e.g. a
- * bare window.open) fails naming the file. A bare `window.open` fails in
- * EVERY file -- even one that mentions OpenerService elsewhere -- so a
- * same-file bypass can never hide behind file-granular co-occurrence.
+ * Activation routing (13-04, G-13-3 facet 1): a committed suggestion must
+ * navigate through its row URL on the stock-window channel -- never the
+ * opaque row key (the blank-panel mint), never a re-spelled command id,
+ * never a bare window.open bypass, never an invented search host.
+ *
+ * Derived from the chrome-bar browser sources at check time. The widget
+ * half pins the commit routing; the every-file half pins the two bypasses
+ * that could hide in any browser source. The React list key
+ * (`key={row.uri}`) is the one sanctioned row.uri use -- it is stripped
+ * before the key-feed assertion, so any surviving row.uri names a commit
+ * or open call fed the opaque key.
  */
+const CHROME_BAR_BROWSER_DIR = 'theia/extensions/chrome-bar/src/browser';
+const CHROME_BAR_WIDGET_FILE = 'chrome-bar-widget.tsx';
+const WINDOW_COMMAND_ID = 'powerbrowser.open-browser-window';
+
+/**
+ * The negated search-addressability list (T-13-04-03): obvious public
+ * engine hosts plus a query-param search pattern. A frozen hand-kept list
+ * -- adding a host is a deliberate contract change visible in the diff.
+ */
+const ENGINE_HOSTS = Object.freeze([
+    'google.com',
+    'bing.com',
+    'duckduckgo.com',
+    'search.yahoo.com',
+    'yandex.com',
+    'yandex.ru',
+    'startpage.com',
+    'ecosia.org',
+    'search.brave.com',
+    'mojeek.com',
+]);
+const SEARCH_QUERY_PATTERN = /[?&](q|query)=|search\?/;
+
 function checkActivationSources(entries) {
     const failures = [];
     const routed = [];
-    for (const { file, src } of entries) {
-        if (!/\.open\(/.test(src)) {
-            continue;
+    const widget = entries.find(entry => entry.file === CHROME_BAR_WIDGET_FILE);
+    if (!widget || !widget.src) {
+        failures.push(
+            `${CHROME_BAR_BROWSER_DIR}/${CHROME_BAR_WIDGET_FILE}: derived ZERO widget source -- ` +
+            `the commit routing cannot be derived, so this comparison proves nothing`
+        );
+    } else {
+        const rel = `${CHROME_BAR_BROWSER_DIR}/${CHROME_BAR_WIDGET_FILE}`;
+        const src = widget.src;
+        if (!src.includes('OPEN_BROWSER_WINDOW_COMMAND_ID')) {
+            failures.push(`${rel}: does not import OPEN_BROWSER_WINDOW_COMMAND_ID -- suggestion activation must execute the imported stock-window command const, never a re-spelled string`);
         }
-        const rel = `theia/extensions/chrome-bar/src/browser/${file}`;
-        if (/window\.open\s*\(/.test(src)) {
-            failures.push(`${rel}: bare window.open bypasses the OpenerService routing -- suggestion activation must navigate through the existing tab-URI opener path`);
-            continue;
+        if (src.includes(`'${WINDOW_COMMAND_ID}'`)) {
+            failures.push(`${rel}: re-spells the window-command id '${WINDOW_COMMAND_ID}' instead of importing the exported const -- the copy drifts silently from the tab-uris registration`);
         }
-        if (src.includes('OpenerService')) {
-            routed.push(rel);
+        if (!/row\.url/.test(src)) {
+            failures.push(`${rel}: commit path does not reference the row url field -- suggestion activation must navigate through row.url, never the opaque row key`);
         } else {
-            failures.push(`${rel}: commits through .open() without the OpenerService -- suggestion activation must navigate through the existing tab-URI opener path`);
+            routed.push(rel);
         }
+        const dekeyed = src.split('key={row.uri}').join('');
+        if (/row\.uri/.test(dekeyed)) {
+            failures.push(`${rel}: feeds the opaque row key row.uri into a commit or open call -- the blank-panel mint recurrence (T-13-04-02); commit row.url instead`);
+        }
+    }
+    for (const { file, src } of entries) {
+        const rel = `${CHROME_BAR_BROWSER_DIR}/${file}`;
+        if (/window\.open\s*\(/.test(src)) {
+            failures.push(`${rel}: bare window.open bypasses the stock-window command -- suggestion activation must navigate through the imported command const`);
+        }
+        for (const host of ENGINE_HOSTS) {
+            if (src.includes(host)) {
+                failures.push(`${rel}: invents search addressability with the engine host literal '${host}' -- search dispatch stays deferred to GUI-02 scope (T-13-04-03)`);
+            }
+        }
+        if (SEARCH_QUERY_PATTERN.test(src)) {
+            failures.push(`${rel}: invents search addressability with a query-param search pattern -- search dispatch stays deferred to GUI-02 scope (T-13-04-03)`);
+        }
+    }
+    // No STAGED branch: call sites exist, so zero routed call sites is a
+    // loud failure, never a held-out pass.
+    if (routed.length === 0) {
+        failures.push(
+            `${CHROME_BAR_BROWSER_DIR}/${CHROME_BAR_WIDGET_FILE}: derived ZERO routed commit call sites -- ` +
+            `no file routes a suggestion row through row.url, so activation cannot navigate`
+        );
     }
     return { failures, routed };
 }
 
 function checkActivation() {
-    const dir = join(REPO_ROOT, 'theia/extensions/chrome-bar/src/browser');
-    const entries = readdirSync(dir)
-        .filter(f => f.endsWith('.ts') || f.endsWith('.tsx'))
-        .map(file => ({ file, src: readFileSync(join(dir, file), 'utf8') }));
+    let files;
+    try {
+        files = readdirSync(join(REPO_ROOT, CHROME_BAR_BROWSER_DIR))
+            .filter(f => f.endsWith('.ts') || f.endsWith('.tsx'));
+    } catch {
+        files = [];
+    }
+    if (files.length === 0) {
+        return {
+            failures: [`${CHROME_BAR_BROWSER_DIR}: derived ZERO chrome-bar browser sources -- the activation routing cannot be derived, so this comparison proves nothing`],
+            routed: [],
+        };
+    }
+    const entries = files.map(file => ({ file, src: readFileSync(join(REPO_ROOT, CHROME_BAR_BROWSER_DIR, file), 'utf8') }));
     return checkActivationSources(entries);
 }
 
@@ -405,19 +478,12 @@ function main() {
     const failures = [...checkStatic(readSources()), ...checkLive()];
     const activation = checkActivation();
     failures.push(...activation.failures);
-    if (activation.routed.length === 0 && activation.failures.length === 0) {
-        console.log(
-            `${NAME}: STAGED -- suggestion-activation backstop held out: no activation call site exists yet ` +
-            `(widget lands in 13-03); committing a suggestion must navigate through the existing opener path. ` +
-            `Rerun: ${RERUN}`
-        );
-    }
     if (failures.length) {
         console.error(`${NAME}: FAIL`);
         failures.forEach(f => console.error(`  - ${f}`));
         return 1;
     }
-    console.log(`${NAME}: PASS -- search shape matches the declared contract and fixture semantics hold (prefix, escape, cap ${EXPECTED.uiCap}, recency)`);
+    console.log(`${NAME}: PASS -- search shape matches the declared contract and fixture semantics hold (prefix, escape, cap ${EXPECTED.uiCap}, recency); activation routes row URLs through the imported stock-window const (${activation.routed.length} file(s))`);
     return 0;
 }
 
@@ -508,39 +574,69 @@ function selfTest() {
         failed++;
     }
 
-    // Activation-backstop proof: a bare window.open in a file that ALSO
-    // mentions OpenerService must go red (the file-granularity hole), a
-    // routed-only call site must stay routed-green, and the live tree must
-    // be routed-green with no failure.
-    const bypass = checkActivationSources([{
-        file: 'chrome-bar-widget.tsx',
-        src: "import { OpenerService } from '@theia/core/lib/browser';\n"
-            + 'const handler = await opener.getOpener(uri); await handler.open(uri);\n'
-            + "window.open('https://bypass.example', '_blank');\n",
-    }]);
-    if (!bypass.failures.some(f => f.includes('window.open'))) {
-        console.error(`${NAME} --self-test: FAIL -- same-file window.open bypass did not go red naming 'window.open'; got: ${bypass.failures.join(' | ') || '(no failures at all)'}`);
-        failed++;
-    } else {
-        console.log(`  ok  same-file window.open bypass -> red, naming 'window.open'`);
-    }
-    const routedOnly = checkActivationSources([{
-        file: 'chrome-bar-widget.tsx',
-        src: "import { OpenerService } from '@theia/core/lib/browser';\n"
-            + 'const handler = await opener.getOpener(uri); await handler.open(uri);\n',
-    }]);
-    if (routedOnly.failures.length !== 0 || routedOnly.routed.length !== 1) {
-        console.error(`${NAME} --self-test: FAIL -- routed-only call site was not routed-green; got: ${routedOnly.failures.join(' | ') || `(routed ${routedOnly.routed.length})`}`);
-        failed++;
-    } else {
-        console.log(`  ok  routed-only call site -> routed-green`);
-    }
+    // Activation-routing proof (13-04): the live tree is routed-green,
+    // and four plants around the new contract each go red naming the
+    // drift. Plants mutate the live widget source in memory; a plant that
+    // does not land is reported as a drifted anchor, never a vacuous
+    // green.
     const liveActivation = checkActivation();
     if (liveActivation.failures.length !== 0 || liveActivation.routed.length === 0) {
         console.error(`${NAME} --self-test: FAIL -- the live tree is not routed-green (failures: ${liveActivation.failures.join(' | ') || 'none'}, routed: ${liveActivation.routed.length})`);
         failed++;
     } else {
         console.log(`  ok  live tree activation -> routed-green (${liveActivation.routed.length} file(s))`);
+    }
+
+    const widgetRel = `${CHROME_BAR_BROWSER_DIR}/${CHROME_BAR_WIDGET_FILE}`;
+    const widgetSrc = readFileSync(join(REPO_ROOT, widgetRel), 'utf8');
+    const otherEntries = readdirSync(join(REPO_ROOT, CHROME_BAR_BROWSER_DIR))
+        .filter(f => (f.endsWith('.ts') || f.endsWith('.tsx')) && f !== CHROME_BAR_WIDGET_FILE)
+        .map(file => ({ file, src: readFileSync(join(REPO_ROOT, CHROME_BAR_BROWSER_DIR, file), 'utf8') }));
+    const activationCases = [
+        {
+            name: 'planted row-key-fed commit',
+            mutate: src => src.replace('void this.commitRow(row);', 'void this.commitRow(row.uri);'),
+            expect: 'row.uri',
+        },
+        {
+            name: 'planted re-spelled window-command id',
+            mutate: src => src.replace(
+                'await this.commands.executeCommand(OPEN_BROWSER_WINDOW_COMMAND_ID, url);',
+                `await this.commands.executeCommand('${WINDOW_COMMAND_ID}', url);`
+            ),
+            expect: WINDOW_COMMAND_ID,
+        },
+        {
+            name: 'planted engine-host literal',
+            mutate: src => src.replace(
+                'return `https://${text}`;',
+                'return `https://duckduckgo.com/html/?q=${text}`;'
+            ),
+            expect: 'duckduckgo.com',
+        },
+        {
+            name: 'planted bare window.open',
+            mutate: src => src.replace(
+                'await this.commands.executeCommand(OPEN_BROWSER_WINDOW_COMMAND_ID, url);',
+                'window.open(url, \'_blank\');'
+            ),
+            expect: 'window.open',
+        },
+    ];
+    for (const testCase of activationCases) {
+        const mutatedSrc = testCase.mutate(widgetSrc);
+        if (mutatedSrc === widgetSrc) {
+            console.error(`${NAME} --self-test: FAIL -- '${testCase.name}' did not modify the source; the anchor it edits has drifted`);
+            failed++;
+            continue;
+        }
+        const failures = checkActivationSources([{ file: CHROME_BAR_WIDGET_FILE, src: mutatedSrc }, ...otherEntries]).failures;
+        if (!failures.some(f => f.includes(testCase.expect))) {
+            console.error(`${NAME} --self-test: FAIL -- '${testCase.name}' did not go red naming '${testCase.expect}'; got: ${failures.join(' | ') || '(no failures at all)'}`);
+            failed++;
+        } else {
+            console.log(`  ok  ${testCase.name} -> red, naming '${testCase.expect}'`);
+        }
     }
 
     if (failed) {

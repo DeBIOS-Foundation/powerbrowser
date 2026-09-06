@@ -556,6 +556,7 @@ const EXPECTED_WIDGET_COPY = new Set([
   "No matches for what you typed — press Enter to visit it as an address.",
   "Enter opens the address · Esc closes suggestions",
   "Power Browser couldn&apos;t load suggestions. Press Enter to visit what you typed.",
+  "Power Browser couldn&apos;t open that address. Press Enter to try again.",
   "${this.tabCount} tabs",
 ]);
 
