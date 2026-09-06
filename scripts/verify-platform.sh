@@ -3688,6 +3688,31 @@ run_own_checks() {
     "gui04-registry-shape|node $REPO_ROOT/scripts/verify-registry-shape.mjs"
     "gui04-registry-shape-self-test|node $REPO_ROOT/scripts/verify-registry-shape.mjs --self-test"
 
+    # NEW (13-02): GUI-06's suggestion-search gate. Static half derives the
+    # search statement from the query-service source and compares
+    # projection/escape/order/limit as set equality; live half runs the
+    # derived statement against a scratch fixture through the vendored
+    # engine, plus the held-out activation backstop (STAGED until the 13-03
+    # widget lands). Honestly --quick: text reads plus a mkdtemp fixture
+    # only. No build, no browser, no display, no network. The self-test
+    # rides alongside for the reason every other self-test row in this
+    # array gives -- a gate nobody has seen go red is not a check.
+    "gui06-chrome-bar-suggestions|node $REPO_ROOT/scripts/verify-chrome-bar-suggestions.mjs"
+    "gui06-chrome-bar-suggestions-self-test|node $REPO_ROOT/scripts/verify-chrome-bar-suggestions.mjs --self-test"
+
+    # NEW (13-02): GUI-07's spike-verdict gate. Parses the strip-relocation
+    # record for a one-line GREEN/RED verdict with a cause on RED plus the
+    # Variant routing, and checks the zero-core claim against the
+    # core-diff instrument itself (invoked, never reimplemented), an empty
+    # upstream diff, and no spike-shipped file under theia/ or scripts/.
+    # Honestly --quick: text reads, git plumbing, and the core-diff
+    # instrument through the theia shell (seconds, like tab-uris-typecheck).
+    # No build, no browser, no display, no network. The self-test rides
+    # alongside for the reason every other self-test row in this array
+    # gives.
+    "gui07-strip-spike-verdict|node $REPO_ROOT/scripts/verify-strip-spike-verdict.mjs"
+    "gui07-strip-spike-verdict-self-test|node $REPO_ROOT/scripts/verify-strip-spike-verdict.mjs --self-test"
+
     # NEW (01-07): MIG-04's user-facing-copy gate. Static -- it reads
     # TheiaService.sys.mjs, never a built artifact -- so it is honestly
     # --quick, and that placement is the point: a leaked pref key must cost
