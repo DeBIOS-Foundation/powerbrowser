@@ -1,6 +1,12 @@
 # Dependencies
 node_modules/
 
+# IN-09 (15-REVIEW.md): the root yarn.lock is a sidecar-build byproduct
+# (empty header-only file, no root package.json to lock) -- never a shipped
+# npm surface. Ignored so a future `git add -A` cannot silently convert it
+# into one; the real lockfile lives under theia/.
+/yarn.lock
+
 # Theia / TypeScript build output
 # Anchored under theia/ so this doesn't also swallow scripts/lib/, which is
 # hand-written source (the shared BiDi driver), not build output.
