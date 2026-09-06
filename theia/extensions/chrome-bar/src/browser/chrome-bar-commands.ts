@@ -1,6 +1,5 @@
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { Command, CommandContribution, CommandRegistry } from '@theia/core/lib/common';
-import { NavigationLocationService } from '@theia/editor/lib/browser/navigation/navigation-location-service';
 import { OPEN_BROWSER_WINDOW_COMMAND_ID } from '@powerbrowser/tab-uris/lib/browser/browser-window-command';
 
 /**
@@ -49,6 +48,23 @@ export const CHROME_BAR_FOCUS_ADDRESS: Command = {
 export const CHROME_BAR_INPUT_CLASS = 'pb-chrome-bar-input';
 
 /**
+ * GUI-02-owned navigable-tab predicate (13-04): back, forward, and reload
+ * all read enablement from this one export, so the three controls can never
+ * disagree about whether a navigable tab exists.
+ *
+ * Returns false: no in-Theia navigable tab type exists until GUI-02 lands,
+ * so no in-Theia browser history exists either. All three commands therefore
+ * stay disabled with their contracted tooltips per the 13-UI-SPEC.md buttons
+ * contract (disabled is styled, never removed -- layout never shifts), and
+ * the widget's nav buttons bind this same predicate instead of a hardcoded
+ * literal. GUI-02 flips this predicate when the first navigable tab type
+ * ships; nothing else changes.
+ */
+export function chromeBarHasNavigableTab(): boolean {
+    return false;
+}
+
+/**
  * Focuses the address pill and selects its content. A DOM lookup, not a
  * widget reference: the command side must not import the widget (the
  * widget imports these ids -- the dependency runs one way only).
@@ -64,32 +80,32 @@ export function focusAddressPill(): void {
 @injectable()
 export class ChromeBarCommandContribution implements CommandContribution {
 
-    @inject(NavigationLocationService)
-    protected readonly navigation: NavigationLocationService;
-
     @inject(CommandRegistry)
     protected readonly commands: CommandRegistry;
 
     registerCommands(commands: CommandRegistry): void {
         // Disabled-not-removed (13-UI-SPEC.md): visibility stays true while
-        // enablement follows the history stack, so the buttons dim with
-        // their tooltips retained and the layout never shifts.
+        // enablement follows the one shared navigable-tab predicate, so the
+        // buttons dim with their tooltips retained and the layout never
+        // shifts. Executes are guarded no-ops that resolve without touching
+        // any service, so a palette invocation cannot reach the wrong stack.
         commands.registerCommand(CHROME_BAR_BACK, {
-            execute: () => this.navigation.back(),
-            isEnabled: () => this.navigation.canGoBack(),
+            execute: () => Promise.resolve(),
+            isEnabled: () => chromeBarHasNavigableTab(),
             isVisible: () => true,
         });
         commands.registerCommand(CHROME_BAR_FORWARD, {
-            execute: () => this.navigation.forward(),
-            isEnabled: () => this.navigation.canGoForward(),
+            execute: () => Promise.resolve(),
+            isEnabled: () => chromeBarHasNavigableTab(),
             isVisible: () => true,
         });
         // Reload enablement is Phase 14 / GUI-02 scope (13-RESEARCH.md Open
-        // Question 1): registered now, disabled, with the contracted
-        // tooltip carried by the widget button -- never removed.
+        // Question 1): registered now, disabled through the same shared
+        // predicate as back and forward, with the contracted tooltip carried
+        // by the widget button -- never removed.
         commands.registerCommand(CHROME_BAR_RELOAD, {
             execute: () => undefined,
-            isEnabled: () => false,
+            isEnabled: () => chromeBarHasNavigableTab(),
             isVisible: () => true,
         });
         // New Tab reuses the ratified candidate-A channel by importing the
