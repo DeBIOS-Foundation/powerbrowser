@@ -120,7 +120,11 @@ function parseModeStore(raw: string): ParsedModeStore {
             continue;
         }
         const id = customModeIdFor(name);
-        if (SHIPPED_IDS.has(id) || seen.has(id)) {
+        // Shipped-colliding NAMES are duplicates (ids live in the separate
+        // `custom-<slug>` namespace, so comparing the id against SHIPPED_IDS
+        // could never match -- compare the label instead, matching the save
+        // path's `isDuplicateName` discipline).
+        if (SHIPPED_MODES.some(descriptor => descriptor.label.toLowerCase() === name.toLowerCase()) || seen.has(id)) {
             continue;
         }
         seen.add(id);
