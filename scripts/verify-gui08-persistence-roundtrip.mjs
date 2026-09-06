@@ -64,6 +64,7 @@ const EXPECTED_GROUP_METHODS = Object.freeze([
     'setTabGroupId',
     'setActiveGroup',
     'writeThumbnail',
+    'captureTabThumbnail',
     'closeGroupRows',
     'readGroupRow',
     'listGroupRows',
