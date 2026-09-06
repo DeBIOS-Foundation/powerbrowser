@@ -27,6 +27,9 @@ ChromeUtils.defineESModuleGetters(lazy, {
   Sqlite: "resource://gre/modules/Sqlite.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   SessionStore: "resource:///modules/sessionstore/SessionStore.sys.mjs",
+  // GUI-08 (15-02): last-view reach-through. PageThumbs draws a stock tab
+  // browser into a canvas at card width; capture stays chrome-side.
+  PageThumbs: "resource://gre/modules/PageThumbs.sys.mjs",
   // SQL-04 (12-02): read-only reach-throughs. PlacesUtils backs the
   // history, bookmark, and folder-listing readers (fetch and
   // getFolderContents only -- never a raw places file open); the
@@ -83,6 +86,14 @@ const GROUP_TITLE_MAX = 60;
 const GROUP_BOUNDS_MAX = 10000;
 const TAB_STORE_THUMBNAIL_MAX_CHARS = 200000;
 
+// GUI-08 (15-02): capture-side PNG cap plus settle delay. writeThumbnail's
+// store cap above is the second wall; a capture over this size clears to
+// NULL at capture time so the card falls back to its contracted
+// title-plus-URI text. Captures wait for settle so rapid Ctrl-Tab never
+// janks the tab-event hot path.
+const TAB_THUMBNAIL_CAPTURE_MAX_CHARS = 102400;
+const TAB_THUMBNAIL_SETTLE_MS = 500;
+
 // GUI-08 (15-01): the PowerBrowserGroup actor pair identity. Registration is
 // scoped to the Theia local origin (matches pin) so the child never loads in
 // stock-window web content; the parent re-checks the sender origin per
@@ -110,6 +121,13 @@ let tabStoreConn = null;
 // TheiaService.start is already once-guarded; this flag makes a second call
 // a no-op rather than a duplicate-registration throw.
 let groupActorRegistered = false;
+
+// GUI-08 (15-02): capture-on-settle plumbing. settleCaptureTokens coalesces
+// rapid re-schedules per tab URI (only the latest timer captures); the
+// selected-tab map remembers each window's last tab so a TabSelect schedules
+// the tab being LEFT, whose view is final. WeakMap so closed windows drop.
+const settleCaptureTokens = new Map();
+const lastSelectedTabByWin = new WeakMap();
 
 export const PowerBrowserAPI = Object.freeze({
   /**
@@ -1092,12 +1110,90 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
-   * GUI-08 (15-01): best-effort stock-tab close by opaque URI key, through
-   * the same window enumeration the tab-store triggers use. Returns true
-   * when a live tab matched and was asked to close. Never throws -- the
-   * caller logs and relies on its deterministic row DELETE.
+   * GUI-08 (15-02): capture-on-settle scheduler. TabSelect-leave and TabClose
+   * call this -- NEVER captureToCanvas synchronously inside onTabEvent.
+   * Coalesced per tab URI (a re-schedule invalidates the earlier timer), run
+   * through sleep() so no new timer surface is added, private windows skipped
+   * at schedule time with a second skip inside captureTabThumbnail. Never
+   * throws: scheduling must not break the tab-event hot path.
    */
-  closeStockTabByUri(uri) {
+  scheduleSettleCapture(uri, chromeWin) {
+    try {
+      if (typeof uri !== "string" || !uri) {
+        return;
+      }
+      if (chromeWin && lazy.PrivateBrowsingUtils.isWindowPrivate(chromeWin)) {
+        return;
+      }
+      settleCaptureTokens.set(uri, (settleCaptureTokens.get(uri) ?? 0) + 1);
+      const token = settleCaptureTokens.get(uri);
+      PowerBrowserAPI.sleep(TAB_THUMBNAIL_SETTLE_MS).then(() => {
+        if (settleCaptureTokens.get(uri) !== token) {
+          return;
+        }
+        settleCaptureTokens.delete(uri);
+        PowerBrowserAPI.captureTabThumbnail(uri).catch(err => {
+          PowerBrowserAPI.log("error", `[thumb-capture] settle capture failed for ${uri}: ${err && err.message ? err.message : err}`);
+        });
+      });
+    } catch {
+      // Scheduling is best-effort; the text fallback stands on any failure.
+    }
+  },
+
+  /**
+   * GUI-08 (15-02): PNG last-view snapshot for one tab row. Finds the live
+   * stock browser by opaque URI key, draws it at card width (160px target,
+   * sketch background so unpainted regions match the tray), and stores the
+   * data URL through writeThumbnail -- over the capture cap, or with no live
+   * browser, the row clears to NULL and the card keeps its contracted text
+   * fallback. Private windows skip here as well as at schedule time (v1
+   * writeTabRow precedent -- no private column exists to select on). Never
+   * throws: capture failures are silent by contract, never a spinner/glyph.
+   */
+  async captureTabThumbnail(uri) {
+    try {
+      if (typeof uri !== "string" || !uri) {
+        return "refused-empty";
+      }
+      const found = PowerBrowserAPI.findStockTabBrowser(uri);
+      if (!found) {
+        await PowerBrowserAPI.writeThumbnail(uri, null).catch(() => undefined);
+        return "no-live-tab";
+      }
+      if (lazy.PrivateBrowsingUtils.isWindowPrivate(found.win)) {
+        return "skipped-private";
+      }
+      const canvas = found.browser.ownerDocument.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
+      await lazy.PageThumbs.captureToCanvas(found.browser, canvas, {
+        targetWidth: 160,
+        preserveAspectRatio: true,
+        backgroundColor: "#2b2a33",
+      });
+      let dataUrl = "";
+      try {
+        dataUrl = canvas.toDataURL("image/png");
+      } catch {
+        dataUrl = "";
+      }
+      if (!dataUrl || dataUrl.length > TAB_THUMBNAIL_CAPTURE_MAX_CHARS) {
+        await PowerBrowserAPI.writeThumbnail(uri, null).catch(() => undefined);
+        return dataUrl ? "dropped-over-cap" : "capture-failed";
+      }
+      return PowerBrowserAPI.writeThumbnail(uri, dataUrl);
+    } catch {
+      return "capture-failed";
+    }
+  },
+
+  /**
+   * GUI-08 (15-02): live stock-tab lookup by opaque URI key, through the
+   * same window enumeration the tab-store triggers use. Shared by the group
+   * close path and the thumbnail capture path so the two can never disagree
+   * on which browser a URI names. Returns { win, tab, browser } or null.
+   * The shell window carries no tab browser, so it never matches.
+   */
+  findStockTabBrowser(uri) {
     const stockWindows = Services.wm.getEnumerator("navigator:browser");
     while (stockWindows.hasMoreElements()) {
       const win = stockWindows.getNext();
@@ -1106,12 +1202,26 @@ export const PowerBrowserAPI = Object.freeze({
         const browser = tab && tab.linkedBrowser;
         const spec = browser && browser.currentURI && browser.currentURI.spec;
         if (spec && PowerBrowserAPI.browserTabKey(spec) === uri) {
-          win.gBrowser.removeTab(tab);
-          return true;
+          return { win, tab, browser };
         }
       }
     }
-    return false;
+    return null;
+  },
+
+  /**
+   * GUI-08 (15-01): best-effort stock-tab close by opaque URI key, through
+   * the shared lookup above. Returns true when a live tab matched and was
+   * asked to close. Never throws -- the caller logs and relies on its
+   * deterministic row DELETE.
+   */
+  closeStockTabByUri(uri) {
+    const found = PowerBrowserAPI.findStockTabBrowser(uri);
+    if (!found) {
+      return false;
+    }
+    found.win.gBrowser.removeTab(found.tab);
+    return true;
   },
 
   /**
@@ -1671,17 +1781,33 @@ export const PowerBrowserAPI = Object.freeze({
           return;
         }
         const uri = PowerBrowserAPI.browserTabKey(spec);
+        const chromeWin = tab && tab.ownerDocument && tab.ownerDocument.defaultView;
         if (event.type === "TabClose") {
+          // Last view is final -- capture on settle, never synchronously.
+          PowerBrowserAPI.scheduleSettleCapture(uri, chromeWin);
           PowerBrowserAPI.removeTabRow(uri).catch(err => {
             PowerBrowserAPI.log("error", `[tab-store-trigger] remove failed: ${err && err.message ? err.message : err}`);
           });
           return;
         }
+        if (event.type === "TabSelect" && chromeWin) {
+          // The tab being LEFT keeps its final view; the newly selected tab
+          // has just arrived and must not capture yet.
+          try {
+            const prev = lastSelectedTabByWin.get(chromeWin);
+            if (prev && prev.uri !== uri) {
+              PowerBrowserAPI.scheduleSettleCapture(prev.uri, chromeWin);
+            }
+            lastSelectedTabByWin.set(chromeWin, { uri, tab });
+          } catch {
+            // Selection tracking is best-effort; the write below still runs.
+          }
+        }
         PowerBrowserAPI.writeTabRow({
           uri,
           url: spec,
           title: (tab && tab.label) || "",
-          chromeWin: tab && tab.ownerDocument && tab.ownerDocument.defaultView,
+          chromeWin,
         }).catch(err => {
           PowerBrowserAPI.log("error", `[tab-store-trigger] write failed: ${err && err.message ? err.message : err}`);
         });
