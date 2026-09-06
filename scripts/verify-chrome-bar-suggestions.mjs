@@ -364,18 +364,22 @@ function checkLive() {
  * chrome-bar browser source for an `.open(` call site: with none present
  * (widget lands in 13-03) the caller reports STAGED loudly -- never a
  * silent pass. A call site that commits without the OpenerService (e.g. a
- * bare window.open) fails naming the file.
+ * bare window.open) fails naming the file. A bare `window.open` fails in
+ * EVERY file -- even one that mentions OpenerService elsewhere -- so a
+ * same-file bypass can never hide behind file-granular co-occurrence.
  */
-function checkActivation() {
+function checkActivationSources(entries) {
     const failures = [];
     const routed = [];
-    const dir = join(REPO_ROOT, 'theia/extensions/chrome-bar/src/browser');
-    for (const file of readdirSync(dir).filter(f => f.endsWith('.ts') || f.endsWith('.tsx'))) {
-        const src = readFileSync(join(dir, file), 'utf8');
+    for (const { file, src } of entries) {
         if (!/\.open\(/.test(src)) {
             continue;
         }
         const rel = `theia/extensions/chrome-bar/src/browser/${file}`;
+        if (/window\.open\s*\(/.test(src)) {
+            failures.push(`${rel}: bare window.open bypasses the OpenerService routing -- suggestion activation must navigate through the existing tab-URI opener path`);
+            continue;
+        }
         if (src.includes('OpenerService')) {
             routed.push(rel);
         } else {
@@ -383,6 +387,14 @@ function checkActivation() {
         }
     }
     return { failures, routed };
+}
+
+function checkActivation() {
+    const dir = join(REPO_ROOT, 'theia/extensions/chrome-bar/src/browser');
+    const entries = readdirSync(dir)
+        .filter(f => f.endsWith('.ts') || f.endsWith('.tsx'))
+        .map(file => ({ file, src: readFileSync(join(dir, file), 'utf8') }));
+    return checkActivationSources(entries);
 }
 
 function main() {
@@ -495,10 +507,45 @@ function selfTest() {
         failed++;
     }
 
+    // Activation-backstop proof: a bare window.open in a file that ALSO
+    // mentions OpenerService must go red (the file-granularity hole), a
+    // routed-only call site must stay routed-green, and the live tree must
+    // be routed-green with no failure.
+    const bypass = checkActivationSources([{
+        file: 'chrome-bar-widget.tsx',
+        src: "import { OpenerService } from '@theia/core/lib/browser';\n"
+            + 'const handler = await opener.getOpener(uri); await handler.open(uri);\n'
+            + "window.open('https://bypass.example', '_blank');\n",
+    }]);
+    if (!bypass.failures.some(f => f.includes('window.open'))) {
+        console.error(`${NAME} --self-test: FAIL -- same-file window.open bypass did not go red naming 'window.open'; got: ${bypass.failures.join(' | ') || '(no failures at all)'}`);
+        failed++;
+    } else {
+        console.log(`  ok  same-file window.open bypass -> red, naming 'window.open'`);
+    }
+    const routedOnly = checkActivationSources([{
+        file: 'chrome-bar-widget.tsx',
+        src: "import { OpenerService } from '@theia/core/lib/browser';\n"
+            + 'const handler = await opener.getOpener(uri); await handler.open(uri);\n',
+    }]);
+    if (routedOnly.failures.length !== 0 || routedOnly.routed.length !== 1) {
+        console.error(`${NAME} --self-test: FAIL -- routed-only call site was not routed-green; got: ${routedOnly.failures.join(' | ') || `(routed ${routedOnly.routed.length})`}`);
+        failed++;
+    } else {
+        console.log(`  ok  routed-only call site -> routed-green`);
+    }
+    const liveActivation = checkActivation();
+    if (liveActivation.failures.length !== 0 || liveActivation.routed.length === 0) {
+        console.error(`${NAME} --self-test: FAIL -- the live tree is not routed-green (failures: ${liveActivation.failures.join(' | ') || 'none'}, routed: ${liveActivation.routed.length})`);
+        failed++;
+    } else {
+        console.log(`  ok  live tree activation -> routed-green (${liveActivation.routed.length} file(s))`);
+    }
+
     if (failed) {
         return 1;
     }
-    console.log(`${NAME} --self-test: PASS -- ${cases.length} planted faults all went red plus the fixture-discrimination proof`);
+    console.log(`${NAME} --self-test: PASS -- ${cases.length} planted faults all went red plus the fixture-discrimination and activation-backstop proofs`);
     return 0;
 }
 
