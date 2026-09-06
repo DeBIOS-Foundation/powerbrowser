@@ -823,6 +823,9 @@ export const PowerBrowserAPI = Object.freeze({
    * internal literal at the call site, never actor input.
    */
   async tabStoreHasColumn(conn, table, column) {
+    if (table !== "tabs" && table !== "groups") {
+      throw new Error(`tabStoreHasColumn: refusing table ${table}`);
+    }
     const rows = await conn.execute(`PRAGMA table_info(${table})`);
     for (const row of rows) {
       if (row.getString(1) === column) {
