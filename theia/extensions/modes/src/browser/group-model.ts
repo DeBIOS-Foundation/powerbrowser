@@ -85,15 +85,15 @@ export class GroupModel {
     }
 
     listGroups(): readonly PanoramaGroup[] {
-        return this.groups;
+        return Object.freeze([...this.groups]);
     }
 
     getTabs(groupId: string): readonly PanoramaTab[] {
-        return this.members.get(groupId) ?? [];
+        return Object.freeze([...(this.members.get(groupId) ?? [])]);
     }
 
     listUngrouped(): readonly PanoramaTab[] {
-        return this.ungrouped;
+        return Object.freeze([...this.ungrouped]);
     }
 
     getActiveGroupId(): string | undefined {
