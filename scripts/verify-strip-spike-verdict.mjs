@@ -30,8 +30,10 @@
  *  5. `git -C upstream diff` is empty -- the spike touched no Gecko.
  *  6. The spike plan (13-01) shipped no file under `theia/` or `scripts/`:
  *     derived at check time from the commits the plan actually made
- *     (`git log --grep="13-01"`), every added path under those roots fails
- *     naming the file. Non-vacuity: zero 13-01 commits fails as a broken
+ *     (`git log` anchored on `^docs(13-01)` / `^fix(13-01)` subject lines --
+ *     never a bare substring grep, which a later message could mention in
+ *     passing), every added OR modified path under those roots fails naming
+ *     the file. Non-vacuity: zero 13-01 commits fails as a broken
  *     instrument (the spike record commit must exist to be audited).
  *
  * On the RED-with-core-cause tree this phase ships, rules 4-6 hold because
@@ -105,29 +107,33 @@ function upstreamClean() {
 }
 
 /**
- * Tracked paths the spike plan added under the shipped roots. Derived from
- * the plan's own commits, never a hand-kept list.
+ * Tracked paths the spike plan added or modified under the shipped roots.
+ * Derived from the plan's own commits, never a hand-kept list. The commit
+ * set anchors on the plan's subject-line prefixes (never a bare substring
+ * grep: a later revert note or follow-up mentioning 13-01 in passing must
+ * not join the set), and the diff filter covers Modified as well as Added
+ * (a plan edit to an already-shipped file is still a shipped-tree change).
  */
 function spikeAddedPaths() {
     let commits;
     try {
-        commits = execFileSync('git', ['log', '--format=%H', '--grep=13-01'], { cwd: REPO_ROOT, encoding: 'utf8' })
+        commits = execFileSync('git', ['log', '--format=%H', '--grep=^docs(13-01)', '--grep=^fix(13-01)'], { cwd: REPO_ROOT, encoding: 'utf8' })
             .split('\n').map(s => s.trim()).filter(Boolean);
     } catch {
-        return { error: 'git log --grep=13-01 failed -- the spike-commit derivation proves nothing' };
+        return { error: 'git log anchored on ^docs(13-01) / ^fix(13-01) failed -- the spike-commit derivation proves nothing' };
     }
     if (commits.length === 0) {
         return { error: 'derived ZERO 13-01 commits -- the spike record commit must exist to be audited, so this comparison proves nothing' };
     }
     const added = [];
     for (const commit of commits) {
-        const names = execFileSync('git', ['show', '--diff-filter=A', '--name-only', '--pretty=format:', commit], {
+        const names = execFileSync('git', ['show', '--diff-filter=AM', '--name-only', '--pretty=format:', commit], {
             cwd: REPO_ROOT,
             encoding: 'utf8',
         }).split('\n').map(s => s.trim()).filter(Boolean);
         for (const name of names) {
             if (name.startsWith('theia/') || name.startsWith('scripts/')) {
-                added.push(`${name} (added in ${commit.slice(0, 7)})`);
+                added.push(`${name} (changed in ${commit.slice(0, 7)})`);
             }
         }
     }
@@ -136,9 +142,10 @@ function spikeAddedPaths() {
 
 /**
  * @returns {{failures: string[], verdict: string|null}} failure messages --
- * empty means the verdict gate holds.
+ * empty means the verdict gate holds. `overrides.shipped` injects the
+ * shipped-tree derivation for --self-test only (live calls derive from git).
  */
-function checkVerdict(record, instruments) {
+function checkVerdict(record, instruments, overrides = {}) {
     const failures = [];
     const verdictLines = parseVerdict(record);
     if (verdictLines.length === 0) {
@@ -180,7 +187,7 @@ function checkVerdict(record, instruments) {
     if (!instruments.upstreamClean) {
         failures.push('upstream diff is NOT empty -- the spike touched Gecko outside the patch stack');
     }
-    const shipped = spikeAddedPaths();
+    const shipped = overrides.shipped ?? spikeAddedPaths();
     if (shipped.error) {
         failures.push(`${RECORD_REL}: ${shipped.error}`);
     } else if (shipped.added.length) {
@@ -254,10 +261,36 @@ function selfTest() {
         }
     }
 
+    // Shipped-tree proof: a plan commit touching theia/ or scripts/ --
+    // Added or Modified alike -- must go red naming the file. Injected
+    // (no git surgery in --self-test); the Modified half is covered by the
+    // AM filter the live derivation uses, asserted identical below.
+    const shippedRed = checkVerdict(record, instruments, {
+        shipped: { added: ['theia/extensions/chrome-bar/src/browser/x.ts (changed in abc1234)'] },
+    });
+    if (!shippedRed.failures.some(f => f.includes('spike plan shipped files') && f.includes('theia/extensions/chrome-bar/src/browser/x.ts'))) {
+        console.error(`${NAME} --self-test: FAIL -- injected shipped-tree path did not go red naming the file; got: ${shippedRed.failures.join(' | ') || '(no failures at all)'}`);
+        failed++;
+    } else {
+        console.log(`  ok  shipped-tree path -> red, naming the file`);
+    }
+
+    // Derivation proof against the live repo: the anchored grep must still
+    // find the real plan commits (non-vacuous), and with the AM filter none
+    // of them may touch the shipped roots (else the gate above would be red
+    // and this proof meaningless -- baseline already asserts green).
+    const liveShipped = spikeAddedPaths();
+    if (liveShipped.error || liveShipped.added.length !== 0) {
+        console.error(`${NAME} --self-test: FAIL -- live derivation broke: ${liveShipped.error ?? `shipped paths: ${liveShipped.added.join(', ')}`}`);
+        failed++;
+    } else {
+        console.log(`  ok  anchored derivation -> plan commits found, no shipped-tree path`);
+    }
+
     if (failed) {
         return 1;
     }
-    console.log(`${NAME} --self-test: PASS -- ${cases.length} planted faults all went red`);
+    console.log(`${NAME} --self-test: PASS -- ${cases.length} planted faults all went red plus the shipped-tree proofs`);
     return 0;
 }
 
