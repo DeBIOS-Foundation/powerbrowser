@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * GUI-07's mode-switch tabs-invariant gate (14-02): no switch path can
- * close, move, or detach a tab without this gate going red by name.
+ * GUI-07's mode-switch tabs-invariant gate (14-02): no anchored switch-path
+ * body can close, move, or detach a tab without this gate going red by name.
  *
  * It DERIVES at check time, from the mode service and the chrome-bar widget
  * sources, the set of shell-mutating calls on every mode-switch path and
@@ -131,12 +131,16 @@ function bodyOf(stripped, anchor, fnName, rel) {
 }
 
 /**
- * Shell-mutating calls in a switch-path body: dotted calls on the shell
- * objects plus the descriptor slot seam both callers share.
+ * Shell-mutating calls in an ANCHORED switch-path body: dotted calls on the
+ * shell objects plus the descriptor slot seam both callers share. Optional
+ * chaining (`?.`) at any hop derives the same call name as plain dots, so a
+ * `?.` spelling cannot evade derivation. Callee bodies (visibilityFor,
+ * resolveTarget) are out of scope by design -- the header claim covers the
+ * anchored bodies only.
  */
 function switchCallsOf(body) {
     const out = new Set();
-    for (const m of body.matchAll(/this\.(?:shell|perspectives|statusBar)[\w.]*\.(\w+)\s*\(/g)) {
+    for (const m of body.matchAll(/this\.(?:shell|perspectives|statusBar)(?:\??\.[\w$]+)*\??\.(\w+)\s*\(/g)) {
         out.add(m[1]);
     }
     for (const m of body.matchAll(/(openOrganisingSlot|closeOrganisingSlot)\s*\(/g)) {
