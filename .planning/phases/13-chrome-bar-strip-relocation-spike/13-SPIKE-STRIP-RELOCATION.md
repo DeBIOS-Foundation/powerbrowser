@@ -190,3 +190,92 @@ behind. `idCounts` all `1`: no duplicate widget id anywhere.
 PHASE3-MOVEBACK ran in the same probe invocation; its verdict-relevant rows
 (requested-versus-resolved readback on the return leg, selection nuance) are
 recorded in the Task 2 edge-observations extension, not rewritten here.
+
+---
+
+## Edge observations (Task 2): what separates a green move from a red one
+
+### Requested-versus-resolved: no silent veto in either direction
+
+Every `addWidget` call in the probe was followed by a `getAreaFor` readback
+of the RESOLVED area, never the requested one (Pitfall 6 discipline). Verbatim
+return-leg rows (PHASE3-MOVEBACK):
+
+```json
+"moves": [
+  {"id": "welcome", "uriBefore": "view:welcome", "uriAfter": "view:welcome",
+   "requested": "main", "resolved": "main", "sameInstance": true, "attached": true},
+  {"id": "settings_widget", "uriBefore": "settings:", "uriAfter": "settings:",
+   "requested": "main", "resolved": "main", "sameInstance": true, "attached": true},
+  {"id": "keybindings.view.widget",
+   "uriBefore": "view:keybindings.view.widget", "uriAfter": "view:keybindings.view.widget",
+   "requested": "main", "resolved": "main", "sameInstance": true, "attached": true}
+],
+"selBefore": null, "selAfter": null
+```
+
+Return-leg main (verbatim): `welcome`, `keybindings.view.widget`,
+`settings_widget` — all `resolved: main`, `attached: true`; bottom restored
+to exactly `problems` + `t1`. Score across both legs: 6 requested, 6 resolved
+as requested, 0 vetoes. A `WidgetAreaResolver` override forcing any widget
+back into `main` would have been recorded as RED data with its cause, never a
+silent pass (T-13-01-04) — none occurred.
+
+### Move-back proves no one-way trip
+
+The full main strip (`main: []` after the outbound leg) returned to `main`
+with per-widget URI identity (`uriBefore` == `uriAfter` on all three return
+rows) and instance identity (`sameInstance: true`). Relocation is reversible
+through the same public call.
+
+### Selection-versus-activation nuance
+
+`currentWidget`/`activeWidget` were `null` before, during, and after every
+leg. The pre-move `activateWidget('welcome')` resolved without error yet
+moved neither pointer — in headless BiDi there is no focused window for focus
+to stick to. Correction stated plainly: this probe proves selection is never
+CLOBBERED (null preserved across 6 moves; nothing stole or dropped a
+selection because none existed), not that a focused tab keeps focus across a
+move. A focused-tab-keeps-focus assertion needs a headed session with real
+activation and is Phase 14 scope if Phase 14 wants it; it is not claimed here.
+
+### Ordering and focus constraints found
+
+- **Ordering:** moved widgets append after existing bottom widgets in move
+  order (`problems`, `keybindings.view.widget`, `settings_widget`, `welcome`,
+  `t1`). Re-adding preserves relative move order but does not preserve the
+  original main order against pre-existing bottom content — Phase 14 must set
+  tab order explicitly if mode switches demand a specific strip sequence.
+- **Focus:** no focus assertions are possible headless (see nuance above).
+  Not a blocker: the spike question is relocation mechanics, and focus
+  behavior ships with Phase 14's headed verification.
+
+### Geometry sanity and overflow: held-out visual checks (backstop)
+
+Zero/one/many-tab geometry in the relocated region and many-tab overflow
+behavior cannot be observed headless — there is no rendered strip to inspect,
+only the widget model. Per the plan they are stated as held-out checks,
+never silent passes:
+
+- backstop: zero, one, and many tabs keep strip geometry sane in the
+  relocated region, matching top-region behaviour — held-out visual check,
+  no explicit evidence in this probe.
+- backstop: many-tab overflow in the relocated region scrolls rather than
+  clipping or wrapping — held-out visual check, no explicit evidence in this
+  probe.
+
+### Live-move-only boundary
+
+This spike asserts the LIVE move only. Persistence across reload (layout
+restorer round-trip of relocated widgets) is Phase 14 scope: no observation
+above asserts post-reload geometry, and none is smuggled into the verdict.
+
+### The tabs invariant (holds in every outcome, including the fallback)
+
+No tab closed, no window moved on, nothing detached — by any leg of this
+probe or any reading of its verdict. Evidence: full-universe URI sets
+byte-identical before/after (`uriSetEqual: true`, 13 URIs), `attached: true`
+on every touched widget, `idCounts` all `1`, and the return leg restoring the
+exact baseline layout (main 3, bottom 2, left 6, right 2). Under a RED verdict
+the same invariant holds trivially stronger: nothing moves at all and the
+strip stays top per Variant A.
