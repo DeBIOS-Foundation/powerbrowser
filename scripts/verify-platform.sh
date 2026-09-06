@@ -4345,6 +4345,26 @@ run_own_checks() {
     # outside-root pass, and a redaction miss.
     "ai-opencode-tracer|node $REPO_ROOT/scripts/verify-opencode-tracer.mjs"
     "ai-opencode-tracer-self-test|node $REPO_ROOT/scripts/verify-opencode-tracer.mjs --self-test"
+    # NEW (16-02): the @OpenCode preset-plus-history gate. Derives the
+    # toggle default, per-session scope, command ids, and history API from
+    # the tree at check time as set equality against one EXPECTED const,
+    # then proves ordering, supersede, stale-refuse, history-write-failure,
+    # redaction, emission order, fallback, and revert behaviorally against
+    # the compiled extension libs. The R3 revert-under-concurrent-edits
+    # end-to-end stays a STAGED holdout (rerun with --live-backstop) --
+    # this row never passes that edge silently.
+    #
+    # Honestly --quick: text reads plus compiled-lib behavior (requires the
+    # extension already built), no browser, no display, no live model. The
+    # core-diff half shells to diff-theia-core.sh --quick through nix.
+    #
+    # ai-opencode-presets-self-test rides alongside for the reason every
+    # other self-test row in this array gives: it proves the unmutated
+    # control green first, then requires red naming the drift for a
+    # persisted preset, a merged supersede, a silent stale accept, a
+    # history reorder, and an emission reorder (B,A).
+    "ai-opencode-presets|node $REPO_ROOT/scripts/verify-opencode-presets.mjs"
+    "ai-opencode-presets-self-test|node $REPO_ROOT/scripts/verify-opencode-presets.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
