@@ -27,7 +27,8 @@
  *   node scripts/verify-dependent-window-content.mjs --live
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -47,6 +48,37 @@ const MODES_SOURCE_RELS = [
 ];
 const SECONDARY_ASSET_REL = 'theia/applications/browser/lib/frontend/secondary-window.html';
 const PROBE_RECORD_REL = '.planning/phases/14-modes-windows-setups/14-PROBE-DEPENDENT-WINDOWS.md';
+const PROBE_PHASE_DIR = '14-modes-windows-setups';
+const PROBE_FILE = '14-PROBE-DEPENDENT-WINDOWS.md';
+
+/**
+ * Milestone archival moves phase dirs to
+ * `.planning/milestones/<v>-phases/`, which must not silently break the
+ * live half's citation. The live tree wins; otherwise the single
+ * archived copy wins; zero or several is a failure naming the search.
+ */
+function resolveRecord(root, liveRel, phaseDir, fileName) {
+    const live = join(root, liveRel);
+    if (existsSync(live)) {
+        return live;
+    }
+    let archived = [];
+    try {
+        archived = readdirSync(join(root, '.planning/milestones'), { withFileTypes: true })
+            .filter(entry => entry.isDirectory() && /-phases$/.test(entry.name))
+            .map(entry => join(root, '.planning/milestones', entry.name, phaseDir, fileName))
+            .filter(existsSync);
+    } catch {
+        archived = [];
+    }
+    if (archived.length === 1) {
+        return archived[0];
+    }
+    if (archived.length === 0) {
+        throw new Error(`${PROBE_RECORD_REL} unreadable and none archived under .planning/milestones/*-phases/${phaseDir}/${fileName} -- the live half cites the standing probe record, which is absent`);
+    }
+    throw new Error(`${PROBE_RECORD_REL} missing and ${archived.length} archived copies -- exactly one must exist, an ambiguous record proves nothing`);
+}
 
 /**
  * The declared dependent contract. The ONE hand-kept block in this file:
@@ -170,9 +202,9 @@ function checkContent(sources, options = {}) {
 function checkLive() {
     let record = '';
     try {
-        record = readFileSync(join(REPO_ROOT, PROBE_RECORD_REL), 'utf8');
-    } catch {
-        return [`${PROBE_RECORD_REL}: unreadable -- the live half cites the standing probe record, which is absent`];
+        record = readFileSync(resolveRecord(REPO_ROOT, PROBE_RECORD_REL, PROBE_PHASE_DIR, PROBE_FILE), 'utf8');
+    } catch (error) {
+        return [error.message];
     }
     if (!/^Verdict: GREEN/m.test(record)) {
         return [`${PROBE_RECORD_REL}: no one-line GREEN verdict -- the live extraction/geometry/close-matrix evidence is not on record`];
@@ -271,6 +303,50 @@ function selfTest() {
             failed++;
         } else {
             console.log(`  ok  ${testCase.name} -> red, naming '${testCase.expect}'`);
+        }
+    }
+
+    // Resolution proof: milestone archival moves the probe record, and
+    // the live half's citation must follow it without touching the
+    // archive. Exercised against mkdtemp fixture roots, never the tree.
+    const resolutionStages = [];
+    try {
+        const liveOnly = mkdtempSync(join(tmpdir(), `${NAME}-resolve-`));
+        resolutionStages.push(liveOnly);
+        writeFileSync(join(liveOnly, 'live.md'), 'x');
+        const archiveOnly = mkdtempSync(join(tmpdir(), `${NAME}-resolve-`));
+        resolutionStages.push(archiveOnly);
+        const archiveDir = join(archiveOnly, '.planning/milestones/v9.9-phases', PROBE_PHASE_DIR);
+        mkdirSync(archiveDir, { recursive: true });
+        writeFileSync(join(archiveDir, PROBE_FILE), 'x');
+        const neither = mkdtempSync(join(tmpdir(), `${NAME}-resolve-`));
+        resolutionStages.push(neither);
+        const resolutionCases = [
+            { name: 'resolution live-only', root: liveOnly, liveRel: 'live.md', want: 'live' },
+            { name: 'resolution archive-only', root: archiveOnly, liveRel: 'absent.md', want: 'v9.9-phases' },
+            { name: 'resolution neither', root: neither, liveRel: 'absent.md', wantError: 'absent' },
+        ];
+        for (const resolutionCase of resolutionCases) {
+            let resolved = null;
+            let resolutionError = '';
+            try {
+                resolved = resolveRecord(resolutionCase.root, resolutionCase.liveRel, PROBE_PHASE_DIR, PROBE_FILE);
+            } catch (error) {
+                resolutionError = error.message;
+            }
+            const ok = resolutionCase.wantError
+                ? resolutionError.includes(resolutionCase.wantError)
+                : resolved !== null && resolved.includes(resolutionCase.want);
+            if (!ok) {
+                console.error(`${NAME} --self-test: FAIL -- '${resolutionCase.name}' resolved to '${resolved ?? resolutionError}'; want '${resolutionCase.want ?? resolutionCase.wantError}'`);
+                failed++;
+            } else {
+                console.log(`  ok  ${resolutionCase.name} -> '${resolutionCase.want ?? resolutionCase.wantError}'`);
+            }
+        }
+    } finally {
+        for (const stage of resolutionStages) {
+            rmSync(stage, { recursive: true, force: true });
         }
     }
 
