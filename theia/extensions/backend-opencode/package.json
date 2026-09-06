@@ -1,0 +1,29 @@
+{
+  "private": true,
+  "name": "@powerbrowser/backend-opencode",
+  "version": "0.1.0",
+  "license": "MIT",
+  "dependencies": {
+    "@agentclientprotocol/sdk": "1.4.0",
+    "@powerbrowser/token-gate": "0.1.0",
+    "@theia/ai-chat": "1.74.1",
+    "@theia/ai-core": "1.74.1",
+    "@theia/core": "1.74.1"
+  },
+  "theiaExtensions": [
+    {
+      "frontend": "lib/browser/backend-opencode-frontend-module"
+    },
+    {
+      "backend": "lib/node/backend-opencode-backend-module"
+    }
+  ],
+  "files": [
+    "lib",
+    "src"
+  ],
+  "scripts": {
+    "clean": "rm -rf lib *.tsbuildinfo",
+    "build": "tsc -b"
+  }
+}

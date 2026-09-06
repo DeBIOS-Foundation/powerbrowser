@@ -35,6 +35,7 @@
     }
   },
   "dependencies": {
+    "@powerbrowser/backend-opencode": "0.1.0",
     "@powerbrowser/branding": "0.1.0",
     "@powerbrowser/chrome-bar": "0.1.0",
     "@powerbrowser/customize": "0.1.0",
