@@ -62,11 +62,11 @@ export default new ContainerModule(bind => {
     // beside the setups binds, in the same voice (D-50).
     bind(DependentWindowsContribution).toSelf().inSingletonScope();
     bind(FrontendApplicationContribution).toService(DependentWindowsContribution);
-    // GUI-08 (15-01): the tracer Panorama widget owns the organising slot
-    // behind the same contribution point (the placeholder file stays on
-    // disk unbound until 15-03 deletes it). The group reader proxy, the
-    // single model, the actor client, and the panorama commands bind
-    // statically beside the other binds, in the same voice (D-50).
+    // GUI-08 (15-01, placeholder retired 15-03): the Panorama widget owns
+    // the organising slot behind the same contribution point. The group
+    // reader proxy, the single model, the actor client, and the panorama
+    // commands bind statically beside the other binds, in the same voice
+    // (D-50).
     bind(GroupQueryService).toDynamicValue(ctx =>
         WebSocketConnectionProvider.createProxy<GroupQueryService>(ctx.container, GROUP_PATH)
     ).inSingletonScope();

@@ -61,9 +61,11 @@
 // (b) the chrome-bar widget scope pins its copy by set equality only, since
 // that copy predates this plan: additions, removals, and drifts go red
 // without re-litigating its wording. Enumerated sites: label:, prompt:,
-// placeHolder:, widgetName:, flash(...) call args, textContent assignments,
-// the widget's title=/aria-label=/placeholder= attrs plus its JSX text nodes
-// plus .label/.caption assignments. Command ids, element ids, class names,
+// placeHolder:, flash(...) call args, the widget's title=/aria-label=/
+// placeholder= attrs plus its JSX text nodes plus .label/.caption
+// assignments. (15-03 retired the organising placeholder: its widgetName:
+// and textContent sites left with the file, and the panorama copy gate now
+// owns the organising strings.) Command ids, element ids, class names,
 // and roles are not user-facing sites and are excluded by construction, not
 // by exemption list -- a user-facing string added at a NEW site is the known
 // residual hole, stated here rather than silently assumed covered.
@@ -519,7 +521,6 @@ function check(targetPath) {
 
 const MODES_SERVICE_REL = "theia/extensions/modes/src/browser/mode-service.ts";
 const MODES_COMMANDS_REL = "theia/extensions/modes/src/browser/modes-commands.ts";
-const MODES_PLACEHOLDER_REL = "theia/extensions/modes/src/browser/organising-placeholder-widget.ts";
 const MODES_WIDGET_REL = "theia/extensions/chrome-bar/src/browser/chrome-bar-widget.tsx";
 
 /**
@@ -536,10 +537,6 @@ const EXPECTED_MODES_COPY = new Set([
   "Power Browser could not save this mode. Your panels are unchanged — try again.",
   'Mode "${name}" saved.',
   "Power Browser couldn't load the \"${name}\" mode. Browsing is shown instead.",
-  "Organising",
-  "Organising arrives next",
-  "The freeform canvas for arranging tabs lands in the next update — your tabs stay exactly where they left them.",
-  "Back to Browsing",
 ]);
 
 /**
@@ -571,7 +568,6 @@ function deriveModesCopyRaw(sources) {
   const out = [];
   const commandsSrc = sources[MODES_COMMANDS_REL] ?? "";
   const serviceSrc = sources[MODES_SERVICE_REL] ?? "";
-  const placeholderSrc = sources[MODES_PLACEHOLDER_REL] ?? "";
   // A template literal below spans the backtick alternative; it is written
   // with literal backticks, matching the same characters tsc parses.
   const flashRe = /flash\(\s*(`(?:[^`\\]|\\.)*`|'(?:[^'\\\n]|\\.)*')/g;
@@ -586,12 +582,6 @@ function deriveModesCopyRaw(sources) {
   }
   for (const m of serviceSrc.matchAll(flashRe)) {
     out.push(m[1].slice(1, -1));
-  }
-  for (const m of placeholderSrc.matchAll(/widgetName:\s*'([^']+)'/g)) {
-    out.push(m[1]);
-  }
-  for (const m of placeholderSrc.matchAll(/textContent\s*=\s*'([^']+)'/g)) {
-    out.push(m[1]);
   }
   return out;
 }
@@ -617,7 +607,7 @@ function deriveWidgetCopy(widgetSrc) {
 
 function readModesSources() {
   const out = {};
-  for (const rel of [MODES_SERVICE_REL, MODES_COMMANDS_REL, MODES_PLACEHOLDER_REL, MODES_WIDGET_REL]) {
+  for (const rel of [MODES_SERVICE_REL, MODES_COMMANDS_REL, MODES_WIDGET_REL]) {
     try {
       out[rel] = readFileSync(join(REPO_ROOT, rel), "utf8");
     } catch {
