@@ -113,7 +113,7 @@ Plans:
 
 - [x] 15-01-PLAN.md
 - [x] 15-02-PLAN.md
-- [ ] 15-03-PLAN.md
+- [x] 15-03-PLAN.md
 
 **UI hint**: yes
 
@@ -123,7 +123,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 13. Chrome Bar + Strip-Relocation Spike | 3/3 | Complete | 2026-09-06 |
 | 14. Modes + Windows & Setups | 3/3 | Complete | 2026-09-06 |
-| 15. Panorama Organising | 2/3 | In Progress|  |
+| 15. Panorama Organising | 3/3 | In Progress|  |
 
 ## Hard constraints (every phase)
 

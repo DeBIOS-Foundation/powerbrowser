@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 13
 current_phase_name: roadmap complete — v1.3 phases 13–15 defined, ready to plan
 status: planning
-stopped_at: Completed 15-panorama-organising-02-PLAN.md
-last_updated: "2026-09-06T08:43:00.959Z"
+stopped_at: Completed 15-panorama-organising-03-PLAN.md
+last_updated: "2026-09-06T09:00:11.476Z"
 last_activity: 2026-09-06
 last_activity_desc: "v1.3 roadmap created (Phases 13–15: GUI-06→13, GUI-07+GUI-09→14, GUI-08→15)"
-state_head: a43275d3ee6c21b11b7ab68e9da8e4d81b8cc455
+state_head: 220e1837b3448dd0d869f76a1e4952c1cf1367e3
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
 milestone_name: Browser GUI
 ---
 
@@ -109,6 +109,7 @@ Last activity: 2026-09-06 — 14-01 executed (probe GREEN routes dependents to s
 | Phase 14-modes-windows-setups P03 | 12min | 3 tasks | 8 files |
 | Phase 15-panorama-organising P02 | 52min | 4 tasks | 9 files |
 | Phase 15-panorama-organising P02 | 52min | 4 tasks | 9 files |
+| Phase 15-panorama-organising P03 | 16min | 4 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -270,6 +271,7 @@ Recent decisions affecting current work:
 - [Phase 13]: 14-03 restores switch mode via stock switchPerspective; file tabs key off editor resource URIs
 - [Phase 13]: 15-02: HTML5 DnD kept with native Esc-cancel; auto-box is one composite actor write; settle-debounce rides sleep(); Close dialog keeps stock ConfirmDialog
 - [Phase 13]: 15-02: GUI-08 stays Pending (gates 2 of 5); requirements mark-complete NOT run
+- [Phase 13]: 15-03: tree renders over the single GroupModel via widget-owned module; parity, exactness, and copy gates green; placeholder retired; GUI-08 stays Pending for 15-05
 
 ### Pending Todos
 
@@ -361,8 +363,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-06T08:42:56.973Z
-Stopped at: Completed 15-panorama-organising-02-PLAN.md
+Last session: 2026-09-06T09:00:11.283Z
+Stopped at: Completed 15-panorama-organising-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
