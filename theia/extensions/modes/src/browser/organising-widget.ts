@@ -428,7 +428,7 @@ export class OrganisingWidget extends Widget {
         card.addEventListener('dragleave', () => card.classList.remove('is-drop-target'));
         card.addEventListener('drop', event => {
             card.classList.remove('is-drop-target');
-            void this.dropCardOntoCard(event, tab.uri);
+            void this.dropCardOntoCard(event, tab.uri, groupId);
         });
         return card;
     }
@@ -783,9 +783,11 @@ export class OrganisingWidget extends Widget {
 
     /**
      * Card-onto-card: auto-draws one box containing both cards at the drop
-     * point, then dissolves any source box left empty (last-card-out).
+     * point, then dissolves any source box left empty (last-card-out) --
+     * BOTH sources, not just the drag source (WR-03: a cross-group drop
+     * onto a sole card in B emptied B without dissolving it).
      */
-    protected async dropCardOntoCard(event: DragEvent, targetUri: string): Promise<void> {
+    protected async dropCardOntoCard(event: DragEvent, targetUri: string, targetGroup: string | null): Promise<void> {
         event.preventDefault();
         event.stopPropagation();
         const drag = this.dragCard;
@@ -796,8 +798,13 @@ export class OrganisingWidget extends Widget {
         }
         try {
             const box = await this.model.autoBox(this.actor, [drag.uri, targetUri], this.canvasPoint(event));
-            if (box && drag.fromGroup !== null && drag.fromGroup !== box.id) {
-                await this.dissolveEmptied(drag.fromGroup, box.id);
+            if (box) {
+                if (drag.fromGroup !== null && drag.fromGroup !== box.id) {
+                    await this.dissolveEmptied(drag.fromGroup, box.id);
+                }
+                if (targetGroup !== null && targetGroup !== box.id && targetGroup !== drag.fromGroup) {
+                    await this.dissolveEmptied(targetGroup, box.id);
+                }
             }
         } catch (error) {
             console.error('[@powerbrowser/modes] card auto-box failed:', error);
