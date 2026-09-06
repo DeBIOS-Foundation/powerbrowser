@@ -6,6 +6,7 @@ import {
     StatusBar,
     StatusBarAlignment,
     Widget,
+    open,
 } from '@theia/core/lib/browser';
 import { FrontendApplicationStateService } from '@theia/core/lib/browser/frontend-application-state';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
@@ -620,7 +621,7 @@ export class SetupsService implements FrontendApplicationContribution {
     /** One tab through the opener: unresolvable URIs drop (null), never throw out. */
     protected async openTabUri(tab: string): Promise<Widget | true | null> {
         try {
-            const opened = await this.opener.open(new URI(tab), { mode: 'activate' });
+            const opened = await open(this.opener, new URI(tab));
             if (opened instanceof Widget) {
                 return opened;
             }
@@ -687,7 +688,7 @@ export class SetupsService implements FrontendApplicationContribution {
                 description: row.meta,
                 id: row.name,
             })),
-            { placeHolder }
+            { placeholder: placeHolder }
         );
         return picked?.id;
     }
