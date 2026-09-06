@@ -180,6 +180,33 @@ const ORIGIN_SENDER_CASES = Object.freeze([
     { spec: '', want: false },
 ]);
 
+/**
+ * WR-04: the normalizeGroupRow id/title wall, mirrored. Client generators
+ * emit `group-<base36>-<base36>` (group-model.ts), so the first case pins
+ * client compatibility; the rest pin the bound (129 chars), charset, and
+ * type rejections.
+ */
+function mirrorGroupIdOk(id) {
+    return typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(id);
+}
+const GROUP_ID_CASES = Object.freeze([
+    { id: 'group-abc123-xyz789', want: true },
+    { id: 'g1', want: true },
+    { id: 'x'.repeat(129), want: false },
+    { id: 'has space', want: false },
+    { id: 'semi;colon', want: false },
+    { id: 'quote"q', want: false },
+    { id: 'slash/s', want: false },
+    { id: '', want: false },
+    { id: 42, want: false },
+    { id: null, want: false },
+    { id: undefined, want: false },
+]);
+function mirrorTitleOk(title) {
+    return title === undefined || title === null || typeof title === 'string';
+}
+const NON_STRING_TITLES = Object.freeze([{}, [], 42, true]);
+
 /** @returns {string[]} failure messages -- empty means the gate holds. */
 function checkStatic(sources) {
     const failures = [];
@@ -280,6 +307,30 @@ function checkStatic(sources) {
     }
     if (mirrorSenderIsTheia(undefined) !== false) {
         failures.push(`${API_REL}: the mirrored Theia sender rule accepts an undefined actorRef -- empty senders must reject`);
+    }
+
+    // WR-04: the id shape bound and the non-string title refusal.
+    if (!apiSrc.includes('/^[A-Za-z0-9_-]{1,128}$/')) {
+        failures.push(`${API_REL}: the group-id shape bound '/^[A-Za-z0-9_-]{1,128}$/' is gone -- unbounded ids bloat the store and collisions silently overwrite`);
+    }
+    if (!apiSrc.includes('refusing malformed group id')) {
+        failures.push(`${API_REL}: the malformed-id refusal is gone -- normalizeGroupRow accepts arbitrary id strings`);
+    }
+    if (!apiSrc.includes('refusing non-string title')) {
+        failures.push(`${API_REL}: the non-string title refusal is gone -- objects store literally as "[object Object]"`);
+    }
+    for (const { id, want } of GROUP_ID_CASES) {
+        if (mirrorGroupIdOk(id) !== want) {
+            failures.push(`${API_REL}: the mirrored id rule resolves ${JSON.stringify(id)} to ${!want} (want ${want}) -- the shape bound drifted`);
+        }
+    }
+    for (const title of NON_STRING_TITLES) {
+        if (mirrorTitleOk(title) !== false) {
+            failures.push(`${API_REL}: the mirrored title rule accepts ${JSON.stringify(title)} -- non-string titles must refuse`);
+        }
+    }
+    if (mirrorTitleOk('Research') !== true) {
+        failures.push(`${API_REL}: the mirrored title rule rejects a plain string title -- the refusal over-matches`);
     }
     return failures;
 }
@@ -718,10 +769,55 @@ function selfTest() {
         }
     }
 
+    // Plant 7 (WR-04): the unbounded-id regression must go red naming the
+    // shape bound.
+    {
+        const mutated = {
+            ...real,
+            [API_REL]: real[API_REL].replace(
+                'if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) {',
+                'if (typeof id !== "string" || !id) {'
+            ),
+        };
+        const landed = !mutated[API_REL].includes('/^[A-Za-z0-9_-]{1,128}$/');
+        const result = checkStatic(mutated);
+        if (!landed) {
+            console.error(`${NAME} --self-test: FAIL -- 'unbounded id' plant did not land`);
+            failed += 1;
+        } else if (!result.some(f => /shape bound|malformed/.test(f))) {
+            console.error(`${NAME} --self-test: FAIL -- 'unbounded id' did not go red naming the shape bound; got: ${result.join(' | ') || '(no failures at all)'}`);
+            failed += 1;
+        } else {
+            console.log(`  ok  unbounded id -> red, naming the shape bound`);
+        }
+    }
+
+    // Plant 8 (WR-04): accepting non-string titles must go red naming it.
+    {
+        const mutated = {
+            ...real,
+            [API_REL]: real[API_REL].replace(
+                '    if (title !== undefined && title !== null && typeof title !== "string") {\n      throw new Error(`${method}: refusing non-string title for ${id}`);\n    }\n',
+                ''
+            ),
+        };
+        const landed = !mutated[API_REL].includes('refusing non-string title');
+        const result = checkStatic(mutated);
+        if (!landed) {
+            console.error(`${NAME} --self-test: FAIL -- 'non-string title' plant did not land`);
+            failed += 1;
+        } else if (!result.some(f => /non-string title/.test(f))) {
+            console.error(`${NAME} --self-test: FAIL -- 'non-string title' did not go red naming it; got: ${result.join(' | ') || '(no failures at all)'}`);
+            failed += 1;
+        } else {
+            console.log(`  ok  non-string title -> red, naming it`);
+        }
+    }
+
     if (failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all six fault directions went red naming the drift`);
+    console.log(`${NAME} --self-test: PASS -- all eight fault directions went red naming the drift`);
 }
 
 if (process.argv.includes('--self-test')) {
