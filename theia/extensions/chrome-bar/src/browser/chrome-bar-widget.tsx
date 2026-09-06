@@ -141,6 +141,13 @@ export class ChromeBarWidget extends ReactWidget {
 
     constructor() {
         super();
+        // ReactWidget's constructor opts every subclass into perfect-scrollbar.
+        // On a fixed-height bar that is actively harmful: it set overflow:hidden
+        // on a node the shell had sized to the 32px menubar row while the bar
+        // itself is 40px, so 8px was clipped and the bar drifted to y=-4 as the
+        // hidden scroll position moved. The bar is one fixed row and scrolls in
+        // no direction, so it takes no scrollbar.
+        this.scrollOptions = undefined;
         this.id = ChromeBarWidget.ID;
         this.title.label = 'Chrome Bar';
         this.title.caption = 'Chrome Bar';
@@ -594,6 +601,20 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         this.perspectives.onDidChangePerspective(id => {
             this.barWidget.syncModeFromPerspective(id);
         });
+        // The toggle's opening selection is the LIVE perspective, never the
+        // first shipped label. Mode activation and this contribution are both
+        // FrontendApplicationContributions with no ordering guarantee between
+        // them, so a perspective activated before this subscription fires no
+        // event we can hear -- and the toggle would keep asserting Coding
+        // while the shell sat in the Browsing launch default. That
+        // disagreement was not cosmetic: activateMode() early-returns when the
+        // requested mode is already selected, so clicking the segment the
+        // toggle already claimed was a no-op and Coding was unreachable until
+        // the user round-tripped through another mode.
+        const activePerspective = this.perspectives.getActivePerspectiveId();
+        if (activePerspective !== undefined) {
+            this.barWidget.syncModeFromPerspective(activePerspective);
+        }
         // Live chip: republish on every shell add, remove, and
         // current-change so the count never goes stale between mode
         // switches (no mode switch required).

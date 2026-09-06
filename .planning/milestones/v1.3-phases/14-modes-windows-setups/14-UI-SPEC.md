@@ -31,8 +31,8 @@ mode switch into an organising placeholder slot, not the canvas.
 spacing ramp, typography delegation (3 sizes / 2 weights), color tokens,
 60/30/10 split, focus idiom, motion baseline, copy rules (product named
 "Power Browser", plain language, real on-screen next step, no internal
-identifiers), "chrome bar" naming, chrome-bar order (menubar → tab strip →
-chrome bar → workarea → status bar), toggle segments Coding / Browsing /
+identifiers), "chrome bar" naming, chrome-bar order (menubar → chrome bar →
+tab strip → workarea → status bar), toggle segments Coding / Browsing /
 Organising, tabs invariant asserted by the status-bar chip. This spec states
 only what is net-new or extended; unmentioned 13 contracts stand unchanged.
 
