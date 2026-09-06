@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 13
 current_phase_name: roadmap complete — v1.3 phases 13–15 defined, ready to plan
 status: planning
-stopped_at: Completed 13-02-PLAN.md
-last_updated: "2026-09-06T04:04:27.747Z"
+stopped_at: Completed 13-03-PLAN.md
+last_updated: "2026-09-06T04:22:09.936Z"
 last_activity: 2026-09-06
 last_activity_desc: "v1.3 roadmap created (Phases 13–15: GUI-06→13, GUI-07+GUI-09→14, GUI-08→15)"
-state_head: ffa2b1bfea24c2121f76a703bf864c11b57a37a6
+state_head: 8ba1340d99eb5f268754ed5ed33db95bb066979d
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
 milestone_name: Browser GUI
 ---
 
@@ -104,6 +104,7 @@ Last activity: 2026-09-06 — v1.3 roadmap created (Phases 13–15: GUI-06→13,
 | Phase 11-sql-store-design P01 | 12min | 2 tasks | 2 files |
 | Phase 12-sql-store-build P03 | ~5min | 3 tasks | 3 files |
 | Phase 13-chrome-bar-strip-relocation-spike P02 | ~20min | 3 tasks | 12 files |
+| Phase 13-chrome-bar-strip-relocation-spike P03 | ~10min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -254,6 +255,10 @@ Recent decisions affecting current work:
 - [Phase 10]: 12-03: drill dry-run at live newer tag FIREFOX_153_2_0esr_RELEASE, destructive re-clone staged per shared-state rule
 - [Phase 13]: 13-02: verdict gate asserts verdict-instrument agreement (GREEN requires clean core-diff; RED-with-core-cause requires red instrument plus pasted proof) because the tree instrument is red on pre-existing drift
 - [Phase 13]: 13-02: fixture engine is stdlib node:sqlite (second-writer gate rule-c carve-out), not vendored better-sqlite3
+- [Phase 13]: Two-step opener routing: getOpener plus handler.open mirrors the open() helper (OpenerService has no open in 1.74.1)
+- [Phase 13]: Caption type by inheritance: the Theia code variable name trips the no-typeface grep, mono deferred
+- [Phase 13]: Commands gate scopes no-retype checks to declared ids, not namespace prefixes
+- [Phase 13]: Active toggle segment is accent ink never fill; 600 reserved for it
 
 ### Pending Todos
 
@@ -343,8 +348,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-06T04:04:27.701Z
-Stopped at: Completed 13-02-PLAN.md
+Last session: 2026-09-06T04:22:09.915Z
+Stopped at: Completed 13-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
