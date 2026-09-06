@@ -22,6 +22,7 @@ import { ModeService } from './mode-service';
 import { ModesCommandContribution } from './modes-commands';
 import { SetupsService } from './setups-service';
 import { SetupsCommandContribution } from './setups-commands';
+import { DependentWindowsContribution } from './dependent-windows';
 import { OrganisingPlaceholderContribution } from './organising-placeholder-widget';
 
 @injectable()
@@ -53,6 +54,10 @@ export default new ContainerModule(bind => {
     bind(FrontendApplicationContribution).toService(SetupsService);
     bind(SetupsCommandContribution).toSelf().inSingletonScope();
     bind(CommandContribution).toService(SetupsCommandContribution);
+    // GUI-09 (14-03): the dependent-windows contribution binds statically
+    // beside the setups binds, in the same voice (D-50).
+    bind(DependentWindowsContribution).toSelf().inSingletonScope();
+    bind(FrontendApplicationContribution).toService(DependentWindowsContribution);
     // GUI-07 (14-02): the organising placeholder view binds through its own
     // contribution path (never a hardcoded shell area); the Phase-15 canvas
     // replaces the slot behind this same point.
