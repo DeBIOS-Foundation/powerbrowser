@@ -1,10 +1,22 @@
 import { ContainerModule } from '@theia/core/shared/inversify';
+import { BackendApplicationContribution } from '@theia/core/lib/node';
+import { ConnectionHandler, JsonRpcConnectionHandler } from '@theia/core/lib/common';
+import { OPENCODE_SERVICE_PATH, OpencodeService } from '../common/opencode-service';
+import { OpencodeAcpSupervisor } from './opencode-acp-supervisor';
+import { OpencodeChangesetEmitter } from './opencode-changeset-emitter';
 
-// 16-01 Task 1: bind-free compilation stub. The ContainerModule call is
-// present so composition resolves; every bind (ACP supervisor as
-// BackendApplicationContribution, JSON-RPC connection handler) lands in
-// Task 2 alongside the implementation files. This module deliberately
-// imports nothing created later.
-export default new ContainerModule(() => {
-    // No binds yet -- added in Task 2 with opencode-acp-supervisor.ts.
+// 16-01 Task 2: backend composition. The supervisor serves both as the
+// BackendApplicationContribution (child lifecycle) and as the
+// OpencodeService JSON-RPC implementation at OPENCODE_SERVICE_PATH over
+// the existing authenticated websocket -- no new transport, no HTTP
+// route, no token-gate re-review. Static at load beside no other binds.
+export default new ContainerModule(bind => {
+    bind(OpencodeChangesetEmitter).toSelf().inSingletonScope();
+    bind(OpencodeAcpSupervisor).toSelf().inSingletonScope();
+    bind(BackendApplicationContribution).toService(OpencodeAcpSupervisor);
+    bind(ConnectionHandler).toDynamicValue(ctx =>
+        new JsonRpcConnectionHandler<OpencodeService>(OPENCODE_SERVICE_PATH, () =>
+            ctx.container.get(OpencodeAcpSupervisor)
+        )
+    );
 });
