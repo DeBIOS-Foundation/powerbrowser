@@ -1,0 +1,1 @@
+{"content":"SQLite PRAGMA integrity_check returns a single 'ok' row when clean else one row per problem (max 100 default, TABLENAME/N args supported); PRAGMA quick_check is the faster tripwire; WAL journal mode is persistent and needs SQLite >= 3.7.0.","source":"web","provider":"webfetch","confidence":"LOW","fetched_at":"2026-09-05T18:29:18.233Z","ttl":86400000,"kind":"docs"}
