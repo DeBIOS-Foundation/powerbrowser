@@ -3744,6 +3744,25 @@ run_own_checks() {
     "gui07-mode-switch-tabs-invariant|node $REPO_ROOT/scripts/verify-mode-switch-tabs-invariant.mjs"
     "gui07-mode-switch-tabs-invariant-self-test|node $REPO_ROOT/scripts/verify-mode-switch-tabs-invariant.mjs --self-test"
 
+    # NEW (14-03): GUI-09's setup roundtrip gate. Derives the setups schema,
+    # the four command ids, and the contracted labels and copy at check time
+    # and runs a node JSON roundtrip over save, list, restore, and delete.
+    # Honestly --quick: text reads only. No build, no browser, no display,
+    # no network. The self-test rides alongside for the reason every other
+    # self-test row in this array gives.
+    "gui09-setup-roundtrip|node $REPO_ROOT/scripts/verify-setup-roundtrip.mjs"
+    "gui09-setup-roundtrip-self-test|node $REPO_ROOT/scripts/verify-setup-roundtrip.mjs --self-test"
+
+    # NEW (14-03): GUI-09's dependent-window content gate. The static half
+    # derives the built secondary asset, the membership pins, and the
+    # closed-state copy at check time; the live half (extraction, geometry,
+    # close-matrix through the probe harness) runs in the full suite only,
+    # so this row is honestly --quick while its live counterpart is not.
+    # The self-test rides alongside for the reason every other self-test
+    # row in this array gives.
+    "gui09-dependent-window-content|node $REPO_ROOT/scripts/verify-dependent-window-content.mjs"
+    "gui09-dependent-window-content-self-test|node $REPO_ROOT/scripts/verify-dependent-window-content.mjs --self-test"
+
     # NEW (01-07): MIG-04's user-facing-copy gate. Static -- it reads
     # TheiaService.sys.mjs, never a built artifact -- so it is honestly
     # --quick, and that placement is the point: a leaked pref key must cost

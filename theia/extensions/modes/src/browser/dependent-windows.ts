@@ -140,9 +140,8 @@ export class DependentWindowsContribution implements FrontendApplicationContribu
     }
 
     /**
-     * Contracted "This tab is closed" state with its window-only close
-     * button. Skips closed windows and repeats (marker), never touches the
-     * core model.
+     * Contracted tab-closed state with its window-only close button. Skips
+     * closed windows and repeats (marker), never touches the core model.
      */
     protected renderClosedState(win: Window): void {
         try {
