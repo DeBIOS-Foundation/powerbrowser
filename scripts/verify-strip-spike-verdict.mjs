@@ -52,7 +52,8 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -60,7 +61,38 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const NAME = 'verify-strip-spike-verdict';
 
 const RECORD_REL = '.planning/phases/13-chrome-bar-strip-relocation-spike/13-SPIKE-STRIP-RELOCATION.md';
+const RECORD_PHASE_DIR = '13-chrome-bar-strip-relocation-spike';
+const RECORD_FILE = '13-SPIKE-STRIP-RELOCATION.md';
 const CORE_DIFF_REL = 'scripts/diff-theia-core.sh';
+
+/**
+ * Milestone archival moves phase dirs to
+ * `.planning/milestones/<v>-phases/`, which must not silently break this
+ * gate. The live tree wins; otherwise the single archived copy wins;
+ * zero or several is a failure naming the search.
+ */
+function resolveRecord(root, liveRel, phaseDir, fileName) {
+    const live = join(root, liveRel);
+    if (existsSync(live)) {
+        return live;
+    }
+    let archived = [];
+    try {
+        archived = readdirSync(join(root, '.planning/milestones'), { withFileTypes: true })
+            .filter(entry => entry.isDirectory() && /-phases$/.test(entry.name))
+            .map(entry => join(root, '.planning/milestones', entry.name, phaseDir, fileName))
+            .filter(existsSync);
+    } catch {
+        archived = [];
+    }
+    if (archived.length === 1) {
+        return archived[0];
+    }
+    if (archived.length === 0) {
+        throw new Error(`${NAME}: no record at ${liveRel} and none archived under .planning/milestones/*-phases/${phaseDir}/${fileName} -- the spike record is missing, so the gate proves nothing`);
+    }
+    throw new Error(`${NAME}: record at ${liveRel} missing and ${archived.length} archived copies -- exactly one must exist, an ambiguous record proves nothing`);
+}
 
 /** Exactly one verdict line; zero or several is a malformed record. */
 function parseVerdict(record) {
@@ -201,7 +233,15 @@ function main() {
     if (process.argv.includes('--self-test')) {
         return selfTest();
     }
-    const record = readFileSync(join(REPO_ROOT, RECORD_REL), 'utf8');
+    let recordPath;
+    try {
+        recordPath = resolveRecord(REPO_ROOT, RECORD_REL, RECORD_PHASE_DIR, RECORD_FILE);
+    } catch (error) {
+        console.error(`${NAME}: FAIL`);
+        console.error(`  - ${error.message}`);
+        return 1;
+    }
+    const record = readFileSync(recordPath, 'utf8');
     const { failures } = checkVerdict(record, { coreDiffExit: coreDiffExit(), upstreamClean: upstreamClean() });
     if (failures.length) {
         console.error(`${NAME}: FAIL`);
@@ -213,7 +253,14 @@ function main() {
 }
 
 function selfTest() {
-    const record = readFileSync(join(REPO_ROOT, RECORD_REL), 'utf8');
+    let recordPath;
+    try {
+        recordPath = resolveRecord(REPO_ROOT, RECORD_REL, RECORD_PHASE_DIR, RECORD_FILE);
+    } catch (error) {
+        console.error(`${NAME} --self-test: FAIL -- ${error.message}`);
+        return 1;
+    }
+    const record = readFileSync(recordPath, 'utf8');
     const instruments = { coreDiffExit: coreDiffExit(), upstreamClean: upstreamClean() };
     const baseline = checkVerdict(record, instruments);
     if (baseline.failures.length !== 0) {
@@ -285,6 +332,66 @@ function selfTest() {
         failed++;
     } else {
         console.log(`  ok  anchored derivation -> plan commits found, no shipped-tree path`);
+    }
+
+    // Resolution proof: milestone archival moves the record, and the gate
+    // must follow it without touching the archive. Exercised against
+    // mkdtemp fixture roots (live-only, archive-only, neither,
+    // both-duplicate), never the real tree.
+    const resolutionCases = [
+        {
+            name: 'resolution live-only',
+            setup: stage => writeFileSync(join(stage, 'live.md'), 'x'),
+            liveRel: 'live.md', want: 'live',
+        },
+        {
+            name: 'resolution archive-only',
+            setup: stage => {
+                const dir = join(stage, '.planning/milestones/v9.9-phases', RECORD_PHASE_DIR);
+                mkdirSync(dir, { recursive: true });
+                writeFileSync(join(dir, RECORD_FILE), 'x');
+            },
+            liveRel: 'absent.md', want: 'v9.9-phases',
+        },
+        {
+            name: 'resolution neither',
+            setup: () => {},
+            liveRel: 'absent.md', wantError: 'missing',
+        },
+        {
+            name: 'resolution both-duplicate',
+            setup: stage => {
+                writeFileSync(join(stage, 'live.md'), 'x');
+                const dir = join(stage, '.planning/milestones/v9.9-phases', RECORD_PHASE_DIR);
+                mkdirSync(dir, { recursive: true });
+                writeFileSync(join(dir, RECORD_FILE), 'x');
+            },
+            liveRel: 'live.md', want: 'live',
+        },
+    ];
+    for (const resolutionCase of resolutionCases) {
+        const stage = mkdtempSync(join(tmpdir(), `${NAME}-resolve-`));
+        try {
+            resolutionCase.setup(stage);
+            let resolved = null;
+            let resolutionError = '';
+            try {
+                resolved = resolveRecord(stage, resolutionCase.liveRel, RECORD_PHASE_DIR, RECORD_FILE);
+            } catch (error) {
+                resolutionError = error.message;
+            }
+            const ok = resolutionCase.wantError
+                ? resolutionError.includes(resolutionCase.wantError)
+                : resolved !== null && resolved.includes(resolutionCase.want);
+            if (!ok) {
+                console.error(`${NAME} --self-test: FAIL -- '${resolutionCase.name}' resolved to '${resolved ?? resolutionError}'; want '${resolutionCase.want ?? resolutionCase.wantError}'`);
+                failed++;
+            } else {
+                console.log(`  ok  ${resolutionCase.name} -> '${resolutionCase.want ?? resolutionCase.wantError}'`);
+            }
+        } finally {
+            rmSync(stage, { recursive: true, force: true });
+        }
     }
 
     if (failed) {
