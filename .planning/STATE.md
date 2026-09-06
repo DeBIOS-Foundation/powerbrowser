@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 13
 current_phase_name: roadmap complete — v1.3 phases 13–15 defined, ready to plan
 status: planning
-stopped_at: Completed 13-03-PLAN.md
-last_updated: "2026-09-06T04:22:09.936Z"
+stopped_at: Completed 14-01-PLAN.md
+last_updated: "2026-09-06T05:36:06.294Z"
 last_activity: 2026-09-06
 last_activity_desc: "v1.3 roadmap created (Phases 13–15: GUI-06→13, GUI-07+GUI-09→14, GUI-08→15)"
-state_head: 8ba1340d99eb5f268754ed5ed33db95bb066979d
+state_head: 74e1db8d1613c9f1bf6af9a7d49838b2da0d8e85
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 6
+  completed_plans: 4
 milestone_name: Browser GUI
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-09-05)
 
 ## Current Position
 
-Phase: 13 (roadmap complete — v1.3 phases 13–15 defined, ready to plan)
-Plan: —
-Status: Roadmap complete, awaiting phase planning
-Last activity: 2026-09-06 — v1.3 roadmap created (Phases 13–15: GUI-06→13, GUI-07+GUI-09→14, GUI-08→15)
+Phase: 14 (modes-windows-setups — plan 01 executed, 02/03 pending)
+Plan: 01 complete (probe + tracer: BiDi GREEN verdict, modes skeleton, bridged toggle, defaults gate)
+Status: Executing v1.3 roadmap (14-01 done: f8081cb, 351ca7d, 74e1db8)
+Last activity: 2026-09-06 — 14-01 executed (probe GREEN routes dependents to stock path; modes/toggle/gate green)
 
 ## Performance Metrics
 
@@ -105,6 +105,7 @@ Last activity: 2026-09-06 — v1.3 roadmap created (Phases 13–15: GUI-06→13,
 | Phase 12-sql-store-build P03 | ~5min | 3 tasks | 3 files |
 | Phase 13-chrome-bar-strip-relocation-spike P02 | ~20min | 3 tasks | 12 files |
 | Phase 13-chrome-bar-strip-relocation-spike P03 | ~10min | 3 tasks | 8 files |
+| Phase 14-modes-windows-setups P01 | 30min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -259,6 +260,9 @@ Recent decisions affecting current work:
 - [Phase 13]: Caption type by inheritance: the Theia code variable name trips the no-typeface grep, mono deferred
 - [Phase 13]: Commands gate scopes no-retype checks to declared ids, not namespace prefixes
 - [Phase 13]: Active toggle segment is accent ink never fill; 600 reserved for it
+- [Phase 14]: 14-01 probe verdict GREEN — dependents build on the stock secondary-window path, no chrome-side fallback, no catalogue amendment
+- [Phase 14]: Shipped modes are stock PerspectiveDescriptor literals (coding/browsing/organising); toggle maps by lowercased labels under gate assertion, never imports
+- [Phase 14]: Workspace realignment via yarn install (no new packages) links modes + chrome-bar into the app; chrome-bar css import follows the upstream src-relative idiom
 
 ### Pending Todos
 
@@ -349,8 +353,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-06T04:22:09.915Z
-Stopped at: Completed 13-03-PLAN.md
+Last session: 2026-09-06T05:36:06.275Z
+Stopped at: Completed 14-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
