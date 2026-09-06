@@ -217,15 +217,17 @@ export class ModeService implements FrontendApplicationContribution {
             return;
         }
         const flags = this.visibilityFor(target);
+        // collapse() floats a promise (expand is sync void): attach the
+        // no-op catch so a shutdown-time rejection is silence, not noise.
         if (flags.left) {
             this.shell.leftPanelHandler.expand('explorer-view-container');
         } else {
-            this.shell.leftPanelHandler.collapse();
+            void this.shell.leftPanelHandler.collapse().catch(() => undefined);
         }
         if (flags.right) {
             this.shell.rightPanelHandler.expand();
         } else {
-            this.shell.rightPanelHandler.collapse();
+            void this.shell.rightPanelHandler.collapse().catch(() => undefined);
         }
         if (flags.bottom) {
             this.shell.expandPanel('bottom');
