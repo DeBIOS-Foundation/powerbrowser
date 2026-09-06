@@ -11,17 +11,36 @@ import * as path from 'path';
  * accept writes the exact backend bytes, reject drops the entry leaving
  * the file byte-identical, zero-edit answers create no entry.
  *
+ * 16-02 Task 2: mandatory history plus revert (D-06, SPEC R3). Both
+ * presets record every applied edit -- gated through acceptStaged, the
+ * auto-accept preset through the chat agent's turn-end apply-all -- with
+ * per-file diff plus working revert on the existing Change Set plus
+ * session-history surfaces (no bespoke widget). Ordering rules hold on
+ * both the intercept and the D-03 apply-then-record fallback paths:
+ * history append order equals apply order, staging order matches backend
+ * emission order, overlapping proposals resolve latest-supersedes with the
+ * old entry marked superseded (never merged), zero-edit answers create no
+ * entry, and idempotent accept tolerates a backend double-write.
+ *
  * Threat mitigations owned here:
  * - T-16-01-01: every staged path is clamped to the workspace root and
  *   refused otherwise (fail-closed negative test in the tracer gate).
  * - T-16-01-02: token-shaped strings are redacted out of diffs and staged
  *   presentation; secrets travel the stdin-pipe path only.
- * - D-04: the stale-hunk check lives at accept time on the Theia side:
- *   the live file is compared against the staged base and a mismatch
+ * - T-16-02-02: the stale-hunk check lives at accept time on the Theia
+ *   side: the live file is compared against the staged base and a mismatch
  *   refuses with a conflict while preserving the proposal.
+ * - T-16-02-03: overlapping proposals are never merged; the latest
+ *   supersedes and the old entry is marked superseded.
+ * - T-16-02-04: history diffs pass through the same redaction.
+ * - D-04: accept-time live-file comparison (see acceptStaged); revert
+ *   applies the same rule (see revertApplied).
  */
 
-export type StagedStatus = 'staged' | 'accepted' | 'rejected' | 'conflict';
+export type StagedStatus = 'staged' | 'accepted' | 'rejected' | 'conflict' | 'superseded';
+
+/** Which review preset applied a history entry (mirrors the frontend store). */
+export type OpenCodePreset = 'gated' | 'auto-accept';
 
 /** The diff-carrying subset of an ACP permission ask worth staging. */
 export interface PermissionAsk {
@@ -44,6 +63,36 @@ export interface StagedEntry {
     status: StagedStatus;
     conflict?: string;
 }
+
+/** One applied edit: the mandatory revertible history record (SPEC R3). */
+export interface HistoryEntry {
+    chatSessionId: string;
+    /** Absolute workspace path. */
+    path: string;
+    /** Live bytes before the apply ('' when the file did not exist). */
+    baseText: string;
+    /** Exact bytes written. */
+    appliedText: string;
+    /** Redacted presentation diff. */
+    diff: string;
+    /** Which preset applied it. */
+    preset: OpenCodePreset;
+    /** Intercept applied through the queue; fallback recorded an outside write. */
+    via: 'intercept' | 'fallback';
+    /** Apply sequence: history append order equals apply order. */
+    order: number;
+    reverted: boolean;
+    revertConflict?: string;
+    diskWriteFailed?: boolean;
+}
+
+/**
+ * Failure guard name for the history write. When the history write fails
+ * the apply is blocked and this failure is surfaced -- an edit is never
+ * applied silently without its history record. Kept as a named const so
+ * the preset gate asserts the guard by name.
+ */
+export const historyWriteFailure = 'history-write-failed: apply blocked, proposal preserved';
 
 /**
  * Clamp a backend-proposed path to the workspace root. Returns the
@@ -125,6 +174,11 @@ function readLiveBytes(absolutePath: string): string | undefined {
 @injectable()
 export class OpencodeChangesetEmitter {
     protected staged = new Map<string, StagedEntry>();
+    /** Superseded proposals: marked, preserved, never merged, never applied. */
+    protected superseded: StagedEntry[] = [];
+    /** Mandatory history in apply order (append order equals apply order). */
+    protected history: HistoryEntry[] = [];
+    protected nextOrder = 0;
     /** Every permission ask, allowed or denied -- the audit trail. */
     protected permissionLog: { tool: string; verdict: 'allow-once' | 'reject' }[] = [];
 
@@ -192,6 +246,25 @@ export class OpencodeChangesetEmitter {
         if (live === newText) {
             return undefined;
         }
+        const mapKey = this.key(chatSessionId, absolutePath);
+        const existing = this.staged.get(mapKey);
+        if (existing && (existing.status === 'staged' || existing.status === 'conflict')) {
+            if (existing.proposedText === newText) {
+                // Idempotent re-stage (backend double-write): the identical
+                // proposal reuses its entry instead of superseding itself.
+                return existing;
+            }
+            // Latest supersedes (T-16-02-03): the old entry is marked and
+            // preserved, never merged into the new proposal. Delete-then-set
+            // keeps staging order on the latest emission.
+            existing.status = 'superseded';
+            this.superseded.push(existing);
+            this.staged.delete(mapKey);
+        } else if (existing) {
+            // Terminal entries (accepted/rejected) never block a follow-up
+            // proposal; history already preserves the applied bytes.
+            this.staged.delete(mapKey);
+        }
         const rawDiff = renderUnifiedDiff(absolutePath, live, newText);
         const entry: StagedEntry = {
             chatSessionId,
@@ -201,7 +274,7 @@ export class OpencodeChangesetEmitter {
             diff: redactSecretStrings(rawDiff).text,
             status: 'staged',
         };
-        this.staged.set(this.key(chatSessionId, absolutePath), entry);
+        this.staged.set(mapKey, entry);
         return entry;
     }
 
@@ -209,25 +282,153 @@ export class OpencodeChangesetEmitter {
         return [...this.staged.values()].filter(e => e.chatSessionId === chatSessionId && e.status === 'staged');
     }
 
+    /** Superseded proposals for a session, oldest first. */
+    supersededFor(chatSessionId: string): StagedEntry[] {
+        return this.superseded.filter(e => e.chatSessionId === chatSessionId);
+    }
+
+    /** Mandatory history for a session in apply order. */
+    historyFor(chatSessionId: string): HistoryEntry[] {
+        return this.history.filter(e => e.chatSessionId === chatSessionId);
+    }
+
+    /**
+     * The single history write site. Protected so the preset gate proves
+     * the historyWriteFailure guard behaviorally by faulting exactly this
+     * method: when it throws, the apply is blocked and surfaced, never
+     * applied silently.
+     */
+    protected appendHistory(init: Omit<HistoryEntry, 'order' | 'reverted'>): HistoryEntry {
+        const entry: HistoryEntry = { ...init, order: this.nextOrder++, reverted: false };
+        this.history.push(entry);
+        return entry;
+    }
+
+    protected markLastHistoryDiskWriteFailed(chatSessionId: string, absolutePath: string): void {
+        for (let i = this.history.length - 1; i >= 0; i--) {
+            const entry = this.history[i];
+            if (entry.chatSessionId === chatSessionId && entry.path === absolutePath && entry.diskWriteFailed !== true) {
+                entry.diskWriteFailed = true;
+                return;
+            }
+        }
+    }
+
     /**
      * Accept one staged file (D-04 accept-time check): compare the live
      * file against the staged base; on mismatch refuse with a conflict
-     * and preserve the proposal, else write the exact backend bytes.
+     * and preserve the proposal, else record history and write the exact
+     * backend bytes. History is written BEFORE disk: when the history
+     * write fails the apply is blocked with historyWriteFailure and the
+     * proposal stays staged -- never applied silently. Idempotent: an
+     * already-accepted entry whose bytes read back identical reports
+     * written, tolerating a backend double-write.
      */
-    acceptStaged(chatSessionId: string, absolutePath: string): { written: boolean; conflict?: string } {
+    acceptStaged(chatSessionId: string, absolutePath: string, preset: OpenCodePreset = 'gated'): { written: boolean; conflict?: string } {
         const entry = this.staged.get(this.key(chatSessionId, absolutePath));
-        if (!entry || entry.status !== 'staged') {
+        if (!entry) {
             return { written: false, conflict: 'no staged proposal for this file' };
         }
+        if (entry.status === 'rejected' || entry.status === 'superseded') {
+            return { written: false, conflict: 'proposal is no longer current; a newer proposal or a rejection replaced it' };
+        }
         const live = readLiveBytes(absolutePath) ?? '';
+        if (entry.status === 'accepted') {
+            return live === entry.proposedText
+                ? { written: true }
+                : { written: false, conflict: 'file changed after apply; history preserves the applied bytes' };
+        }
         if (live !== entry.baseText) {
             entry.status = 'conflict';
             entry.conflict = 'file changed since the proposal was staged; accept refused, proposal preserved';
             return { written: false, conflict: entry.conflict };
         }
-        fs.writeFileSync(absolutePath, entry.proposedText, 'utf8');
+        const safePreset: OpenCodePreset = preset === 'auto-accept' ? 'auto-accept' : 'gated';
+        try {
+            this.appendHistory({
+                chatSessionId,
+                path: absolutePath,
+                baseText: entry.baseText,
+                appliedText: entry.proposedText,
+                diff: entry.diff,
+                preset: safePreset,
+                via: 'intercept',
+            });
+        } catch (err) {
+            throw new Error(`${historyWriteFailure}: ${(err as Error).message}`);
+        }
+        try {
+            fs.writeFileSync(absolutePath, entry.proposedText, 'utf8');
+        } catch (err) {
+            this.markLastHistoryDiskWriteFailed(chatSessionId, absolutePath);
+            entry.status = 'staged';
+            throw err;
+        }
         entry.status = 'accepted';
         return { written: true };
+    }
+
+    /**
+     * D-03 apply-then-record fallback, strictly behind the intercept path:
+     * for writes the backend applied to disk itself (older binary, a path
+     * the ask channel never carried), record the observable change into
+     * history on the same ordering and redaction rules. NEVER writes disk
+     * itself -- it only consumes a matching staged entry (fulfilled
+     * externally, so a later accept cannot double-write) and appends
+     * history. Zero observable change records nothing.
+     */
+    recordExternalApply(
+        chatSessionId: string,
+        workspaceRoot: string,
+        candidatePath: string,
+        preset: OpenCodePreset = 'gated'
+    ): HistoryEntry | undefined {
+        const absolutePath = clampStagedPath(workspaceRoot, candidatePath);
+        const live = readLiveBytes(absolutePath) ?? '';
+        const pending = this.staged.get(this.key(chatSessionId, absolutePath));
+        let baseText = '';
+        if (pending && (pending.status === 'staged' || pending.status === 'conflict')) {
+            baseText = pending.baseText;
+            pending.status = 'accepted';
+        }
+        if (live === baseText) {
+            return undefined;
+        }
+        const safePreset: OpenCodePreset = preset === 'auto-accept' ? 'auto-accept' : 'gated';
+        const rawDiff = renderUnifiedDiff(absolutePath, baseText, live);
+        return this.appendHistory({
+            chatSessionId,
+            path: absolutePath,
+            baseText,
+            appliedText: live,
+            diff: redactSecretStrings(rawDiff).text,
+            preset: safePreset,
+            via: 'fallback',
+        });
+    }
+
+    /**
+     * Revert one applied file from history (D-06 reuse, SPEC R3): writes
+     * the pre-apply bytes back and marks the entry reverted. Mirrors the
+     * D-04 accept rule -- when the live file no longer matches the applied
+     * bytes (concurrent external edit) the revert is refused with a
+     * conflict and history is preserved. End-to-end behavior through live
+     * session surfaces is the held-out R3 backstop (preset gate STAGED).
+     */
+    revertApplied(chatSessionId: string, absolutePath: string): { reverted: boolean; conflict?: string } {
+        const entries = this.history.filter(e => e.chatSessionId === chatSessionId && e.path === absolutePath && !e.reverted);
+        const latest = entries[entries.length - 1];
+        if (!latest) {
+            return { reverted: false, conflict: 'no applied history for this file' };
+        }
+        const live = readLiveBytes(absolutePath) ?? '';
+        if (live !== latest.appliedText) {
+            latest.revertConflict = 'file changed after apply; revert refused, history preserved';
+            return { reverted: false, conflict: latest.revertConflict };
+        }
+        fs.writeFileSync(absolutePath, latest.baseText, 'utf8');
+        latest.reverted = true;
+        return { reverted: true };
     }
 
     /** Reject one staged file: drop it, disk byte-identical. */
