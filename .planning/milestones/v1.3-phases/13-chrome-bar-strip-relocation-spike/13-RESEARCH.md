@@ -338,22 +338,25 @@ async commitAddress(raw: string): Promise<void> {
 | A4 | `better-sqlite3` `LIKE … ESCAPE` + bound `LIMIT` parameter behave per standard SQLite on 13.0.3 [ASSUMED] | Pattern 3 | Low risk (long-stable SQLite + engine); covered by the new check's `--self-test` with `%`/`_` fixtures |
 | A5 | BiDi-driven live checks (à la `verify-gui01-command.mjs`, inversify 6.2.2 `_bindingDictionary` walk) remain viable for the chrome-bar command/suggestion rows [ASSUMED] | Validation Architecture | If the frontend internals drifted, rows fall back to static derive-and-compare (command ids from source) + explicit manual UAT; same degradation 01-05 survived |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Reload semantics pre-GUI-02**
+1. **Reload semantics pre-GUI-02 (RESOLVED: reload stays disabled)**
    - What we know: Theia core ships no reload primitive for shell widgets (verified: no back/forward/reload command surface outside tree-model internals and `NavigationLocationService`, which has no reload). UI-SPEC contracts a disabled Reload "with no navigable current tab".
    - What's unclear: Whether "navigable current tab" will ever be true before GUI-02 web tabs (e.g., mini-browser preview widgets with their own reload).
    - Recommendation: Register `powerbrowser.chrome-reload` now with `isEnabled: () => false` and the contracted tooltip; enablement predicate is Phase 14/GUI-02 scope. Planner records this as the Variant-A-compatible default.
+   - Outcome: RESOLVED — 13-04 Task 1 lands back, forward, and reload disabled on the single shared chromeBarHasNavigableTab predicate returning false; enablement stays GUI-02 scope.
 
-2. **Bar above vs below the Theia toolbar (planner's call per UI-SPEC)**
+2. **Bar above vs below the Theia toolbar (RESOLVED: bar above the strip)**
    - What we know: `'top'`-area placement lands the bar below the menubar but above the main dock's tab strip and its per-tab toolbars — i.e., *above* the Theia toolbar. Below-tab-strip placement has no shell area and is rejected above.
    - What's unclear: Nothing technical — this is the aesthetic call UI-SPEC explicitly grants the planner (Variant A permits either).
    - Recommendation: Take `'top'` (above). The sketch mock order (tabstrip→navbar) is acknowledged as mock-level; UI-SPEC's placement paragraph overrides with planner discretion.
+   - Outcome: RESOLVED — 13-05 Task 1 ratifies bar-above-strip as the Variant-A contract with the never-fork-core reason recorded, and 13-05 Task 2 asserts it with a DOM-order placement gate.
 
-3. **Mode-toggle persistence**
+3. **Mode-toggle persistence (RESOLVED: in-memory toggle)**
    - What we know: Custom names/persistence are Phase 14 scope (UI-SPEC defers); `user-storage:` + `FileService` precedent exists if needed.
    - What's unclear: Whether Phase 13's toggle should persist the *selection* across reloads or reset to a default.
    - Recommendation: In-memory selection defaulting to the first segment ("Coding"); persistence rides Phase 14's modes-data work. One-line planner decision.
+   - Outcome: RESOLVED — toggle stays in-memory defaulting to the first segment; persistence rides Phase 14 modes-data scope.
 
 ## Environment Availability
 
