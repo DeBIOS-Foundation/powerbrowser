@@ -53,6 +53,18 @@
   and deferred verifications (`/gsd-verify-work 10/11/12`, 5 human
   UAT signatures staged)
 
+### Inherited network egress (carried, not decided here)
+
+The imported platform allows exactly three Mozilla hosts, all one feature —
+Remote Settings (disabling it would also lose CRLite revocation,
+intermediate preloading, and tracking-protection updates):
+**firefox.settings.services.mozilla.com**,
+**content-signature-2.cdn.mozilla.net**, and
+**firefox-settings-attachments.cdn.mozilla.net**. Named here and in
+ROADMAP.md because `verify-platform.sh`'s `allowlist-doc-consistency`
+check requires every allow-dispositioned Mozilla host to be documented in
+the project's own planning record.
+
 ## Future Requirements (v1.4+)
 
 - **GUI-02**: In-Theia web tabs (`<xul:browser>`-backed). New-tab
