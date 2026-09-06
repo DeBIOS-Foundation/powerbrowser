@@ -4,11 +4,11 @@ milestone: v1.3
 current_phase: 13
 current_phase_name: Chrome Bar + Strip-Relocation Spike
 status: executing
-stopped_at: Completed 13-chrome-bar-strip-relocation-spike-04-PLAN.md
-last_updated: "2026-09-06T19:42:23.551Z"
+stopped_at: Completed 13-chrome-bar-strip-relocation-spike-05-PLAN.md
+last_updated: "2026-09-06T20:30:00.000Z"
 last_activity: 2026-09-06
 last_activity_desc: Phase 13 execution started
-state_head: 5ff735202e3239169987c6bf5f5482f3cacfd51f
+state_head: 948ec6f9c026f590b8a7bb47cc3f75c991373572
 progress:
   total_phases: 4
   completed_phases: 0
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 ## Current Position
 
 Phase: 13 (Chrome Bar + Strip-Relocation Spike) — EXECUTING
-Plan: 2 of 2
-Status: Ready to execute
-Last activity: 2026-09-06 — Phase 13 execution started
+Plan: 5 of 5 (13-05 gap closure complete, G-13-3 placement facet closed)
+Status: Phase 13 plans complete; verification deferred per standing nonstop rule
+Last activity: 2026-09-06 — 13-05 executed (ratification + placement gate)
 
 ## Performance Metrics
 
@@ -111,6 +111,7 @@ Last activity: 2026-09-06 — Phase 13 execution started
 | Phase 15-panorama-organising P02 | 52min | 4 tasks | 9 files |
 | Phase 15-panorama-organising P03 | 16min | 4 tasks | 13 files |
 | Phase 13-chrome-bar-strip-relocation-spike P04 | n/a | 3 tasks | 4 files |
+| Phase 13-chrome-bar-strip-relocation-spike P05 | n/a | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -275,6 +276,8 @@ Recent decisions affecting current work:
 - [Phase 13]: 15-03: tree renders over the single GroupModel via widget-owned module; parity, exactness, and copy gates green; placeholder retired; GUI-08 stays Pending for 15-05
 - [Phase 13]: [Phase 13-04]: Nav enablement reads one exported chromeBarHasNavigableTab (false, GUI-02-owned); GUI-02 flips the predicate
 - [Phase 13]: [Phase 13-04]: Suggestion activation commits row.url via the imported stock-window const; opaque row.uri survives only as the React list key; STAGED branch retired
+- [Phase 13]: [Phase 13-05]: Bar-above-strip ratified as the Variant-A contract — below-strip needs dock surgery, a Theia-core touch forbidden by never-fork-core, so facet 2 closed by contract not code
+- [Phase 13]: [Phase 13-05]: Placement gate derives addWidget area plus UI-SPEC order at check time; empty derivation fails as broken instrument; area respell, order flip, order deletion each proven red
 
 ### Pending Todos
 
@@ -367,8 +370,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-06T19:42:23.530Z
-Stopped at: Completed 13-chrome-bar-strip-relocation-spike-04-PLAN.md
+Last session: 2026-09-06T20:30:00.000Z
+Stopped at: Completed 13-chrome-bar-strip-relocation-spike-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
