@@ -11,13 +11,21 @@
 
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { TabQueryRow, TabQueryService } from '@powerbrowser/tab-uris/lib/node/tab-query-service';
-import { ChromeBarSuggestionService } from '../browser/chrome-bar-suggestion-service';
+import { CHROME_SUGGESTION_LIMIT, ChromeBarSuggestionService } from '../browser/chrome-bar-suggestion-service';
 
 @injectable()
 export class ChromeBarSuggestionServiceImpl implements ChromeBarSuggestionService {
     constructor(@inject(TabQueryService) private readonly tabs: TabQueryService) {}
 
     async searchByPrefix(prefix: string, limit: number): Promise<TabQueryRow[]> {
-        return this.tabs.searchByPrefix(prefix, limit);
+        // RPC-boundary clamp: the UI cap is enforced widget-side, but any
+        // present-or-future caller reaches this impl -- a negative LIMIT is
+        // "unbounded" in SQLite, so clamp here where the contract holds.
+        const safe = Number.isFinite(limit)
+            ? Math.min(Math.max(Math.floor(limit), 1), CHROME_SUGGESTION_LIMIT)
+            : CHROME_SUGGESTION_LIMIT;
+        // Bound the LIKE pattern length: an unbounded %...% scan is paid by
+        // the backend. Coerced, never throws (the reader resolves [] anyway).
+        return this.tabs.searchByPrefix(String(prefix ?? '').slice(0, 256), safe);
     }
 }
