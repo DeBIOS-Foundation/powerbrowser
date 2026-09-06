@@ -42,7 +42,8 @@ import { GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-quer
 import pDebounce from 'p-debounce';
 import { registerOrganisingSlot } from './mode-descriptors';
 import { GroupActorClient } from './group-actor-client';
-import { GroupModel, GROUP_BOX_MIN_H, GROUP_BOX_MIN_W, PanoramaGroup, PanoramaTab } from './group-model';
+import { GroupModel, GROUP_BOX_MIN_H, GROUP_BOX_MIN_W, GROUP_TITLE_MAX_CHARS, PanoramaGroup, PanoramaTab } from './group-model';
+import { PANORAMA_CLOSE_GROUP_COMMAND_ID, PANORAMA_NEW_GROUP_COMMAND_ID } from './panorama-commands';
 import { PanoramaCommandHandler } from './panorama-commands';
 import '../../src/browser/modes.css';
 
@@ -282,8 +283,8 @@ export class OrganisingWidget extends Widget {
             caption.textContent = 'No ungrouped tabs — drag a tab here to ungroup it.';
             cards.append(caption);
         }
-        for (const tab of tabs) {
-            cards.append(this.buildCard(tab, null));
+        for (let i = 0; i < tabs.length; i += 1) {
+            cards.append(this.buildCard(tabs[i], null, i === 0));
         }
         this.trayRoot.append(cards);
     }
@@ -319,6 +320,7 @@ export class OrganisingWidget extends Widget {
         const close = document.createElement('button');
         close.type = 'button';
         close.className = 'pb-org-box-close';
+        close.dataset.command = PANORAMA_CLOSE_GROUP_COMMAND_ID;
         close.textContent = '×';
         close.title = 'Close group';
         close.setAttribute('aria-label', 'Close group');
@@ -329,6 +331,12 @@ export class OrganisingWidget extends Widget {
         header.append(close);
         header.addEventListener('pointerdown', event => this.beginBoxMove(event, group));
         header.addEventListener('click', () => {
+            void this.activateGroup(group.id);
+        });
+        // Field-background click (anywhere in the box that is not a control)
+        // marks the group active too; the close button and rename input stop
+        // propagation, and card dives already activate, so this is idempotent.
+        box.addEventListener('click', () => {
             void this.activateGroup(group.id);
         });
         box.append(header);
@@ -342,8 +350,8 @@ export class OrganisingWidget extends Widget {
             hint.textContent = 'Empty group — drag tabs here.';
             cards.append(hint);
         }
-        for (const tab of tabs) {
-            cards.append(this.buildCard(tab, group.id));
+        for (let i = 0; i < tabs.length; i += 1) {
+            cards.append(this.buildCard(tabs[i], group.id, i === 0));
         }
         box.append(cards);
 
@@ -362,12 +370,12 @@ export class OrganisingWidget extends Widget {
         return box;
     }
 
-    protected buildCard(tab: PanoramaTab, groupId: string | null): HTMLElement {
+    protected buildCard(tab: PanoramaTab, groupId: string | null, tabbable = true): HTMLElement {
         const card = document.createElement('div');
         card.className = 'pb-org-card';
         card.dataset.u = tab.uri;
         card.draggable = true;
-        card.tabIndex = 0;
+        card.tabIndex = tabbable ? 0 : -1;
         card.title = tab.title;
         if (tab.thumbnail) {
             const shot = document.createElement('img');
@@ -391,6 +399,12 @@ export class OrganisingWidget extends Widget {
         card.addEventListener('keydown', event => {
             if (event.key === 'Enter') {
                 this.dive(tab, groupId);
+            } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                event.preventDefault();
+                this.moveCardFocus(card, 1);
+            } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                this.moveCardFocus(card, -1);
             }
         });
         card.addEventListener('dragstart', event => {
@@ -448,6 +462,7 @@ export class OrganisingWidget extends Widget {
         const close = document.createElement('button');
         close.type = 'button';
         close.className = 'pb-org-tree-close';
+        close.dataset.command = PANORAMA_CLOSE_GROUP_COMMAND_ID;
         close.textContent = '×';
         close.title = 'Close group';
         close.setAttribute('aria-label', 'Close group');
@@ -523,6 +538,13 @@ export class OrganisingWidget extends Widget {
         input.maxLength = 60;
         input.placeholder = 'Group name';
         input.setAttribute('aria-label', 'Group name');
+        // Pasted overflow is cut at the cap before commit (maxLength already
+        // truncates typed and pasted text natively; this covers the rest).
+        input.addEventListener('input', () => {
+            if (input.value.length > GROUP_TITLE_MAX_CHARS) {
+                input.value = input.value.slice(0, GROUP_TITLE_MAX_CHARS);
+            }
+        });
         let settled = false;
         const commit = (): void => {
             if (settled) {
@@ -871,6 +893,27 @@ export class OrganisingWidget extends Widget {
         }
     }
 
+    /**
+     * Roving tabindex within one box or the tray: arrows move focus to the
+     * sibling card, which takes the single tab stop. Enter still dives.
+     */
+    protected moveCardFocus(card: HTMLElement, delta: 1 | -1): void {
+        const scope = card.closest('.pb-org-box-cards, .pb-org-tray-cards');
+        if (!scope) {
+            return;
+        }
+        const cards = Array.from(scope.querySelectorAll('.pb-org-card')) as HTMLElement[];
+        const at = cards.indexOf(card);
+        if (at < 0 || cards.length < 2) {
+            return;
+        }
+        const next = cards[(at + delta + cards.length) % cards.length];
+        for (const candidate of cards) {
+            candidate.tabIndex = candidate === next ? 0 : -1;
+        }
+        next.focus();
+    }
+
     protected dive(tab: PanoramaTab, groupId: string | null): void {
         if (groupId !== null) {
             void this.activateGroup(groupId);
@@ -904,7 +947,7 @@ export class OrganisingWidget extends Widget {
     }
 
     protected async flash(text: string): Promise<void> {
-        const id = 'powerbrowser.panorama.notice';
+        const id = 'powerbrowser.modes.panorama-notice';
         try {
             await this.statusBar.setElement(id, { text, alignment: StatusBarAlignment.RIGHT });
         } catch {
@@ -940,6 +983,7 @@ export class OrganisingWidget extends Widget {
         fresh.type = 'button';
         fresh.className = 'pb-org-new theia-button';
         fresh.textContent = 'New Group';
+        fresh.dataset.command = PANORAMA_NEW_GROUP_COMMAND_ID;
         fresh.addEventListener('click', () => {
             void this.createNewGroup();
         });
