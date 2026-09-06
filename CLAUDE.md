@@ -10,6 +10,8 @@ Read `.planning/PROJECT.md` for the product, `.planning/ROADMAP.md` for where th
 `.planning/REQUIREMENTS.md` for what is in and out of scope. This file is the set of rules that
 hold regardless of which phase you are in.
 
+- **Sketch findings for Power Browser** (design decisions, CSS patterns, visual direction) → `Skill("sketch-findings-Power-Browser")`
+
 ---
 
 ## Hard rules

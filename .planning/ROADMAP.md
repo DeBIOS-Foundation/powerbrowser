@@ -5,9 +5,14 @@
 - ✅ **v1.0 PowerBrowser** — Phases 1–7 (shipped 2026-09-04, override closeout — see `.planning/milestones/v1.0-ROADMAP.md`)
 - ✅ **v1.1 Hardening and SQL Tabs** — Phases 08–09 (shipped 2026-09-05, hardening-only — see `.planning/milestones/v1.1-ROADMAP.md`)
 - ✅ **v1.2 Sign-off Closeout and SQL Store** — Phases 10–12 (shipped 2026-09-05, override closeout — see `.planning/milestones/v1.2-ROADMAP.md`)
-- 📋 **Future** — SQL GUI surface, GUI-02 in-Theia web tabs, GUI-05 unified tab strip (v1.3+)
+- 🔄 **v1.3 Browser GUI** — Phases 13–15 (active: Theia-hosted chrome bar, mode-driven tabs, Panorama organising on the v1.2 SQL store)
+- 📋 **Future** — GUI-02 in-Theia web tabs, GUI-05 unified tab strip, deferred seeds (bookmarks strip, per-tab close/mute, browser menu, gui-component-dnd, firefox-parity-tabs) (v1.4+)
 
 ## Phases
+
+- [ ] **Phase 13: Chrome Bar + Strip-Relocation Spike** - Top chrome bar navigation shell; spike proves a live tab strip moves shell areas (GUI-06; enables GUI-07)
+- [ ] **Phase 14: Modes + Windows & Setups** - Mode-driven shell with relocating strip; core/dependent windows with named setups (GUI-07, GUI-09)
+- [ ] **Phase 15: Panorama Organising** - Freeform canvas + tree toggle over SQL-persisted groups (GUI-08)
 
 <details>
 <summary>✅ v1.0 PowerBrowser (Phases 1–7) — SHIPPED 2026-09-04</summary>
@@ -44,6 +49,69 @@ Archive: `.planning/milestones/v1.1-ROADMAP.md` · Requirements: `.planning/mile
 Archive: `.planning/milestones/v1.2-ROADMAP.md` · Requirements: `.planning/milestones/v1.2-REQUIREMENTS.md` · Audit: `.planning/milestones/v1.2-MILESTONE-AUDIT.md` · Tag: `v1.2`
 
 </details>
+
+## Phase Details
+
+### Phase 13: Chrome Bar + Strip-Relocation Spike
+
+**Goal**: The user navigates with a top chrome bar, and strip-relocation feasibility is proven with the fallback decided
+**Depends on**: Phase 12 (v1.2 SQL store shipped — tab rows and registry URIs are the identity substrate)
+**Requirements**: GUI-06
+**Enables**: GUI-07 strip-relocation spike entry criterion (mapped to Phase 14 — the spike verdict is this phase's exit gate)
+**Success Criteria** (what must be TRUE):
+
+  1. User sees a top chrome bar — back, forward, reload, address input, new tab, mode toggle — as a toolbar-like `@powerbrowser/*` contribution above or below the Theia toolbar (sketch 001 winner: Variant A), styled as a native Theia citizen per the sketch-findings theme
+  2. User can go back/forward, reload the current tab, and open a new tab from the bar (new-tab opens via the stock-window escape until GUI-02; tab feel + navigation only — no bookmarks strip, no per-tab close/mute, no browser menu)
+  3. User gets address-input suggestions while typing and activating one navigates
+  4. Strip-relocation spike verdict is recorded: a live tab strip moves Theia shell areas without forking Theia core (green → Variant B strip work proceeds in Phase 14; red → Variant-A fallback, strip stays top, modes still ship)
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 14: Modes + Windows & Setups
+
+**Goal**: The user switches modes that reshape the shell around invariant tabs, and works across core/dependent windows with named setups
+**Depends on**: Phase 13 (chrome bar hosts the mode toggle; spike verdict fixes Variant B vs Variant-A fallback)
+**Requirements**: GUI-07, GUI-09
+**Success Criteria** (what must be TRUE):
+
+  1. User can switch coding / browsing / organising modes from shipped defaults, customise them, and save layouts as modes — modes are data with defaults, never a `[features]`/`[modes]` manifest flag
+  2. Tab strip relocates per mode (top in browsing, IDE-docked in coding per sketch 002 winner Variant B — or stays top under the Variant-A fallback) with sliding side panels, and every tab persists across switches
+  3. User can open dependent windows hosting tab content, never a second IDE frame; closing the core window kills the session and the next launch restores the setup
+  4. User can save, name, and restore setups remembering geometry, tab placement, and mode
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 15: Panorama Organising
+
+**Goal**: The user organises tabs spatially on a freeform canvas and hierarchically in a tree, over SQL-persisted groups
+**Depends on**: Phase 14 (organising mode hosts the canvas/tree surface)
+**Requirements**: GUI-08
+**Success Criteria** (what must be TRUE):
+
+  1. User can drag tabs freely on the Panorama canvas, resize groups by corner, drop canvas items to auto-box, zoom, and see the ungrouped tray
+  2. User can flip between canvas and tree over the identical group data
+  3. Groups persist across restart in a SQL groups table (id, title, bounds, activeGroupId) + `group_id` on the URI-keyed tab rows, written only by the single chrome-side writer; the canvas reads/writes only SQL and sessionstore stays restore-authoritative (never sessionstore-coupled — Bugzilla 1221050)
+  4. Tab thumbnails render as PNG last-view snapshots
+
+**Plans**: TBD
+**UI hint**: yes
+
+## Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 13. Chrome Bar + Strip-Relocation Spike | 0/TBD | Not started | - |
+| 14. Modes + Windows & Setups | 0/TBD | Not started | - |
+| 15. Panorama Organising | 0/TBD | Not started | - |
+
+## Hard constraints (every phase)
+
+- Never fork or patch Theia core — `@powerbrowser/*` extensions only; never modify Gecko outside the patch stack (hook-only patches)
+- One verification driver `scripts/verify-platform.sh` — new checks land as registry rows with `--self-test`, never sibling drivers
+- Single chrome-side SQLite writer; sessionstore stays restore authority; groups never sessionstore-coupled
+- No `[features]`/`[modes]` manifest flags — modes are data with shipped defaults
 
 ## Inherited network egress (carried through the migration, not decided here)
 
