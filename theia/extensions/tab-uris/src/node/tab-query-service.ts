@@ -140,7 +140,9 @@ export class TabQueryService {
 
     /**
      * Prefix-substring search over the address and title columns, newest
-     * first, capped at the caller-supplied `limit` rows. The pattern is
+     * first, capped at the caller-supplied `limit` rows. "Prefix" names the
+     * user's typed input, matched anywhere in either column (substring
+     * semantics, never anchored to column start). The pattern is
      * escaped (see `escapeLikePattern`) before wrapping, bound twice, and
      * read under an explicit `ESCAPE '\'` clause; the limit is bound, never
      * interpolated. Resolves [] when the store is not yet readable or the
