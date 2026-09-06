@@ -3809,6 +3809,17 @@ run_own_checks() {
     "gui08-close-exactness|node $REPO_ROOT/scripts/verify-gui08-close-exactness.mjs"
     "gui08-close-exactness-self-test|node $REPO_ROOT/scripts/verify-gui08-close-exactness.mjs --self-test"
 
+    # NEW (15-03): GUI-08's panorama-copy gate. Derives every contracted
+    # panorama string from the Theia sources at check time versus EXPECTED
+    # literals verbatim as set equality, proves zero retired placeholder
+    # copy in shipped sources by negated search, and runs the no-internals
+    # shape check over the same strings. Honestly --quick: text reads only.
+    # No build, no browser, no display, no network. The self-test rides
+    # alongside for the reason every other self-test row in this array
+    # gives.
+    "gui08-panorama-copy|node $REPO_ROOT/scripts/verify-gui08-panorama-copy.mjs"
+    "gui08-panorama-copy-self-test|node $REPO_ROOT/scripts/verify-gui08-panorama-copy.mjs --self-test"
+
     # NEW (01-07): MIG-04's user-facing-copy gate. Static -- it reads
     # TheiaService.sys.mjs, never a built artifact -- so it is honestly
     # --quick, and that placement is the point: a leaked pref key must cost
