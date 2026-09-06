@@ -272,6 +272,10 @@ export class ModeService implements FrontendApplicationContribution {
             return;
         }
         this.lastGoodCustoms = customs;
+        // A re-save after a store delete must clear the stale drop marker:
+        // the descriptor was never unregistered by stock, so without this
+        // `resolveTarget` keeps rejecting the just-saved id to Browsing.
+        this.droppedCustomIds.delete(customModeIdFor(name));
         this.registerCustom(row);
         void this.flash(`Mode "${name}" saved.`);
         await this.activateMode(customModeIdFor(name));
