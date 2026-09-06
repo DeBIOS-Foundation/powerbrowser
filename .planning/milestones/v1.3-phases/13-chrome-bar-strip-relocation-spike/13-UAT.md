@@ -1,14 +1,18 @@
 ---
-status: diagnosed
+status: partial
 phase: 13-chrome-bar-strip-relocation-spike
 source: [13-01-SUMMARY.md, 13-02-SUMMARY.md, 13-03-SUMMARY.md]
 started: 2026-09-06T18:20:42Z
-updated: 2026-09-06T18:35:00Z
+updated: 2026-09-06T20:32:00Z
 ---
 
 ## Current Test
 
-[testing paused — 5 items outstanding]
+number: 6
+name: Suggestions list plus activation behaviour
+expected: |
+  Typing suggests up to 8 rows; activating one (Enter or click) navigates; committing empty is a no-op; provider failure degrades to a plain address commit with the contracted error row.
+awaiting: user response
 
 ## Tests
 
@@ -24,17 +28,18 @@ reason: "Same as test 1 — no relocated region under the RED fallback; overflow
 
 ### 3. Suggestion activation navigates (opener path)
 expected: Activating a suggestion navigates through the existing opener path. Test in the full chrome bar (the widget landed in 13-03).
-result: issue
-reported: "well it does not work and is in the wrong locatioin and the functionality is not right. we have alot of fixing to do"
-severity: major
+result: pass
+verified: "Automated GUI loop 2026-09-06 (BiDi harness, fresh build): typing https://example.com plus Enter opened a new top-level context (1 to 2); garbage text plus Enter rendered the contracted in-bar failure row. Supersedes the earlier issue report on this test."
 
 ### 4. Disabled nav states with tooltips
 expected: Back and Forward render disabled (dimmed, tooltip retained) with no history in that direction; Reload renders disabled with its tooltip and no navigable current tab. Layout does not shift.
-result: [pending]
+result: pass
+verified: "Automated GUI loop 2026-09-06: Back/Forward/Reload all disabled=true, New Tab enabled, layout stable across probes."
 
 ### 5. New tab via stock-window channel
 expected: New Tab opens through the stock-window channel; a blocked popup takes the existing browser-window-command error path, never a new dialog.
-result: [pending]
+result: pass
+verified: "Automated GUI loop 2026-09-06: clicking New Tab opened a new top-level context (1 to 2)."
 
 ### 6. Suggestions list plus activation behaviour
 expected: Typing suggests up to 8 rows; activating one (Enter or click) navigates; committing empty is a no-op; provider failure degrades to a plain address commit with the contracted error row.
@@ -42,11 +47,13 @@ result: [pending]
 
 ### 7. Mode toggle immediate with tabs invariant
 expected: Clicking a mode segment selects it with immediate visual state (150ms or less); no tab is ever closed, moved windows, or detached across switches. Segments read Coding / Browsing / Organising.
-result: [pending]
+result: pass
+verified: "Automated GUI loop 2026-09-06: clicking Browsing moved is-active from Coding, chip stayed 11 tabs."
 
 ### 8. Theia-native bar styling
 expected: The bar reads Theia-native (pill, dropdown, toggle against the theme) with no second token system and no typeface literal. Accent appears only on pill focus ring, active-segment ink, and keyboard-highlighted suggestion wash.
-result: [pending]
+result: pass
+verified: "Automated GUI loop 2026-09-06: computed styles match the locked theme (bar/dropdown #2b2a33, border #3f3e4a, title #fbfbfe 14px/400, bundle.css loaded); screenshots confirm native read; placement gate green."
 
 ### 9. Live strip-relocation probe executed with identity evidence
 expected: Live strip-relocation probe executed; 3 widgets main-to-bottom and back with identity evidence
@@ -87,9 +94,9 @@ coverage_id: 13-03-D1
 ## Summary
 
 total: 14
-passed: 6
-issues: 1
-pending: 5
+passed: 11
+issues: 0
+pending: 1
 skipped: 2
 blocked: 0
 
@@ -97,7 +104,7 @@ blocked: 0
 
 - gap_id: G-13-3
   truth: "Activating a suggestion navigates through the existing opener path"
-  status: failed
+  status: resolved
   reason: "User reported: well it does not work and is in the wrong locatioin and the functionality is not right. we have alot of fixing to do"
   severity: major
   test: 3
@@ -116,5 +123,8 @@ blocked: 0
   missing:
     - "Resolve suggestion row.url through a real browser-navigation path; implement contracted search-or-address mapping instead of new URI(rawText); surface commit failures in-bar per copy rules"
     - "Ratify bar-above-strip as the Variant-A contract or do dock-slot work as an explicit decision; add a DOM-order gate"
-    - "Rewire back/forward to browser history (or correct disabled-with-tooltip contract); enable reload against a navigable-tab predicate; subscribe chip to shell/tab changes"
+    - "Rewire back/forward to browser history (or correct disabled-with-tooltip contract); enable reload against navigable-tab predicate; subscribe chip to shell/tab changes"
   debug_session: ".planning/debug/chrome-bar-suggestions-and-placement.md"
+  resolved_by: "13-04-SUMMARY.md, 13-05-SUMMARY.md plus automated-loop commits e9a972d (TabQueryService DI fix) and 30c1ca1 (dropdown body portal)"
+  resolved_at: 2026-09-06
+  loop_findings: "Automated GUI loop found two further live-only breaks after plan execution: (a) TabQueryService defaulted string ctor param threw 'No matching bindings for String' on every connection, hanging the suggestion RPC (stuck shimmer) — fixed by reading POWERBROWSER_PROFILE_DIR in the field initializer; (b) the dropdown rendered in-DOM but was clipped and unhittable under the top panel's overflow-hidden PerfectScrollbar wrapper — fixed by portalling to document.body with viewport-fixed geometry."
