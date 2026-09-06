@@ -5,7 +5,7 @@
 // build surfaces under generated/. It is the only thing in this tree that turns
 // a brand setting into a build artifact (CFG-01).
 //
-// WHAT IT COVERS. Fifty-three targets: thirty-three byte-identical to the
+// WHAT IT COVERS. Fifty-four targets: thirty-three byte-identical to the
 // file Phase 1 wrote by hand -- the five Phase 2 build surfaces (the two
 // branding configure.sh files, .mozconfig, and the two .desktop files), the
 // eighteen GEN-01 branding-directory surfaces (per variant: brand.ftl,
@@ -42,7 +42,10 @@
 // [[webextensions]] declaration -- the add-on id, its installation mode,
 // and its self-hosted install URL), plus the UPD-01 pin fragment
 // (generated/upstream-pins.env: the [upstreams] tag as one shell
-// assignment, sourced by scripts/fetch-upstream.sh as its default).
+// assignment, sourced by scripts/fetch-upstream.sh as its default), plus
+// the 16-03 AI backend-selection fragment (generated/ai-backend.json: the
+// powerbrowserAiBackend key of the theia.frontend.config block -- off or
+// opencode, missing key means off).
 // That byte-identity IS
 // the acceptance test for the thirty-three,
 // which is why no emitter here is allowed to reformat, reorder or "tidy" what
@@ -2013,6 +2016,48 @@ export function emitTheiaTelemetry(config, variant) {
 }
 
 /**
+ * The AI backend-selection fragment (16-03, SPEC R4): the
+ * powerbrowserAiBackend key of theia/applications/browser/package.json's
+ * `theia.frontend.config` block -- `off` or `opencode`.
+ *
+ * UNSET MEANS OFF. The key is `required: false`; an absent (or
+ * whitespace-only, D-10) backend resolves to `off` in this emitter, so
+ * absence is a clean tree with no backend registered, not a defect. The
+ * one refusal is an unknown id, which would otherwise silently fall back
+ * and ship a backend nobody asked for -- the schema regex plus the sink
+ * guard below both own the two-value enum, the same split validateTheia
+ * keeps for the theme ids.
+ *
+ * FRAGMENT, NOT THE WHOLE BLOCK (same contract as the telemetry
+ * fragment): the tracked package.json is yarn-managed, so whole-file
+ * byte-identity is brittle there; the copy-over sets ONLY the
+ * powerbrowserAiBackend key from this fragment, and the byte-identity
+ * gate skips rows without a tracked path while --check still covers the
+ * row through the frozen table. The tracked side is pinned by
+ * scripts/verify-opencode-bridge.mjs (fragment equality against this
+ * emission, block equality on the tracked key).
+ */
+const AI_BACKENDS = Object.freeze(['off', 'opencode']);
+export function emitAiBackend(config, variant) {
+    void variant;
+    const raw = config.ai?.backend;
+    const backend = isUnset(raw) ? 'off' : raw;
+    if (!AI_BACKENDS.includes(backend)) {
+        report([
+            `ai.backend is ${JSON.stringify(backend)}, which is not a backend this project implements. `
+            + `Write it as one of ${AI_BACKENDS.map(b => JSON.stringify(b)).join(', ')} in ${MANIFEST_NAME}, then run: ${RERUN}`,
+        ]);
+    }
+    assertEmittable('ai.backend', backend);
+    const lines = [
+        '{',
+        `  "backend": ${JSON.stringify(backend)}`,
+        '}',
+    ];
+    return lines.join('\n') + '\n';
+}
+
+/**
  * The placeholder standing in for the checkout's absolute path in both
  * emitted .desktop entries (02-DESIGN-G-02-11.md, option-4-placeholder). The
  * `POWERBROWSER_` prefix already appears literally in tracked files
@@ -3388,6 +3433,19 @@ export const TARGETS = Object.freeze([
         generated: 'theia-telemetry.json',
         variant: 'dev',
         emit: emitTheiaTelemetry,
+    }),
+    // NEW (16-03): the AI backend-selection fragment. No tracked
+    // comparand -- the tracked theia/applications/browser/package.json is
+    // yarn-managed, so whole-file byte-identity is brittle there; the
+    // copy-over sets ONLY the powerbrowserAiBackend key from this fragment,
+    // and the byte-identity gate skips rows without a tracked path while
+    // --check still covers the row through the frozen table. The tracked
+    // side is pinned by scripts/verify-opencode-bridge.mjs (fragment
+    // equality against this emission, block equality on the tracked key).
+    Object.freeze({
+        generated: 'ai-backend.json',
+        variant: 'dev',
+        emit: emitAiBackend,
     }),
     // NEW (04-04): GEN-05's branding fragment. No tracked comparand -- same
     // yarn-managed package.json, same reason; the copy-over sets ONLY the

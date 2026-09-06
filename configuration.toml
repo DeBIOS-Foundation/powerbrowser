@@ -93,8 +93,7 @@ level = "off"
 # them. This project declares none, so the block stays absent. A downstream
 # drops an inherited entry by restating the list without it.
 
-# Upstream pins (UPD-01, UPD-02). firefox_esr_tag is the one ESR tag this
-# project builds against: scripts/fetch-upstream.sh clones it,
+# Upstream pins (UPD-01, UPD-02). firefox_esr_tag is the one ESR tag this# project builds against: scripts/fetch-upstream.sh clones it,
 # scripts/rebase-upstream.sh moves to it, and the rebase workflow mirrors
 # it. theia_release is the one Theia release this project composes: every
 # @theia/* pin in theia/package.json resolutions, every member
@@ -106,3 +105,12 @@ level = "off"
 [upstreams]
 firefox_esr_tag = "FIREFOX_153_1_0esr_RELEASE"
 theia_release = "1.74.1"
+
+# AI backend selection (16-03, SPEC R4). backend names the chat backend the
+# sidecar registers: "off" registers none, "opencode" registers @OpenCode.
+# It defaults to off: an unset backend resolves to off with the standard
+# D-08 default-echo, so a downstream omitting it inherits off rather than
+# a live backend. One manifest edit plus regenerate (then the copy-over
+# step docs/ai-opencode-adapter.md names) turns it on.
+[ai]
+backend = "off"

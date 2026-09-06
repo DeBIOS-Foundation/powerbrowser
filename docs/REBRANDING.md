@@ -296,6 +296,12 @@ also echoed at generate time as a `generate: default applied` line.
 | `telemetry.level` | Optional | Resolves to `off` with the standard default echo; nothing ever leaves the application | `generated/theia-telemetry.json` level (one of off, crash, error, all); an enabled level with no endpoint fails naming `telemetry.endpoint` |
 | `telemetry.endpoint` | Optional | Null — nowhere to send, and with level off nothing sends | `generated/theia-telemetry.json` endpoint plus endpoint hosts when stated (must be your own https URL) |
 
+### `[ai]` — AI backend selection (optional)
+
+| Setting | Required? | If omitted | Reaches |
+|---|---|---|---|
+| `ai.backend` | Optional | Resolves to `off` with the standard default echo; no backend is registered | `generated/ai-backend.json` backend (one of off, opencode); the composed sidecar skips the backend binding entirely when off |
+
 ### `[upstreams]` — upstream pins (both required, never inherited)
 
 | Setting | Required? | If omitted | Reaches |

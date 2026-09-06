@@ -80,6 +80,13 @@
       "type": "string",
       "required": false
     },
+    "ai.backend": {
+      "type": "string",
+      "required": false,
+      "regex": "^(off|opencode)$",
+      "regex_help": "the chat backend the sidecar registers: off for none, opencode for the @OpenCode backend",
+      "regex_example": "off"
+    },
     "theia.welcome_text": {
       "type": "string",
       "required": false,
