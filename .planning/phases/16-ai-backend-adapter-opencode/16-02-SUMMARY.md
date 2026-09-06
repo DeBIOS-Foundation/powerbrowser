@@ -18,7 +18,7 @@ affects: [16-03 bridge plus selection wiring]
 actuals:
   tokens: 19000
   tasks: 3
-  commits: 3
+  commits: 4
 
 # Tech tracking
 tech-stack:
@@ -120,6 +120,7 @@ status: complete
 1. **Task 1: Per-session preset toggle defaulting to gated** - `3cf30dc` (feat)
 2. **Task 2: Mandatory history plus revert with ordering, supersede, conflict, and fallback** - `4b819be` (feat)
 3. **Task 3: Preset gate plus R3 backstop held-out test** - `7b00184` (feat)
+4. **Fixup: verified final states of preset files plus gate** - `ac017fe` (fix, Rule 1; see deviation 4)
 
 ## Files Created/Modified
 
@@ -197,9 +198,28 @@ status: complete
 
 ---
 
-**Total deviations:** 3 auto-fixed (2 blocking, 1 bug)
-**Impact on plan:** All three required for the acceptance criteria; no scope
+**Total deviations:** 4 auto-fixed (2 blocking, 2 bug)
+**Impact on plan:** All four required for the acceptance criteria; no scope
 creep: no /mcp endpoint, no selection wiring, no history widget (all 16-03).
+
+**4. [Rule 1 - Bug] Index/worktree split left two task commits stale**
+- **Found during:** Post-commit tree check before the docs commit (staged
+  `git status` showed the Task-1 and gate files still modified)
+- **Issue:** `git commit` records the index, not the working tree, and two
+  follow-up edit rounds were never re-staged: 3cf30dc holds the
+  pre-restructure Task-1 sources (self-consistent, built green at the
+  time), and 7b00184 holds the gate script truncated mid-rebuild (fails
+  `node --check`). The verified-green tree existed only in the working
+  tree. 4b819be was checked and is complete.
+- **Fix:** Staged the exact verified working tree and committed as ac017fe
+  (new commit, never amend); re-proved build, gate, self-test, and full
+  quick on the committed state afterward.
+- **Files modified:** opencode-preset-commands.ts,
+  opencode-preset-contribution.ts, backend-opencode-frontend-module.ts,
+  scripts/verify-opencode-presets.mjs (staging only, no new edits)
+- **Verification:** Full `verify-platform.sh --quick` green after ac017fe,
+  including both tracer and both preset rows
+- **Committed in:** ac017fe
 
 ## Issues Encountered
 
