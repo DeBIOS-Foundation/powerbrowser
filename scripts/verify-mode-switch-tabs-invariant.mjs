@@ -43,7 +43,6 @@ const SERVICE_REL = 'theia/extensions/modes/src/browser/mode-service.ts';
 const WIDGET_REL = 'theia/extensions/chrome-bar/src/browser/chrome-bar-widget.tsx';
 const COMMANDS_REL = 'theia/extensions/modes/src/browser/modes-commands.ts';
 const DESCRIPTORS_REL = 'theia/extensions/modes/src/browser/mode-descriptors.ts';
-const PLACEHOLDER_REL = 'theia/extensions/modes/src/browser/organising-placeholder-widget.ts';
 const MODES_MODULE_REL = 'theia/extensions/modes/src/browser/modes-frontend-module.ts';
 
 /**
@@ -234,7 +233,7 @@ function checkInvariant(sources) {
     // Call-site const discipline: the bare command strings live in the const
     // definitions only; every other modes source imports the consts.
     for (const id of EXPECTED_COMMAND_IDS) {
-        for (const rel of [SERVICE_REL, DESCRIPTORS_REL, PLACEHOLDER_REL, WIDGET_REL, MODES_MODULE_REL]) {
+        for (const rel of [SERVICE_REL, DESCRIPTORS_REL, WIDGET_REL, MODES_MODULE_REL]) {
             if ((sources[rel] ?? '').includes(`'${id}'`)) {
                 failures.push(`${rel}: re-spelled mode command string '${id}' -- import the exported const from modes-commands instead`);
             }
@@ -242,7 +241,6 @@ function checkInvariant(sources) {
     }
     for (const [rel, from] of [
         [WIDGET_REL, "'@powerbrowser/modes/lib/browser/modes-commands'"],
-        [PLACEHOLDER_REL, "'./modes-commands'"],
     ]) {
         const src = sources[rel] ?? '';
         if (!new RegExp(`import\\s*\\{[^}]*MODES_ACTIVATE_COMMAND_ID[^}]*\\}\\s*from\\s*${from.replace(/[./]/g, m => `\\${m}`)}`).test(src)) {
@@ -255,7 +253,7 @@ function checkInvariant(sources) {
 
 function readSources() {
     const out = {};
-    for (const rel of [SERVICE_REL, WIDGET_REL, COMMANDS_REL, DESCRIPTORS_REL, PLACEHOLDER_REL, MODES_MODULE_REL]) {
+    for (const rel of [SERVICE_REL, WIDGET_REL, COMMANDS_REL, DESCRIPTORS_REL, MODES_MODULE_REL]) {
         try {
             out[rel] = readFileSync(join(REPO_ROOT, rel), 'utf8');
         } catch {

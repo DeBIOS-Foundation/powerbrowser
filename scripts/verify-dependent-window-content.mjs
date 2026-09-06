@@ -43,7 +43,6 @@ const MODES_SOURCE_RELS = [
     'theia/extensions/modes/src/browser/mode-service.ts',
     'theia/extensions/modes/src/browser/modes-commands.ts',
     'theia/extensions/modes/src/browser/mode-descriptors.ts',
-    'theia/extensions/modes/src/browser/organising-placeholder-widget.ts',
     'theia/extensions/modes/src/browser/modes-frontend-module.ts',
 ];
 const SECONDARY_ASSET_REL = 'theia/applications/browser/lib/frontend/secondary-window.html';

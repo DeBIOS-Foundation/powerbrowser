@@ -44,7 +44,6 @@ const MODES_GLOB_RELS = [
     'theia/extensions/modes/src/browser/modes-frontend-module.ts',
     'theia/extensions/modes/src/browser/mode-service.ts',
     'theia/extensions/modes/src/browser/modes-commands.ts',
-    'theia/extensions/modes/src/browser/organising-placeholder-widget.ts',
     'theia/extensions/modes/src/browser/setups-service.ts',
     'theia/extensions/modes/src/browser/setups-commands.ts',
     'theia/extensions/modes/src/browser/dependent-windows.ts',
