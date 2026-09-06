@@ -22,6 +22,8 @@ import {
     CHROME_BAR_RELOAD_COMMAND_ID,
 } from './chrome-bar-commands';
 import { CHROME_SUGGESTION_LIMIT, ChromeBarSuggestionService } from './chrome-bar-suggestion-service';
+import { MODES_ACTIVATE_COMMAND_ID } from '@powerbrowser/modes/lib/browser/modes-commands';
+import { ModeService } from '@powerbrowser/modes/lib/browser/mode-service';
 import '../../src/browser/chrome-bar.css';
 
 /**
@@ -80,6 +82,19 @@ export class ChromeBarWidget extends ReactWidget {
 
     @inject(PerspectiveService)
     protected readonly perspectives: PerspectiveService;
+
+    /**
+     * GUI-07 (14-02): custom modes listed beside the shipped defaults. The
+     * shipped MODES literal above stays the fallback behind customs: customs
+     * append as menu rows after the shipped segments, truncated by ellipsis
+     * at row width with full names in tooltips, the active row carrying the
+     * inherited selected-row marker. Shipped rows are never mutated.
+     */
+    @inject(ModeService)
+    protected readonly modes: ModeService;
+
+    protected customModes: Array<{ id: string; name: string }> = [];
+    protected activeCustomId: string | undefined = undefined;
 
     protected inputValue = '';
     protected committedAddress = '';
@@ -247,11 +262,12 @@ export class ChromeBarWidget extends ReactWidget {
      * the gate instead of silently switching nothing.
      */
     protected selectMode = (next: string) => async (): Promise<void> => {
-        if (this.mode === next) {
+        if (this.mode === next && this.activeCustomId === undefined) {
             return;
         }
         const before = this.countTabs();
         this.mode = next;
+        this.activeCustomId = undefined;
         try {
             await this.perspectives.switchPerspective(next.toLowerCase());
         } catch (error) {
@@ -267,14 +283,48 @@ export class ChromeBarWidget extends ReactWidget {
     };
 
     /**
+     * GUI-07 (14-02): custom-mode activation routes through the imported mode
+     * command const (never a re-spelled string) so panel flags, the
+     * placeholder slot, and the chip re-assert run the same switch path as
+     * shipped segments. The stock perspective event repaints the toggle.
+     */
+    protected selectCustomMode = (id: string) => async (): Promise<void> => {
+        try {
+            await this.commands.executeCommand(MODES_ACTIVATE_COMMAND_ID, id);
+        } catch (error) {
+            console.error('[@powerbrowser/chrome-bar] custom mode activation failed:', id, error);
+        }
+        this.update();
+    };
+
+    protected refreshCustomModes(): void {
+        let customs: Array<{ id: string; name: string }> = [];
+        try {
+            customs = this.modes.getCustomModes();
+        } catch {
+            customs = [];
+        }
+        this.customModes = customs;
+        if (this.activeCustomId !== undefined && !customs.some(row => row.id === this.activeCustomId)) {
+            this.activeCustomId = undefined;
+        }
+    }
+
+    /**
      * Stock perspective changes from anywhere else (commands, palette,
      * layout restore) re-assert the toggle and the chip. Unknown ids leave
      * the shipped selection untouched and still re-assert the count.
      */
     syncModeFromPerspective(id: string): void {
+        this.refreshCustomModes();
         const label = ChromeBarWidget.MODES.find(candidate => candidate.toLowerCase() === id);
         if (label !== undefined) {
             this.mode = label;
+            this.activeCustomId = undefined;
+        } else if (this.modes.hasCustomMode(id)) {
+            this.activeCustomId = id;
+        } else {
+            this.activeCustomId = undefined;
         }
         this.publishTabCount();
     }
@@ -372,13 +422,29 @@ export class ChromeBarWidget extends ReactWidget {
                     <button
                         key={name}
                         type='button'
-                        className={'pb-chrome-bar-segment' + (this.mode === name ? ' is-active' : '')}
-                        aria-pressed={this.mode === name}
+                        className={'pb-chrome-bar-segment' + (this.mode === name && this.activeCustomId === undefined ? ' is-active' : '')}
+                        aria-pressed={this.mode === name && this.activeCustomId === undefined}
                         onClick={this.selectMode(name)}
                     >
                         {name}
                     </button>
                 ))}
+                {this.customModes.length > 0 && (
+                    <div className='pb-modes-custom-menu'>
+                        {this.customModes.map(row => (
+                            <button
+                                key={row.id}
+                                type='button'
+                                className={'pb-chrome-bar-segment pb-modes-custom-row' + (this.activeCustomId === row.id ? ' is-active' : '')}
+                                aria-pressed={this.activeCustomId === row.id}
+                                title={row.name}
+                                onClick={this.selectCustomMode(row.id)}
+                            >
+                                {row.name}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
             <span className='pb-chrome-bar-tab-count' aria-label={`${this.tabCount} tabs`}>{this.tabCount}</span>
         </div>;

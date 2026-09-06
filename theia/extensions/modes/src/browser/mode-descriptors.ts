@@ -37,6 +37,11 @@ const organising: PerspectiveDescriptor = {
     label: 'Organising',
     viewPlacements: new Map<string, ApplicationShell.Area>(),
     chromeOptions: { collapseAreas: ['left', 'right', 'bottom'] },
+    // GUI-07 (14-02): the placeholder slot shows through the contribution
+    // open path on activation and hides on deactivation; every other
+    // descriptor stays untouched.
+    onActivate: () => { openOrganisingSlot(); },
+    onDeactivate: () => { closeOrganisingSlot(); },
 };
 
 /** The shipped defaults in contracted order. Later plans append; never reorder here. */

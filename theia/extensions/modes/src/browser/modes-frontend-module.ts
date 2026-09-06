@@ -16,9 +16,11 @@ import { injectable, inject } from '@theia/core/shared/inversify';
 import { FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { CommandContribution } from '@theia/core/lib/common';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
+import { bindViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
 import { SHIPPED_MODES } from './mode-descriptors';
 import { ModeService } from './mode-service';
 import { ModesCommandContribution } from './modes-commands';
+import { OrganisingPlaceholderContribution } from './organising-placeholder-widget';
 
 @injectable()
 export class ModesContribution implements FrontendApplicationContribution {
@@ -42,4 +44,8 @@ export default new ContainerModule(bind => {
     bind(FrontendApplicationContribution).toService(ModeService);
     bind(ModesCommandContribution).toSelf().inSingletonScope();
     bind(CommandContribution).toService(ModesCommandContribution);
+    // GUI-07 (14-02): the organising placeholder view binds through its own
+    // contribution path (never a hardcoded shell area); the Phase-15 canvas
+    // replaces the slot behind this same point.
+    bindViewContribution(bind, OrganisingPlaceholderContribution);
 });
