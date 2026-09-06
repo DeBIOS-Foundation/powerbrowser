@@ -119,6 +119,15 @@ export const SETUP_RESTORE_FAILURE = 'Power Browser couldn\'t restore this setup
  */
 export const SETUP_GONE_TABS_NOTICE = 'Power Browser restored this setup, but some tabs no longer exist. Geometry and mode are applied.';
 
+/**
+ * Contracted unknown-mode fallback notice (14-UI-SPEC.md): stock
+ * `switchPerspective` silently no-ops on unknown ids (never throws), so the
+ * restore pre-validates against shipped + custom ids and falls back to
+ * Browsing with this explanation instead of keeping a wrong mode silently.
+ * The stored id is never interpolated: custom ids are internal identifiers.
+ */
+export const SETUP_MODE_FALLBACK_NOTICE = 'Power Browser restored this setup, but its saved mode is no longer available. Browsing is shown instead.';
+
 /** Contracted saved confirmation shape: `Setup "<name>" saved.` */
 export function setupSavedConfirmation(name: string): string {
     return `Setup "${name}" saved.`;
@@ -390,8 +399,14 @@ export class SetupsService implements FrontendApplicationContribution {
         }
         this.applyGeometry(row.windows[0]);
         const dropped = await this.placeTabs(row);
+        // Stock `switchPerspective` silently no-ops on unknown ids (never
+        // throws), so pre-validate against shipped + custom ids: an unknown
+        // mode falls back to Browsing with the contracted notice instead of
+        // silently keeping whatever mode was active.
+        const knownCustom = this.modes.getCustomModes().some(custom => custom.id === row.modeId);
+        const known = SHIPPED_MODES.some(descriptor => descriptor.id === row.modeId) || knownCustom;
         try {
-            await this.perspectives.switchPerspective(row.modeId);
+            await this.perspectives.switchPerspective(known ? row.modeId : 'browsing');
         } catch {
             try {
                 await this.perspectives.switchPerspective('browsing');
@@ -403,6 +418,9 @@ export class SetupsService implements FrontendApplicationContribution {
         void this.persistLastSession(row.name);
         if (dropped > 0) {
             void this.flash(SETUP_GONE_TABS_NOTICE);
+        }
+        if (!known) {
+            void this.flash(SETUP_MODE_FALLBACK_NOTICE);
         }
     }
 

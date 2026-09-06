@@ -70,6 +70,7 @@ const EXPECTED_STRINGS = Object.freeze([
     'No saved setups',
     'Save the current windows, tabs, and mode as a setup to restore them later — choose Save Setup.',
     'Power Browser couldn\'t restore this setup. Your current windows and tabs are unchanged — try again, or delete the setup and save a new one.',
+    'Power Browser restored this setup, but its saved mode is no longer available. Browsing is shown instead.',
     'some tabs no longer exist',
     'Setup "${name}" saved.',
     'Delete "${name}"? You can\'t undo this.',
