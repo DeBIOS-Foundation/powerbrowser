@@ -43,6 +43,7 @@ import pDebounce from 'p-debounce';
 import { registerOrganisingSlot } from './mode-descriptors';
 import { GroupActorClient } from './group-actor-client';
 import { GroupModel, GROUP_BOX_MIN_H, GROUP_BOX_MIN_W, GROUP_TITLE_MAX_CHARS, PanoramaGroup, PanoramaTab } from './group-model';
+import { buildTreeSection } from './organising-tree';
 import { PANORAMA_CLOSE_GROUP_COMMAND_ID, PANORAMA_NEW_GROUP_COMMAND_ID } from './panorama-commands';
 import { PanoramaCommandHandler } from './panorama-commands';
 import '../../src/browser/modes.css';
@@ -432,79 +433,42 @@ export class OrganisingWidget extends Widget {
         return card;
     }
 
+    /**
+     * Tree sections render through the widget-owned tree module over the
+     * single GroupModel: the widget supplies the data plus its own
+     * callbacks, so the tree holds no fetch and no selection of its own.
+     * Flipping the toggle never reloads and never loses selection.
+     */
     protected buildSection(group: PanoramaGroup): HTMLElement {
-        const tabs = this.model.getTabs(group.id);
-        const section = document.createElement('div');
-        section.className = `pb-org-tree-section${group.isActive ? ' is-active' : ''}`;
-        section.dataset.g = group.id;
-        const header = document.createElement('div');
-        header.className = 'pb-org-tree-header';
-        if (this.editingGroupId === group.id) {
-            header.append(this.buildRename(group));
-        } else {
-            const title = document.createElement('span');
-            title.className = 'pb-org-tree-title';
-            title.textContent = group.title;
-            title.title = group.title;
-            title.tabIndex = 0;
-            title.addEventListener('dblclick', () => this.startRename(group.id));
-            title.addEventListener('keydown', event => {
-                if (event.key === 'Enter') {
-                    this.startRename(group.id);
-                }
-            });
-            header.append(title);
-        }
-        const count = document.createElement('span');
-        count.className = 'pb-org-tree-count';
-        count.textContent = `${tabs.length}`;
-        header.append(count);
-        const close = document.createElement('button');
-        close.type = 'button';
-        close.className = 'pb-org-tree-close';
-        close.dataset.command = PANORAMA_CLOSE_GROUP_COMMAND_ID;
-        close.textContent = '×';
-        close.title = 'Close group';
-        close.setAttribute('aria-label', 'Close group');
-        close.addEventListener('click', event => {
-            event.stopPropagation();
-            void this.closeGroupById(group.id);
+        return buildTreeSection(group, this.model.getTabs(group.id), {
+            renderTitle: target => this.editingGroupId === target.id
+                ? this.buildRename(target)
+                : this.buildTreeTitle(target),
+            closeCommandId: PANORAMA_CLOSE_GROUP_COMMAND_ID,
+            activateGroup: id => {
+                void this.activateGroup(id);
+            },
+            closeGroup: id => {
+                void this.closeGroupById(id);
+            },
+            dive: (tab, groupId) => this.dive(tab, groupId),
         });
-        header.append(close);
-        header.addEventListener('click', () => {
-            void this.activateGroup(group.id);
+    }
+
+    /** Tree group title: identical rename entry to the canvas box title. */
+    protected buildTreeTitle(group: PanoramaGroup): HTMLElement {
+        const title = document.createElement('span');
+        title.className = 'pb-org-tree-title';
+        title.textContent = group.title;
+        title.title = group.title;
+        title.tabIndex = 0;
+        title.addEventListener('dblclick', () => this.startRename(group.id));
+        title.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                this.startRename(group.id);
+            }
         });
-        section.append(header);
-        if (tabs.length === 0) {
-            const hint = document.createElement('div');
-            hint.className = 'pb-org-box-empty';
-            hint.textContent = 'Empty group — drag tabs here.';
-            section.append(hint);
-        }
-        for (const tab of tabs) {
-            const row = document.createElement('div');
-            row.className = 'pb-org-tree-row';
-            row.dataset.u = tab.uri;
-            row.tabIndex = 0;
-            row.title = tab.title;
-            const name = document.createElement('span');
-            name.className = 'pb-org-tree-row-title';
-            name.textContent = tab.title;
-            name.title = tab.title;
-            const uri = document.createElement('span');
-            uri.className = 'pb-org-tree-row-uri';
-            uri.textContent = tab.url || tab.uri;
-            uri.title = tab.url || tab.uri;
-            row.append(name, uri);
-            row.addEventListener('click', () => this.dive(tab, group.id));
-            row.addEventListener('keydown', event => {
-                if (event.key === 'Enter') {
-                    this.dive(tab, group.id);
-                }
-            });
-            section.append(row);
-        }
-        return section;
+        return title;
     }
 
     protected buildEmpty(heading: string, body: string, withAction: boolean): HTMLElement {

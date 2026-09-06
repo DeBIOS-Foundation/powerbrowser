@@ -36,6 +36,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, '..');
 
 const WIDGET_REL = 'theia/extensions/modes/src/browser/organising-widget.ts';
+const TREE_REL = 'theia/extensions/modes/src/browser/organising-tree.ts';
 const CSS_REL = 'theia/extensions/modes/src/browser/modes.css';
 const COMMANDS_REL = 'theia/extensions/modes/src/browser/panorama-commands.ts';
 const MODEL_REL = 'theia/extensions/modes/src/browser/group-model.ts';
@@ -171,6 +172,7 @@ function thumbnailIfSpan(cardBody) {
 function checkStatic(sources) {
     const failures = [];
     const widgetSrc = sources[WIDGET_REL] ?? '';
+    const treeSrc = sources[TREE_REL] ?? '';
     const cssSrc = stripCssComments(sources[CSS_REL] ?? '');
     const commandsSrc = sources[COMMANDS_REL] ?? '';
     const modelSrc = sources[MODEL_REL] ?? '';
@@ -284,8 +286,9 @@ function checkStatic(sources) {
     if (!widgetSrc.includes(EXPECTED_CLOSE_DIALOG_TITLE) || !widgetSrc.includes(EXPECTED_CLOSE_DIALOG_OK)) {
         failures.push(`${WIDGET_REL}: the contracted Close Group dialog copy drifted -- title/ok must read 'Close Group' verbatim`);
     }
-    if ((widgetSrc.match(/= 'Close group'/g) || []).length < 2) {
-        failures.push(`${WIDGET_REL}: the contracted 'Close group' tooltip is gone from a close button -- canvas and tree each carry it`);
+    if ((widgetSrc.match(/= 'Close group'/g) || []).length < 1
+        || (treeSrc.match(/= 'Close group'/g) || []).length < 1) {
+        failures.push(`the contracted 'Close group' tooltip is gone from a close button -- canvas (${WIDGET_REL}) and tree (${TREE_REL}) each carry it`);
     }
 
     // 7. Call-site const discipline: import consts, never re-spell them.
@@ -351,6 +354,7 @@ function readSources() {
     const read = rel => readFileSync(join(REPO_ROOT, rel), 'utf8');
     return {
         [WIDGET_REL]: read(WIDGET_REL),
+        [TREE_REL]: read(TREE_REL),
         [CSS_REL]: read(CSS_REL),
         [COMMANDS_REL]: read(COMMANDS_REL),
         [MODEL_REL]: read(MODEL_REL),
