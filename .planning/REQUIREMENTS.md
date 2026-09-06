@@ -41,7 +41,7 @@
 
 ### Windows & setups — Phase 13+
 
-- [ ] **GUI-09**: The user gets core + dependent windows with named
+- [x] **GUI-09**: The user gets core + dependent windows with named
       setups remembering geometry, tab placement, and mode; closing
       the core window kills the session and the next launch restores
       the setup. Sub-windows host tab content, never a second IDE
@@ -120,7 +120,7 @@ the project's own planning record.
 | GUI-06 | Phase 13 | Complete |
 | GUI-07 | Phase 14 (strip-relocation spike entry criterion runs as Phase 13 exit gate) | Pending |
 | GUI-08 | Phase 15 | Pending |
-| GUI-09 | Phase 14 | Pending |
+| GUI-09 | Phase 14 | Complete |
 
 **Coverage:**
 
