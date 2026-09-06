@@ -280,6 +280,17 @@ export const TheiaService = {
       this._pushLog(`Tab triggers not attached: ${err && err.message ? err.message : err}`);
     }
 
+    // GUI-08 (15-01): register the PowerBrowserGroup actor pair beside the
+    // tab-store wiring above (before _restart/swap), through PowerBrowserAPI
+    // only (D-96: this file imports nothing else). Best-effort like the
+    // store: a registration failure is logged and startup continues, so the
+    // write channel can never stall the first spawn.
+    try {
+      PowerBrowserAPI.registerGroupActor();
+    } catch (err) {
+      this._pushLog(`Group actor not registered: ${err && err.message ? err.message : err}`);
+    }
+
     // SHELL-03: the very first spawn attempt is folded into _restart()'s
     // own bounded give-up loop (D-103 was Phase 4's indefinite-retry
     // default) rather than being a separate uncounted attempt outside the

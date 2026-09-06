@@ -14,4 +14,5 @@ browser.jar:
    content/powerbrowser/powerbrowser.js            (powerbrowser.js)
    content/powerbrowser/powerbrowser.css           (powerbrowser.css)
    content/powerbrowser/PowerBrowserAPI.sys.mjs    (PowerBrowserAPI.sys.mjs)
+   content/powerbrowser/GroupActorChild.sys.mjs    (GroupActorChild.sys.mjs)
    content/powerbrowser/TheiaService.sys.mjs    (TheiaService.sys.mjs)

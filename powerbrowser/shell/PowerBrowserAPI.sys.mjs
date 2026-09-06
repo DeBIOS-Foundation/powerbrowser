@@ -83,6 +83,16 @@ const GROUP_TITLE_MAX = 60;
 const GROUP_BOUNDS_MAX = 10000;
 const TAB_STORE_THUMBNAIL_MAX_CHARS = 200000;
 
+// GUI-08 (15-01): the PowerBrowserGroup actor pair identity. Registration is
+// scoped to the Theia local origin (matches pin) so the child never loads in
+// stock-window web content; the parent re-checks the sender origin per
+// message (threat-model W5 second wall) and chrome-side field validation in
+// the writer methods is the wall behind that.
+const GROUP_ACTOR_NAME = "PowerBrowserGroup";
+const GROUP_ACTOR_THEIA_ORIGIN = "http://127.0.0.1";
+const GROUP_ACTOR_CHILD_MODULE = "chrome://powerbrowser/content/GroupActorChild.sys.mjs";
+const GROUP_ACTOR_PARENT_MODULE = "chrome://powerbrowser/content/PowerBrowserAPI.sys.mjs";
+
 const TAB_STORE_FILE_NAME = "tabs.sqlite";
 
 // SQL-01 (12-01): sweep bounds. The reconciliation sweep caps its per-run
@@ -95,6 +105,11 @@ const TAB_STORE_CLOSED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 // (never a property on the frozen PowerBrowserAPI object -- assignment to a
 // frozen object throws), one writer only.
 let tabStoreConn = null;
+
+// GUI-08 (15-01): the group actor registers once per browser session.
+// TheiaService.start is already once-guarded; this flag makes a second call
+// a no-op rather than a duplicate-registration throw.
+let groupActorRegistered = false;
 
 export const PowerBrowserAPI = Object.freeze({
   /**
@@ -1177,6 +1192,152 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
+   * GUI-08 (15-01): registers the PowerBrowserGroup actor pair -- the SOLE
+   * actor-registration caller in this tree (the guard fails any second one
+   * by design). The child loads only in documents matching the Theia local
+   * origin; the parent class below lives in this same boundary file so no
+   * second file reaches a privileged surface. Called once from
+   * TheiaService.start beside the tab-store wiring, through PowerBrowserAPI
+   * only. Never throws: a duplicate or late call resolves quietly so startup
+   * can never stall on the write channel.
+   */
+  registerGroupActor() {
+    if (groupActorRegistered) {
+      return;
+    }
+    groupActorRegistered = true;
+    ChromeUtils.registerWindowActor(GROUP_ACTOR_NAME, {
+      parent: {
+        esModuleURI: GROUP_ACTOR_PARENT_MODULE,
+      },
+      child: {
+        esModuleURI: GROUP_ACTOR_CHILD_MODULE,
+        events: {
+          PowerBrowserGroupRequest: { capture: true },
+        },
+      },
+      matches: [`${GROUP_ACTOR_THEIA_ORIGIN}/*`],
+    });
+  },
+
+  /**
+   * GUI-08 (15-01): the parent-side dispatch for PowerBrowserGroupMutation
+   * queries. Returns { ok: true, ...echo } on success, { ok: false, reason }
+   * otherwise -- reason 'validation' for shape/origin/kind violations,
+   * 'store' for failures inside the writer. Never throws and never stores a
+   * violating message: the writer methods throw loudly naming method + key,
+   * and that text becomes the reply message so the frontend save-error path
+   * can report it. actorRef is the parent actor instance, used only to read
+   * back the sender document for the W5 origin check.
+   */
+  async handleGroupMutation(data, actorRef) {
+    let senderSpec = "";
+    try {
+      const context = actorRef && actorRef.browsingContext;
+      const windowGlobal = context && context.currentWindowGlobal;
+      const uri = windowGlobal && windowGlobal.documentURI;
+      senderSpec = (uri && uri.spec) || "";
+    } catch {
+      senderSpec = "";
+    }
+    if (senderSpec !== GROUP_ACTOR_THEIA_ORIGIN && !senderSpec.startsWith(`${GROUP_ACTOR_THEIA_ORIGIN}/`)) {
+      PowerBrowserAPI.log("error", "[handleGroupMutation] rejecting non-Theia-origin sender");
+      return { ok: false, reason: "validation", message: "handleGroupMutation: rejecting non-Theia-origin sender" };
+    }
+    const kind = data && data.kind;
+    try {
+      switch (kind) {
+        case "createGroup": {
+          await PowerBrowserAPI.writeGroupRow({
+            id: data.id,
+            title: data.title,
+            x: data.x,
+            y: data.y,
+            w: data.w,
+            h: data.h,
+            isActive: data.isActive,
+          });
+          return { ok: true, kind, id: data.id };
+        }
+        case "setTabGroup": {
+          await PowerBrowserAPI.setTabGroupId(
+            data.uri,
+            data.groupId === undefined ? null : data.groupId
+          );
+          return { ok: true, kind, uri: data.uri };
+        }
+        case "moveGroup": {
+          const current = await PowerBrowserAPI.readGroupRow(data.id);
+          if (!current) {
+            throw new Error(`handleGroupMutation: unknown group ${data.id}`);
+          }
+          await PowerBrowserAPI.writeGroupRow({
+            id: current.id,
+            title: current.title,
+            x: data.x,
+            y: data.y,
+            w: current.w,
+            h: current.h,
+            isActive: current.is_active,
+          });
+          return { ok: true, kind, id: data.id };
+        }
+        case "resizeGroup": {
+          const current = await PowerBrowserAPI.readGroupRow(data.id);
+          if (!current) {
+            throw new Error(`handleGroupMutation: unknown group ${data.id}`);
+          }
+          await PowerBrowserAPI.writeGroupRow({
+            id: current.id,
+            title: current.title,
+            x: current.x,
+            y: current.y,
+            w: data.w,
+            h: data.h,
+            isActive: current.is_active,
+          });
+          return { ok: true, kind, id: data.id };
+        }
+        case "renameGroup": {
+          const current = await PowerBrowserAPI.readGroupRow(data.id);
+          if (!current) {
+            throw new Error(`handleGroupMutation: unknown group ${data.id}`);
+          }
+          await PowerBrowserAPI.writeGroupRow({
+            id: current.id,
+            title: data.title,
+            x: current.x,
+            y: current.y,
+            w: current.w,
+            h: current.h,
+            isActive: current.is_active,
+          });
+          return { ok: true, kind, id: data.id };
+        }
+        case "dissolveGroup": {
+          await PowerBrowserAPI.removeGroupRow(data.id);
+          return { ok: true, kind, id: data.id };
+        }
+        case "closeGroup": {
+          await PowerBrowserAPI.closeGroupRows(data.id);
+          return { ok: true, kind, id: data.id };
+        }
+        case "setActiveGroup": {
+          await PowerBrowserAPI.setActiveGroup(data.id);
+          return { ok: true, kind, id: data.id };
+        }
+        default: {
+          return { ok: false, reason: "validation", message: `handleGroupMutation: unknown kind ${String(kind)}` };
+        }
+      }
+    } catch (err) {
+      const message = err && err.message ? err.message : String(err);
+      const reason = /refusing|unknown/.test(message) ? "validation" : "store";
+      return { ok: false, reason, message };
+    }
+  },
+
+  /**
    * SQL-04 (12-02): history point read via the History fetch API keyed by
    * URL. Never-throw read convention: resolves null when the page is
    * unknown or Places is unreachable. Platform API only -- no raw places
@@ -1659,5 +1820,27 @@ export class PowerBrowserSingleInstanceHandler {
     } catch (err) {
       PowerBrowserAPI.log("error", `[PowerBrowserSingleInstanceHandler] ${err}`);
     }
+  }
+}
+
+/**
+ * GUI-08 (15-01): parent half of the PowerBrowserGroup actor pair, exported
+ * from this boundary file (never a sibling module) for the same reason as
+ * the handler above: the structural consequence in 15-01-PLAN.md. The actor
+ * loader resolves the parent esModuleURI at registration time; the class
+ * extends the actor global when present and a no-op base otherwise, so the
+ * normal importESModule load of this file (TheiaService, tests) never
+ * throws on the missing global. receiveMessage answers
+ * PowerBrowserGroupMutation queries through handleGroupMutation above and
+ * ignores anything else.
+ */
+const GroupActorBase = typeof JSWindowActorParent !== "undefined" ? JSWindowActorParent : class {};
+
+export class PowerBrowserGroupParent extends GroupActorBase {
+  async receiveMessage(message) {
+    if (!message || message.name !== "PowerBrowserGroupMutation") {
+      return undefined;
+    }
+    return PowerBrowserAPI.handleGroupMutation(message.data, this);
   }
 }
