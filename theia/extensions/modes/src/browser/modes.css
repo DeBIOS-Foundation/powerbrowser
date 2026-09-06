@@ -1,0 +1,118 @@
+/**
+ * GUI-07 (14-02): the modes extension's single style layer.
+ *
+ * One `@layer` block expressing the locked sketch tokens
+ * (sketch-findings-Power-Browser `sources/themes/default.css`, the only
+ * token source) over the contracted class hooks the placeholder widget and
+ * the chrome-bar custom rows render. A layered sheet loses to unlayered
+ * author CSS by cascade construction, so the `customize.css` user layer keeps
+ * winning with no specificity arms race -- this sheet sits below it by
+ * position in the cascade, never by `!important`. Stock Theia regions are
+ * never selected here: panels are actuated through the shell API and the
+ * placeholder paints inside its own contribution host.
+ *
+ * Type is delegated, never literal: every rule inherits the surrounding
+ * theme type, and this sheet carries no typeface literal of its own. Sizes
+ * are the contracted roles only (14px placeholder copy, 13px custom rows);
+ * 600 appears on the placeholder heading and rides the inherited segment
+ * marker for the active custom row. Accent ink appears only through the
+ * inherited active-segment marker (the fourth reserved use) and the focus
+ * idiom below -- no second hue exists anywhere in this sheet.
+ */
+@layer powerbrowser-modes {
+
+/* The placeholder host fills the main area and centres the slot. */
+.pb-modes-organising {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 16px;
+    background: var(--color-bg, #1c1b22);
+    color: var(--color-text, #fbfbfe);
+}
+
+/* The contracted slot: one static panel, at most 480px wide. */
+.pb-modes-organising-slot {
+    max-width: 480px;
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 24px;
+    background: var(--color-surface, #2b2a33);
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 4px;
+    animation: pb-modes-slot-in 0.15s ease;
+}
+
+@keyframes pb-modes-slot-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.pb-modes-organising-heading {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--color-text, #fbfbfe);
+}
+
+.pb-modes-organising-body {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-text, #fbfbfe);
+}
+
+/* The Back control is a stock Theia button; this layer owns only spacing
+   and the contracted focus outline, never its fill or ink. */
+.pb-modes-organising-back {
+    align-self: flex-start;
+    transition: all 0.15s ease;
+}
+
+.pb-modes-organising-back:focus-visible {
+    outline: 2px solid var(--color-primary, #00a6f5);
+    outline-offset: 2px;
+}
+
+/* Custom modes ride after the shipped segments inside the toggle group:
+   same row contract (ellipsis at row width, full name in the title
+   tooltip), scrolling internally past the cap without shifting bar layout.
+   Shipped segments are never restyled here. */
+.pb-modes-custom-menu {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 320px;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+.pb-modes-custom-row {
+    flex: none;
+    transition: all 0.15s ease;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.pb-modes-custom-row:focus-visible {
+    outline: 2px solid var(--color-primary, #00a6f5);
+    outline-offset: 2px;
+}
+
+/* Reduced motion renders every switch instantly, same baseline as the bar. */
+@media (prefers-reduced-motion: reduce) {
+    .pb-modes-organising-slot {
+        animation: none;
+    }
+    .pb-modes-organising-back,
+    .pb-modes-custom-row {
+        transition: none;
+    }
+}
+
+}
