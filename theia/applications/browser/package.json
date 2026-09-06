@@ -12,6 +12,7 @@
       "config": {
         "applicationName": "PowerBrowser",
         "powerbrowserPrivilegedJs": false,
+        "powerbrowserAiBackend": "off",
         "powerbrowserTelemetry": {
           "level": "off",
           "endpoint": null
