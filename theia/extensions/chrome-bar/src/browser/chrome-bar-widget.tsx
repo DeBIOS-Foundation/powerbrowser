@@ -99,7 +99,11 @@ export class ChromeBarWidget extends ReactWidget {
     }
 
     protected runCommand = (id: string) => async (): Promise<void> => {
-        await this.commands.executeCommand(id);
+        try {
+            await this.commands.executeCommand(id);
+        } catch (error) {
+            console.error('[@powerbrowser/chrome-bar] command failed:', id, error);
+        }
         this.update();
     };
 
