@@ -1102,7 +1102,9 @@ export const PowerBrowserAPI = Object.freeze({
    * cleanup through the one path -- with a deterministic row DELETE per
    * member in the same transaction as the group removal, so a tab without a
    * live browser (or a failed close) still leaves no orphan row. Loud errors
-   * naming method + id. Unknown ids reject before touching anything.
+   * naming method + id. Unknown ids resolve as already-closed success (WR-02:
+   * the frontend Retry discipline assumes idempotency -- a close whose ack
+   * was lost must not resurrect a ghost box on replay).
    */
   async closeGroupRows(id) {
     if (typeof id !== "string" || !id) {
@@ -1113,7 +1115,7 @@ export const PowerBrowserAPI = Object.freeze({
     try {
       const group = await conn.execute("SELECT 1 FROM groups WHERE id = :id", { id });
       if (!group.length) {
-        throw new Error(`closeGroupRows: unknown group ${id}`);
+        return "already-closed";
       }
       const rows = await conn.execute("SELECT uri FROM tabs WHERE group_id = :id", { id });
       members = rows.map(row => row.getString(0));

@@ -212,6 +212,15 @@ function checkStatic(sources) {
     if (!apiSrc.includes('DELETE FROM groups WHERE id')) {
         failures.push(`${API_REL}: no group-row DELETE -- the closed box survives in the store`);
     }
+    // WR-02: close is idempotent -- an unknown group row resolves as
+    // already-closed success so a retry-after-success (chrome close landed,
+    // only the ack was lost) cannot throw into a ghost-box revert.
+    if (!apiSrc.includes('return "already-closed"')) {
+        failures.push(`${API_REL}: no 'return "already-closed"' -- closing an unknown group throws instead of resolving idempotent success, so a retry-after-success resurrects a ghost group`);
+    }
+    if (apiSrc.includes('closeGroupRows: unknown group')) {
+        failures.push(`${API_REL}: the 'closeGroupRows: unknown group' throw is back -- the close path is not idempotent`);
+    }
     return failures;
 }
 
@@ -297,10 +306,27 @@ function selfTest() {
         }
     }
 
+    // Plant 4 (WR-02): the unknown-group throw must go red naming the
+    // idempotency loss.
+    {
+        const mutated = { ...real, [API_REL]: real[API_REL].replace('return "already-closed";', 'throw new Error(`closeGroupRows: unknown group ${id}`);') };
+        const landed = mutated[API_REL].includes('closeGroupRows: unknown group');
+        const result = checkStatic(mutated);
+        if (!landed) {
+            console.error(`${NAME} --self-test: FAIL -- 'unknown-group throw' plant did not land`);
+            failed += 1;
+        } else if (!result.some(f => /already-closed|unknown group/.test(f))) {
+            console.error(`${NAME} --self-test: FAIL -- 'unknown-group throw' did not go red naming the idempotency loss; got: ${result.join(' | ') || '(no failures at all)'}`);
+            failed += 1;
+        } else {
+            console.log(`  ok  unknown-group throw -> red, naming the idempotency loss`);
+        }
+    }
+
     if (failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all three fault directions went red naming the drift`);
+    console.log(`${NAME} --self-test: PASS -- all four fault directions went red naming the drift`);
 }
 
 if (process.argv.includes('--self-test')) {
