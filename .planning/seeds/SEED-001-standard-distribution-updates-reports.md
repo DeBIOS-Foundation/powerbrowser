@@ -2,7 +2,7 @@
 id: SEED-001
 status: dormant
 planted: 2026-09-05
-planted_during: v1.2 complete, awaiting next milestone
+planted_during: v1.2 shipped; v1.3 Browser GUI (Phases 13-15) started concurrently
 trigger_when: the next milestone scopes a first public release, per-OS installers on GitHub Releases, self-update, or crash/error/bug reporting
 scope: Large, a full milestone (proposed Phases 13 to 21)
 ---
@@ -190,15 +190,20 @@ Sidecar and Node staging into every package; per-platform Theia builds; packaged
 
 ## Proposed phases
 
-- Phase 13: DIST-01, SEC-01, rebase to the current ESR point release.
-- Phase 14: REL-01, UPD-01, UPD-02, UPD-03.
-- Phase 15: SEC-02, UPD-04.
-- Phase 16: PKG-04, PKG-05, PKG-06, PKG-07, PKG-08, PKG-09, UPD-08.
-- Phase 17: DIST-02, DIST-03, UPD-05, UPD-06, UPD-07; first public release (Linux).
-- Phase 18: PKG-10, PKG-11, PKG-12, PKG-13, SEC-03.
-- Phase 19: PKG-14, PKG-15, SEC-04, PKG-16.
-- Phase 20: TEL-05, TEL-06, TEL-07, TEL-08.
-- Phase 21: DIST-04, DIST-05.
+Numbered as milestone-relative stages, not phase numbers. Phases 13 to 15
+are already taken by v1.3 Browser GUI, which started while this review ran,
+so this work is v1.4 or later and its phase numbers are assigned when the
+milestone is created. The dependency order below is what matters.
+
+- Stage 1: DIST-01, SEC-01, rebase to the current ESR point release.
+- Stage 2: REL-01, UPD-01, UPD-02, UPD-03.
+- Stage 3: SEC-02, UPD-04.
+- Stage 4: PKG-04, PKG-05, PKG-06, PKG-07, PKG-08, PKG-09, UPD-08.
+- Stage 5: DIST-02, DIST-03, UPD-05, UPD-06, UPD-07; first public release (Linux).
+- Stage 6: PKG-10, PKG-11, PKG-12, PKG-13, SEC-03.
+- Stage 7: PKG-14, PKG-15, SEC-04, PKG-16.
+- Stage 8: TEL-05, TEL-06, TEL-07, TEL-08.
+- Stage 9: DIST-04, DIST-05.
 
 Independent of the release pipeline and startable at any time: TEL-05, TEL-06, the collector extra-part fix, TEL-08, PKG-07, PKG-09.
 
