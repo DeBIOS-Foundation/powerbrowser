@@ -28,7 +28,21 @@ export class PowerBrowserGroupChild extends JSWindowActorChild {
     if (typeof requestId !== "string" || !requestId || !msg || typeof msg.kind !== "string") {
       return;
     }
-    this.sendQuery("PowerBrowserGroupMutation", msg).then(
+    // IN-10: sendQuery can throw synchronously (actor shutting down,
+    // message-manager gone) -- nack immediately instead of leaving the
+    // frontend to wait out the full 5s ack timeout.
+    let pending;
+    try {
+      pending = this.sendQuery("PowerBrowserGroupMutation", msg);
+    } catch (error) {
+      this.sendResponse(requestId, {
+        ok: false,
+        reason: "store",
+        message: String((error && error.message) || error),
+      });
+      return;
+    }
+    pending.then(
       reply => {
         this.sendResponse(requestId, reply);
       },
