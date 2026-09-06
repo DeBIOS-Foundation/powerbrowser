@@ -51,6 +51,7 @@ import './chrome-bar.css';
  * startup-opened window would break the stock chrome per the candidate-A
  * constraint).
  */
+@injectable()
 export class ChromeBarWidget extends ReactWidget {
 
     static readonly ID = 'powerbrowser.chrome-bar';
