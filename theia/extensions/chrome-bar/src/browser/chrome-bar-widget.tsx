@@ -21,6 +21,7 @@ import {
     CHROME_BAR_RELOAD_COMMAND_ID,
 } from './chrome-bar-commands';
 import { CHROME_SUGGESTION_LIMIT, ChromeBarSuggestionService } from './chrome-bar-suggestion-service';
+import './chrome-bar.css';
 
 /**
  * GUI-06 (13-03): the chrome bar widget -- nav buttons, address pill with

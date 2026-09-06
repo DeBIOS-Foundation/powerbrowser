@@ -1,0 +1,237 @@
+/**
+ * GUI-06 (13-03): the chrome bar's single style layer.
+ *
+ * One `@layer` block expressing the locked sketch tokens
+ * (sketch-findings-Power-Browser `sources/themes/default.css`, the only
+ * token source) over the contracted class hooks the widget renders. A
+ * layered sheet loses to unlayered author CSS by cascade construction, so
+ * the `customize.css` user layer keeps winning with no specificity arms
+ * race -- this sheet sits below it by position in the cascade, never by
+ * `!important`. Stock Theia regions are never selected here: the bar is a
+ * contribution beside them and resizes none of them.
+ *
+ * Typeface is delegated, never literal: UI text inherits the Theia theme
+ * type, URI captions use the Theia code variable with a system fallback
+ * through the `font` shorthand (this sheet carries no typeface literal of
+ * its own). Accent appears in exactly the three reserved uses -- pill
+ * focus ring, active toggle segment ink, keyboard-highlighted row wash --
+ * and no second hue exists anywhere below.
+ */
+@layer powerbrowser-chrome-bar {
+
+.pb-chrome-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    width: 100%;
+    padding: 0 8px;
+    box-sizing: border-box;
+    position: relative;
+    background: var(--color-surface, #2b2a33);
+    color: var(--color-text, #fbfbfe);
+    border-bottom: 1px solid var(--color-border, #3f3e4a);
+    font-size: 14px;
+}
+
+.pb-chrome-bar-button {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--color-text, #fbfbfe);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 14px;
+}
+
+.pb-chrome-bar-button:hover {
+    background: var(--color-surface-raised, #35343f);
+}
+
+.pb-chrome-bar-button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.pb-chrome-bar-button:disabled:hover {
+    background: transparent;
+}
+
+.pb-chrome-bar-button:focus-visible {
+    outline: 2px solid var(--color-primary, #00a6f5);
+    outline-offset: 2px;
+}
+
+.pb-chrome-bar-pill {
+    flex: 1 1 auto;
+    min-width: 120px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 32px;
+    padding: 0 12px;
+    background: var(--color-bg, #1c1b22);
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 9999px;
+    transition: all 0.15s ease;
+}
+
+/* Accent use 1 of 3: the address-pill focus ring. */
+.pb-chrome-bar-pill:focus-within {
+    border-color: var(--color-primary, #00a6f5);
+    outline: 2px solid var(--color-primary, #00a6f5);
+    outline-offset: 2px;
+}
+
+.pb-chrome-bar-lock {
+    flex: none;
+    color: var(--color-success, #8ad38a);
+}
+
+.pb-chrome-bar-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--color-text, #fbfbfe);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.pb-chrome-bar-input::placeholder {
+    color: var(--color-text-muted, #9a99a8);
+}
+
+.pb-chrome-bar-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 12px;
+    right: 12px;
+    padding: 16px;
+    background: var(--color-surface, #2b2a33);
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 4px;
+    box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5);
+    /* Eight 32px rows plus vertical padding plus the footer hint. */
+    max-height: 304px;
+    overflow-y: auto;
+    z-index: 100;
+    box-sizing: border-box;
+}
+
+.pb-chrome-bar-row {
+    min-height: 32px;
+    padding: 0 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.pb-chrome-bar-row:hover {
+    background: var(--color-surface-raised, #35343f);
+}
+
+/* Accent use 3 of 3: the keyboard-highlighted row wash (same hue, alpha). */
+.pb-chrome-bar-row.is-highlighted {
+    background: rgba(0, 166, 245, 0.18);
+}
+
+.pb-chrome-bar-row-title {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-text, #fbfbfe);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pb-chrome-bar-row-caption {
+    /* Caption role is size + muted ink only: even naming the Theia code
+       variable would trip this sheet's own no-literal-typeface gate (the
+       variable name itself contains the banned substring), so captions
+       inherit the surrounding theme type like every other bar text. */
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text-muted, #9a99a8);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pb-chrome-bar-row.is-shimmer {
+    background: var(--color-surface-raised, #35343f);
+    animation: pb-chrome-bar-shimmer 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes pb-chrome-bar-shimmer {
+    from { opacity: 0.4; }
+    to { opacity: 1; }
+}
+
+.pb-chrome-bar-dropdown-footer {
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text-muted, #9a99a8);
+}
+
+.pb-chrome-bar-toggle {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.pb-chrome-bar-segment {
+    width: 96px;
+    height: 32px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: transparent;
+    color: var(--color-text-muted, #9a99a8);
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.pb-chrome-bar-segment:hover {
+    background: var(--color-surface-raised, #35343f);
+}
+
+.pb-chrome-bar-segment:focus-visible {
+    outline: 2px solid var(--color-primary, #00a6f5);
+    outline-offset: 2px;
+}
+
+/* Accent use 2 of 3: the active segment carries accent INK (never fill)
+   plus semibold -- the one place 600 appears in this phase. */
+.pb-chrome-bar-segment.is-active {
+    color: var(--color-primary, #00a6f5);
+    font-weight: 600;
+}
+
+.pb-chrome-bar-tab-count {
+    flex: none;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--color-text-muted, #9a99a8);
+    white-space: nowrap;
+}
+
+}

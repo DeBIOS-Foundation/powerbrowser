@@ -3688,6 +3688,16 @@ run_own_checks() {
     "gui04-registry-shape|node $REPO_ROOT/scripts/verify-registry-shape.mjs"
     "gui04-registry-shape-self-test|node $REPO_ROOT/scripts/verify-registry-shape.mjs --self-test"
 
+    # NEW (13-03): GUI-06's command-registry gate. Derives the bar's five
+    # command ids from the commands source and compares as set equality,
+    # plus the four contracted labels verbatim and the labelless focus
+    # command. Honestly --quick: text reads only. No build, no browser, no
+    # display, no network. The self-test rides alongside for the reason
+    # every other self-test row in this array gives -- a gate nobody has
+    # seen go red is not a check.
+    "gui06-chrome-bar-commands|node $REPO_ROOT/scripts/verify-chrome-bar-commands.mjs"
+    "gui06-chrome-bar-commands-self-test|node $REPO_ROOT/scripts/verify-chrome-bar-commands.mjs --self-test"
+
     # NEW (13-02): GUI-06's suggestion-search gate. Static half derives the
     # search statement from the query-service source and compares
     # projection/escape/order/limit as set equality; live half runs the
