@@ -364,7 +364,14 @@ export class OrganisingWidget extends Widget {
         const grip = document.createElement('div');
         grip.className = 'pb-org-box-resize';
         grip.setAttribute('aria-label', 'Resize group');
+        grip.title = 'Resize group';
+        grip.tabIndex = 0;
+        grip.setAttribute('role', 'slider');
+        grip.setAttribute('aria-valuemin', String(GROUP_BOX_MIN_W));
+        grip.setAttribute('aria-valuenow', String(group.w));
+        grip.setAttribute('aria-valuetext', `${group.w} by ${group.h} pixels`);
         grip.addEventListener('pointerdown', event => this.beginBoxResize(event, group));
+        grip.addEventListener('keydown', event => this.stepBoxResize(event, group.id));
         box.append(grip);
 
         box.addEventListener('dragover', event => this.allowCardDrop(event, box));
@@ -750,6 +757,50 @@ export class OrganisingWidget extends Widget {
             this.render();
             throw error;
         }
+    }
+
+    /**
+     * Keyboard resize (15-UI-REVIEW Top Fix #2): arrows step the box
+     * through the same persistResize path as the pointer grip -- 8px, 32px
+     * with Shift; Left/Right ride width, Up/Down ride height, floored at
+     * the contracted minimum. The model change re-renders (fresh grip
+     * carries fresh valuenow/valuetext), so focus is returned to the new
+     * grip; a clamped no-op changes nothing and keeps focus where it is.
+     */
+    protected stepBoxResize(event: KeyboardEvent, id: string): void {
+        const step = event.shiftKey ? 32 : 8;
+        let dw = 0;
+        let dh = 0;
+        if (event.key === 'ArrowLeft') {
+            dw = -step;
+        } else if (event.key === 'ArrowRight') {
+            dw = step;
+        } else if (event.key === 'ArrowUp') {
+            dh = -step;
+        } else if (event.key === 'ArrowDown') {
+            dh = step;
+        } else {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        const current = this.model.listGroups().find(candidate => candidate.id === id);
+        if (!current) {
+            return;
+        }
+        const w = Math.max(GROUP_BOX_MIN_W, current.w + dw);
+        const h = Math.max(GROUP_BOX_MIN_H, current.h + dh);
+        if (w === current.w && h === current.h) {
+            return;
+        }
+        void this.persistResize(id, w, h, this.geometrySeq).then(() => {
+            const grip = this.node.querySelector(`[data-g="${CSS.escape(id)}"] .pb-org-box-resize`) as HTMLElement | null;
+            if (grip) {
+                grip.focus();
+            }
+        }).catch(error => {
+            console.error('[@powerbrowser/modes] group resize failed:', error);
+        });
     }
 
     protected allowCardDrop(event: DragEvent, host: HTMLElement): void {
