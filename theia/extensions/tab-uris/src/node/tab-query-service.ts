@@ -1,20 +1,14 @@
 /**
  * SQL-04 (12-02): readonly tab-row query service, beside the registry.
  *
- * STAGED (12-CODE-REVIEW.md WR-04): this service is bound but has no
- * consumer yet -- nothing injects it, no route serves it, and the first
- * consumer (frontend RPC binding or backend route plus a setProfileDir
- * call from the backend's captured POWERBROWSER_PROFILE_DIR, which the
- * supervisor already passes on every spawn) has not landed. Presented as
- * staged, not shipped: do not cite it as the query-API delivery until that
- * consumer exists.
- *
- * Holds the single Theia-backend handle on the dedicated `tabs.sqlite`
- * file, opened with the engine readonly flag at open time and asserted via
- * the handle's own readonly property -- never a read-write open, never any
- * profile database but the dedicated file (AUTHORITY.md row 4). Chrome-side
- * `PowerBrowserAPI` remains the sole writer; this service only serves rows
- * the writer wrote.
+ * First consumer landed (13-02): `@powerbrowser/chrome-bar`'s suggestion
+ * service reaches this reader over the existing authenticated JSON-RPC
+ * channel (`chrome-bar-suggestion-service-impl.ts` delegates to
+ * `searchByPrefix` below), so the staged caveat from 12-CODE-REVIEW.md
+ * WR-04 no longer applies. The service still exposes no HTTP route and
+ * opens no profile database but the dedicated file (AUTHORITY.md row 4).
+ * Chrome-side `PowerBrowserAPI` remains the sole writer; this service only
+ * serves rows the writer wrote.
  *
  * First-launch tolerance: the backend may start before the chrome writer
  * ever creates the file, and a readonly open of a missing file fails -- so
@@ -37,6 +31,17 @@ export interface TabQueryRow {
     url: string;
     title: string;
     last_active: number;
+}
+
+/**
+ * Neutralises LIKE metacharacters so typed text matches literally.
+ * Binding the pattern blocks SQL injection, but `%`/`_`/`\` stay wildcards
+ * inside the pattern itself (Pitfall 3: an unescaped `%` degrades the query
+ * to a full-table dump) -- hence the escape before wrapping plus the
+ * explicit `ESCAPE '\'` clause at the call site.
+ */
+function escapeLikePattern(raw: string): string {
+    return raw.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
 /** The dedicated store filename: fixed platform content, never configured. */
@@ -128,6 +133,31 @@ export class TabQueryService {
         }
         try {
             return db.prepare('SELECT uri, url, title, last_active FROM tabs ORDER BY last_active DESC LIMIT ?').all(limit) as TabQueryRow[];
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Prefix-substring search over the address and title columns, newest
+     * first, capped at the caller-supplied `limit` rows. The pattern is
+     * escaped (see `escapeLikePattern`) before wrapping, bound twice, and
+     * read under an explicit `ESCAPE '\'` clause; the limit is bound, never
+     * interpolated. Resolves [] when the store is not yet readable or the
+     * query fails -- the same never-throw convention as the point reads and
+     * the recency listing. Follows the UI side of the ordering contract
+     * (IN-02): recency serves UI reads.
+     */
+    searchByPrefix(prefix: string, limit: number): TabQueryRow[] {
+        const db = this.openIfNeeded();
+        if (!db) {
+            return [];
+        }
+        try {
+            const pattern = `%${escapeLikePattern(prefix)}%`;
+            return db.prepare(
+                'SELECT uri, url, title, last_active FROM tabs WHERE url LIKE ? ESCAPE \'\\\' OR title LIKE ? ESCAPE \'\\\' ORDER BY last_active DESC LIMIT ?'
+            ).all(pattern, pattern, limit) as TabQueryRow[];
         } catch {
             return [];
         }
