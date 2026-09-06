@@ -17,12 +17,8 @@ import { PerspectiveDescriptor } from '@theia/core/lib/browser/perspective-servi
  * Coding leaves Explorer visible with the remaining areas per saved layout.
  * The Organising placeholder show/hide hooks land in plan 14-02.
  */
-export const CODING_MODE_ID = 'coding';
-export const BROWSING_MODE_ID = 'browsing';
-export const ORGANISING_MODE_ID = 'organising';
-
 const coding: PerspectiveDescriptor = {
-    id: CODING_MODE_ID,
+    id: 'coding',
     label: 'Coding',
     viewPlacements: new Map<string, ApplicationShell.Area>([
         ['explorer-view-container', 'left'],
@@ -30,14 +26,14 @@ const coding: PerspectiveDescriptor = {
 };
 
 const browsing: PerspectiveDescriptor = {
-    id: BROWSING_MODE_ID,
+    id: 'browsing',
     label: 'Browsing',
     viewPlacements: new Map<string, ApplicationShell.Area>(),
     chromeOptions: { collapseAreas: ['left', 'right', 'bottom'] },
 };
 
 const organising: PerspectiveDescriptor = {
-    id: ORGANISING_MODE_ID,
+    id: 'organising',
     label: 'Organising',
     viewPlacements: new Map<string, ApplicationShell.Area>(),
     chromeOptions: { collapseAreas: ['left', 'right', 'bottom'] },

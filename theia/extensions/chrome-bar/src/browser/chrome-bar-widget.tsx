@@ -10,6 +10,7 @@ import {
 } from '@theia/core/lib/browser';
 import { CommandRegistry } from '@theia/core/lib/common';
 import URI from '@theia/core/lib/common/uri';
+import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
 import { NavigationLocationService } from '@theia/editor/lib/browser/navigation/navigation-location-service';
 import pDebounce from 'p-debounce';
 import type { TabQueryRow } from '@powerbrowser/tab-uris/lib/node/tab-query-service';
@@ -76,6 +77,9 @@ export class ChromeBarWidget extends ReactWidget {
 
     @inject(StatusBar)
     protected readonly statusBar: StatusBar;
+
+    @inject(PerspectiveService)
+    protected readonly perspectives: PerspectiveService;
 
     protected inputValue = '';
     protected committedAddress = '';
@@ -233,12 +237,26 @@ export class ChromeBarWidget extends ReactWidget {
         this.update();
     }
 
-    protected selectMode = (next: string) => (): void => {
+    /**
+     * Segment selection switches the matching shipped perspective through
+     * the stock service. The toggle stays selection state only: the segment
+     * is set and the chip re-asserted even when the perspective switch
+     * throws, and a tab-count mismatch is logged, never thrown. Segment
+     * labels map to descriptor ids by lowercasing -- the shipped-mode
+     * defaults gate asserts that rule, so a label that stops mapping fails
+     * the gate instead of silently switching nothing.
+     */
+    protected selectMode = (next: string) => async (): Promise<void> => {
         if (this.mode === next) {
             return;
         }
         const before = this.countTabs();
         this.mode = next;
+        try {
+            await this.perspectives.switchPerspective(next.toLowerCase());
+        } catch (error) {
+            console.error('[@powerbrowser/chrome-bar] perspective switch failed:', next, error);
+        }
         const after = this.countTabs();
         if (before !== after) {
             console.error(
@@ -247,6 +265,19 @@ export class ChromeBarWidget extends ReactWidget {
         }
         this.publishTabCount();
     };
+
+    /**
+     * Stock perspective changes from anywhere else (commands, palette,
+     * layout restore) re-assert the toggle and the chip. Unknown ids leave
+     * the shipped selection untouched and still re-assert the count.
+     */
+    syncModeFromPerspective(id: string): void {
+        const label = ChromeBarWidget.MODES.find(candidate => candidate.toLowerCase() === id);
+        if (label !== undefined) {
+            this.mode = label;
+        }
+        this.publishTabCount();
+    }
 
     protected renderDropdown(): React.ReactNode {
         if (!this.dropdownOpen) {
@@ -363,10 +394,16 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
     @inject(ChromeBarWidget)
     protected readonly barWidget: ChromeBarWidget;
 
+    @inject(PerspectiveService)
+    protected readonly perspectives: PerspectiveService;
+
     async onStart(): Promise<void> {
         if (!this.shell.getWidgetById(ChromeBarWidget.ID)) {
             await this.shell.addWidget(this.barWidget, { area: 'top' });
         }
+        this.perspectives.onDidChangePerspective(id => {
+            this.barWidget.syncModeFromPerspective(id);
+        });
         this.barWidget.publishTabCount();
     }
 }
