@@ -573,3 +573,16 @@
 }
 
 }
+
+/* GUI-08 (15-UI-REVIEW Top Fix #1): destructive ink for the Close Group
+   confirm button -- the ONLY destructive action in the phase. Scoped to
+   the dialog instance the close path tags via the public Widget addClass
+   (`pb-org-close-confirm`), so no other stock dialog is selected and
+   nothing bleeds. Unlayered by cascade necessity: this sheet's layer
+   loses to Theia's unlayered `.theia-button` color by construction, so
+   this one scoped rule rides outside the layer to win it. No !important,
+   no new hue -- the contracted `--color-danger` token only. */
+.pb-org-close-confirm .theia-button.main {
+    color: var(--color-danger, #ff848b);
+    border-color: var(--color-danger, #ff848b);
+}
