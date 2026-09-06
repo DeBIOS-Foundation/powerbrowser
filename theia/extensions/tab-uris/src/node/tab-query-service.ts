@@ -76,7 +76,14 @@ export const TAB_QUERY_FILE_NAME = 'tabs.sqlite';
 export class TabQueryService {
     private db: Database | null = null;
 
-    constructor(private profileDir: string = process.env.POWERBROWSER_PROFILE_DIR ?? '') {}
+    // No constructor parameter: inversify cannot resolve a bare `string`
+    // serviceIdentifier, so a defaulted ctor param throws "No matching
+    // bindings" on every websocket connection and the suggestion RPC hangs
+    // (stuck shimmer). The supervisor already exports
+    // POWERBROWSER_PROFILE_DIR into the backend environment; read it here at
+    // construction (per-connection, lazy) and re-point later via
+    // setProfileDir.
+    private profileDir: string = process.env.POWERBROWSER_PROFILE_DIR ?? '';
 
     /** Points the reader at a profile directory, resetting any open handle. */
     setProfileDir(dir: string): void {
