@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.3
-current_phase: complete
-current_phase_name: v1.3 Browser GUI shipped — phases 13–15 complete, audit tech_debt accepted
-status: complete
-stopped_at: Milestone v1.3 complete (audit tech_debt, closeout committed)
-last_updated: "2026-09-06T00:00:00.000Z"
+current_phase: 13
+current_phase_name: Chrome Bar + Strip-Relocation Spike
+status: executing
+stopped_at: Completed 13-chrome-bar-strip-relocation-spike-04-PLAN.md
+last_updated: "2026-09-06T19:42:23.551Z"
 last_activity: 2026-09-06
-last_activity_desc: "v1.3 Browser GUI shipped (Phases 13–15: 9/9 plans + 1 revision; GUI-06..09 implemented; verifications deferred)"
-state_head: 220e1837b3448dd0d869f76a1e4952c1cf1367e3
+last_activity_desc: Phase 13 execution started
+state_head: 5ff735202e3239169987c6bf5f5482f3cacfd51f
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 3
+  completed_plans: 3
 milestone_name: Browser GUI
 ---
 
@@ -24,14 +24,14 @@ milestone_name: Browser GUI
 See: .planning/PROJECT.md (updated 2026-09-06)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** v1.3 shipped. Next: v1.4 intake (GUI-02, GUI-05, met seeds, re-probe, piles/search) — run `/gsd-new-milestone`. Carried: `/gsd-verify-work 13/14/15` (+ 10/11/12), GUI-07/GUI-08 box flips.
+**Current focus:** Phase 13 — Chrome Bar + Strip-Relocation Spike
 
 ## Current Position
 
-Phase: — (milestone complete)
-Plan: —
-Status: Milestone v1.3 complete — audit tech_debt accepted, archives written, tag v1.3
-Last activity: 2026-09-06 — v1.3 closeout (audit → archive → tag)
+Phase: 13 (Chrome Bar + Strip-Relocation Spike) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-09-06 — Phase 13 execution started
 
 ## Performance Metrics
 
@@ -110,6 +110,7 @@ Last activity: 2026-09-06 — v1.3 closeout (audit → archive → tag)
 | Phase 15-panorama-organising P02 | 52min | 4 tasks | 9 files |
 | Phase 15-panorama-organising P02 | 52min | 4 tasks | 9 files |
 | Phase 15-panorama-organising P03 | 16min | 4 tasks | 13 files |
+| Phase 13-chrome-bar-strip-relocation-spike P04 | n/a | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -272,6 +273,8 @@ Recent decisions affecting current work:
 - [Phase 13]: 15-02: HTML5 DnD kept with native Esc-cancel; auto-box is one composite actor write; settle-debounce rides sleep(); Close dialog keeps stock ConfirmDialog
 - [Phase 13]: 15-02: GUI-08 stays Pending (gates 2 of 5); requirements mark-complete NOT run
 - [Phase 13]: 15-03: tree renders over the single GroupModel via widget-owned module; parity, exactness, and copy gates green; placeholder retired; GUI-08 stays Pending for 15-05
+- [Phase 13]: [Phase 13-04]: Nav enablement reads one exported chromeBarHasNavigableTab (false, GUI-02-owned); GUI-02 flips the predicate
+- [Phase 13]: [Phase 13-04]: Suggestion activation commits row.url via the imported stock-window const; opaque row.uri survives only as the React list key; STAGED branch retired
 
 ### Pending Todos
 
@@ -364,8 +367,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-06T09:00:11.283Z
-Stopped at: Completed 15-panorama-organising-03-PLAN.md
+Last session: 2026-09-06T19:42:23.530Z
+Stopped at: Completed 13-chrome-bar-strip-relocation-spike-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
