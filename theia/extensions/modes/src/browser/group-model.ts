@@ -23,6 +23,10 @@ import type { GroupActorClient, GroupMutation } from './group-actor-client';
 /** Contracted rename cap (15-UI-SPEC.md); duplicates allowed, empty reverts. */
 export const GROUP_TITLE_MAX_CHARS = 60;
 
+/** Group-box minimum geometry (15-UI-SPEC.md: fits header plus one card). */
+export const GROUP_BOX_MIN_W = 200;
+export const GROUP_BOX_MIN_H = 144;
+
 /** Default title for New Group (contracted copy, verbatim). */
 export const UNTITLED_GROUP_TITLE = 'Untitled group';
 
@@ -232,6 +236,85 @@ export class GroupModel {
                 current.y = prior.y;
             }
         }, () => client.mutate({ kind: 'moveGroup', id, x: next.x, y: next.y }));
+    }
+
+    /** Resizes a box (corner handle); floors at the contracted minimum. */
+    async resizeGroup(client: GroupActorClient, id: string, w: number, h: number): Promise<void> {
+        const group = this.groups.find(candidate => candidate.id === id);
+        if (!group) {
+            return;
+        }
+        const next = { w: Math.max(GROUP_BOX_MIN_W, Math.floor(w)), h: Math.max(GROUP_BOX_MIN_H, Math.floor(h)) };
+        if (next.w === group.w && next.h === group.h) {
+            return;
+        }
+        const prior = { w: group.w, h: group.h };
+        await this.persist(`resize:${id}`, () => {
+            const current = this.groups.find(candidate => candidate.id === id);
+            if (current) {
+                current.w = next.w;
+                current.h = next.h;
+            }
+        }, () => {
+            const current = this.groups.find(candidate => candidate.id === id);
+            if (current) {
+                current.w = prior.w;
+                current.h = prior.h;
+            }
+        }, () => client.mutate({ kind: 'resizeGroup', id, w: next.w, h: next.h }));
+    }
+
+    /**
+     * Auto-draws one box around the given cards (the drop-matrix gesture:
+     * card-onto-card contains both, card-onto-field contains the one).
+     * Paints the box plus the membership move optimistically; the write is
+     * one composite (createGroup, idempotent upsert, then one setTabGroup
+     * per card) so Retry replays it whole and a second failure reverts it
+     * whole. Returns the painted box, or undefined when no URI resolved.
+     */
+    async autoBox(client: GroupActorClient, uris: readonly string[], at: { x: number; y: number }): Promise<PanoramaGroup | undefined> {
+        const placements = [...new Set(uris)].flatMap(uri => {
+            const found = this.locateCard(uri);
+            return found ? [{ uri, groupId: found.groupId, card: found.card }] : [];
+        });
+        if (!placements.length) {
+            return undefined;
+        }
+        const group: PanoramaGroup = {
+            id: `group-${Date.now().toString(36)}-${Math.floor(Math.random() * 0x100000).toString(36)}`,
+            title: UNTITLED_GROUP_TITLE,
+            x: Math.max(0, Math.floor(at.x)),
+            y: Math.max(0, Math.floor(at.y)),
+            w: 400,
+            h: 300,
+            isActive: false,
+        };
+        const apply = (): void => {
+            this.groups = [...this.groups, group];
+            this.members.set(group.id, []);
+            for (const placement of placements) {
+                this.removeCardLocal(placement.uri);
+                this.insertCardLocal(placement.card, group.id);
+            }
+        };
+        const revert = (): void => {
+            this.groups = this.groups.filter(candidate => candidate.id !== group.id);
+            this.members.delete(group.id);
+            for (const placement of placements) {
+                this.removeCardLocal(placement.uri);
+                this.insertCardLocal(placement.card, placement.groupId);
+            }
+            if (this.activeGroupId === group.id) {
+                this.activeGroupId = undefined;
+            }
+        };
+        await this.persist(`autobox:${group.id}`, apply, revert, async () => {
+            await client.mutate({ kind: 'createGroup', id: group.id, title: group.title, x: group.x, y: group.y, w: group.w, h: group.h });
+            for (const placement of placements) {
+                await client.mutate({ kind: 'setTabGroup', uri: placement.uri, groupId: group.id });
+            }
+        });
+        return group;
     }
 
     /**
@@ -448,8 +531,8 @@ export class GroupModel {
             title,
             x: Math.max(0, toFinite(row.x, 0)),
             y: Math.max(0, toFinite(row.y, 0)),
-            w: Math.max(200, toFinite(row.w, 400)),
-            h: Math.max(144, toFinite(row.h, 300)),
+            w: Math.max(GROUP_BOX_MIN_W, toFinite(row.w, 400)),
+            h: Math.max(GROUP_BOX_MIN_H, toFinite(row.h, 300)),
             isActive: row.is_active === 1,
         };
     }

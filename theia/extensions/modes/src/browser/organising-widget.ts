@@ -14,6 +14,17 @@
  * dialog (those are 15-02). Zoom is a pure view transform here -- card data
  * and box bounds are untouched, nothing persists.
  *
+ * 15-02: full canvas geometry. Corner resize (16x16 handle, 200x144 live
+ * floor, same debounce/commit discipline), the four-gesture auto-box drop
+ * matrix (card-onto-card, card-onto-field, card-into-box, card-into-tray)
+ * with optimistic paint and contracted rollback, Esc cancelling any geometry
+ * gesture with paint reverted and no further persist, dragged-card 0.7 with
+ * no transition while dragging, accent target outline (reserved use 7).
+ * Card drags ride native HTML5 DnD, so an Esc-cancelled drag fires no drop
+ * and persists nothing by construction -- there is no mid-drag paint to
+ * revert. Zoom stays a pure view transform: bounds plus card data untouched,
+ * thumbnails scaling by CSS, never re-captured.
+ *
  * Copy: contracted 15-UI-SPEC.md strings verbatim; no placeholder copy
  * survives. Names render as textContent, never innerHTML.
  */
@@ -31,7 +42,7 @@ import { GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-quer
 import pDebounce from 'p-debounce';
 import { registerOrganisingSlot } from './mode-descriptors';
 import { GroupActorClient } from './group-actor-client';
-import { GroupModel, PanoramaGroup, PanoramaTab } from './group-model';
+import { GroupModel, GROUP_BOX_MIN_H, GROUP_BOX_MIN_W, PanoramaGroup, PanoramaTab } from './group-model';
 import { PanoramaCommandHandler } from './panorama-commands';
 import '../../src/browser/modes.css';
 
@@ -61,9 +72,13 @@ export class OrganisingWidget extends Widget {
     protected editingGroupId: string | undefined;
     protected suppressRender = false;
     protected moveState: { id: string; startX: number; startY: number; baseX: number; baseY: number } | undefined;
+    protected resizeState: { id: string; startX: number; startY: number; baseW: number; baseH: number } | undefined;
     protected dragCard: { uri: string; fromGroup: string | null } | undefined;
+    /** Invalidates trailing debounced persists (Esc cancel, gesture end). */
+    protected geometrySeq = 0;
 
-    protected readonly debouncedMove = pDebounce((id: string, x: number, y: number) => this.persistMove(id, x, y), 150);
+    protected readonly debouncedMove = pDebounce((id: string, x: number, y: number, seq: number) => this.persistMove(id, x, y, seq), 150);
+    protected readonly debouncedResize = pDebounce((id: string, w: number, h: number, seq: number) => this.persistResize(id, w, h, seq), 150);
 
     protected toolbar!: HTMLElement;
     protected canvasToggle!: HTMLButtonElement;
@@ -332,6 +347,12 @@ export class OrganisingWidget extends Widget {
         }
         box.append(cards);
 
+        const grip = document.createElement('div');
+        grip.className = 'pb-org-box-resize';
+        grip.setAttribute('aria-label', 'Resize group');
+        grip.addEventListener('pointerdown', event => this.beginBoxResize(event, group));
+        box.append(grip);
+
         box.addEventListener('dragover', event => this.allowCardDrop(event, box));
         box.addEventListener('dragleave', () => box.classList.remove('is-drop-target'));
         box.addEventListener('drop', event => {
@@ -374,6 +395,7 @@ export class OrganisingWidget extends Widget {
         });
         card.addEventListener('dragstart', event => {
             this.dragCard = { uri: tab.uri, fromGroup: groupId };
+            card.classList.add('is-dragging');
             if (event.dataTransfer) {
                 event.dataTransfer.effectAllowed = 'move';
                 event.dataTransfer.setData('text/plain', tab.uri);
@@ -381,7 +403,17 @@ export class OrganisingWidget extends Widget {
         });
         card.addEventListener('dragend', () => {
             this.dragCard = undefined;
+            card.classList.remove('is-dragging');
             this.clearDropTargets();
+        });
+        card.addEventListener('dragover', event => {
+            event.stopPropagation();
+            this.allowCardDrop(event, card);
+        });
+        card.addEventListener('dragleave', () => card.classList.remove('is-drop-target'));
+        card.addEventListener('drop', event => {
+            card.classList.remove('is-drop-target');
+            void this.dropCardOntoCard(event, tab.uri);
         });
         return card;
     }
@@ -531,7 +563,7 @@ export class OrganisingWidget extends Widget {
             return;
         }
         const target = event.target as HTMLElement | null;
-        if (target && (target.closest('button') || target.closest('input'))) {
+        if (target && (target.closest('button') || target.closest('input') || target.closest('.pb-org-box-resize'))) {
             return;
         }
         event.preventDefault();
@@ -542,6 +574,8 @@ export class OrganisingWidget extends Widget {
             return;
         }
         this.suppressRender = true;
+        const seq = this.geometrySeq;
+        const base = { x: group.x, y: group.y };
         this.moveState = { id: group.id, startX: event.clientX, startY: event.clientY, baseX: group.x, baseY: group.y };
         const box = header.closest('.pb-org-box') as HTMLElement | null;
         const onMove = (move: PointerEvent): void => {
@@ -553,17 +587,21 @@ export class OrganisingWidget extends Widget {
             if (box) {
                 box.style.transform = `translate(${x}px, ${y}px)`;
             }
-            void this.debouncedMove(this.moveState.id, x, y).catch(error => {
+            void this.debouncedMove(this.moveState.id, x, y, seq).catch(error => {
                 console.error('[@powerbrowser/modes] group move failed:', error);
                 this.suppressRender = false;
                 this.moveState = undefined;
                 this.render();
             });
         };
-        const onUp = (up: PointerEvent): void => {
+        const finish = (): void => {
             header.removeEventListener('pointermove', onMove);
             header.removeEventListener('pointerup', onUp);
             header.removeEventListener('pointercancel', onCancel);
+            window.removeEventListener('keydown', onKey);
+        };
+        const onUp = (up: PointerEvent): void => {
+            finish();
             if (!this.moveState) {
                 return;
             }
@@ -572,26 +610,151 @@ export class OrganisingWidget extends Widget {
             const y = Math.max(0, Math.floor(baseY + (up.clientY - this.moveState.startY)));
             this.moveState = undefined;
             this.suppressRender = false;
-            void this.persistMove(id, x, y).catch(error => {
+            void this.persistMove(id, x, y, seq).catch(error => {
                 console.error('[@powerbrowser/modes] group move failed:', error);
-            }).finally(() => this.render());
+            }).finally(() => {
+                this.geometrySeq += 1;
+                this.render();
+            });
         };
         const onCancel = (): void => {
-            header.removeEventListener('pointermove', onMove);
-            header.removeEventListener('pointerup', onUp);
-            header.removeEventListener('pointercancel', onCancel);
+            finish();
             this.moveState = undefined;
             this.suppressRender = false;
+            this.geometrySeq += 1;
             this.render();
+        };
+        const onKey = (key: KeyboardEvent): void => {
+            if (key.key === 'Escape') {
+                // Esc cancels: invalidate the trailing debounce, revert the
+                // paint, and restore persisted bounds to base -- nothing new
+                // stays moved or persisted.
+                finish();
+                this.geometrySeq += 1;
+                const id = this.moveState?.id;
+                this.moveState = undefined;
+                this.suppressRender = false;
+                this.render();
+                if (id) {
+                    void this.model.moveGroup(this.actor, id, base.x, base.y).catch(error => {
+                        console.error('[@powerbrowser/modes] group move cancel-restore failed:', error);
+                    }).finally(() => this.render());
+                }
+            }
         };
         header.addEventListener('pointermove', onMove);
         header.addEventListener('pointerup', onUp);
         header.addEventListener('pointercancel', onCancel);
+        window.addEventListener('keydown', onKey);
     }
 
-    protected async persistMove(id: string, x: number, y: number): Promise<void> {
+    protected beginBoxResize(event: PointerEvent, group: PanoramaGroup): void {
+        if (event.button !== 0 || this.editingGroupId !== undefined) {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        const grip = event.currentTarget as HTMLElement;
+        try {
+            grip.setPointerCapture(event.pointerId);
+        } catch {
+            return;
+        }
+        this.suppressRender = true;
+        const seq = this.geometrySeq;
+        const base = { w: group.w, h: group.h };
+        this.resizeState = { id: group.id, startX: event.clientX, startY: event.clientY, baseW: group.w, baseH: group.h };
+        const box = grip.closest('.pb-org-box') as HTMLElement | null;
+        const apply = (clientX: number, clientY: number): { w: number; h: number } => {
+            const state = this.resizeState;
+            const w = Math.max(GROUP_BOX_MIN_W, Math.floor((state?.baseW ?? base.w) + (clientX - (state?.startX ?? clientX))));
+            const h = Math.max(GROUP_BOX_MIN_H, Math.floor((state?.baseH ?? base.h) + (clientY - (state?.startY ?? clientY))));
+            if (box) {
+                box.style.width = `${w}px`;
+                box.style.height = `${h}px`;
+            }
+            return { w, h };
+        };
+        const finish = (): void => {
+            grip.removeEventListener('pointermove', onMove);
+            grip.removeEventListener('pointerup', onUp);
+            grip.removeEventListener('pointercancel', onCancel);
+            window.removeEventListener('keydown', onKey);
+        };
+        const onMove = (move: PointerEvent): void => {
+            if (!this.resizeState) {
+                return;
+            }
+            const { w, h } = apply(move.clientX, move.clientY);
+            void this.debouncedResize(this.resizeState.id, w, h, seq).catch(error => {
+                console.error('[@powerbrowser/modes] group resize failed:', error);
+                this.suppressRender = false;
+                this.resizeState = undefined;
+                this.render();
+            });
+        };
+        const onUp = (up: PointerEvent): void => {
+            finish();
+            if (!this.resizeState) {
+                return;
+            }
+            const { id } = this.resizeState;
+            const { w, h } = apply(up.clientX, up.clientY);
+            this.resizeState = undefined;
+            this.suppressRender = false;
+            void this.persistResize(id, w, h, seq).catch(error => {
+                console.error('[@powerbrowser/modes] group resize failed:', error);
+            }).finally(() => {
+                this.geometrySeq += 1;
+                this.render();
+            });
+        };
+        const onCancel = (): void => {
+            finish();
+            this.resizeState = undefined;
+            this.suppressRender = false;
+            this.geometrySeq += 1;
+            this.render();
+        };
+        const onKey = (key: KeyboardEvent): void => {
+            if (key.key === 'Escape') {
+                finish();
+                this.geometrySeq += 1;
+                const id = this.resizeState?.id;
+                this.resizeState = undefined;
+                this.suppressRender = false;
+                this.render();
+                if (id) {
+                    void this.model.resizeGroup(this.actor, id, base.w, base.h).catch(error => {
+                        console.error('[@powerbrowser/modes] group resize cancel-restore failed:', error);
+                    }).finally(() => this.render());
+                }
+            }
+        };
+        grip.addEventListener('pointermove', onMove);
+        grip.addEventListener('pointerup', onUp);
+        grip.addEventListener('pointercancel', onCancel);
+        window.addEventListener('keydown', onKey);
+    }
+
+    protected async persistMove(id: string, x: number, y: number, seq: number): Promise<void> {
+        if (seq !== this.geometrySeq) {
+            return;
+        }
         try {
             await this.model.moveGroup(this.actor, id, x, y);
+        } catch (error) {
+            this.render();
+            throw error;
+        }
+    }
+
+    protected async persistResize(id: string, w: number, h: number, seq: number): Promise<void> {
+        if (seq !== this.geometrySeq) {
+            return;
+        }
+        try {
+            await this.model.resizeGroup(this.actor, id, w, h);
         } catch (error) {
             this.render();
             throw error;
@@ -625,15 +788,87 @@ export class OrganisingWidget extends Widget {
         }
         try {
             await this.model.moveCard(this.actor, drag.uri, toGroup);
-            if (drag.fromGroup !== null && drag.fromGroup !== toGroup
-                && this.model.getTabs(drag.fromGroup).length === 0
-                && this.model.listGroups().some(group => group.id === drag.fromGroup)) {
-                await this.model.dissolveGroup(this.actor, drag.fromGroup);
-            }
+            await this.dissolveEmptied(drag.fromGroup, toGroup);
         } catch (error) {
             console.error('[@powerbrowser/modes] card drop failed:', error);
         }
         this.render();
+    }
+
+    /**
+     * Card-onto-card: auto-draws one box containing both cards at the drop
+     * point, then dissolves any source box left empty (last-card-out).
+     */
+    protected async dropCardOntoCard(event: DragEvent, targetUri: string): Promise<void> {
+        event.preventDefault();
+        event.stopPropagation();
+        const drag = this.dragCard;
+        this.dragCard = undefined;
+        this.clearDropTargets();
+        if (!drag || drag.uri === targetUri) {
+            return;
+        }
+        try {
+            const box = await this.model.autoBox(this.actor, [drag.uri, targetUri], this.canvasPoint(event));
+            if (box && drag.fromGroup !== null && drag.fromGroup !== box.id) {
+                await this.dissolveEmptied(drag.fromGroup, box.id);
+            }
+        } catch (error) {
+            console.error('[@powerbrowser/modes] card auto-box failed:', error);
+        }
+        this.render();
+    }
+
+    /** Card-onto-field: auto-draws one box around the dropped card. */
+    protected async dropCardOnField(event: DragEvent): Promise<void> {
+        const target = event.target as HTMLElement | null;
+        if (target && target.closest('.pb-org-box, .pb-org-card')) {
+            return;
+        }
+        event.preventDefault();
+        const drag = this.dragCard;
+        this.dragCard = undefined;
+        this.clearDropTargets();
+        if (!drag) {
+            return;
+        }
+        try {
+            const box = await this.model.autoBox(this.actor, [drag.uri], this.canvasPoint(event));
+            if (box && drag.fromGroup !== null && drag.fromGroup !== box.id) {
+                await this.dissolveEmptied(drag.fromGroup, box.id);
+            }
+        } catch (error) {
+            console.error('[@powerbrowser/modes] card auto-box failed:', error);
+        }
+        this.render();
+    }
+
+    /** Last-card-out: dissolves a source box left with zero cards. */
+    protected async dissolveEmptied(fromGroup: string | null, toGroup: string | null): Promise<void> {
+        if (fromGroup === null || fromGroup === toGroup
+            || this.model.getTabs(fromGroup).length !== 0
+            || !this.model.listGroups().some(group => group.id === fromGroup)) {
+            return;
+        }
+        await this.model.dissolveGroup(this.actor, fromGroup);
+    }
+
+    /**
+     * Drop-event client pixels into user-pixel canvas coordinates. The zoom
+     * transform touches the layer only, so dividing the layer-relative point
+     * by the zoom factor recovers the stored bounds space.
+     */
+    protected canvasPoint(event: DragEvent): { x: number; y: number } {
+        const zoom = ZOOM_STEPS[this.zoomIndex] / 100;
+        try {
+            const rect = this.canvasRoot.getBoundingClientRect();
+            return {
+                x: Math.max(0, Math.floor((event.clientX - rect.left) / zoom)),
+                y: Math.max(0, Math.floor((event.clientY - rect.top) / zoom)),
+            };
+        } catch {
+            return { x: 24, y: 24 };
+        }
     }
 
     protected dive(tab: PanoramaTab, groupId: string | null): void {
@@ -760,6 +995,18 @@ export class OrganisingWidget extends Widget {
         this.canvasRoot = document.createElement('div');
         this.canvasRoot.className = 'pb-org-canvas';
         this.canvasRoot.dataset.canvas = 'true';
+        this.canvasRoot.addEventListener('dragover', event => {
+            const target = event.target as HTMLElement | null;
+            if (target && target.closest('.pb-org-box, .pb-org-card')) {
+                return;
+            }
+            this.allowCardDrop(event, this.canvasRoot);
+        });
+        this.canvasRoot.addEventListener('dragleave', () => this.canvasRoot.classList.remove('is-drop-target'));
+        this.canvasRoot.addEventListener('drop', event => {
+            this.canvasRoot.classList.remove('is-drop-target');
+            void this.dropCardOnField(event);
+        });
         this.canvasLayer.append(this.canvasRoot);
         this.canvasHost.append(this.canvasLayer);
 

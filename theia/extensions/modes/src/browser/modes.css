@@ -352,6 +352,28 @@
     color: var(--color-text-muted, #9a99a8);
 }
 
+/* GUI-08 (15-02): the corner resize handle. A 16x16 hit area pinned to the
+   box's bottom-right corner; the grip face is drawn, never an image. */
+.pb-org-box-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 16px;
+    height: 16px;
+    box-sizing: border-box;
+    cursor: nwse-resize;
+    touch-action: none;
+    background: linear-gradient(135deg, transparent 50%, var(--color-text-muted, #9a99a8) 50%);
+    border-bottom-right-radius: 4px;
+    opacity: 0.6;
+    transition: all 0.15s ease;
+}
+
+.pb-org-canvas.is-drop-target {
+    outline: 2px solid var(--color-primary, #00a6f5);
+    outline-offset: -2px;
+}
+
 .pb-org-card {
     width: 160px;
     box-sizing: border-box;
@@ -367,6 +389,18 @@
     width: 160px;
     height: 90px;
     object-fit: cover;
+}
+
+/* GUI-08 (15-02): drag idiom. The dragged card rides at 0.7 with no
+   transition while dragging so it tracks the pointer; a card hovered as an
+   auto-box target carries the reserved accent outline (use 7). */
+.pb-org-card.is-dragging {
+    opacity: 0.7;
+    transition: none;
+}
+
+.pb-org-card.is-drop-target {
+    border-color: var(--color-primary, #00a6f5);
 }
 
 .pb-org-card-title {
@@ -569,6 +603,8 @@
 @media (prefers-reduced-motion: reduce) {
     .pb-org-canvas-layer,
     .pb-org-card,
+    .pb-org-card.is-dragging,
+    .pb-org-box-resize,
     .pb-org-toggle-segment,
     .pb-org-new,
     .pb-org-zoom-step,
