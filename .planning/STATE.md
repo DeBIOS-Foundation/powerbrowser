@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-status: Awaiting next milestone
-stopped_at: Completed 12-sql-store-build-03-PLAN.md
-last_updated: "2026-09-05T20:44:32.800Z"
+milestone: v1.3
+milestone_name: Browser GUI
+status: planning
+last_updated: "2026-09-06T02:29:49.569Z"
 last_activity: 2026-09-05
-last_activity_desc: Milestone v1.2 completed and archived
-state_head: 0f56ed9cffaf38c05458c378761df3d68589f85e
 progress:
-  total_phases: 3
+  total_phases: 0
   completed_phases: 0
-  total_plans: 9
-  completed_plans: 6
-milestone_name: Sign-off Closeout and SQL Store
-current_phase: 10
-current_phase_name: roadmap created, not started
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-09-05)
 
 ## Current Position
 
-Phase: Milestone v1.2 complete (override closeout, audit tech_debt accepted)
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone — phases archived to `.planning/milestones/v1.2-phases/`
-Last activity: 2026-09-05 — Milestone v1.2 completed and archived (3 phases, 9 plans, 22 tasks; tag v1.2)
+Status: Defining requirements
+Last activity: 2026-09-05 — Milestone v1.3 started
 
 ## Performance Metrics
 
