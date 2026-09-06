@@ -30,7 +30,7 @@
 //   node scripts/verify-gui08-panorama-copy.mjs
 //   node scripts/verify-gui08-panorama-copy.mjs --self-test
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -38,12 +38,13 @@ const NAME = 'verify-gui08-panorama-copy';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, '..');
 
-const WIDGET_REL = 'theia/extensions/modes/src/browser/organising-widget.ts';
-const TREE_REL = 'theia/extensions/modes/src/browser/organising-tree.ts';
-const COMMANDS_REL = 'theia/extensions/modes/src/browser/panorama-commands.ts';
-const MODEL_REL = 'theia/extensions/modes/src/browser/group-model.ts';
-const CSS_REL = 'theia/extensions/modes/src/browser/modes.css';
-const MODULE_REL = 'theia/extensions/modes/src/browser/modes-frontend-module.ts';
+const MODES_BROWSER_REL = 'theia/extensions/modes/src/browser';
+const WIDGET_REL = `${MODES_BROWSER_REL}/organising-widget.ts`;
+const TREE_REL = `${MODES_BROWSER_REL}/organising-tree.ts`;
+const COMMANDS_REL = `${MODES_BROWSER_REL}/panorama-commands.ts`;
+const MODEL_REL = `${MODES_BROWSER_REL}/group-model.ts`;
+const CSS_REL = `${MODES_BROWSER_REL}/modes.css`;
+const MODULE_REL = `${MODES_BROWSER_REL}/modes-frontend-module.ts`;
 
 /**
  * The declared panorama copy contract. The ONE hand-kept block in this
@@ -196,12 +197,15 @@ function checkStatic(sources) {
             failures.push(`user-facing string ${JSON.stringify(value)} leaks the internal identifier ${JSON.stringify(hit)} -- it belongs in a diagnostics field row`);
         }
     }
-    const shipped = [WIDGET_REL, TREE_REL, CSS_REL, COMMANDS_REL, MODEL_REL, MODULE_REL]
-        .map(rel => sources[rel] ?? '');
-    RETIRED_COPY.forEach((needle, index) => {
-        const holder = [WIDGET_REL, TREE_REL, CSS_REL, COMMANDS_REL, MODEL_REL, MODULE_REL][shipped.findIndex(src => src.includes(needle))];
-        if (holder) {
-            failures.push(`retired placeholder copy ${JSON.stringify(RETIRED_COPY[index])} survives in ${holder} -- the placeholder is retired, not reused`);
+    // WR-05b: the retired-copy proof scans the DERIVED shipped set (every
+    // modes-browser .ts plus the CSS/module files), never a hand-kept list
+    // -- placeholder copy reintroduced in any other shipped source goes red.
+    const shippedRels = Object.keys(sources);
+    const shipped = shippedRels.map(rel => sources[rel] ?? '');
+    RETIRED_COPY.forEach((needle) => {
+        const at = shipped.findIndex(src => src.includes(needle));
+        if (at >= 0) {
+            failures.push(`retired placeholder copy ${JSON.stringify(needle)} survives in ${shippedRels[at]} -- the placeholder is retired, not reused`);
         }
     });
     return failures;
@@ -209,7 +213,7 @@ function checkStatic(sources) {
 
 function readSources() {
     const read = rel => readFileSync(join(REPO_ROOT, rel), 'utf8');
-    return {
+    const sources = {
         [WIDGET_REL]: read(WIDGET_REL),
         [TREE_REL]: read(TREE_REL),
         [COMMANDS_REL]: read(COMMANDS_REL),
@@ -217,6 +221,17 @@ function readSources() {
         [CSS_REL]: read(CSS_REL),
         [MODULE_REL]: read(MODULE_REL),
     };
+    // WR-05b: derive the shipped set -- every modes-browser .ts rides the
+    // retired-copy proof, so a seventh file cannot silently carry a revival.
+    for (const file of readdirSync(join(REPO_ROOT, MODES_BROWSER_REL))) {
+        if (file.endsWith('.ts')) {
+            const rel = `${MODES_BROWSER_REL}/${file}`;
+            if (!(rel in sources)) {
+                sources[rel] = read(rel);
+            }
+        }
+    }
+    return sources;
 }
 
 function main() {
@@ -290,10 +305,28 @@ function selfTest() {
         }
     }
 
+    // Plant 4 (WR-05b): retired copy revived in a previously-unscanned file
+    // must go red naming the file.
+    {
+        const OTHER_REL = `${MODES_BROWSER_REL}/mode-descriptors.ts`;
+        const mutated = { ...real, [OTHER_REL]: `${real[OTHER_REL]}\nhint.textContent = 'Back to Browsing';\n` };
+        const landed = mutated[OTHER_REL].includes('Back to Browsing');
+        const result = checkStatic(mutated);
+        if (!landed) {
+            console.error(`${NAME} --self-test: FAIL -- 'unscanned-file placeholder' plant did not land`);
+            failed += 1;
+        } else if (!result.some(f => /Back to Browsing/.test(f) && new RegExp(OTHER_REL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(f))) {
+            console.error(`${NAME} --self-test: FAIL -- 'unscanned-file placeholder' did not go red naming the file; got: ${result.join(' | ') || '(no failures at all)'}`);
+            failed += 1;
+        } else {
+            console.log(`  ok  unscanned-file placeholder -> red, naming the file`);
+        }
+    }
+
     if (failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all three fault directions went red naming the drift`);
+    console.log(`${NAME} --self-test: PASS -- all four fault directions went red naming the drift`);
 }
 
 if (process.argv.includes('--self-test')) {

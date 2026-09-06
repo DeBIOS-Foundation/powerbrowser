@@ -79,7 +79,11 @@ function derivedModelReaders(browsedFiles) {
         if (rel === MODEL_REL) {
             continue;
         }
-        if (/\.listGroups\(/.test(src)) {
+        // WR-05a: all four reader entry points, not just listGroups -- a
+        // second fetch site reading getGroupTabs, listUngroupedTabs, or
+        // getThumbnail without calling listGroups is the same divergence.
+        if (/\.listGroups\(/.test(src) || /\.getGroupTabs\(/.test(src)
+            || /\.listUngroupedTabs\(/.test(src) || /\.getThumbnail\(/.test(src)) {
             readers.push(rel);
         }
     }
@@ -125,8 +129,9 @@ function checkStatic(sources) {
     }
 
     // 1. Single-model readers as set equality: exactly the widget reads the
-    // model outside the model itself. A second file with a listGroups call
-    // site is a second store opinion, not a render root.
+    // model outside the model itself. A second file with a reader call site
+    // (listGroups, getGroupTabs, listUngroupedTabs, or getThumbnail) is a
+    // second store opinion, not a render root.
     const browsed = Object.entries(sources).filter(([rel]) => rel !== MODEL_REL && rel !== WIDGET_REL && rel !== TREE_REL);
     const readers = derivedModelReaders([[WIDGET_REL, widgetSrc], [TREE_REL, treeSrc], ...browsed]);
     if (!readers.length && !widgetSrc.includes('listGroups')) {
@@ -276,10 +281,28 @@ function selfTest() {
         }
     }
 
+    // Plant 4 (WR-05a): a second fetch site via getGroupTabs in another
+    // modes-browser file must go red naming it.
+    {
+        const OTHER_REL = `${MODES_BROWSER_REL}/mode-descriptors.ts`;
+        const mutated = { ...real, [OTHER_REL]: `${real[OTHER_REL]}\nconst extra = reader.getGroupTabs('g1');\n` };
+        const landed = mutated[OTHER_REL].includes('reader.getGroupTabs(');
+        const result = checkStatic(mutated);
+        if (!landed) {
+            console.error(`${NAME} --self-test: FAIL -- 'getGroupTabs fetch site' plant did not land`);
+            failed += 1;
+        } else if (!result.some(f => /second fetch site|getGroupTabs/.test(f))) {
+            console.error(`${NAME} --self-test: FAIL -- 'getGroupTabs fetch site' did not go red naming the fetch; got: ${result.join(' | ') || '(no failures at all)'}`);
+            failed += 1;
+        } else {
+            console.log(`  ok  getGroupTabs fetch site -> red, naming the fetch`);
+        }
+    }
+
     if (failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all three fault directions went red naming the drift`);
+    console.log(`${NAME} --self-test: PASS -- all four fault directions went red naming the drift`);
 }
 
 if (process.argv.includes('--self-test')) {
