@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sketch 001: Browser chrome placement</title>
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding-top: 52px; background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); }
+  /* variant nav */
+  #variant-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 9998; background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding: 8px 16px; display: flex; gap: 8px; font-family: system-ui; align-items: center; }
+  #variant-nav .sketch-title { font-size: 12px; color: var(--color-text-muted); margin-right: 12px; }
+  .variant-tab { background: transparent; border: 1px solid var(--color-border); color: var(--color-text); border-radius: var(--radius-md); padding: 6px 12px; cursor: pointer; transition: all 0.15s ease; font-size: 13px; }
+  .variant-tab:hover { background: var(--color-surface-raised); }
+  .variant-tab.active { background: var(--color-primary); border-color: var(--color-primary); }
+  .variant { display: none; padding: 24px; }
+  .variant.active { display: block; }
+  .variant h2 { font-size: var(--text-lg); margin: 0 0 4px; }
+  .variant .sub { color: var(--color-text-muted); font-size: var(--text-sm); margin: 0 0 16px; }
+  /* mock window */
+  .mockwin { border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; background: var(--color-bg); box-shadow: var(--shadow-lg); max-width: 1100px; margin: 0 auto; }
+  .menubar { display: flex; gap: 14px; padding: 6px 12px; font-size: 12px; color: var(--color-text-muted); background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
+  .menubar span:hover { color: var(--color-text); cursor: default; }
+  .tabstrip { display: flex; align-items: flex-end; gap: 4px; padding: 6px 8px 0; background: var(--color-surface); }
+  .tab { padding: 7px 12px; font-size: 13px; border-radius: var(--radius-md) var(--radius-md) 0 0; color: var(--color-text-muted); cursor: pointer; border: 1px solid transparent; border-bottom: none; transition: all 0.15s ease; white-space: nowrap; user-select: none; }
+  .tab:hover { background: var(--color-surface-raised); color: var(--color-text); }
+  .tab.active { background: var(--color-bg); color: var(--color-text); border-color: var(--color-border); }
+  .tab.dragging { opacity: 0.4; }
+  .newtab-btn { background: transparent; border: none; color: var(--color-text-muted); font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: var(--radius-sm); transition: all 0.15s ease; }
+  .newtab-btn:hover { background: var(--color-surface-raised); color: var(--color-text); }
+  .navbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--color-bg); border-top: 1px solid var(--color-border); }
+  .navbtn { background: transparent; border: none; color: var(--color-text); font-size: 15px; cursor: pointer; padding: 6px 9px; border-radius: var(--radius-full); transition: all 0.15s ease; }
+  .navbtn:hover:not(:disabled) { background: var(--color-surface-raised); }
+  .navbtn:disabled { opacity: 0.3; cursor: default; }
+  .addr { flex: 1; display: flex; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-full); padding: 6px 14px; font-size: 13px; position: relative; }
+  .addr input { flex: 1; background: transparent; border: none; outline: none; color: var(--color-text); font-size: 13px; }
+  .addr .lock { color: var(--color-success); margin-right: 8px; font-size: 12px; }
+  .suggest { position: absolute; top: 110%; left: 0; right: 0; background: var(--color-surface-raised); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-md); display: none; z-index: 50; overflow: hidden; }
+  .suggest div { padding: 8px 14px; font-size: 13px; cursor: pointer; }
+  .suggest div:hover { background: var(--color-primary); }
+  .modeseg { display: flex; border: 1px solid var(--color-border); border-radius: var(--radius-full); overflow: hidden; font-size: 12px; }
+  .modeseg button { background: transparent; border: none; color: var(--color-text-muted); padding: 6px 12px; cursor: pointer; transition: all 0.15s ease; }
+  .modeseg button.active { background: var(--color-primary); color: white; }
+  .workarea { display: flex; min-height: 340px; }
+  .sidepanel { width: 210px; background: var(--color-surface); border-right: 1px solid var(--color-border); padding: 12px; font-size: 13px; transition: all 0.2s ease; }
+  .sidepanel.hidden { display: none; }
+  .sidepanel h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-muted); }
+  .sidepanel .file { padding: 4px 8px; border-radius: var(--radius-sm); color: var(--color-text-muted); }
+  .sidepanel .file:hover { background: var(--color-surface-raised); color: var(--color-text); cursor: pointer; }
+  .content { flex: 1; padding: 24px; position: relative; }
+  .content h3 { margin-top: 0; }
+  .content .uri-chip { font-family: var(--font-mono); font-size: 12px; color: var(--color-accent); background: var(--color-surface); padding: 3px 8px; border-radius: var(--radius-sm); }
+  .statusbar { display: flex; gap: 12px; padding: 4px 12px; font-size: 11px; color: var(--color-text-muted); background: var(--color-surface); border-top: 1px solid var(--color-border); }
+  .toast { position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%); background: var(--color-surface-raised); border: 1px solid var(--color-border); padding: 8px 16px; border-radius: var(--radius-md); font-size: 13px; opacity: 0; transition: opacity 0.2s ease; z-index: 9999; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  /* Variant B floating */
+  .addr-chip { cursor: pointer; }
+  .addr-chip:hover { border-color: var(--color-primary); }
+  .float-overlay { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 60%; z-index: 60; display: none; }
+  .float-overlay.open { display: block; }
+  /* Variant C side */
+  .layout-side { display: flex; }
+  .sidestrip { width: 190px; background: var(--color-surface); border-right: 1px solid var(--color-border); display: flex; flex-direction: column; padding: 8px; gap: 2px; }
+  .sidestrip .tab { border-radius: var(--radius-md); border: 1px solid transparent; }
+  .sidestrip .tab.active { border-color: var(--color-border); background: var(--color-bg); }
+  .sidestrip .navrow { display: flex; gap: 2px; padding: 4px 2px 8px; }
+  .sidestrip .addr-mini { margin: 0 2px 8px; }
+  .sidestrip .addr-mini input { width: 100%; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); padding: 6px 8px; font-size: 12px; outline: none; }
+  .maincol { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  /* sketch toolbar */
+  #sketch-tools { position: fixed; bottom: 12px; right: 12px; z-index: 9999; font-family: system-ui; font-size: 12px; background: rgba(0,0,0,0.7); color: white; padding: 8px 12px; border-radius: 8px; opacity: 0.4; transition: opacity 0.2s; display: flex; gap: 8px; align-items: center; }
+  #sketch-tools:hover { opacity: 1; }
+  #sketch-tools button { background: #444; color: white; border: none; border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+  body.annotate .mockwin { outline: 1px dashed var(--color-accent); outline-offset: 4px; }
+  .spin { display: inline-block; animation: rot 0.8s linear infinite; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="variant-nav">
+  <span class="sketch-title">001 · chrome placement</span>
+  <button class="variant-tab active" onclick="showVariant('a')">A: Top bar ★ Selected</button>
+  <button class="variant-tab" onclick="showVariant('b')">B: Floating address</button>
+  <button class="variant-tab" onclick="showVariant('c')">C: Side strip</button>
+</div>
+
+<div id="variant-a" class="variant active">
+  <h2>Variant A: Top bar, Firefox-like</h2>
+  <p class="sub">Tab strip on top, nav row beneath. Path of least resistance in Theia — maps to existing tab bars + a toolbar contribution.</p>
+  <div class="mockwin" id="win-a">
+    <div class="menubar"><span>File</span><span>Edit</span><span>Selection</span><span>View</span><span>Go</span><span>Run</span><span>Terminal</span><span>Help</span></div>
+    <div class="tabstrip" data-tabs></div>
+    <div class="navbar">
+      <button class="navbtn" data-act="back" title="Back">←</button>
+      <button class="navbtn" data-act="fwd" title="Forward">→</button>
+      <button class="navbtn" data-act="reload" title="Reload">⟳</button>
+      <div class="addr"><span class="lock">🔒</span><input data-addr placeholder="Search or enter address"><div class="suggest" data-suggest></div></div>
+      <div class="modeseg" data-modes><button data-mode="coding">Coding</button><button data-mode="browsing" class="active">Browsing</button><button data-mode="organising">Organising</button></div>
+    </div>
+    <div class="workarea"><div class="sidepanel" data-side><h4>Explorer</h4><div class="file">📁 src</div><div class="file">📁 theia/extensions</div><div class="file">📄 configuration.toml</div><div class="file">📄 README.md</div></div><div class="content" data-content></div></div>
+    <div class="statusbar"><span>ⓘ main*</span><span>⇅ 0↓ 0↑</span><span style="margin-left:auto">PowerBrowser</span></div>
+  </div>
+</div>
+
+<div id="variant-b" class="variant">
+  <h2>Variant B: Floating address bar</h2>
+  <p class="sub">No permanent nav row. An address chip opens a centered floating bar (spotlight-style). Maximum content space; address one keypress away.</p>
+  <div class="mockwin" id="win-b">
+    <div class="menubar"><span>File</span><span>Edit</span><span>Selection</span><span>View</span><span>Go</span><span>Run</span><span>Terminal</span><span>Help</span></div>
+    <div class="tabstrip" data-tabs></div>
+    <div class="navbar">
+      <button class="navbtn" data-act="back">←</button>
+      <button class="navbtn" data-act="fwd">→</button>
+      <button class="navbtn" data-act="reload">⟳</button>
+      <div class="addr addr-chip" data-chip title="Open address bar"><span class="lock">🔒</span><span data-chipurl style="color:var(--color-text-muted)">Search or enter address…</span></div>
+      <div class="modeseg" data-modes><button data-mode="coding">Coding</button><button data-mode="browsing" class="active">Browsing</button><button data-mode="organising">Organising</button></div>
+    </div>
+    <div class="workarea"><div class="sidepanel" data-side><h4>Explorer</h4><div class="file">📁 src</div><div class="file">📁 theia/extensions</div><div class="file">📄 configuration.toml</div></div><div class="content" data-content><div class="float-overlay" data-float><div class="addr"><span class="lock">🔒</span><input data-addr placeholder="Search or enter address"><div class="suggest" data-suggest></div></div></div></div></div>
+    <div class="statusbar"><span>ⓘ main*</span><span style="margin-left:auto">PowerBrowser</span></div>
+  </div>
+</div>
+
+<div id="variant-c" class="variant">
+  <h2>Variant C: Vertical side strip</h2>
+  <p class="sub">Tabs + nav stacked on the side, Edge-vertical-tabs style. Frees all vertical space; tab titles never truncate.</p>
+  <div class="mockwin layout-side" id="win-c">
+    <div class="sidestrip">
+      <div class="modeseg" data-modes style="margin-bottom:6px"><button data-mode="coding">💻</button><button data-mode="browsing" class="active">🌐</button><button data-mode="organising">🗂</button></div>
+      <div class="navrow"><button class="navbtn" data-act="back">←</button><button class="navbtn" data-act="fwd">→</button><button class="navbtn" data-act="reload">⟳</button></div>
+      <div class="addr-mini"><input data-addr placeholder="Address…"></div>
+      <div data-tabs style="display:flex;flex-direction:column;gap:2px"></div>
+      <button class="newtab-btn" data-act="new" style="align-self:flex-start">＋ New tab</button>
+    </div>
+    <div class="maincol">
+      <div class="menubar"><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Run</span><span>Terminal</span><span>Help</span></div>
+      <div class="workarea"><div class="sidepanel" data-side><h4>Explorer</h4><div class="file">📁 src</div><div class="file">📄 configuration.toml</div></div><div class="content" data-content></div></div>
+      <div class="statusbar"><span>ⓘ main*</span><span style="margin-left:auto">PowerBrowser</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="sketch-tools">
+  <select onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default.css">Default</option></select>
+  <button onclick="setWidth('100%')">Desktop</button>
+  <button onclick="setWidth('768px')">Tablet</button>
+  <button onclick="setWidth('375px')">Phone</button>
+  <button onclick="document.body.classList.toggle('annotate')">Annotate</button>
+</div>
+
+<script>
+function showVariant(id) {
+  document.querySelectorAll('.variant').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.variant-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('variant-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+function setWidth(w) { document.querySelectorAll('.mockwin').forEach(m => m.style.maxWidth = w === '100%' ? '1100px' : w); }
+let toastT;
+function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1800); }
+
+const PAGES = {
+  'view:welcome': { title: 'Welcome', body: '<h3>Welcome to PowerBrowser</h3><p>IDE home. Open a file, terminal, or new browser tab.</p>' },
+  'terminal:build': { title: 'Terminal — build', body: '<h3>Terminal <span class="uri-chip">terminal:build</span></h3><p style="font-family:var(--font-mono);font-size:13px">$ yarn build<br>✓ done in 41s</p>' },
+  'web:example.com': { title: 'Example', url: 'https://example.com', hist: ['https://example.com', 'https://example.com/about'], hi: 1, body: '<h3>Example Domain</h3><p>This domain is for use in illustrative examples.</p>' },
+};
+const SUGGEST = ['example.com', 'example.com/about', 'terminal:build', 'view:welcome', 'theia-ide.org/docs'];
+const STARTER = ['view:welcome', 'terminal:build', 'web:example.com'];
+
+function MockBrowser(rootId) {
+  this.root = document.getElementById(rootId);
+  this.tabs = STARTER.slice();
+  this.active = this.tabs[0];
+  this.tabEls = this.root.querySelector('[data-tabs]');
+  this.content = this.root.querySelector('[data-content]');
+  this.addr = this.root.querySelector('.navbar input[data-addr], .addr-mini input[data-addr], .float-overlay input[data-addr]') || this.root.querySelector('input[data-addr]');
+  this.suggest = this.root.querySelector('.navbar [data-suggest], .float-overlay [data-suggest]');
+  this.side = this.root.querySelector('[data-side]');
+  const self = this;
+  // new-tab button only exists in C; A/B get one appended
+  if (!this.root.querySelector('[data-act="new"]') && this.tabEls) {
+    const b = document.createElement('button'); b.className = 'newtab-btn'; b.textContent = '＋'; b.title = 'New tab'; b.onclick = () => self.newTab();
+    this.tabEls.appendChild(b); this.plusBtn = b;
+  }
+  this.root.querySelectorAll('[data-act]').forEach(btn => {
+    const a = btn.dataset.act;
+    if (a === 'back') btn.onclick = () => self.nav(-1);
+    if (a === 'fwd') btn.onclick = () => self.nav(1);
+    if (a === 'reload') btn.onclick = (e) => self.reload(e.target);
+    if (a === 'new') btn.onclick = () => self.newTab();
+  });
+  this.root.querySelectorAll('[data-modes] button').forEach(btn => {
+    btn.onclick = () => {
+      self.root.querySelectorAll('[data-modes] button').forEach(x => { if (x.dataset.mode) x.classList.remove('active'); });
+      btn.classList.add('active');
+      const show = btn.dataset.mode !== 'browsing';
+      if (self.side) self.side.classList.toggle('hidden', !show);
+      toast(btn.dataset.mode[0].toUpperCase() + btn.dataset.mode.slice(1) + ' mode — tabs kept: ' + self.tabs.length);
+    };
+  });
+  const chip = this.root.querySelector('[data-chip]');
+  if (chip) chip.onclick = () => { const f = self.root.querySelector('[data-float]'); f.classList.add('open'); const i = f.querySelector('input'); i.value = self.addrUrl(); i.focus(); };
+  if (this.addr) {
+    this.addr.addEventListener('input', () => self.filterSuggest());
+    this.addr.addEventListener('keydown', e => { if (e.key === 'Enter') self.go(self.addr.value); if (e.key === 'Escape') { const f = self.root.querySelector('[data-float]'); if (f) f.classList.remove('open'); } });
+    this.addr.addEventListener('blur', () => setTimeout(() => { if (self.suggest) self.suggest.style.display = 'none'; }, 150));
+  }
+  this.render();
+}
+MockBrowser.prototype.label = function (uri) {
+  const p = PAGES[uri]; if (p) return p.title;
+  return uri.replace('web:https://', '').replace('web:', '');
+};
+MockBrowser.prototype.addrUrl = function () { const p = PAGES[this.active]; return (p && p.url) || this.active; };
+MockBrowser.prototype.render = function () {
+  const self = this;
+  // tabs (keep trailing + button in A/B)
+  this.tabEls.querySelectorAll('.tab').forEach(t => t.remove());
+  this.tabs.forEach((uri, i) => {
+    const t = document.createElement('div');
+    t.className = 'tab' + (uri === self.active ? ' active' : '');
+    t.textContent = self.label(uri); t.draggable = true; t.title = uri;
+    t.onclick = () => { self.active = uri; self.render(); };
+    t.ondragstart = e => { e.dataTransfer.setData('text/plain', i); t.classList.add('dragging'); };
+    t.ondragend = () => t.classList.remove('dragging');
+    t.ondragover = e => e.preventDefault();
+    t.ondrop = e => {
+      e.preventDefault();
+      const from = +e.dataTransfer.getData('text/plain');
+      const moved = self.tabs.splice(from, 1)[0];
+      self.tabs.splice(i, 0, moved); self.render();
+      toast('Tab moved → position ' + (i + 1));
+    };
+    if (self.plusBtn) self.tabEls.insertBefore(t, self.plusBtn); else self.tabEls.appendChild(t);
+  });
+  const p = PAGES[this.active] || { title: this.active, body: '<h3>' + this.active + '</h3>' };
+  this.content.querySelectorAll(':scope > :not(.float-overlay)').forEach(n => n.remove());
+  const d = document.createElement('div'); d.innerHTML = p.body; this.content.appendChild(d);
+  if (this.addr && !this.root.querySelector('[data-float].open')) this.addr.value = this.addrUrl();
+  const chipUrl = this.root.querySelector('[data-chipurl]'); if (chipUrl) chipUrl.textContent = this.addrUrl();
+  const back = this.root.querySelector('[data-act="back"]'), fwd = this.root.querySelector('[data-act="fwd"]');
+  const h = p.hist;
+  if (back) back.disabled = !(h && p.hi > 0);
+  if (fwd) fwd.disabled = !(h && p.hi < h.length - 1);
+};
+MockBrowser.prototype.newTab = function () {
+  const n = 'web:example.com';
+  if (!this.tabs.includes(n)) this.tabs.push(n);
+  this.active = n; this.render(); toast('New tab — ' + this.tabs.length + ' tabs open');
+};
+MockBrowser.prototype.nav = function (dir) {
+  const p = PAGES[this.active];
+  if (!p || !p.hist) { toast('Not a web tab — nothing to navigate'); return; }
+  const ni = p.hi + dir;
+  if (ni < 0 || ni >= p.hist.length) return;
+  p.hi = ni; p.url = p.hist[ni]; this.render();
+};
+MockBrowser.prototype.reload = function (el) {
+  el.classList.add('spin'); setTimeout(() => el.classList.remove('spin'), 800);
+  toast('Reloaded ' + this.addrUrl());
+};
+MockBrowser.prototype.filterSuggest = function () {
+  if (!this.suggest) return;
+  const q = this.addr.value.toLowerCase();
+  const hits = SUGGEST.filter(s => s.toLowerCase().includes(q)).slice(0, 5);
+  if (!hits.length || !q) { this.suggest.style.display = 'none'; return; }
+  const self = this;
+  this.suggest.innerHTML = '';
+  hits.forEach(h => { const d = document.createElement('div'); d.textContent = h; d.onclick = () => self.go(h); self.suggest.appendChild(d); });
+  this.suggest.style.display = 'block';
+};
+MockBrowser.prototype.go = function (raw) {
+  let uri = raw.trim();
+  if (!uri) return;
+  if (!/^(view:|terminal:|web:|https?:)/.test(uri)) uri = 'web:https://' + uri;
+  if (/^https?:/.test(uri)) uri = 'web:' + uri;
+  if (!PAGES[uri]) PAGES[uri] = { title: uri.replace('web:https://', '').replace('web:', ''), url: uri.replace('web:', ''), hist: [uri.replace('web:', '')], hi: 0, body: '<h3>' + uri + '</h3><p>Fake page render — an iframe would refuse framing here; stock window is the escape.</p>' };
+  if (!this.tabs.includes(uri)) this.tabs.push(uri);
+  this.active = uri;
+  const f = this.root.querySelector('[data-float]'); if (f) f.classList.remove('open');
+  this.render(); toast('Opened ' + uri);
+};
+['win-a', 'win-b', 'win-c'].forEach(id => new MockBrowser(id));
+</script>
+</body>
+</html>
