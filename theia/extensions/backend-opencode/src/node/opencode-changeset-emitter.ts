@@ -23,6 +23,14 @@ import * as path from 'path';
 
 export type StagedStatus = 'staged' | 'accepted' | 'rejected' | 'conflict';
 
+/** The diff-carrying subset of an ACP permission ask worth staging. */
+export interface PermissionAsk {
+    kind: string;
+    path?: string;
+    oldText?: string;
+    newText?: string;
+}
+
 export interface StagedEntry {
     chatSessionId: string;
     /** Absolute workspace path. */
@@ -125,14 +133,31 @@ export class OpencodeChangesetEmitter {
     }
 
     /**
-     * ACP `session/request_permission` handler. Gated default per D-05:
-     * read-shaped tools are allowed once (their writes still intercept
-     * below, so approval can never touch disk directly), everything that
-     * executes (bash/terminal) is rejected fail-closed. Every verdict is
-     * logged either way.
+     * ACP `session/request_permission` handler. Gated default per D-05.
+     *
+     * Load-bearing double-write finding (live probe, installed 1.18.25):
+     * replying `selected/once` to an edit ask makes opencode write the
+     * file to disk itself AFTER the delegated `fs/write_text_file`
+     * returns -- approval can never gate disk. So edit-shaped asks are
+     * staged from the ask's own diff payload and then REJECTED: the turn
+     * still ends normally, the proposal sits in the queue, and disk stays
+     * untouched until accept. Read-shaped asks without a diff are allowed
+     * once (no disk effect); everything that executes is rejected
+     * fail-closed. Every verdict is logged either way.
      */
-    requestPermission(tool: string): 'allow-once' | 'reject' {
-        const readShaped = /^(read|edit|write|glob|grep|ls|patch)$/i.test(tool);
+    requestPermission(tool: string, ask?: PermissionAsk, chatSessionId?: string, workspaceRoot?: string): 'allow-once' | 'reject' {
+        const editShaped = /^(edit|write|patch|create)$/i.test(tool) || /^(edit|write|patch|create)$/i.test(ask?.kind ?? '');
+        if (editShaped && ask?.path !== undefined && ask.newText !== undefined && chatSessionId && workspaceRoot) {
+            this.stageProposal(chatSessionId, workspaceRoot, ask.path, ask.newText);
+            this.permissionLog.push({ tool, verdict: 'reject' });
+            return 'reject';
+        }
+        if (editShaped) {
+            // Diff-carrying ask without a staging context: safest is reject.
+            this.permissionLog.push({ tool, verdict: 'reject' });
+            return 'reject';
+        }
+        const readShaped = /^(read|glob|grep|ls)$/i.test(tool);
         const verdict = readShaped ? 'allow-once' : 'reject';
         this.permissionLog.push({ tool, verdict });
         return verdict;
@@ -143,22 +168,36 @@ export class OpencodeChangesetEmitter {
     }
 
     /**
-     * ACP `fs/write_text_file` handler: the delegated write. Stages the
-     * proposal as a Change Set entry; never writes disk here. Zero-edit
-     * proposals (content already equals live bytes) create no entry.
+     * ACP `fs/write_text_file` handler: the delegated write. Idempotent
+     * safety net beside ask-staging above -- if a delegation ever arrives
+     * (older binary, permissive config), it stages under the same key
+     * instead of touching disk. Zero-edit proposals create no entry.
      */
     writeTextFile(chatSessionId: string, workspaceRoot: string, candidatePath: string, content: string): StagedEntry | undefined {
+        return this.stageProposal(chatSessionId, workspaceRoot, candidatePath, content);
+    }
+
+    /** Shared stage path: clamp, drop zero-edits, redact presentation. */
+    protected stageProposal(
+        chatSessionId: string,
+        workspaceRoot: string,
+        candidatePath: string,
+        newText: string
+    ): StagedEntry | undefined {
         const absolutePath = clampStagedPath(workspaceRoot, candidatePath);
+        // Base is always the live bytes at stage time, so the D-04
+        // accept-time comparison is meaningful regardless of which
+        // channel (ask or delegated write) delivered the proposal.
         const live = readLiveBytes(absolutePath) ?? '';
-        if (live === content) {
+        if (live === newText) {
             return undefined;
         }
-        const rawDiff = renderUnifiedDiff(absolutePath, live, content);
+        const rawDiff = renderUnifiedDiff(absolutePath, live, newText);
         const entry: StagedEntry = {
             chatSessionId,
             path: absolutePath,
             baseText: live,
-            proposedText: content,
+            proposedText: newText,
             diff: redactSecretStrings(rawDiff).text,
             status: 'staged',
         };

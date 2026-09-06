@@ -322,8 +322,26 @@ export class OpencodeAcpSupervisor implements BackendApplicationContribution, Op
     }
 
     protected onRequestPermission(id: number | undefined, params: Record<string, unknown>): void {
-        const tool = String((params as { tool?: unknown }).tool ?? 'unknown');
-        const verdict = this.emitter.requestPermission(tool);
+        const toolCall = (params as { toolCall?: Record<string, unknown> }).toolCall ?? {};
+        const kind = String(toolCall['kind'] ?? 'unknown');
+        const contents = (toolCall['content'] ?? []) as { type?: unknown; path?: unknown; oldText?: unknown; newText?: unknown }[];
+        const diff = contents.find(c => c.type === 'diff');
+        const sessionId = String((params as { sessionId?: unknown }).sessionId ?? '');
+        const chatSessionId = this.chatSessionFor(sessionId);
+        // Stage-from-ask (double-write finding): the ask already carries
+        // the full diff, so the emitter stages it and the reply rejects --
+        // disk stays untouched until the user accepts the Change Set entry.
+        const verdict = this.emitter.requestPermission(
+            kind,
+            diff ? {
+                kind,
+                path: typeof diff.path === 'string' ? diff.path : undefined,
+                oldText: typeof diff.oldText === 'string' ? diff.oldText : undefined,
+                newText: typeof diff.newText === 'string' ? diff.newText : undefined,
+            } : undefined,
+            chatSessionId,
+            this.workspaceRoot
+        );
         if (id === undefined) {
             return;
         }
