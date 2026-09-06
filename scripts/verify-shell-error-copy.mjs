@@ -53,6 +53,21 @@
 // shell-diagnostics-rows-populated, which drives two real failure paths and
 // asserts the painted message is one of the values derived here.
 //
+// 14-02 (GUI-07) modes-copy extension. The same no-internal-identifier shape
+// test (all-caps tokens, dotted keys) over the new modes sources, with two
+// deliberate deltas from the shell rules: (a) a template may interpolate a
+// SINGLE plain identifier -- ${name} is a mode name rendered as text, never
+// an exception string, while a dotted or complex interpolation stays red;
+// (b) the chrome-bar widget scope pins its copy by set equality only, since
+// that copy predates this plan: additions, removals, and drifts go red
+// without re-litigating its wording. Enumerated sites: label:, prompt:,
+// placeHolder:, widgetName:, flash(...) call args, textContent assignments,
+// the widget's title=/aria-label=/placeholder= attrs plus its JSX text nodes
+// plus .label/.caption assignments. Command ids, element ids, class names,
+// and roles are not user-facing sites and are excluded by construction, not
+// by exemption list -- a user-facing string added at a NEW site is the known
+// residual hole, stated here rather than silently assumed covered.
+//
 // Usage:
 //   node scripts/verify-shell-error-copy.mjs [--file <path>]
 //   node scripts/verify-shell-error-copy.mjs --self-test
@@ -498,6 +513,260 @@ function check(targetPath) {
 }
 
 // ---------------------------------------------------------------------------
+// 14-02 modes-copy extension (GUI-07). Pure functions of source strings so
+// the self-test below can plant faults in memory.
+// ---------------------------------------------------------------------------
+
+const MODES_SERVICE_REL = "theia/extensions/modes/src/browser/mode-service.ts";
+const MODES_COMMANDS_REL = "theia/extensions/modes/src/browser/modes-commands.ts";
+const MODES_PLACEHOLDER_REL = "theia/extensions/modes/src/browser/organising-placeholder-widget.ts";
+const MODES_WIDGET_REL = "theia/extensions/chrome-bar/src/browser/chrome-bar-widget.tsx";
+
+/**
+ * The declared modes copy contract, with ${...} interpolations normalized
+ * to ${name} (the interpolation identifiers themselves are checked
+ * separately against the plain-identifier rule). The ONE hand-kept list in
+ * this section: editing it is how a deliberate copy change is made.
+ */
+const EXPECTED_MODES_COPY = new Set([
+  "Save as Mode",
+  "Mode name",
+  "Give the mode a name — type a name and choose Save as Mode.",
+  "A mode with this name already exists. Choose a different name.",
+  "Power Browser could not save this mode. Your panels are unchanged — try again.",
+  'Mode "${name}" saved.',
+  "Power Browser couldn't load the \"${name}\" mode. Browsing is shown instead.",
+  "Organising",
+  "Organising arrives next",
+  "The freeform canvas for arranging tabs lands in the next update — your tabs stay exactly where they left them.",
+  "Back to Browsing",
+]);
+
+/**
+ * The widget's grandfathered copy, pinned by set equality: any addition,
+ * removal, or drift goes red naming it, with no wording judgment here.
+ */
+const EXPECTED_WIDGET_COPY = new Set([
+  "Back",
+  "Forward",
+  "Reload",
+  "Search or enter address",
+  "New Tab",
+  "Suggestions",
+  "Mode",
+  "Chrome Bar",
+  "No suggestions",
+  "No matches for what you typed — press Enter to visit it as an address.",
+  "Enter opens the address · Esc closes suggestions",
+  "Power Browser couldn&apos;t load suggestions. Press Enter to visit what you typed.",
+  "${this.tabCount} tabs",
+]);
+
+function normalizeInterp(value) {
+  return value.replace(/\$\{[^}]+\}/g, "${name}");
+}
+
+/** Raw user-facing strings from the modes sources (interpolations intact). */
+function deriveModesCopyRaw(sources) {
+  const out = [];
+  const commandsSrc = sources[MODES_COMMANDS_REL] ?? "";
+  const serviceSrc = sources[MODES_SERVICE_REL] ?? "";
+  const placeholderSrc = sources[MODES_PLACEHOLDER_REL] ?? "";
+  // A template literal below spans the backtick alternative; it is written
+  // with literal backticks, matching the same characters tsc parses.
+  const flashRe = /flash\(\s*(`(?:[^`\\]|\\.)*`|'(?:[^'\\\n]|\\.)*')/g;
+  for (const m of commandsSrc.matchAll(/label:\s*'([^']+)'/g)) {
+    out.push(m[1]);
+  }
+  for (const m of serviceSrc.matchAll(/prompt:\s*'([^']+)'/g)) {
+    out.push(m[1]);
+  }
+  for (const m of serviceSrc.matchAll(/placeHolder:\s*'([^']+)'/g)) {
+    out.push(m[1]);
+  }
+  for (const m of serviceSrc.matchAll(flashRe)) {
+    out.push(m[1].slice(1, -1));
+  }
+  for (const m of placeholderSrc.matchAll(/widgetName:\s*'([^']+)'/g)) {
+    out.push(m[1]);
+  }
+  for (const m of placeholderSrc.matchAll(/textContent\s*=\s*'([^']+)'/g)) {
+    out.push(m[1]);
+  }
+  return out;
+}
+
+/** User-facing strings from the widget's enumerated attribute and text sites. */
+function deriveWidgetCopy(widgetSrc) {
+  const out = new Set();
+  const attrRe = /(?:title|aria-label|placeholder)=\{?((?:"(?:[^"\\\n]|\\.)*")|(?:'(?:[^'\\\n]|\\.)*')|(?:`(?:[^`\\]|\\.)*`))\}?/g;
+  for (const m of widgetSrc.matchAll(attrRe)) {
+    out.add(m[1].slice(1, -1));
+  }
+  for (const m of widgetSrc.matchAll(/[^=]>([^<>{}\n]+?)</g)) {
+    const text = m[1].trim();
+    if (text) {
+      out.add(text);
+    }
+  }
+  for (const m of widgetSrc.matchAll(/\.(?:label|caption)\s*=\s*'([^']+)'/g)) {
+    out.add(m[1]);
+  }
+  return out;
+}
+
+function readModesSources() {
+  const out = {};
+  for (const rel of [MODES_SERVICE_REL, MODES_COMMANDS_REL, MODES_PLACEHOLDER_REL, MODES_WIDGET_REL]) {
+    try {
+      out[rel] = readFileSync(join(REPO_ROOT, rel), "utf8");
+    } catch {
+      out[rel] = "";
+    }
+  }
+  return out;
+}
+
+/** @returns {string[]} failure messages -- empty means the copy holds. */
+function checkModesCopy(sources) {
+  const copyFailures = [];
+  const raw = deriveModesCopyRaw(sources);
+  if (raw.length === 0) {
+    copyFailures.push("modes copy: derived ZERO user-facing strings from the modes sources -- the enumeration matches nothing, so this comparison proves nothing");
+    return copyFailures;
+  }
+  const normalized = new Set(raw.map(normalizeInterp));
+  for (const value of normalized) {
+    if (!EXPECTED_MODES_COPY.has(value)) {
+      copyFailures.push(`modes copy: user-facing string NOT in the declared contract (unreviewed copy): ${JSON.stringify(value)}`);
+    }
+  }
+  for (const value of EXPECTED_MODES_COPY) {
+    if (!normalized.has(value)) {
+      copyFailures.push(`modes copy: declared contract string is GONE (drifted or reworded copy): ${JSON.stringify(value)}`);
+    }
+  }
+  for (const value of new Set(raw)) {
+    for (const hit of value.match(ALL_CAPS_TOKEN) ?? []) {
+      copyFailures.push(
+        `modes copy ${JSON.stringify(value)} leaks the internal identifier "${hit}" (all-caps underscored token) ` +
+          `into user-facing text -- it belongs in a diagnostics field row`
+      );
+    }
+    for (const hit of value.match(DOTTED_KEY) ?? []) {
+      copyFailures.push(
+        `modes copy ${JSON.stringify(value)} leaks the internal identifier "${hit}" (dotted multi-segment key) ` +
+          `into user-facing text -- it belongs in a diagnostics field row`
+      );
+    }
+    for (const m of value.matchAll(/\$\{([^}]+)\}/g)) {
+      if (!/^[A-Za-z_$][\w$]*$/.test(m[1])) {
+        copyFailures.push(
+          `modes copy ${JSON.stringify(value)} interpolates \`${m[0]}\` -- only a single plain identifier (a mode name ` +
+            `rendered as text) may interpolate; a dotted or complex expression carries runtime internals`
+        );
+      }
+    }
+  }
+  const widget = deriveWidgetCopy(sources[MODES_WIDGET_REL] ?? "");
+  if (widget.size === 0) {
+    copyFailures.push("widget copy: derived ZERO user-facing strings from the chrome-bar widget -- the enumeration matches nothing, so this comparison proves nothing");
+    return copyFailures;
+  }
+  for (const value of widget) {
+    if (!EXPECTED_WIDGET_COPY.has(value)) {
+      copyFailures.push(`widget copy: string NOT in the pinned contract (added or reworded widget copy): ${JSON.stringify(value)}`);
+    }
+  }
+  for (const value of EXPECTED_WIDGET_COPY) {
+    if (!widget.has(value)) {
+      copyFailures.push(`widget copy: pinned string is GONE (removed or reworded widget copy): ${JSON.stringify(value)}`);
+    }
+  }
+  return copyFailures;
+}
+
+const MODES_COPY_FAULTS = [
+  {
+    name: "all-caps sentinel leaked into the fallback notice",
+    apply: (sources) => ({
+      ...sources,
+      [MODES_SERVICE_REL]: sources[MODES_SERVICE_REL].replace(
+        "couldn't load the",
+        "could not see POWERBROWSER_MODES_JSON in"
+      ),
+    }),
+    expect: "POWERBROWSER_MODES_JSON",
+  },
+  {
+    name: "dotted store key leaked into the saved confirmation",
+    apply: (sources) => ({
+      ...sources,
+      [MODES_SERVICE_REL]: sources[MODES_SERVICE_REL].replace(
+        'Mode "${name}" saved.',
+        'Mode "${name}" saved to powerbrowser.modes.store.'
+      ),
+    }),
+    expect: "powerbrowser.modes.store",
+  },
+  {
+    name: "save label drifted from the contracted copy",
+    apply: (sources) => ({
+      ...sources,
+      [MODES_COMMANDS_REL]: sources[MODES_COMMANDS_REL].replace(
+        "label: 'Save as Mode',",
+        "label: 'Save Mode',"
+      ),
+    }),
+    // The drifted value goes red as surplus; 'Save as Mode' itself still
+    // derives from the save prompt, and the switch-invariant gate pins the
+    // command label verbatim on top of this.
+    expect: "Save Mode",
+  },
+  {
+    name: "new widget aria string bypasses the pinned copy",
+    apply: (sources) => ({
+      ...sources,
+      [MODES_WIDGET_REL]: sources[MODES_WIDGET_REL].replace(
+        "title={row.name}",
+        "title={row.name}\n                                aria-label='Custom mode bliss'"
+      ),
+    }),
+    expect: "Custom mode bliss",
+  },
+];
+
+function runModesCopySelfTest() {
+  const clean = readModesSources();
+  const baseline = checkModesCopy(clean);
+  if (baseline.length !== 0) {
+    console.error("verify-shell-error-copy --self-test: FAIL -- the modes-copy baseline is already red, so the planted-fault results below would be meaningless:");
+    baseline.forEach((f) => console.error(`  ${f}`));
+    return false;
+  }
+  let allOk = true;
+  for (const fault of MODES_COPY_FAULTS) {
+    const mutated = fault.apply(clean);
+    if (JSON.stringify(mutated) === JSON.stringify(clean)) {
+      console.error(`  FAIL  ${fault.name} -- the fault did not apply; this self-test row proves nothing`);
+      allOk = false;
+      continue;
+    }
+    const found = checkModesCopy(mutated);
+    if (!found.some((f) => f.includes(fault.expect))) {
+      console.error(
+        `  FAIL  ${fault.name} -- planted fault did NOT go red naming ${JSON.stringify(fault.expect)}; ` +
+          `got: ${found.join(" | ") || "(no failures at all)"}`
+      );
+      allOk = false;
+    } else {
+      console.log(`  ok    ${fault.name} -- red, naming the drift`);
+    }
+  }
+  return allOk;
+}
+
+// ---------------------------------------------------------------------------
 // --self-test: plant faults, require each to go red naming the drift.
 // ---------------------------------------------------------------------------
 
@@ -721,8 +990,16 @@ for (let i = 0; i < argv.length; i += 1) {
 
 if (selfTest) {
   console.log(`verify-shell-error-copy --self-test: planting ${FAULTS.length} fault(s)`);
-  if (runSelfTest(target)) {
+  const shellOk = runSelfTest(target);
+  if (shellOk) {
     console.log(`verify-shell-error-copy: PASS -- all ${FAULTS.length} planted faults went red naming the drift`);
+  }
+  console.log(`verify-shell-error-copy --self-test: planting ${MODES_COPY_FAULTS.length} modes-copy fault(s)`);
+  const modesOk = runModesCopySelfTest();
+  if (modesOk) {
+    console.log(`verify-shell-error-copy: PASS -- all ${MODES_COPY_FAULTS.length} planted modes-copy faults went red naming the drift`);
+  }
+  if (shellOk && modesOk) {
     process.exit(0);
   }
   console.error("verify-shell-error-copy: FAIL -- see the self-test rows above");
@@ -730,6 +1007,11 @@ if (selfTest) {
 }
 
 check(target);
+if (!argv.includes("--file")) {
+  for (const f of checkModesCopy(readModesSources())) {
+    fail(f);
+  }
+}
 if (failures.length === 0) {
   console.log(`verify-shell-error-copy: PASS -- no internal identifier can reach the error layer (${target})`);
   process.exit(0);
