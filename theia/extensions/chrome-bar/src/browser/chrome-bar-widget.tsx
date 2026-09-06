@@ -11,20 +11,37 @@ import {
 import { CommandRegistry } from '@theia/core/lib/common';
 import URI from '@theia/core/lib/common/uri';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
-import { NavigationLocationService } from '@theia/editor/lib/browser/navigation/navigation-location-service';
 import pDebounce from 'p-debounce';
 import type { TabQueryRow } from '@powerbrowser/tab-uris/lib/node/tab-query-service';
+import { OPEN_BROWSER_WINDOW_COMMAND_ID } from '@powerbrowser/tab-uris/lib/browser/browser-window-command';
 import {
     CHROME_BAR_BACK_COMMAND_ID,
     CHROME_BAR_FORWARD_COMMAND_ID,
     CHROME_BAR_INPUT_CLASS,
     CHROME_BAR_NEW_TAB_COMMAND_ID,
     CHROME_BAR_RELOAD_COMMAND_ID,
+    chromeBarHasNavigableTab,
 } from './chrome-bar-commands';
 import { CHROME_SUGGESTION_LIMIT, ChromeBarSuggestionService } from './chrome-bar-suggestion-service';
 import { MODES_ACTIVATE_COMMAND_ID } from '@powerbrowser/modes/lib/browser/modes-commands';
 import { ModeService } from '@powerbrowser/modes/lib/browser/mode-service';
 import '../../src/browser/chrome-bar.css';
+
+/**
+ * Maps raw typed text onto the contracted search-or-address routing.
+ * Returns the URL to open, or undefined when the text is not an address
+ * this tree can visit (the caller surfaces the contracted in-bar failure
+ * row). No search-engine host is minted here by design.
+ */
+function typedAddressTargetOf(text: string): string | undefined {
+    if (/^https?:\/\//i.test(text)) {
+        return text;
+    }
+    if (!/\s/.test(text) && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(text) && text.includes('.')) {
+        return `https://${text}`;
+    }
+    return undefined;
+}
 
 /**
  * GUI-06 (13-03): the chrome bar widget -- nav buttons, address pill with
@@ -65,9 +82,6 @@ export class ChromeBarWidget extends ReactWidget {
     @inject(CommandRegistry)
     protected readonly commands: CommandRegistry;
 
-    @inject(NavigationLocationService)
-    protected readonly navigation: NavigationLocationService;
-
     @inject(OpenerService)
     protected readonly openerService: OpenerService;
 
@@ -102,6 +116,7 @@ export class ChromeBarWidget extends ReactWidget {
     protected dropdownOpen = false;
     protected highlightIndex = -1;
     protected providerFailed = false;
+    protected commitFailed = false;
     protected shimmer = false;
     protected mode = ChromeBarWidget.MODES[0];
     protected tabCount = 0;
@@ -165,36 +180,87 @@ export class ChromeBarWidget extends ReactWidget {
 
     protected onInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
         this.inputValue = e.target.value;
+        this.commitFailed = false;
         this.update();
         void this.debouncedQuery(this.inputValue);
     };
 
     /**
-     * Commits text through the existing opener routing -- the bar never
-     * invents an addressability scheme. Empty commits are no-ops; provider
-     * failure degrades to this same plain commit (Enter always works).
-     * Navigation failures surface in the stock surfaces -- no replacement
-     * error UI is authored here.
+     * Opens a committed URL on the contracted routing: http and https go
+     * through the stock-window command (imported const, never a re-spelled
+     * id string), so a blocked popup takes that command's existing error
+     * path; every other scheme (view:, settings:) keeps the existing
+     * two-step opener routing (getOpener plus handler open), which already
+     * navigates in-Theia views correctly.
      */
-    protected commitAddress = async (raw: string): Promise<void> => {
+    protected openCommittedUrl = async (url: string): Promise<void> => {
+        if (/^https?:\/\//i.test(url)) {
+            await this.commands.executeCommand(OPEN_BROWSER_WINDOW_COMMAND_ID, url);
+        } else {
+            const uri = new URI(url);
+            const handler = await this.openerService.getOpener(uri);
+            await handler.open(uri);
+        }
+    };
+
+    /** Surfaces a commit failure in-bar per the copy contract: one failure row, Enter retries. */
+    protected showCommitFailure(): void {
+        this.commitFailed = true;
+        this.dropdownOpen = true;
+        this.highlightIndex = -1;
+        this.update();
+    }
+
+    /**
+     * Activates a suggestion row through its url field, never its opaque
+     * uri key: the key is a store identity (kept as the React list key
+     * below), not an address any opener could route.
+     */
+    protected commitRow = async (row: TabQueryRow): Promise<void> => {
+        const url = row.url;
+        this.committedAddress = url;
+        this.inputValue = url;
+        this.commitFailed = false;
+        this.dropdownOpen = false;
+        this.highlightIndex = -1;
+        this.update();
+        try {
+            await this.openCommittedUrl(url);
+        } catch {
+            this.showCommitFailure();
+        }
+    };
+
+    /**
+     * Commits typed text by scheme, inventing no search addressability:
+     * text already carrying http or https goes to the stock-window channel
+     * as-is; host-like text (no spaces, no scheme, containing a dot) is
+     * normalized with an https prefix onto the same channel; anything else
+     * is not an address this tree can visit, so it surfaces the contracted
+     * in-bar failure row instead of a file-scheme editor open, and no
+     * search-engine host is minted anywhere (search dispatch stays deferred
+     * to GUI-02 scope). Empty commits are no-ops.
+     */
+    protected commitText = async (raw: string): Promise<void> => {
         const text = raw.trim();
         if (!text) {
             return;
         }
         this.committedAddress = text;
         this.inputValue = text;
+        this.commitFailed = false;
         this.dropdownOpen = false;
         this.highlightIndex = -1;
         this.update();
+        const target = typedAddressTargetOf(text);
+        if (!target) {
+            this.showCommitFailure();
+            return;
+        }
         try {
-            // The opener-service routing (mirrors the `open()` helper's own
-            // two steps: highest-priority handler, then its open) -- the
-            // existing tab-URI handlers decide, never a new scheme here.
-            const uri = new URI(text);
-            const handler = await this.openerService.getOpener(uri);
-            await handler.open(uri);
-        } catch (error) {
-            console.error('[@powerbrowser/chrome-bar] address commit failed:', error);
+            await this.openCommittedUrl(target);
+        } catch {
+            this.showCommitFailure();
         }
     };
 
@@ -210,8 +276,18 @@ export class ChromeBarWidget extends ReactWidget {
             this.update();
         } else if (e.key === 'Enter') {
             e.preventDefault();
+            if (this.commitFailed) {
+                // Retry affordance: Enter re-commits the typed text.
+                this.commitFailed = false;
+                void this.commitText(this.inputValue);
+                return;
+            }
             const highlighted = this.highlightIndex >= 0 ? this.rows[this.highlightIndex] : undefined;
-            void this.commitAddress(highlighted ? highlighted.uri : this.inputValue);
+            if (highlighted) {
+                void this.commitRow(highlighted);
+            } else {
+                void this.commitText(this.inputValue);
+            }
         } else if (e.key === 'Escape') {
             // Two-stage dismissal: first press closes the dropdown, second
             // restores the committed address.
@@ -335,6 +411,12 @@ export class ChromeBarWidget extends ReactWidget {
         if (!this.dropdownOpen) {
             return undefined;
         }
+        if (this.commitFailed) {
+            return <div className='pb-chrome-bar-dropdown' role='listbox' aria-label='Suggestions'>
+                <div className='pb-chrome-bar-row'>Power Browser couldn&apos;t open that address. Press Enter to try again.</div>
+                <div className='pb-chrome-bar-dropdown-footer'>Enter opens the address · Esc closes suggestions</div>
+            </div>;
+        }
         return <div className='pb-chrome-bar-dropdown' role='listbox' aria-label='Suggestions'>
             {this.providerFailed ? (
                 <div className='pb-chrome-bar-row'>Power Browser couldn&apos;t load suggestions. Press Enter to visit what you typed.</div>
@@ -352,7 +434,7 @@ export class ChromeBarWidget extends ReactWidget {
                         className={'pb-chrome-bar-row' + (index === this.highlightIndex ? ' is-highlighted' : '')}
                         onMouseDown={e => {
                             e.preventDefault();
-                            void this.commitAddress(row.uri);
+                            void this.commitRow(row);
                         }}
                     >
                         <div className='pb-chrome-bar-row-title' title={row.title}>{row.title}</div>
@@ -366,15 +448,17 @@ export class ChromeBarWidget extends ReactWidget {
     }
 
     protected render(): React.ReactNode {
-        const canBack = this.navigation.canGoBack();
-        const canForward = this.navigation.canGoForward();
+        // One shared navigable-tab predicate (GUI-02-owned, false until
+        // GUI-02 ships): all three controls dim with their contracted
+        // tooltips retained and the layout never shifts.
+        const canNavigate = chromeBarHasNavigableTab();
         const secure = this.inputValue.trim().startsWith('https://');
         return <div className='pb-chrome-bar'>
             <button
                 className='pb-chrome-bar-button'
                 title='Back'
                 aria-label='Back'
-                disabled={!canBack}
+                disabled={!canNavigate}
                 onClick={this.runCommand(CHROME_BAR_BACK_COMMAND_ID)}
             >
                 <span className='codicon codicon-chevron-left' />
@@ -383,7 +467,7 @@ export class ChromeBarWidget extends ReactWidget {
                 className='pb-chrome-bar-button'
                 title='Forward'
                 aria-label='Forward'
-                disabled={!canForward}
+                disabled={!canNavigate}
                 onClick={this.runCommand(CHROME_BAR_FORWARD_COMMAND_ID)}
             >
                 <span className='codicon codicon-chevron-right' />
@@ -392,7 +476,7 @@ export class ChromeBarWidget extends ReactWidget {
                 className='pb-chrome-bar-button'
                 title='Reload'
                 aria-label='Reload'
-                disabled={true}
+                disabled={!canNavigate}
                 onClick={this.runCommand(CHROME_BAR_RELOAD_COMMAND_ID)}
             >
                 <span className='codicon codicon-refresh' />
@@ -472,6 +556,12 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         this.perspectives.onDidChangePerspective(id => {
             this.barWidget.syncModeFromPerspective(id);
         });
+        // Live chip: republish on every shell add, remove, and
+        // current-change so the count never goes stale between mode
+        // switches (no mode switch required).
+        this.shell.onDidAddWidget(() => this.barWidget.publishTabCount());
+        this.shell.onDidRemoveWidget(() => this.barWidget.publishTabCount());
+        this.shell.onDidChangeCurrentWidget(() => this.barWidget.publishTabCount());
         this.barWidget.publishTabCount();
     }
 }
