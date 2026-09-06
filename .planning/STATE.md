@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 13
 current_phase_name: roadmap complete — v1.3 phases 13–15 defined, ready to plan
 status: planning
-stopped_at: Phase 16 executed — 3/3 plans green
-last_updated: "2026-09-06T08:13:53.773Z"
+stopped_at: Completed 15-panorama-organising-02-PLAN.md
+last_updated: "2026-09-06T08:43:00.959Z"
 last_activity: 2026-09-06
 last_activity_desc: "v1.3 roadmap created (Phases 13–15: GUI-06→13, GUI-07+GUI-09→14, GUI-08→15)"
-state_head: 8c5b073ac89d8c452cfad41d54c125d49963a8dc
+state_head: a43275d3ee6c21b11b7ab68e9da8e4d81b8cc455
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 12
-  completed_plans: 9
+  completed_plans: 11
 milestone_name: Browser GUI
 ---
 
@@ -107,6 +107,8 @@ Last activity: 2026-09-06 — 14-01 executed (probe GREEN routes dependents to s
 | Phase 13-chrome-bar-strip-relocation-spike P03 | ~10min | 3 tasks | 8 files |
 | Phase 14-modes-windows-setups P01 | 30min | 3 tasks | 10 files |
 | Phase 14-modes-windows-setups P03 | 12min | 3 tasks | 8 files |
+| Phase 15-panorama-organising P02 | 52min | 4 tasks | 9 files |
+| Phase 15-panorama-organising P02 | 52min | 4 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -266,6 +268,8 @@ Recent decisions affecting current work:
 - [Phase 14]: Workspace realignment via yarn install (no new packages) links modes + chrome-bar into the app; chrome-bar css import follows the upstream src-relative idiom
 - [Phase 13]: 14-03 GREEN verdict: dependents on stock secondary-window path, chrome-side files byte-identical
 - [Phase 13]: 14-03 restores switch mode via stock switchPerspective; file tabs key off editor resource URIs
+- [Phase 13]: 15-02: HTML5 DnD kept with native Esc-cancel; auto-box is one composite actor write; settle-debounce rides sleep(); Close dialog keeps stock ConfirmDialog
+- [Phase 13]: 15-02: GUI-08 stays Pending (gates 2 of 5); requirements mark-complete NOT run
 
 ### Pending Todos
 
@@ -357,9 +361,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-06T08:13:53.743Z
-Stopped at: Phase 16 executed — 3/3 plans green
-Resume file: .planning/phases/16-ai-backend-adapter-opencode/16-03-SUMMARY.md
+Last session: 2026-09-06T08:42:56.973Z
+Stopped at: Completed 15-panorama-organising-02-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
