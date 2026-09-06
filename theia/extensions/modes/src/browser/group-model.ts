@@ -63,7 +63,14 @@ export class GroupModel {
     private activeGroupId: string | undefined;
     private loaded = false;
     private loadFailed = false;
-    private pending: { key: string; attempts: number; revert: () => void; write: () => Promise<unknown> } | undefined;
+    /**
+     * WR-01: one pending write per mutation key, not a single slot. A
+     * cross-key failure used to evict the earlier write's revert closure,
+     * stranding its painted-but-unpersisted change with no recovery path.
+     * Bounded (drop-oldest past 20) so a failure storm cannot grow it.
+     */
+    private readonly pendingWrites = new Map<string, { attempts: number; revert: () => void; write: () => Promise<unknown> }>();
+    private static readonly PENDING_WRITES_MAX = 20;
 
     get isLoaded(): boolean {
         return this.loaded;
@@ -74,7 +81,7 @@ export class GroupModel {
     }
 
     get hasPendingWrite(): boolean {
-        return this.pending !== undefined;
+        return this.pendingWrites.size > 0;
     }
 
     listGroups(): readonly PanoramaGroup[] {
@@ -428,52 +435,62 @@ export class GroupModel {
     }
 
     /**
-     * Replays the pending write once (save-error Retry). A second failure
-     * reverts the painted change and clears the pending slot.
+     * Replays every pending write once (save-error Retry). Entries that fail
+     * again revert their painted change and clear; entries that succeed
+     * clear. Throws the first replay error so the save-error bar stays up.
      */
     async retryPending(client: GroupActorClient): Promise<void> {
-        const current = this.pending;
-        if (!current) {
+        const entries = [...this.pendingWrites.entries()];
+        if (!entries.length) {
             return;
         }
-        try {
-            await current.write();
-            if (this.pending === current) {
-                this.pending = undefined;
+        let firstError: unknown;
+        for (const [key, current] of entries) {
+            try {
+                await current.write();
+                if (this.pendingWrites.get(key) === current) {
+                    this.pendingWrites.delete(key);
+                }
+            } catch (error) {
+                current.attempts += 1;
+                if (current.attempts >= 2) {
+                    current.revert();
+                    this.pendingWrites.delete(key);
+                }
+                if (firstError === undefined) {
+                    firstError = error;
+                }
             }
-        } catch (error) {
-            current.attempts += 1;
-            if (current.attempts >= 2) {
-                current.revert();
-                this.pending = undefined;
-            } else {
-                this.pending = current;
-            }
-            this.changeEmitter.fire();
-            throw error;
         }
         this.changeEmitter.fire();
+        if (firstError !== undefined) {
+            throw firstError;
+        }
     }
 
     private async persist(key: string, apply: () => void, revert: () => void, write: () => Promise<unknown>): Promise<void> {
         apply();
         this.changeEmitter.fire();
-        const slot = this.pending?.key === key ? this.pending : { key, attempts: 0, revert, write };
+        let slot = this.pendingWrites.get(key);
+        if (!slot) {
+            slot = { attempts: 0, revert, write };
+            if (this.pendingWrites.size >= GroupModel.PENDING_WRITES_MAX) {
+                const oldest = this.pendingWrites.keys().next();
+                if (!oldest.done) {
+                    this.pendingWrites.delete(oldest.value);
+                }
+            }
+            this.pendingWrites.set(key, slot);
+        }
         try {
             await write();
-            if (this.pending === slot || this.pending?.key === key) {
-                this.pending = undefined;
-            }
+            this.pendingWrites.delete(key);
         } catch (error) {
             slot.attempts += 1;
             if (slot.attempts >= 2) {
                 revert();
                 this.changeEmitter.fire();
-                if (this.pending === slot || this.pending?.key === key) {
-                    this.pending = undefined;
-                }
-            } else {
-                this.pending = slot;
+                this.pendingWrites.delete(key);
             }
             throw error;
         }
