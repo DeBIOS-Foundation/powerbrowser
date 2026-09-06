@@ -13,7 +13,12 @@ ship). Sketch 002 winner B is PENDING this verdict by committed direction.
 **Binary under test:** `objdir/dist/bin/powerbrowser` (existing build, unrebuilt).
 **App under test:** the supervised Theia sidecar the binary launches
 (`theia/applications/browser/lib`, reused as built).
-**Verdict:** TBD in Task 3 (observations below are the evidence it will cite).
+**Verdict: RED** — relocation mechanics proven live (6/6 moves resolve as
+requested, identity preserved), but the zero-core-modification pillar is
+unprovable by its ratified instrument: `diff-theia-core.sh --quick` is red on
+pre-existing install-state drift (cause below), so the GUI-07 entry criterion
+is not met. Fallback: strip stays top per Variant A; modes still ship.
+Re-probe path is cheap (realign `node_modules`, re-run check + probe).
 
 ---
 
@@ -279,3 +284,117 @@ on every touched widget, `idCounts` all `1`, and the return leg restoring the
 exact baseline layout (main 3, bottom 2, left 6, right 2). Under a RED verdict
 the same invariant holds trivially stronger: nothing moves at all and the
 strip stays top per Variant A.
+
+---
+
+## Constraints found (neither predicted nor blocking the fallback)
+
+1. **Side views do not populate main.** View-container opens land in their
+   contributions' default side areas; only editor-like views (`welcome`,
+   `settings:`, keybindings) open as main-area tabs. Phase 14's Variant-B
+   strip work must reckon with which widgets can actually live in the strip.
+2. **Moved widgets append after existing bottom content in move order** (see
+   edge section). A mode switch that demands a specific strip sequence must
+   set tab order explicitly.
+3. **Focus does not stick headless.** `activateWidget` resolves but
+   `currentWidget`/`activeWidget` stay `null` over BiDi headless. A
+   focused-tab-keeps-focus claim needs a headed session; unproven here.
+4. **Geometry/overflow are held-out backstop checks** (see edge section) —
+   unobservable without a rendered strip.
+5. **Core-diff instrument needs install-state realignment** (see proofs).
+   Pre-existing drift, not probe-caused; blocks any GREEN until fixed.
+
+## Summary table — one row per spike question
+
+| Spike question | Answer |
+|---|---|
+| Does a live strip move shell areas through public `ApplicationShell` API only? | YES — 3/3 main→bottom + 3/3 bottom→main, same instances, `{area}` option only, no core patch, no rebind, no panel surgery |
+| Is zero Theia-core modification proven by the ratified instrument? | NO (this run) — `diff-theia-core.sh --quick` exits 1 on pre-existing install-state drift; file-tampering evidence: none, but the instrument cannot go green as run. Blocking cause, named below. |
+| Is tab identity preserved across the move? | YES — per-widget `uriOf` equality, full-universe set equality (13/13), instance identity, no duplicates; selection intact-vacuous with cause named |
+| **Routing** | **RED → Variant-A fallback: strip stays top, modes still ship (Phase 14). Relocation mechanics banked above for a cheap re-probe after realignment.** |
+
+## Artefacts
+
+Probe harness (`.tmp-phase13-spike/probe-strip-move.mjs`, `evidence.json`,
+`probe-run*.log`) was scratch, never staged, never committed, and is removed
+at closeout (`test ! -e` on the scratch path post-removal). The deciding
+evidence is pasted verbatim in Observations 1–2 and the edge section above;
+that paste-out is why removal loses nothing. The committed artefacts of this
+plan are this record and the Task/SUMMARY commits. Verdict is a decision
+artifact, not user-facing copy — no UI-SPEC copy rules apply to it.
+
+## Correction
+
+Run 2's `uriSetEqual: false` was a harness comparison bug (main-only-before
+vs all-areas-after), corrected by run 3's full-universe comparison (`true`,
+13/13 byte-identical). The misreading is corrected in place here with the
+reasoning visible; no observation was rewritten to hide it.
+
+## Ratification
+
+| Gate question | Answer |
+|---|---|
+| Land as spiked (Variant B strip work in Phase 14)? | NO — entry criterion not met: zero-core pillar unproven by its instrument |
+| Fallback taken? | YES — Variant A: strip stays top; modes still ship in Phase 14 |
+| Constraints binding Phase 14 | 1–4 above (strip population, explicit tab order, headed focus proof if wanted, geometry/overflow backstop checks) plus 5 (realign install state, then the cheap re-probe can reopen Variant B) |
+| Guard | Plan 13-02's gui07 verdict-registry row parses this record's `Verdict: RED` line and routes Phase 14 to Variant A |
+
+## Proofs
+
+Zero core modification — `diff-theia-core.sh` output pasted (RED, cause
+named; this is the blocking cause, not a silent pass). Routed through the
+Nix theia shell per project rule (host shell has no `yarn`):
+
+```
+$ nix develop .#theia --command bash scripts/diff-theia-core.sh --quick
+diff-theia-core: stage 1 -- yarn check --integrity
+yarn check v1.22.22
+warning Integrity check: Flags don't match
+error Integrity check failed
+error Found 1 errors.
+diff-theia-core: FAIL -- yarn check --integrity reported a mismatch (see output above)
+```
+
+Exit 1. One fix-and-retry diagnostic (read-only, no install per T-13-01-SC),
+run from `theia/`:
+
+```
+$ nix develop .#theia --command bash -c 'yarn check --integrity'
+yarn check v1.22.22
+warning Integrity check: Top level patterns don't match
+error Integrity check failed
+```
+
+Cause (pre-existing, predates this plan — no plan action writes under
+`theia/node_modules`): the installed `node_modules` (`.yarn-integrity`
+flags `[]`, written 2026-09-05) no longer matches the current manifests
+(`theia/yarn.lock` last committed in 12-02 `1b7bf88`; check demands
+`--ignore-scripts` echo + top-level pattern agreement). Diagnosis: install-
+state drift, not observed tampering — corroborated by (a) zero tracked
+modifications under `theia/`/`scripts/` (see below), (b) no `@theia/*` file
+newer than the install (nothing written during the 2026-09-06 probe window),
+(c) the probe's only file writes being this record, scratch harness/logs,
+and `tsc -b` outputs under `theia/extensions/tab-uris/lib` (build outputs,
+not `@theia/*`). Repair (reinstall per `docs/BUILD.md` flags, then re-probe)
+is out of scope: T-13-01-SC forbids package-manager installs in this plan,
+and reinstalling would prove a different tree than the one probed.
+
+No Gecko touch:
+
+```
+$ git -C upstream diff --quiet && echo UPSTREAM_DIFF_EMPTY
+UPSTREAM_DIFF_EMPTY
+```
+
+Shipped tree clean (no tracked modification under `theia/` or `scripts/`
+from this plan; `??` untracked excluded per plan):
+
+```
+$ git status --porcelain theia/ scripts/ | grep -v '^??' | test $(wc -l) -eq 0 && echo SHIPPED_TREE_CLEAN
+SHIPPED_TREE_CLEAN
+```
+
+Scratch removed at closeout; the plan-literal `/tmp/phase13-spike` path was
+never created (runner tool sandbox denies all external-directory writes —
+see D-13-01-01 in What-changed; the actual scratch path removal is asserted
+in the Task 3 verify).
