@@ -3785,6 +3785,30 @@ run_own_checks() {
     "gui08-canvas-geometry|node $REPO_ROOT/scripts/verify-gui08-canvas-geometry.mjs"
     "gui08-canvas-geometry-self-test|node $REPO_ROOT/scripts/verify-gui08-canvas-geometry.mjs --self-test"
 
+    # NEW (15-03): GUI-08's view-parity gate. Derives the single-model
+    # assertion at check time (exactly the widget reads the model outside
+    # the model itself, the tree module carries no fetch, the widget owns
+    # the tree render functions, the flip is visibility-only) and compares
+    # as set equality against one EXPECTED const; live membership and flip
+    # halves ride as HELD-OUT backstops, honestly reserved for the full
+    # suite. Honestly --quick: text reads only. No build, no browser, no
+    # display, no network. The self-test rides alongside for the reason
+    # every other self-test row in this array gives.
+    "gui08-view-parity|node $REPO_ROOT/scripts/verify-gui08-view-parity.mjs"
+    "gui08-view-parity-self-test|node $REPO_ROOT/scripts/verify-gui08-view-parity.mjs --self-test"
+
+    # NEW (15-03): GUI-08's close-exactness gate. Derives the contracted
+    # Close Group dialog copy verbatim, the cancel-before-mutation ordering,
+    # the model close wiring, and the chrome-side per-tab close surface at
+    # check time and compares as set equality against one EXPECTED const;
+    # live confirm/cancel/activity halves ride as HELD-OUT backstops,
+    # honestly reserved for the full suite. Honestly --quick: text reads
+    # only. No build, no browser, no display, no network. The self-test
+    # rides alongside for the reason every other self-test row in this array
+    # gives.
+    "gui08-close-exactness|node $REPO_ROOT/scripts/verify-gui08-close-exactness.mjs"
+    "gui08-close-exactness-self-test|node $REPO_ROOT/scripts/verify-gui08-close-exactness.mjs --self-test"
+
     # NEW (01-07): MIG-04's user-facing-copy gate. Static -- it reads
     # TheiaService.sys.mjs, never a built artifact -- so it is honestly
     # --quick, and that placement is the point: a leaked pref key must cost
