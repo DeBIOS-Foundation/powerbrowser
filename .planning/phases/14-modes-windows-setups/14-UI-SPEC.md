@@ -200,6 +200,7 @@ Naming is fixed: **"chrome bar"**, mode names **"Coding"**, **"Browsing"**,
 | Empty setups body | **"Save the current windows, tabs, and mode as a setup to restore them later — choose Save Setup."** |
 | Setup row meta | **"{Mode} · {N} window(s) · {M} tab(s)"** — counts from stored data, singular/plural exact |
 | Restore-failure error | **"Power Browser couldn't restore this setup. Your current windows and tabs are unchanged — try again, or delete the setup and save a new one."** |
+| Setup mode-fallback notice | **"Power Browser restored this setup, but its saved mode is no longer available. Browsing is shown instead."** — restoring a setup whose stored mode id matches no shipped or custom mode falls back to Browsing (stock `switchPerspective` silently no-ops on unknown ids); the stored id is never shown |
 | Corrupt-mode fallback notice | **"Power Browser couldn't load the "{name}" mode. Browsing is shown instead."** (status-bar flash; custom data falls back to the shipped Browsing default, never a blank shell) |
 | Mode saved confirmation | **"Mode "{name}" saved."** (status-bar flash) |
 | Setup saved confirmation | **"Setup "{name}" saved."** (status-bar flash) |
