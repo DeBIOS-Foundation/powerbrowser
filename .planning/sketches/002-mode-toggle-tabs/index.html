@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sketch 002: Mode toggle + tabs</title>
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding-top: 52px; background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); }
+  #variant-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 9998; background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding: 8px 16px; display: flex; gap: 8px; align-items: center; }
+  #variant-nav .sketch-title { font-size: 12px; color: var(--color-text-muted); margin-right: 12px; }
+  .variant-tab { background: transparent; border: 1px solid var(--color-border); color: var(--color-text); border-radius: var(--radius-md); padding: 6px 12px; cursor: pointer; transition: all 0.15s ease; font-size: 13px; }
+  .variant-tab:hover { background: var(--color-surface-raised); }
+  .variant-tab.active { background: var(--color-primary); border-color: var(--color-primary); }
+  .variant { display: none; padding: 24px; }
+  .variant.active { display: block; }
+  .variant h2 { font-size: var(--text-lg); margin: 0 0 4px; }
+  .variant .sub { color: var(--color-text-muted); font-size: var(--text-sm); margin: 0 0 16px; max-width: 900px; }
+  .mockwin { border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; background: var(--color-bg); box-shadow: var(--shadow-lg); max-width: 1100px; margin: 0 auto; }
+  .menubar { display: flex; gap: 14px; padding: 6px 12px; font-size: 12px; color: var(--color-text-muted); background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
+  .tabstrip { display: flex; align-items: flex-end; gap: 4px; padding: 6px 8px 0; background: var(--color-surface); }
+  .tabstrip.ide { background: var(--color-bg); border-bottom: 1px solid var(--color-border); padding: 6px 8px; }
+  .tab { padding: 7px 12px; font-size: 13px; border-radius: var(--radius-md) var(--radius-md) 0 0; color: var(--color-text-muted); cursor: pointer; border: 1px solid transparent; border-bottom: none; transition: all 0.15s ease; white-space: nowrap; user-select: none; }
+  .tabstrip.ide .tab { border-radius: var(--radius-md); border: 1px solid transparent; }
+  .tab:hover { background: var(--color-surface-raised); color: var(--color-text); }
+  .tab.active { background: var(--color-bg); color: var(--color-text); border-color: var(--color-border); }
+  .tab .kind { font-size: 10px; color: var(--color-text-muted); margin-right: 6px; }
+  .newtab-btn { background: transparent; border: none; color: var(--color-text-muted); font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: var(--radius-sm); }
+  .newtab-btn:hover { background: var(--color-surface-raised); color: var(--color-text); }
+  .navbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--color-bg); border-top: 1px solid var(--color-border); }
+  .navbtn { background: transparent; border: none; color: var(--color-text); font-size: 15px; cursor: pointer; padding: 6px 9px; border-radius: var(--radius-full); }
+  .navbtn:hover { background: var(--color-surface-raised); }
+  .addr { flex: 1; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-full); padding: 6px 14px; font-size: 13px; color: var(--color-text-muted); }
+  .modeseg { display: flex; border: 1px solid var(--color-border); border-radius: var(--radius-full); overflow: hidden; font-size: 12px; }
+  .modeseg button { background: transparent; border: none; color: var(--color-text-muted); padding: 6px 12px; cursor: pointer; transition: all 0.15s ease; }
+  .modeseg button.active { background: var(--color-primary); color: white; }
+  .workarea { display: flex; min-height: 320px; }
+  .sidepanel { width: 200px; background: var(--color-surface); padding: 12px; font-size: 13px; overflow: hidden; transition: width 0.2s ease, padding 0.2s ease, opacity 0.15s ease; }
+  .sidepanel.left { border-right: 1px solid var(--color-border); }
+  .sidepanel.right { border-left: 1px solid var(--color-border); }
+  .sidepanel.collapsed { width: 0; padding: 12px 0; opacity: 0; border: none; }
+  .sidepanel h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-muted); white-space: nowrap; }
+  .sidepanel .file { padding: 4px 8px; border-radius: var(--radius-sm); color: var(--color-text-muted); white-space: nowrap; }
+  .content { flex: 1; padding: 24px; min-width: 0; }
+  .content h3 { margin-top: 0; }
+  .uri-chip { font-family: var(--font-mono); font-size: 12px; color: var(--color-accent); background: var(--color-surface); padding: 3px 8px; border-radius: var(--radius-sm); }
+  .tabcount { font-size: 12px; color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: var(--radius-full); padding: 5px 12px; white-space: nowrap; }
+  .statusbar { display: flex; gap: 12px; padding: 4px 12px; font-size: 11px; color: var(--color-text-muted); background: var(--color-surface); border-top: 1px solid var(--color-border); }
+  .toast { position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%); background: var(--color-surface-raised); border: 1px solid var(--color-border); padding: 8px 16px; border-radius: var(--radius-md); font-size: 13px; opacity: 0; transition: opacity 0.2s ease; z-index: 9999; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .mode-menu { position: relative; }
+  .mode-drop { position: absolute; right: 0; top: 110%; background: var(--color-surface-raised); border: 1px solid var(--color-border); border-radius: var(--radius-md); min-width: 220px; display: none; z-index: 60; box-shadow: var(--shadow-md); overflow: hidden; }
+  .mode-drop.open { display: block; }
+  .mode-drop div { padding: 8px 14px; font-size: 13px; cursor: pointer; }
+  .mode-drop div:hover { background: var(--color-primary); }
+  .mode-drop .head { font-size: 11px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.06em; cursor: default; }
+  .mode-drop .head:hover { background: transparent; }
+  .organise-grid { display: flex; flex-direction: column; gap: 12px; }
+  .org-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+  .org-search { flex: 1; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-full); color: var(--color-text); padding: 6px 14px; font-size: 13px; outline: none; }
+  .viewtoggle { display: flex; border: 1px solid var(--color-border); border-radius: var(--radius-full); overflow: hidden; font-size: 12px; }
+  .viewtoggle button { background: transparent; border: none; color: var(--color-text-muted); padding: 6px 12px; cursor: pointer; }
+  .viewtoggle button.active { background: var(--color-primary); color: white; }
+  .panorama-wrap { border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); overflow: hidden; }
+  .panorama { position: relative; min-height: 430px; background-image: radial-gradient(var(--color-border) 1px, transparent 1px); background-size: 22px 22px; }
+  .panorama-inner { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .pgroup { position: absolute; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 0; min-width: 180px; box-shadow: var(--shadow-md); }
+  .pgroup.dragover { border-color: var(--color-primary); }
+  .pgroup h5 { margin: 0; padding: 8px 10px; font-size: 12px; cursor: grab; user-select: none; border-bottom: 1px solid var(--color-border); }
+  .pgroup h5:active { cursor: grabbing; }
+  .pgroup h5 span { color: var(--color-text-muted); font-weight: normal; }
+  .pgroup .pbody { padding: 8px; }
+  .pgroup .resize { position: absolute; right: 2px; bottom: 2px; width: 16px; height: 16px; cursor: nwse-resize; color: var(--color-text-muted); font-size: 12px; line-height: 16px; text-align: center; }
+  .zoomctl { display: flex; gap: 2px; align-items: center; }
+  .zoomctl button { background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text); border-radius: var(--radius-sm); padding: 4px 10px; cursor: pointer; font-size: 13px; }
+  .zoomctl button:hover { border-color: var(--color-primary); }
+  .utray { margin-top: 10px; background: var(--color-surface); border: 1px dashed var(--color-border); border-radius: var(--radius-md); padding: 8px 10px; }
+  .utray h5 { margin: 0 0 6px; font-size: 11px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .utray .pcards { display: flex; flex-direction: row; flex-wrap: wrap; }
+  .utray .pcard { width: 180px; }
+  .pcards { display: flex; flex-direction: column; gap: 6px; min-height: 30px; }
+  .pcard { background: var(--color-surface-raised); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px; cursor: grab; transition: all 0.15s ease; }
+  .pcard:hover { border-color: var(--color-primary); }
+  .pcard.dragging { opacity: 0.4; }
+  .pcard small { color: var(--color-text-muted); display: block; font-family: var(--font-mono); font-size: 11px; margin-top: 2px; }
+  .pcard .thumb { height: 34px; border-radius: 4px; background: linear-gradient(135deg, var(--color-surface-raised), var(--color-border)); margin-bottom: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .newgroup { background: transparent; border: 1px dashed var(--color-border); color: var(--color-text-muted); border-radius: var(--radius-md); padding: 10px; font-size: 12px; cursor: pointer; min-width: 140px; }
+  .newgroup:hover { color: var(--color-text); border-color: var(--color-primary); }
+  .ptree { font-size: 13px; }
+  .ptree ul { list-style: none; margin: 4px 0 10px; padding-left: 16px; border-left: 1px solid var(--color-border); }
+  .ptree li { padding: 4px 8px; border-radius: var(--radius-sm); cursor: grab; color: var(--color-text-muted); }
+  .ptree li:hover { background: var(--color-surface-raised); color: var(--color-text); }
+  .ptree .gname { font-size: 12px; color: var(--color-text); font-weight: 600; }
+  #sketch-tools { position: fixed; bottom: 12px; right: 12px; z-index: 9999; font-family: system-ui; font-size: 12px; background: rgba(0,0,0,0.7); color: white; padding: 8px 12px; border-radius: 8px; opacity: 0.4; transition: opacity 0.2s; display: flex; gap: 8px; align-items: center; }
+  #sketch-tools:hover { opacity: 1; }
+  #sketch-tools button { background: #444; color: white; border: none; border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="variant-nav">
+  <span class="sketch-title">002 · mode toggle + tabs</span>
+  <button class="variant-tab active" onclick="showVariant('a')">A: Segmented toggle</button>
+  <button class="variant-tab" onclick="showVariant('b')">B: Strip relocates ★ Selected</button>
+  <button class="variant-tab" onclick="showVariant('c')">C: Custom modes</button>
+</div>
+
+<div id="variant-a" class="variant active">
+  <h2>Variant A: Segmented toggle, strip stays top</h2>
+  <p class="sub">One segmented control in the chrome bar. Modes filter side panels only; the tab strip never moves. Simplest to build — pure visibility rules.</p>
+  <div class="mockwin" id="win-a">
+    <div class="menubar"><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Run</span><span>Terminal</span><span>Help</span></div>
+    <div class="tabstrip" data-tabs></div>
+    <div class="navbar">
+      <button class="navbtn">←</button><button class="navbtn">→</button><button class="navbtn">⟳</button>
+      <div class="addr" data-addr>🔒 <span>view:welcome</span></div>
+      <div class="modeseg" data-modes><button data-mode="coding" class="active">Coding</button><button data-mode="browsing">Browsing</button><button data-mode="organising">Organising</button></div>
+    </div>
+    <div class="workarea"><div class="sidepanel left" data-left><h4>Explorer</h4><div class="file">📁 src</div><div class="file">📄 configuration.toml</div></div><div class="content" data-content></div><div class="sidepanel right" data-right><h4>Outline</h4><div class="file">◇ openTab()</div><div class="file">◇ render()</div></div></div>
+    <div class="statusbar"><span class="tabcount" data-count></span><span style="margin-left:auto">PowerBrowser</span></div>
+  </div>
+</div>
+
+<div id="variant-b" class="variant">
+  <h2>Variant B: Strip relocates with the mode</h2>
+  <p class="sub">Browsing puts tabs on the top bar like a browser; coding docks the strip above the editor area IDE-style. Tabs persist — only the strip moves. Custom layout work.</p>
+  <div class="mockwin" id="win-b">
+    <div class="menubar"><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Run</span><span>Terminal</span><span>Help</span></div>
+    <div class="tabstrip" data-tabs-top></div>
+    <div class="navbar" data-navbar>
+      <button class="navbtn">←</button><button class="navbtn">→</button><button class="navbtn">⟳</button>
+      <div class="addr" data-addr>🔒 <span>view:welcome</span></div>
+      <div class="modeseg" data-modes><button data-mode="coding" class="active">Coding</button><button data-mode="browsing">Browsing</button><button data-mode="organising">Organising</button></div>
+    </div>
+    <div class="workarea"><div class="sidepanel left" data-left><h4>Explorer</h4><div class="file">📁 src</div><div class="file">📄 configuration.toml</div></div><div style="flex:1;display:flex;flex-direction:column;min-width:0"><div class="tabstrip ide" data-tabs-ide style="display:none"></div><div class="content" data-content></div></div><div class="sidepanel right" data-right><h4>Outline</h4><div class="file">◇ openTab()</div></div></div>
+    <div class="statusbar"><span class="tabcount" data-count></span><span style="margin-left:auto">PowerBrowser</span></div>
+  </div>
+</div>
+
+<div id="variant-c" class="variant">
+  <h2>Variant C: Custom modes menu</h2>
+  <p class="sub">Modes are data: shipped defaults plus your own. The menu lists modes and offers "Save current layout as mode". Strip stays top; panels filter per mode rule.</p>
+  <div class="mockwin" id="win-c">
+    <div class="menubar"><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Run</span><span>Terminal</span><span>Help</span></div>
+    <div class="tabstrip" data-tabs></div>
+    <div class="navbar">
+      <button class="navbtn">←</button><button class="navbtn">→</button><button class="navbtn">⟳</button>
+      <div class="addr" data-addr>🔒 <span>view:welcome</span></div>
+      <div class="mode-menu"><div class="modeseg"><button class="active" data-modelabel>Coding ▾</button></div>
+        <div class="mode-drop" data-drop><div class="head">Defaults</div><div data-mode="coding">💻 Coding</div><div data-mode="browsing">🌐 Browsing</div><div data-mode="organising">🗂 Organising</div><div class="head">Yours</div><div data-custom>＋ Save current layout as mode…</div></div></div>
+    </div>
+    <div class="workarea"><div class="sidepanel left" data-left><h4>Explorer</h4><div class="file">📁 src</div><div class="file">📄 configuration.toml</div></div><div class="content" data-content></div><div class="sidepanel right" data-right><h4>Outline</h4><div class="file">◇ openTab()</div></div></div>
+    <div class="statusbar"><span class="tabcount" data-count></span><span style="margin-left:auto">PowerBrowser</span></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="sketch-tools">
+  <select onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default.css">Default</option></select>
+  <button onclick="setWidth('100%')">Desktop</button>
+  <button onclick="setWidth('768px')">Tablet</button>
+  <button onclick="document.body.classList.toggle('annotate')">Annotate</button>
+</div>
+
+<script>
+function showVariant(id) {
+  document.querySelectorAll('.variant').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.variant-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('variant-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+function setWidth(w) { document.querySelectorAll('.mockwin').forEach(m => m.style.maxWidth = w === '100%' ? '1100px' : w); }
+let toastT;
+function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1800); }
+
+const TABS = [
+  { uri: 'view:welcome', kind: 'IDE', title: 'Welcome', body: '<h3>Welcome to PowerBrowser</h3><p>IDE home. Tabs go with you in every mode.</p>' },
+  { uri: 'terminal:build', kind: 'IDE', title: 'Terminal — build', body: '<h3>Terminal <span class="uri-chip">terminal:build</span></h3><p style="font-family:var(--font-mono);font-size:13px">$ yarn build<br>✓ done in 41s</p>' },
+  { uri: 'web:example.com', kind: 'WEB', title: 'Example', addr: 'https://example.com', body: '<h3>Example Domain</h3><p>Illustrative example page.</p>' },
+];
+// mode -> {left, right, navbar, organise}
+const RULES = {
+  coding:     { left: true,  right: true,  navbar: false, organise: false },
+  browsing:   { left: false, right: false, navbar: true,  organise: false },
+  organising: { left: false, right: false, navbar: false, organise: true  },
+};
+function ModeDemo(rootId, opts) {
+  this.root = document.getElementById(rootId);
+  this.mode = 'coding'; this.active = TABS[0].uri;
+  this.relocate = opts && opts.relocate;
+  this.customModes = [];
+  this.render();
+  const self = this;
+  this.root.querySelectorAll('[data-mode]').forEach(b => { if (b.dataset.custom === undefined) b.onclick = () => self.setMode(b.dataset.mode); });
+  const label = this.root.querySelector('[data-modelabel]');
+  if (label) label.parentElement.querySelector('.modeseg').onclick = () => this.root.querySelector('[data-drop]').classList.toggle('open');
+  const custom = this.root.querySelector('[data-custom]');
+  if (custom) custom.onclick = () => {
+    const name = 'Focus ' + (this.customModes.length + 1);
+    this.customModes.push(name);
+    const d = document.createElement('div'); d.textContent = '⭐ ' + name + ' (left hidden, bar shown)';
+    d.onclick = () => self.setMode('browsing', name);
+    this.root.querySelector('[data-drop]').insertBefore(d, custom);
+    toast('Mode saved: ' + name + ' — modes are data, not code');
+  };
+}
+ModeDemo.prototype.setMode = function (mode, customName) {
+  this.mode = mode;
+  const r = RULES[mode];
+  const q = s => this.root.querySelector(s);
+  if (q('[data-left]')) q('[data-left]').classList.toggle('collapsed', !r.left);
+  if (q('[data-right]')) q('[data-right]').classList.toggle('collapsed', !r.right);
+  // The nav row always stays: it carries the toggle itself, so hiding
+  // it in any mode would strand the user with no way back.
+  if (q('[data-navbar]')) q('[data-navbar]').style.display = '';
+  const label = q('[data-modelabel]');
+  if (label) { label.textContent = (customName || mode[0].toUpperCase() + mode.slice(1)) + ' ▾'; q('[data-drop]').classList.remove('open'); }
+  else this.root.querySelectorAll('[data-modes] button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  // strip relocation (variant B): browsing -> top, coding -> ide dock
+  if (this.relocate) {
+    const top = q('[data-tabs-top]'), ide = q('[data-tabs-ide]');
+    const toTop = (mode !== 'coding');
+    top.style.display = toTop ? '' : 'none';
+    ide.style.display = toTop ? 'none' : '';
+  }
+  this.render();
+  toast((customName || mode) + ' — ' + TABS.length + ' tabs kept, panels ' + (r.left || r.right ? 'shown' : 'hidden'));
+};
+ModeDemo.prototype.render = function () {
+  const self = this;
+  const strips = this.root.querySelectorAll('[data-tabs], [data-tabs-top], [data-tabs-ide]');
+  strips.forEach(st => {
+    if (st.style.display === 'none') return;
+    st.querySelectorAll('.tab').forEach(t => t.remove());
+    TABS.forEach(t => {
+      const el = document.createElement('div');
+      el.className = 'tab' + (t.uri === self.active ? ' active' : '');
+      el.innerHTML = '<span class="kind">' + t.kind + '</span>' + t.title;
+      el.title = t.uri;
+      el.onclick = () => { self.active = t.uri; self.render(); };
+      const plus = st.querySelector('.newtab-btn');
+      if (plus) st.insertBefore(el, plus); else st.appendChild(el);
+    });
+    if (!st.querySelector('.newtab-btn')) { const b = document.createElement('button'); b.className = 'newtab-btn'; b.textContent = '＋'; b.onclick = () => toast(TABS.length + ' tabs — new web tabs arrive with GUI-02'); st.appendChild(b); }
+  });
+  const t = TABS.find(t => t.uri === self.active);
+  const c = this.root.querySelector('[data-content]');
+  const r = RULES[this.mode];
+  if (r.organise) { this.renderOrganise(c); return; }
+  c.innerHTML = t.body;
+  const addr = this.root.querySelector('[data-addr] span');
+  if (addr) addr.textContent = t.addr || t.uri;
+  const count = this.root.querySelector('[data-count]');
+  if (count) count.textContent = TABS.length + ' tabs · mode: ' + this.mode;
+};
+// Panorama-style organising: named groups of tab URIs + tree toggle.
+// Groups are the same sets setups and windows will compose later;
+// the tree is a second view over identical group data, not a copy.
+const GROUPS = [
+  { name: 'Research', uris: ['web:example.com'], x: 24, y: 24, w: 250 },
+  { name: 'Build', uris: ['terminal:build'], x: 320, y: 150, w: 250 },
+];
+function groupOf(uri) { const g = GROUPS.find(g => g.uris.includes(uri)); return g ? g.name : 'Ungrouped'; }
+const THUMB = { 'view:welcome': '👋', 'terminal:build': '▮', 'web:example.com': '🌐' };
+ModeDemo.prototype.renderOrganise = function (c) {
+  const self = this;
+  if (!this.orgView) this.orgView = 'canvas';
+  if (this.orgQuery === undefined) this.orgQuery = '';
+  if (!this.zoom) this.zoom = 1;
+  const ungrouped = TABS.map(t => t.uri).filter(u => groupOf(u) === 'Ungrouped');
+  const match = u => !self.orgQuery || u.toLowerCase().includes(self.orgQuery) ||
+    (TABS.find(t => t.uri === u).title.toLowerCase().includes(self.orgQuery));
+  let html = '<h3>Organise — drag tabs between groups</h3>' +
+    '<div class="organise-grid"><div class="org-toolbar">' +
+    '<input class="org-search" placeholder="Search tabs…" value="' + self.orgQuery + '">' +
+    '<div class="viewtoggle"><button data-v="canvas" class="' + (self.orgView === 'canvas' ? 'active' : '') + '">Canvas</button>' +
+    '<button data-v="tree" class="' + (self.orgView === 'tree' ? 'active' : '') + '">Tree</button></div>' +
+    '<div class="zoomctl"><button data-zoom="-1">−</button><span style="font-size:12px;color:var(--color-text-muted)">' + Math.round(self.zoom * 100) + '%</span><button data-zoom="1">＋</button></div></div>';
+  if (self.orgView === 'canvas') {
+    // Freeform Panorama canvas: groups are absolutely positioned boxes
+    // (no snap, no grid, no auto-fit). Drag a card onto empty canvas to
+    // auto-box a new group — the #1 Panorama mechanic.
+    html += '<div class="panorama-wrap"><div class="panorama" data-canvas><div class="panorama-inner" data-inner style="transform:scale(' + self.zoom + ')">';
+    GROUPS.forEach(g => {
+      const cards = g.uris.filter(match).map(u => {
+        const t = TABS.find(t => t.uri === u);
+        return '<div class="pcard" draggable="true" data-u="' + u + '" title="Click to open">' +
+          '<div class="thumb">' + (THUMB[u] || '▤') + '</div><b>' + t.title + '</b><small>' + u + '</small></div>';
+      }).join('');
+      html += '<div class="pgroup" data-g="' + g.name + '" style="left:' + g.x + 'px;top:' + g.y + 'px;width:' + g.w + 'px">' +
+        '<h5 data-grip="1">⤢ ' + g.name + ' <span>' + g.uris.length + '</span></h5><div class="pbody"><div class="pcards">' +
+        (cards || '<small style="color:var(--color-text-muted)">drop tabs here</small>') + '</div></div><div class="resize" data-rs="1">◢</div></div>';
+    });
+    html += '</div></div></div>';
+    const ucards = ungrouped.filter(match).map(u => {
+      const t = TABS.find(t => t.uri === u);
+      return '<div class="pcard" draggable="true" data-u="' + u + '" title="Click to open">' +
+        '<div class="thumb">' + (THUMB[u] || '▤') + '</div><b>' + t.title + '</b><small>' + u + '</small></div>';
+    }).join('');
+    html += '<div class="utray"><h5>Ungrouped tray — drag onto canvas to auto-box a group</h5><div class="pcards">' + (ucards || '<small style="color:var(--color-text-muted)">empty — every tab belongs to a group</small>') + '</div></div>';
+  } else {
+    html += '<div class="ptree">';
+    GROUPS.concat([{ name: 'Ungrouped', uris: ungrouped }]).forEach(g => {
+      const items = g.uris.filter(match).map(u => {
+        const t = TABS.find(t => t.uri === u);
+        return '<li draggable="true" data-u="' + u + '">' + t.title + ' <small style="color:var(--color-text-muted)">' + u + '</small></li>';
+      }).join('');
+      html += '<div class="gname">▸ ' + g.name + ' (' + g.uris.length + ')</div><ul data-g="' + g.name + '">' + items + '</ul>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  c.innerHTML = html;
+  const search = c.querySelector('.org-search');
+  search.oninput = () => { self.orgQuery = search.value.toLowerCase(); self.renderOrganise(c); const s2 = c.querySelector('.org-search'); s2.focus(); s2.setSelectionRange(s2.value.length, s2.value.length); };
+  c.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { self.orgView = b.dataset.v; self.renderOrganise(c); toast((b.dataset.v === 'canvas' ? 'Panorama canvas' : 'Tree') + ' — same groups, second view'); });
+  const move = (uri, gname) => {
+    GROUPS.forEach(g => g.uris = g.uris.filter(u => u !== uri));
+    if (gname !== 'Ungrouped') GROUPS.find(g => g.name === gname).uris.push(uri);
+    self.renderOrganise(c);
+    toast('Moved to ' + gname + ' — row reassigned, tab untouched');
+  };
+  c.querySelectorAll('[draggable]').forEach(el => {
+    el.onclick = () => { self.active = el.dataset.u; self.setMode('browsing'); };
+    el.ondragstart = e => { e.dataTransfer.setData('text/plain', el.dataset.u); el.classList.add('dragging'); e.stopPropagation(); };
+    el.ondragend = () => el.classList.remove('dragging');
+  });
+  c.querySelectorAll('[data-g]').forEach(g => {
+    g.ondragover = e => { e.preventDefault(); g.classList.add('dragover'); };
+    g.ondragleave = () => g.classList.remove('dragover');
+    g.ondrop = e => { e.preventDefault(); g.classList.remove('dragover'); move(e.dataTransfer.getData('text/plain'), g.dataset.g); };
+  });
+  c.querySelectorAll('[data-zoom]').forEach(b => b.onclick = () => {
+    self.zoom = Math.min(1.6, Math.max(0.4, self.zoom + 0.2 * (+b.dataset.zoom)));
+    self.renderOrganise(c);
+  });
+  // Free group drag: mousedown on the header, pixel-free, no snap.
+  c.querySelectorAll('[data-grip]').forEach(grip => {
+    grip.onmousedown = e => {
+      e.preventDefault();
+      const box = grip.closest('.pgroup');
+      const g = GROUPS.find(x => x.name === box.dataset.g);
+      const sx = e.clientX, sy = e.clientY, ox = g.x, oy = g.y;
+      const mv = ev => { g.x = Math.max(0, ox + (ev.clientX - sx) / self.zoom); g.y = Math.max(0, oy + (ev.clientY - sy) / self.zoom); box.style.left = g.x + 'px'; box.style.top = g.y + 'px'; };
+      const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); };
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+    };
+  });
+  // Corner resize: manual only, groups never auto-size.
+  c.querySelectorAll('[data-rs]').forEach(h => {
+    h.onmousedown = e => {
+      e.preventDefault(); e.stopPropagation();
+      const box = h.closest('.pgroup');
+      const g = GROUPS.find(x => x.name === box.dataset.g);
+      const sx = e.clientX, ow = g.w;
+      const mv = ev => { g.w = Math.max(180, ow + (ev.clientX - sx) / self.zoom); box.style.width = g.w + 'px'; };
+      const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); };
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+    };
+  });
+  // Drop onto empty canvas: auto-box a new group at the drop point.
+  const canvas = c.querySelector('[data-canvas]');
+  if (canvas) {
+    canvas.ondragover = e => e.preventDefault();
+    canvas.ondrop = e => {
+      e.preventDefault();
+      if (e.target.closest('.pgroup')) return;
+      const uri = e.dataTransfer.getData('text/plain');
+      if (!uri) return;
+      const rect = canvas.getBoundingClientRect();
+      GROUPS.forEach(g => g.uris = g.uris.filter(u => u !== uri));
+      GROUPS.push({ name: 'Group ' + (GROUPS.length + 1), uris: [uri],
+        x: Math.max(0, (e.clientX - rect.left) / self.zoom - 90),
+        y: Math.max(0, (e.clientY - rect.top) / self.zoom - 20), w: 230 });
+      self.renderOrganise(c);
+      toast('Auto-boxed a group — the Panorama mechanic');
+    };
+  }
+  const ng = c.querySelector('.newgroup');
+  if (ng) ng.onclick = () => { GROUPS.push({ name: 'Group ' + (GROUPS.length + 1), uris: [] }); self.renderOrganise(c); };
+};
+new ModeDemo('win-a', {});
+new ModeDemo('win-b', { relocate: true });
+new ModeDemo('win-c', {});
+// start all in coding per mock default, then browsing demo state for A? keep coding.
+</script>
+</body>
+</html>
