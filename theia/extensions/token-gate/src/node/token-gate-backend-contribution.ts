@@ -83,6 +83,21 @@ export class PowerBrowserTokenGateContribution implements BackendApplicationCont
     }
 
     onStart(server: http.Server | https.Server): void {
+        // The bound address is only readable once the socket binds, which
+        // is asynchronous: contributions' onStart run as microtasks right
+        // after listen() is initiated, so address() here is still null
+        // whenever no earlier contribution yielded a macrotask first.
+        // Announce now when already bound, else on 'listening' -- startup
+        // must never depend on contribution ordering (16-03: the backend
+        // exited 78 deterministically on every boot until this deferral).
+        if (server.listening) {
+            this.announce(server);
+        } else {
+            server.once('listening', () => this.announce(server));
+        }
+    }
+
+    protected announce(server: http.Server | https.Server): void {
         const address = server.address();
         if (address === null || typeof address === 'string') {
             process.stderr.write(

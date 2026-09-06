@@ -2,10 +2,14 @@ import { inject, injectable } from '@theia/core/shared/inversify';
 import { BackendApplicationContribution } from '@theia/core/lib/node';
 import { FileUri } from '@theia/core/lib/common/file-uri';
 import { WorkspaceServer } from '@theia/workspace/lib/common';
+import * as http from 'http';
+import * as https from 'https';
 import { ChildProcess, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk';
 import { POWERBROWSER_ENV } from '@powerbrowser/token-gate/lib/node/powerbrowser-env';
+import { buildBridgeChildEnv } from './opencode-bridge-env';
+import { OPENCODE_MCP_ROUTE, buildBridgeServerEntry } from './opencode-mcp-contribution';
 import {
     OpencodeReply,
     OpencodeService,
@@ -23,14 +27,12 @@ import { OpencodeChangesetEmitter, StagedEntry } from './opencode-changeset-emit
 // Environment hygiene (T-16-01-03, D-07): this file never reads the host
 // environment object directly -- every secret comes through POWERBROWSER_ENV,
 // captured and scrubbed at module load by powerbrowser-env.ts. The child is
-// spawned with an INHERITED environment, which is already scrubbed: the
-// capture-and-delete in powerbrowser-env.ts removed every POWERBROWSER_* key
-// from this backend process before any contribution initialized, so the
-// child cannot inherit the supervised marker (no nested watchdog re-arm)
-// and cannot inherit a token (the token travels the stdin pipe only and was
-// never in the environment). Nothing secret is added here; the /mcp bridge
-// token injection is plan 16-03 scope and will use per-spawn config, never
-// a checked-in value.
+// spawned with an EXPLICIT environment built by opencode-bridge-env.ts: the
+// scrubbed base (no supervised marker, so no nested watchdog re-arm; no
+// supervisor token name) plus the one per-spawn bridge variable the /mcp
+// header reference resolves against. The bridge value equals the live
+// token but travels under the bridge name only; the checked-in bridge
+// config carries the interpolation reference and no value (16-03).
 
 interface PendingRequest {
     resolve: (value: unknown) => void;
@@ -66,6 +68,15 @@ export class OpencodeAcpSupervisor implements BackendApplicationContribution, Op
     protected handshakeOk = false;
     protected workspaceRoot: string | undefined;
     protected executable = 'opencode';
+    /**
+     * 16-03 Task 1: the backend HTTP server, retained for the /mcp bridge
+     * entry. The bound address is read LAZILY at session/new time, never
+     * in onStart: contributions' onStart run before the socket binds, so
+     * an eager address() read is always null (the same race that
+     * deterministic-78'd every backend boot until the token gate deferred
+     * its own announce to 'listening').
+     */
+    protected httpServer: http.Server | https.Server | undefined;
 
     /** 1 Theia chat session -> 1 ACP session, minted at the workspace root. */
     protected acpSessions = new Map<string, string>();
@@ -87,6 +98,11 @@ export class OpencodeAcpSupervisor implements BackendApplicationContribution, Op
         // The parent watchdog SIGTERMs this backend on parent death; take
         // the supervised child down with it so no orphan survives (DoS).
         process.on('exit', () => this.killChild());
+    }
+
+    onStart(server: http.Server | https.Server): void {
+        // Retain only; the port is read when the first session needs it.
+        this.httpServer = server;
     }
 
     // -- OpencodeService (JSON-RPC surface at /services/opencode) ----------
@@ -144,13 +160,37 @@ export class OpencodeAcpSupervisor implements BackendApplicationContribution, Op
         }
         // Created at the workspace root and never reloaded elsewhere: the
         // installed binary drops permission replies after a session/load
-        // with a different cwd, hanging the turn (research Q1).
+        // with a different cwd, hanging the turn (research Q1). The bridge
+        // entry points opencode at this backend's live /mcp endpoint.
         const response = await this.requestAgent('session/new', {
             cwd: this.workspaceRoot ?? '',
-            mcpServers: [],
+            mcpServers: this.bridgeServers(),
         }) as { sessionId: string };
         this.acpSessions.set(chatSessionId, response.sessionId);
         return response.sessionId;
+    }
+
+    /**
+     * 16-03 Task 1: the per-session bridge server entry. Built at
+     * session/new time, when the backend is long bound and the port reads
+     * live; the secret stays the interpolation reference resolving against
+     * the per-spawn child env. Empty while the port is unreadable -- never
+     * a guessed URL.
+     */
+    protected bridgeServers(): { type: string; name: string; url: string; headers: { name: string; value: string }[] }[] {
+        let port: number | undefined;
+        try {
+            const address = this.httpServer?.address();
+            if (address !== null && address !== undefined && typeof address !== 'string') {
+                port = address.port;
+            }
+        } catch {
+            // Port stays unknown; the entry falls back to none below.
+        }
+        if (port === undefined) {
+            return [];
+        }
+        return [buildBridgeServerEntry("http://127.0.0.1:" + port + OPENCODE_MCP_ROUTE)];
     }
 
     protected finishTurn(chatSessionId: string, sessionId: string): OpencodeReply {
@@ -198,7 +238,12 @@ export class OpencodeAcpSupervisor implements BackendApplicationContribution, Op
             console.error(`opencode-acp-supervisor: unexpected ACP protocol version ${expectedProtocol} -- failing closed`);
             process.exit(78);
         }
-        this.child = spawn(this.resolveExecutable(), args, { stdio: ['pipe', 'pipe', 'pipe'] });
+        this.child = spawn(this.resolveExecutable(), args, {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            // Explicit per-spawn env (16-03 D-07): scrubbed base plus the
+            // bridge variable, never the supervised marker or token name.
+            env: buildBridgeChildEnv(),
+        });
         this.handshakeOk = false;
         const reader = createInterface({ input: this.child.stdout! });
         reader.on('line', line => this.onAgentLine(line));
