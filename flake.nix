@@ -29,6 +29,16 @@
             pkgs.python3
             pkgs.pkg-config
             pkgs.gnumake
+            # scripts/generate.mjs rasterises brand/mark.svg through the system
+            # `inkscape`, so the generator -- and every check that compares its
+            # output -- has always depended on a binary no shell declared. It
+            # worked on the reference host only because the NixOS system profile
+            # happened to provide one. Pinning it here is not just convenience:
+            # the tracked PNGs are byte-compared by the generated-identity row,
+            # and only inkscape 1.4.4 (what this nixpkgs supplies, and what
+            # produced them) reproduces those bytes. A distro package of a
+            # different version passes the raster step and fails byte identity.
+            pkgs.inkscape
           ];
           buildInputs = [
             pkgs.libx11

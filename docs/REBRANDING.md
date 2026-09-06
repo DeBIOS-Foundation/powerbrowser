@@ -28,8 +28,14 @@ signal to re-read the step, not to edit the file.
   - `nix develop .#firefox` — the Gecko toolchain (rustc, cargo, cbindgen,
     clang). Used for everything under `upstream/`.
   - `nix develop .#theia` — Node and yarn. Used for everything under
-    `theia/`.
-  - `node` works outside either shell; `yarn` does not.
+    `theia/`, and for `scripts/generate.mjs`.
+  - `yarn` does not work outside either shell. Plain `node` does, but the
+    generator is the exception: it rasterises `brand/mark.svg` through
+    `inkscape`, which only the `.#theia` shell supplies at the pinned
+    version. Run `nix develop .#theia --command node scripts/generate.mjs`
+    rather than bare `node`, or the icon step fails — and a differently
+    versioned `inkscape` found on the host is worse, because it produces
+    rasters that then fail the byte-identity check.
 
 ### 1. Clone
 

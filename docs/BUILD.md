@@ -37,6 +37,16 @@ Nothing else needs installing by hand. Both `nix develop` shells below
 supply their entire toolchain; there is no `mach bootstrap` step and no
 separate Node/Yarn/Rust install (D-18).
 
+One consequence is easy to miss, because plain `node` otherwise works
+outside either shell: **`scripts/generate.mjs` must run inside `nix develop
+.#theia`.** It rasterises `brand/mark.svg` through `inkscape`, which that
+shell pins at 1.4.4. Bare `node scripts/generate.mjs` on a host without an
+`inkscape` fails at the 16-pixel icon; on a host carrying a *different*
+`inkscape` it is worse, producing rasters that pass the icon step and then
+fail the byte-identity check as though the tree were at fault. The
+invocations written as `node scripts/generate.mjs` below are all inside
+that shell, and CI runs them the same way.
+
 ## Theia half
 
 The app composes the frozen 49-`@theia/*`-package daily-drivable set
