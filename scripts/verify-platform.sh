@@ -3723,6 +3723,17 @@ run_own_checks() {
     "gui07-strip-spike-verdict|node $REPO_ROOT/scripts/verify-strip-spike-verdict.mjs"
     "gui07-strip-spike-verdict-self-test|node $REPO_ROOT/scripts/verify-strip-spike-verdict.mjs --self-test"
 
+    # NEW (14-01): GUI-07's shipped-mode defaults gate. Derives descriptor
+    # ids, labels, order, and the placement map from the modes sources plus
+    # the widget MODES literal at check time and compares as set equality
+    # against one EXPECTED const; fails distinctly on empty derivation and
+    # proves modes ship as data with a scoped negated search for manifest
+    # flags. Honestly --quick: text reads only. No build, no browser, no
+    # display, no network. The self-test rides alongside for the reason
+    # every other self-test row in this array gives.
+    "gui07-mode-toggle-commands|node $REPO_ROOT/scripts/verify-mode-toggle-commands.mjs"
+    "gui07-mode-toggle-commands-self-test|node $REPO_ROOT/scripts/verify-mode-toggle-commands.mjs --self-test"
+
     # NEW (01-07): MIG-04's user-facing-copy gate. Static -- it reads
     # TheiaService.sys.mjs, never a built artifact -- so it is honestly
     # --quick, and that placement is the point: a leaked pref key must cost
