@@ -551,6 +551,7 @@
 .pb-org-box-title:focus-visible,
 .pb-org-tree-title:focus-visible,
 .pb-org-rename:focus-visible,
+.pb-org-box-resize:focus-visible,
 .pb-org-empty-action:focus-visible {
     outline: 2px solid var(--color-primary, #00a6f5);
     outline-offset: 2px;
