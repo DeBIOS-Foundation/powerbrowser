@@ -87,7 +87,14 @@ Plans:
   3. User can open dependent windows hosting tab content, never a second IDE frame; closing the core window kills the session and the next launch restores the setup
   4. User can save, name, and restore setups remembering geometry, tab placement, and mode
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+
+- [ ] 14-01-PLAN.md — Window-routing probe with GREEN/RED record, modes tracer with shipped descriptors, bridged toggle, defaults gate
+- [ ] 14-02-PLAN.md — Modes full: customs with fallback, organising placeholder, toggle rows, style layer, invariant gate
+- [ ] 14-03-PLAN.md — Dependents per probe verdict plus named setups with relaunch restore, roundtrip and content gates
+
 **UI hint**: yes
 
 ### Phase 15: Panorama Organising
