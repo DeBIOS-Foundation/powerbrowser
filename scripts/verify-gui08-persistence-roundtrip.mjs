@@ -137,6 +137,12 @@ function derivedTitleCap(apiSrc) {
     return m ? Number(m[1]) : undefined;
 }
 
+/** WR-05c: the model-side rename cap must equal the chrome-side cap. */
+function derivedModelTitleCap(modelSrc) {
+    const m = /const GROUP_TITLE_MAX_CHARS\s*=\s*(\d+)/.exec(modelSrc);
+    return m ? Number(m[1]) : undefined;
+}
+
 function derivedGroupPath(contractSrc) {
     const m = /GROUP_PATH\s*=\s*'([^']+)'/.exec(contractSrc);
     return m ? m[1] : '';
@@ -268,6 +274,14 @@ function checkStatic(sources) {
         failures.push(`${API_REL}: GROUP_TITLE_MAX unlocatable -- the cap anchor drifted`);
     } else if (cap !== EXPECTED_TITLE_CAP) {
         failures.push(`${API_REL}: title cap is ${cap}, declared ${EXPECTED_TITLE_CAP} -- the rename contract broke`);
+    }
+    // WR-05c: the model cap must equal the chrome cap -- drift paints titles
+    // the store will cut on write (paint/store divergence until reload).
+    const modelCap = derivedModelTitleCap(modelSrc);
+    if (modelCap === undefined) {
+        failures.push(`${MODEL_REL}: GROUP_TITLE_MAX_CHARS unlocatable -- the model cap anchor drifted`);
+    } else if (cap !== undefined && modelCap !== cap) {
+        failures.push(`${MODEL_REL}: model cap is ${modelCap} but chrome GROUP_TITLE_MAX is ${cap} -- rename paints titles the store cuts on write`);
     }
     if (!apiSrc.includes(`|| "${UNTITLED_FALLBACK}"`) && !apiSrc.includes(`?? "${UNTITLED_FALLBACK}"`)) {
         failures.push(`${API_REL}: the empty-title fallback to '${UNTITLED_FALLBACK}' is gone -- blank headers become storable`);
@@ -814,10 +828,32 @@ function selfTest() {
         }
     }
 
+    // Plant 9 (WR-05c): model/chrome title-cap drift must go red naming it.
+    {
+        const mutated = {
+            ...real,
+            [MODEL_REL]: real[MODEL_REL].replace(
+                'export const GROUP_TITLE_MAX_CHARS = 60;',
+                'export const GROUP_TITLE_MAX_CHARS = 61;'
+            ),
+        };
+        const landed = mutated[MODEL_REL].includes('GROUP_TITLE_MAX_CHARS = 61');
+        const result = checkStatic(mutated);
+        if (!landed) {
+            console.error(`${NAME} --self-test: FAIL -- 'title-cap drift' plant did not land`);
+            failed += 1;
+        } else if (!result.some(f => /model cap|GROUP_TITLE_MAX_CHARS|paints titles/.test(f))) {
+            console.error(`${NAME} --self-test: FAIL -- 'title-cap drift' did not go red naming the cap divergence; got: ${result.join(' | ') || '(no failures at all)'}`);
+            failed += 1;
+        } else {
+            console.log(`  ok  title-cap drift -> red, naming the cap divergence`);
+        }
+    }
+
     if (failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all eight fault directions went red naming the drift`);
+    console.log(`${NAME} --self-test: PASS -- all nine fault directions went red naming the drift`);
 }
 
 if (process.argv.includes('--self-test')) {
