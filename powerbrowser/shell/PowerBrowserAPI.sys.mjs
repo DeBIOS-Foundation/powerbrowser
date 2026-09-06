@@ -922,10 +922,13 @@ export const PowerBrowserAPI = Object.freeze({
    * so the row can never violate its own CHECKs). Throws, never stores.
    */
   normalizeGroupRow(method, { id, title, x, y, w, h, isActive }) {
-    if (typeof id !== "string" || !id) {
-      throw new Error(`${method}: refusing group with empty id`);
+    if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) {
+      throw new Error(`${method}: refusing malformed group id`);
     }
-    const cleanTitle = String(title ?? "Untitled group").trim().slice(0, GROUP_TITLE_MAX) || "Untitled group";
+    if (title !== undefined && title !== null && typeof title !== "string") {
+      throw new Error(`${method}: refusing non-string title for ${id}`);
+    }
+    const cleanTitle = (title ?? "Untitled group").trim().slice(0, GROUP_TITLE_MAX) || "Untitled group";
     const at = (name, value, floor) => {
       const n = Number(value ?? floor);
       if (!Number.isFinite(n)) {
