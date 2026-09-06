@@ -68,6 +68,8 @@ platform. If a rebrand ever requires editing a second file, that is a bug.
 | v1.2 scope: sign-off closeout + SQL store only, SQL GUI deferred | v1.2 closes formal sign-off on the 16 Open v1 requirements then ships the SQL-01 store/DB layer with no GUI surface; SQL GUI, GUI-02, and GUI-05 move to v1.3+ so the milestone stays shippable | — Decided 2026-09-05 |
 | SQLite is the only store engine; single chrome-side writer behind the sole boundary | `.planning/research/duckdb-vs-sqlite/VERDICT.md` unanimous for SQLite (topology, OLTP, vendoring, format); writer is `Sqlite.sys.mjs` behind `PowerBrowserAPI.sys.mjs` into own `tabs.sqlite`, sessionstore stays restore authority, registry URIs are the join key, Theia reads readonly via `better-sqlite3` | — Decided v1.2 |
 | v1.2 closeout accepted as override with doc-sync debt carried | 20/20 requirements implemented with evidence; 3 boxes unchecked + 3 summaries absent are doc-sync, not missing code; verifications 10/11/12 deferred per standing nonstop rule | — Decided 2026-09-05 |
+| v1.3 scope: Theia-hosted browser GUI only (chrome bar + modes + Panorama organising) | Everything explored 2026-09-05/06: chrome bar (001-A), relocating strip modes (002-B), Panorama canvas + tree toggle, core+dependent windows, custom modes as data; bookmarks/mute/menu, DnD rearrange, cross-window tear-off seeded later; all other tree areas untouched | — Decided 2026-09-06 |
+| Tabs invariant across modes; modes are data with shipped defaults | Mode switches move/filter/relocate everything except tabs; coding/browsing/organising ship as defaults, users may save layouts as modes; organising copies Panorama (freeform canvas first, tree second, SQL groups table, never sessionstore-coupled) | — Decided 2026-09-06 |
 
 ## configuration.toml planned sections
 
@@ -138,9 +140,24 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - [x] Tier-3 per-fixture builds over the new source kinds; Theia re-pin
       proof with token-gate intact — BLD-02, UPD-04 — Phase 09
 
-### Active (v1.3+ planning)
+### Active (v1.3 Browser GUI)
 
-- [ ] SQL GUI surface, GUI-02 in-Theia web tabs, GUI-05 unified tab strip (v1.3+ candidates — next milestone defines requirements)
+- [ ] Chrome bar (Variant A top bar) as a toolbar-like
+      `@powerbrowser/*` contribution: back/forward/reload, address
+      input with suggestions, new tab, mode toggle — tab feel +
+      navigation only
+- [ ] Modes (coding / browsing / organising) as customizable data
+      with shipped defaults; tab strip relocates per mode
+      (Variant B); sliding side panels; tabs invariant across switches
+- [ ] Panorama organising canvas: freeform groups (free drag, corner
+      resize, auto-box on canvas drop, zoom, ungrouped tray) + tree
+      toggle over identical group data; SQL groups table + `group_id`
+      on tab rows; PNG-snapshot thumbnails
+- [ ] Window model: core + dependents, setups remember geometry + tab
+      placement + mode, core-close-full-kill
+- [ ] Strip-relocation spike first: prove a live tab strip can move
+      shell areas without forking Theia core (fallback: Variant A,
+      strip stays top)
 - [ ] Doc-sync pass: 11-02/11-03 and 12-01 summaries from landed commits; flip SQL-01/SQL-03/SQL-04 boxes + traceability rows once reviewed
 - [ ] Deferred verifications: `/gsd-verify-work 10`, `/gsd-verify-work 11`, `/gsd-verify-work 12` (5 human UAT signatures in 10-UAT.md runbooks)
 
@@ -152,8 +169,12 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 
 ### Out of Scope
 
-- SQL GUI surface, GUI-02 in-Theia web tabs, GUI-05 unified tab strip —
-      deferred to v1.3+ per 2026-09-05 scoping (v1.2 is store-only)
+- Bookmarks strip, per-tab close/mute, browser menu, drag-anywhere
+      GUI rearrange, cross-window tab tear-off — seeded for later
+      milestones (v1.3 is tab feel + navigation + organising only)
+- GUI-02 in-Theia web tabs and GUI-05 unified tab strip stay
+      deferred behind this milestone's chrome/mode/organising work;
+      the mirror/proxy bridge stays a later milestone
 - Unified tab strip where web pages and editors are peers — the mirror/proxy
   bridge stays a later milestone, as in the upstream plan; current browser
   access is the toggle + browsing inside Theia
@@ -195,10 +216,22 @@ requirements still staged (human/tier-3 halves).
 
 </details>
 
-## Next Milestone Goals (v1.3+ candidates)
+## Next Milestone Goals (v1.4+ candidates)
 
-- SQL GUI surface on the v1.2 store; GUI-02 in-Theia web tabs; GUI-05 unified tab strip (order and scope defined by `/gsd-new-milestone`)
+- GUI-02 in-Theia web tabs; GUI-05 unified tab strip (order and scope
+  defined by a later milestone intake, behind v1.3 chrome/mode/organising)
 - Doc-sync pass and deferred verifications listed above ride the next milestone intake, not a v1.2 follow-up
+
+## Current Milestone: v1.3 Browser GUI
+
+**Goal:** Theia becomes a working browser shell — chrome bar, mode-driven tabs, Panorama organising — on the v1.2 SQL store.
+
+**Target features:**
+- Chrome bar (Variant A top bar): back/forward/reload, address input, new tab, mode toggle
+- Modes (coding/browsing/organising) as data with defaults; relocating strip (Variant B); sliding panels; tabs invariant
+- Panorama organising canvas + tree toggle; SQL groups table; snapshot thumbnails
+- Core + dependent windows; named setups; core-close-full-kill
+- Strip-relocation spike first, Variant-A fallback baked in
 
 ## Retired Milestone Section (v1.2 active scope, superseded by Current State above)
 
@@ -236,4 +269,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-05 after v1.2 milestone*
+*Last updated: 2026-09-06 at v1.3 start (Theia-hosted browser GUI scope)*
