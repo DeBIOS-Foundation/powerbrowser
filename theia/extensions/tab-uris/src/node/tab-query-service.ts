@@ -34,6 +34,31 @@ export interface TabQueryRow {
 }
 
 /**
+ * GUI-08 (15-01): one projected group row, mirroring the chrome-side v2
+ * projection (`PowerBrowserAPI.listGroupRows`). `is_active` is 0/1 at the
+ * store; the frontend model folds it to boolean.
+ */
+export interface GroupRow {
+    id: string;
+    title: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    is_active: number;
+}
+
+/**
+ * GUI-08 (15-01): one grouped tab row -- the tab projection plus its
+ * membership key and last-view snapshot bytes (NULL/absent means the
+ * contracted text fallback, never a broken-image glyph).
+ */
+export interface GroupTabRow extends TabQueryRow {
+    group_id: string | null;
+    thumbnail: string | null;
+}
+
+/**
  * Neutralises LIKE metacharacters so typed text matches literally.
  * Binding the pattern blocks SQL injection, but `%`/`_`/`\` stay wildcards
  * inside the pattern itself (Pitfall 3: an unescaped `%` degrades the query
@@ -164,4 +189,77 @@ export class TabQueryService {
             return [];
         }
     }
-}
+
+    /**
+     * GUI-08 (15-01): group listing in insertion order over the SAME lazy
+     * readonly handle above -- never a second open. Resolves [] when the
+     * store is unreadable OR still v1 (no groups table): the never-throw
+     * convention degrades that to the contracted empty copy, never an
+     * exception in UI paths.
+     */
+    async listGroups(): Promise<GroupRow[]> {
+        const db = this.openIfNeeded();
+        if (!db) {
+            return [];
+        }
+        try {
+            return db.prepare('SELECT id, title, x, y, w, h, is_active FROM groups ORDER BY rowid').all() as GroupRow[];
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * GUI-08 (15-01): one group's tab rows in URI order (the sweep's
+     * set-equality order, matching the chrome-side `getGroupTabs`). Bound
+     * parameter, never throws -- resolves [] like every other read here.
+     */
+    async getGroupTabs(groupId: string): Promise<GroupTabRow[]> {
+        const db = this.openIfNeeded();
+        if (!db) {
+            return [];
+        }
+        try {
+            return db.prepare(
+                'SELECT uri, url, title, last_active, group_id, thumbnail FROM tabs WHERE group_id = ? ORDER BY uri'
+            ).all(groupId) as GroupTabRow[];
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * GUI-08 (15-01): one tab's snapshot bytes by opaque URI key. Resolves
+     * undefined when unreadable or absent -- the card paints its title + URI
+     * block alone in that case (contracted text fallback).
+     */    async getThumbnail(uri: string): Promise<string | undefined> {
+        const db = this.openIfNeeded();
+        if (!db) {
+            return undefined;
+        }
+        try {
+            const row = db.prepare('SELECT thumbnail FROM tabs WHERE uri = ?').get(uri) as { thumbnail: string | null } | undefined;
+            return row?.thumbnail ?? undefined;
+        } catch {
+            return undefined;
+        }
+    }
+
+    /**
+     * GUI-08 (15-01): tray listing -- tab rows with no group, newest first.
+     * Same lazy readonly handle, bound params, never throws. Without this
+     * the always-rendered Ungrouped tray has no data source.
+     */
+    async listUngroupedTabs(): Promise<GroupTabRow[]> {
+        const db = this.openIfNeeded();
+        if (!db) {
+            return [];
+        }
+        try {
+            return db.prepare(
+                'SELECT uri, url, title, last_active, group_id, thumbnail FROM tabs WHERE group_id IS NULL ORDER BY last_active DESC'
+            ).all() as GroupTabRow[];
+        } catch {
+            return [];
+        }
+    }}
