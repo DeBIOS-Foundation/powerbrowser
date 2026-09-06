@@ -1,5 +1,5 @@
 ---
-status: partial
+status: diagnosed
 phase: 13-chrome-bar-strip-relocation-spike
 source: [13-01-SUMMARY.md, 13-02-SUMMARY.md, 13-03-SUMMARY.md]
 started: 2026-09-06T18:20:42Z
@@ -101,5 +101,20 @@ blocked: 0
   reason: "User reported: well it does not work and is in the wrong locatioin and the functionality is not right. we have alot of fixing to do"
   severity: major
   test: 3
-  artifacts: []
-  missing: []
+  root_cause: "Facet 1 (activation no-op): commitAddress feeds the opaque row.uri (webview:-scheme browser-tab key) into OpenerService, where PowerBrowserWebviewOpenHandler (priority 1000) claims it and mints a blank webview panel via dedup-key miss; raw-text commits parse to file: scheme — nothing navigates the current browser tab in-tab; all failures swallowed into console.error. Facet 2 (wrong location): bar added via shell.addWidget area 'top' (topPanel), which ApplicationShell.createLayout stacks ABOVE the main dock owning the tab strip — mock order menubar, tab strip, chrome bar, workarea is unachievable via the public area API. Facet 3 (dead controls): back/forward ride editor NavigationLocationService (empty when browsing); reload is execute-noop plus disabled; tab-count chip runs only at startup/mode-switch with no shell listener so it goes stale."
+  artifacts:
+    - path: "theia/extensions/chrome-bar/src/browser/chrome-bar-widget.tsx"
+      issue: "commitAddress feeds opaque row.uri/raw text to opener with console-only catch; reload button hardcoded disabled; chip without shell listener"
+    - path: "theia/extensions/chrome-bar/src/browser/chrome-bar-commands.ts"
+      issue: "reload execute noop plus isEnabled false; back/forward on editor NavigationLocationService"
+    - path: "theia/extensions/tab-uris/src/browser/existing-scheme-coverage.ts"
+      issue: "PowerBrowserWebviewOpenHandler claims webview:-keyed browser rows and mints blank panel"
+    - path: "theia/extensions/tab-uris/src/browser/view-open-handler.ts"
+      issue: "no handler claims in-tab web navigation"
+    - path: "powerbrowser/shell/PowerBrowserAPI.sys.mjs"
+      issue: "browserTabKey reuses webview: panel scheme as opaque row keys (collision source)"
+  missing:
+    - "Resolve suggestion row.url through a real browser-navigation path; implement contracted search-or-address mapping instead of new URI(rawText); surface commit failures in-bar per copy rules"
+    - "Ratify bar-above-strip as the Variant-A contract or do dock-slot work as an explicit decision; add a DOM-order gate"
+    - "Rewire back/forward to browser history (or correct disabled-with-tooltip contract); enable reload against a navigable-tab predicate; subscribe chip to shell/tab changes"
+  debug_session: ".planning/debug/chrome-bar-suggestions-and-placement.md"
