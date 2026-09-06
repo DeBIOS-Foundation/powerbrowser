@@ -142,6 +142,8 @@ export class DependentWindowsContribution implements FrontendApplicationContribu
     /**
      * Contracted tab-closed state with its window-only close button. Skips
      * closed windows and repeats (marker), never touches the core model.
+     * Classes reuse the placeholder slot pattern (centred slot, 14px
+     * heading/body, stock button + contracted focus outline in modes.css).
      */
     protected renderClosedState(win: Window): void {
         try {
@@ -154,17 +156,24 @@ export class DependentWindowsContribution implements FrontendApplicationContribu
             }
             const host = doc.createElement('div');
             host.setAttribute('data-pb-dependent-closed', 'true');
+            host.className = 'pb-modes-dependent-closed';
+            const slot = doc.createElement('div');
+            slot.className = 'pb-modes-dependent-closed-slot';
             const heading = doc.createElement('div');
+            heading.className = 'pb-modes-dependent-closed-heading';
             heading.textContent = DEPENDENT_TAB_CLOSED_HEADING;
             const body = doc.createElement('div');
+            body.className = 'pb-modes-dependent-closed-body';
             body.textContent = DEPENDENT_TAB_CLOSED_BODY;
             const close = doc.createElement('button');
             close.type = 'button';
+            close.className = 'pb-modes-dependent-closed-close theia-button';
             close.textContent = DEPENDENT_CLOSE_WINDOW_LABEL;
             close.onclick = () => {
                 win.close();
             };
-            host.append(heading, body, close);
+            slot.append(heading, body, close);
+            host.append(slot);
             doc.body.append(host);
         } catch {
             return;

@@ -104,13 +104,66 @@
     outline-offset: 2px;
 }
 
+/* The dependent tab-closed state reuses the placeholder slot pattern: one
+   centred static panel, at most 480px wide, contracted 14px heading/body,
+   and a stock Theia button carrying only spacing plus the contracted focus
+   outline -- never its fill or ink. */
+.pb-modes-dependent-closed {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 100vh;
+    box-sizing: border-box;
+    padding: 16px;
+    background: var(--color-bg, #1c1b22);
+    color: var(--color-text, #fbfbfe);
+}
+
+.pb-modes-dependent-closed-slot {
+    max-width: 480px;
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 24px;
+    background: var(--color-surface, #2b2a33);
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 4px;
+}
+
+.pb-modes-dependent-closed-heading {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--color-text, #fbfbfe);
+}
+
+.pb-modes-dependent-closed-body {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-text, #fbfbfe);
+}
+
+.pb-modes-dependent-closed-close {
+    align-self: flex-start;
+    transition: all 0.15s ease;
+}
+
+.pb-modes-dependent-closed-close:focus-visible {
+    outline: 2px solid var(--color-primary, #00a6f5);
+    outline-offset: 2px;
+}
+
 /* Reduced motion renders every switch instantly, same baseline as the bar. */
 @media (prefers-reduced-motion: reduce) {
     .pb-modes-organising-slot {
         animation: none;
     }
     .pb-modes-organising-back,
-    .pb-modes-custom-row {
+    .pb-modes-custom-row,
+    .pb-modes-dependent-closed-close {
         transition: none;
     }
 }
