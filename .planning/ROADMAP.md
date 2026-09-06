@@ -146,9 +146,13 @@ them per a downstream's manifest is Phase 4's TEL-03.
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Phase 15
-**Plans:** 0 plans
+**Plans:** 2/3 plans executed
 
 Plans:
+
+- [x] 16-01-PLAN.md
+- [x] 16-02-PLAN.md
+- [ ] 16-03-PLAN.md
 
 - [ ] TBD (run /gsd-plan-phase 16 to break down)
 
