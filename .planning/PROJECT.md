@@ -140,24 +140,30 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - [x] Tier-3 per-fixture builds over the new source kinds; Theia re-pin
       proof with token-gate intact — BLD-02, UPD-04 — Phase 09
 
-### Active (v1.3 Browser GUI)
+### Validated (v1.3 — shipped 2026-09-06, verifications deferred)
 
-- [ ] Chrome bar (Variant A top bar) as a toolbar-like
-      `@powerbrowser/*` contribution: back/forward/reload, address
-      input with suggestions, new tab, mode toggle — tab feel +
-      navigation only
-- [ ] Modes (coding / browsing / organising) as customizable data
-      with shipped defaults; tab strip relocates per mode
-      (Variant B); sliding side panels; tabs invariant across switches
-- [ ] Panorama organising canvas: freeform groups (free drag, corner
-      resize, auto-box on canvas drop, zoom, ungrouped tray) + tree
-      toggle over identical group data; SQL groups table + `group_id`
-      on tab rows; PNG-snapshot thumbnails
-- [ ] Window model: core + dependents, setups remember geometry + tab
-      placement + mode, core-close-full-kill
-- [ ] Strip-relocation spike first: prove a live tab strip can move
-      shell areas without forking Theia core (fallback: Variant A,
-      strip stays top)
+- [x] Chrome bar (Variant A top bar) as a toolbar-like
+      `@powerbrowser/*` contribution — shipped Phase 13
+- [x] Modes as customizable data with shipped defaults; strip stays
+      top per RED-verdict Variant-A fallback; sliding panels; tabs
+      invariant — shipped Phase 14
+- [x] Panorama organising canvas + tree toggle over SQL groups;
+      single-writer actor channel; snapshot thumbnails with text
+      fallback — shipped Phase 15
+- [x] Window model: core + dependents, named setups, core-close-full-kill
+      — shipped Phase 14
+
+### Active (v1.4+ planning)
+
+- [ ] GUI-02 in-Theia web tabs; GUI-05 unified tab strip (order and
+      scope defined by a later milestone intake)
+- [ ] Seeds: deferred-browser-chrome, gui-component-dnd,
+      firefox-parity-tabs — trigger off v1.3 landing (done)
+- [ ] Re-probe runway: realign node_modules per docs/BUILD.md flags,
+      re-run core-diff check + recorded strip probe to reopen Variant B
+- [ ] Piles + type-anywhere search for the canvas (deferred as costly)
+- [ ] Doc-sync flips: GUI-07/GUI-08 boxes + traceability rows once reviewed
+- [ ] Deferred verifications: `/gsd-verify-work 13`, `/gsd-verify-work 14`, `/gsd-verify-work 15`
 - [ ] Doc-sync pass: 11-02/11-03 and 12-01 summaries from landed commits; flip SQL-01/SQL-03/SQL-04 boxes + traceability rows once reviewed
 - [ ] Deferred verifications: `/gsd-verify-work 10`, `/gsd-verify-work 11`, `/gsd-verify-work 12` (5 human UAT signatures in 10-UAT.md runbooks)
 
@@ -183,7 +189,23 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - Moving every conceivable setting into `configuration.toml` in milestone 1 —
   the file grows toward "everything configurable" incrementally
 
-## Current State (v1.2 shipped 2026-09-05)
+## Current State (v1.3 shipped 2026-09-06)
+
+v1.3 Browser GUI is archived:
+`.planning/milestones/v1.3-ROADMAP.md`,
+`.planning/milestones/v1.3-REQUIREMENTS.md`,
+`.planning/milestones/v1.3-MILESTONE-AUDIT.md` (status `tech_debt`,
+accepted per standing nonstop instruction), tag `v1.3`. Phases 13–15
+(9/9 plans + 1 revision) delivered: top chrome bar with navigation +
+suggestions + gates; modes as data with sliding panels and invariant
+tabs; dependent windows with named setups; Panorama canvas + tree over
+SQL groups with snapshot thumbnails. Spike verdict RED → Variant-A
+fallback recorded (strip stays top). No GUI-02/GUI-05 bridge work this
+cycle. Carried forward: `/gsd-verify-work 13/14/15`, GUI-07/GUI-08 box
+flips, piles + search, v1.4 candidates below.
+
+<details>
+<summary>Previous state (v1.2 shipped 2026-09-05)</summary>
 
 v1.2 Sign-off Closeout and SQL Store is archived:
 `.planning/milestones/v1.2-ROADMAP.md`,
@@ -220,15 +242,18 @@ requirements still staged (human/tier-3 halves).
 
 - GUI-02 in-Theia web tabs; GUI-05 unified tab strip (order and scope
   defined by a later milestone intake, behind v1.3 chrome/mode/organising)
-- Doc-sync pass and deferred verifications listed above ride the next milestone intake, not a v1.2 follow-up
+- Seeds whose triggers are now met: deferred-browser-chrome,
+  gui-component-dnd, firefox-parity-tabs (scope per seed trigger review)
+- Piles + type-anywhere search for the canvas; Variant-B re-probe;
+  doc-sync flips and deferred verifications listed above
 
-## Current Milestone: v1.3 Browser GUI
+## Retired Milestone Section (v1.3 active scope, superseded by Current State above)
 
-**Goal:** Theia becomes a working browser shell — chrome bar, mode-driven tabs, Panorama organising — on the v1.2 SQL store.
+**Goal (was):** Theia becomes a working browser shell — chrome bar, mode-driven tabs, Panorama organising — on the v1.2 SQL store.
 
 **Target features:**
 - Chrome bar (Variant A top bar): back/forward/reload, address input, new tab, mode toggle
-- Modes (coding/browsing/organising) as data with defaults; relocating strip (Variant B); sliding panels; tabs invariant
+- Modes (coding/browsing/organising) as data with defaults; strip stays top per RED verdict; sliding panels; tabs invariant
 - Panorama organising canvas + tree toggle; SQL groups table; snapshot thumbnails
 - Core + dependent windows; named setups; core-close-full-kill
 - Strip-relocation spike first, Variant-A fallback baked in
@@ -269,4 +294,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-06 at v1.3 start (Theia-hosted browser GUI scope)*
+*Last updated: 2026-09-06 at v1.3 closeout (Browser GUI shipped, tech_debt accepted)*

@@ -1,5 +1,21 @@
 # Milestones
 
+## v1.3 Browser GUI (Shipped: 2026-09-06)
+
+**Phases completed:** 3 phases, 10 plans (13: 3, 14: 3, 15: 3 + 1 revision), ~30 tasks
+
+**Key accomplishments:**
+
+- Chrome bar as a toolbar-like `@powerbrowser/*` contribution (back/forward/reload, pill address with 8-row suggestions, New Tab via stock-window escape, mode toggle) with derive-and-compare gates, all green.
+- Strip-relocation spike verdict RED (mechanics proven live; zero-core pillar unprovable on pre-existing core-diff drift) → Variant-A fallback recorded: strip stays top, modes still ship, re-probe runway documented.
+- Modes as data (coding/browsing/organising defaults + user-saved customs in user-storage JSON, no manifest flag); sliding panels; tabs invariant asserted by gate; dependent windows via stock secondary-window route (probe GREEN); named setups with restore applicator; core-close-full-kill.
+- Panorama organising canvas (free drag, corner resize, auto-box on canvas drop, zoom, ungrouped tray) + tree over identical group data; SQL groups table + `group_id` via single chrome-side writer (JSWindowActor pair, origin-scoped); PNG snapshots with guaranteed text fallback; placeholder retired.
+- Reviews: 10/10 (13), 13/13 + 3 UI (14), 19 + 3 UI (15) dispositioned; security SECURED ×2; UI audits 15/24 and 20/24; `--quick` green throughout; single driver, no core fork, no new packages.
+
+**Carried as tech debt:** verifications 13/14/15 deferred per standing nonstop rule; GUI-07/GUI-08 box flips; 14 minor UI batch; piles + type-anywhere search OUT; IN-07 same-origin forgery inherent.
+
+---
+
 ## v1.2 Sign-off Closeout and SQL Store (Shipped: 2026-09-05)
 
 **Phases completed:** 3 phases, 9 plans, 22 tasks
