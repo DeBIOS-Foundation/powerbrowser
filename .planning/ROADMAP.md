@@ -87,11 +87,11 @@ Plans:
   3. User can open dependent windows hosting tab content, never a second IDE frame; closing the core window kills the session and the next launch restores the setup
   4. User can save, name, and restore setups remembering geometry, tab placement, and mode
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 Plans:
 
-- [ ] 14-01-PLAN.md — Window-routing probe with GREEN/RED record, modes tracer with shipped descriptors, bridged toggle, defaults gate
+- [x] 14-01-PLAN.md — Window-routing probe with GREEN/RED record, modes tracer with shipped descriptors, bridged toggle, defaults gate
 - [ ] 14-02-PLAN.md — Modes full: customs with fallback, organising placeholder, toggle rows, style layer, invariant gate
 - [ ] 14-03-PLAN.md — Dependents per probe verdict plus named setups with relaunch restore, roundtrip and content gates
 
@@ -117,7 +117,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 13. Chrome Bar + Strip-Relocation Spike | 3/3 | Complete | 2026-09-06 |
-| 14. Modes + Windows & Setups | 0/TBD | Not started | - |
+| 14. Modes + Windows & Setups | 1/3 | In Progress|  |
 | 15. Panorama Organising | 0/TBD | Not started | - |
 
 ## Hard constraints (every phase)
