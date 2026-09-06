@@ -9,7 +9,7 @@
 
 ### Chrome bar — Phase 13+
 
-- [ ] **GUI-06**: The user can navigate with a top chrome bar —
+- [x] **GUI-06**: The user can navigate with a top chrome bar —
       back, forward, reload, address input with suggestions, new
       tab, mode toggle — living as a toolbar-like `@powerbrowser/*`
       contribution above or below the Theia toolbar (sketch 001
@@ -92,12 +92,13 @@ the project's own planning record.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GUI-06 | Phase 13 | Pending |
+| GUI-06 | Phase 13 | Complete |
 | GUI-07 | Phase 14 (strip-relocation spike entry criterion runs as Phase 13 exit gate) | Pending |
 | GUI-08 | Phase 15 | Pending |
 | GUI-09 | Phase 14 | Pending |
 
 **Coverage:**
+
 - v1.3 requirements: 4 total (+ carried items)
 - Mapped to phases: 4 (GUI-06→13, GUI-07→14, GUI-08→15, GUI-09→14)
 - Unmapped: 0
