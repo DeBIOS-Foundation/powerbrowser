@@ -245,10 +245,12 @@ export class ChromeBarWidget extends ReactWidget {
      */
     publishTabCount(): void {
         this.tabCount = this.countTabs();
+        // Handled, never floating: a rejection during teardown is noise in
+        // exactly the logs used for diagnosis.
         void this.statusBar.setElement('powerbrowser.chrome-bar.tab-count', {
             text: `${this.tabCount} tabs`,
             alignment: StatusBarAlignment.RIGHT,
-        });
+        }).catch(() => undefined);
         this.update();
     }
 
