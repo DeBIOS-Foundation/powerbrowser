@@ -13,17 +13,21 @@
 
 import { ContainerModule } from '@theia/core/shared/inversify';
 import { injectable, inject } from '@theia/core/shared/inversify';
-import { FrontendApplicationContribution } from '@theia/core/lib/browser';
+import { FrontendApplicationContribution, WebSocketConnectionProvider } from '@theia/core/lib/browser';
 import { CommandContribution } from '@theia/core/lib/common';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
 import { bindViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
+import { GROUP_PATH, GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-query-service';
 import { SHIPPED_MODES } from './mode-descriptors';
 import { ModeService } from './mode-service';
 import { ModesCommandContribution } from './modes-commands';
 import { SetupsService } from './setups-service';
 import { SetupsCommandContribution } from './setups-commands';
 import { DependentWindowsContribution } from './dependent-windows';
-import { OrganisingPlaceholderContribution } from './organising-placeholder-widget';
+import { GroupModel } from './group-model';
+import { GroupActorClient } from './group-actor-client';
+import { OrganisingCommandHandler, OrganisingContribution } from './organising-widget';
+import { PanoramaCommandContribution, PanoramaCommandHandler } from './panorama-commands';
 
 @injectable()
 export class ModesContribution implements FrontendApplicationContribution {
@@ -58,8 +62,18 @@ export default new ContainerModule(bind => {
     // beside the setups binds, in the same voice (D-50).
     bind(DependentWindowsContribution).toSelf().inSingletonScope();
     bind(FrontendApplicationContribution).toService(DependentWindowsContribution);
-    // GUI-07 (14-02): the organising placeholder view binds through its own
-    // contribution path (never a hardcoded shell area); the Phase-15 canvas
-    // replaces the slot behind this same point.
-    bindViewContribution(bind, OrganisingPlaceholderContribution);
+    // GUI-08 (15-01): the tracer Panorama widget owns the organising slot
+    // behind the same contribution point (the placeholder file stays on
+    // disk unbound until 15-03 deletes it). The group reader proxy, the
+    // single model, the actor client, and the panorama commands bind
+    // statically beside the other binds, in the same voice (D-50).
+    bind(GroupQueryService).toDynamicValue(ctx =>
+        WebSocketConnectionProvider.createProxy<GroupQueryService>(ctx.container, GROUP_PATH)
+    ).inSingletonScope();
+    bind(GroupModel).toSelf().inSingletonScope();
+    bind(GroupActorClient).toSelf().inSingletonScope();
+    bind(PanoramaCommandHandler).to(OrganisingCommandHandler).inSingletonScope();
+    bind(PanoramaCommandContribution).toSelf().inSingletonScope();
+    bind(CommandContribution).toService(PanoramaCommandContribution);
+    bindViewContribution(bind, OrganisingContribution);
 });

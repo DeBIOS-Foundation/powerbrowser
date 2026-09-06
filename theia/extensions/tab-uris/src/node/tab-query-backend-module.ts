@@ -8,8 +8,20 @@
  */
 
 import { ContainerModule } from '@theia/core/shared/inversify';
+import { ConnectionHandler, JsonRpcConnectionHandler } from '@theia/core/lib/common';
+import { GROUP_PATH, GroupQueryService } from '../browser/group-query-service';
 import { TabQueryService } from './tab-query-service';
 
 export default new ContainerModule(bind => {
     bind(TabQueryService).toSelf().inSingletonScope();
+    // GUI-08 (15-01): the group-read handler serves the reader's group
+    // methods at GROUP_PATH over the existing authenticated websocket --
+    // the chrome-bar-backend-module mirror: no new channel, no HTTP route.
+    // TabQueryService structurally satisfies GroupQueryService (its group
+    // reads are async), so no separate impl class is needed.
+    bind(ConnectionHandler).toDynamicValue(ctx =>
+        new JsonRpcConnectionHandler<GroupQueryService>(GROUP_PATH, () =>
+            ctx.container.get(TabQueryService)
+        )
+    );
 });

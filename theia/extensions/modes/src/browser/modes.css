@@ -21,15 +21,17 @@
  */
 @layer powerbrowser-modes {
 
-/* The placeholder host fills the main area and centres the slot. */
+/* The organising host fills the main area. Since 15-01 it stacks the
+   tracer toolbar, error bars, canvas/tree view, and tray vertically; the
+   retired placeholder slot below centres inside it. */
 .pb-modes-organising {
     display: flex;
-    align-items: center;
-    justify-content: center;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
     width: 100%;
     height: 100%;
     box-sizing: border-box;
-    padding: 16px;
     background: var(--color-bg, #1c1b22);
     color: var(--color-text, #fbfbfe);
 }
@@ -164,6 +166,416 @@
     .pb-modes-organising-back,
     .pb-modes-custom-row,
     .pb-modes-dependent-closed-close {
+        transition: none;
+    }
+}
+
+/* GUI-08 (15-01): the tracer Panorama surface. Same layer, same tokens,
+   same focus idiom; no second hue, no typeface literal, no !important.
+   Type roles: 14px group titles/empty/error copy, 13px cards/rows/buttons,
+   12px URI captions/tray/zoom readout. 600 rides exactly the active toggle
+   segment and the active-group title -- card titles and inactive group
+   titles never set it. */
+.pb-org-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--color-surface, #2b2a33);
+    border-bottom: 1px solid var(--color-border, #3f3e4a);
+}
+
+.pb-org-toggle {
+    display: flex;
+    gap: 4px;
+}
+
+.pb-org-toggle-segment {
+    min-height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--color-text-muted, #9a99a8);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.pb-org-toggle-segment.is-active {
+    font-weight: 600;
+    color: var(--color-primary, #00a6f5);
+}
+
+.pb-org-new {
+    min-height: 32px;
+    transition: all 0.15s ease;
+}
+
+.pb-org-zoom {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.pb-org-zoom-step {
+    min-width: 32px;
+    min-height: 32px;
+    font-size: 13px;
+    color: var(--color-text, #fbfbfe);
+    background: transparent;
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.pb-org-zoom-readout {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text-muted, #9a99a8);
+    min-width: 44px;
+    text-align: center;
+}
+
+.pb-org-errorbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: var(--color-surface, #2b2a33);
+    border-bottom: 1px solid var(--color-border, #3f3e4a);
+}
+
+.pb-org-errorbar[hidden] {
+    display: none;
+}
+
+.pb-org-errorbar-text {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-text, #fbfbfe);
+}
+
+.pb-org-errorbar-retry {
+    transition: all 0.15s ease;
+}
+
+.pb-org-canvas-host {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 16px;
+    background: var(--color-bg, #1c1b22);
+}
+
+.pb-org-canvas-layer {
+    transform-origin: 0 0;
+    transition: transform 0.15s ease;
+}
+
+.pb-org-canvas {
+    position: relative;
+    min-height: 320px;
+}
+
+.pb-org-box {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 200px;
+    min-height: 144px;
+    box-sizing: border-box;
+    padding: 12px;
+    background: var(--color-surface, #2b2a33);
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 4px;
+}
+
+.pb-org-box.is-active {
+    border-color: var(--color-primary, #00a6f5);
+}
+
+.pb-org-box.is-active .pb-org-box-title {
+    font-weight: 600;
+}
+
+.pb-org-box.is-drop-target {
+    border-color: var(--color-primary, #00a6f5);
+}
+
+.pb-org-box-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: grab;
+    touch-action: none;
+}
+
+.pb-org-box-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-text, #fbfbfe);
+}
+
+.pb-org-box-close,
+.pb-org-tree-close {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+    color: var(--color-text-muted, #9a99a8);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.pb-org-box-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    overflow-y: auto;
+}
+
+.pb-org-box-empty {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text-muted, #9a99a8);
+}
+
+.pb-org-card {
+    width: 160px;
+    box-sizing: border-box;
+    background: var(--color-surface-raised, #35343f);
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 4px;
+    overflow: hidden;
+    transition: all 0.15s ease;
+}
+
+.pb-org-card-thumb {
+    display: block;
+    width: 160px;
+    height: 90px;
+    object-fit: cover;
+}
+
+.pb-org-card-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--color-text, #fbfbfe);
+    padding: 4px 4px 0;
+}
+
+.pb-org-card-uri {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--theia-code-font-family, ui-monospace, monospace);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text-muted, #9a99a8);
+    padding: 0 4px 4px;
+}
+
+.pb-org-tray {
+    flex: none;
+    height: 144px;
+    box-sizing: border-box;
+    padding: 12px 16px;
+    background: var(--color-surface, #2b2a33);
+    border-top: 1px solid var(--color-border, #3f3e4a);
+}
+
+.pb-org-tray.is-drop-target {
+    border-top-color: var(--color-primary, #00a6f5);
+}
+
+.pb-org-tray-label {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text-muted, #9a99a8);
+}
+
+.pb-org-tray-cards {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    overflow-x: auto;
+}
+
+.pb-org-tray-empty {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text-muted, #9a99a8);
+}
+
+.pb-org-tree {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px;
+    background: var(--color-bg, #1c1b22);
+}
+
+.pb-org-tree-section {
+    margin-bottom: 12px;
+    background: var(--color-surface, #2b2a33);
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 4px;
+}
+
+.pb-org-tree-section.is-active {
+    border-color: var(--color-primary, #00a6f5);
+}
+
+.pb-org-tree-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+}
+
+.pb-org-tree-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-text, #fbfbfe);
+}
+
+.pb-org-tree-section.is-active .pb-org-tree-title {
+    font-weight: 600;
+}
+
+.pb-org-tree-count {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text-muted, #9a99a8);
+}
+
+.pb-org-tree-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-height: 32px;
+    box-sizing: border-box;
+    padding: 4px 12px;
+    border-top: 1px solid var(--color-border, #3f3e4a);
+}
+
+.pb-org-tree-row-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--color-text, #fbfbfe);
+}
+
+.pb-org-tree-row-uri {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--theia-code-font-family, ui-monospace, monospace);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text-muted, #9a99a8);
+}
+
+.pb-org-empty {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    max-width: 480px;
+    margin: 24px auto;
+    padding: 24px;
+    background: var(--color-surface, #2b2a33);
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 4px;
+}
+
+.pb-org-empty-heading {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-text, #fbfbfe);
+}
+
+.pb-org-empty-body {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-text, #fbfbfe);
+}
+
+.pb-org-empty-action {
+    align-self: flex-start;
+    transition: all 0.15s ease;
+}
+
+.pb-org-rename {
+    flex: 1;
+    min-width: 0;
+    min-height: 32px;
+    box-sizing: border-box;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-text, #fbfbfe);
+    background: var(--color-bg, #1c1b22);
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 4px;
+}
+
+.pb-org-skeleton {
+    height: 144px;
+    margin-bottom: 12px;
+    background: var(--color-surface, #2b2a33);
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 4px;
+}
+
+.pb-org-toggle-segment:focus-visible,
+.pb-org-new:focus-visible,
+.pb-org-zoom-step:focus-visible,
+.pb-org-errorbar-retry:focus-visible,
+.pb-org-box-close:focus-visible,
+.pb-org-tree-close:focus-visible,
+.pb-org-card:focus-visible,
+.pb-org-tree-row:focus-visible,
+.pb-org-box-title:focus-visible,
+.pb-org-tree-title:focus-visible,
+.pb-org-rename:focus-visible,
+.pb-org-empty-action:focus-visible {
+    outline: 2px solid var(--color-primary, #00a6f5);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pb-org-canvas-layer,
+    .pb-org-card,
+    .pb-org-toggle-segment,
+    .pb-org-new,
+    .pb-org-zoom-step,
+    .pb-org-errorbar-retry,
+    .pb-org-box-close,
+    .pb-org-tree-close,
+    .pb-org-empty-action {
         transition: none;
     }
 }
