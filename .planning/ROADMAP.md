@@ -143,18 +143,16 @@ them per a downstream's manifest is Phase 4's TEL-03.
 
 ### Phase 16: AI backend adapter - OpenCode
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Selectable `@OpenCode` backend in sidecar chat with staged accept/reject review (AI-01..AI-05)
+**Requirements**: AI-01, AI-02, AI-03, AI-04, AI-05
 **Depends on:** Phase 15
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans executed
 
 Plans:
 
 - [x] 16-01-PLAN.md
 - [x] 16-02-PLAN.md
-- [ ] 16-03-PLAN.md
-
-- [ ] TBD (run /gsd-plan-phase 16 to break down)
+- [x] 16-03-PLAN.md
 
 ---
 
