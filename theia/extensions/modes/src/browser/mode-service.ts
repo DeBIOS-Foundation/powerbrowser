@@ -207,7 +207,12 @@ export class ModeService implements FrontendApplicationContribution {
         try {
             await this.perspectives.switchPerspective(target);
         } catch {
-            await this.perspectives.switchPerspective('browsing');
+            try {
+                await this.perspectives.switchPerspective('browsing');
+            } catch {
+                // Last resort: stock misbehaves twice -- the shell keeps its
+                // current layout and the callers (all void) see no rejection.
+            }
             closeOrganisingSlot();
             return;
         }
