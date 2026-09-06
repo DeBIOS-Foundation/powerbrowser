@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.3
-current_phase: 13
-current_phase_name: roadmap complete — v1.3 phases 13–15 defined, ready to plan
-status: planning
-stopped_at: Completed 15-panorama-organising-03-PLAN.md
-last_updated: "2026-09-06T09:00:11.476Z"
+current_phase: complete
+current_phase_name: v1.3 Browser GUI shipped — phases 13–15 complete, audit tech_debt accepted
+status: complete
+stopped_at: Milestone v1.3 complete (audit tech_debt, closeout committed)
+last_updated: "2026-09-06T00:00:00.000Z"
 last_activity: 2026-09-06
-last_activity_desc: "v1.3 roadmap created (Phases 13–15: GUI-06→13, GUI-07+GUI-09→14, GUI-08→15)"
+last_activity_desc: "v1.3 Browser GUI shipped (Phases 13–15: 9/9 plans + 1 revision; GUI-06..09 implemented; verifications deferred)"
 state_head: 220e1837b3448dd0d869f76a1e4952c1cf1367e3
 progress:
-  total_phases: 4
-  completed_phases: 0
-  total_plans: 12
-  completed_plans: 12
+  total_phases: 3
+  completed_phases: 3
+  total_plans: 10
+  completed_plans: 10
 milestone_name: Browser GUI
 ---
 
@@ -21,17 +21,17 @@ milestone_name: Browser GUI
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-05)
+See: .planning/PROJECT.md (updated 2026-09-06)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Planning next milestone (v1.3+ candidates: SQL GUI surface, GUI-02, GUI-05) — run `/gsd-new-milestone`. Carried: `/gsd-verify-work 10/11/12`, doc-sync pass (SQL-01/SQL-03/SQL-04 boxes, 11-02/11-03/12-01 summaries).
+**Current focus:** v1.3 shipped. Next: v1.4 intake (GUI-02, GUI-05, met seeds, re-probe, piles/search) — run `/gsd-new-milestone`. Carried: `/gsd-verify-work 13/14/15` (+ 10/11/12), GUI-07/GUI-08 box flips.
 
 ## Current Position
 
-Phase: 14 (modes-windows-setups — plan 01 executed, 02/03 pending)
-Plan: 01 complete (probe + tracer: BiDi GREEN verdict, modes skeleton, bridged toggle, defaults gate)
-Status: Executing v1.3 roadmap (14-01 done: f8081cb, 351ca7d, 74e1db8)
-Last activity: 2026-09-06 — 14-01 executed (probe GREEN routes dependents to stock path; modes/toggle/gate green)
+Phase: — (milestone complete)
+Plan: —
+Status: Milestone v1.3 complete — audit tech_debt accepted, archives written, tag v1.3
+Last activity: 2026-09-06 — v1.3 closeout (audit → archive → tag)
 
 ## Performance Metrics
 
