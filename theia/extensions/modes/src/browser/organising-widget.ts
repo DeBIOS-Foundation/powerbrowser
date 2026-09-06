@@ -46,7 +46,7 @@ import { GroupModel, GROUP_BOX_MIN_H, GROUP_BOX_MIN_W, GROUP_TITLE_MAX_CHARS, Pa
 import { buildTreeSection } from './organising-tree';
 import { PANORAMA_CLOSE_GROUP_COMMAND_ID, PANORAMA_NEW_GROUP_COMMAND_ID } from './panorama-commands';
 import { PanoramaCommandHandler } from './panorama-commands';
-import '../../src/browser/modes.css';
+import './modes.css';
 
 type OrganisingView = 'canvas' | 'tree';
 
