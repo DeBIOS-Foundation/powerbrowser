@@ -35,6 +35,7 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const NAME = 'verify-dependent-window-content';
 
 const DEPENDENTS_REL = 'theia/extensions/modes/src/browser/dependent-windows.ts';
+const SETUPS_REL = 'theia/extensions/modes/src/browser/setups-service.ts';
 const MODES_SOURCE_RELS = [
     'theia/extensions/modes/src/browser/dependent-windows.ts',
     'theia/extensions/modes/src/browser/setups-service.ts',
@@ -131,6 +132,15 @@ function checkContent(sources, options = {}) {
     }
     if (!dependentsSrc.includes('setups.json')) {
         failures.push(`${DEPENDENTS_REL}: no setups.json snapshot contract -- dependent rects and hosted tab URIs are not recorded for verbatim restore`);
+    }
+    // The snapshot half of that contract lives in the setups service, not
+    // in a doc comment: rect + tab-URI capture must exist where restore
+    // reads it, so deleting the snapshot code trips this assertion.
+    const setupsSrc = sources[SETUPS_REL] ?? '';
+    for (const pin of ['snapshotWindows', 'activeTab']) {
+        if (!setupsSrc.includes(pin)) {
+            failures.push(`${SETUPS_REL}: no '${pin}' snapshot capture -- dependent rects and hosted tab URIs are not recorded for verbatim restore`);
+        }
     }
 
     // Built secondary asset: the bare dock host the stock path loads.
