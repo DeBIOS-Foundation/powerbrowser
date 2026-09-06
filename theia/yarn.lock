@@ -2,6 +2,11 @@
 # yarn lockfile v1
 
 
+"@agentclientprotocol/sdk@1.4.0":
+  version "1.4.0"
+  resolved "https://registry.yarnpkg.com/@agentclientprotocol/sdk/-/sdk-1.4.0.tgz#01dd53874b97f50b325f9172a8f0714971e0d3ab"
+  integrity sha512-/eufudw+aFY1LKLolT6yFE6UMmYRl7fMJ/DEONSIyR6wI3slHWITBsANRGqXEY8FRzqUxwh7QEaGiZHcJPVThg==
+
 "@antfu/install-pkg@^1.1.0":
   version "1.1.0"
   resolved "https://registry.yarnpkg.com/@antfu/install-pkg/-/install-pkg-1.1.0.tgz#78fa036be1a6081b5a77a5cf59f50c7752b6ba26"
