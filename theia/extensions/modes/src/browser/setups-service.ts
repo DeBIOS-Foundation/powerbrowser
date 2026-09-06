@@ -546,7 +546,8 @@ export class SetupsService implements FrontendApplicationContribution {
                 return uri.toString();
             }
         } catch {
-            return undefined;
+            // A throwing registry lookup falls through to the editor
+            // resource-URI fallback below instead of losing the tab.
         }
         try {
             const navigable = widget as unknown as { getResourceUri?: () => { toString(): string } };
