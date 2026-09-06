@@ -4365,6 +4365,31 @@ run_own_checks() {
     # history reorder, and an emission reorder (B,A).
     "ai-opencode-presets|node $REPO_ROOT/scripts/verify-opencode-presets.mjs"
     "ai-opencode-presets-self-test|node $REPO_ROOT/scripts/verify-opencode-presets.mjs --self-test"
+    # NEW (16-03): the @OpenCode bridge-plus-selection gate. Derives the
+    # /mcp route, read-only tool set, interpolation-only checked-in config,
+    # selection default-off, and doc coverage from the tree at check time
+    # as set equality against one EXPECTED const, with fixture proofs for
+    # live-read shape, reference-only config, missing-key-off, and
+    # variables-plus-skills resolution -- then proves bridge auth
+    # mandatorily live (token GET plus POST read live state, anonymous
+    # GET plus POST refused 403 with no cookie leak; a backend that never
+    # becomes ready fails non-zero). The R5 concurrent-read backstop stays
+    # a STAGED holdout (rerun with --live-backstop), never a silent pass.
+    #
+    # Honestly --quick with one declared exception (tracer-gate
+    # precedent): text reads plus derivation, plus one backend boot
+    # (typically one to two minutes: nix develop plus Theia backend init;
+    # requires the built app bundle). No browser, no display, no live
+    # model. The core-diff half shells to diff-theia-core.sh --quick
+    # through nix.
+    #
+    # ai-opencode-bridge-self-test rides alongside for the reason every
+    # other self-test row in this array gives: it proves the unmutated
+    # control green first (live half included), then requires red naming
+    # the drift for a writable tool, a hardcoded secret, a default-on
+    # selection, and a missing doc row.
+    "ai-opencode-bridge|node $REPO_ROOT/scripts/verify-opencode-bridge.mjs"
+    "ai-opencode-bridge-self-test|node $REPO_ROOT/scripts/verify-opencode-bridge.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
