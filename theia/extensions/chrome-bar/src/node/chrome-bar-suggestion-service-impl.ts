@@ -10,7 +10,8 @@
  */
 
 import { inject, injectable } from '@theia/core/shared/inversify';
-import { TabQueryRow, TabQueryService } from '@powerbrowser/tab-uris/lib/node/tab-query-service';
+import type { TabQueryRow } from '@powerbrowser/tab-uris/lib/node/tab-query-service';
+import { TabQueryService } from '@powerbrowser/tab-uris/lib/node/tab-query-service';
 import { CHROME_SUGGESTION_LIMIT, ChromeBarSuggestionService } from '../browser/chrome-bar-suggestion-service';
 
 @injectable()
