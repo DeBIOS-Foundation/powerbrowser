@@ -67,6 +67,31 @@ the project's own planning record.
 
 ## Future Requirements (v1.4+)
 
+### AI backends (candidates — goal noted in .planning/notes/ai-backends-goal.md)
+
+- **AI-01**: The user can chat with a selectable coding backend
+  (`@OpenCode` / `@Pi` / native agents) reusing the built-in
+  `@agent`/model picker. GUI stays backend-agnostic; switching
+  backends never changes the review UX.
+- **AI-02**: The user gets Antigravity-style review — inline chat
+  (Ctrl+I) scoped to cursor/selection, per-file accept/reject with
+  diff view, Review Changes pane, history + revert. Gaps to close
+  vs Theia 1.74.1 baseline: per-line comment-to-steer loop, `/btw`
+  ephemeral question, file-wide Supercomplete Tab-accept.
+- **AI-03**: The user gets permission presets per session — gated
+  (ask before writes) vs auto-accept (write immediately). Change
+  Set history with diffs + revert is mandatory under both presets,
+  so post-approval review always works.
+- **AI-04**: A backend snaps in as Theia extensions only
+  (`LanguageModel` + `ChatAgent`, emitting Change Sets; packaging
+  follows `theia/extensions/tab-uris`), never a Theia core fork.
+  Rebrand selects backends via `configuration.toml`. Opencode
+  first (`opencode acp` wrapper); Pi transport unverified, DSH third.
+- **AI-05**: Sessions, context variables, skills pool, and change
+  history are shared where Theia provides them; per-backend
+  CLI-owned tools/models are documented per adapter instead of
+  forced into the shared registries.
+
 - **GUI-02**: In-Theia web tabs (`<xul:browser>`-backed). New-tab
   chrome in v1.3 opens with the stock-window escape until this lands.
 - **GUI-05**: Unified tab strip (chrome-owned tab model,
