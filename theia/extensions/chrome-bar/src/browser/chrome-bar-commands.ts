@@ -45,7 +45,7 @@ export const CHROME_BAR_FOCUS_ADDRESS: Command = {
     id: CHROME_BAR_FOCUS_ADDRESS_COMMAND_ID,
 };
 
-/** Structural class hook for the address pill input (also the style layer's target). */
+/** Structural class hook for the address pill input (also the style layer's target). Lives beside the command ids deliberately, so the widget, focusAddressPill, and stylesheet share one import. */
 export const CHROME_BAR_INPUT_CLASS = 'pb-chrome-bar-input';
 
 /**
