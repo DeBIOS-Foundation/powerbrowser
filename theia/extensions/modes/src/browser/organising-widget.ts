@@ -29,7 +29,7 @@
  * survives. Names render as textContent, never innerHTML.
  */
 
-import { injectable, inject } from '@theia/core/shared/inversify';
+import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
 import {
     ApplicationShell,
     ConfirmDialog,
@@ -46,7 +46,11 @@ import { GroupModel, GROUP_BOX_MIN_H, GROUP_BOX_MIN_W, GROUP_TITLE_MAX_CHARS, Pa
 import { buildTreeSection } from './organising-tree';
 import { PANORAMA_CLOSE_GROUP_COMMAND_ID, PANORAMA_NEW_GROUP_COMMAND_ID } from './panorama-commands';
 import { PanoramaCommandHandler } from './panorama-commands';
-import './modes.css';
+// Resolved through src/, not './', because the build is `tsc -b` alone: tsc
+// emits no CSS into lib/, so a lib-relative specifier resolves to a file that
+// is never written and the frontend bundle fails to build. Same form as the
+// chrome-bar extension's stylesheet import, which is the working precedent.
+import '../../src/browser/modes.css';
 
 type OrganisingView = 'canvas' | 'tree';
 
@@ -101,7 +105,24 @@ export class OrganisingWidget extends Widget {
         this.title.label = 'Organising';
         this.title.closable = false;
         this.addClass('pb-modes-organising');
+        // Only identity and the injection-free static DOM belong here.
+        // Everything reading an @inject'ed property moved to @postConstruct
+        // below: inversify assigns property injections AFTER the constructor
+        // returns, so `this.model` was undefined at this point and the
+        // constructor threw `Cannot read properties of undefined (reading
+        // 'onDidChange')`. The throw surfaced nowhere because the only caller
+        // is openView(), whose promise every caller voids -- so Organising
+        // mode collapsed the panels and then rendered nothing at all.
         this.buildStaticDom();
+    }
+
+    /**
+     * Runs once, after inversify has satisfied every @inject above. The model
+     * subscription, the first paint, and the group load all read injected
+     * collaborators and therefore cannot run any earlier.
+     */
+    @postConstruct()
+    protected init(): void {
         this.model.onDidChange(() => {
             if (!this.suppressRender) {
                 this.render();

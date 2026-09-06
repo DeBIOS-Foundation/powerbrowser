@@ -76,6 +76,9 @@
     align-items: center;
     gap: 4px;
     height: 32px;
+    /* border-box like every sibling control: the xl token prescribes a 32px
+       pill, and under content-box the 1px hairline rendered it at 34. */
+    box-sizing: border-box;
     padding: 0 12px;
     background: var(--color-bg, #1c1b22);
     border: 1px solid var(--color-border, #3f3e4a);
@@ -235,4 +238,40 @@
     white-space: nowrap;
 }
 
+}
+
+/* GUI-06 (13-UI-SPEC "Single chrome bar, full-bleed, 40px", ratified order
+   menubar -> chrome bar -> tab strip -> workarea -> status bar).
+
+   These three rules are UNLAYERED on purpose, and they are the only rules in
+   this sheet that select a stock Theia region. Both facts are deliberate and
+   neither is a licence to grow:
+
+   - Unlayered, because Theia's own `#theia-top-panel` rule (core menus.css)
+     is unlayered too. A layered rule loses to an unlayered one at equal
+     specificity by cascade construction, so the min-height override would be
+     silently discarded from inside the @layer block above. This is the same
+     reason the layer exists for everything else -- it is a cascade fact, not
+     an `!important` escape, and customize.css still wins by position.
+
+   - Selecting the top panel, because the shell's top area is a horizontal
+     flex row that already holds the menubar. `addWidget(area: 'top')` alone
+     therefore lands the bar BESIDE the menubar as a flex sibling: 712px of a
+     1920px window, sharing the 32px menubar row, with the 40px bar clipped by
+     its 32px allocation. Wrapping the row and claiming a full basis is what
+     makes "full-bleed, single row, above the strip" true in the DOM rather
+     than only in the contribution's area argument. Lumino sizes the
+     stretch-0 top panel from this computed min-height, so the menubar row and
+     the bar row are both allocated. No Theia file is edited and no dock
+     surgery is performed -- the below-strip slot stays ruled out. */
+
+#theia-top-panel {
+    flex-wrap: wrap;
+    min-height: calc(var(--theia-private-menubar-height) + 40px);
+}
+
+#theia-top-panel > [id="powerbrowser.chrome-bar"] {
+    flex: 0 0 100%;
+    height: 40px;
+    overflow: visible;
 }

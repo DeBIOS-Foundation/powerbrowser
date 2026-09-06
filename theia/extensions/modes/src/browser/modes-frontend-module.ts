@@ -13,7 +13,7 @@
 
 import { ContainerModule } from '@theia/core/shared/inversify';
 import { injectable, inject } from '@theia/core/shared/inversify';
-import { FrontendApplicationContribution, WebSocketConnectionProvider } from '@theia/core/lib/browser';
+import { FrontendApplicationContribution, WebSocketConnectionProvider, WidgetFactory } from '@theia/core/lib/browser';
 import { CommandContribution } from '@theia/core/lib/common';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
 import { bindViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
@@ -26,7 +26,7 @@ import { SetupsCommandContribution } from './setups-commands';
 import { DependentWindowsContribution } from './dependent-windows';
 import { GroupModel } from './group-model';
 import { GroupActorClient } from './group-actor-client';
-import { OrganisingCommandHandler, OrganisingContribution } from './organising-widget';
+import { OrganisingCommandHandler, OrganisingContribution, OrganisingWidget } from './organising-widget';
 import { PanoramaCommandContribution, PanoramaCommandHandler } from './panorama-commands';
 
 @injectable()
@@ -75,5 +75,23 @@ export default new ContainerModule(bind => {
     bind(PanoramaCommandHandler).to(OrganisingCommandHandler).inSingletonScope();
     bind(PanoramaCommandContribution).toSelf().inSingletonScope();
     bind(CommandContribution).toService(PanoramaCommandContribution);
+    // GUI-08: the widget itself and a factory keyed on its id. openView()
+    // resolves through WidgetManager.getOrCreateWidget(id), which needs a
+    // WidgetFactory registered under exactly that id -- bindViewContribution
+    // registers none. Without both binds the open path rejected, and because
+    // every caller voids that promise the rejection was swallowed: switching
+    // to Organising collapsed the panels and then silently did nothing.
+    bind(OrganisingWidget).toSelf();
+    bind(WidgetFactory).toDynamicValue(ctx => ({
+        id: OrganisingWidget.ID,
+        createWidget: () => ctx.container.get(OrganisingWidget),
+    })).inSingletonScope();
     bindViewContribution(bind, OrganisingContribution);
+    // GUI-08: bindViewContribution binds only Command/Keybinding/Menu --
+    // NOT FrontendApplicationContribution -- so onStart() never fires on a
+    // view contribution unless it is bound here as well. Without this the
+    // contribution's registerOrganisingSlot() never runs, leaving the slot
+    // seam undefined and openOrganisingSlot() a permanent silent no-op:
+    // switching to Organising collapsed the panels and rendered nothing.
+    bind(FrontendApplicationContribution).toService(OrganisingContribution);
 });

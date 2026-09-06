@@ -182,6 +182,17 @@ export class ModeService implements FrontendApplicationContribution {
         // deadlock documented in the customize-css header. Shipped modes are
         // already registered synchronously by ModesContribution.
         void this.loadCustomModes();
+        // GUI-07 (14-UI-SPEC: "Browsing (launch default)"): nothing else
+        // activates a mode on a normal launch. ModesContribution only
+        // REGISTERS the descriptors, and reapplyPersistedMode() re-activates
+        // custom ids only, so a shipped id was restored by nobody. The shell
+        // therefore opened on stock Theia's own layout while the toggle
+        // asserted its first literal label -- and because activateMode()
+        // early-returns on the already-active id, the mode the toggle falsely
+        // claimed could not be entered by clicking it. Fire-and-forget for the
+        // same reason as loadCustomModes above: awaiting a read here re-enters
+        // the boot-chain deadlock documented in the customize-css header.
+        void this.applyLaunchMode();
         this.fileService.onDidFilesChange(event => {
             // A DELETED change is a deliberate absence: reset immediately,
             // bypassing the keep-last-good guard (same shape as customize).
@@ -455,6 +466,27 @@ export class ModeService implements FrontendApplicationContribution {
             return undefined;
         }
         return undefined;
+    }
+
+    /**
+     * GUI-07/GUI-09: the mode a launch opens in -- the persisted mode when it
+     * is one of the shipped ids, else the contracted Browsing default. Custom
+     * ids are deliberately NOT handled here: they register asynchronously from
+     * user storage, and reapplyPersistedMode() already owns re-activating them
+     * once they exist. An unreadable store is an absence, never a throw, and
+     * falls through to the same default.
+     */
+    protected async applyLaunchMode(): Promise<void> {
+        let persistedId: unknown;
+        try {
+            const data = await this.storage.getData<{ activePerspectiveId?: unknown }>('perspective-layouts');
+            persistedId = data?.activePerspectiveId;
+        } catch {
+            persistedId = undefined;
+        }
+        const shipped = typeof persistedId === 'string'
+            && SHIPPED_MODES.some(descriptor => descriptor.id === persistedId);
+        await this.activateMode(shipped ? persistedId as string : 'browsing');
     }
 
     protected async reapplyPersistedMode(): Promise<void> {
