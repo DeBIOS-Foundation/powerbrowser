@@ -65,12 +65,14 @@ Archive: `.planning/milestones/v1.2-ROADMAP.md` · Requirements: `.planning/mile
   3. User gets address-input suggestions while typing and activating one navigates
   4. Strip-relocation spike verdict is recorded: a live tab strip moves Theia shell areas without forking Theia core (green → Variant B strip work proceeds in Phase 14; red → Variant-A fallback, strip stays top, modes still ship)
 
-**Plans**: 3 plans
+**Plans**: 2/3 plans executed
 
 Plans:
-- [ ] 13-01-PLAN.md — Strip-relocation spike with GREEN/RED verdict record
-- [ ] 13-02-PLAN.md — Chrome-bar skeleton, prefix search over RPC, suggestions plus verdict gates
+
+- [x] 13-01-PLAN.md — Strip-relocation spike with GREEN/RED verdict record
+- [x] 13-02-PLAN.md — Chrome-bar skeleton, prefix search over RPC, suggestions plus verdict gates
 - [ ] 13-03-PLAN.md — Chrome-bar widget, styling, and commands gate
+
 **UI hint**: yes
 
 ### Phase 14: Modes + Windows & Setups
@@ -107,7 +109,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 13. Chrome Bar + Strip-Relocation Spike | 0/3 | Not started | - |
+| 13. Chrome Bar + Strip-Relocation Spike | 2/3 | In Progress|  |
 | 14. Modes + Windows & Setups | 0/TBD | Not started | - |
 | 15. Panorama Organising | 0/TBD | Not started | - |
 

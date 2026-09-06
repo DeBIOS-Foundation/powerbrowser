@@ -1,16 +1,20 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.3
-milestone_name: Browser GUI
+current_phase: 13
+current_phase_name: roadmap complete — v1.3 phases 13–15 defined, ready to plan
 status: planning
-last_updated: "2026-09-06T02:29:49.569Z"
-last_activity: 2026-09-05
+stopped_at: Completed 13-02-PLAN.md
+last_updated: "2026-09-06T04:04:27.747Z"
+last_activity: 2026-09-06
+last_activity_desc: "v1.3 roadmap created (Phases 13–15: GUI-06→13, GUI-07+GUI-09→14, GUI-08→15)"
+state_head: ffa2b1bfea24c2121f76a703bf864c11b57a37a6
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 3
+  completed_plans: 2
+milestone_name: Browser GUI
 ---
 
 # Project State
@@ -99,6 +103,7 @@ Last activity: 2026-09-06 — v1.3 roadmap created (Phases 13–15: GUI-06→13,
 | Phase 10-sign-off-closeout P03 | 25min | 2 tasks | 1 files |
 | Phase 11-sql-store-design P01 | 12min | 2 tasks | 2 files |
 | Phase 12-sql-store-build P03 | ~5min | 3 tasks | 3 files |
+| Phase 13-chrome-bar-strip-relocation-spike P02 | ~20min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -247,6 +252,8 @@ Recent decisions affecting current work:
 - [Phase 10]: 12-03: scan exact-paren spelling keeps DatabaseSync scaffolding green by construction; scan self-exempts by basename with plants elsewhere
 - [Phase 10]: 12-03: soak default static-only keeps base row honestly quick; live half opt-in --live
 - [Phase 10]: 12-03: drill dry-run at live newer tag FIREFOX_153_2_0esr_RELEASE, destructive re-clone staged per shared-state rule
+- [Phase 13]: 13-02: verdict gate asserts verdict-instrument agreement (GREEN requires clean core-diff; RED-with-core-cause requires red instrument plus pasted proof) because the tree instrument is red on pre-existing drift
+- [Phase 13]: 13-02: fixture engine is stdlib node:sqlite (second-writer gate rule-c carve-out), not vendored better-sqlite3
 
 ### Pending Todos
 
@@ -336,8 +343,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-05T20:44:32.800Z
-Stopped at: Milestone v1.2 archived and tagged (override closeout)
+Last session: 2026-09-06T04:04:27.701Z
+Stopped at: Completed 13-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
