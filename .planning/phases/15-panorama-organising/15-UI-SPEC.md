@@ -413,15 +413,15 @@ The equivalent supply-chain gate for this phase: no new packages.
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: FLAG (non-blocking — "Retry"/"Cancel" single-word secondaries; primaries specific)
+- [x] Dimension 2 Visuals: FLAG (non-blocking — no explicit focal-point declaration; planner treats canvas field / active group as anchor; icon-only controls keep tooltip-matched aria-labels)
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending
+**Approval:** APPROVED — gsd-ui-checker, 2026-09-06 (2 non-blocking FLAGs recorded above)
 
 ---
 
