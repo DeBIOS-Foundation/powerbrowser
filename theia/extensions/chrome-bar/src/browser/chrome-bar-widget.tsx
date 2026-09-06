@@ -1,4 +1,5 @@
 import * as React from '@theia/core/shared/react';
+import { createPortal } from '@theia/core/shared/react-dom';
 import { injectable, inject } from '@theia/core/shared/inversify';
 import {
     ApplicationShell,
@@ -123,6 +124,17 @@ export class ChromeBarWidget extends ReactWidget {
     protected mode = ChromeBarWidget.MODES[0];
     protected tabCount = 0;
     protected querySeq = 0;
+    protected pillRef: HTMLDivElement | null = null;
+
+    /**
+     * Re-derives the portalled dropdown geometry after a window resize
+     * (every keystroke already re-renders, so only resize needs a push).
+     */
+    repositionDropdown(): void {
+        if (this.dropdownOpen) {
+            this.update();
+        }
+    }
 
     /** Debounced pill queries over the RPC proxy (in-tree p-debounce pin, 150ms precedent). */
     protected readonly debouncedQuery = pDebounce((prefix: string) => this.runQuery(prefix), 150);
@@ -413,13 +425,37 @@ export class ChromeBarWidget extends ReactWidget {
         if (!this.dropdownOpen) {
             return undefined;
         }
+        const body = this.dropdownBody();
+        // Body portal: the bar lives under a PerfectScrollbar `.ps` wrapper
+        // with overflow hidden, which clips any in-tree dropdown at the
+        // 40px bar edge (rows render in DOM but are neither visible nor
+        // hittable). Portalling to body with fixed geometry escapes the
+        // clipping ancestor; no ancestor carries transform/filter, so fixed
+        // positions against the viewport. Geometry re-derives on every
+        // render (each keystroke re-renders) plus on window resize.
+        const pill = this.pillRef?.getBoundingClientRect();
+        const style: React.CSSProperties | undefined = pill ? {
+            position: 'fixed',
+            top: Math.round(pill.bottom + 4),
+            left: Math.round(pill.left),
+            width: Math.round(pill.width),
+        } : undefined;
+        return createPortal(
+            <div className='pb-chrome-bar-dropdown' role='listbox' aria-label='Suggestions' style={style}>
+                {body}
+            </div>,
+            document.body
+        );
+    }
+
+    protected dropdownBody(): React.ReactNode {
         if (this.commitFailed) {
-            return <div className='pb-chrome-bar-dropdown' role='listbox' aria-label='Suggestions'>
+            return <>
                 <div className='pb-chrome-bar-row'>Power Browser couldn&apos;t open that address. Press Enter to try again.</div>
                 <div className='pb-chrome-bar-dropdown-footer'>Enter opens the address · Esc closes suggestions</div>
-            </div>;
+            </>;
         }
-        return <div className='pb-chrome-bar-dropdown' role='listbox' aria-label='Suggestions'>
+        return <>
             {this.providerFailed ? (
                 <div className='pb-chrome-bar-row'>Power Browser couldn&apos;t load suggestions. Press Enter to visit what you typed.</div>
             ) : this.rows.length === 0 && !this.shimmer ? (
@@ -446,7 +482,7 @@ export class ChromeBarWidget extends ReactWidget {
             )}
             {this.shimmer && <div className='pb-chrome-bar-row is-shimmer' aria-hidden='true' />}
             <div className='pb-chrome-bar-dropdown-footer'>Enter opens the address · Esc closes suggestions</div>
-        </div>;
+        </>;
     }
 
     protected render(): React.ReactNode {
@@ -483,7 +519,7 @@ export class ChromeBarWidget extends ReactWidget {
             >
                 <span className='codicon codicon-refresh' />
             </button>
-            <div className='pb-chrome-bar-pill'>
+            <div className='pb-chrome-bar-pill' ref={el => { this.pillRef = el; }}>
                 {secure && <span className='codicon codicon-lock pb-chrome-bar-lock' aria-hidden='true' />}
                 <input
                     className={CHROME_BAR_INPUT_CLASS}
@@ -564,6 +600,9 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         this.shell.onDidAddWidget(() => this.barWidget.publishTabCount());
         this.shell.onDidRemoveWidget(() => this.barWidget.publishTabCount());
         this.shell.onDidChangeCurrentWidget(() => this.barWidget.publishTabCount());
+        // The portalled dropdown positions against the viewport, so a
+        // window resize re-derives its geometry while open.
+        window.addEventListener('resize', () => this.barWidget.repositionDropdown());
         this.barWidget.publishTabCount();
     }
 }
