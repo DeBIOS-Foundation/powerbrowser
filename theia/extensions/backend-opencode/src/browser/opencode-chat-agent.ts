@@ -9,9 +9,11 @@ import {
     MutableChatRequestModel,
 } from '@theia/ai-chat/lib/common';
 import {
+    NO_APPLIED_HISTORY,
     OpencodeService,
     StagedFileProposal,
 } from '../common/opencode-service';
+import { OpencodePresetStore } from './opencode-preset-commands';
 
 /** The chat-picker id users select. User-visible once shipped. */
 export const OPENCODE_CHAT_AGENT_ID = 'OpenCode';
@@ -53,6 +55,9 @@ export class OpencodeChatAgent implements ChatAgent {
     @inject(OpencodeService)
     protected readonly backend: OpencodeService;
 
+    @inject(OpencodePresetStore)
+    protected readonly presets: OpencodePresetStore;
+
     async invoke(request: MutableChatRequestModel): Promise<void> {
         const chatSessionId = request.session.id;
         const prompt = `${request.message.request.text}\n\n${this.systemPromptAppendixTemplate}`;
@@ -74,6 +79,16 @@ export class OpencodeChatAgent implements ChatAgent {
             const body = reply.text || '_The backend returned no text for this turn._';
             this.addMarkdown(request, body);
             this.attachStagedElements(request, chatSessionId, reply.staged);
+            // 16-02 Task 2: the preset selects the apply path. Gated leaves
+            // every proposal staged for per-file accept (nothing writes
+            // without a click). Auto-accept applies each staged proposal in
+            // turn order right away -- stage-then-immediately-apply, never
+            // reply-selected, so the 16-01 double-write finding cannot bite:
+            // the backend stays rejected while Theia owns the write, and
+            // every apply lands in mandatory history with working revert.
+            if (this.presets.getPreset(chatSessionId) === 'auto-accept') {
+                await this.applyAllStaged(request, chatSessionId, reply.staged);
+            }
             request.response.complete();
         } catch (err) {
             request.response.error(err as Error);
@@ -90,7 +105,6 @@ export class OpencodeChatAgent implements ChatAgent {
         };
         holder.addContent(new MarkdownChatResponseContentImpl(text));
     }
-
     protected attachStagedElements(
         request: MutableChatRequestModel,
         chatSessionId: string,
@@ -115,11 +129,42 @@ export class OpencodeChatAgent implements ChatAgent {
                     }
                 },
                 revert: async () => {
+                    // Staged proposals drop without a trace; applied ones
+                    // revert through mandatory history. NO_APPLIED_HISTORY
+                    // simply means there was nothing applied to undo.
                     await this.backend.rejectStaged(chatSessionId, proposal.path);
+                    const result = await this.backend.revertApplied(chatSessionId, proposal.path);
+                    if (!result.reverted && result.conflict !== NO_APPLIED_HISTORY) {
+                        throw new Error(result.conflict ?? 'revert refused');
+                    }
                 },
             };
             return element;
         });
         request.changeSet = new ChangeSetImpl(elements);
+    }
+
+    /**
+     * Auto-accept apply-all: each staged proposal from the just-finished
+     * turn applies in emission order with mandatory history (the emitter
+     * records preset 'auto-accept' on every entry). Stale refusals are
+     * collected into the transcript as plain language; history-write and
+     * disk failures rethrow into the turn error path -- never silent.
+     */
+    protected async applyAllStaged(
+        request: MutableChatRequestModel,
+        chatSessionId: string,
+        staged: StagedFileProposal[]
+    ): Promise<void> {
+        const held: string[] = [];
+        for (const proposal of staged) {
+            const result = await this.backend.acceptStaged(chatSessionId, proposal.path, 'auto-accept');
+            if (!result.written) {
+                held.push(`${proposal.path}: ${result.conflict ?? 'accept refused'}`);
+            }
+        }
+        if (held.length > 0) {
+            this.addMarkdown(request, `_Auto-accept held ${held.length} file(s) for review:_\n${held.map(line => `- ${line}`).join('\n')}`);
+        }
     }
 }

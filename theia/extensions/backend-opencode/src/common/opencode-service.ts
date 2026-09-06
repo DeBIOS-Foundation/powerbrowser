@@ -9,6 +9,12 @@
  * modules can depend on it without pulling a side.
  */
 
+/** Which review preset applied an edit (mirrors the frontend preset store). */
+export type OpenCodePreset = 'gated' | 'auto-accept';
+
+/** Sentinel conflict when revert finds no applied history (staged-only drop). */
+export const NO_APPLIED_HISTORY = 'no applied history for this file';
+
 /** JSON-RPC path the backend connection handler serves (key link: the
  *  frontend agent reaches the supervisor only through this path). */
 export const OPENCODE_SERVICE_PATH = '/services/opencode';
@@ -48,10 +54,17 @@ export interface OpencodeService {
      * safe asks (see the supervisor); this stays for the gated UI later.
      */
     handlePermissionResponse(requestId: string, approved: boolean): Promise<void>;
-    /** Accept one staged file: stale-check then write exact bytes. */
-    acceptStaged(chatSessionId: string, path: string): Promise<{ written: boolean; conflict?: string }>;
+    /** Accept one staged file: stale-check, history write, then exact bytes. */
+    acceptStaged(chatSessionId: string, path: string, preset?: OpenCodePreset): Promise<{ written: boolean; conflict?: string }>;
     /** Reject one staged file: drop it, disk untouched. */
     rejectStaged(chatSessionId: string, path: string): Promise<void>;
+    /**
+     * 16-02 Task 2: revert one applied file from mandatory history:
+     * restores the pre-apply bytes, or refuses with a conflict when the
+     * live file moved on (history preserved). Reports NO_APPLIED_HISTORY
+     * when nothing was ever applied (a staged-only drop needs no revert).
+     */
+    revertApplied(chatSessionId: string, path: string): Promise<{ reverted: boolean; conflict?: string }>;
 }
 
 /** Backend-to-frontend pushes (turn tokens stream here in later plans;

@@ -9,6 +9,7 @@ import { POWERBROWSER_ENV } from '@powerbrowser/token-gate/lib/node/powerbrowser
 import {
     OpencodeReply,
     OpencodeService,
+    OpenCodePreset,
     StagedFileProposal,
 } from '../common/opencode-service';
 import { OpencodeChangesetEmitter, StagedEntry } from './opencode-changeset-emitter';
@@ -121,12 +122,16 @@ export class OpencodeAcpSupervisor implements BackendApplicationContribution, Op
             : { outcome: { outcome: 'cancelled' } });
     }
 
-    async acceptStaged(chatSessionId: string, path: string): Promise<{ written: boolean; conflict?: string }> {
-        return this.emitter.acceptStaged(chatSessionId, path);
+    async acceptStaged(chatSessionId: string, path: string, preset?: OpenCodePreset): Promise<{ written: boolean; conflict?: string }> {
+        return this.emitter.acceptStaged(chatSessionId, path, preset);
     }
 
     async rejectStaged(chatSessionId: string, path: string): Promise<void> {
         this.emitter.rejectStaged(chatSessionId, path);
+    }
+
+    async revertApplied(chatSessionId: string, path: string): Promise<{ reverted: boolean; conflict?: string }> {
+        return this.emitter.revertApplied(chatSessionId, path);
     }
 
     // -- Session mapping ----------------------------------------------------
