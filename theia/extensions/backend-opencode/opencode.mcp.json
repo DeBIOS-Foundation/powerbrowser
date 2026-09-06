@@ -1,0 +1,12 @@
+{
+  "mcp": {
+    "powerbrowser": {
+      "type": "remote",
+      "url": "http://127.0.0.1:{env:POWERBROWSER_MCP_PORT}/mcp",
+      "headers": {
+        "Cookie": "POWERBROWSER_TOKEN={env:POWERBROWSER_MCP_TOKEN}"
+      },
+      "enabled": true
+    }
+  }
+}
