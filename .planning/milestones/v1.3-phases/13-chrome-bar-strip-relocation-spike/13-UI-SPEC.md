@@ -163,6 +163,7 @@ fixed: **"chrome bar"** everywhere, never "browser toolbar".
 | Empty suggestions body | **"No matches for what you typed — press Enter to visit it as an address."** |
 | Suggestions-unavailable error | **"Power Browser couldn't load suggestions. Press Enter to visit what you typed."** (provider failure degrades to a plain address commit; no Retry — there is nothing to retry that Enter does not already do) |
 | Destructive confirmation | **None in this phase.** Back/forward/reload/new-tab/mode-switch are all non-destructive, and the tabs invariant (no tab closed, moved windows, or detached by a mode change) means no switch ever needs a confirmation. |
+| Commit failure | **"Power Browser couldn't open that address. Press Enter to try again."** (a commit throw surfaces in-bar as a single dropdown row; Enter re-commits the typed text as the retry affordance, so the copy gate in 13-04 owns the identical string rather than standing alone) |
 
 ---
 
@@ -171,9 +172,12 @@ fixed: **"chrome bar"** everywhere, never "browser toolbar".
 ### Bar placement and order
 
 Single chrome bar, full-bleed, 40px, immediately adjacent to the Theia tab
-strip in the sketch-001 mock order: menubar → tab strip → **chrome bar** →
-workarea → status bar. Whether it lands above or below the Theia toolbar is
-the planner's call (Variant A permits either); exactly one bar, never two.
+strip in the ratified Variant-A order: menubar → chrome bar → tab strip →
+workarea → status bar. The bar is contributed to the top shell area, which
+the shell stacks above the main dock owning the tab strip, and the
+below-strip slot would need dock surgery, which is a Theia-core touch
+forbidden by the never-fork-core hard rule, so below-strip stays out of
+Variant A; exactly one bar, never two.
 The status-bar tab-count chip (sketch pattern) asserts the tabs invariant on
 every mode switch.
 
