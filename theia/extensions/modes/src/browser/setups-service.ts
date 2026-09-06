@@ -416,10 +416,15 @@ export class SetupsService implements FrontendApplicationContribution {
         }
         this.currentSetup = row.name;
         void this.persistLastSession(row.name);
-        if (dropped > 0) {
+        // Both notices share one status-bar element, so two sequential
+        // flashes would overwrite each other: when both fire, combine them
+        // into a single flash built only from the two contracted literals
+        // (no new user-facing copy).
+        if (dropped > 0 && !known) {
+            void this.flash(`${SETUP_GONE_TABS_NOTICE} ${SETUP_MODE_FALLBACK_NOTICE}`);
+        } else if (dropped > 0) {
             void this.flash(SETUP_GONE_TABS_NOTICE);
-        }
-        if (!known) {
+        } else if (!known) {
             void this.flash(SETUP_MODE_FALLBACK_NOTICE);
         }
     }
