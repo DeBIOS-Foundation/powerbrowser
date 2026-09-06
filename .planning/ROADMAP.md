@@ -10,7 +10,7 @@
 
 ## Phases
 
-- [ ] **Phase 13: Chrome Bar + Strip-Relocation Spike** - Top chrome bar navigation shell; spike proves a live tab strip moves shell areas (GUI-06; enables GUI-07)
+- [x] **Phase 13: Chrome Bar + Strip-Relocation Spike** - Top chrome bar navigation shell; spike proves a live tab strip moves shell areas (GUI-06; enables GUI-07)
 - [ ] **Phase 14: Modes + Windows & Setups** - Mode-driven shell with relocating strip; core/dependent windows with named setups (GUI-07, GUI-09)
 - [ ] **Phase 15: Panorama Organising** - Freeform canvas + tree toggle over SQL-persisted groups (GUI-08)
 
@@ -109,7 +109,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 13. Chrome Bar + Strip-Relocation Spike | 3/3 | In Progress|  |
+| 13. Chrome Bar + Strip-Relocation Spike | 3/3 | Complete | 2026-09-06 |
 | 14. Modes + Windows & Setups | 0/TBD | Not started | - |
 | 15. Panorama Organising | 0/TBD | Not started | - |
 
