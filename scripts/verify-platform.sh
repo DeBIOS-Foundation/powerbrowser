@@ -3710,6 +3710,16 @@ run_own_checks() {
     "gui06-chrome-bar-suggestions|node $REPO_ROOT/scripts/verify-chrome-bar-suggestions.mjs"
     "gui06-chrome-bar-suggestions-self-test|node $REPO_ROOT/scripts/verify-chrome-bar-suggestions.mjs --self-test"
 
+    # NEW (13-05): GUI-06's bar-placement gate. Derives the contribution area
+    # from the widget's addWidget call and the ratified order from the
+    # UI-SPEC order line at check time and compares both; honestly --quick
+    # (text reads only, no build, no browser, no display, no network).
+    "gui06-chrome-bar-placement|node $REPO_ROOT/scripts/verify-chrome-bar-placement.mjs"
+    # The placement self-test rides alongside for the reason every other
+    # self-test row in this array gives -- a gate nobody has seen go red is
+    # not a check.
+    "gui06-chrome-bar-placement-self-test|node $REPO_ROOT/scripts/verify-chrome-bar-placement.mjs --self-test"
+
     # NEW (13-02): GUI-07's spike-verdict gate. Parses the strip-relocation
     # record for a one-line GREEN/RED verdict with a cause on RED plus the
     # Variant routing, and checks the zero-core claim against the
