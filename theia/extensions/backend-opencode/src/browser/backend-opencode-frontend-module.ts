@@ -5,7 +5,8 @@ import { WebSocketConnectionProvider } from '@theia/core/lib/browser';
 import { TabBarToolbarContribution } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { OPENCODE_SERVICE_PATH, OpencodeService } from '../common/opencode-service';
 import { OpencodeChatAgent } from './opencode-chat-agent';
-import { OpencodePresetContribution, OpencodePresetStore } from './opencode-preset-contribution';
+import { OpencodePresetStore } from './opencode-preset-commands';
+import { OpencodePresetContribution } from './opencode-preset-contribution';
 
 // 16-01 Task 2: frontend composition. The ChatAgent token binds to the new
 // agent class and the backend proxy rides the existing authenticated

@@ -338,10 +338,10 @@ function checkHistoryOrder(E, root) {
 /** Staging order matches backend emission order (two-file fixture). */
 function checkEmissionOrder(E, root) {
     const e = new E.OpencodeChangesetEmitter();
-    e.writeTextFile('c', root, 'a.txt', 'A-bytes');
-    e.writeTextFile('c', root, 'b.txt', 'B-bytes');
+    e.writeTextFile('c', root, 'order-a.txt', 'A-bytes');
+    e.writeTextFile('c', root, 'order-b.txt', 'B-bytes');
     const got = e.stagedFor('c').map(entry => entry.path);
-    if (got.length !== 2 || got[0] !== join(root, 'a.txt') || got[1] !== join(root, 'b.txt')) {
+    if (got.length !== 2 || got[0] !== join(root, 'order-a.txt') || got[1] !== join(root, 'order-b.txt')) {
         return [`staging order [${got.join(', ')}] -- emission order A,B must stage A,B`];
     }
     return [];
@@ -361,5 +361,503 @@ function checkSupersede(E, root) {
         return [`supersede archive [${old.map(x => `${x.proposedText}:${x.status}`).join(', ')}] -- the old entry must be marked superseded, never merged`];
     }
     if (staged[0].proposedText.includes('v1-bytes')) {
-     
-...[truncated 14068 chars]
+        return [`supersede staged carries v1 bytes -- overlapping proposals must never merge (T-16-02-03)`];
+    }
+    e.acceptStaged('c', join(root, 's.txt'));
+    if (readFileSync(join(root, 's.txt'), 'utf8') !== 'v2-bytes') {
+        return [`supersede accept did not write exactly the latest bytes`];
+    }
+    return [];
+}
+/** Stale accept refuses with a conflict and keeps the proposal (D-04). */
+function checkStaleRefuse(E, root) {
+    const e = new E.OpencodeChangesetEmitter();
+    const target = join(root, 'q.txt');
+    writeFileSync(target, 'orig-bytes');
+    e.writeTextFile('c', root, 'q.txt', 'proposed-bytes');
+    writeFileSync(target, 'external-bytes');
+    const verdict = e.acceptStaged('c', target);
+    if (verdict.written || !/refused|preserved/.test(verdict.conflict ?? '')) {
+        return [`stale accept wrote or stayed silent -- must refuse with a conflict naming preservation`];
+    }
+    if (e.historyFor('c').length !== 0) {
+        return [`refused accept recorded history -- nothing applied, nothing recorded`];
+    }
+    if (readFileSync(target, 'utf8') !== 'external-bytes') {
+        return [`refused accept touched disk -- the external edit must stand`];
+    }
+    // The proposal is preserved: restoring the base lets the same entry apply.
+    writeFileSync(target, 'orig-bytes');
+    const retry = e.acceptStaged('c', target);
+    if (!retry.written || readFileSync(target, 'utf8') !== 'proposed-bytes') {
+        return [`preserved proposal did not apply after the base returned -- refusal must keep, not drop`];
+    }
+    return [];
+}
+
+/** History-write failure blocks the apply and surfaces (never silent). */
+function checkHistoryWriteFailure(E, root) {
+    class Failing extends E.OpencodeChangesetEmitter {
+        appendHistory() {
+            throw new Error('injected sink fault');
+        }
+    }
+    const e = new Failing();
+    const target = join(root, 'w.txt');
+    writeFileSync(target, 'orig-bytes');
+    e.writeTextFile('c', root, 'w.txt', 'proposed-bytes');
+    let threw = '';
+    try {
+        e.acceptStaged('c', target);
+    } catch (err) {
+        threw = err.message;
+    }
+    if (!threw.includes('history-write-failed')) {
+        return [`history-write failure did not surface the named guard -- got '${threw || '(no throw at all)'}'`];
+    }
+    if (readFileSync(target, 'utf8') !== 'orig-bytes') {
+        return [`guarded apply reached disk -- the apply must be blocked when history fails`];
+    }
+    if (e.stagedFor('c').length !== 1) {
+        return [`guarded proposal vanished -- refusal must keep the entry staged`];
+    }
+    return [];
+}
+/** Redaction covers history while accept writes exact bytes (T-16-02-04). */
+function checkHistoryRedaction(E, root) {
+    const e = new E.OpencodeChangesetEmitter();
+    const secret = 'sk-abcDEF1234567890';
+    e.writeTextFile('c', root, 'n.txt', `token ${secret} deployed`);
+    e.acceptStaged('c', join(root, 'n.txt'));
+    const entries = e.historyFor('c');
+    if (entries.length !== 1) {
+        return [`redaction fixture recorded ${entries.length} entries -- exactly one apply means one history row`];
+    }
+    if (entries[0].diff.includes(secret)) {
+        return [`history diff still carries a token-shaped string after redaction (T-16-02-04)`];
+    }
+    if (!entries[0].diff.includes('[redacted]')) {
+        return [`history diff shows no redaction marker -- the fixture must prove the pass ran`];
+    }
+    if (readFileSync(join(root, 'n.txt'), 'utf8') !== `token ${secret} deployed`) {
+        return [`accept did not write the exact backend bytes -- redaction is presentation-only`];
+    }
+    return [];
+}
+
+/** Idempotent re-stage plus zero-edit silence. */
+function checkIdempotentAndZeroEdit(E, root) {
+    const e = new E.OpencodeChangesetEmitter();
+    const target = join(root, 'i.txt');
+    writeFileSync(target, 'base-bytes');
+    e.writeTextFile('c', root, 'i.txt', 'new-bytes');
+    e.writeTextFile('c', root, 'i.txt', 'new-bytes');
+    if (e.stagedFor('c').length !== 1 || e.supersededFor('c').length !== 0) {
+        return [`identical re-stage superseded itself -- double-writes must reuse the entry`];
+    }
+    const zero = join(root, 'z.txt');
+    writeFileSync(zero, 'same-bytes');
+    if (e.writeTextFile('c', root, 'z.txt', 'same-bytes') !== undefined) {
+        return [`zero-edit answer created an entry -- silence is the contract`];
+    }
+    return [];
+}
+
+/** D-03 fallback records without ever writing disk. */
+function checkFallback(E, root) {
+    const e = new E.OpencodeChangesetEmitter();
+    const target = join(root, 'f.txt');
+    writeFileSync(target, 'staged-base');
+    e.writeTextFile('c', root, 'f.txt', 'staged-proposal');
+    writeFileSync(target, 'externally-written');
+    const before = readFileSync(target, 'utf8');
+    const entry = e.recordExternalApply('c', root, 'f.txt', 'auto-accept');
+    if (!entry || entry.via !== 'fallback' || entry.preset !== 'auto-accept') {
+        return [`fallback did not append a tagged history row -- the outside write would vanish from review`];
+    }
+    if (entry.baseText !== 'staged-base' || entry.appliedText !== 'externally-written') {
+        return [`fallback history misattributes base/applied -- the record must match the observable change`];
+    }
+    if (readFileSync(target, 'utf8') !== before) {
+        return [`recordExternalApply touched disk -- the fallback records, never writes`];
+    }
+    return [];
+}
+
+/** Working revert restores pre-apply bytes and marks the entry. */
+function checkRevert(E, root) {
+    const e = new E.OpencodeChangesetEmitter();
+    const target = join(root, 'r.txt');
+    writeFileSync(target, 'orig-bytes');
+    e.writeTextFile('c', root, 'r.txt', 'applied-bytes');
+    e.acceptStaged('c', target);
+    const verdict = e.revertApplied('c', target);
+    if (!verdict.reverted || readFileSync(target, 'utf8') !== 'orig-bytes') {
+        return [`clean revert did not restore pre-apply bytes -- revert must work (SPEC R3)`];
+    }
+    if (!e.historyFor('c').every(h => h.reverted)) {
+        return [`reverted entry not marked -- history must show the revert`];
+    }
+    const repeat = e.revertApplied('c', target);
+    if (repeat.reverted || repeat.conflict !== 'no applied history for this file') {
+        return [`second revert misbehaved -- exhausted history reports the sentinel, nothing else`];
+    }
+    return [];
+}
+
+/** Concurrent-edit revert refuses and preserves (engine half; e2e held out). */
+function checkRevertConcurrent(E, root) {
+    const e = new E.OpencodeChangesetEmitter();
+    const target = join(root, 'k.txt');
+    writeFileSync(target, 'orig-bytes');
+    e.writeTextFile('c', root, 'k.txt', 'applied-bytes');
+    e.acceptStaged('c', target);
+    writeFileSync(target, 'concurrent-bytes');
+    const verdict = e.revertApplied('c', target);
+    if (verdict.reverted || !/refused|preserved/.test(verdict.conflict ?? '')) {
+        return [`concurrent revert applied or stayed silent -- must refuse with a conflict naming preservation`];
+    }
+    if (readFileSync(target, 'utf8') !== 'concurrent-bytes') {
+        return [`refused revert touched disk -- the concurrent edit must stand`];
+    }
+    if (e.historyFor('c').some(h => h.reverted)) {
+        return [`refused revert marked history -- preservation means untouched`];
+    }
+    return [];
+}
+function checkBehavior(libs) {
+    const failures = [];
+    const root = stageRoot();
+    try {
+        failures.push(...checkPresetDefault(libs.preset));
+        failures.push(...checkExplicitAction(libs.preset));
+        failures.push(...checkHistoryOrder(libs.emitter, root));
+        failures.push(...checkEmissionOrder(libs.emitter, root));
+        failures.push(...checkSupersede(libs.emitter, root));
+        failures.push(...checkStaleRefuse(libs.emitter, root));
+        failures.push(...checkHistoryWriteFailure(libs.emitter, root));
+        failures.push(...checkHistoryRedaction(libs.emitter, root));
+        failures.push(...checkIdempotentAndZeroEdit(libs.emitter, root));
+        failures.push(...checkFallback(libs.emitter, root));
+        failures.push(...checkRevert(libs.emitter, root));
+        failures.push(...checkRevertConcurrent(libs.emitter, root));
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+    return failures;
+}
+
+// -- R3 backstop: revert under concurrent edits, held out as STAGED --------
+
+/**
+ * The live one-hunk scenario, run for real only under --live-backstop.
+ * Hunk one proves the refusal (concurrent external edit, revert refused
+ * with a conflict, disk plus history preserved); hunk two proves the
+ * working revert still restores. The default entry point never runs this
+ * without its driver -- it holds out as STAGED instead.
+ */
+function runLiveBackstop() {
+    const failures = [];
+    const notes = [];
+    const loaded = loadLibs();
+    if (loaded.error) {
+        return { failures: [loaded.error], notes };
+    }
+    const EmitterClass = loaded.emitter.OpencodeChangesetEmitter;
+    const root = mkdtempSync(join(tmpdir(), 'opencode-backstop-'));
+    try {
+        const e = new EmitterClass();
+        const hunk = join(root, 'hunk.txt');
+        writeFileSync(hunk, 'base-v1');
+        e.writeTextFile('live', root, 'hunk.txt', 'applied-v1');
+        e.acceptStaged('live', hunk, 'auto-accept');
+        writeFileSync(hunk, 'concurrent-user-edit');
+        const refused = e.revertApplied('live', hunk);
+        if (refused.reverted) {
+            failures.push('live backstop: revert applied over a concurrent external edit on one hunk -- must refuse with a conflict (R3 backstop)');
+        } else if (!/refused|preserved/.test(refused.conflict ?? '')) {
+            failures.push(`live backstop: concurrent-revert conflict drifted ('${refused.conflict ?? 'none'}') -- the refusal must name preservation`);
+        } else {
+            notes.push('live backstop: concurrent revert refused with a conflict');
+        }
+        if (readFileSync(hunk, 'utf8') !== 'concurrent-user-edit') {
+            failures.push('live backstop: refused revert touched disk -- history must be preserved byte-identical');
+        }
+        if (!e.historyFor('live').some(h => !h.reverted)) {
+            failures.push('live backstop: history entry lost after the refused revert');
+        }
+        const clean = join(root, 'clean.txt');
+        writeFileSync(clean, 'before');
+        e.writeTextFile('live', root, 'clean.txt', 'after');
+        e.acceptStaged('live', clean, 'gated');
+        const restored = e.revertApplied('live', clean);
+        if (!restored.reverted || readFileSync(clean, 'utf8') !== 'before') {
+            failures.push('live backstop: clean revert did not restore pre-apply bytes');
+        } else {
+            notes.push('live backstop: clean revert restored pre-apply bytes');
+        }
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+    return { failures, notes };
+}
+
+function checkCoreDiff() {
+    try {
+        execFileSync('nix', ['develop', `${REPO_ROOT}#theia`, '--command', 'bash', `${REPO_ROOT}/scripts/diff-theia-core.sh`, '--quick'], {
+            encoding: 'utf8',
+            timeout: 180000,
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        return [];
+    } catch (err) {
+        return [`core diff: scripts/diff-theia-core.sh --quick red (${(err.stderr ?? err.message ?? '').toString().slice(0, 200)})`];
+    }
+}
+
+function checkSpaceFree() {
+    return process.cwd().includes(' ') ? [`repo path contains a space (${process.cwd()}) -- hard rule`] : [];
+}
+
+async function main() {
+    if (process.argv.includes('--self-test')) {
+        return selfTest();
+    }
+    if (process.argv.includes('--live-backstop')) {
+        const { failures, notes } = runLiveBackstop();
+        if (failures.length) {
+            console.error(`${NAME} --live-backstop: FAIL -- the R3 revert backstop drifted.`);
+            failures.forEach(f => console.error(`  - ${f}`));
+            return 1;
+        }
+        notes.forEach(n => console.log(`  ok  ${n}`));
+        console.log(`${NAME} --live-backstop: PASS -- revert refuses under concurrent edits and restores cleanly`);
+        return 0;
+    }
+    const loaded = loadLibs();
+    const failures = [
+        ...checkStatic(readSources()),
+        ...(loaded.error ? [loaded.error] : checkBehavior(loaded)),
+        ...checkSpaceFree(),
+        ...checkCoreDiff(),
+    ];
+    // Held out, loudly: the R3 revert-under-concurrent-edits end-to-end
+    // has no live driver in this run, so it stages instead of passing.
+    console.log(`${NAME}: STAGED -- R3 backstop held out: revert-after-concurrent-external-edit on one hunk ` +
+        `needs its live driver; the engine half above is proven, the end-to-end is not. Rerun: ${RERUN}`);
+    if (failures.length) {
+        console.error(`${NAME}: FAIL -- the opencode presets drifted from their contract.`);
+        failures.forEach(f => console.error(`  - ${f}`));
+        return 1;
+    }
+    console.log(`${NAME}: PASS -- per-session presets, ordered mandatory history, and conflict-safe accept hold`);
+    return 0;
+}
+
+// -- Self-test: green first, then each planted fault red naming the drift --
+
+function selfTest() {
+    const clean = readSources();
+    const loaded = loadLibs();
+    const baseline = [
+        ...checkStatic(clean),
+        ...(loaded.error ? [loaded.error] : checkBehavior(loaded)),
+        ...checkSpaceFree(),
+    ];
+    if (baseline.length !== 0) {
+        console.error(`${NAME} --self-test: FAIL -- the unmodified tree is already red, so the planted-fault results below would be meaningless:`);
+        baseline.forEach(f => console.error(`  ${f}`));
+        return 1;
+    }
+    const root = stageRoot();
+    const cases = [
+        {
+            name: 'planted persisted preset',
+            mutate: sources => ({
+                ...sources,
+                [REL.presetCommands]: `${clean[REL.presetCommands]}\n// planted fault\nconst plantedPersistence = globalState;\n`,
+            }),
+            run: mutated => checkStatic(mutated),
+            expect: 'persist',
+        },
+        {
+            name: 'planted merged supersede',
+            mutate: sources => sources,
+            run: () => {
+                // Fault the instrument's dependency: an emitter that merges
+                // the old proposal into the new one must trip the
+                // never-merged assert.
+                const E = {
+                    OpencodeChangesetEmitter: class {
+                        constructor() {
+                            this.entries = new Map();
+                            this.old = [];
+                        }
+                        writeTextFile(chat, wsRoot, candidate, content) {
+                            const abs = join(wsRoot, candidate);
+                            const prev = this.entries.get(abs);
+                            const merged = prev ? `${prev.proposedText}\n${content}` : content;
+                            const entry = { chatSessionId: chat, path: abs, proposedText: merged, status: 'staged' };
+                            this.entries.set(abs, entry);
+                            return entry;
+                        }
+                        stagedFor(chat) {
+                            return [...this.entries.values()].filter(x => x.chatSessionId === chat);
+                        }
+                        supersededFor() {
+                            return [];
+                        }
+                        acceptStaged(chat, abs) {
+                            const entry = this.entries.get(abs);
+                            writeFileSync(abs, entry.proposedText, 'utf8');
+                            entry.status = 'accepted';
+                            return { written: true };
+                        }
+                    },
+                };
+                return checkSupersede(E, root);
+            },
+            expect: 'supersede',
+        },
+        {
+            name: 'planted silent stale accept',
+            mutate: sources => sources,
+            run: () => {
+                // Fault: an accept that writes despite the live mismatch
+                // must trip the refuse-with-conflict assert.
+                const E = {
+                    OpencodeChangesetEmitter: class {
+                        constructor() {
+                            this.entries = new Map();
+                        }
+                        writeTextFile(chat, wsRoot, candidate, content) {
+                            const abs = join(wsRoot, candidate);
+                            let base = '';
+                            try {
+                                base = readFileSync(abs, 'utf8');
+                            } catch { /* absent */ }
+                            const entry = { chatSessionId: chat, path: abs, baseText: base, proposedText: content, status: 'staged' };
+                            this.entries.set(`${chat}::${abs}`, entry);
+                            return entry;
+                        }
+                        stagedFor() {
+                            return [];
+                        }
+                        supersededFor() {
+                            return [];
+                        }
+                        historyFor() {
+                            return [];
+                        }
+                        acceptStaged(chat, abs) {
+                            const entry = this.entries.get(`${chat}::${abs}`);
+                            writeFileSync(abs, entry.proposedText, 'utf8');
+                            entry.status = 'accepted';
+                            return { written: true };
+                        }
+                    },
+                };
+                return checkStaleRefuse(E, root);
+            },
+            expect: 'stale',
+        },
+        {
+            name: 'planted history reorder',
+            mutate: sources => sources,
+            run: () => {
+                // Fault: history served newest-first must trip the
+                // append-order assert on a b-then-a apply pair.
+                const E = {
+                    OpencodeChangesetEmitter: class {
+                        constructor() {
+                            this.rows = [];
+                        }
+                        writeTextFile() {
+                            return {};
+                        }
+                        acceptStaged(chat, abs) {
+                            this.rows.push({ path: abs, order: this.rows.length });
+                            return { written: true };
+                        }
+                        stagedFor() {
+                            return [];
+                        }
+                        supersededFor() {
+                            return [];
+                        }
+                        historyFor() {
+                            return [...this.rows].reverse();
+                        }
+                    },
+                };
+                const e = new E.OpencodeChangesetEmitter();
+                writeFileSync(join(root, 'b.txt'), 'B');
+                writeFileSync(join(root, 'a.txt'), 'A');
+                e.acceptStaged('c', join(root, 'b.txt'));
+                e.acceptStaged('c', join(root, 'a.txt'));
+                return checkHistoryOrder(E, root);
+            },
+            expect: 'history order',
+        },
+        {
+            name: 'planted emission reorder (B,A)',
+            mutate: sources => sources,
+            run: () => {
+                // Fault: staging served in reverse emission order must trip
+                // the emission-order assert on an A,B emission.
+                const E = {
+                    OpencodeChangesetEmitter: class {
+                        constructor() {
+                            this.rows = [];
+                        }
+                        writeTextFile(chat, wsRoot, candidate, content) {
+                            const abs = join(wsRoot, candidate);
+                            this.rows.unshift({ chatSessionId: chat, path: abs, proposedText: content, status: 'staged' });
+                            return {};
+                        }
+                        stagedFor(chat) {
+                            return this.rows.filter(x => x.chatSessionId === chat && x.status === 'staged');
+                        }
+                        supersededFor() {
+                            return [];
+                        }
+                        historyFor() {
+                            return [];
+                        }
+                    },
+                };
+                return checkEmissionOrder(E, root);
+            },
+            expect: 'emission order',
+        },
+    ];
+    let failed = 0;
+    try {
+        for (const testCase of cases) {
+            let mutated;
+            try {
+                mutated = testCase.mutate(clean);
+            } catch (err) {
+                console.error(`${NAME} --self-test: FAIL -- '${testCase.name}' threw while mutating: ${err.message}`);
+                failed++;
+                continue;
+            }
+            const failures = testCase.run(mutated);
+            if (!failures.some(f => f.includes(testCase.expect))) {
+                console.error(`${NAME} --self-test: FAIL -- '${testCase.name}' did not go red naming '${testCase.expect}'; got: ${failures.join(' | ') || '(no failures at all)'}`);
+                failed++;
+            } else {
+                console.log(`  ok  ${testCase.name} -> red, naming '${testCase.expect}'`);
+            }
+        }
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+    if (failed) {
+        return 1;
+    }
+    console.log(`${NAME} --self-test: PASS -- all planted faults went red`);
+    return 0;
+}
+
+process.exit(await main());
