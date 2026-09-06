@@ -14,8 +14,11 @@
 import { ContainerModule } from '@theia/core/shared/inversify';
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { FrontendApplicationContribution } from '@theia/core/lib/browser';
+import { CommandContribution } from '@theia/core/lib/common';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
 import { SHIPPED_MODES } from './mode-descriptors';
+import { ModeService } from './mode-service';
+import { ModesCommandContribution } from './modes-commands';
 
 @injectable()
 export class ModesContribution implements FrontendApplicationContribution {
@@ -33,4 +36,10 @@ export class ModesContribution implements FrontendApplicationContribution {
 export default new ContainerModule(bind => {
     bind(ModesContribution).toSelf().inSingletonScope();
     bind(FrontendApplicationContribution).toService(ModesContribution);
+    // GUI-07 (14-02): the custom-modes service and the mode commands bind
+    // statically beside the shipped registration, in the same voice (D-50).
+    bind(ModeService).toSelf().inSingletonScope();
+    bind(FrontendApplicationContribution).toService(ModeService);
+    bind(ModesCommandContribution).toSelf().inSingletonScope();
+    bind(CommandContribution).toService(ModesCommandContribution);
 });

@@ -41,3 +41,35 @@ const organising: PerspectiveDescriptor = {
 
 /** The shipped defaults in contracted order. Later plans append; never reorder here. */
 export const SHIPPED_MODES: ReadonlyArray<PerspectiveDescriptor> = [coding, browsing, organising];
+
+/**
+ * GUI-07 (14-02): the organising main-area slot seam.
+ *
+ * The organising descriptor's activation hooks (task 2) and the mode
+ * service's switch path share these module functions so placeholder show and
+ * hide stay one seam: the placeholder contribution registers its
+ * contribution-routed open and close here at startup, and both callers stay
+ * idempotent (open when open reveals, close when closed no-ops). Before the
+ * contribution registers, both are silent no-ops -- never a throw.
+ */
+export interface OrganisingSlot {
+    open(): void;
+    close(): void;
+}
+
+let organisingSlot: OrganisingSlot | undefined = undefined;
+
+/** Called once by the placeholder contribution at startup; never by anyone else. */
+export function registerOrganisingSlot(slot: OrganisingSlot | undefined): void {
+    organisingSlot = slot;
+}
+
+/** Show the organising placeholder through the registered contribution. */
+export function openOrganisingSlot(): void {
+    organisingSlot?.open();
+}
+
+/** Hide the organising placeholder through the registered contribution. */
+export function closeOrganisingSlot(): void {
+    organisingSlot?.close();
+}
