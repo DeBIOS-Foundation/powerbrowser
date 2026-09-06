@@ -49,7 +49,12 @@ const API_REL = 'powerbrowser/shell/PowerBrowserAPI.sys.mjs';
  * check time from the sources named above.
  */
 const EXPECTED_DIALOG_TITLE = 'Close Group';
-const EXPECTED_DIALOG_MSG = 'Close "${group.title}"? Its ${count} tab(s) will close too. You can\'t undo this.';
+// 15-UI-REVIEW Top Fix #3: the body is singular/plural exact -- both forms
+// are contracted (15-UI-SPEC.md Copywriting Contract), branched on
+// `count === 1` in closeGroupById. Editing either form is a deliberate
+// contract change -- it shows up in the diff for review.
+const EXPECTED_DIALOG_MSG_ONE = 'Close "${group.title}"? Its 1 tab will close too. You can\'t undo this.';
+const EXPECTED_DIALOG_MSG_MANY = 'Close "${group.title}"? Its ${count} tabs will close too. You can\'t undo this.';
 const EXPECTED_DIALOG_OK = 'Close Group';
 const EXPECTED_DIALOG_CANCEL = 'Cancel';
 const EXPECTED_CLOSE_KIND = "kind: 'closeGroup'";
@@ -143,17 +148,13 @@ function checkStatic(sources) {
         failures.push(`${WIDGET_REL}: the ConfirmDialog block is gone from the close path -- closing without the contracted confirmation`);
     } else {
         const title = derivedField(dialog, 'title');
-        const msg = derivedField(dialog, 'msg');
         const ok = derivedField(dialog, 'ok');
         const cancel = derivedField(dialog, 'cancel');
-        if (title === undefined || msg === undefined || ok === undefined || cancel === undefined) {
-            failures.push(`${WIDGET_REL}: the dialog block no longer derives title/msg/ok/cancel -- the confirmation anchor drifted`);
+        if (title === undefined || ok === undefined || cancel === undefined) {
+            failures.push(`${WIDGET_REL}: the dialog block no longer derives title/ok/cancel -- the confirmation anchor drifted`);
         } else {
             if (title !== EXPECTED_DIALOG_TITLE) {
                 failures.push(`${WIDGET_REL}: dialog title is ${JSON.stringify(title)}, declared ${JSON.stringify(EXPECTED_DIALOG_TITLE)}`);
-            }
-            if (msg !== EXPECTED_DIALOG_MSG) {
-                failures.push(`${WIDGET_REL}: dialog body drifted -- declared ${JSON.stringify(EXPECTED_DIALOG_MSG)}, derived ${JSON.stringify(msg)}`);
             }
             if (ok !== EXPECTED_DIALOG_OK) {
                 failures.push(`${WIDGET_REL}: dialog ok is ${JSON.stringify(ok)}, declared ${JSON.stringify(EXPECTED_DIALOG_OK)}`);
@@ -161,6 +162,18 @@ function checkStatic(sources) {
             if (cancel !== EXPECTED_DIALOG_CANCEL) {
                 failures.push(`${WIDGET_REL}: dialog cancel is ${JSON.stringify(cancel)}, declared ${JSON.stringify(EXPECTED_DIALOG_CANCEL)}`);
             }
+        }
+        // The body rides a `count === 1` branch: both templates must derive
+        // from the close path verbatim (set equality -- a reworded singular
+        // or plural breaks its side, a lost branch breaks the pairing).
+        if (!closePath.includes('`' + EXPECTED_DIALOG_MSG_ONE + '`')) {
+            failures.push(`${WIDGET_REL}: dialog singular body drifted -- declared ${JSON.stringify(EXPECTED_DIALOG_MSG_ONE)}`);
+        }
+        if (!closePath.includes('`' + EXPECTED_DIALOG_MSG_MANY + '`')) {
+            failures.push(`${WIDGET_REL}: dialog plural body drifted -- declared ${JSON.stringify(EXPECTED_DIALOG_MSG_MANY)}`);
+        }
+        if (!/count\s*===\s*1/.test(closePath)) {
+            failures.push(`${WIDGET_REL}: no 'count === 1' branch -- the singular/plural pairing lost its selector`);
         }
     }
 
@@ -323,10 +336,27 @@ function selfTest() {
         }
     }
 
+    // Plant 5 (15-UI-REVIEW Top Fix #3): singular-body drift must go red
+    // naming the singular form.
+    {
+        const mutated = { ...real, [WIDGET_REL]: real[WIDGET_REL].replace('Its 1 tab will close too.', 'Its 1 tabs will close too.') };
+        const landed = mutated[WIDGET_REL].includes('Its 1 tabs will close too.');
+        const result = checkStatic(mutated);
+        if (!landed) {
+            console.error(`${NAME} --self-test: FAIL -- 'singular-body drift' plant did not land`);
+            failed += 1;
+        } else if (!result.some(f => /singular body/.test(f))) {
+            console.error(`${NAME} --self-test: FAIL -- 'singular-body drift' did not go red naming the singular body; got: ${result.join(' | ') || '(no failures at all)'}`);
+            failed += 1;
+        } else {
+            console.log(`  ok  singular-body drift -> red, naming the singular body`);
+        }
+    }
+
     if (failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all four fault directions went red naming the drift`);
+    console.log(`${NAME} --self-test: PASS -- all five fault directions went red naming the drift`);
 }
 
 if (process.argv.includes('--self-test')) {

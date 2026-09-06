@@ -74,7 +74,8 @@ const EXPECTED_COPY = Object.freeze([
     'Retry',
     'Close group',
     'Close Group',
-    'Close "${group.title}"? Its ${count} tab(s) will close too. You can\'t undo this.',
+    'Close "${group.title}"? Its 1 tab will close too. You can\'t undo this.',
+    'Close "${group.title}"? Its ${count} tabs will close too. You can\'t undo this.',
     'Cancel',
     'Group "${closed.name}" closed.',
     'Organising',
@@ -141,11 +142,16 @@ function derivedCopy(sources) {
     if (dialogAt >= 0) {
         const dialog = widgetSrc.slice(dialogAt, dialogAt + 800);
         pushAll(out, dialog.matchAll(/title:\s*'([^']+)'/g));
-        for (const m of dialog.matchAll(/msg:\s*`([^`]+)`/g)) {
-            out.push(m[1]);
-        }
         pushAll(out, dialog.matchAll(/ok:\s*'([^']+)'/g));
         pushAll(out, dialog.matchAll(/cancel:\s*'([^']+)'/g));
+        // 15-UI-REVIEW Top Fix #3: the body rides a `count === 1` branch
+        // declared above the dialog block, so both templates are derived
+        // by shape (every template naming the close-too clause) rather
+        // than by a `msg:`-anchored literal.
+        const msgRegion = widgetSrc.slice(Math.max(0, dialogAt - 600), dialogAt + 800);
+        for (const m of msgRegion.matchAll(/`([^`]*will close too[^`]*)`/g)) {
+            out.push(m[1]);
+        }
     }
     for (const m of widgetSrc.matchAll(/flash\(\s*(`[^`]+`)/g)) {
         out.push(m[1].slice(1, -1));
