@@ -910,7 +910,7 @@ export class OrganisingWidget extends Widget {
     }
 
     protected focusRename(id: string): void {
-        const input = this.node.querySelector(`[data-g="${id}"] .pb-org-rename`) as HTMLInputElement | null;
+        const input = this.node.querySelector(`[data-g="${CSS.escape(id)}"] .pb-org-rename`) as HTMLInputElement | null;
         if (input) {
             input.focus();
             input.select();
