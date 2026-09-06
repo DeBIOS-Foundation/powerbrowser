@@ -10,10 +10,11 @@
  * `!important`. Stock Theia regions are never selected here: the bar is a
  * contribution beside them and resizes none of them.
  *
- * Typeface is delegated, never literal: UI text inherits the Theia theme
- * type, URI captions use the Theia code variable with a system fallback
- * through the `font` shorthand (this sheet carries no typeface literal of
- * its own). Accent appears in exactly the three reserved uses -- pill
+ * Typeface is delegated, never literal: all bar text -- UI strings and
+ * URI captions alike -- inherits the surrounding theme type (the caption
+ * rule's own comment records why even naming the code variable is
+ * deferred: its name trips this sheet's own no-literal-typeface gate).
+ * This sheet carries no typeface literal of its own. Accent appears in
  * focus ring, active toggle segment ink, keyboard-highlighted row wash --
  * and no second hue exists anywhere below.
  */
