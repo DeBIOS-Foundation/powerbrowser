@@ -80,15 +80,15 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GUI-06 | TBD (roadmap) | Pending |
-| GUI-07 | TBD (roadmap) | Pending |
-| GUI-08 | TBD (roadmap) | Pending |
-| GUI-09 | TBD (roadmap) | Pending |
+| GUI-06 | Phase 13 | Pending |
+| GUI-07 | Phase 14 (strip-relocation spike entry criterion runs as Phase 13 exit gate) | Pending |
+| GUI-08 | Phase 15 | Pending |
+| GUI-09 | Phase 14 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 4 total (+ carried items)
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 4
+- Mapped to phases: 4 (GUI-06→13, GUI-07→14, GUI-08→15, GUI-09→14)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-09-06*
