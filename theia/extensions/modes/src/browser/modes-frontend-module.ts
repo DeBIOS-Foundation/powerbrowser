@@ -20,6 +20,8 @@ import { bindViewContribution } from '@theia/core/lib/browser/shell/view-contrib
 import { SHIPPED_MODES } from './mode-descriptors';
 import { ModeService } from './mode-service';
 import { ModesCommandContribution } from './modes-commands';
+import { SetupsService } from './setups-service';
+import { SetupsCommandContribution } from './setups-commands';
 import { OrganisingPlaceholderContribution } from './organising-placeholder-widget';
 
 @injectable()
@@ -44,6 +46,13 @@ export default new ContainerModule(bind => {
     bind(FrontendApplicationContribution).toService(ModeService);
     bind(ModesCommandContribution).toSelf().inSingletonScope();
     bind(CommandContribution).toService(ModesCommandContribution);
+    // GUI-09 (14-03): the named-setups service and the setup commands bind
+    // statically beside the mode binds, in the same voice (D-50). The
+    // dependent-windows contribution joins them in Task 2.
+    bind(SetupsService).toSelf().inSingletonScope();
+    bind(FrontendApplicationContribution).toService(SetupsService);
+    bind(SetupsCommandContribution).toSelf().inSingletonScope();
+    bind(CommandContribution).toService(SetupsCommandContribution);
     // GUI-07 (14-02): the organising placeholder view binds through its own
     // contribution path (never a hardcoded shell area); the Phase-15 canvas
     // replaces the slot behind this same point.
