@@ -142,6 +142,44 @@ function derivedGroupPath(contractSrc) {
     return m ? m[1] : '';
 }
 
+/**
+ * CR-01: host-based Theia sender rule. Theia is always served with a port
+ * (http://127.0.0.1:PORT/ via TheiaService._swap), so the parent wall must
+ * parse the sender URI and compare host -- never an exact-or-slash-prefix
+ * string match against portless http://127.0.0.1. Mirrored here with WHATWG
+ * URL (Services.io.newURI in chrome); the static half below proves the
+ * source uses the host rule, the live cases prove the rule itself accepts
+ * port-bearing senders and rejects suffix forgeries.
+ */
+function mirrorSenderIsTheia(spec) {
+    if (typeof spec !== 'string' || !spec) {
+        return false;
+    }
+    try {
+        const url = new URL(spec);
+        if (url.protocol !== 'http:') {
+            return false;
+        }
+        return url.hostname === '127.0.0.1' || url.hostname === 'localhost';
+    } catch {
+        return false;
+    }
+}
+
+/** Port-bearing positive, suffix negative, empty/undefined reject. */
+const ORIGIN_SENDER_CASES = Object.freeze([
+    { spec: 'http://127.0.0.1:3000/', want: true },
+    { spec: 'http://127.0.0.1:3000/some/path', want: true },
+    { spec: 'http://localhost:3000/', want: true },
+    { spec: 'http://127.0.0.1/', want: true },
+    { spec: 'http://127.0.0.1.evil.com/', want: false },
+    { spec: 'http://127.0.0.1evil.com:3000/', want: false },
+    { spec: 'http://127.0.0.1:3000.evil.com/', want: false },
+    { spec: 'https://127.0.0.1:3000/', want: false },
+    { spec: 'http://example.com/', want: false },
+    { spec: '', want: false },
+]);
+
 /** @returns {string[]} failure messages -- empty means the gate holds. */
 function checkStatic(sources) {
     const failures = [];
@@ -209,6 +247,39 @@ function checkStatic(sources) {
     }
     if (!modelSrc.includes(`'${UNTITLED_FALLBACK}'`)) {
         failures.push(`${MODEL_REL}: the contracted '${UNTITLED_FALLBACK}' default is gone from the model -- New Group copy drifted`);
+    }
+
+    // CR-01: the parent origin wall is host-based, not a string prefix.
+    // A string exact-or-slash-prefix match against portless http://127.0.0.1
+    // rejects every port-bearing Theia sender (100% of production traffic).
+    if (!apiSrc.includes('function groupSenderIsTheia') && !apiSrc.includes('function groupSenderSpecIsTheia')) {
+        failures.push(`${API_REL}: the Theia sender predicate (groupSenderIsTheia/groupSenderSpecIsTheia) is underivable -- the origin anchor drifted`);
+    }
+    if (!apiSrc.includes('schemeIs("http")')) {
+        failures.push(`${API_REL}: the origin scheme check 'schemeIs("http")' is gone -- non-http senders are no longer rejected`);
+    }
+    if (!apiSrc.includes('uri.host')) {
+        failures.push(`${API_REL}: the origin host comparison 'uri.host' is gone -- the wall no longer parses the sender host`);
+    }
+    if (!apiSrc.includes('"localhost"') && !apiSrc.includes("'localhost'")) {
+        failures.push(`${API_REL}: the 'localhost' host acceptance is gone -- loopback senders diverge by hostname`);
+    }
+    if (apiSrc.includes('senderSpec !== GROUP_ACTOR_THEIA_ORIGIN') || apiSrc.includes('senderSpec.startsWith')) {
+        failures.push(`${API_REL}: the string-prefix origin wall is back (senderSpec exact-or-slash-prefix) -- it rejects every port-bearing Theia sender, so the write channel nacks 100% of production traffic`);
+    }
+    if (apiSrc.includes('spec.startsWith("http://127.0.0.1")') || apiSrc.includes('spec.startsWith(GROUP_ACTOR_THEIA_ORIGIN')) {
+        failures.push(`${API_REL}: naive startsWith origin admits suffix forgeries such as 'http://127.0.0.1.evil.com/' -- compare parsed host instead`);
+    }
+    if (!apiSrc.includes('if (!groupSenderIsTheia(actorRef))')) {
+        failures.push(`${API_REL}: handleGroupMutation no longer gates on 'if (!groupSenderIsTheia(actorRef))' -- the W5 second wall is unwired`);
+    }
+    for (const { spec, want } of ORIGIN_SENDER_CASES) {
+        if (mirrorSenderIsTheia(spec) !== want) {
+            failures.push(`${API_REL}: the mirrored Theia sender rule resolves '${spec}' to ${!want} (want ${want}) -- the port-bearing/suffix contract broke`);
+        }
+    }
+    if (mirrorSenderIsTheia(undefined) !== false) {
+        failures.push(`${API_REL}: the mirrored Theia sender rule accepts an undefined actorRef -- empty senders must reject`);
     }
     return failures;
 }
@@ -580,10 +651,77 @@ function selfTest() {
         }
     }
 
+    // Plant 4 (CR-01): the port-blind string-prefix wall must go red naming
+    // the port-bearing rejection. Reintroduces the exact pre-fix shape.
+    {
+        const mutated = {
+            ...real,
+            [API_REL]: real[API_REL]
+                .replace('if (!groupSenderIsTheia(actorRef)) {', 'if (senderSpec !== GROUP_ACTOR_THEIA_ORIGIN && !senderSpec.startsWith(`${GROUP_ACTOR_THEIA_ORIGIN}/`)) {')
+                .replace('function groupSenderSpecIsTheia(', 'function groupSenderSpecIsTheiaRemoved('),
+        };
+        const landed = mutated[API_REL].includes('senderSpec !== GROUP_ACTOR_THEIA_ORIGIN');
+        const result = checkStatic(mutated);
+        if (!landed) {
+            console.error(`${NAME} --self-test: FAIL -- 'string-prefix origin' plant did not land`);
+            failed += 1;
+        } else if (!result.some(f => /port-bearing|string-prefix|senderSpec/.test(f))) {
+            console.error(`${NAME} --self-test: FAIL -- 'string-prefix origin' did not go red naming the port-bearing rejection; got: ${result.join(' | ') || '(no failures at all)'}`);
+            failed += 1;
+        } else {
+            console.log(`  ok  string-prefix origin -> red, naming the port-bearing rejection`);
+        }
+    }
+
+    // Plant 5 (CR-01): a naive startsWith(ORIGIN) repair must go red naming
+    // the suffix forgery it admits.
+    {
+        const mutated = {
+            ...real,
+            [API_REL]: real[API_REL].replace(
+                'return uri.host === "127.0.0.1" || uri.host === "localhost";',
+                'return spec.startsWith("http://127.0.0.1");'
+            ),
+        };
+        const landed = mutated[API_REL].includes('spec.startsWith("http://127.0.0.1")');
+        const result = checkStatic(mutated);
+        if (!landed) {
+            console.error(`${NAME} --self-test: FAIL -- 'naive startsWith origin' plant did not land`);
+            failed += 1;
+        } else if (!result.some(f => /suffix|evil|startsWith|host/.test(f))) {
+            console.error(`${NAME} --self-test: FAIL -- 'naive startsWith origin' did not go red naming the suffix forgery; got: ${result.join(' | ') || '(no failures at all)'}`);
+            failed += 1;
+        } else {
+            console.log(`  ok  naive startsWith origin -> red, naming the suffix forgery`);
+        }
+    }
+
+    // Plant 6 (CR-01): dropping the localhost acceptance must go red naming it.
+    {
+        const mutated = {
+            ...real,
+            [API_REL]: real[API_REL].replace(
+                'return uri.host === "127.0.0.1" || uri.host === "localhost";',
+                'return uri.host === "127.0.0.1";'
+            ),
+        };
+        const landed = !mutated[API_REL].includes('"localhost"') || mutated[API_REL].includes('return uri.host === "127.0.0.1";');
+        const result = checkStatic(mutated);
+        if (!landed) {
+            console.error(`${NAME} --self-test: FAIL -- 'dropped localhost' plant did not land`);
+            failed += 1;
+        } else if (!result.some(f => /localhost/.test(f))) {
+            console.error(`${NAME} --self-test: FAIL -- 'dropped localhost' did not go red naming 'localhost'; got: ${result.join(' | ') || '(no failures at all)'}`);
+            failed += 1;
+        } else {
+            console.log(`  ok  dropped localhost -> red, naming 'localhost'`);
+        }
+    }
+
     if (failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all three fault directions went red naming the drift`);
+    console.log(`${NAME} --self-test: PASS -- all six fault directions went red naming the drift`);
 }
 
 if (process.argv.includes('--self-test')) {

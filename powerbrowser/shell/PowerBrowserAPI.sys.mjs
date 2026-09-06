@@ -104,6 +104,38 @@ const GROUP_ACTOR_THEIA_ORIGIN = "http://127.0.0.1";
 const GROUP_ACTOR_CHILD_MODULE = "chrome://powerbrowser/content/GroupActorChild.sys.mjs";
 const GROUP_ACTOR_PARENT_MODULE = "chrome://powerbrowser/content/PowerBrowserAPI.sys.mjs";
 
+// GUI-08 (15-REVIEW CR-01): host-based Theia sender check. Theia is always
+// served with a port (http://127.0.0.1:PORT/ via TheiaService._swap), so an
+// exact-or-slash-prefix string match against portless http://127.0.0.1 nacks
+// 100% of production traffic. Parse the sender URI and compare host
+// (127.0.0.1/localhost, any port); a naive startsWith(ORIGIN) repair would
+// admit http://127.0.0.1.evil.com/. Pure over the spec string so the
+// persistence gate can mirror it with WHATWG URL.
+function groupSenderSpecIsTheia(spec) {
+  if (typeof spec !== "string" || !spec) {
+    return false;
+  }
+  try {
+    const uri = Services.io.newURI(spec);
+    if (!uri.schemeIs("http")) {
+      return false;
+    }
+    return uri.host === "127.0.0.1" || uri.host === "localhost";
+  } catch {
+    return false;
+  }
+}
+
+function groupSenderIsTheia(actorRef) {
+  let spec = "";
+  try {
+    spec = actorRef?.browsingContext?.currentWindowGlobal?.documentURI?.spec ?? "";
+  } catch {
+    spec = "";
+  }
+  return groupSenderSpecIsTheia(spec);
+}
+
 const TAB_STORE_FILE_NAME = "tabs.sqlite";
 
 // SQL-01 (12-01): sweep bounds. The reconciliation sweep caps its per-run
@@ -1341,16 +1373,7 @@ export const PowerBrowserAPI = Object.freeze({
    * back the sender document for the W5 origin check.
    */
   async handleGroupMutation(data, actorRef) {
-    let senderSpec = "";
-    try {
-      const context = actorRef && actorRef.browsingContext;
-      const windowGlobal = context && context.currentWindowGlobal;
-      const uri = windowGlobal && windowGlobal.documentURI;
-      senderSpec = (uri && uri.spec) || "";
-    } catch {
-      senderSpec = "";
-    }
-    if (senderSpec !== GROUP_ACTOR_THEIA_ORIGIN && !senderSpec.startsWith(`${GROUP_ACTOR_THEIA_ORIGIN}/`)) {
+    if (!groupSenderIsTheia(actorRef)) {
       PowerBrowserAPI.log("error", "[handleGroupMutation] rejecting non-Theia-origin sender");
       return { ok: false, reason: "validation", message: "handleGroupMutation: rejecting non-Theia-origin sender" };
     }
