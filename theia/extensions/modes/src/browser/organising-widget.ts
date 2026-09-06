@@ -142,6 +142,7 @@ export class OrganisingWidget extends Widget {
                 ok: 'Close Group',
                 cancel: 'Cancel',
             });
+            dialog.addClass('pb-org-close-confirm');
             confirmed = await dialog.open();
         } catch (error) {
             console.error('[@powerbrowser/modes] close-group dialog failed:', error);
