@@ -3774,6 +3774,17 @@ run_own_checks() {
     "gui08-persistence-roundtrip|node $REPO_ROOT/scripts/verify-gui08-persistence-roundtrip.mjs"
     "gui08-persistence-roundtrip-self-test|node $REPO_ROOT/scripts/verify-gui08-persistence-roundtrip.mjs --self-test"
 
+    # NEW (15-02): GUI-08's canvas-geometry gate. Derives canvas hooks,
+    # zoom/min/tray/card consts, the thumbnail-fallback shape, and the
+    # panorama command registry at check time and compares as set equality
+    # against one EXPECTED const; live drag/auto-box/close halves ride as
+    # HELD-OUT backstops, honestly reserved for the full suite. Honestly
+    # --quick: text reads only. No build, no browser, no display, no
+    # network. The self-test rides alongside for the reason every other
+    # self-test row in this array gives.
+    "gui08-canvas-geometry|node $REPO_ROOT/scripts/verify-gui08-canvas-geometry.mjs"
+    "gui08-canvas-geometry-self-test|node $REPO_ROOT/scripts/verify-gui08-canvas-geometry.mjs --self-test"
+
     # NEW (01-07): MIG-04's user-facing-copy gate. Static -- it reads
     # TheiaService.sys.mjs, never a built artifact -- so it is honestly
     # --quick, and that placement is the point: a leaked pref key must cost
