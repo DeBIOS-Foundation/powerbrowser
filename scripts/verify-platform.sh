@@ -4319,6 +4319,32 @@ run_own_checks() {
     # --quick per the function comment above: the extension's own tsc over
     # its own project, --noEmit, seconds, no build/browser/display/network.
     "tab-uris-typecheck|check_tab_uris_typecheck"
+    # NEW (16-01): the @OpenCode tracer gate. Derives composition, agent
+    # id, spawn args, ACP method sets, and the staging API from the tree
+    # at check time as set equality against one EXPECTED const, then
+    # enforces the prohibitions behaviorally against the compiled
+    # extension lib -- and, mandatorily, probes the installed `opencode
+    # acp` binary live over stdio (initialize, session/new, four prompts
+    # on one session asserting a single stable sessionId, new session for
+    # a new chat, no session/load anywhere; gated-config edit asks
+    # captured-then-cancelled with disk untouched, one allow path
+    # observing the delegated write). Absent binary fails the gate; the
+    # probe authors its own config in a mkdtemp cwd and never touches
+    # user configuration.
+    #
+    # Honestly --quick with one declared exception: text reads plus a
+    # local child spawn with live model turns (typically under a minute).
+    # No build (requires the extension already built), no browser, no
+    # display. The core-diff half shells to diff-theia-core.sh --quick
+    # through nix, where yarn lives.
+    #
+    # ai-opencode-tracer-self-test rides alongside for the reason every
+    # other self-test row in this array gives: it proves the unmutated
+    # control green first, then requires red naming the drift for a
+    # missing ChatAgent bind, a permissive allow-always default, an
+    # outside-root pass, and a redaction miss.
+    "ai-opencode-tracer|node $REPO_ROOT/scripts/verify-opencode-tracer.mjs"
+    "ai-opencode-tracer-self-test|node $REPO_ROOT/scripts/verify-opencode-tracer.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
