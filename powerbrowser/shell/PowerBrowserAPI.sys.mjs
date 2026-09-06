@@ -44,7 +44,7 @@ const pendingTimers = new Set();
 // between the DDL markers at check time and fails distinctly when they are
 // absent -- the DDL lives here once, never as a copy. No private, window,
 // pinned, or credential-shaped column exists by construction.
-const TAB_STORE_SCHEMA_HEAD = 1;
+const TAB_STORE_SCHEMA_HEAD = 2;
 const TABS_STORE_V1_DDL = /* PB-SQL-TABS-DDL-START */ `CREATE TABLE tabs (
   uri         TEXT PRIMARY KEY CHECK(length(uri) > 0),
   url         TEXT NOT NULL,
@@ -53,6 +53,35 @@ const TABS_STORE_V1_DDL = /* PB-SQL-TABS-DDL-START */ `CREATE TABLE tabs (
 );
 
 CREATE INDEX idx_tabs_last_active ON tabs (last_active);` /* PB-SQL-TABS-DDL-END */;
+
+// GUI-08 (15-01): v2 groups schema carried verbatim from 15-RESEARCH.md. The
+// persistence gate (scripts/verify-gui08-persistence-roundtrip.mjs) extracts
+// the text between the GROUPS markers at check time -- the DDL lives here
+// once, never as a copy. group_id/thumbnail ride the tabs table as NULLable
+// columns so ungrouped rows and text-fallback cards are plain NULLs, never
+// sentinel strings.
+const GROUPS_STORE_V2_DDL = /* PB-SQL-GROUPS-DDL-START */ `CREATE TABLE groups (
+  id          TEXT PRIMARY KEY CHECK(length(id) > 0),
+  title       TEXT NOT NULL DEFAULT 'Untitled group',
+  x           INTEGER NOT NULL DEFAULT 0 CHECK(x >= 0),
+  y           INTEGER NOT NULL DEFAULT 0 CHECK(y >= 0),
+  w           INTEGER NOT NULL DEFAULT 400 CHECK(w >= 200),
+  h           INTEGER NOT NULL DEFAULT 300 CHECK(h >= 144),
+  is_active   INTEGER NOT NULL DEFAULT 0 CHECK(is_active IN (0, 1))
+);
+CREATE INDEX idx_groups_active ON groups (is_active);
+ALTER TABLE tabs ADD COLUMN group_id TEXT NULL;
+CREATE INDEX idx_tabs_group ON tabs (group_id);
+ALTER TABLE tabs ADD COLUMN thumbnail TEXT NULL;` /* PB-SQL-GROUPS-DDL-END */;
+
+// GUI-08 (15-01): writer-side bounds for group fields. The title cap mirrors
+// the contracted rename rule (15-UI-SPEC.md); bounds clamp to a sane max so
+// a malformed actor message can never park a box off-field; thumbnails over
+// the byte cap drop to the contracted text fallback instead of bloating the
+// store (15-RESEARCH.md Pitfall 4).
+const GROUP_TITLE_MAX = 60;
+const GROUP_BOUNDS_MAX = 10000;
+const TAB_STORE_THUMBNAIL_MAX_CHARS = 200000;
 
 const TAB_STORE_FILE_NAME = "tabs.sqlite";
 
@@ -620,7 +649,13 @@ export const PowerBrowserAPI = Object.freeze({
       );
     }
     if (schemaVersion < TAB_STORE_SCHEMA_HEAD) {
-      await PowerBrowserAPI.migrateTabStoreToV1(conn);
+      // GUI-08 (15-01): chained forward migration. v0 runs v1 first (which
+      // stamps exactly 1, never the head), then v2; a v1 store runs v2 only.
+      // Sequential top-level transactions, never nested (CR-02).
+      if (schemaVersion < 1) {
+        await PowerBrowserAPI.migrateTabStoreToV1(conn);
+      }
+      await PowerBrowserAPI.migrateTabStoreToV2(conn);
     }
     tabStoreConn = conn;
     return conn;
@@ -632,6 +667,10 @@ export const PowerBrowserAPI = Object.freeze({
    * never a copy) plus the version bump run inside exactly one
    * executeTransaction. A database whose work is already done is a no-op
    * success that only stamps the version.
+   *
+   * GUI-08 (15-01): stamps exactly 1, never TAB_STORE_SCHEMA_HEAD -- under
+   * head 2 a v0 store must fall through to migrateTabStoreToV2 afterwards,
+   * and stamping the head here would skip the groups shape entirely.
    */
   async migrateTabStoreToV1(conn) {
     const statements = TABS_STORE_V1_DDL.split(";")
@@ -645,7 +684,7 @@ export const PowerBrowserAPI = Object.freeze({
     const tableDone = await conn.tableExists("tabs");
     const indexDone = await conn.indexExists("idx_tabs_last_active");
     if (tableDone && indexDone) {
-      await conn.setSchemaVersion(TAB_STORE_SCHEMA_HEAD);
+      await conn.setSchemaVersion(1);
       return;
     }
     await conn.executeTransaction(async () => {
@@ -655,8 +694,77 @@ export const PowerBrowserAPI = Object.freeze({
       if (!indexDone) {
         await conn.execute(createIndex);
       }
+      await conn.setSchemaVersion(1);
+    });
+  },
+
+  /**
+   * GUI-08 (15-01): the single forward migration (v1 to v2). Same discipline
+   * as v1: marker-delimited DDL split (never a copy), tableExists/indexExists
+   * pre-checks plus a column check per ADD COLUMN (no PRAGMA-shortcut
+   * stamping), missing pieces plus the version bump inside exactly one
+   * executeTransaction, newer-than-head refused by the caller leaving the
+   * file untouched. Application order is load-bearing: the groups table
+   * first, then the tabs columns, then the indexes over them.
+   */
+  async migrateTabStoreToV2(conn) {
+    const statements = GROUPS_STORE_V2_DDL.split(";")
+      .map(s => s.trim())
+      .filter(Boolean);
+    const findStatement = pattern => {
+      const hit = statements.find(s => pattern.test(s));
+      if (!hit) {
+        throw new Error("migrateTabStoreToV2: DDL marker content missing a required statement");
+      }
+      return hit;
+    };
+    const createGroups = findStatement(/^create table groups\b/i);
+    const groupsActiveIndex = findStatement(/^create index idx_groups_active\b/i);
+    const addGroupId = findStatement(/^alter table tabs add column group_id\b/i);
+    const tabsGroupIndex = findStatement(/^create index idx_tabs_group\b/i);
+    const addThumbnail = findStatement(/^alter table tabs add column thumbnail\b/i);
+    const groupsDone = await conn.tableExists("groups");
+    const activeIndexDone = await conn.indexExists("idx_groups_active");
+    const groupIdDone = await PowerBrowserAPI.tabStoreHasColumn(conn, "tabs", "group_id");
+    const groupIndexDone = await conn.indexExists("idx_tabs_group");
+    const thumbnailDone = await PowerBrowserAPI.tabStoreHasColumn(conn, "tabs", "thumbnail");
+    if (groupsDone && activeIndexDone && groupIdDone && groupIndexDone && thumbnailDone) {
+      await conn.setSchemaVersion(TAB_STORE_SCHEMA_HEAD);
+      return;
+    }
+    await conn.executeTransaction(async () => {
+      if (!groupsDone) {
+        await conn.execute(createGroups);
+      }
+      if (!groupIdDone) {
+        await conn.execute(addGroupId);
+      }
+      if (!thumbnailDone) {
+        await conn.execute(addThumbnail);
+      }
+      if (!activeIndexDone) {
+        await conn.execute(groupsActiveIndex);
+      }
+      if (!groupIndexDone) {
+        await conn.execute(tabsGroupIndex);
+      }
       await conn.setSchemaVersion(TAB_STORE_SCHEMA_HEAD);
     });
+  },
+
+  /**
+   * GUI-08 (15-01): column pre-check for the v2 migration. Reads back
+   * PRAGMA table_info over the open connection; the table name is always an
+   * internal literal at the call site, never actor input.
+   */
+  async tabStoreHasColumn(conn, table, column) {
+    const rows = await conn.execute(`PRAGMA table_info(${table})`);
+    for (const row of rows) {
+      if (row.getString(1) === column) {
+        return true;
+      }
+    }
+    return false;
   },
 
   /**
@@ -734,6 +842,334 @@ export const PowerBrowserAPI = Object.freeze({
         url: row.getString(1),
         title: row.getString(2),
         last_active: row.getInt64(3),
+      }));
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * GUI-08 (15-01): normalises one group row the way writeTabRow binds its
+   * values -- id must be non-empty (rejected loudly naming method + id),
+   * title trimmed and cut at the contracted 60-char cap (empty falls back
+   * to the DDL default, never a blank header), bounds finite numbers >= 0
+   * clamped to the sane max (w/h additionally floored at the DDL minimums
+   * so the row can never violate its own CHECKs). Throws, never stores.
+   */
+  normalizeGroupRow(method, { id, title, x, y, w, h, isActive }) {
+    if (typeof id !== "string" || !id) {
+      throw new Error(`${method}: refusing group with empty id`);
+    }
+    const cleanTitle = String(title ?? "Untitled group").trim().slice(0, GROUP_TITLE_MAX) || "Untitled group";
+    const at = (name, value, floor) => {
+      const n = Number(value ?? floor);
+      if (!Number.isFinite(n)) {
+        throw new Error(`${method}: refusing non-finite ${name} for ${id}`);
+      }
+      return Math.min(Math.max(Math.floor(n), floor), GROUP_BOUNDS_MAX);
+    };
+    return {
+      id,
+      title: cleanTitle,
+      x: at("x", x, 0),
+      y: at("y", y, 0),
+      w: at("w", w, 200),
+      h: at("h", h, 144),
+      is_active: isActive ? 1 : 0,
+    };
+  },
+
+  /**
+   * GUI-08 (15-01): the single group write path, following writeTabRow
+   * (bound params only, INSERT ... ON CONFLICT ... DO UPDATE, loud errors
+   * naming method + key). Groups carry no private-window surface -- tab
+   * URIs do, and those are validated at setTabGroupId/writeThumbnail below.
+   */
+  async writeGroupRow({ id, title, x, y, w, h, isActive }) {
+    const group = PowerBrowserAPI.normalizeGroupRow("writeGroupRow", { id, title, x, y, w, h, isActive });
+    const conn = await PowerBrowserAPI.openTabStore();
+    try {
+      await conn.executeCached(
+        `INSERT INTO groups (id, title, x, y, w, h, is_active) VALUES (:id, :title, :x, :y, :w, :h, :is_active)
+         ON CONFLICT (id) DO UPDATE SET title=excluded.title, x=excluded.x, y=excluded.y, w=excluded.w, h=excluded.h, is_active=excluded.is_active`,
+        group
+      );
+    } catch (err) {
+      throw new Error(`writeGroupRow: upsert failed for ${id}: ${err && err.message ? err.message : err}`);
+    }
+    return "written";
+  },
+
+  /**
+   * GUI-08 (15-01): dissolves one group by opaque id. Member tabs are
+   * ungrouped (group_id NULL) in the same transaction -- a dissolve never
+   * orphans membership references -- then the row is removed. Tabs survive;
+   * the tab-CLOSING path is closeGroupRows below. Bound params, loud errors.
+   */
+  async removeGroupRow(id) {
+    if (typeof id !== "string" || !id) {
+      throw new Error("removeGroupRow: refusing group with empty id");
+    }
+    const conn = await PowerBrowserAPI.openTabStore();
+    try {
+      await conn.executeTransaction(async () => {
+        await conn.execute("UPDATE tabs SET group_id = NULL WHERE group_id = :id", { id });
+        await conn.execute("DELETE FROM groups WHERE id = :id", { id });
+      });
+    } catch (err) {
+      throw new Error(`removeGroupRow: dissolve failed for ${id}: ${err && err.message ? err.message : err}`);
+    }
+    return "removed";
+  },
+
+  /**
+   * GUI-08 (15-01): assigns one tab row to a group (or NULL to ungroup),
+   * following writeTabRow's bound-param + loud-error shape. Both keys are
+   * opaque: the URI must be a known row and a non-null group id must be a
+   * known group, else rejected loudly naming method + URI and never stored.
+   * Private-window tabs never have rows (writeTabRow skips them before the
+   * upsert), so the known-row check is also the private-exclusion gate here.
+   */
+  async setTabGroupId(uri, groupId) {
+    if (typeof uri !== "string" || !uri) {
+      throw new Error("setTabGroupId: refusing empty tab URI");
+    }
+    const conn = await PowerBrowserAPI.openTabStore();
+    try {
+      const known = await conn.execute("SELECT 1 FROM tabs WHERE uri = :uri", { uri });
+      if (!known.length) {
+        throw new Error(`setTabGroupId: unknown tab URI ${uri}`);
+      }
+      if (groupId !== null && groupId !== undefined) {
+        if (typeof groupId !== "string" || !groupId) {
+          throw new Error(`setTabGroupId: refusing empty group id for ${uri}`);
+        }
+        const group = await conn.execute("SELECT 1 FROM groups WHERE id = :id", { id: groupId });
+        if (!group.length) {
+          throw new Error(`setTabGroupId: unknown group ${groupId} for ${uri}`);
+        }
+      }
+      await conn.execute("UPDATE tabs SET group_id = :groupId WHERE uri = :uri", {
+        groupId: groupId ?? null,
+        uri,
+      });
+    } catch (err) {
+      if (err && err.message && err.message.startsWith("setTabGroupId:")) {
+        throw err;
+      }
+      throw new Error(`setTabGroupId: assign failed for ${uri}: ${err && err.message ? err.message : err}`);
+    }
+    return "assigned";
+  },
+
+  /**
+   * GUI-08 (15-01): marks exactly one group active (15-RESEARCH.md A6:
+   * is_active column, writer-enforced invariant). Clears the others in the
+   * same transaction, so the store can never hold zero or two active rows
+   * after this resolves. Rejects unknown ids loudly, never stored.
+   */
+  async setActiveGroup(id) {
+    if (typeof id !== "string" || !id) {
+      throw new Error("setActiveGroup: refusing empty group id");
+    }
+    const conn = await PowerBrowserAPI.openTabStore();
+    try {
+      const known = await conn.execute("SELECT 1 FROM groups WHERE id = :id", { id });
+      if (!known.length) {
+        throw new Error(`setActiveGroup: unknown group ${id}`);
+      }
+      await conn.executeTransaction(async () => {
+        await conn.execute("UPDATE groups SET is_active = 0");
+        await conn.execute("UPDATE groups SET is_active = 1 WHERE id = :id", { id });
+      });
+    } catch (err) {
+      if (err && err.message && err.message.startsWith("setActiveGroup:")) {
+        throw err;
+      }
+      throw new Error(`setActiveGroup: activate failed for ${id}: ${err && err.message ? err.message : err}`);
+    }
+    return "active";
+  },
+
+  /**
+   * GUI-08 (15-01): stores one PNG last-view snapshot (data URL) on a known
+   * tab row, following writeTabRow's bound-param + loud-error shape. NULL
+   * clears back to the contracted text fallback; bytes over the cap drop to
+   * NULL (same fallback) instead of bloating the store. Unknown URIs reject
+   * loudly -- private-window tabs never have rows, so this is also the
+   * private-exclusion gate for capture.
+   */
+  async writeThumbnail(uri, dataUrl) {
+    if (typeof uri !== "string" || !uri) {
+      throw new Error("writeThumbnail: refusing empty tab URI");
+    }
+    const conn = await PowerBrowserAPI.openTabStore();
+    try {
+      const known = await conn.execute("SELECT 1 FROM tabs WHERE uri = :uri", { uri });
+      if (!known.length) {
+        throw new Error(`writeThumbnail: unknown tab URI ${uri}`);
+      }
+      if (dataUrl === null || dataUrl === undefined) {
+        await conn.execute("UPDATE tabs SET thumbnail = NULL WHERE uri = :uri", { uri });
+        return "cleared";
+      }
+      if (String(dataUrl).length > TAB_STORE_THUMBNAIL_MAX_CHARS) {
+        await conn.execute("UPDATE tabs SET thumbnail = NULL WHERE uri = :uri", { uri });
+        return "dropped-over-cap";
+      }
+      await conn.execute("UPDATE tabs SET thumbnail = :thumbnail WHERE uri = :uri", {
+        thumbnail: String(dataUrl),
+        uri,
+      });
+    } catch (err) {
+      if (err && err.message && err.message.startsWith("writeThumbnail:")) {
+        throw err;
+      }
+      throw new Error(`writeThumbnail: store failed for ${uri}: ${err && err.message ? err.message : err}`);
+    }
+    return "written";
+  },
+
+  /**
+   * GUI-08 (15-01): closes exactly one group's tabs and removes the box
+   * (the ONLY destructive group path). Each member tab closes through the
+   * stock tab container first -- the existing TabClose triggers then do row
+   * cleanup through the one path -- with a deterministic row DELETE per
+   * member in the same transaction as the group removal, so a tab without a
+   * live browser (or a failed close) still leaves no orphan row. Loud errors
+   * naming method + id. Unknown ids reject before touching anything.
+   */
+  async closeGroupRows(id) {
+    if (typeof id !== "string" || !id) {
+      throw new Error("closeGroupRows: refusing empty group id");
+    }
+    const conn = await PowerBrowserAPI.openTabStore();
+    let members = [];
+    try {
+      const group = await conn.execute("SELECT 1 FROM groups WHERE id = :id", { id });
+      if (!group.length) {
+        throw new Error(`closeGroupRows: unknown group ${id}`);
+      }
+      const rows = await conn.execute("SELECT uri FROM tabs WHERE group_id = :id", { id });
+      members = rows.map(row => row.getString(0));
+    } catch (err) {
+      if (err && err.message && err.message.startsWith("closeGroupRows:")) {
+        throw err;
+      }
+      throw new Error(`closeGroupRows: member read failed for ${id}: ${err && err.message ? err.message : err}`);
+    }
+    for (const uri of members) {
+      try {
+        PowerBrowserAPI.closeStockTabByUri(uri);
+      } catch (err) {
+        PowerBrowserAPI.log("error", `[closeGroupRows] stock close failed for ${uri}: ${err && err.message ? err.message : err}`);
+      }
+    }
+    try {
+      await conn.executeTransaction(async () => {
+        await conn.execute("DELETE FROM tabs WHERE group_id = :id", { id });
+        await conn.execute("DELETE FROM groups WHERE id = :id", { id });
+      });
+    } catch (err) {
+      throw new Error(`closeGroupRows: close failed for ${id}: ${err && err.message ? err.message : err}`);
+    }
+    return "closed";
+  },
+
+  /**
+   * GUI-08 (15-01): best-effort stock-tab close by opaque URI key, through
+   * the same window enumeration the tab-store triggers use. Returns true
+   * when a live tab matched and was asked to close. Never throws -- the
+   * caller logs and relies on its deterministic row DELETE.
+   */
+  closeStockTabByUri(uri) {
+    const stockWindows = Services.wm.getEnumerator("navigator:browser");
+    while (stockWindows.hasMoreElements()) {
+      const win = stockWindows.getNext();
+      const tabs = (win.gBrowser && win.gBrowser.tabs) || [];
+      for (const tab of tabs) {
+        const browser = tab && tab.linkedBrowser;
+        const spec = browser && browser.currentURI && browser.currentURI.spec;
+        if (spec && PowerBrowserAPI.browserTabKey(spec) === uri) {
+          win.gBrowser.removeTab(tab);
+          return true;
+        }
+      }
+    }
+    return false;
+  },
+
+  /**
+   * GUI-08 (15-01): group point read by opaque id. Never-throw read
+   * convention: resolves null on any failure, matching readTabRow above.
+   * Shared by the parent actor and the Theia reader contract.
+   */
+  async readGroupRow(id) {
+    try {
+      const conn = await PowerBrowserAPI.openTabStore();
+      const rows = await conn.execute(
+        "SELECT id, title, x, y, w, h, is_active FROM groups WHERE id = :id",
+        { id }
+      );
+      if (!rows.length) {
+        return null;
+      }
+      return {
+        id: rows[0].getString(0),
+        title: rows[0].getString(1),
+        x: rows[0].getInt32(2),
+        y: rows[0].getInt32(3),
+        w: rows[0].getInt32(4),
+        h: rows[0].getInt32(5),
+        is_active: rows[0].getInt32(6),
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * GUI-08 (15-01): lists all group rows in insertion order. Never-throw:
+   * resolves [] on any failure. Shared by the parent actor and the Theia
+   * reader contract.
+   */
+  async listGroupRows() {
+    try {
+      const conn = await PowerBrowserAPI.openTabStore();
+      const rows = await conn.execute("SELECT id, title, x, y, w, h, is_active FROM groups ORDER BY rowid");
+      return rows.map(row => ({
+        id: row.getString(0),
+        title: row.getString(1),
+        x: row.getInt32(2),
+        y: row.getInt32(3),
+        w: row.getInt32(4),
+        h: row.getInt32(5),
+        is_active: row.getInt32(6),
+      }));
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * GUI-08 (15-01): lists one group's tab rows in URI order (the sweep's
+   * set-equality order, matching listTabRows). Never-throw: resolves [] on
+   * any failure. Shared by the parent actor and the Theia reader contract.
+   */
+  async getGroupTabs(groupId) {
+    try {
+      const conn = await PowerBrowserAPI.openTabStore();
+      const rows = await conn.execute(
+        "SELECT uri, url, title, last_active, group_id, thumbnail FROM tabs WHERE group_id = :groupId ORDER BY uri",
+        { groupId }
+      );
+      return rows.map(row => ({
+        uri: row.getString(0),
+        url: row.getString(1),
+        title: row.getString(2),
+        last_active: row.getInt64(3),
+        group_id: row.getString(4),
+        thumbnail: row.getString(5),
       }));
     } catch {
       return [];
@@ -979,6 +1415,12 @@ export const PowerBrowserAPI = Object.freeze({
     // transaction and the row inserts follow in a second one -- sequential,
     // never nested.
     await PowerBrowserAPI.migrateTabStoreToV1(conn);
+    // GUI-08 (15-01, 15-RESEARCH.md A3): the v2 shape rebuilds alongside --
+    // group rows rebuild to EMPTY (titles dropped, never invented) and the
+    // restored tab rows below carry no group_id, so every tab lands
+    // ungrouped. The corrupt copy above stays the only record of the lost
+    // membership.
+    await PowerBrowserAPI.migrateTabStoreToV2(conn);
     await conn.executeTransaction(async () => {
       for (const row of restoreRows) {
         await conn.execute(
