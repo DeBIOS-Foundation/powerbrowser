@@ -9,7 +9,7 @@
  * instead of duplicating the string.
  */
 
-import { TabQueryRow } from '@powerbrowser/tab-uris/lib/node/tab-query-service';
+import type { TabQueryRow } from '@powerbrowser/tab-uris/lib/node/tab-query-service';
 
 /** JSON-RPC path the backend suggestion handler serves on. */
 export const CHROME_SUGGESTION_PATH = '/services/powerbrowser/chrome-suggestions';

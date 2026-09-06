@@ -12,7 +12,7 @@ import { CommandRegistry } from '@theia/core/lib/common';
 import URI from '@theia/core/lib/common/uri';
 import { NavigationLocationService } from '@theia/editor/lib/browser/navigation/navigation-location-service';
 import pDebounce from 'p-debounce';
-import { TabQueryRow } from '@powerbrowser/tab-uris/lib/node/tab-query-service';
+import type { TabQueryRow } from '@powerbrowser/tab-uris/lib/node/tab-query-service';
 import {
     CHROME_BAR_BACK_COMMAND_ID,
     CHROME_BAR_FORWARD_COMMAND_ID,
