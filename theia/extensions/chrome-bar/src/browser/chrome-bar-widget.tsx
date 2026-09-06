@@ -49,7 +49,9 @@ function typedAddressTargetOf(text: string): string | undefined {
  *
  * A React contribution added once at startup to the top shell area -- the
  * plain Lumino panel above the main dock, so no core patch and no dock
- * surgery (13-RESEARCH.md Pattern 1). Structural class hooks below are the
+ * surgery (13-RESEARCH.md Pattern 1). Ratified Variant-A order is menubar,
+ * chrome bar, tab strip, workarea, status bar (13-UI-SPEC.md Bar placement
+ * and order). Structural class hooks below are the
  * style layer's contract (chrome-bar.css targets them verbatim): bar,
  * buttons, pill, input, dropdown, rows, toggle, segments, tab count.
  *
