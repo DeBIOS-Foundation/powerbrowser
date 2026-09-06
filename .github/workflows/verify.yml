@@ -3,12 +3,21 @@
 # generate, then generate --check, then the whole --quick table through the
 # one driver scripts/verify-platform.sh -- no build, no browser, no display.
 #
-# Follows the rebase-upstream.yml precedents: no Nix (a GitHub-hosted runner
-# cannot honestly provide the Gecko toolchain closure), no tier-3 build, and
-# the WR-09 token posture (T-06-06) -- contents: read plus
-# persist-credentials: false, so the token is neither powerful nor present
-# while third-party trees (the 1.1 GB upstream clone some checks reference)
-# are on disk.
+# Follows the rebase-upstream.yml precedents: no tier-3 build, and the WR-09
+# token posture (T-06-06) -- contents: read plus persist-credentials: false,
+# so the token is neither powerful nor present while third-party trees (the
+# 1.1 GB upstream clone some checks reference) are on disk.
+#
+# This workflow DOES use Nix, and the earlier "no Nix in CI" note here was
+# too broad: that constraint is about the *Gecko toolchain closure*, which a
+# GitHub-hosted runner cannot honestly provide and which this workflow never
+# needs. The `.#theia` shell is the small Node-side one, and it is required
+# rather than convenient -- scripts/generate.mjs rasterises brand/mark.svg
+# through `inkscape`, the generated-identity row byte-compares the result
+# against the tracked PNGs, and only the pinned inkscape 1.4.4 reproduces
+# those bytes. Before this, the job had no inkscape at all and failed at the
+# 16-pixel icon; a distro package would instead have failed byte identity,
+# which is the worse failure because it looks like a real defect.
 
 name: Verify static layers
 
@@ -35,6 +44,13 @@ jobs:
         with:
           persist-credentials: false
 
+      # The three steps below run inside `nix develop .#theia`, so the shell
+      # the flake pins -- not whatever the runner image happens to carry --
+      # supplies node and inkscape. Pinned by SHA like every other action
+      # here. No Gecko closure is fetched: this is the Node-side shell only.
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+
       # THE ORDER OF THE NEXT THREE STEPS IS LOAD-BEARING (plan 02-06).
       # generated/ is git-ignored, so a fresh clone -- which every run of
       # this workflow is -- has no such directory. Running the freshness
@@ -43,10 +59,10 @@ jobs:
       # gate its readers learn to skip. Generate first, then --check asserts
       # idempotence (a second run produces the same bytes as the first).
       - name: Generate the derived build surfaces
-        run: node scripts/generate.mjs
+        run: nix develop .#theia --command node scripts/generate.mjs
 
       - name: Check the generated tree is fresh
-        run: node scripts/generate.mjs --check
+        run: nix develop .#theia --command node scripts/generate.mjs --check
 
       # The whole static table through the one driver -- the same gate
       # developers run locally before committing. Includes the Phase 6 rows
@@ -56,7 +72,7 @@ jobs:
       # extension-pins, verify-upstream-pins) plus every other honestly
       # --quick check the registry carries.
       - name: Run the static verification table
-        run: scripts/verify-platform.sh --quick
+        run: nix develop .#theia --command scripts/verify-platform.sh --quick
 
       # DELIBERATELY OUT OF THIS WORKFLOW -- runtime-behind-build rows CI
       # cannot honestly run (no tier-3 binary, no display, no network
