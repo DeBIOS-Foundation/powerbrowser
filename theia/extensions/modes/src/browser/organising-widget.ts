@@ -131,14 +131,18 @@ export class OrganisingWidget extends Widget {
             return;
         }
         const count = this.model.getTabs(id).length;
+        const closeMsg = count === 1
+            ? `Close "${group.title}"? Its 1 tab will close too. You can't undo this.`
+            : `Close "${group.title}"? Its ${count} tabs will close too. You can't undo this.`;
         let confirmed: boolean | undefined = false;
         try {
-            confirmed = await new ConfirmDialog({
+            const dialog = new ConfirmDialog({
                 title: 'Close Group',
-                msg: `Close "${group.title}"? Its ${count} tab(s) will close too. You can't undo this.`,
+                msg: closeMsg,
                 ok: 'Close Group',
                 cancel: 'Cancel',
-            }).open();
+            });
+            confirmed = await dialog.open();
         } catch (error) {
             console.error('[@powerbrowser/modes] close-group dialog failed:', error);
             return;
