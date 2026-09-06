@@ -3763,6 +3763,17 @@ run_own_checks() {
     "gui09-dependent-window-content|node $REPO_ROOT/scripts/verify-dependent-window-content.mjs"
     "gui09-dependent-window-content-self-test|node $REPO_ROOT/scripts/verify-dependent-window-content.mjs --self-test"
 
+    # NEW (15-01): GUI-08's persistence-roundtrip gate. Derives the groups
+    # DDL, the schema head, the group write/read method names, GROUP_PATH,
+    # and the title cap at check time and runs a mkdtemp-stage migration +
+    # CRUD + quarantine + downgrade-refusal roundtrip through the stdlib
+    # `node:sqlite` engine (second-writer carve-out). Honestly --quick: text
+    # reads plus a mkdtemp fixture only. No build, no browser, no display,
+    # no network. The self-test rides alongside for the reason every other
+    # self-test row in this array gives.
+    "gui08-persistence-roundtrip|node $REPO_ROOT/scripts/verify-gui08-persistence-roundtrip.mjs"
+    "gui08-persistence-roundtrip-self-test|node $REPO_ROOT/scripts/verify-gui08-persistence-roundtrip.mjs --self-test"
+
     # NEW (01-07): MIG-04's user-facing-copy gate. Static -- it reads
     # TheiaService.sys.mjs, never a built artifact -- so it is honestly
     # --quick, and that placement is the point: a leaked pref key must cost
