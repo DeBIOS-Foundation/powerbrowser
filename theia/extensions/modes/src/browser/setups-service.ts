@@ -575,7 +575,10 @@ export class SetupsService implements FrontendApplicationContribution {
             return shipped.label;
         }
         const custom = this.modes.getCustomModes().find(row => row.id === modeId);
-        return custom?.name ?? modeId;
+        // The stored id is never shown (14-UI-SPEC.md Copywriting Contract):
+        // an unknown id falls back to the shipped Browsing label, mirroring
+        // the restore path's Browsing fallback.
+        return custom?.name ?? 'Browsing';
     }
 
     protected isDuplicateName(name: string): boolean {
