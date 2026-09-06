@@ -702,11 +702,17 @@ export class SetupsService implements FrontendApplicationContribution {
             return undefined;
         }
         const picked = await this.quickInput.showQuickPick(
-            rows.map(row => ({
-                label: row.current ? `$(check) ${row.name}` : row.name,
-                description: row.meta,
-                id: row.name,
-            })),
+            rows.map(row => {
+                // Names are user data stored verbatim, but `$(...)` renders
+                // a stock icon in labels -- neutralise the sequence for
+                // display only; the stored name and row id stay exact.
+                const display = row.name.replace(/\$\(/g, '(');
+                return {
+                    label: row.current ? `$(check) ${display}` : display,
+                    description: row.meta,
+                    id: row.name,
+                };
+            }),
             { placeholder: placeHolder }
         );
         return picked?.id;
