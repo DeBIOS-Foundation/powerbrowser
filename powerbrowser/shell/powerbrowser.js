@@ -60,8 +60,38 @@ document.addEventListener(
     // chrome and has no tabbrowser, so it presents its single browser through
     // that same shape -- also the seed of the chrome-owned tab model the
     // post-4.0 bridge needs.
+    //
+    // 14.1.1-04 (G-14.1.1-19): the three members beside `tabs` are the exact
+    // set upstream CALLS on a gBrowser receiver at the pinned tag
+    // (LinkHandlerParent.sys.mjs and browser-custom-element.mjs; ContextMenuParent
+    // calls none today and is scanned so a rebase that adds one is caught).
+    // Those call sites optional-chain the RECEIVER, not the member, so a
+    // non-nullish stand-in missing the member threw once per overlay creation
+    // and buried the next real chrome-side error in the same log.
+    // scripts/verify-shell-gbrowser-standin.mjs re-derives both sides at
+    // --quick time and compares as set equality, so an upstream rebase adding a
+    // call and a member deleted or added here each go red by name.
+    //
+    // None of them synthesises a tab object: a fabricated tab handed to
+    // LinkHandlerParent or ContextMenuParent would let privileged actors act on
+    // a tab that does not exist.
     browserElement.permanentKey = PowerBrowserAPI.createPermanentKey();
-    window.gBrowser = { tabs: [{ linkedBrowser: browserElement }] };
+    window.gBrowser = {
+      tabs: [{ linkedBrowser: browserElement }],
+      // No tab strip here, so no browser has a tab record. Returning null is
+      // what makes the upstream optional chain's condition false and its caller
+      // take the no-tab branch -- the behaviour that already applied before the throw.
+      getTabForBrowser() {
+        return null;
+      },
+      // The overlay records PowerBrowserAPI.webTabOpen pushes onto `tabs` carry
+      // exactly this field; anything else has no linked browser.
+      getBrowserForTab(tab) {
+        return (tab && tab.linkedBrowser) || null;
+      },
+      // No-op: there is no tab strip to paint a favicon on.
+      setIcon() {},
+    };
 
     // Exposed for plan 04-04's TheiaService.sys.mjs to call once the
     // backend is ready: navigates the content browser to the Theia

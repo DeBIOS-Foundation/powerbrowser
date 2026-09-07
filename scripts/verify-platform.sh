@@ -3678,6 +3678,25 @@ run_own_checks() {
     "shell-csp-inline-attrs|check_shell_csp_inline_attrs"
     "shell04-log-redacts-token|check_shell04_log_redacts_token"
 
+    # NEW (14.1.1-04): G-14.1.1-19's gBrowser stand-in gate. The shell window
+    # carries a `window.gBrowser` stand-in because privileged upstream code
+    # reaches it, and those call sites optional-chain the RECEIVER, not the
+    # member -- so a stand-in missing a member threw once per overlay creation
+    # and buried the next real chrome-side error in the same log. The reported
+    # symptom is an absent log line, which CLAUDE.md's first verification rule
+    # forbids asserting on directly (the emitter is Gecko's, not ours), so this
+    # row asserts the POSITIVE invariant instead: the members upstream calls on
+    # a gBrowser receiver, derived from three read-only upstream files at check
+    # time, EQUAL the members of the stand-in literal, parsed with comment
+    # lines skipped. Red on an upstream rebase adding a call AND on a member
+    # deleted or added here unreviewed -- seconds, not a forty-minute build,
+    # which is why it belongs in the same --quick set rebase-upstream.sh runs.
+    # Honestly --quick: text reads only, and `upstream/` is read, never
+    # written. The self-test rides alongside for the reason every other
+    # self-test row in this array gives.
+    "shell-gbrowser-standin|node $REPO_ROOT/scripts/verify-shell-gbrowser-standin.mjs"
+    "shell-gbrowser-standin-self-test|node $REPO_ROOT/scripts/verify-shell-gbrowser-standin.mjs --self-test"
+
     # NEW (01-06): GUI-04's bridge-contract assertion. Reads the TypeScript
     # sources, never a compiled artifact, so it is honestly --quick: no build,
     # no browser, no display, no network. The self-test is registered
