@@ -89,13 +89,38 @@ Plans:
   3. User can open dependent windows hosting tab content, never a second IDE frame; closing the core window kills the session and the next launch restores the setup
   4. User can save, name, and restore setups remembering geometry, tab placement, and mode
 
-**Plans**: 3/3 plans executed
+**Plans**: 3/3 plans executed + 2 gap-closure plans (G-14-1 … G-14-8)
 
 Plans:
 
 - [x] 14-01-PLAN.md — Window-routing probe with GREEN/RED record, modes tracer with shipped descriptors, bridged toggle, defaults gate
 - [x] 14-02-PLAN.md — Modes full: customs with fallback, organising placeholder, toggle rows, style layer, invariant gate
 - [x] 14-03-PLAN.md — Dependents per probe verdict plus named setups with relaunch restore, roundtrip and content gates
+- [ ] 14-04-PLAN.md — Gap closure: main-area exemption at the deactivate seam, toggle routed through the mode command, Explorer dock, launch order, behavioural second-visit gate
+- [ ] 14-05-PLAN.md — Gap closure: backend reads the captured environment, group channel delivers, one stock window for new tab, two class gates, catalogue green
+
+**UI hint**: yes
+
+### Phase 14.1: In-Theia Web Tabs (GUI-02) (INSERTED)
+
+**Goal**: The chrome-bar "+" opens a web page tab inside the Theia shell's own tab strip. The page is rendered by a chrome-owned `<xul:browser>` overlay kept aligned with a Theia placeholder widget through a two-way bridge (Theia sends geometry, visibility, close; chrome sends URL, title, loading state, back/forward availability); the tab follows every mode switch; the address pill shows and navigates the active tab's URL. Chris reversed the 2026-08-30 GUI-02 deferral on 2026-09-06; step 1 (an overlay rendering a page inside the shell window over the live frontend) was confirmed live the same day.
+**Depends on**: Phase 14 (main-area exemption keeps content tabs alive across mode switches; the group channel delivers). Phase 15's Organising surface needs this phase for real tab data.
+**Requirements**: GUI-02
+**Success Criteria** (what must be TRUE):
+
+  1. Clicking "+" adds a tab to the shell's main-area tab strip and a web page renders inside that tab's bounds — no separate OS window opens for "+", typed addresses, or suggestion activation
+  2. The web tab survives every mode switch (Coding, Browsing, Organising, and a mode's second visit) and follows the layout each mode gives it; the overlay tracks the placeholder on resize, tab switch, panel slide, hide, and close
+  3. Every tab has a URI via `TabUriRegistry` (web tabs use their page URL); the address pill shows the active tab's address, a typed address navigates the active web tab (or opens one when the active tab is not a web tab), and page navigations report URL, title, loading state, and back/forward availability back to the pill and nav buttons
+  4. Each web tab writes its uri/url/title row to the chrome-side tab store on open, navigate, and close, so Organising and named setups see real tabs
+  5. Firefox internals stay behind `PowerBrowserAPI.sys.mjs`, Theia core is untouched, and a `--quick` gate plus a live-frontend check go red on each of the above when a fault is planted
+
+**Plans**: 3 plans
+
+Plans:
+
+- [ ] 14.1-01-PLAN.md — Overlay bridge tracer (open handler → placeholder → geometry → chrome-owned overlay) plus chrome host expansion (progress listener, pushes, store rows, nav kinds, embedder wall, orphan cleanup, reserved Ctrl+L) and widget states/occlusion/keyboard
+- [ ] 14.1-02-PLAN.md — Chrome bar and registry rewiring: uriOf page-URL branch, navigable-tab predicate flipped, New Tab/commit/suggestion routed to the in-shell web tab, pill bound to the active tab and state pushes, suggestions gate retargeted, URI-SCHEMES section
+- [ ] 14.1-03-PLAN.md — gui02-web-tab-bridge --quick gate and gui02-web-tab-live BiDi check (New Tab, typed commit, ≤1px alignment, five-hop mode walk, pill/uriOf/Back, store row, close) with self-tests and registry rows; ends on Chris's blocking confirmation in his window
 
 **UI hint**: yes
 
