@@ -282,6 +282,24 @@ document.addEventListener(
       window.powerbrowserShowDiagnostics();
     });
     diagnosticsKeyset.appendChild(diagnosticsKey);
+
+    // GUI-02 (14.1-01): the one key guaranteed to LEAVE a web page. A page
+    // rendered in a web-tab overlay owns the focused docshell, so Theia never
+    // sees Ctrl+L / Cmd+L while the page has focus (14.1-UI-SPEC A13,
+    // 14.1-RESEARCH Pitfall 8). A reserved key is handled in chrome before any
+    // content docshell -- including a focused overlay -- sees it, which is the
+    // only mechanism that can hand focus back to the Theia frame from there.
+    // The API method refocuses the frame and asks the frontend, over the
+    // state-push channel, to focus the address pill.
+    const focusAddressKey = document.createXULElement("key");
+    focusAddressKey.setAttribute("id", "powerbrowser-focus-address-key");
+    focusAddressKey.setAttribute("modifiers", "accel");
+    focusAddressKey.setAttribute("key", "L");
+    focusAddressKey.setAttribute("reserved", "true");
+    focusAddressKey.addEventListener("command", () => {
+      PowerBrowserAPI.webTabFocusAddress(browserElement);
+    });
+    diagnosticsKeyset.appendChild(focusAddressKey);
     document.documentElement.appendChild(diagnosticsKeyset);
 
     // GUI-01 (01-05 Task 3): NOTHING is registered here for the

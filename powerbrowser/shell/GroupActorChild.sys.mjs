@@ -16,6 +16,14 @@
 // module import of any kind, only the actor globals plus DOM dispatch. It
 // loads solely in documents matching the Theia local origin (the matches
 // pin in the registration call), so stock-window web content never runs it.
+//
+// GUI-02 (14.1-01): the channel now runs in BOTH directions. Chrome pushes
+// web-tab state (URL, title, loading, back/forward availability, and the
+// reserved accel+L focus request) to the frontend as a
+// PowerBrowserWebTabState actor message; receiveMessage below re-dispatches
+// it into the content window as a DOM event of the same name, under the
+// same content-compartment rule sendResponse already documents. The
+// payload is primitives only, so the JSON round trip is lossless.
 
 export class PowerBrowserGroupChild extends JSWindowActorChild {
   handleEvent(event) {
@@ -42,6 +50,19 @@ export class PowerBrowserGroupChild extends JSWindowActorChild {
       });
       return;
     }
+    // GUI-01 (F9): the synchronous "chrome has this" signal. DOM dispatch is
+    // synchronous, so calling preventDefault here makes the frontend's own
+    // `window.dispatchEvent(...)` return false the instant this runs -- which
+    // is how browser-window-command.ts decides between this channel and its
+    // window.open fallback WITHOUT awaiting an ack. That distinction is not a
+    // style choice: window.open needs the user activation of the click that
+    // started the request, and an await spends it, so a fallback decided 5s
+    // later is a fallback the popup blocker eats. Deliberately AFTER the
+    // sendQuery above -- a synchronous throw there leaves the event
+    // un-prevented, so the frontend falls back instead of opening nothing.
+    // A no-op for the group mutations: GroupActorClient's events are not
+    // cancelable, and preventDefault on a non-cancelable event does nothing.
+    event.preventDefault();
     pending.then(
       reply => {
         this.sendResponse(requestId, reply);
@@ -61,9 +82,45 @@ export class PowerBrowserGroupChild extends JSWindowActorChild {
     if (!win) {
       return;
     }
+    // The detail MUST be built in the content window's compartment. Handing
+    // content an object from this scope makes the frontend read it through an
+    // Xray that exposes none of its own properties, so `detail.requestId` came
+    // back undefined, the correlator dropped every reply as malformed, and
+    // each mutation waited out its full 5s ack timeout EVEN WHEN chrome had
+    // already applied the write. That was one of the faults that kept this
+    // channel dead from the day it was written.
+    //
+    // Upstream clones this hop with the privileged clone helper
+    // (WebChannelChild.sys.mjs:69, RemotePageChild.sys.mjs:103). We cannot:
+    // that helper's namespace is an unconditional forbidden pattern outside
+    // PowerBrowserAPI.sys.mjs (D-96, enforced by
+    // scripts/check-internals-boundary.sh), and this file's whole point is
+    // ZERO privileged reach. Round-tripping through the CONTENT window's own
+    // JSON does the same job with no privileged API: the parse runs in that
+    // compartment, so the result is a plain content object. The payload is
+    // JSON-safe by construction -- requestId is a string and reply is the
+    // parent's {ok, kind, ...} record of primitives.
     win.dispatchEvent(
       new win.CustomEvent("PowerBrowserGroupResponse", {
-        detail: { requestId, reply },
+        detail: win.JSON.parse(JSON.stringify({ requestId, reply })),
+      })
+    );
+  }
+
+  // GUI-02 (14.1-01): chrome -> content. Same content-compartment rule as
+  // sendResponse above -- no privileged clone helper, the CONTENT window's
+  // own JSON builds the detail -- so this file keeps zero privileged reach.
+  receiveMessage(message) {
+    if (!message || message.name !== "PowerBrowserWebTabState") {
+      return;
+    }
+    const win = this.contentWindow;
+    if (!win) {
+      return;
+    }
+    win.dispatchEvent(
+      new win.CustomEvent("PowerBrowserWebTabState", {
+        detail: win.JSON.parse(JSON.stringify(message.data)),
       })
     );
   }
