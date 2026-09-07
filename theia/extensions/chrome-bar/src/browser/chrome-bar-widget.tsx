@@ -8,13 +8,15 @@ import {
     ReactWidget,
     StatusBar,
     StatusBarAlignment,
+    Widget,
 } from '@theia/core/lib/browser';
-import { CommandRegistry } from '@theia/core/lib/common';
+import { CommandRegistry, Disposable } from '@theia/core/lib/common';
 import URI from '@theia/core/lib/common/uri';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
 import pDebounce from 'p-debounce';
 import type { TabQueryRow } from '@powerbrowser/tab-uris/lib/node/tab-query-service';
-import { OPEN_BROWSER_WINDOW_COMMAND_ID } from '@powerbrowser/tab-uris/lib/browser/browser-window-command';
+import { WebTabChannel, WebTabWidget } from '@powerbrowser/tab-uris/lib/browser/web-tab';
+import { TabUriRegistry } from '@powerbrowser/tab-uris/lib/browser/tab-uri-registry';
 import {
     CHROME_BAR_BACK_COMMAND_ID,
     CHROME_BAR_FORWARD_COMMAND_ID,
@@ -22,10 +24,18 @@ import {
     CHROME_BAR_NEW_TAB_COMMAND_ID,
     CHROME_BAR_RELOAD_COMMAND_ID,
     chromeBarHasNavigableTab,
+    currentWebTab,
+    focusAddressPill,
+    setCurrentWebTab,
 } from './chrome-bar-commands';
 import { CHROME_SUGGESTION_LIMIT, ChromeBarSuggestionService } from './chrome-bar-suggestion-service';
 import { MODES_ACTIVATE_COMMAND_ID } from '@powerbrowser/modes/lib/browser/modes-commands';
 import { ModeService } from '@powerbrowser/modes/lib/browser/mode-service';
+// The organising placeholder's own id, imported for the same const-discipline
+// reason every command id here is imported: the tab count excludes that widget
+// by identity, and a re-spelled string would keep counting it the day the
+// widget renames.
+import { OrganisingWidget } from '@powerbrowser/modes/lib/browser/organising-widget';
 import '../../src/browser/chrome-bar.css';
 
 /**
@@ -66,8 +76,15 @@ function typedAddressTargetOf(text: string): string | undefined {
  * route through the existing opener with empty as a no-op and no
  * evaluation surface (T-13-03-03); the toggle is selection state only and
  * never touches a tab, with the chip asserting the invariant on every
- * switch (T-13-03-04); blocked popups keep the existing throw path with no
- * new dialog authored (T-13-03-05).
+ * switch (T-13-03-04); a refused or unacknowledged web-tab navigation takes
+ * the same throw-and-catch path a blocked popup once did, with no new dialog
+ * authored (T-13-03-05).
+ *
+ * GUI-02 (14.1-02): http(s) commits, suggestion rows and "+" all land in an
+ * in-shell web tab (navigateWebTab below and the New Tab command); the pill
+ * is bound to the shell's current widget and to the active web tab's state
+ * pushes; nav enablement follows those pushes. No path from this file reaches
+ * the stock window -- that survives only behind the GUI-01 palette command.
  *
  * No chrome-side command is registered and nothing opens at startup: the
  * bar only issues commands through the registry on user gestures (a
@@ -97,8 +114,11 @@ export class ChromeBarWidget extends ReactWidget {
     @inject(StatusBar)
     protected readonly statusBar: StatusBar;
 
-    @inject(PerspectiveService)
-    protected readonly perspectives: PerspectiveService;
+    // No PerspectiveService here by design: every mode switch this widget
+    // issues -- shipped segment and custom row alike -- goes through the mode
+    // command, which owns the stock switch plus the contracted panel work.
+    // The contribution below still holds the service, to LISTEN for the stock
+    // perspective event and to read the live id at startup; it never switches.
 
     /**
      * GUI-07 (14-02): custom modes listed beside the shipped defaults. The
@@ -109,6 +129,13 @@ export class ChromeBarWidget extends ReactWidget {
      */
     @inject(ModeService)
     protected readonly modes: ModeService;
+
+    /** GUI-02: the widget -> URI direction, for the pill's address on non-web tabs (UI-SPEC A6). */
+    @inject(TabUriRegistry)
+    protected readonly tabUris: TabUriRegistry;
+
+    /** The active web tab's state-push subscription; replaced on every current-widget change. */
+    protected stateSubscription: Disposable | undefined;
 
     protected customModes: Array<{ id: string; name: string }> = [];
     protected activeCustomId: string | undefined = undefined;
@@ -207,22 +234,44 @@ export class ChromeBarWidget extends ReactWidget {
     };
 
     /**
-     * Opens a committed URL on the contracted routing: http and https go
-     * through the stock-window command (imported const, never a re-spelled
-     * id string), so a blocked popup takes that command's existing error
-     * path; every other scheme (view:, settings:) keeps the existing
-     * two-step opener routing (getOpener plus handler open), which already
-     * navigates in-Theia views correctly.
+     * Opens a committed URL on the GUI-02 routing: http and https navigate
+     * the active in-shell web tab, or open a new one when the active tab is
+     * not a web tab (navigateWebTab below); every other scheme (view:,
+     * settings:) keeps the existing two-step opener routing (getOpener plus
+     * handler open), which already navigates in-Theia views correctly. No
+     * path from here reaches the stock window: that survives only behind
+     * the GUI-01 palette command.
      */
     protected openCommittedUrl = async (url: string): Promise<void> => {
         if (/^https?:\/\//i.test(url)) {
-            await this.commands.executeCommand(OPEN_BROWSER_WINDOW_COMMAND_ID, url);
+            await this.navigateWebTab(url);
         } else {
             const uri = new URI(url);
             const handler = await this.openerService.getOpener(uri);
             await handler.open(uri);
         }
     };
+
+    /**
+     * The one http(s) route. With an active web tab, navigates it in place
+     * and turns a refused or unacknowledged reply into a throw so the
+     * caller's catch surfaces the carried in-bar failure row (no new copy);
+     * without one, the two-step opener resolves to WebTabOpenHandler at
+     * priority 1000 and opens a new web tab.
+     */
+    protected async navigateWebTab(url: string): Promise<void> {
+        const tab = currentWebTab();
+        if (tab) {
+            const reply = await tab.navigate(url);
+            if (!reply.ok) {
+                throw new Error('web tab did not acknowledge the navigation');
+            }
+            return;
+        }
+        const uri = new URI(url);
+        const handler = await this.openerService.getOpener(uri);
+        await handler.open(uri);
+    }
 
     /** Surfaces a commit failure in-bar per the copy contract: one failure row, Enter retries. */
     protected showCommitFailure(): void {
@@ -254,13 +303,13 @@ export class ChromeBarWidget extends ReactWidget {
 
     /**
      * Commits typed text by scheme, inventing no search addressability:
-     * text already carrying http or https goes to the stock-window channel
-     * as-is; host-like text (no spaces, no scheme, containing a dot) is
-     * normalized with an https prefix onto the same channel; anything else
-     * is not an address this tree can visit, so it surfaces the contracted
-     * in-bar failure row instead of a file-scheme editor open, and no
-     * search-engine host is minted anywhere (search dispatch stays deferred
-     * to GUI-02 scope). Empty commits are no-ops.
+     * text already carrying http or https goes to the web-tab route as-is;
+     * host-like text (no spaces, no scheme, containing a dot) is normalized
+     * with an https prefix onto the same route; anything else is not an
+     * address this tree can visit, so it surfaces the contracted in-bar
+     * failure row instead of a file-scheme editor open, and no search-engine
+     * host is minted anywhere (non-address text stays local). Empty commits
+     * are no-ops.
      */
     protected commitText = async (raw: string): Promise<void> => {
         const text = raw.trim();
@@ -329,8 +378,83 @@ export class ChromeBarWidget extends ReactWidget {
         this.update();
     };
 
+    /**
+     * The address the pill shows for a widget (UI-SPEC "The address pill,
+     * bound to the active tab"): a web tab's live page URL when it has one;
+     * any other tab's registry URI string; the empty string for a page-less
+     * web tab, a widget with no registry URI, or no widget at all. The
+     * empty-page URL, factory ids and tab counters never reach here.
+     */
+    protected addressOf(widget: Widget | undefined): string {
+        if (!widget) {
+            return '';
+        }
+        if (widget instanceof WebTabWidget) {
+            return widget.hasPage ? widget.url : '';
+        }
+        return this.tabUris.uriOf(widget)?.toString(true) ?? '';
+    }
+
+    /**
+     * Re-derives the pill from a widget, unless the user is typing: while
+     * the input has focus AND carries an uncommitted edit, neither a tab
+     * change nor a state push overwrites it (the carried two-stage Esc
+     * restores the committed address). Focus alone is not the guard: after
+     * Enter the input keeps focus and the value equals the committed text,
+     * and that is exactly when chrome's canonical URL must replace it.
+     */
+    protected syncAddressFromWidget(widget: Widget | undefined): void {
+        const input = this.pillRef?.querySelector('input');
+        if (input && document.activeElement === input && this.inputValue !== this.committedAddress) {
+            return;
+        }
+        const address = this.addressOf(widget);
+        this.inputValue = address;
+        this.committedAddress = address;
+        this.commitFailed = false;
+        this.update();
+    }
+
+    /**
+     * Current-widget change from the contribution: follows the new widget's
+     * state pushes when it is a web tab (dropping the previous
+     * subscription), then syncs the pill and re-renders nav enablement.
+     */
+    onCurrentWidgetChanged(widget: Widget | undefined): void {
+        this.stateSubscription?.dispose();
+        this.stateSubscription = undefined;
+        if (widget instanceof WebTabWidget) {
+            this.stateSubscription = widget.onDidChangeState(() => {
+                this.syncAddressFromWidget(widget);
+                this.update();
+            });
+        }
+        this.syncAddressFromWidget(widget);
+        this.update();
+    }
+
+    /**
+     * The MAIN-AREA tab count, and only that. `allTabBars` is
+     * mainAreaTabBars plus bottomAreaTabBars plus the left and right panel
+     * tab bars, so counting it folded in exactly the surfaces a mode switch
+     * is contracted to change: Browsing and Organising collapse all three
+     * side areas, Coding expands the left one. The before/after comparison
+     * in selectMode was therefore false-red by construction -- it reported
+     * the contracted panel reshape as a broken tabs invariant on every
+     * switch, which is permanent noise in the one log used to diagnose a
+     * real tab loss.
+     *
+     * The organising placeholder is excluded one hop further down for the
+     * same reason: the Organising slot opens exactly one main-area widget on
+     * entry and closes it on exit, so counting it would move the number by
+     * one on each of the two switches that cross the Organising boundary --
+     * again a contracted change, not a lost tab.
+     */
     protected countTabs(): number {
-        return this.shell.allTabBars.reduce((total, tabBar) => total + tabBar.titles.length, 0);
+        return this.shell.mainAreaTabBars.reduce(
+            (total, tabBar) => total + tabBar.titles.filter(title => title.owner.id !== OrganisingWidget.ID).length,
+            0
+        );
     }
 
     /**
@@ -352,13 +476,27 @@ export class ChromeBarWidget extends ReactWidget {
     }
 
     /**
-     * Segment selection switches the matching shipped perspective through
-     * the stock service. The toggle stays selection state only: the segment
-     * is set and the chip re-asserted even when the perspective switch
-     * throws, and a tab-count mismatch is logged, never thrown. Segment
-     * labels map to descriptor ids by lowercasing -- the shipped-mode
-     * defaults gate asserts that rule, so a label that stops mapping fails
-     * the gate instead of silently switching nothing.
+     * Segment selection activates the matching shipped mode through the
+     * imported mode command const -- the identical channel selectCustomMode
+     * uses below, never a re-spelled string.
+     *
+     * The three shipped segments used to call the stock perspective service
+     * directly, one hop shallower, and that was the whole reason a shipped
+     * mode reshaped nothing: the contracted per-mode panel map, the panel
+     * expand/collapse flags, and the organising slot all live behind the
+     * mode command, so a direct stock switch skipped every one of them.
+     * Coding switched perspective and then showed no Theia view. Custom rows
+     * never had the bug because they always routed through the command.
+     *
+     * The toggle stays selection state only: the segment is set and the chip
+     * re-asserted even when activation throws, and a tab-count mismatch is
+     * logged, never thrown. Segment labels map to mode ids by lowercasing --
+     * the shipped-mode defaults gate asserts that rule, so a label that stops
+     * mapping fails the gate instead of silently switching nothing. The
+     * repaint path is unchanged: the stock perspective event still fires at
+     * the end of the switch (one hop deeper now, inside the command), and
+     * the contribution's onDidChangePerspective subscription re-asserts the
+     * toggle and the chip from it.
      */
     protected selectMode = (next: string) => async (): Promise<void> => {
         if (this.mode === next && this.activeCustomId === undefined) {
@@ -368,9 +506,9 @@ export class ChromeBarWidget extends ReactWidget {
         this.mode = next;
         this.activeCustomId = undefined;
         try {
-            await this.perspectives.switchPerspective(next.toLowerCase());
+            await this.commands.executeCommand(MODES_ACTIVATE_COMMAND_ID, next.toLowerCase());
         } catch (error) {
-            console.error('[@powerbrowser/chrome-bar] perspective switch failed:', next, error);
+            console.error('[@powerbrowser/chrome-bar] mode activation failed:', next, error);
         }
         const after = this.countTabs();
         if (before !== after) {
@@ -493,17 +631,18 @@ export class ChromeBarWidget extends ReactWidget {
     }
 
     protected render(): React.ReactNode {
-        // One shared navigable-tab predicate (GUI-02-owned, false until
-        // GUI-02 ships): all three controls dim with their contracted
-        // tooltips retained and the layout never shifts.
+        // One shared navigable-tab predicate (GUI-02-owned) narrowed by the
+        // active web tab's last state push: all three controls dim with
+        // their contracted tooltips retained and the layout never shifts.
         const canNavigate = chromeBarHasNavigableTab();
+        const tab = currentWebTab();
         const secure = this.inputValue.trim().startsWith('https://');
         return <div className='pb-chrome-bar'>
             <button
                 className='pb-chrome-bar-button'
                 title='Back'
                 aria-label='Back'
-                disabled={!canNavigate}
+                disabled={!canNavigate || !tab?.canGoBack}
                 onClick={this.runCommand(CHROME_BAR_BACK_COMMAND_ID)}
             >
                 <span className='codicon codicon-chevron-left' />
@@ -512,7 +651,7 @@ export class ChromeBarWidget extends ReactWidget {
                 className='pb-chrome-bar-button'
                 title='Forward'
                 aria-label='Forward'
-                disabled={!canNavigate}
+                disabled={!canNavigate || !tab?.canGoForward}
                 onClick={this.runCommand(CHROME_BAR_FORWARD_COMMAND_ID)}
             >
                 <span className='codicon codicon-chevron-right' />
@@ -521,7 +660,7 @@ export class ChromeBarWidget extends ReactWidget {
                 className='pb-chrome-bar-button'
                 title='Reload'
                 aria-label='Reload'
-                disabled={!canNavigate}
+                disabled={!canNavigate || !tab?.canReload}
                 onClick={this.runCommand(CHROME_BAR_RELOAD_COMMAND_ID)}
             >
                 <span className='codicon codicon-refresh' />
@@ -594,6 +733,21 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
     @inject(PerspectiveService)
     protected readonly perspectives: PerspectiveService;
 
+    /** GUI-02: the frontend end of the web-tab bridge, for chrome's reserved accel+L. */
+    @inject(WebTabChannel)
+    protected readonly webTabs: WebTabChannel;
+
+    /**
+     * One current-widget sync for the subscription and the startup seed:
+     * the shared navigable-tab predicate, the pill's address and the chip
+     * all follow the shell's current widget.
+     */
+    protected syncCurrentWidget(widget: Widget | undefined): void {
+        setCurrentWebTab(widget);
+        this.barWidget.onCurrentWidgetChanged(widget);
+        this.barWidget.publishTabCount();
+    }
+
     async onStart(): Promise<void> {
         if (!this.shell.getWidgetById(ChromeBarWidget.ID)) {
             await this.shell.addWidget(this.barWidget, { area: 'top' });
@@ -620,7 +774,17 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         // switches (no mode switch required).
         this.shell.onDidAddWidget(() => this.barWidget.publishTabCount());
         this.shell.onDidRemoveWidget(() => this.barWidget.publishTabCount());
-        this.shell.onDidChangeCurrentWidget(() => this.barWidget.publishTabCount());
+        // GUI-02: the current widget also drives the navigable-tab predicate
+        // and the pill. Seeded once from the live current widget because an
+        // activation can precede this subscription (the perspective seed
+        // above exists for the same ordering hazard).
+        this.shell.onDidChangeCurrentWidget(({ newValue }) => this.syncCurrentWidget(newValue ?? undefined));
+        this.syncCurrentWidget(this.shell.currentWidget);
+        // The landing half of chrome's reserved accel+L: from inside a page
+        // the shell key asks the frontend to focus the address, the channel
+        // re-emits it here, and the pill takes focus with its content
+        // selected -- the same result as the in-Theia keybinding.
+        this.webTabs.onDidRequestFocusAddress(() => focusAddressPill());
         // The portalled dropdown positions against the viewport, so a
         // window resize re-derives its geometry while open.
         window.addEventListener('resize', () => this.barWidget.repositionDropdown());
