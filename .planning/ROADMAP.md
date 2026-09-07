@@ -166,17 +166,20 @@ Plans:
 
 *Pass 2 — gap closure against `14.1.1-VERIFICATION.md`*
 
-**Wave 1**
+**Wave 1** *(the registry writer runs alone: 08 appends two rows to `scripts/verify-platform.sh`, which 06, 07 and 09 all execute as `--quick`)*
+
+- [ ] 14.1.1-08-PLAN.md — clean-checkout build order (G-9): token-gate before tab-uris, the edge declared, and a derive-and-compare `--quick` gate
+
+**Wave 2** *(blocked on 08)*
 
 - [ ] 14.1.1-06-PLAN.md — tracer: make the G-6 thumbnail proof attributable — a served page whose only capture opportunity is the hide, plus a plant that removes it
-- [ ] 14.1.1-08-PLAN.md — clean-checkout build order (G-9): token-gate before tab-uris, the edge declared, and a derive-and-compare `--quick` gate
 - [ ] 14.1.1-09-PLAN.md — anti-pattern findings in unreserved files: internal command id in user-facing copy (CR-03), a comment claiming an assertion a gate cannot make (WR-02), one reply read two ways in `web-tab.ts`
 
-**Wave 2** *(blocked on 06)*
+**Wave 3** *(blocked on 06)*
 
 - [ ] 14.1.1-07-PLAN.md — G-20's red-ness proof: fifteen anchored message prefixes, pairwise-unique plant expects, and one decorative assertion deleted (WR-13)
 
-**Wave 3** *(blocked on 06, 07, 08, 09)*
+**Wave 4** *(blocked on 06, 07, 08, 09)*
 
 - [ ] 14.1.1-10-PLAN.md — the record: ten UAT statuses flipped with commit pointers, five new gap entries, GUI-DEFECTS 12/15/23/24/25 moved, catalogue line corrected (WR-10), Phase-14 placeholder rows superseded
 
