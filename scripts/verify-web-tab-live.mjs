@@ -47,14 +47,15 @@
  * equals the set before "+"; the shell's own POWERBROWSER_SHELL_READY line
  * is PRESENT in the launched binary's stdout (never an absence assertion).
  *
- * HEADLESS ACCOMMODATION (14.1-01 finding, carried): a headless window never
- * delivers the DOM focus event a click raises, so Lumino's FocusTracker --
- * and therefore `shell.currentWidget` and the chrome bar's current-web-tab
- * slot -- never learn that the new tab was activated. The check dispatches
- * ONE synthetic `focus` event on the placeholder node after "+", which is
- * exactly what the click delivers in a real window; it then asserts
- * `shell.currentWidget` is the web tab. Per-hop currency is read from the
- * main dock's `currentTitle` (Lumino state), as v1 did.
+ * NO HEADLESS COMPENSATION (G-14.1.1-20): nothing in this check helps the
+ * chrome bar learn which tab is selected, and that is deliberate. The pill
+ * assertion stands on the strip-selection binding alone --
+ * `shell.mainPanel.onDidChangeCurrent` in chrome-bar-widget.tsx -- so a
+ * regression that re-keys the pill on DOM focus of the placeholder goes red
+ * here rather than being propped up into looking correct. The
+ * `focus-keyed-pill` plant is what proves that red is reachable. Per-hop
+ * currency is read from the main dock's `currentTitle` (Lumino state), as v1
+ * did.
  *
  * WHAT IT DERIVES, never hand-keeps: factory id, empty-page URL, state event
  * name, the three class names and the DI binding line from web-tab.ts and
@@ -72,7 +73,7 @@
  * last Theia app build (fresh profile, so chrome-side edits are live, but the
  * frontend bundle is whatever `theia build` last wrote). Register it in the
  * full set, never the commit gate. One clean run is roughly a minute;
- * `--self-test` boots seven sessions.
+ * `--self-test` boots ten sessions (the clean control plus nine plants).
  *
  * Usage:
  *   node scripts/verify-web-tab-live.mjs
@@ -96,6 +97,7 @@ const NAME = 'verify-web-tab-live';
 const WEB_TAB_REL = 'theia/extensions/tab-uris/src/browser/web-tab.ts';
 const MODULE_REL = 'theia/extensions/tab-uris/src/browser/tab-uris-frontend-module.ts';
 const CHROME_BAR_COMMANDS_REL = 'theia/extensions/chrome-bar/src/browser/chrome-bar-commands.ts';
+const CHROME_BAR_WIDGET_REL = 'theia/extensions/chrome-bar/src/browser/chrome-bar-widget.tsx';
 const DESCRIPTORS_REL = 'theia/extensions/modes/src/browser/mode-descriptors.ts';
 const MODES_COMMANDS_REL = 'theia/extensions/modes/src/browser/modes-commands.ts';
 const ORGANISING_REL = 'theia/extensions/modes/src/browser/organising-widget.ts';
@@ -192,6 +194,17 @@ function derive() {
         failures.push(`${CHROME_BAR_COMMANDS_REL}: derived NO pill input class -- the typed commit has no input to type into`);
     }
 
+    // The binding the pill assertion now stands on, alone (G-14.1.1-20), and
+    // the class the focus-keyed-pill plant re-keys.
+    const chromeBarWidget = read(CHROME_BAR_WIDGET_REL);
+    const chromeBarContributionClass = /export class (\w+)\s+implements FrontendApplicationContribution/.exec(chromeBarWidget)?.[1];
+    if (!chromeBarContributionClass) {
+        failures.push(`${CHROME_BAR_WIDGET_REL}: derived NO chrome-bar contribution class -- the focus-keyed-pill plant has no strip-selection binding to re-key`);
+    }
+    if (!/mainPanel\.onDidChangeCurrent\(/.test(chromeBarWidget)) {
+        failures.push(`${CHROME_BAR_WIDGET_REL}: the pill no longer follows 'mainPanel.onDidChangeCurrent' -- the strip-selection binding the pill assertion stands on is gone, so a green pill here would mean nothing`);
+    }
+
     const shipped = [...read(DESCRIPTORS_REL).matchAll(/^\s*id:\s*'([^']+)'/gm)].map(m => m[1]);
     if (shipped.length !== 3) {
         failures.push(`${DESCRIPTORS_REL}: derived ${shipped.length} shipped mode ids, expected exactly three (coding, browsing, organising) -- the walk cannot be built from a set of any other size`);
@@ -210,7 +223,7 @@ function derive() {
 
     return {
         failures, factoryId, emptyUrl, stateEvent, requestEvent, blockingSelector, lostViewCopy,
-        handlerClass, widgetClass, channelClass,
+        handlerClass, widgetClass, channelClass, chromeBarContributionClass,
         newTabCommandId, inputClass, shipped, activateCommandId, organisingWidgetId, walk,
     };
 }
@@ -419,6 +432,33 @@ function phaseExpression(cfg, phase, arg) {
                 };
                 report.notes.push('PLANT lost-view-ignored: the geometry publish dispatches fire-and-forget, so the unknown-tab outcome of its reply is discarded');
             }
+        } else if (cfg.plant === 'focus-keyed-pill') {
+            // The regression G-14.1.1-20 says must be catchable: the pill is
+            // re-keyed off DOM focus of the placeholder instead of the strip's
+            // selection. Reached through the DI container, like the channel and
+            // handler plants above.
+            const barContribution = __getByName(container, cfg.chromeBarContributionClass);
+            const barProto = Object.getPrototypeOf(barContribution);
+            if (typeof barProto.syncCurrentWidget !== 'function') {
+                fail('plant focus-keyed-pill could not be applied: ' + cfg.chromeBarContributionClass + '.prototype.syncCurrentWidget is not a function');
+            } else {
+                const realSync = barProto.syncCurrentWidget;
+                // The strip-selection subscription is already live and its
+                // Disposable was never handed out, so it is disconnected by
+                // making the method it calls a no-op...
+                barProto.syncCurrentWidget = function () { };
+                // ...and the SAME call is re-keyed on a focus landing anywhere
+                // inside a main-area widget's node.
+                document.addEventListener('focus', event => {
+                    const owner = P.shell.mainAreaTabBars
+                        .flatMap(tabBar => Array.from(tabBar.titles).map(title => title.owner))
+                        .find(candidate => candidate.node.contains(event.target));
+                    if (owner) {
+                        realSync.call(barContribution, owner);
+                    }
+                }, true);
+                report.notes.push('PLANT focus-keyed-pill: ' + cfg.chromeBarContributionClass + '.syncCurrentWidget no longer follows the strip selection and is re-keyed on DOM focus of the widget node');
+            }
         } else if (cfg.plant === 'restore-recreates') {
             // The pre-fix behaviour: the WidgetFactory admits any id, so a
             // persisted layout re-creates last session's web tabs. Reached
@@ -486,13 +526,11 @@ function phaseExpression(cfg, phase, arg) {
         report.pillValueAfterNewTab = P.input() ? P.input().value : undefined;
         report.currentAfterNewTab = P.currentTitleIds().includes(P.widget.id);
 
-        // The headless accommodation (file header): the focus event a click
-        // delivers in a real window, so the FocusTracker -- and the chrome
-        // bar's current-web-tab slot -- learn the tab was activated.
-        P.widget.node.dispatchEvent(new FocusEvent('focus'));
+        // No headless compensation (G-14.1.1-20, file header): measured as the
+        // product leaves it, with nothing dispatched to help it along.
         await P.settle();
-        report.notes.push('headless: one synthetic focus event dispatched on the placeholder node after "+"');
         report.isShellCurrentWidget = P.shell.currentWidget === P.widget;
+        report.notes.push('shell.currentWidget is the tab: ' + report.isShellCurrentWidget + ' -- RECORDED, not asserted: it follows Lumino FocusTracker, which a headless window never feeds. Selection is asserted through the dock currentTitle instead (Lumino state, no focus needed)');
 
         // --- TYPED COMMIT A ---------------------------------------------------
         report.steps.push('commit ' + cfg.typedA);
@@ -715,6 +753,7 @@ async function drive(derived, plant) {
         handlerClass: derived.handlerClass,
         widgetClass: derived.widgetClass,
         channelClass: derived.channelClass,
+        chromeBarContributionClass: derived.chromeBarContributionClass,
         requestEvent: derived.requestEvent,
         stateEvent: derived.stateEvent,
         blockingSelector: derived.blockingSelector,
@@ -936,9 +975,14 @@ function assertReport(derived, report) {
     if (report.currentAfterNewTab !== true) {
         failures.push(`the new tab '${report.widgetId}' is not the current title of its dock after "+" -- the tab was added without being activated`);
     }
-    if (report.isShellCurrentWidget !== true) {
-        failures.push(`shell.currentWidget is not the new web tab after activation`);
-    }
+    // `shell.currentWidget` is NOT asserted (G-14.1.1-20). It is derived from
+    // Lumino's FocusTracker, which a headless window never feeds, so the only
+    // way this check could ever assert it was by dispatching the focus event
+    // itself -- an assertion over an observable the instrument manufactures,
+    // which is exactly what CLAUDE.md's Verification rule 1 forbids. Selection
+    // IS asserted, one line above, through the dock's own `currentTitle`.
+    // Whether the real window keeps `shell.currentWidget` on the web tab is
+    // recorded as test 43 in 14.1.1-UAT.md for Chris's screen to settle.
     const a = report.afterA ?? {};
     if (a.pill !== report.servedA) {
         failures.push(`after the first commit the pill reads ${JSON.stringify(a.pill)}, expected the canonical URL ${report.servedA} from chrome's state push`);
@@ -1111,6 +1155,11 @@ async function selfTest() {
         // The factory admits any construction id again (G-14.1.1-5's pre-fix
         // behaviour), so a persisted layout re-creates last session's tabs.
         { name: 'the factory re-creates a described web tab', plant: 'restore-recreates', expect: 'restore' },
+        // The pill is re-keyed on DOM focus of the placeholder instead of the
+        // strip's selection (G-14.1.1-20). A placeholder covered by the chrome
+        // overlay never receives DOM focus in real use, so the pill stays on
+        // the typed text -- and nothing in this check props it up any more.
+        { name: 'the pill is keyed on focus, not on the strip selection', plant: 'focus-keyed-pill', expect: 'pill' },
         // Chrome's pushes never reach the widget, so the pill keeps the typed text.
         { name: 'state pushes ignored', plant: 'state-ignored', expect: 'pill' },
         // The store reader returns nothing.
