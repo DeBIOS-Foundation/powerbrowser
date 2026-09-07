@@ -205,6 +205,22 @@ function derive() {
     if (!/mainPanel\.onDidChangeCurrent\(/.test(chromeBarWidget)) {
         failures.push(`${CHROME_BAR_WIDGET_REL}: the pill no longer follows 'mainPanel.onDidChangeCurrent' -- the strip-selection binding the pill assertion stands on is gone, so a green pill here would mean nothing`);
     }
+    // G-14.1.1-7: the dropdownAfterEnter phase must commit STRICTLY INSIDE the
+    // suggestion debounce, which is the whole timing the guard exists for. The
+    // interval is read off the source that sets it -- a hand-typed 150 here
+    // would silently stop exercising the race the day the debounce changes.
+    const chromeBarWidgetClass = /export class (\w+)\s+extends ReactWidget/.exec(chromeBarWidget)?.[1];
+    if (!chromeBarWidgetClass) {
+        failures.push(`${CHROME_BAR_WIDGET_REL}: derived NO chrome-bar widget class -- the dropdown-rearms plant has no closeDropdown to disarm`);
+    }
+    const debounceMs = Number(/pDebounce\([\s\S]*?,\s*(\d+)\s*\)/.exec(chromeBarWidget)?.[1]);
+    if (!debounceMs) {
+        failures.push(`${CHROME_BAR_WIDGET_REL}: derived NO suggestion debounce interval -- the commit-inside-the-debounce phase would be timed by a guess, so a green there could not mean the late query was outrun`);
+    }
+    const dropdownClass = /className='(pb-chrome-bar-dropdown)' role='listbox'/.exec(chromeBarWidget)?.[1];
+    if (!dropdownClass) {
+        failures.push(`${CHROME_BAR_WIDGET_REL}: derived NO suggestion dropdown class -- a re-opened dropdown over the committed page would be unfindable, so its absence would assert nothing`);
+    }
 
     // G-14.1.1-6: the capture cap the stored snapshot must fit inside. Read
     // off the boundary file that enforces it so the number is never typed
@@ -234,7 +250,7 @@ function derive() {
         failures, factoryId, emptyUrl, stateEvent, requestEvent, blockingSelector, lostViewCopy,
         handlerClass, widgetClass, channelClass, chromeBarContributionClass,
         newTabCommandId, inputClass, shipped, activateCommandId, organisingWidgetId, walk,
-        thumbnailMaxChars,
+        thumbnailMaxChars, chromeBarWidgetClass, debounceMs, dropdownClass,
     };
 }
 
@@ -345,16 +361,24 @@ const PROBE_HELPERS = `
             .filter(el => el.getClientRects().length > 0)
             .map(el => el.className || el.tagName),
     });
-    // The React-compatible typed commit: the native value setter (so React's
-    // tracker sees a change), an input event (onChange), then Enter (onKeyDown).
-    P.commit = text => {
+    // The React-compatible typed commit, split into its two halves so a phase
+    // can put time between them -- or, for G-14.1.1-7, prove there was none.
+    // Typing is the native value setter (so React's change tracker sees a
+    // change) plus an input event (onChange, which arms the dropdown and
+    // schedules the debounced query); the commit is Enter (onKeyDown).
+    P.type = text => {
         const input = P.input();
         if (!input) throw new Error('no pill input to type into');
         input.focus();
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, text);
         input.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    P.pressEnter = () => {
+        const input = P.input();
+        if (!input) throw new Error('no pill input to commit from');
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     };
+    P.commit = text => { P.type(text); P.pressEnter(); };
 `;
 
 /**
@@ -501,6 +525,26 @@ function phaseExpression(cfg, phase, arg) {
                 window.removeEventListener(cfg.stateEvent, P.channel.onState);
                 report.notes.push('PLANT state-ignored: the ' + cfg.stateEvent + ' listener was removed, so chrome pushes never reach the widget');
             }
+        } else if (cfg.plant === 'dropdown-rearms') {
+            // The pre-fix behaviour of G-14.1.1-7, restored at the real seam:
+            // closing the dropdown on user intent no longer disarms the bar, so
+            // the query the last keystroke scheduled passes runQuery's armed
+            // guard after the commit and re-opens the dropdown over the page.
+            // The querySeq bump is deliberately LEFT IN PLACE -- it never
+            // caught that query anyway (runQuery takes its sequence after the
+            // guard), and removing it too would plant a second fault.
+            const bar = __getByName(container, cfg.chromeBarWidgetClass);
+            const barProto = Object.getPrototypeOf(bar);
+            if (typeof barProto.closeDropdown !== 'function') {
+                fail('plant dropdown-rearms could not be applied: ' + cfg.chromeBarWidgetClass + '.prototype.closeDropdown is not a function');
+            } else {
+                const realClose = barProto.closeDropdown;
+                barProto.closeDropdown = function () {
+                    realClose.call(this);
+                    this.dropdownArmed = true;
+                };
+                report.notes.push('PLANT dropdown-rearms: ' + cfg.chromeBarWidgetClass + '.prototype.closeDropdown leaves the bar armed, so a query still in flight at Enter re-opens the dropdown over the committed page');
+            }
         } else if (cfg.plant === 'thumb-not-scheduled') {
             // DOCUMENTED LIMITATION -- this is an ASSERTION test, not a
             // capture-path test, and must not be read as one. The schedule
@@ -601,6 +645,35 @@ function phaseExpression(cfg, phase, arg) {
             pushes: P.pushes.slice(),
             visibility: P.visibility(),
             lastSent: P.widget.lastSent,
+        };`,
+
+        // G-14.1.1-7. The fix is already in tree (closeDropdown disarms the bar,
+        // runQuery refuses to open while disarmed) but nothing exercised its
+        // timing, so a regression would have stayed green. The race is: the
+        // LAST keystroke before Enter schedules a debounced query, and that
+        // query lands AFTER the commit. Reproduce it by pressing Enter with no
+        // time at all between the two -- P.type then P.pressEnter back to back,
+        // which is why P.commit was split -- then wait past the derived
+        // debounce so the late query has certainly run.
+        //
+        // The typed text is the served URL with an upper-case scheme, exactly
+        // as the first commit types it: it must DIFFER from what the pill
+        // already shows or React's change tracker sees no change, no onChange
+        // fires, nothing arms the bar and the phase would prove nothing. Chrome
+        // canonicalises it back to the same page, so no other phase is
+        // disturbed.
+        dropdownAfterEnter: `
+        report.steps.push('type a prefix and commit inside the ' + cfg.debounceMs + 'ms debounce');
+        P.type(cfg.typedB);
+        P.pressEnter();
+        await new Promise(resolve => setTimeout(resolve, cfg.debounceMs));
+        await P.settle();
+        report.dropdownAfterEnter = {
+            typed: cfg.typedB,
+            dropdownPresent: !!document.querySelector('.' + cfg.dropdownClass),
+            pill: P.input() ? P.input().value : undefined,
+            rect: P.placeholderRect(),
+            visibility: P.visibility(),
         };`,
 
         // G-14.1.1-4. The overlay is dropped from under a widget that does not
@@ -834,9 +907,16 @@ async function drive(derived, plant) {
         // pill must show the CANONICAL URL from the state push, not the typed
         // text -- which is what makes the pill assertion depend on the push.
         typedA: pages.urls.a.replace(/^http:/, 'HTTP:'),
+        // Same trick for the dropdownAfterEnter phase's re-commit: it must
+        // differ from what the pill already reads, or React's change tracker
+        // fires no onChange and no query is ever scheduled to outrun.
+        typedB: pages.urls.b.replace(/^http:/, 'HTTP:'),
         servedA: pages.urls.a,
         servedB: pages.urls.b,
         servedOrigin: pages.origin,
+        debounceMs: derived.debounceMs,
+        dropdownClass: derived.dropdownClass,
+        chromeBarWidgetClass: derived.chromeBarWidgetClass,
     };
     try {
         // Empty URL: the shell's own supervised frontend is the app under
@@ -932,6 +1012,24 @@ async function drive(derived, plant) {
                     }
                     if (b.afterB) {
                         await align('after the second commit', overlay, b.afterB.placeholderRect);
+                    }
+                }
+
+                // G-14.1.1-7: a commit issued inside the debounce window must
+                // leave no dropdown over the page. The overlay's own visibility
+                // is read through the SAME OVERLAY_RECT_EXPR path every other
+                // occlusion read here uses -- a dropdown that re-opened would
+                // count as a blocking layer and the page would go hidden.
+                const late = await phase('dropdownAfterEnter');
+                report.dropdownAfterEnter = late.dropdownAfterEnter;
+                if (report.dropdownAfterEnter) {
+                    if (overlay) {
+                        const o = await overlayRect(overlay);
+                        report.dropdownAfterEnter.overlayVisible = o.hidden === false;
+                        report.dropdownAfterEnter.overlayRect = o;
+                    }
+                    if (report.dropdownAfterEnter.overlayVisible === undefined) {
+                        report.dropdownAfterEnter.overlayVisible = false;
                     }
                 }
 
@@ -1070,6 +1168,19 @@ function assertReport(derived, report) {
     if (b.backDisabled !== false) {
         failures.push(`Back is ${b.backDisabled === true ? 'disabled' : 'unreadable'} after the second commit, expected enabled (one entry behind)`);
     }
+    // G-14.1.1-7. The fix is in tree; these three are what make a regression to
+    // the pre-fix behaviour -- a query the last keystroke scheduled re-opening
+    // the dropdown over the committed page -- go red instead of green.
+    const late = report.dropdownAfterEnter ?? {};
+    if (late.dropdownPresent !== false) {
+        failures.push(`dropdown: a suggestion dropdown is in the document ${derived.debounceMs}ms after a commit issued inside the debounce window -- a query scheduled by the last keystroke re-opened it over the committed page (typed ${JSON.stringify(late.typed)})`);
+    }
+    if (late.overlayVisible !== true) {
+        failures.push(`dropdown: the overlay is not visible after the commit inside the debounce window (document.hidden read ${JSON.stringify(late.overlayRect && late.overlayRect.hidden)}) -- a re-opened dropdown counts as a blocking layer and occludes the page (widget visibility ${JSON.stringify(late.visibility)})`);
+    }
+    if (late.pill !== report.servedB) {
+        failures.push(`dropdown: after the commit inside the debounce window the pill reads ${JSON.stringify(late.pill)}, expected the committed URL ${report.servedB} rather than the typed prefix ${JSON.stringify(late.typed)}`);
+    }
     // G-14.1.1-4. Non-vacuous by construction: the clean control must satisfy
     // all three, and the `lost-view-ignored` plant -- which restores the
     // fire-and-forget geometry publish whose reply the widget used to discard
@@ -1176,6 +1287,8 @@ function printReport(report) {
     console.log(`${NAME}: rows after navigation: ${JSON.stringify((report.rowsAfterNavigation ?? []).map(r => r.url))}; rows after close: ${JSON.stringify((report.rowsAfterClose ?? []).map(r => r.url))}`);
     const thumb = report.thumbnail ?? {};
     console.log(`${NAME}: thumbnail: hasThumbnail ${thumb.hasThumbnail}, prefixOk ${thumb.prefixOk}, length ${thumb.length} -- bytes deliberately not printed`);
+    const late = report.dropdownAfterEnter ?? {};
+    console.log(`${NAME}: dropdownAfterEnter: typed ${JSON.stringify(late.typed)}, dropdownPresent ${late.dropdownPresent}, overlayVisible ${late.overlayVisible}, pill ${JSON.stringify(late.pill)}, overlay ${JSON.stringify(late.overlayRect)}`);
     console.log(`${NAME}: contexts after close: ${JSON.stringify(report.contextsAfterClose ?? [])}; main-area ids before/after: [${(report.mainIdsBefore ?? []).join(', ')}] / [${(report.mainIdsAfterClose ?? []).join(', ')}]; window.open calls: ${report.windowOpenCalls}; ${SHELL_READY_SENTINEL} lines: ${report.shellReadyLines}`);
     for (const note of report.notes ?? []) {
         console.log(`${NAME}: ${note}`);
@@ -1244,6 +1357,10 @@ async function selfTest() {
         { name: 'the pill is keyed on focus, not on the strip selection', plant: 'focus-keyed-pill', expect: 'pill' },
         // Chrome's pushes never reach the widget, so the pill keeps the typed text.
         { name: 'state pushes ignored', plant: 'state-ignored', expect: 'pill' },
+        // The bar stays armed across the commit (G-14.1.1-7's pre-fix
+        // behaviour), so the query the last keystroke scheduled re-opens the
+        // dropdown over the committed page and occludes the overlay.
+        { name: 'the dropdown re-arms across the commit', plant: 'dropdown-rearms', expect: 'dropdown' },
         // No last-view snapshot reaches the row (G-14.1.1-6). See the plant's
         // own comment: it strips the read, not the chrome-side schedule, so it
         // proves the thumbnail assertions are reachable and independent of the
