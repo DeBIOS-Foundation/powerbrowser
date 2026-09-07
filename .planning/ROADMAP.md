@@ -117,9 +117,16 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 14.1-01-PLAN.md — Overlay bridge tracer (open handler → placeholder → geometry → chrome-owned overlay) plus chrome host expansion (progress listener, pushes, store rows, nav kinds, embedder wall, orphan cleanup, reserved Ctrl+L) and widget states/occlusion/keyboard
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 14.1-02-PLAN.md — Chrome bar and registry rewiring: uriOf page-URL branch, navigable-tab predicate flipped, New Tab/commit/suggestion routed to the in-shell web tab, pill bound to the active tab and state pushes, suggestions gate retargeted, URI-SCHEMES section
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 14.1-03-PLAN.md — gui02-web-tab-bridge --quick gate and gui02-web-tab-live BiDi check (New Tab, typed commit, ≤1px alignment, five-hop mode walk, pill/uriOf/Back, store row, close) with self-tests and registry rows; ends on Chris's blocking confirmation in his window
 
 **UI hint**: yes
