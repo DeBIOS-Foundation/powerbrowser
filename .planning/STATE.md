@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v1.3
 current_phase: 14.1.1
 current_phase_name: GUI Conformance Sweep (INSERTED)
-status: executing
-stopped_at: Completed 14.1.1-02-PLAN.md
-last_updated: "2026-09-07T21:54:39.327Z"
+status: verifying
+stopped_at: Completed 14.1.1-04-PLAN.md
+last_updated: "2026-09-07T22:16:38.830Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 14.1.1 execution started
-state_head: 1103bbfe590d3d2bcfe797edf9bb9171a692c660
+state_head: 45b1c0c34ad4d2aa6a7c96b62891262484bb1a89
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 11
-  completed_plans: 10
+  completed_plans: 11
 milestone_name: Browser GUI
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 
 Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-07 — Phase 14.1.1 execution started
 
 ## Performance Metrics
@@ -119,6 +119,7 @@ Last activity: 2026-09-07 — Phase 14.1.1 execution started
 | Phase 14.1.1 P03 | 14min | 2 tasks | 5 files |
 | Phase 14.1.1 P05 | 6 min | 2 tasks | 3 files |
 | Phase 14.1.1 P02 | 1h 24m | 2 tasks | 4 files |
+| Phase 14.1.1 P04 | 25min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -302,6 +303,9 @@ Recent decisions affecting current work:
 - [Phase 14.1.1]: The thumbnail is read back through GroupQueryService.getThumbnail, not the suggestion reader: the suggestion row projection drops the thumbnail column
 - [Phase 14.1.1]: A live phase whose evidence is a stored row must not also await a transport reply -- the lost-view-ignored plant legitimately withholds one, and awaiting it hung the whole session
 - [Phase 14.1.1]: thumb-not-scheduled is documented as an assertion test, not a capture-path test: the chrome-side capture path has no page-realm seam
+- [Phase 14.1.1]: G-14.1.1-19's gate asserts a positive gBrowser member-set equality, not the absence of a TypeError log line: the emitter is Gecko's console, so an absence assertion over it can never be shown to go red
+- [Phase 14.1.1]: G-14.1.1-24's truth was restated (empty prefixed-read set plus a two-entry environment-toucher allowlist) because the gap's literal wording is false against this tree in both halves
+- [Phase 14.1.1]: verify-backend-env-readers.mjs derives the product environment prefix from powerbrowser-env.ts's capture loop rather than spelling it, so the Phase 2 rebrand cannot leave the gate matching a dead prefix
 
 ### Pending Todos
 
@@ -399,8 +403,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-07T21:54:31.726Z
-Stopped at: Completed 14.1.1-02-PLAN.md
+Last session: 2026-09-07T22:16:30.425Z
+Stopped at: Completed 14.1.1-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

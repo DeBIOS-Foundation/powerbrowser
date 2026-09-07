@@ -136,7 +136,7 @@ Plans:
 **Goal:** Every `fixable: yes` gap in `14.1.1-UAT.md` is closed, each proved by a check that goes red without its fix; `needs-chris` and `decision` gaps gain evidence only and are never marked fixed by an executor
 **Requirements**: none mapped — this phase closes GUI conformance gaps, not requirement IDs
 **Depends on:** Phase 14.1
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans executed
 **Protocol:** `.planning/GUI-SWEEP.md` (Step 2 — automated fix pass)
 
 Pass 1 plans the eleven in-scope `fixable: yes` gaps (G-14.1.1-4, 5, 6, 7, 19, 20, 21, 22, 24, 25,
@@ -156,7 +156,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 14.1.1-04-PLAN.md — wave 2: gBrowser stand-in member set (G-19), backend env-reader gate (G-24)
+- [x] 14.1.1-04-PLAN.md — wave 2: gBrowser stand-in member set (G-19), backend env-reader gate (G-24)
 
 ### Phase 15: Panorama Organising
 
