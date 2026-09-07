@@ -18,7 +18,7 @@
 
 ### Web tabs — Phase 14.1
 
-- [ ] **GUI-02**: The user gets web page tabs inside the Theia shell:
+- [x] **GUI-02**: The user gets web page tabs inside the Theia shell:
       the chrome-bar "+" opens a new tab in the shell's own tab
       strip, rendered by a chrome-owned `<xul:browser>` overlay kept
       aligned with a Theia placeholder widget through a two-way
@@ -135,7 +135,7 @@ the project's own planning record.
 | GUI-07 | Phase 14 (strip-relocation spike entry criterion runs as Phase 13 exit gate) | Pending |
 | GUI-08 | Phase 15 | Pending |
 | GUI-09 | Phase 14 | Complete |
-| GUI-02 | Phase 14.1 (inserted 2026-09-06; deferral reversed) | Pending |
+| GUI-02 | Phase 14.1 (inserted 2026-09-06; deferral reversed) | Complete |
 
 **Coverage:**
 

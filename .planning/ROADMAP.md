@@ -114,7 +114,7 @@ Plans:
   4. Each web tab writes its uri/url/title row to the chrome-side tab store on open, navigate, and close, so Organising and named setups see real tabs
   5. Firefox internals stay behind `PowerBrowserAPI.sys.mjs`, Theia core is untouched, and a `--quick` gate plus a live-frontend check go red on each of the above when a fault is planted
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans executed
 
 Plans:
 **Wave 1**
@@ -127,7 +127,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 14.1-03-PLAN.md — gui02-web-tab-bridge --quick gate and gui02-web-tab-live BiDi check (New Tab, typed commit, ≤1px alignment, five-hop mode walk, pill/uriOf/Back, store row, close) with self-tests and registry rows; ends on Chris's blocking confirmation in his window
+- [x] 14.1-03-PLAN.md — gui02-web-tab-bridge --quick gate and gui02-web-tab-live BiDi check (New Tab, typed commit, ≤1px alignment, five-hop mode walk, pill/uriOf/Back, store row, close) with self-tests and registry rows; ends on Chris's blocking confirmation in his window
 
 **UI hint**: yes
 
