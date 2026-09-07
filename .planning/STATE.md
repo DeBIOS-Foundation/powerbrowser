@@ -5,12 +5,12 @@ current_phase: "14.1"
 current_phase_name: In-Theia Web Tabs (GUI-02)
 status: verifying
 stopped_at: Completed 14.1-03-PLAN.md
-last_updated: "2026-09-07T15:37:57.132Z"
+last_updated: "2026-09-07T15:58:53.792Z"
 last_activity: 2026-09-06
 last_activity_desc: Phase 14.1 execution started
-state_head: cd1410e78853faf4da8a64f4ee703e7c34af51b9
+state_head: 98a38fabd68984b9aafebec21f97a787e9cda73f
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 0
   total_plans: 6
   completed_plans: 6
@@ -306,6 +306,7 @@ Recent decisions affecting current work:
 ### Roadmap Evolution
 
 - Phase 14.1 inserted after Phase 14: In-Theia Web Tabs (GUI-02) — Chris reversed the 2026-08-30 deferral on 2026-09-06; + opens a web tab inside the shell (URGENT)
+- Phase 14.1.1 inserted after Phase 14.1: GUI Conformance Sweep — living GUI defect list, automated fix pass, then one-at-a-time confirmation with Chris (URGENT)
 
 ## Deferred Items
 
