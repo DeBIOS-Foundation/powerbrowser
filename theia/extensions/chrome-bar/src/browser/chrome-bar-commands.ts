@@ -53,7 +53,7 @@ export const CHROME_BAR_INPUT_CLASS = 'pb-chrome-bar-input';
  * The active web tab, or undefined when the shell's current widget is any
  * other kind. Module-level rather than a service: the command side must not
  * import the widget (the widget imports these ids -- the dependency runs one
- * way only), and the contribution that hears `shell.onDidChangeCurrentWidget`
+ * way only), and the contribution that hears `shell.mainPanel.onDidChangeCurrent`
  * lives on the widget side, so it writes here and everyone else reads.
  */
 let current: WebTabWidget | undefined;
