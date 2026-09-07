@@ -39,7 +39,9 @@
  * user action and ONE Reload brings the page back aligned (G-14.1.1-4 -- made
  * non-vacuous by the clean control passing all three while the
  * `lost-view-ignored` plant, which restores the discarded geometry reply,
- * fails them); a store row
+ * fails them); a web tab described under a FOREIGN session's id is refused by
+ * the same `WidgetFactory` seam the stock layout restorer calls, and a second
+ * "+" mints an id distinct from the first (G-14.1.1-5); a store row
  * for the served URL is readable after navigation and gone after close; no
  * context carries a served URL after close; the main-area id set after close
  * equals the set before "+"; the shell's own POWERBROWSER_SHELL_READY line
@@ -103,6 +105,14 @@ const SHELL_READY_SENTINEL = 'POWERBROWSER_SHELL_READY';
 
 /** Alignment tolerance, CSS px, on each of sx / sy / w / h. */
 const ALIGN_TOLERANCE_PX = 1;
+
+/**
+ * The session discriminator the restore probe pretends a persisted layout was
+ * written under. Deliberately longer than the six base-36 characters
+ * `WEB_TAB_SESSION` can ever be, so it cannot collide with a live session by
+ * accident -- the probe must be foreign every single run, not usually.
+ */
+const FOREIGN_SESSION = 'notthissession';
 
 const HELP = `Usage: node scripts/${NAME}.mjs [--self-test]
 
@@ -409,6 +419,24 @@ function phaseExpression(cfg, phase, arg) {
                 };
                 report.notes.push('PLANT lost-view-ignored: the geometry publish dispatches fire-and-forget, so the unknown-tab outcome of its reply is discarded');
             }
+        } else if (cfg.plant === 'restore-recreates') {
+            // The pre-fix behaviour: the WidgetFactory admits any id, so a
+            // persisted layout re-creates last session's web tabs. Reached
+            // through the WidgetManager's own factory table -- the same seam
+            // ShellLayoutRestorer goes through -- not through the DI binding,
+            // which is already resolved by now.
+            const factory = P.widgets.factories && P.widgets.factories.get(cfg.webTabFactoryId);
+            if (!factory || typeof factory.createWidget !== 'function') {
+                fail('plant restore-recreates could not be applied: no createWidget on the registered factory for ' + cfg.webTabFactoryId);
+            } else {
+                const widgetCtor = __getByName(container, cfg.widgetClass).constructor;
+                factory.createWidget = options => {
+                    const widget = container.get(widgetCtor);
+                    widget.init(options);
+                    return widget;
+                };
+                report.notes.push('PLANT restore-recreates: the ' + cfg.webTabFactoryId + ' factory admits any construction id again, so a persisted layout can re-create last session\\'s web tabs');
+            }
         } else if (cfg.plant === 'state-ignored') {
             if (typeof P.channel.onState !== 'function') {
                 fail('plant state-ignored could not be applied: ' + cfg.channelClass + '.onState is not a function');
@@ -566,6 +594,52 @@ function phaseExpression(cfg, phase, arg) {
         }, 5000);
         report.rowsAfterNavigation = rows.map(row => ({ url: row.url, title: row.title }));`,
 
+        // G-14.1.1-5. Both halves of the gap, one mechanism. The stock layout
+        // restorer describes every widget that has a WidgetManager description
+        // and re-creates it through `getOrCreateWidget(factoryId, options)` --
+        // the same public seam this phase calls, so no Theia-core code is
+        // touched here and none is needed. A construction option whose id was
+        // not minted this session must be refused; the restorer's own catch
+        // turns that refusal into a dropped widget.
+        restoreRepeat: `
+        report.steps.push('construct a web tab from a foreign session id');
+        report.restoreRepeat = { mintedId: P.widget.tabId };
+        const idParts = P.widget.tabId.split('-');
+        report.restoreRepeat.mintedIdPrefix = idParts.length >= 3 ? idParts[1] : undefined;
+        const foreignId = 'wt-' + cfg.foreignSession + '-1';
+        report.restoreRepeat.foreignId = foreignId;
+        let foreignWidget;
+        try {
+            foreignWidget = await P.widgets.getOrCreateWidget(cfg.webTabFactoryId, { id: foreignId, url: cfg.emptyUrl });
+            report.restoreRepeat.refusedForeignId = false;
+        } catch (e) {
+            report.restoreRepeat.refusedForeignId = true;
+            report.restoreRepeat.refusalMessage = String((e && e.message) || e);
+        }
+        if (foreignWidget && typeof foreignWidget.dispose === 'function') {
+            foreignWidget.dispose();
+        }
+        report.restoreRepeat.mainIdsAfter = P.mainIds();
+
+        report.steps.push('a second "+"');
+        const beforeSecond = P.mainIds();
+        await P.commands.executeCommand(cfg.newTabCommandId);
+        await P.settle();
+        const addedSecond = P.mainIds().filter(id => !beforeSecond.includes(id));
+        const ownersSecond = P.shell.mainAreaTabBars
+            .flatMap(bar => Array.from(bar.titles).map(title => title.owner))
+            .filter(owner => addedSecond.includes(owner.id));
+        report.restoreRepeat.secondMintedId = ownersSecond[0] && ownersSecond[0].tabId;
+        // Closed again straight away: the residue assertion at the end of the
+        // run compares the main-area id set against the set before the first
+        // "+", and this second tab is scaffolding for the distinctness half,
+        // not a subject of the run.
+        for (const owner of ownersSecond) {
+            owner.close();
+        }
+        await P.settle();
+        report.restoreRepeat.mainIdsAfterSecondClose = P.mainIds();`,
+
         close: `
         report.steps.push('close');
         P.widget.close();
@@ -645,6 +719,8 @@ async function drive(derived, plant) {
         stateEvent: derived.stateEvent,
         blockingSelector: derived.blockingSelector,
         emptyUrl: derived.emptyUrl,
+        webTabFactoryId: derived.factoryId,
+        foreignSession: FOREIGN_SESSION,
         newTabCommandId: derived.newTabCommandId,
         inputClass: derived.inputClass,
         activateCommandId: derived.activateCommandId,
@@ -805,6 +881,7 @@ async function drive(derived, plant) {
 
                 const store = await phase('store');
                 report.rowsAfterNavigation = store.rowsAfterNavigation;
+                report.restoreRepeat = (await phase('restoreRepeat')).restoreRepeat;
                 const closed = await phase('close');
                 Object.assign(report, {
                     rowsAfterClose: closed.rowsAfterClose, mainIdsAfterClose: closed.mainIdsAfterClose,
@@ -917,6 +994,18 @@ function assertReport(derived, report) {
     if (organisingHops.some(h => h.isCurrent)) {
         failures.push(`the web tab stayed the current title while '${derived.shipped[2]}' was active -- the organising slot did not take the main area`);
     }
+    // G-14.1.1-5.
+    const restore = report.restoreRepeat ?? {};
+    if (restore.refusedForeignId !== true) {
+        failures.push(`restore: constructing a web tab from a foreign session's id ${JSON.stringify(restore.foreignId)} through the same WidgetFactory seam the stock layout restorer calls was ACCEPTED -- a persisted layout can still re-create last session's web tabs at startup`);
+    }
+    if (!restore.secondMintedId || restore.secondMintedId === restore.mintedId) {
+        failures.push(`restore: the two ids minted in this session are ${JSON.stringify(restore.mintedId)} and ${JSON.stringify(restore.secondMintedId)} -- a second "+" must never reuse an id, or two widgets drive one overlay`);
+    }
+    const restoreBefore = [...(restore.mainIdsAfter ?? [])];
+    if (restoreBefore.includes(`${derived.factoryId}:${restore.foreignId}`)) {
+        failures.push(`restore: the refused construction still put a widget in the main area (ids: [${restoreBefore.join(', ')}])`);
+    }
     if (!(report.rowsAfterNavigation ?? []).some(row => row.url === report.servedB)) {
         failures.push(`no store row for ${report.servedB} was readable through ChromeBarSuggestionService.searchByPrefix after the navigation (rows: ${JSON.stringify(report.rowsAfterNavigation ?? [])})`);
     }
@@ -958,6 +1047,8 @@ function printReport(report) {
     }
     const lost = report.lostView ?? {};
     console.log(`${NAME}: lostView: chrome answered the close with ${JSON.stringify(lost.closeWhere)}; body after the drop ${JSON.stringify(lost.stateText)}, lostView ${JSON.stringify(lost.lostView)}; after one Reload: lostView ${JSON.stringify((lost.afterOneReload ?? {}).lostView)}, hasPage ${JSON.stringify((lost.afterOneReload ?? {}).hasPage)}, reload reply where ${JSON.stringify(lost.reloadReplyWhere)}, re-acquired overlay context ${report.overlayContextAfterLostView}`);
+    const restore = report.restoreRepeat ?? {};
+    console.log(`${NAME}: restoreRepeat: minted ${JSON.stringify(restore.mintedId)} (session segment ${JSON.stringify(restore.mintedIdPrefix)}), second "+" minted ${JSON.stringify(restore.secondMintedId)}; foreign id ${JSON.stringify(restore.foreignId)} refused: ${restore.refusedForeignId}${restore.refusalMessage ? ` (${restore.refusalMessage})` : ''}; main-area ids after: [${(restore.mainIdsAfter ?? []).join(', ')}]`);
     console.log(`${NAME}: rows after navigation: ${JSON.stringify((report.rowsAfterNavigation ?? []).map(r => r.url))}; rows after close: ${JSON.stringify((report.rowsAfterClose ?? []).map(r => r.url))}`);
     console.log(`${NAME}: contexts after close: ${JSON.stringify(report.contextsAfterClose ?? [])}; main-area ids before/after: [${(report.mainIdsBefore ?? []).join(', ')}] / [${(report.mainIdsAfterClose ?? []).join(', ')}]; window.open calls: ${report.windowOpenCalls}; ${SHELL_READY_SENTINEL} lines: ${report.shellReadyLines}`);
     for (const note of report.notes ?? []) {
@@ -1017,6 +1108,9 @@ async function selfTest() {
         // behaviour), so a dropped overlay leaves the body blank until the
         // user clicks Reload.
         { name: 'the geometry reply is discarded', plant: 'lost-view-ignored', expect: 'lost-view' },
+        // The factory admits any construction id again (G-14.1.1-5's pre-fix
+        // behaviour), so a persisted layout re-creates last session's tabs.
+        { name: 'the factory re-creates a described web tab', plant: 'restore-recreates', expect: 'restore' },
         // Chrome's pushes never reach the widget, so the pill keeps the typed text.
         { name: 'state pushes ignored', plant: 'state-ignored', expect: 'pill' },
         // The store reader returns nothing.

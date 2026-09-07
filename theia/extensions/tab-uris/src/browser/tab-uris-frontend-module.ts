@@ -10,7 +10,7 @@ import { PowerBrowserTerminalFrontendContribution, PowerBrowserTerminalWidget } 
 import { TerminalUriOpenHandler } from './terminal-open-handler';
 import { PowerBrowserOutputOpenHandler, PowerBrowserWebviewOpenHandler } from './existing-scheme-coverage';
 import { BrowserWindowCommandContribution } from './browser-window-command';
-import { WEB_TAB_FACTORY_ID, WebTabChannel, WebTabOpenHandler, WebTabOptions, WebTabWidget } from './web-tab';
+import { WEB_TAB_FACTORY_ID, WebTabChannel, WebTabOpenHandler, WebTabOptions, WebTabWidget, isCurrentSessionTabId } from './web-tab';
 
 /**
  * Registers an `OpenHandler` after the app's first `OpenerService.open()`
@@ -94,6 +94,19 @@ export default new ContainerModule((bind, _unbind, isBound, rebind) => {
     bind(WidgetFactory).toDynamicValue(ctx => ({
         id: WEB_TAB_FACTORY_ID,
         createWidget: (options: WebTabOptions) => {
+            // G-14.1.1-5: the single construction seam, so the single place a
+            // web tab from a persisted layout can be refused. The stock
+            // ShellLayoutRestorer describes every widget that has a
+            // WidgetManager description -- StatefulWidget or not -- and
+            // re-creates it here; its own `convertToWidget` catch logs a
+            // warning and drops the widget, which is exactly the contracted
+            // "no web tabs at startup". Throwing is therefore the supported
+            // opt-out and needs zero Theia-core edits. The message is an
+            // internal diagnostic that only reaches that log, never a user
+            // surface.
+            if (!isCurrentSessionTabId(options.id)) {
+                throw new Error(`@powerbrowser/tab-uris: refusing to construct a web tab for '${options.id}', which was not minted by this frontend session`);
+            }
             const widget = ctx.container.get(WebTabWidget);
             widget.init(options);
             return widget;

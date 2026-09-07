@@ -19,9 +19,21 @@ import '../../src/browser/web-tab.css';
  *
  * The widget is deliberately NOT `ExtractableWidget` (the overlay lives in
  * the shell window and cannot follow a widget into a dependent window) and
- * NOT `StatefulWidget` (the frontend origin changes every launch, so a
- * cross-launch layout restore has nothing to hydrate; named setups restore
- * tabs through the opener instead). UI-SPEC A12.
+ * NOT `StatefulWidget`. UI-SPEC A12.
+ *
+ * Not being `StatefulWidget` is NOT what keeps a web tab out of a restored
+ * layout, and the earlier claim here that the frontend origin changes every
+ * launch was wrong (G-14.1.1-5). The measured truth: the origin repeats on an
+ * in-session reload after a backend respawn on the pinned port
+ * (`TheiaService.sys.mjs:595, :602`) and on an ephemeral-port repeat across
+ * launches. The stock `ShellLayoutRestorer` describes EVERY widget that has a
+ * `WidgetManager` description, `StatefulWidget` or not, and re-creates it
+ * through `getOrCreateWidget(factoryId, options)` -- so it WILL try to
+ * re-create last session's web tabs. What actually makes the widget
+ * un-restorable is the `WEB_TAB_SESSION` discriminator below plus the
+ * `WEB_TAB_FACTORY_ID` factory's refusal of any id not minted this session;
+ * the restorer's own catch turns that refusal into a dropped widget, with no
+ * Theia-core edit. Named setups restore tabs through the opener instead.
  */
 
 export const WEB_TAB_FACTORY_ID = 'powerbrowser.web-tab';
@@ -97,7 +109,10 @@ function ensureBodyObserver(): void {
 }
 
 export interface WebTabOptions {
-    /** Per-session counter minted by the open handler; lives here and never in a URI. */
+    /**
+     * `wt-<session>-<n>`: the per-session discriminator plus the counter,
+     * minted by the open handler. Lives here and never in a URI.
+     */
     id: string;
     url: string;
 }
@@ -529,6 +544,25 @@ export class WebTabWidget extends BaseWidget {
 let nextTabSeq = 0;
 
 /**
+ * A per-session discriminator, minted once at module load, carried in every
+ * tab id this frontend session mints (G-14.1.1-5). Its only job is to make an
+ * id from a persisted layout distinguishable from one minted now, so the
+ * counter restarting at 0 can never collide with a described tab.
+ *
+ * It is NOT a security token and grants nothing: authorisation for a group
+ * channel request is the chrome-side origin wall in `PowerBrowserAPI.sys.mjs`.
+ * Like the counter it accompanies, it is a non-user-chosen discriminator, so
+ * it lives in widget construction options and never in a URI
+ * (docs/URI-SCHEMES.md:37-40).
+ */
+export const WEB_TAB_SESSION = Math.random().toString(36).slice(2, 8);
+
+/** True only for an id minted by THIS frontend session. The factory's admission test. */
+export function isCurrentSessionTabId(id: string): boolean {
+    return typeof id === 'string' && id.startsWith(`wt-${WEB_TAB_SESSION}-`);
+}
+
+/**
  * Opens `http:`/`https:` URIs (and the empty page) as in-shell web tabs.
  * Priority 1000 clears stock `HttpOpenHandler` at 500 -- whose `open()`
  * hands the URI to `windowService.openNewWindow(..., { external: true })`,
@@ -557,7 +591,7 @@ export class WebTabOpenHandler implements OpenHandler {
     }
 
     async openUrl(url: string): Promise<WebTabWidget> {
-        const options: WebTabOptions = { id: `wt${++nextTabSeq}`, url };
+        const options: WebTabOptions = { id: `wt-${WEB_TAB_SESSION}-${++nextTabSeq}`, url };
         const widget = await this.widgetManager.getOrCreateWidget<WebTabWidget>(WEB_TAB_FACTORY_ID, options);
         if (!widget.isAttached) {
             this.shell.addWidget(widget, { area: 'main' });
