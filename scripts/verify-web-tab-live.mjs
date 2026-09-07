@@ -101,6 +101,7 @@ const CHROME_BAR_WIDGET_REL = 'theia/extensions/chrome-bar/src/browser/chrome-ba
 const DESCRIPTORS_REL = 'theia/extensions/modes/src/browser/mode-descriptors.ts';
 const MODES_COMMANDS_REL = 'theia/extensions/modes/src/browser/modes-commands.ts';
 const ORGANISING_REL = 'theia/extensions/modes/src/browser/organising-widget.ts';
+const SHELL_API_REL = 'powerbrowser/shell/PowerBrowserAPI.sys.mjs';
 
 /** The shell's own readiness sentinel (powerbrowser.js dump channel). */
 const SHELL_READY_SENTINEL = 'POWERBROWSER_SHELL_READY';
@@ -205,6 +206,14 @@ function derive() {
         failures.push(`${CHROME_BAR_WIDGET_REL}: the pill no longer follows 'mainPanel.onDidChangeCurrent' -- the strip-selection binding the pill assertion stands on is gone, so a green pill here would mean nothing`);
     }
 
+    // G-14.1.1-6: the capture cap the stored snapshot must fit inside. Read
+    // off the boundary file that enforces it so the number is never typed
+    // twice -- raising the cap there raises it here, and nowhere else.
+    const thumbnailMaxChars = Number(/TAB_THUMBNAIL_CAPTURE_MAX_CHARS\s*=\s*(\d+)/.exec(read(SHELL_API_REL))?.[1]);
+    if (!thumbnailMaxChars) {
+        failures.push(`${SHELL_API_REL}: derived NO thumbnail capture cap -- the stored snapshot's length could only be checked against a hand-typed number`);
+    }
+
     const shipped = [...read(DESCRIPTORS_REL).matchAll(/^\s*id:\s*'([^']+)'/gm)].map(m => m[1]);
     if (shipped.length !== 3) {
         failures.push(`${DESCRIPTORS_REL}: derived ${shipped.length} shipped mode ids, expected exactly three (coding, browsing, organising) -- the walk cannot be built from a set of any other size`);
@@ -225,6 +234,7 @@ function derive() {
         failures, factoryId, emptyUrl, stateEvent, requestEvent, blockingSelector, lostViewCopy,
         handlerClass, widgetClass, channelClass, chromeBarContributionClass,
         newTabCommandId, inputClass, shipped, activateCommandId, organisingWidgetId, walk,
+        thumbnailMaxChars,
     };
 }
 
@@ -385,6 +395,13 @@ function phaseExpression(cfg, phase, arg) {
         // The store reader the check polls. Wrapped here so the store-unread
         // plant can replace the reader through one seam.
         P.search = (prefix, limit) => suggestions.searchByPrefix(prefix, limit);
+        // G-14.1.1-6: the last-view snapshot reader. NOT ChromeBarSuggestionService
+        // -- its row projection drops the thumbnail column, so the only frontend
+        // reader that can see one is GroupQueryService, the same backend handle
+        // (TabQueryService) behind one more RPC method. Wrapped here so the
+        // thumb-not-scheduled plant has one seam.
+        const groups = __getByName(container, 'GroupQueryService');
+        P.thumbnailOf = uri => groups.getThumbnail(uri);
 
         if (cfg.plant === 'swallow') {
             const realDispatch = document.dispatchEvent.bind(document);
@@ -483,6 +500,25 @@ function phaseExpression(cfg, phase, arg) {
             } else {
                 window.removeEventListener(cfg.stateEvent, P.channel.onState);
                 report.notes.push('PLANT state-ignored: the ' + cfg.stateEvent + ' listener was removed, so chrome pushes never reach the widget');
+            }
+        } else if (cfg.plant === 'thumb-not-scheduled') {
+            // DOCUMENTED LIMITATION -- this is an ASSERTION test, not a
+            // capture-path test, and must not be read as one. The schedule
+            // and the capture both live entirely chrome-side (the overlay's
+            // own progress listener and webTabGeometry in
+            // PowerBrowserAPI.sys.mjs), while every plant here runs in the page
+            // realm, so no seam this plant can reach removes the schedule
+            // itself. It strips the snapshot off the READ instead, which
+            // proves the three thumbnail assertions are separate from the row
+            // assertions and go red on their own -- it does NOT prove the
+            // capture path is what filled them. What proves that is the RED
+            // recorded before the fix landed: the same phase, same reader, no
+            // plant, and no snapshot in the row.
+            if (typeof P.thumbnailOf !== 'function') {
+                fail('plant thumb-not-scheduled could not be applied: the probe carries no thumbnail reader seam');
+            } else {
+                P.thumbnailOf = async () => undefined;
+                report.notes.push('PLANT thumb-not-scheduled: the last-view snapshot reader returns nothing (assertion test -- the chrome-side capture path is not reachable from the page realm)');
             }
         } else if (cfg.plant === 'store-unread') {
             P.search = async () => [];
@@ -631,6 +667,36 @@ function phaseExpression(cfg, phase, arg) {
             return rows.some(row => row.url === cfg.servedB);
         }, 5000);
         report.rowsAfterNavigation = rows.map(row => ({ url: row.url, title: row.title }));`,
+
+        // G-14.1.1-6. Since 14.1 every tab Chris opens is an overlay, so if the
+        // capture path can only see stock tabs every Panorama card falls to the
+        // no-thumbnail state. Hide the overlay through the product's own
+        // geometry message -- the same one a mode switch away publishes -- so
+        // the last-view schedule site is exercised, then wait past the settle
+        // window and read the row back. The bytes themselves NEVER enter the
+        // report: presence, prefix and length only.
+        thumbnail: `
+        report.steps.push('hide the overlay, then read its last-view snapshot');
+        report.thumbnail = { hasThumbnail: false, prefixOk: false, length: 0 };
+        // send, NOT request: the geometry reply is deliberately withheld by the
+        // lost-view-ignored plant, and a phase that awaited it would hang that
+        // whole session rather than let the plant go red on its own assertion.
+        // Nothing here needs the reply -- the evidence is the stored row below.
+        P.channel.send({ kind: 'webTabGeometry', tabId: P.widget.tabId, x: 0, y: 0, w: 0, h: 0, visible: false });
+        let snapshot;
+        await P.until(async () => {
+            snapshot = await P.thumbnailOf(cfg.servedB);
+            return typeof snapshot === 'string' && snapshot.length > 0;
+        }, 8000);
+        report.thumbnail.hasThumbnail = typeof snapshot === 'string' && snapshot.length > 0;
+        report.thumbnail.prefixOk = typeof snapshot === 'string' && snapshot.startsWith('data:image/png;base64,');
+        report.thumbnail.length = typeof snapshot === 'string' ? snapshot.length : 0;
+        // Put the overlay back where the run found it, through the widget's own
+        // publisher, so the phases after this one see the product's state and
+        // not this phase's leftovers.
+        P.widget.lastSent = '';
+        P.widget.publish();
+        await P.settle();`,
 
         // G-14.1.1-5. Both halves of the gap, one mechanism. The stock layout
         // restorer describes every widget that has a WidgetManager description
@@ -920,6 +986,7 @@ async function drive(derived, plant) {
 
                 const store = await phase('store');
                 report.rowsAfterNavigation = store.rowsAfterNavigation;
+                report.thumbnail = (await phase('thumbnail')).thumbnail;
                 report.restoreRepeat = (await phase('restoreRepeat')).restoreRepeat;
                 const closed = await phase('close');
                 Object.assign(report, {
@@ -1053,6 +1120,19 @@ function assertReport(derived, report) {
     if (!(report.rowsAfterNavigation ?? []).some(row => row.url === report.servedB)) {
         failures.push(`no store row for ${report.servedB} was readable through ChromeBarSuggestionService.searchByPrefix after the navigation (rows: ${JSON.stringify(report.rowsAfterNavigation ?? [])})`);
     }
+    // G-14.1.1-6. The card's `tab.thumbnail` branch has always rendered; what
+    // it never had since 14.1 was a row to render, because the capture path
+    // could only find a stock tab.
+    const thumb = report.thumbnail ?? {};
+    if (thumb.hasThumbnail !== true) {
+        failures.push(`thumbnail: the store row for ${report.servedB} carries no last-view snapshot after the overlay loaded and was hidden -- an in-shell web tab captured nothing, so its Panorama card falls to the text fallback`);
+    }
+    if (thumb.prefixOk !== true) {
+        failures.push(`thumbnail: the stored snapshot for ${report.servedB} is not a PNG data URL (length ${thumb.length}) -- GUI-08 contracts a PNG last-view snapshot`);
+    }
+    if (!(thumb.length > 0 && thumb.length <= derived.thumbnailMaxChars)) {
+        failures.push(`thumbnail: the stored snapshot is ${thumb.length} chars, outside the capture cap TAB_THUMBNAIL_CAPTURE_MAX_CHARS=${derived.thumbnailMaxChars} derived from ${SHELL_API_REL} -- over the cap the row must clear to NULL rather than store`);
+    }
     if ((report.rowsAfterClose ?? []).some(row => row.url === report.servedA || row.url === report.servedB)) {
         failures.push(`a store row for a served URL is still readable after the tab was closed (rows: ${JSON.stringify(report.rowsAfterClose)})`);
     }
@@ -1094,6 +1174,8 @@ function printReport(report) {
     const restore = report.restoreRepeat ?? {};
     console.log(`${NAME}: restoreRepeat: minted ${JSON.stringify(restore.mintedId)} (session segment ${JSON.stringify(restore.mintedIdPrefix)}), second "+" minted ${JSON.stringify(restore.secondMintedId)}; foreign id ${JSON.stringify(restore.foreignId)} refused: ${restore.refusedForeignId}${restore.refusalMessage ? ` (${restore.refusalMessage})` : ''}; main-area ids after: [${(restore.mainIdsAfter ?? []).join(', ')}]`);
     console.log(`${NAME}: rows after navigation: ${JSON.stringify((report.rowsAfterNavigation ?? []).map(r => r.url))}; rows after close: ${JSON.stringify((report.rowsAfterClose ?? []).map(r => r.url))}`);
+    const thumb = report.thumbnail ?? {};
+    console.log(`${NAME}: thumbnail: hasThumbnail ${thumb.hasThumbnail}, prefixOk ${thumb.prefixOk}, length ${thumb.length} -- bytes deliberately not printed`);
     console.log(`${NAME}: contexts after close: ${JSON.stringify(report.contextsAfterClose ?? [])}; main-area ids before/after: [${(report.mainIdsBefore ?? []).join(', ')}] / [${(report.mainIdsAfterClose ?? []).join(', ')}]; window.open calls: ${report.windowOpenCalls}; ${SHELL_READY_SENTINEL} lines: ${report.shellReadyLines}`);
     for (const note of report.notes ?? []) {
         console.log(`${NAME}: ${note}`);
@@ -1162,6 +1244,11 @@ async function selfTest() {
         { name: 'the pill is keyed on focus, not on the strip selection', plant: 'focus-keyed-pill', expect: 'pill' },
         // Chrome's pushes never reach the widget, so the pill keeps the typed text.
         { name: 'state pushes ignored', plant: 'state-ignored', expect: 'pill' },
+        // No last-view snapshot reaches the row (G-14.1.1-6). See the plant's
+        // own comment: it strips the read, not the chrome-side schedule, so it
+        // proves the thumbnail assertions are reachable and independent of the
+        // row assertions -- not that the capture path filled them.
+        { name: 'no last-view snapshot on the row', plant: 'thumb-not-scheduled', expect: 'thumbnail' },
         // The store reader returns nothing.
         { name: 'store rows unread', plant: 'store-unread', expect: 'row' },
         // "+" itself regresses to a popup.

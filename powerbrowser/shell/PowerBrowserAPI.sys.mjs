@@ -1274,7 +1274,8 @@ export const PowerBrowserAPI = Object.freeze({
 
   /**
    * GUI-08 (15-02): PNG last-view snapshot for one tab row. Finds the live
-   * stock browser by opaque URI key, draws it at card width (160px target,
+   * stock tab OR the live in-shell overlay by opaque URI key (14.1.1-02 --
+   * before that every in-shell tab captured nothing), draws it at card width (160px target,
    * sketch background so unpainted regions match the tray), and stores the
    * data URL through writeThumbnail -- over the capture cap, or with no live
    * browser, the row clears to NULL and the card keeps its contracted text
@@ -1287,7 +1288,7 @@ export const PowerBrowserAPI = Object.freeze({
       if (typeof uri !== "string" || !uri) {
         return "refused-empty";
       }
-      const found = PowerBrowserAPI.findStockTabBrowser(uri);
+      const found = PowerBrowserAPI.findTabBrowserForUri(uri);
       if (!found) {
         await PowerBrowserAPI.writeThumbnail(uri, null).catch(() => undefined);
         return "no-live-tab";
@@ -1341,8 +1342,38 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
+   * GUI-08 (14.1.1-02): live tab-browser lookup by opaque URI key across BOTH
+   * tab shapes -- a stock window's XUL tab first, then this shell's web-tab
+   * overlays. Since 14.1 every tab Chris opens is an overlay, so a capture
+   * that could only resolve a stock tab found nothing to draw and every
+   * Panorama card fell to the no-thumbnail state.
+   *
+   * Overlay entries are keyed on `entry.uri` EXACTLY -- the same value the
+   * overlay's onLocationChange passed to writeTabRow -- so a thumbnail always
+   * lands on a row that exists.
+   *
+   * Returns { win, tab, browser } or null. `tab` is null for an overlay:
+   * there is no XUL tab record behind it. That is why closeStockTabByUri,
+   * which dereferences `found.tab`, keeps calling findStockTabBrowser
+   * directly and must NOT be repointed here.
+   */
+  findTabBrowserForUri(uri) {
+    const stock = PowerBrowserAPI.findStockTabBrowser(uri);
+    if (stock) {
+      return stock;
+    }
+    for (const entry of webTabs.values()) {
+      if (entry && entry.uri === uri && entry.browser) {
+        return { win: entry.browser.ownerDocument.defaultView, tab: null, browser: entry.browser };
+      }
+    }
+    return null;
+  },
+
+  /**
    * GUI-08 (15-01): best-effort stock-tab close by opaque URI key, through
-   * the shared lookup above. Returns true when a live tab matched and was
+   * the stock-only lookup above -- NOT findTabBrowserForUri, which can return
+   * an overlay whose `tab` is null. Returns true when a live tab matched and was
    * asked to close. Never throws -- the caller logs and relies on its
    * deterministic row DELETE.
    */
@@ -2221,7 +2252,17 @@ export const PowerBrowserAPI = Object.freeze({
         if (!webProgress.isTopLevel || !(stateFlags & Ci.nsIWebProgressListener.STATE_IS_NETWORK)) {
           return;
         }
-        PowerBrowserAPI.webTabPush(theiaBrowser, tabId, browser, !!(stateFlags & Ci.nsIWebProgressListener.STATE_START));
+        const starting = !!(stateFlags & Ci.nsIWebProgressListener.STATE_START);
+        // GUI-08 (14.1.1-02): the overlay's own capture schedule. On the
+        // network STOP transition the page has finished loading, so a
+        // snapshot taken after the settle window shows the page rather than a
+        // blank frame. Coalesced per URI by scheduleSettleCapture, private
+        // windows skipped there and again at capture time, never throws --
+        // so this cannot break the progress hot path.
+        if (!starting && (stateFlags & Ci.nsIWebProgressListener.STATE_STOP) && entry.uri) {
+          PowerBrowserAPI.scheduleSettleCapture(entry.uri, win);
+        }
+        PowerBrowserAPI.webTabPush(theiaBrowser, tabId, browser, starting);
       },
     };
     browser.addProgressListener(entry.listener, Ci.nsIWebProgress.NOTIFY_LOCATION | Ci.nsIWebProgress.NOTIFY_STATE_NETWORK);
@@ -2314,6 +2355,15 @@ export const PowerBrowserAPI = Object.freeze({
     const width = Math.max(0, Math.min(w, win.innerWidth - left));
     const height = Math.max(0, Math.min(h, win.innerHeight - top));
     const host = theiaBrowser.getBoundingClientRect();
+    // GUI-08 (14.1.1-02): the overlay's equivalent of the stock TabSelect-leave
+    // site -- a mode switch away or a tab deselect hides this overlay, and its
+    // LAST view is what the Panorama card must show. Scheduled BEFORE the
+    // assignment below turns docShellIsActive off, so the page is still
+    // painting when the settle timer draws it.
+    const wasVisible = entry.browser.style.visibility === "visible";
+    if (wasVisible && !visible && entry.uri) {
+      PowerBrowserAPI.scheduleSettleCapture(entry.uri, win);
+    }
     Object.assign(entry.browser.style, {
       left: `${host.left + left}px`,
       top: `${host.top + top}px`,
