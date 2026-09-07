@@ -12,6 +12,7 @@ import {
 } from '@theia/core/lib/browser';
 import { CommandRegistry, Disposable } from '@theia/core/lib/common';
 import URI from '@theia/core/lib/common/uri';
+import { NavigatableWidget } from '@theia/core/lib/browser/navigatable-types';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
 import pDebounce from 'p-debounce';
 import type { TabQueryRow } from '@powerbrowser/tab-uris/lib/node/tab-query-service';
@@ -415,7 +416,12 @@ export class ChromeBarWidget extends ReactWidget {
         if (widget instanceof WebTabWidget) {
             return widget.hasPage ? widget.url : '';
         }
-        return this.tabUris.uriOf(widget)?.toString(true) ?? '';
+        // Editors are Theia Navigatables addressed by their own resource
+        // URI (docs/URI-SCHEMES.md), not registry rows -- fall back to it so
+        // a file tab shows its path (found live 2026-09-07: empty pill).
+        return this.tabUris.uriOf(widget)?.toString(true)
+            ?? NavigatableWidget.getUri(widget)?.toString(true)
+            ?? '';
     }
 
     /**
@@ -797,12 +803,19 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         // switches (no mode switch required).
         this.shell.onDidAddWidget(() => this.barWidget.publishTabCount());
         this.shell.onDidRemoveWidget(() => this.barWidget.publishTabCount());
-        // GUI-02: the current widget also drives the navigable-tab predicate
-        // and the pill. Seeded once from the live current widget because an
-        // activation can precede this subscription (the perspective seed
-        // above exists for the same ordering hazard).
-        this.shell.onDidChangeCurrentWidget(({ newValue }) => this.syncCurrentWidget(newValue ?? undefined));
-        this.syncCurrentWidget(this.shell.currentWidget);
+        // GUI-02: the SELECTED MAIN-AREA TAB drives the navigable-tab
+        // predicate and the pill -- the dock's current title, not the
+        // focus-derived shell.currentWidget. A web tab's body is covered by
+        // the chrome overlay, so its placeholder node never receives DOM
+        // focus in real use ("+" focuses the pill, a click lands in the
+        // overlay): keyed on focus, the bar never subscribed to the tab's
+        // state pushes and the pill stayed on the typed text (found live
+        // 2026-09-07). Seeded once because an activation can precede this
+        // subscription (the perspective seed above exists for the same
+        // ordering hazard).
+        this.shell.mainPanel.onDidChangeCurrent(title => this.syncCurrentWidget(title?.owner));
+        this.syncCurrentWidget(this.shell.mainPanel.currentTitle?.owner);
+        this.shell.onDidChangeCurrentWidget(() => this.barWidget.publishTabCount());
         // The landing half of chrome's reserved accel+L: from inside a page
         // the shell key asks the frontend to focus the address, the channel
         // re-emits it here, and the pill takes focus with its content
