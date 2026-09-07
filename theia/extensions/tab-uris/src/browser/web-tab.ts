@@ -1,0 +1,393 @@
+import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
+import { ApplicationShell, BaseWidget, Message, OpenHandler, Widget, WidgetManager } from '@theia/core/lib/browser';
+import { Emitter, Event as TheiaEvent } from '@theia/core/lib/common';
+import URI from '@theia/core/lib/common/uri';
+
+/**
+ * GUI-02 (14.1-01): the in-shell web tab -- a main-area placeholder widget
+ * whose page is rendered by a chrome-owned `<xul:browser>` overlay that
+ * `PowerBrowserAPI.sys.mjs` keeps aligned with this widget's node. The
+ * frontend owns tab identity, the strip title and geometry; chrome owns the
+ * docshell, the navigation and the tab-store row. The two halves talk over
+ * the existing PowerBrowserGroup actor channel (frontend -> chrome as
+ * `PowerBrowserGroupRequest` DOM events, chrome -> frontend as
+ * `PowerBrowserWebTabState` events re-dispatched by the actor child).
+ *
+ * The widget is deliberately NOT `ExtractableWidget` (the overlay lives in
+ * the shell window and cannot follow a widget into a dependent window) and
+ * NOT `StatefulWidget` (the frontend origin changes every launch, so a
+ * cross-launch layout restore has nothing to hydrate; named setups restore
+ * tabs through the opener instead). UI-SPEC A12.
+ */
+
+export const WEB_TAB_FACTORY_ID = 'powerbrowser.web-tab';
+/** The one non-http target chrome admits: a bare New Tab. Never shown in copy. */
+export const EMPTY_PAGE_URL = 'about:blank';
+export const WEB_TAB_STATE_EVENT = 'PowerBrowserWebTabState';
+/** Ack budget for the requests whose reply decides UI state; matches the group channel's. */
+export const WEB_TAB_ACK_TIMEOUT_MS = 5000;
+export const WEB_TAB_OPEN_HANDLER_ID = 'powerbrowser.web-tab-open-handler';
+
+/**
+ * Wire names of the group channel. Spelled locally rather than imported for
+ * the reason `browser-window-command.ts` already records: the canonical
+ * exports live in `@powerbrowser/modes`, which depends on this package, so
+ * importing back would close a package cycle.
+ */
+const GROUP_REQUEST_EVENT = 'PowerBrowserGroupRequest';
+const GROUP_RESPONSE_EVENT = 'PowerBrowserGroupResponse';
+
+/** Copywriting Contract, verbatim. */
+const NEW_TAB_LABEL = 'New Tab';
+
+export interface WebTabOptions {
+    /** Per-session counter minted by the open handler; lives here and never in a URI. */
+    id: string;
+    url: string;
+}
+
+export interface WebTabState {
+    url: string;
+    title: string;
+    loading: boolean;
+    canGoBack: boolean;
+    canGoForward: boolean;
+}
+
+/** The eight kinds `handleGroupMutation` serves for web tabs; one stable set for the bridge gate. */
+export type WebTabMessage =
+    | { kind: 'webTabOpen'; tabId: string; url: string }
+    | { kind: 'webTabGeometry'; tabId: string; x: number; y: number; w: number; h: number; visible: boolean }
+    | { kind: 'webTabNavigate'; tabId: string; url: string }
+    | { kind: 'webTabBack'; tabId: string }
+    | { kind: 'webTabForward'; tabId: string }
+    | { kind: 'webTabReload'; tabId: string }
+    | { kind: 'webTabClose'; tabId: string }
+    | { kind: 'webTabFocus'; tabId: string };
+
+export interface WebTabReply {
+    ok: boolean;
+    where?: string;
+    reason?: string;
+    message?: string;
+}
+
+/**
+ * The frontend end of the two-way bridge. `send` is fire-and-forget (a
+ * requestId is supplied so the child's reply is well-formed, but no waiter
+ * is registered and every correlator drops an unmatched response);
+ * `request` awaits the ack with a timeout, for the few messages whose reply
+ * decides UI state. One window-level listener receives every chrome push
+ * and routes it to the widget registered under its tabId.
+ *
+ * Never read `dispatchEvent`'s return value as "chrome took it" -- measured
+ * false twice in this tree even when chrome had acted on the message.
+ */
+@injectable()
+export class WebTabChannel {
+
+    private seq = 0;
+    private readonly widgets = new Map<string, WebTabWidget>();
+    private readonly focusAddressEmitter = new Emitter<void>();
+
+    /** Fired when chrome's reserved accel+L asks the frontend to focus the address pill. */
+    readonly onDidRequestFocusAddress: TheiaEvent<void> = this.focusAddressEmitter.event;
+
+    @postConstruct()
+    protected init(): void {
+        window.addEventListener(WEB_TAB_STATE_EVENT, this.onState);
+    }
+
+    register(tabId: string, widget: WebTabWidget): void {
+        this.widgets.set(tabId, widget);
+    }
+
+    unregister(tabId: string): void {
+        this.widgets.delete(tabId);
+    }
+
+    send(msg: WebTabMessage): void {
+        this.dispatch(this.requestId(msg.kind), msg);
+    }
+
+    request(msg: WebTabMessage): Promise<WebTabReply> {
+        return new Promise<WebTabReply>(resolve => {
+            const requestId = this.requestId(msg.kind);
+            const settle = (reply: WebTabReply): void => {
+                window.removeEventListener(GROUP_RESPONSE_EVENT, onResponse);
+                window.clearTimeout(timer);
+                resolve(reply);
+            };
+            const onResponse = (event: Event): void => {
+                const detail = (event as CustomEvent).detail as
+                    { requestId?: unknown; reply?: unknown } | undefined;
+                if (!detail || detail.requestId !== requestId) {
+                    return;
+                }
+                const reply = detail.reply;
+                settle(reply && typeof reply === 'object'
+                    ? reply as WebTabReply
+                    : { ok: false, reason: 'validation', message: 'malformed reply' });
+            };
+            const timer = window.setTimeout(() => settle({ ok: false, reason: 'timeout' }), WEB_TAB_ACK_TIMEOUT_MS);
+            window.addEventListener(GROUP_RESPONSE_EVENT, onResponse);
+            this.dispatch(requestId, msg);
+        });
+    }
+
+    private requestId(kind: string): string {
+        return `web-tab-${kind}-${Date.now().toString(36)}-${(this.seq += 1)}`;
+    }
+
+    private dispatch(requestId: string, msg: WebTabMessage): void {
+        // `document` target + bubbles:true are both load-bearing: the actor
+        // child's listener sits on the window root, which a non-bubbling
+        // event dispatched on `window` never reaches (GUI-DEFECTS item 10).
+        document.dispatchEvent(new CustomEvent(GROUP_REQUEST_EVENT, {
+            bubbles: true,
+            detail: { requestId, msg },
+        }));
+    }
+
+    private readonly onState = (event: Event): void => {
+        try {
+            const detail = (event as CustomEvent).detail as
+                { kind?: unknown; tabId?: unknown; url?: unknown; title?: unknown; loading?: unknown; canGoBack?: unknown; canGoForward?: unknown } | undefined;
+            if (!detail || typeof detail !== 'object') {
+                return;
+            }
+            if (detail.kind === 'focusAddress') {
+                this.focusAddressEmitter.fire();
+                return;
+            }
+            if (detail.kind !== 'state' || typeof detail.tabId !== 'string') {
+                return;
+            }
+            const widget = this.widgets.get(detail.tabId);
+            if (!widget) {
+                return;
+            }
+            widget.applyState({
+                url: typeof detail.url === 'string' ? detail.url : widget.url,
+                title: typeof detail.title === 'string' ? detail.title : '',
+                loading: detail.loading === true,
+                canGoBack: detail.canGoBack === true,
+                canGoForward: detail.canGoForward === true,
+            });
+        } catch (error) {
+            console.error('[@powerbrowser/tab-uris] web-tab state dispatch failed:', error);
+        }
+    };
+}
+
+/**
+ * The placeholder. Its node is what Lumino lays out; chrome paints the page
+ * over exactly that rect. Geometry is published on every lifecycle hook
+ * that can move or resize the node, coalesced to one animation frame per
+ * widget with the latest rect winning, and skipped when byte-identical to
+ * the last message sent.
+ */
+@injectable()
+export class WebTabWidget extends BaseWidget {
+
+    tabId: string;
+    url: string;
+    pageTitle = '';
+    loading = false;
+    canGoBack = false;
+    canGoForward = false;
+    lostView = false;
+
+    protected readonly stateEmitter = new Emitter<WebTabState>();
+    readonly onDidChangeState: TheiaEvent<WebTabState> = this.stateEmitter.event;
+
+    @inject(WebTabChannel)
+    protected readonly channel: WebTabChannel;
+
+    protected raf = 0;
+    protected lastSent = '';
+    protected resizeObserver: ResizeObserver | undefined;
+    protected listening = false;
+
+    get hasPage(): boolean {
+        return this.url !== EMPTY_PAGE_URL;
+    }
+
+    init(options: WebTabOptions): void {
+        // The Theia widget id -- an internal identifier, never shown.
+        this.id = `${WEB_TAB_FACTORY_ID}:${options.id}`;
+        this.tabId = options.id;
+        this.url = options.url;
+        this.title.closable = true;
+        this.title.iconClass = 'codicon codicon-globe';
+        this.node.tabIndex = 0;
+        this.addClass('pb-web-tab');
+        this.channel.register(this.tabId, this);
+        this.refreshTitle();
+    }
+
+    /** Label: page title -> page URL -> "New Tab". Caption: URL or "New Tab". Text values only, never markup. */
+    protected refreshTitle(): void {
+        this.title.label = this.pageTitle || (this.hasPage ? this.url : NEW_TAB_LABEL);
+        this.title.caption = this.hasPage ? this.url : NEW_TAB_LABEL;
+        this.node.setAttribute('aria-label', this.title.label);
+    }
+
+    protected onAfterAttach(msg: Message): void {
+        super.onAfterAttach(msg);
+        this.channel.send({ kind: 'webTabOpen', tabId: this.tabId, url: this.url });
+        this.publish();
+        if (!this.listening) {
+            this.listening = true;
+            this.resizeObserver = new ResizeObserver(() => this.publish());
+            this.resizeObserver.observe(this.node);
+            const onWindowResize = (): void => this.publish();
+            window.addEventListener('resize', onWindowResize);
+            this.toDispose.push({ dispose: () => window.removeEventListener('resize', onWindowResize) });
+        }
+    }
+
+    protected onResize(msg: Widget.ResizeMessage): void {
+        super.onResize(msg);
+        this.publish();
+    }
+
+    protected onAfterShow(msg: Message): void {
+        super.onAfterShow(msg);
+        this.publish();
+    }
+
+    protected onBeforeHide(msg: Message): void {
+        super.onBeforeHide(msg);
+        this.publish();
+    }
+
+    protected onBeforeDetach(msg: Message): void {
+        super.onBeforeDetach(msg);
+        this.publish();
+    }
+
+    protected onCloseRequest(msg: Message): void {
+        this.channel.send({ kind: 'webTabClose', tabId: this.tabId });
+        this.channel.unregister(this.tabId);
+        super.onCloseRequest(msg);
+    }
+
+    dispose(): void {
+        if (this.isDisposed) {
+            return;
+        }
+        cancelAnimationFrame(this.raf);
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = undefined;
+        this.channel.unregister(this.tabId);
+        super.dispose();
+    }
+
+    /** Coalesced geometry publish: one rAF per widget, latest rect wins, identical messages skipped. */
+    publish(): void {
+        cancelAnimationFrame(this.raf);
+        this.raf = requestAnimationFrame(() => {
+            if (this.isDisposed) {
+                return;
+            }
+            const r = this.node.getBoundingClientRect();
+            const msg: WebTabMessage = {
+                kind: 'webTabGeometry',
+                tabId: this.tabId,
+                x: Math.round(r.left),
+                y: Math.round(r.top),
+                w: Math.round(r.width),
+                h: Math.round(r.height),
+                visible: this.isAttached && this.isVisible && this.hasPage,
+            };
+            const key = JSON.stringify(msg);
+            if (key === this.lastSent) {
+                return;
+            }
+            this.lastSent = key;
+            this.channel.send(msg);
+        });
+    }
+
+    navigate(url: string): Promise<WebTabReply> {
+        this.url = url;
+        this.refreshTitle();
+        this.publish();
+        return this.channel.request({ kind: 'webTabNavigate', tabId: this.tabId, url });
+    }
+
+    back(): void {
+        this.channel.send({ kind: 'webTabBack', tabId: this.tabId });
+    }
+
+    forward(): void {
+        this.channel.send({ kind: 'webTabForward', tabId: this.tabId });
+    }
+
+    reload(): void {
+        this.channel.send({ kind: 'webTabReload', tabId: this.tabId });
+    }
+
+    focusPage(): void {
+        this.channel.send({ kind: 'webTabFocus', tabId: this.tabId });
+    }
+
+    applyState(state: WebTabState): void {
+        this.url = state.url;
+        this.pageTitle = state.title;
+        this.loading = state.loading;
+        this.canGoBack = state.canGoBack;
+        this.canGoForward = state.canGoForward;
+        if (this.loading) {
+            const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            this.title.iconClass = reduced ? 'codicon codicon-loading' : 'codicon codicon-loading codicon-modifier-spin';
+        } else {
+            this.title.iconClass = 'codicon codicon-globe';
+        }
+        this.refreshTitle();
+        this.stateEmitter.fire(state);
+    }
+}
+
+/** Per-session tab counter; lives only in widget construction options, never in a URI (docs/URI-SCHEMES.md). */
+let nextTabSeq = 0;
+
+/**
+ * Opens `http:`/`https:` URIs (and the empty page) as in-shell web tabs.
+ * Priority 1000 clears stock `HttpOpenHandler` at 500 -- whose `open()`
+ * hands the URI to `windowService.openNewWindow(..., { external: true })`,
+ * i.e. an OS window -- while staying under `defaultHandlerPriority`, the
+ * same reasoning as `view-open-handler.ts`. Every opener in the tree
+ * (chrome bar, setups restore, Panorama dive, a link) reaches this through
+ * `OpenerService`; none of them needs to know a web tab exists.
+ */
+@injectable()
+export class WebTabOpenHandler implements OpenHandler {
+
+    readonly id = WEB_TAB_OPEN_HANDLER_ID;
+
+    @inject(WidgetManager)
+    protected readonly widgetManager: WidgetManager;
+
+    @inject(ApplicationShell)
+    protected readonly shell: ApplicationShell;
+
+    canHandle(uri: URI): number {
+        return /^https?$/.test(uri.scheme) || uri.toString(true) === EMPTY_PAGE_URL ? 1000 : 0;
+    }
+
+    async open(uri: URI): Promise<WebTabWidget> {
+        return this.openUrl(uri.toString(true));
+    }
+
+    async openUrl(url: string): Promise<WebTabWidget> {
+        const options: WebTabOptions = { id: `wt${++nextTabSeq}`, url };
+        const widget = await this.widgetManager.getOrCreateWidget<WebTabWidget>(WEB_TAB_FACTORY_ID, options);
+        if (!widget.isAttached) {
+            this.shell.addWidget(widget, { area: 'main' });
+        }
+        await this.shell.activateWidget(widget.id);
+        return widget;
+    }
+}

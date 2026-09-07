@@ -1,5 +1,5 @@
 import { ContainerModule } from '@theia/core/shared/inversify';
-import { FrontendApplicationContribution, OpenHandler, OpenerService, WidgetManager } from '@theia/core/lib/browser';
+import { FrontendApplicationContribution, OpenHandler, OpenerService, WidgetFactory, WidgetManager } from '@theia/core/lib/browser';
 import { CommandContribution, Disposable } from '@theia/core/lib/common';
 import { ChatViewWidget } from '@theia/ai-chat-ui/lib/browser/chat-view-widget';
 import { TerminalFrontendContribution } from '@theia/terminal/lib/browser/terminal-frontend-contribution';
@@ -10,6 +10,7 @@ import { PowerBrowserTerminalFrontendContribution, PowerBrowserTerminalWidget } 
 import { TerminalUriOpenHandler } from './terminal-open-handler';
 import { PowerBrowserOutputOpenHandler, PowerBrowserWebviewOpenHandler } from './existing-scheme-coverage';
 import { BrowserWindowCommandContribution } from './browser-window-command';
+import { WEB_TAB_FACTORY_ID, WebTabChannel, WebTabOpenHandler, WebTabOptions, WebTabWidget } from './web-tab';
 
 /**
  * Registers an `OpenHandler` after the app's first `OpenerService.open()`
@@ -79,6 +80,27 @@ export default new ContainerModule((bind, _unbind, isBound, rebind) => {
     // dedup, no restore machinery added (D-51 carve-out 4).
     bind(PowerBrowserWebviewOpenHandler).toSelf().inSingletonScope();
     bind(OpenHandler).toService(PowerBrowserWebviewOpenHandler);
+
+    // GUI-02 (14.1-01): in-shell web tabs. The channel is one per frontend
+    // (one state listener routing chrome pushes by tabId); the widget is
+    // transient so every `getOrCreateWidget` call with fresh options mints
+    // a fresh placeholder; the factory is what WidgetManager keys the
+    // {factoryId, options} dedup on. The open handler is bound statically
+    // at module load for the same D-50 reason as every handler above --
+    // and it is what makes `OpenerService.open(https URI)` land in a web
+    // tab rather than in stock HttpOpenHandler's external OS window.
+    bind(WebTabChannel).toSelf().inSingletonScope();
+    bind(WebTabWidget).toSelf().inTransientScope();
+    bind(WidgetFactory).toDynamicValue(ctx => ({
+        id: WEB_TAB_FACTORY_ID,
+        createWidget: (options: WebTabOptions) => {
+            const widget = ctx.container.get(WebTabWidget);
+            widget.init(options);
+            return widget;
+        },
+    })).inSingletonScope();
+    bind(WebTabOpenHandler).toSelf().inSingletonScope();
+    bind(OpenHandler).toService(WebTabOpenHandler);
 
     // GUI-01 (01-05): the palette-reachable "Open Browser Window" command.
     // Bound statically at module load for the same reason the open-handler
