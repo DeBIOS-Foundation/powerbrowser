@@ -114,7 +114,7 @@ Plans:
   4. Each web tab writes its uri/url/title row to the chrome-side tab store on open, navigate, and close, so Organising and named setups see real tabs
   5. Firefox internals stay behind `PowerBrowserAPI.sys.mjs`, Theia core is untouched, and a `--quick` gate plus a live-frontend check go red on each of the above when a fault is planted
 
-**Plans**: 1/3 plans executed
+**Plans**: 2/3 plans executed
 
 Plans:
 **Wave 1**
@@ -123,7 +123,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 14.1-02-PLAN.md — Chrome bar and registry rewiring: uriOf page-URL branch, navigable-tab predicate flipped, New Tab/commit/suggestion routed to the in-shell web tab, pill bound to the active tab and state pushes, suggestions gate retargeted, URI-SCHEMES section
+- [x] 14.1-02-PLAN.md — Chrome bar and registry rewiring: uriOf page-URL branch, navigable-tab predicate flipped, New Tab/commit/suggestion routed to the in-shell web tab, pill bound to the active tab and state pushes, suggestions gate retargeted, URI-SCHEMES section
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
