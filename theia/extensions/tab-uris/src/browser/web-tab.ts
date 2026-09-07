@@ -2,6 +2,10 @@ import { inject, injectable, postConstruct } from '@theia/core/shared/inversify'
 import { ApplicationShell, BaseWidget, Message, OpenHandler, Widget, WidgetManager } from '@theia/core/lib/browser';
 import { Emitter, Event as TheiaEvent } from '@theia/core/lib/common';
 import URI from '@theia/core/lib/common/uri';
+// Resolved through src/, not './': the build is `tsc -b` alone, which emits
+// no CSS into lib/, so a lib-relative specifier would name a file that is
+// never written (the organising-widget / chrome-bar precedent).
+import '../../src/browser/web-tab.css';
 
 /**
  * GUI-02 (14.1-01): the in-shell web tab -- a main-area placeholder widget
@@ -37,8 +41,54 @@ export const WEB_TAB_OPEN_HANDLER_ID = 'powerbrowser.web-tab-open-handler';
 const GROUP_REQUEST_EVENT = 'PowerBrowserGroupRequest';
 const GROUP_RESPONSE_EVENT = 'PowerBrowserGroupResponse';
 
-/** Copywriting Contract, verbatim. */
+/** Copywriting Contract, verbatim. Text nodes only, never markup. */
 const NEW_TAB_LABEL = 'New Tab';
+const EMPTY_STATE_COPY = 'Type an address above to get started.';
+const LOST_VIEW_COPY = "Power Browser can't show this page right now. Choose Reload to try again, or close this tab.";
+
+/**
+ * Occlusion policy (UI-SPEC A8, Research Pitfall 3). The overlay is
+ * composited above the whole Theia frame, so any layer Theia portals to
+ * `document.body` -- the chrome bar's suggestion dropdown, the quick input
+ * / command palette, a dialog overlay, a menu -- would vanish behind the
+ * page. While one of these is rendered, every visible web tab publishes
+ * visible=false and shows its flat dark surface instead. `getClientRects`
+ * rather than mere presence: Theia keeps some of these in the DOM hidden.
+ */
+const BLOCKING_LAYER_SELECTOR = '.pb-chrome-bar-dropdown, .quick-input-widget, .lm-Widget.dialogOverlay, .lm-Menu';
+
+function blockingLayerOpen(): boolean {
+    return Array.from(document.querySelectorAll(BLOCKING_LAYER_SELECTOR))
+        .some(element => element.getClientRects().length > 0);
+}
+
+/** Every attached web tab, so one body observer can re-publish all of them. */
+const attachedWebTabs = new Set<WebTabWidget>();
+let bodyObserver: MutationObserver | undefined;
+
+/**
+ * One MutationObserver on the body for every web tab, created on first
+ * attach and never disconnected. It fires on a lot -- every class/style
+ * flip anywhere -- but each publish is rAF-coalesced and deduped against
+ * the last message sent, so the cost is bounded at one rect read per frame
+ * per widget, and hide/restore both land within one animation frame.
+ */
+function ensureBodyObserver(): void {
+    if (bodyObserver) {
+        return;
+    }
+    bodyObserver = new MutationObserver(() => {
+        for (const widget of attachedWebTabs) {
+            widget.publish();
+        }
+    });
+    bodyObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style'],
+    });
+}
 
 export interface WebTabOptions {
     /** Per-session counter minted by the open handler; lives here and never in a URI. */
@@ -208,9 +258,15 @@ export class WebTabWidget extends BaseWidget {
     protected lastSent = '';
     protected resizeObserver: ResizeObserver | undefined;
     protected listening = false;
+    protected stateNode: HTMLDivElement;
 
     get hasPage(): boolean {
         return this.url !== EMPTY_PAGE_URL;
+    }
+
+    /** Reload enablement (UI-SPEC A7 + A10): a page to reload, or a lost view whose open Reload re-issues. */
+    get canReload(): boolean {
+        return this.hasPage || this.lostView;
     }
 
     init(options: WebTabOptions): void {
@@ -222,8 +278,51 @@ export class WebTabWidget extends BaseWidget {
         this.title.iconClass = 'codicon codicon-globe';
         this.node.tabIndex = 0;
         this.addClass('pb-web-tab');
+        // The one child: the empty-state / lost-view line, a text node
+        // only. Live so a screen reader hears the state when it changes.
+        this.stateNode = document.createElement('div');
+        this.stateNode.className = 'pb-web-tab-state';
+        this.stateNode.setAttribute('aria-live', 'polite');
+        this.node.appendChild(this.stateNode);
+        // Keyboard entry into the page (UI-SPEC A14): Enter or Space on the
+        // focused placeholder hands focus to the overlay; leaving it again
+        // is chrome's reserved accel+L feeding onDidRequestFocusAddress.
+        this.node.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                this.focusPage();
+            }
+        });
         this.channel.register(this.tabId, this);
         this.refreshTitle();
+        this.renderState();
+    }
+
+    /** The body text state. Fixed literals; the tab counter, empty-page URL, kinds and error text never reach it. */
+    protected renderState(): void {
+        if (this.lostView) {
+            this.stateNode.textContent = LOST_VIEW_COPY;
+            this.stateNode.classList.add('is-lost');
+        } else if (!this.hasPage) {
+            this.stateNode.textContent = EMPTY_STATE_COPY;
+            this.stateNode.classList.remove('is-lost');
+        } else {
+            this.stateNode.textContent = '';
+            this.stateNode.classList.remove('is-lost');
+        }
+    }
+
+    protected setLostView(lost: boolean): void {
+        if (this.lostView === lost) {
+            return;
+        }
+        this.lostView = lost;
+        this.renderState();
+    }
+
+    /** A reply that means chrome no longer renders (or never rendered) this tab. */
+    protected static lostReply(reply: WebTabReply): boolean {
+        return reply.ok !== true || reply.where === 'unknown-tab';
     }
 
     /** Label: page title -> page URL -> "New Tab". Caption: URL or "New Tab". Text values only, never markup. */
@@ -235,7 +334,12 @@ export class WebTabWidget extends BaseWidget {
 
     protected onAfterAttach(msg: Message): void {
         super.onAfterAttach(msg);
-        this.channel.send({ kind: 'webTabOpen', tabId: this.tabId, url: this.url });
+        attachedWebTabs.add(this);
+        ensureBodyObserver();
+        // Lost-view detection (UI-SPEC A10/A11): the open is awaited, and a
+        // refusal, a nack or silence (timeout included) marks the view lost.
+        void this.channel.request({ kind: 'webTabOpen', tabId: this.tabId, url: this.url })
+            .then(reply => this.setLostView(reply.ok !== true));
         this.publish();
         if (!this.listening) {
             this.listening = true;
@@ -277,10 +381,13 @@ export class WebTabWidget extends BaseWidget {
         if (this.isDisposed) {
             return;
         }
+        attachedWebTabs.delete(this);
         cancelAnimationFrame(this.raf);
         this.resizeObserver?.disconnect();
         this.resizeObserver = undefined;
         this.channel.unregister(this.tabId);
+        // The window resize listener is on toDispose; the body observer is
+        // shared and lives for the session.
         super.dispose();
     }
 
@@ -299,7 +406,7 @@ export class WebTabWidget extends BaseWidget {
                 y: Math.round(r.top),
                 w: Math.round(r.width),
                 h: Math.round(r.height),
-                visible: this.isAttached && this.isVisible && this.hasPage,
+                visible: this.isAttached && this.isVisible && this.hasPage && !blockingLayerOpen(),
             };
             const key = JSON.stringify(msg);
             if (key === this.lastSent) {
@@ -310,23 +417,44 @@ export class WebTabWidget extends BaseWidget {
         });
     }
 
-    navigate(url: string): Promise<WebTabReply> {
+    async navigate(url: string): Promise<WebTabReply> {
         this.url = url;
         this.refreshTitle();
+        this.renderState();
+        // The tab now has a page, so the overlay becomes visible.
         this.publish();
-        return this.channel.request({ kind: 'webTabNavigate', tabId: this.tabId, url });
+        return this.settle(await this.channel.request({ kind: 'webTabNavigate', tabId: this.tabId, url }));
     }
 
-    back(): void {
-        this.channel.send({ kind: 'webTabBack', tabId: this.tabId });
+    async back(): Promise<WebTabReply> {
+        return this.settle(await this.channel.request({ kind: 'webTabBack', tabId: this.tabId }));
     }
 
-    forward(): void {
-        this.channel.send({ kind: 'webTabForward', tabId: this.tabId });
+    async forward(): Promise<WebTabReply> {
+        return this.settle(await this.channel.request({ kind: 'webTabForward', tabId: this.tabId }));
     }
 
-    reload(): void {
-        this.channel.send({ kind: 'webTabReload', tabId: this.tabId });
+    /**
+     * Reload; on a lost view this re-issues the open for the current URL
+     * instead (the contracted "Choose Reload to try again" affordance), and
+     * republishes geometry from scratch so the re-created overlay gets a
+     * rect the dedupe would otherwise have skipped.
+     */
+    async reload(): Promise<WebTabReply> {
+        if (this.lostView) {
+            const reply = await this.channel.request({ kind: 'webTabOpen', tabId: this.tabId, url: this.url });
+            this.setLostView(reply.ok !== true);
+            this.lastSent = '';
+            this.publish();
+            return reply;
+        }
+        return this.settle(await this.channel.request({ kind: 'webTabReload', tabId: this.tabId }));
+    }
+
+    /** Folds a navigation reply into the lost-view state and hands it back. */
+    protected settle(reply: WebTabReply): WebTabReply {
+        this.setLostView(WebTabWidget.lostReply(reply));
+        return reply;
     }
 
     focusPage(): void {
@@ -346,6 +474,7 @@ export class WebTabWidget extends BaseWidget {
             this.title.iconClass = 'codicon codicon-globe';
         }
         this.refreshTitle();
+        this.renderState();
         this.stateEmitter.fire(state);
     }
 }
