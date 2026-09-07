@@ -114,12 +114,12 @@ Plans:
   4. Each web tab writes its uri/url/title row to the chrome-side tab store on open, navigate, and close, so Organising and named setups see real tabs
   5. Firefox internals stay behind `PowerBrowserAPI.sys.mjs`, Theia core is untouched, and a `--quick` gate plus a live-frontend check go red on each of the above when a fault is planted
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 14.1-01-PLAN.md — Overlay bridge tracer (open handler → placeholder → geometry → chrome-owned overlay) plus chrome host expansion (progress listener, pushes, store rows, nav kinds, embedder wall, orphan cleanup, reserved Ctrl+L) and widget states/occlusion/keyboard
+- [x] 14.1-01-PLAN.md — Overlay bridge tracer (open handler → placeholder → geometry → chrome-owned overlay) plus chrome host expansion (progress listener, pushes, store rows, nav kinds, embedder wall, orphan cleanup, reserved Ctrl+L) and widget states/occlusion/keyboard
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

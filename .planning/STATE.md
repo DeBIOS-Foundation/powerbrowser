@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v1.3
 current_phase: "14.1"
 current_phase_name: In-Theia Web Tabs (GUI-02)
-status: "Phase 14.1 inserted after 14 on 2026-09-06; next: /gsd-plan-phase 14.1"
-stopped_at: Phase 14.1 UI-SPEC approved
-last_updated: "2026-09-07T05:09:39.404Z"
+status: executing
+stopped_at: Completed 14.1-01-PLAN.md
+last_updated: "2026-09-07T05:42:01.580Z"
 last_activity: 2026-09-06
-last_activity_desc: Phase 14.1 inserted (GUI-02 deferral reversed by Chris)
-state_head: 3d38cc6243c4e5c00b74a46ec732564155751431
+last_activity_desc: Phase 14.1 execution started
+state_head: b76358fbd096ff154375e4f38351357e94a43415
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 6
-  completed_plans: 3
+  completed_plans: 4
 milestone_name: Browser GUI
 ---
 
@@ -24,14 +24,14 @@ milestone_name: Browser GUI
 See: .planning/PROJECT.md (updated 2026-09-06)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 13 — Chrome Bar + Strip-Relocation Spike
+**Current focus:** Phase 14.1 — In-Theia Web Tabs (GUI-02)
 
 ## Current Position
 
-Phase: 14.1 (In-Theia Web Tabs (GUI-02)) — READY TO EXECUTE
-Plan: 5 of 5 (13-05 gap closure complete, G-13-3 placement facet closed)
-Status: Phase 14.1 inserted after 14 on 2026-09-06; next: /gsd-plan-phase 14.1
-Last activity: 2026-09-06 — Phase 14.1 inserted (GUI-02 deferral reversed by Chris)
+Phase: 14.1 (In-Theia Web Tabs (GUI-02)) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-09-06 — Phase 14.1 execution started
 
 ## Performance Metrics
 
@@ -112,6 +112,7 @@ Last activity: 2026-09-06 — Phase 14.1 inserted (GUI-02 deferral reversed by C
 | Phase 15-panorama-organising P03 | 16min | 4 tasks | 13 files |
 | Phase 13-chrome-bar-strip-relocation-spike P04 | n/a | 3 tasks | 4 files |
 | Phase 13-chrome-bar-strip-relocation-spike P05 | n/a | 2 tasks | 4 files |
+| Phase 14.1 P01 | 25min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -278,6 +279,8 @@ Recent decisions affecting current work:
 - [Phase 13]: [Phase 13-04]: Suggestion activation commits row.url via the imported stock-window const; opaque row.uri survives only as the React list key; STAGED branch retired
 - [Phase 13]: [Phase 13-05]: Bar-above-strip ratified as the Variant-A contract — below-strip needs dock surgery, a Theia-core touch forbidden by never-fork-core, so facet 2 closed by contract not code
 - [Phase 13]: [Phase 13-05]: Placement gate derives addWidget area plus UI-SPEC order at check time; empty derivation fails as broken instrument; area respell, order flip, order deletion each proven red
+- [Phase 14.1]: 14.1-01: overlay styled via CSSOM property writes (shell CSP drops inline style attributes); live check asserts returned widget + dock currentTitle, not shell.currentWidget (headless FocusTracker)
+- [Phase 14.1]: 14.1-01: embedder-is-primary wall lives inside groupSenderIsTheia (shared predicate; gui08 guard-line anchor byte-identical)
 
 ### Pending Todos
 
@@ -374,9 +377,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-07T04:16:10.949Z
-Stopped at: Phase 14.1 UI-SPEC approved
-Resume file: .planning/phases/14.1-in-theia-web-tabs-gui-02/14.1-UI-SPEC.md
+Last session: 2026-09-07T05:42:01.559Z
+Stopped at: Completed 14.1-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
