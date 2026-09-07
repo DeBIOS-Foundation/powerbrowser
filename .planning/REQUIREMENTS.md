@@ -3,7 +3,7 @@
 **Defined:** 2026-09-06
 **Core Value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
 
-(v1.3 builds the Theia-hosted browser GUI only: chrome bar, mode-driven tabs, Panorama organising. No web-content rendering, no bridge work.)
+(v1.3 builds the Theia-hosted browser GUI: chrome bar, mode-driven tabs, Panorama organising, and — since 2026-09-06 — in-Theia web tabs (GUI-02) over a chrome-owned overlay bridge. The chrome-owned tab model / unified strip (GUI-05) stays deferred.)
 
 ## v1.3 Requirements
 
@@ -15,6 +15,23 @@
       contribution above or below the Theia toolbar (sketch 001
       winner: Variant A). Tab feel + navigation only: no bookmarks
       strip, no per-tab close/mute, no browser menu.
+
+### Web tabs — Phase 14.1
+
+- [ ] **GUI-02**: The user gets web page tabs inside the Theia shell:
+      the chrome-bar "+" opens a new tab in the shell's own tab
+      strip, rendered by a chrome-owned `<xul:browser>` overlay kept
+      aligned with a Theia placeholder widget through a two-way
+      bridge (Theia sends geometry, visibility, close; chrome sends
+      URL, title, loading state, back/forward availability). The tab
+      survives and follows every mode switch. Every tab has a URI
+      via `TabUriRegistry` (web tabs use their page URL); the
+      address pill shows the active tab's address and navigates the
+      active web tab; back/forward/reload act on it; each web tab
+      writes its uri/url/title row to the chrome-side tab store.
+      Replaces the stock-window escape for "+", address commits, and
+      suggestion activation. (Chris reversed the 2026-08-30 deferral
+      on 2026-09-06.)
 
 ### Modes — Phase 13+
 
@@ -92,8 +109,6 @@ the project's own planning record.
   CLI-owned tools/models are documented per adapter instead of
   forced into the shared registries.
 
-- **GUI-02**: In-Theia web tabs (`<xul:browser>`-backed). New-tab
-  chrome in v1.3 opens with the stock-window escape until this lands.
 - **GUI-05**: Unified tab strip (chrome-owned tab model,
   mirror/proxy bridge). Deferred behind v1.3 chrome/mode/organising.
 - **Seeds**: deferred-browser-chrome (bookmarks strip, per-tab
@@ -105,8 +120,7 @@ the project's own planning record.
 
 | Feature | Reason |
 |---------|--------|
-| Web-content rendering inside Theia this cycle | GUI-02 stays deferred; v1.3 is chrome + modes + organising over existing tab kinds |
-| Mirror/proxy bridge or chrome-owned tab model | GUI-05 stays a later milestone |
+| Chrome-owned tab model / unified tab strip | GUI-05 stays a later milestone; Phase 14.1's overlay bridge keeps Theia as the tab-model owner |
 | Second SQLite writer in any process | Corruption class; single chrome-side writer is invariant |
 | New tables inside `places.sqlite` | Upstream-owned schema; every ESR rebase may migrate it |
 | Sessionstore-coupled group storage | Panorama's removal lesson (Bugzilla 1221050); groups live in SQL |
@@ -121,11 +135,12 @@ the project's own planning record.
 | GUI-07 | Phase 14 (strip-relocation spike entry criterion runs as Phase 13 exit gate) | Pending |
 | GUI-08 | Phase 15 | Pending |
 | GUI-09 | Phase 14 | Complete |
+| GUI-02 | Phase 14.1 (inserted 2026-09-06; deferral reversed) | Pending |
 
 **Coverage:**
 
-- v1.3 requirements: 4 total (+ carried items)
-- Mapped to phases: 4 (GUI-06→13, GUI-07→14, GUI-08→15, GUI-09→14)
+- v1.3 requirements: 5 total (+ carried items)
+- Mapped to phases: 5 (GUI-06→13, GUI-07→14, GUI-08→15, GUI-09→14, GUI-02→14.1)
 - Unmapped: 0
 
 ---

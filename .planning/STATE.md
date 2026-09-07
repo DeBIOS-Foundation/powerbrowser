@@ -1,18 +1,18 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.3
-current_phase: 13
-current_phase_name: Chrome Bar + Strip-Relocation Spike
-status: executing
-stopped_at: Completed 13-chrome-bar-strip-relocation-spike-05-PLAN.md
-last_updated: "2026-09-06T20:30:00.000Z"
+current_phase: "14.1"
+current_phase_name: In-Theia Web Tabs (GUI-02)
+status: "Phase 14.1 inserted after 14 on 2026-09-06; next: /gsd-plan-phase 14.1"
+stopped_at: Phase 14.1 UI-SPEC approved
+last_updated: "2026-09-07T05:09:39.404Z"
 last_activity: 2026-09-06
-last_activity_desc: Phase 13 execution started
-state_head: 948ec6f9c026f590b8a7bb47cc3f75c991373572
+last_activity_desc: Phase 14.1 inserted (GUI-02 deferral reversed by Chris)
+state_head: 3d38cc6243c4e5c00b74a46ec732564155751431
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 0
-  total_plans: 3
+  total_plans: 6
   completed_plans: 3
 milestone_name: Browser GUI
 ---
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 
 ## Current Position
 
-Phase: 13 (Chrome Bar + Strip-Relocation Spike) — EXECUTING
+Phase: 14.1 (In-Theia Web Tabs (GUI-02)) — READY TO EXECUTE
 Plan: 5 of 5 (13-05 gap closure complete, G-13-3 placement facet closed)
-Status: Phase 13 plans complete; verification deferred per standing nonstop rule
-Last activity: 2026-09-06 — 13-05 executed (ratification + placement gate)
+Status: Phase 14.1 inserted after 14 on 2026-09-06; next: /gsd-plan-phase 14.1
+Last activity: 2026-09-06 — Phase 14.1 inserted (GUI-02 deferral reversed by Chris)
 
 ## Performance Metrics
 
@@ -294,6 +294,10 @@ Recent decisions affecting current work:
 - Phase 1's two manual verifications (GUI-01 browser-window toggle, 5 steps; GUI-03 visible runtime restyle, 3 steps) are UNPERFORMED -- 01-07 ran autonomously with no human. Recorded as open WINDOWS.md ledger entries.
 - WINDOWS.md 18's named residual: no registered check drives a rejection out of either long-lived supervisor loop, so those two terminal handlers rest on the source-derived coverage rule rather than on a runtime red
 
+### Roadmap Evolution
+
+- Phase 14.1 inserted after Phase 14: In-Theia Web Tabs (GUI-02) — Chris reversed the 2026-08-30 deferral on 2026-09-06; + opens a web tab inside the shell (URGENT)
+
 ## Deferred Items
 
 Items acknowledged and carried forward from previous milestone close:
@@ -370,9 +374,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-06T20:30:00.000Z
-Stopped at: Completed 13-chrome-bar-strip-relocation-spike-05-PLAN.md
-Resume file: None
+Last session: 2026-09-07T04:16:10.949Z
+Stopped at: Phase 14.1 UI-SPEC approved
+Resume file: .planning/phases/14.1-in-theia-web-tabs-gui-02/14.1-UI-SPEC.md
 
 ## Operator Next Steps
 
