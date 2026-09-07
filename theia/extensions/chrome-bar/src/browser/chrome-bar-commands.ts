@@ -1,6 +1,8 @@
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { Command, CommandContribution, CommandRegistry } from '@theia/core/lib/common';
-import { OPEN_BROWSER_WINDOW_COMMAND_ID } from '@powerbrowser/tab-uris/lib/browser/browser-window-command';
+import { OpenerService, Widget } from '@theia/core/lib/browser';
+import URI from '@theia/core/lib/common/uri';
+import { EMPTY_PAGE_URL, WebTabWidget } from '@powerbrowser/tab-uris/lib/browser/web-tab';
 
 /**
  * GUI-06 (13-03): the chrome bar's five commands -- back, forward, reload,
@@ -48,20 +50,37 @@ export const CHROME_BAR_FOCUS_ADDRESS: Command = {
 export const CHROME_BAR_INPUT_CLASS = 'pb-chrome-bar-input';
 
 /**
- * GUI-02-owned navigable-tab predicate (13-04): back, forward, and reload
- * all read enablement from this one export, so the three controls can never
- * disagree about whether a navigable tab exists.
+ * The active web tab, or undefined when the shell's current widget is any
+ * other kind. Module-level rather than a service: the command side must not
+ * import the widget (the widget imports these ids -- the dependency runs one
+ * way only), and the contribution that hears `shell.onDidChangeCurrentWidget`
+ * lives on the widget side, so it writes here and everyone else reads.
+ */
+let current: WebTabWidget | undefined;
+
+export function currentWebTab(): WebTabWidget | undefined {
+    return current;
+}
+
+/** Called from the chrome-bar contribution on every current-widget change; a non-web widget clears it. */
+export function setCurrentWebTab(widget: Widget | undefined): void {
+    current = widget instanceof WebTabWidget ? widget : undefined;
+}
+
+/**
+ * GUI-02-owned navigable-tab predicate (13-04, flipped in 14.1-02): back,
+ * forward, and reload all read enablement from this one export, and so do
+ * the widget's three nav buttons, so the three controls can never disagree
+ * about whether a navigable tab exists.
  *
- * Returns false: no in-Theia navigable tab type exists until GUI-02 lands,
- * so no in-Theia browser history exists either. All three commands therefore
- * stay disabled with their contracted tooltips per the 13-UI-SPEC.md buttons
- * contract (disabled is styled, never removed -- layout never shifts), and
- * the widget's nav buttons bind this same predicate instead of a hardcoded
- * literal. GUI-02 flips this predicate when the first navigable tab type
- * ships; nothing else changes.
+ * True exactly when the shell's current widget is an in-shell web tab. Each
+ * command then narrows further on the tab's own last state push (history
+ * behind, history ahead, a page to reload); the buttons stay disabled-not-
+ * removed with their contracted tooltips per the 13-UI-SPEC.md buttons
+ * contract, so the layout never shifts.
  */
 export function chromeBarHasNavigableTab(): boolean {
-    return false;
+    return current !== undefined;
 }
 
 /**
@@ -83,37 +102,54 @@ export class ChromeBarCommandContribution implements CommandContribution {
     @inject(CommandRegistry)
     protected readonly commands: CommandRegistry;
 
+    @inject(OpenerService)
+    protected readonly openerService: OpenerService;
+
     registerCommands(commands: CommandRegistry): void {
         // Disabled-not-removed (13-UI-SPEC.md): visibility stays true while
-        // enablement follows the one shared navigable-tab predicate, so the
-        // buttons dim with their tooltips retained and the layout never
-        // shifts. Executes are guarded no-ops that resolve without touching
-        // any service, so a palette invocation cannot reach the wrong stack.
+        // enablement follows the shared navigable-tab predicate narrowed by
+        // the active tab's last state push, so the buttons dim with their
+        // tooltips retained and the layout never shifts. Each execute acts on
+        // the active web tab only and is a no-op without one.
         commands.registerCommand(CHROME_BAR_BACK, {
-            execute: () => Promise.resolve(),
-            isEnabled: () => chromeBarHasNavigableTab(),
+            execute: () => currentWebTab()?.back(),
+            isEnabled: () => {
+                const tab = currentWebTab();
+                return !!tab && tab.canGoBack;
+            },
             isVisible: () => true,
         });
         commands.registerCommand(CHROME_BAR_FORWARD, {
-            execute: () => Promise.resolve(),
-            isEnabled: () => chromeBarHasNavigableTab(),
+            execute: () => currentWebTab()?.forward(),
+            isEnabled: () => {
+                const tab = currentWebTab();
+                return !!tab && tab.canGoForward;
+            },
             isVisible: () => true,
         });
-        // Reload enablement is Phase 14 / GUI-02 scope (13-RESEARCH.md Open
-        // Question 1): registered now, disabled through the same shared
-        // predicate as back and forward, with the contracted tooltip carried
-        // by the widget button -- never removed.
+        // Reload (UI-SPEC A7 + A10): enabled only for a web tab that has a
+        // page, or one in the lost-view state whose Reload re-issues the open.
         commands.registerCommand(CHROME_BAR_RELOAD, {
-            execute: () => undefined,
-            isEnabled: () => chromeBarHasNavigableTab(),
+            execute: () => currentWebTab()?.reload(),
+            isEnabled: () => {
+                const tab = currentWebTab();
+                return !!tab && tab.canReload;
+            },
             isVisible: () => true,
         });
-        // New Tab reuses the ratified candidate-A channel by importing the
-        // existing window-command const (never re-spelling its string): a
-        // blocked popup takes that command's existing error path, and no
-        // new dialog, toast, or error surface is authored here.
+        // GUI-02: New Tab opens the empty page as an in-shell web tab through
+        // the opener service (two-step routing -- OpenerService has no open()
+        // in 1.74.1 -- resolving to WebTabOpenHandler at priority 1000) and
+        // hands focus to the pill, which is the affordance for the empty tab.
+        // No command id is re-spelled and no popup is issued: the stock
+        // window survives only behind the GUI-01 palette command.
         commands.registerCommand(CHROME_BAR_NEW_TAB, {
-            execute: () => this.commands.executeCommand(OPEN_BROWSER_WINDOW_COMMAND_ID),
+            execute: async () => {
+                const uri = new URI(EMPTY_PAGE_URL);
+                const handler = await this.openerService.getOpener(uri);
+                await handler.open(uri);
+                focusAddressPill();
+            },
         });
         commands.registerCommand(CHROME_BAR_FOCUS_ADDRESS, {
             execute: () => focusAddressPill(),

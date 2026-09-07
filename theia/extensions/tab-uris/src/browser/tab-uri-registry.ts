@@ -12,6 +12,7 @@ import {
     PLUGIN_VIEW_CONTAINER_FACTORY_ID, SETTINGS_WIDGET_FACTORY_ID, POWERBROWSER_VIEW_FACTORY_IDS
 } from './view-factory-table';
 import { extensionDetailUriOf, webviewUriOf } from './existing-scheme-coverage';
+import { WEB_TAB_FACTORY_ID, WebTabWidget } from './web-tab';
 
 /**
  * The `factoryId <-> URI` registry (D-38). Its exported shape is the
@@ -161,6 +162,15 @@ export class TabUriRegistry {
         const webviewUri = webviewUriOf(factoryId, description.options);
         if (webviewUri) {
             return webviewUri;
+        }
+        if (factoryId === WEB_TAB_FACTORY_ID) {
+            // GUI-02 (14.1-02): a web tab's address is the widget's LIVE page
+            // URL. A navigated tab has moved on from `description.options.url`
+            // (getDescription reconstructs that object from the dedup key, so
+            // it is the URL the tab was OPENED on, never the one it shows).
+            // The per-session counter stays in the options and out of the URI
+            // (docs/URI-SCHEMES.md general rule 4).
+            return new URI((widget as WebTabWidget).url);
         }
         if (factoryId === PLUGIN_VIEW_CONTAINER_FACTORY_ID) {
             // The widget's own `.id` already equals the full `view:` path
