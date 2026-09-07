@@ -5,7 +5,8 @@ built browser plus a 16-agent read-only investigation. Each item is fixed and **
 on Chris's screen** before the next is started.
 
 Status values: `OPEN` · `IN PROGRESS` · `IN TREE` (code landed, not confirmed live) ·
-`CONFIRMED` (Chris verified in his window) · `DEFERRED`.
+`CONFIRMED` (Chris verified in his window) · `CONFIRMED FIXED` (closed on a reproducible
+check, not on Chris's screen) · `DEFERRED`.
 
 Items 5–10 are marked `IN TREE` deliberately: the code is written and the bundle rebuilt,
 but nothing on this list counts as done until it is seen working in the real window.
@@ -46,7 +47,7 @@ Static gates cannot confirm any of it.
 | 11 | Clean build breaks | OPEN | `build:extensions` is a hand-ordered `&&` chain; tab-uris now builds before token-gate but imports from it, and `theia/**/lib/` is gitignored. Only works locally because token-gate/lib already existed. |
 | 12 | No gate for the `process.env.POWERBROWSER_*` class of bug | OPEN | Should derive the set of backend files reading those keys directly and require it to equal exactly `{powerbrowser-env.ts}`. |
 | 13 | No gate for the group channel | OPEN | `wantUntrusted` can silently regress and every other assertion still passes green. |
-| 14 | Stale line reference in INTERNAL-APIS.md | OPEN | `PowerBrowserAPI.sys.mjs:817` → actually `:1643`. Not an enforced row, so nothing fails. |
+| 14 | Stale line reference in INTERNAL-APIS.md | CONFIRMED FIXED | **Closed 2026-09-07 on the catalogue gate's verdict, not on Chris's screen** — this row sits under "Repo problems, invisible to Chris", so no window can confirm it, and `CONFIRMED` on its own stays reserved for what Chris verified himself. The stale `PowerBrowserAPI.sys.mjs:817` reference this row recorded no longer appears anywhere in `powerbrowser/INTERNAL-APIS.md`; the row it described has since been corrected to the line it actually names. All 48 `PowerBrowserAPI.sys.mjs:N` references in the catalogue were re-checked construct-by-construct against `powerbrowser/shell/PowerBrowserAPI.sys.mjs` on 2026-09-07 — every one points at the construct its row describes, so no further correction was needed. Reproducer: `scripts/verify-platform.sh --only internals-catalogue`, whose verdict line reads `internals-catalogue: PASS -- every forbidden-pattern occurrence in /home/chris/coding/Power-Browser/powerbrowser/shell/PowerBrowserAPI.sys.mjs has a catalogue row in /home/chris/coding/Power-Browser/powerbrowser/INTERNAL-APIS.md`. What that PASS asserts is one direction only: every forbidden-pattern occurrence line in the boundary file has a matching `basename:line` row in the catalogue. A *stale* row — one naming a line where no occurrence lives, which is exactly what `:817` was — is not itself flagged, which is why the 48 references were re-checked by hand rather than left to the gate. |
 | 15 | 15-RESEARCH / 15-REVIEW record a now-false assumption | OPEN | They assume the GUI-08 write channel works. It never did (item 10). |
 | 16 | Nothing committed | OPEN | Working tree carries all of the above. Another session may also be committing here — commit with explicit paths. |
 | 23 | Every overlay creation logs `TypeError: this.documentGlobal.gBrowser.getTabForBrowser is not a function` | OPEN | From browser-custom-element.mjs:951 (also LinkHandlerParent / ContextMenuParent): the shell's stand-in `window.gBrowser` in `powerbrowser.js` has only `tabs`. One-line fix: add `getTabForBrowser() { return null; }` to the stand-in. Seen in the 14.1-03 checkpoint launch log; harmless to the page but noisy. |
