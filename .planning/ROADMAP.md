@@ -131,6 +131,17 @@ Plans:
 
 **UI hint**: yes
 
+### Phase 14.1.1: GUI Conformance Sweep (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 14.1
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 14.1.1 to break down)
+
 ### Phase 15: Panorama Organising
 
 **Goal**: The user organises tabs spatially on a freeform canvas and hierarchically in a tree, over SQL-persisted groups
