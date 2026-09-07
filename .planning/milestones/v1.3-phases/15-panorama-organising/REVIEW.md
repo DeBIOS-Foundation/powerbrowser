@@ -63,6 +63,8 @@ holes) and thirteen INFO items follow. Hard-rule compliance that verified
 clean is recorded at the end so the phase record shows what was proven, not
 just what failed.
 
+> **Correction (2026-09-06):** CR-01 below identifies the parent-side origin check — the last fault in the chain, and the only one this review could see. It was not the first. Five independent faults, each fatal on its own, sat earlier on the same channel and are recorded in full at `.planning/GUI-DEFECTS.md:58-95`: the actor child registered on a `chrome://` URI (not loadable in the content process), a missing untrusted-event flag, the event dispatched on the window rather than the document, a non-bubbling event, and the reply detail not cloned into content. The channel had never delivered a single event before 2026-09-06, so no request had ever reached the parent and the origin check had never rejected anything either. The statement above that "All five gui08 gates pass despite this" therefore understates the situation: the gates were blind to a channel that had never run at all, not merely to one rejected sender. CR-01 stands as written; this note qualifies it.
+
 ## Critical Issues
 
 ### CR-01: Actor parent origin check rejects all port-bearing Theia senders — write channel dead in production

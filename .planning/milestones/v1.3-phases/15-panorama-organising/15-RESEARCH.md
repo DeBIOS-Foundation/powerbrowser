@@ -12,6 +12,8 @@ The write path is the one decision that shapes everything else. Theia runs in a 
 
 **Primary recommendation:** Plain-DOM absolutely-positioned canvas widget (extend the placeholder idiom, not React) + one v1→v2 forward migration adding the groups table and `tabs.group_id` + JSWindowActor write channel with optimistic UI and rollback + chrome-side PageThumbs last-view capture with the contracted text-only fallback as the guaranteed milestone surface. No new npm packages. Piles and type-anywhere search deferred.
 
+> **Correction (2026-09-06):** The JSWindowActor write channel this document recommends had never delivered a single event at the time this document was written. Five independent faults, each fatal on its own and the first masking the rest, were found on 2026-09-06 and are recorded in full at `.planning/GUI-DEFECTS.md:58-95`: the actor child registered on a `chrome://` URI (not loadable in the content process, so the child never ran), a missing untrusted-event flag, the event dispatched on the window rather than the document, a non-bubbling event, and the reply detail not cloned into content. Everything below that treats the actor pair as a working channel — the sanctioned-crossing claim in the summary, the primary recommendation, and in particular the rejected-alternatives row asserting the actor "gives request/response ack ... for free" — held only after those five fixes landed. Before them the channel acked nothing and nacked nothing, because it never ran at all.
+
 ## User Constraints (from CONTEXT.md)
 
 ### Locked Decisions
