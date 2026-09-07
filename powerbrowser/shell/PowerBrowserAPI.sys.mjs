@@ -101,7 +101,14 @@ const TAB_THUMBNAIL_SETTLE_MS = 500;
 // the writer methods is the wall behind that.
 const GROUP_ACTOR_NAME = "PowerBrowserGroup";
 const GROUP_ACTOR_THEIA_ORIGIN = "http://127.0.0.1";
-const GROUP_ACTOR_CHILD_MODULE = "chrome://powerbrowser/content/GroupActorChild.sys.mjs";
+// The CHILD loads in the CONTENT process, where a chrome:// package is not
+// loadable: 15-01 shipped this as chrome://powerbrowser/content/... and the
+// load failed with "Failed to load chrome://..." on every launch, so the actor
+// child never ran and every mutation waited out the 5s ack timeout. Upstream
+// ships every actor child on resource:/// or moz-src:/// for exactly this
+// reason (browser/components/DesktopActorRegistry.sys.mjs). The resource alias
+// is registered beside the content package in shell/jar.mn.
+const GROUP_ACTOR_CHILD_MODULE = "resource://powerbrowser/GroupActorChild.sys.mjs";
 const GROUP_ACTOR_PARENT_MODULE = "chrome://powerbrowser/content/PowerBrowserAPI.sys.mjs";
 
 // GUI-08 (15-REVIEW CR-01): host-based Theia sender check. Theia is always
@@ -160,6 +167,23 @@ let groupActorRegistered = false;
 // the tab being LEFT, whose view is final. WeakMap so closed windows drop.
 const settleCaptureTokens = new Map();
 const lastSelectedTabByWin = new WeakMap();
+
+// GUI-02 (14.1-01): the web-tab host's overlay table, tabId -> { browser,
+// uri, listener, titleListener, owner }. Module-level for the same reason as
+// tabStoreConn (the API object is frozen), and a STRONG reference on
+// purpose: the progress listener each entry holds is registered with a
+// parent-side web progress that keeps listeners WEAKLY
+// (BrowsingContextWebProgress.cpp do_GetWeakReference), so a listener held
+// nowhere else is collected mid-session -- the pendingTimers class of bug.
+const webTabs = new Map();
+
+// GUI-02 (14.1-01): the shape wall on a frontend-supplied tab id, applied
+// before any host method reads the map. The id is minted by the frontend's
+// own per-session counter, so anything outside this alphabet is not the
+// widget that is supposed to be talking.
+function webTabIdIsValid(tabId) {
+  return typeof tabId === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(tabId);
+}
 
 export const PowerBrowserAPI = Object.freeze({
   /**
@@ -663,6 +687,62 @@ export const PowerBrowserAPI = Object.freeze({
       "chrome,dialog=no,all",
       arg
     );
+  },
+
+  /**
+   * GUI-01 (F9): puts `url` in the ONE stock browser window instead of
+   * opening a whole new OS window per navigation.
+   *
+   * Every New Tab, suggestion activation and typed address in the chrome bar
+   * funnels through the same frontend sink
+   * (theia/extensions/tab-uris/src/browser/browser-window-command.ts), and
+   * until this landed that sink called `window.open(url, '_blank')` from
+   * content. The shell window carries no `nsIBrowserDOMWindow`, so
+   * `nsWindowWatcher` had no tab to divert into and every call fell through
+   * to `AppWindow::CreateNewContentWindow`: three navigations, three windows.
+   * GUI-01's contract is unchanged -- the FIRST navigation still opens a
+   * stock window through `openBrowserWindow` above, and closing it still
+   * leaves the shell running. Only the second and later ones differ.
+   *
+   * `addWebTab`, never `addTrustedTab`: upstream's own wrapper mints a null
+   * principal for the load and throws outright on a system principal
+   * (upstream/browser/components/tabbrowser/content/tabbrowser.js:3185-3198),
+   * which is what stops a URL that arrived over the actor channel from
+   * loading `file:` or `chrome:`.
+   *
+   * The scheme gate in front of it is the wall that matters, and it guards
+   * the FALLBACK rather than the tab path: `openBrowserWindow` hands the
+   * string to `Services.ww.openWindow`, whose window-argument path reaches
+   * `loadOneOrMoreURIs`, whose `triggeringPrincipal` DEFAULTS TO THE SYSTEM
+   * PRINCIPAL (upstream/browser/base/content/browser.js:1304-1310). That
+   * method was unreachable from content until this change, so admitting a
+   * non-web scheme here would be a real escalation rather than a theoretical
+   * one. http/https only; an empty url (the New Tab case) resolves to the
+   * same `about:newtab` literal `openBrowserWindow` already uses, which a
+   * null principal may load (URI_SAFE_FOR_UNTRUSTED_CONTENT,
+   * upstream/browser/components/newtab/AboutNewTabRedirector.sys.mjs:452-459).
+   * Anything else is refused with no window and no tab -- the frontend only
+   * ever sends the two admitted shapes, so a refusal means a sender that is
+   * not the chrome bar.
+   *
+   * ponytail: targets the most recently focused stock window, private or
+   * not. Which window a given tab belongs in is the mirror/proxy bridge's
+   * question (GUI-04), not this one's.
+   */
+  openStockTab(url) {
+    const spec = typeof url === "string" && url ? url : "about:newtab";
+    if (spec !== "about:newtab" && !/^https?:\/\//i.test(spec)) {
+      return "refused-scheme";
+    }
+    const win = Services.wm.getMostRecentWindow("navigator:browser");
+    const tab = win && win.gBrowser ? win.gBrowser.addWebTab(spec) : null;
+    if (!tab) {
+      PowerBrowserAPI.openBrowserWindow(spec);
+      return "opened-window";
+    }
+    win.gBrowser.selectedTab = tab;
+    PowerBrowserAPI.focusWindow(win);
+    return "opened-tab";
   },
 
   /**
@@ -1363,7 +1443,21 @@ export const PowerBrowserAPI = Object.freeze({
       child: {
         esModuleURI: GROUP_ACTOR_CHILD_MODULE,
         events: {
-          PowerBrowserGroupRequest: { capture: true },
+          // `wantUntrusted` is load-bearing, not decoration. The frontend is
+          // web content, so every PowerBrowserGroupRequest it dispatches is an
+          // UNTRUSTED event, and Gecko drops an untrusted event for any
+          // listener that did not ask for one
+          // (EventListenerManager::Listener::AllowsEventTrustedness,
+          // upstream/dom/events/EventListenerManager.h:277-280). The actor
+          // registration path defaults the flag to FALSE when the events entry
+          // omits it (upstream/dom/ipc/jsactor/JSWindowActorProtocol.cpp:130-133),
+          // so 15-01 registered a child that could never run: the request
+          // never reached handleEvent and every mutation waited out the full
+          // 5s ack timeout into the save-error bar. Upstream sets it on every
+          // actor that listens to a content page's own CustomEvents --
+          // about:logins' entire event table does
+          // (upstream/browser/components/DesktopActorRegistry.sys.mjs:104-121).
+          PowerBrowserGroupRequest: { capture: true, wantUntrusted: true },
         },
       },
       matches: [`${GROUP_ACTOR_THEIA_ORIGIN}/*`],
@@ -1466,6 +1560,76 @@ export const PowerBrowserAPI = Object.freeze({
         case "setActiveGroup": {
           await PowerBrowserAPI.setActiveGroup(data.id);
           return { ok: true, kind, id: data.id };
+        }
+        // GUI-01 (F9): the navigation kind, riding the group pair rather than
+        // a second actor pair -- one channel means one origin wall
+        // (groupSenderIsTheia above) and one boundary file, which is the whole
+        // point of D-96. It is the only kind here that writes no row; the
+        // reply carries openStockTab's own outcome word so a caller that does
+        // read the ack can tell a reused tab from a fresh window from a
+        // refusal.
+        case "openStockTab": {
+          return { ok: true, kind, where: PowerBrowserAPI.openStockTab(data.url) };
+        }
+        // GUI-02 (14.1-01): the in-shell web-tab kinds, riding the same pair
+        // for the same one-wall reason as openStockTab. The Theia frame is
+        // resolved FROM THE SENDER (the actor's top embedder element), never
+        // looked up by id, so the overlay is always placed in the document
+        // that asked for it. Every arm applies the tabId shape wall before
+        // the host method reads the map; the reply carries the host's own
+        // outcome word as `where` so the widget can tell an idempotent
+        // re-open from a refusal from a tab chrome no longer holds.
+        case "webTabOpen": {
+          if (!webTabIdIsValid(data.tabId)) {
+            return { ok: false, reason: "validation", message: "handleGroupMutation: refusing malformed tabId" };
+          }
+          const theiaBrowser = actorRef.browsingContext.top.embedderElement;
+          return { ok: true, kind, where: PowerBrowserAPI.webTabOpen(theiaBrowser, actorRef, data.tabId, data.url) };
+        }
+        case "webTabGeometry": {
+          if (!webTabIdIsValid(data.tabId)) {
+            return { ok: false, reason: "validation", message: "handleGroupMutation: refusing malformed tabId" };
+          }
+          const { x, y, w, h } = data;
+          if (![x, y, w, h].every(Number.isFinite)) {
+            return { ok: false, reason: "validation", message: "handleGroupMutation: refusing non-finite geometry" };
+          }
+          const theiaBrowser = actorRef.browsingContext.top.embedderElement;
+          const rect = { x, y, w, h, visible: !!data.visible };
+          return { ok: true, kind, where: PowerBrowserAPI.webTabGeometry(theiaBrowser, data.tabId, rect) };
+        }
+        case "webTabNavigate": {
+          if (!webTabIdIsValid(data.tabId)) {
+            return { ok: false, reason: "validation", message: "handleGroupMutation: refusing malformed tabId" };
+          }
+          return { ok: true, kind, where: PowerBrowserAPI.webTabNavigate(data.tabId, data.url) };
+        }
+        case "webTabClose": {
+          if (!webTabIdIsValid(data.tabId)) {
+            return { ok: false, reason: "validation", message: "handleGroupMutation: refusing malformed tabId" };
+          }
+          return { ok: true, kind, where: PowerBrowserAPI.webTabClose(data.tabId) };
+        }
+        // GUI-01: a side-effect-free liveness answer, so the frontend can know
+        // BEFORE a click whether this channel is available.
+        //
+        // It exists because the obvious alternative does not work. The original
+        // design decided per click, by having the actor child cancel the
+        // request event and reading `dispatchEvent`'s return value. Measured
+        // live against the built binary, twice and by two independent routes,
+        // the content-side dispatch still returns true with
+        // `defaultPrevented` false even when chrome has received and acted on
+        // the message -- so the caller concluded "chrome declined", ran its
+        // window.open fallback, and the user got TWO windows for one click.
+        // Awaiting the ack instead is not available either: window.open needs
+        // the user activation of the click, and an await spends it, so a
+        // fallback decided after a round trip is one the popup blocker eats.
+        //
+        // Answering liveness once, off the click path, removes the ambiguity
+        // entirely: a click either uses the channel or opens a window, never
+        // both. Writes no row and touches no window.
+        case "probeChannel": {
+          return { ok: true, kind };
         }
         default: {
           return { ok: false, reason: "validation", message: `handleGroupMutation: unknown kind ${String(kind)}` };
@@ -1906,6 +2070,176 @@ export const PowerBrowserAPI = Object.freeze({
         // Observer removal is best-effort on teardown.
       }
     };
+  },
+
+  /**
+   * GUI-02 (14.1-01): the web-tab host. One chrome-owned <xul:browser>
+   * overlay per in-shell web tab, positioned over the Theia placeholder
+   * widget whose geometry the frontend publishes, in the SAME shell window
+   * the Theia frame lives in. The overlay is built exactly as tabbrowser.js
+   * builds every tab (upstream/browser/components/tabbrowser/content/
+   * tabbrowser.js:2739-2767) minus the browser.xhtml-only hooks, and every
+   * attribute is set BEFORE the element is appended because the frameloader
+   * is constructed in connectedCallback (browser-custom-element.mjs:397-406).
+   *
+   * Scheme wall FIRST, mirroring openStockTab: http/https and the single
+   * literal empty page, refused before any element exists. The load itself
+   * goes through fixupAndLoadURIString with a NULL principal, never the
+   * Theia swap's system-principal loader above (a system-principal load of
+   * a caller-chosen URL is a file:/chrome: reach; the plan's acceptance grep
+   * proves that name absent from this host). Idempotent on tabId: a second
+   * open for a tab this host already
+   * holds returns "already-open" and creates no second overlay.
+   *
+   * Returns one of "opened" | "already-open" | "refused-scheme" | "loading" |
+   * "unknown-tab"; handleGroupMutation echoes it as `where`.
+   */
+  webTabOpen(theiaBrowser, actorRef, tabId, url) {
+    const spec = typeof url === "string" && url ? url : "about:blank";
+    if (spec !== "about:blank" && !/^https?:\/\//i.test(spec)) {
+      return "refused-scheme";
+    }
+    if (webTabs.has(tabId)) {
+      return "already-open";
+    }
+    const doc = theiaBrowser.ownerDocument;
+    const win = doc.defaultView;
+    const browser = doc.createXULElement("browser");
+    // remote + remoteType="web": a content-process docshell (E10SUtils
+    // DEFAULT_REMOTE_TYPE). maychangeremoteness: without it every cross-site
+    // navigation's process switch is refused outright
+    // (DocumentLoadListener.cpp:1860-1867 "toplevel switch disabled by
+    // <browser>"), and under Fission the first https:// load is one.
+    // manualactiveness: activeness then follows docShellIsActive below
+    // rather than the shell window (BrowsingContext.cpp:821-830), which is
+    // what lets a hidden tab stop painting and stop running foreground
+    // timers. No primary (that is the Theia frame), no contextmenu/tooltip/
+    // autocompletepopup (they name browser.xhtml elements this shell lacks),
+    // and no src (the load is the null-principal call below).
+    for (const [name, value] of Object.entries({
+      type: "content",
+      remote: "true",
+      remoteType: "web",
+      maychangeremoteness: "true",
+      manualactiveness: "true",
+      messagemanagergroup: "browsers",
+      tabindex: "-1",
+    })) {
+      browser.setAttribute(name, value);
+    }
+    browser.permanentKey = PowerBrowserAPI.createPermanentKey();
+    // CSSOM writes, never a style attribute: the shell's CSP drops an inline
+    // style ATTRIBUTE silently (powerbrowser.css header), while property
+    // writes are what powerbrowser.js already uses to toggle the deck.
+    // z-index 1 puts the overlay above the content frame (0) and below the
+    // error (2) and diagnostics (3) layers, so a malformed rect can never
+    // bury the recovery affordances. It TIES the loading layer at 1 and wins
+    // that tie by DOM order: appendChild places the overlay after the static
+    // loading layer, and later siblings paint on top at equal z-index.
+    Object.assign(browser.style, {
+      position: "fixed",
+      left: "0px",
+      top: "0px",
+      width: "0px",
+      height: "0px",
+      zIndex: "1",
+      visibility: "hidden",
+      border: "none",
+    });
+    doc.body.appendChild(browser);
+    browser.docShellIsActive = false;
+    // The shape powerbrowser.js:63-64 already fakes for the one content
+    // browser: WebDriver finds top-level contexts through win.gBrowser.tabs
+    // and addresses each by its browser's permanentKey. Pushing the overlay
+    // here is what makes it a BiDi-addressable context, which is what the
+    // live check observes.
+    win.gBrowser.tabs.push({ linkedBrowser: browser });
+    const entry = { browser, uri: null, listener: null, titleListener: null, owner: actorRef };
+    webTabs.set(tabId, entry);
+    const where = PowerBrowserAPI.webTabNavigate(tabId, spec);
+    return where === "loading" ? "opened" : where;
+  },
+
+  /**
+   * GUI-02 (14.1-01): navigates one overlay. Same scheme wall as webTabOpen;
+   * the triggering principal is a fresh null principal, exactly the
+   * hardening addWebTab applies (tabbrowser.js:3185-3198 throws on a system
+   * principal), and never browser.src.
+   */
+  webTabNavigate(tabId, url) {
+    const spec = typeof url === "string" && url ? url : "about:blank";
+    if (spec !== "about:blank" && !/^https?:\/\//i.test(spec)) {
+      return "refused-scheme";
+    }
+    const entry = webTabs.get(tabId);
+    if (!entry) {
+      return "unknown-tab";
+    }
+    const triggeringPrincipal = Services.scriptSecurityManager.createNullPrincipal({});
+    entry.browser.fixupAndLoadURIString(spec, { triggeringPrincipal });
+    return "loading";
+  },
+
+  /**
+   * GUI-02 (14.1-01): applies one placeholder rect to its overlay. The
+   * frontend measures the placeholder in CSS px inside the Theia frame;
+   * both frames share one window (one devicePixelRatio, no zoom UI), so the
+   * mapping is the identity offset by the Theia frame's own rect -- (0,0)
+   * today, read live so the mapping stays honest if the frame ever moves.
+   * Numbers are clamped to the shell window (the caller has already
+   * refused non-finite ones). visible=false hides with `visibility`, the
+   * tabpanels deck idiom (xul.css:453-470) -- never display:none or removal,
+   * which would destroy the frameloader and its session history -- and
+   * turns activeness off so the page stops rendering layers and running
+   * foreground timers while it cannot be seen.
+   */
+  webTabGeometry(theiaBrowser, tabId, { x, y, w, h, visible }) {
+    const entry = webTabs.get(tabId);
+    if (!entry) {
+      return "unknown-tab";
+    }
+    const win = theiaBrowser.ownerDocument.defaultView;
+    const left = Math.max(0, x);
+    const top = Math.max(0, y);
+    const width = Math.max(0, Math.min(w, win.innerWidth - left));
+    const height = Math.max(0, Math.min(h, win.innerHeight - top));
+    const host = theiaBrowser.getBoundingClientRect();
+    Object.assign(entry.browser.style, {
+      left: `${host.left + left}px`,
+      top: `${host.top + top}px`,
+      width: `${width}px`,
+      height: `${height}px`,
+      visibility: visible ? "visible" : "hidden",
+    });
+    entry.browser.docShellIsActive = !!visible;
+    return "applied";
+  },
+
+  /**
+   * GUI-02 (14.1-01): drops one overlay -- element, BiDi tab record, host
+   * entry. Idempotent: a tab this host does not hold answers "unknown-tab"
+   * and touches nothing.
+   */
+  webTabClose(tabId) {
+    const entry = webTabs.get(tabId);
+    if (!entry) {
+      return "unknown-tab";
+    }
+    const { browser } = entry;
+    const win = browser.ownerDocument.defaultView;
+    try {
+      const tabs = win.gBrowser.tabs;
+      const index = tabs.findIndex(tab => tab.linkedBrowser === browser);
+      if (index !== -1) {
+        tabs.splice(index, 1);
+      }
+    } catch {
+      // The tab record is best-effort on teardown; the element removal
+      // below is what frees the docshell.
+    }
+    browser.remove();
+    webTabs.delete(tabId);
+    return "closed";
   },
 
   /**
