@@ -136,7 +136,7 @@ Plans:
 **Goal:** Every `fixable: yes` gap in `14.1.1-UAT.md` is closed, each proved by a check that goes red without its fix; `needs-chris` and `decision` gaps gain evidence only and are never marked fixed by an executor
 **Requirements**: none mapped — this phase closes GUI conformance gaps, not requirement IDs
 **Depends on:** Phase 14.1
-**Plans:** 1/5 plans executed
+**Plans:** 2/5 plans executed
 **Protocol:** `.planning/GUI-SWEEP.md` (Step 2 — automated fix pass)
 
 Pass 1 plans the eleven in-scope `fixable: yes` gaps (G-14.1.1-4, 5, 6, 7, 19, 20, 21, 22, 24, 25,
@@ -147,7 +147,7 @@ Plans:
 **Wave 1**
 
 - [x] 14.1.1-01-PLAN.md — wave 1: web-tab lost-view (G-4), no restored tabs / no id collision (G-5), honest live instrument (G-20)
-- [ ] 14.1.1-03-PLAN.md — wave 1: setups save/delete failure copy (G-21), Delete Setup destructive ink (G-22)
+- [x] 14.1.1-03-PLAN.md — wave 1: setups save/delete failure copy (G-21), Delete Setup destructive ink (G-22)
 - [ ] 14.1.1-05-PLAN.md — wave 1: internals-catalogue record (G-25), Phase 15 write-channel corrections (G-26)
 
 **Wave 2** *(blocked on Wave 1 completion)*

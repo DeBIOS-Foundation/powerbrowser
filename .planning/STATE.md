@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 14.1.1
 current_phase_name: GUI Conformance Sweep (INSERTED)
 status: executing
-stopped_at: Completed 14.1.1-01-PLAN.md
-last_updated: "2026-09-07T18:32:35.928Z"
+stopped_at: Completed 14.1.1-03-PLAN.md
+last_updated: "2026-09-07T18:48:27.867Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 14.1.1 execution started
-state_head: 85237825ec8e5f5c9451b7a282f477d4973a4a0b
+state_head: "0bfbaa1a9f41c55762450e1df3210b8cf3615ca5"
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 11
-  completed_plans: 7
+  completed_plans: 8
 milestone_name: Browser GUI
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 ## Current Position
 
 Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-09-07 — Phase 14.1.1 execution started
 
@@ -116,6 +116,7 @@ Last activity: 2026-09-07 — Phase 14.1.1 execution started
 | Phase 14.1 P02 | 11min | 2 tasks | 5 files |
 | Phase 14.1 P03 | 9h 38m | 3 tasks | 11 files |
 | Phase 14.1.1 P01 | 40 min | 3 tasks | 4 files |
+| Phase 14.1.1 P03 | 14min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -292,6 +293,8 @@ Recent decisions affecting current work:
 - [Phase 14.1.1]: 14.1.1-01: WEB_TAB_SESSION is a collision discriminator, never an authorisation token; the chrome-side origin wall stays the only authorisation
 - [Phase 14.1.1]: 14.1.1-01: a web tab from a persisted layout is refused at the WidgetFactory, and ShellLayoutRestorer's own catch drops it -- zero Theia-core edits
 - [Phase 14.1.1]: 14.1.1-01: shell.currentWidget demoted from assertion to record -- a check may not assert an observable it manufactures (new gap G-14.1.1-43, needs-chris)
+- [Phase 14.1.1]: 14.1.1-03: setups copy gate derives both sides (service paint sites vs 14-UI-SPEC contract rows) and compares as set equality; SETUP_ROW_LABELS is a scope selector, never an expectation
+- [Phase 14.1.1]: 14.1.1-03: four contract rows added, not two — the gone-tabs notice and the two quick-pick placeholders shipped uncontracted, and set equality cannot close without them
 
 ### Pending Todos
 
@@ -389,8 +392,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-07T18:32:25.569Z
-Stopped at: Completed 14.1.1-01-PLAN.md
+Last session: 2026-09-07T18:48:27.833Z
+Stopped at: Completed 14.1.1-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
