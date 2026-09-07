@@ -1,0 +1,59 @@
+/**
+ * GUI-02 (14.1-01): the web-tab placeholder's single style layer.
+ *
+ * One `@layer` block expressing the locked sketch tokens
+ * (sketch-findings-Power-Browser `sources/themes/default.css`, the only
+ * token source) over the class hooks WebTabWidget renders. A layered sheet
+ * loses to unlayered author CSS by cascade construction, so the
+ * `customize.css` user layer keeps winning with no specificity arms race --
+ * this sheet sits below it by position in the cascade, never by an
+ * importance override. Typeface is delegated (no literal); the only size is the
+ * 14px body the UI-SPEC binds the two placeholder lines to.
+ *
+ * The placeholder fills its Lumino bounds with zero padding, border and
+ * margin: the chrome-owned overlay copies this node's rect verbatim, and
+ * any inset here would offset the page. The surface is --color-bg, so a
+ * hidden or not-yet-attached overlay shows the dark workarea rather than a
+ * white frame. The focus ring is INSET because the node fills its bounds
+ * and an outset ring would be clipped by the dock (UI-SPEC A16).
+ */
+@layer powerbrowser-web-tab {
+
+.pb-web-tab {
+    background: var(--color-bg, #1c1b22);
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pb-web-tab:focus-visible {
+    outline: 2px solid var(--color-primary, #00a6f5);
+    outline-offset: -2px;
+}
+
+/* The two contracted text states: empty (muted ink) and lost-view (primary
+ * ink). Fixed literals that wrap inside a 480px block and never truncate. */
+.pb-web-tab-state {
+    max-width: 480px;
+    padding: 16px;
+    text-align: center;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-text-muted, #9a99a8);
+}
+
+.pb-web-tab-state.is-lost {
+    color: var(--color-text, #fbfbfe);
+}
+
+.pb-web-tab-state:empty {
+    display: none;
+}
+
+}
