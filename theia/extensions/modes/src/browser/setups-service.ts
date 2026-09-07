@@ -457,12 +457,26 @@ export class SetupsService implements FrontendApplicationContribution {
         if (!row) {
             return;
         }
-        const confirmed = await new ConfirmDialog({
-            title: 'Delete Setup',
-            msg: setupDeleteBody(row.name),
-            ok: 'Delete',
-            cancel: 'Cancel',
-        }).open();
+        // G-14.1.1-22: this is the ONLY destructive confirmation in the phase
+        // (14-UI-SPEC.md:136 reserves the danger token for exactly this
+        // button), so the dialog instance is tagged through the public Widget
+        // addClass and the scoped rule in modes.css paints it. Same shape as
+        // the Close Group precedent in organising-widget.ts: a dialog failure
+        // logs and returns rather than throwing through the command.
+        let confirmed: boolean | undefined = false;
+        try {
+            const dialog = new ConfirmDialog({
+                title: 'Delete Setup',
+                msg: setupDeleteBody(row.name),
+                ok: 'Delete',
+                cancel: 'Cancel',
+            });
+            dialog.addClass('pb-setup-delete-confirm');
+            confirmed = await dialog.open();
+        } catch (error) {
+            console.error('[@powerbrowser/modes] delete-setup dialog failed:', error);
+            return;
+        }
         if (!confirmed) {
             return;
         }

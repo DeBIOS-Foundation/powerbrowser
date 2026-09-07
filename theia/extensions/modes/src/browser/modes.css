@@ -582,8 +582,19 @@
    nothing bleeds. Unlayered by cascade necessity: this sheet's layer
    loses to Theia's unlayered `.theia-button` color by construction, so
    this one scoped rule rides outside the layer to win it. No !important,
-   no new hue -- the contracted `--color-danger` token only. */
+   no new hue -- the contracted `--color-danger` token only.
+
+   G-14.1.1-22 (14.1.1-03) adds the second and last of these: Setups' Delete
+   Setup (`pb-setup-delete-confirm`, 14-UI-SPEC.md:136 and :213). Panorama's
+   Close Group and Setups' Delete Setup are the ONLY two destructive
+   confirmations in the tree, so these are the only two danger-scoped confirm
+   selectors this sheet may carry -- gui09-setups-copy goes red on a third. */
 .pb-org-close-confirm .theia-button.main {
+    color: var(--color-danger, #ff848b);
+    border-color: var(--color-danger, #ff848b);
+}
+
+.pb-setup-delete-confirm .theia-button.main {
     color: var(--color-danger, #ff848b);
     border-color: var(--color-danger, #ff848b);
 }

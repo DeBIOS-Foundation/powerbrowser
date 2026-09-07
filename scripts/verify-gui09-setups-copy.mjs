@@ -3,13 +3,18 @@
 //
 // GUI-09's setups-copy gate (14.1.1-03): every user-facing string the
 // setups surface paints is the string 14-UI-SPEC.md's Copywriting Contract
-// says it is.
+// says it is, and the Delete Setup confirmation -- the ONLY destructive
+// action in Phase 14 -- carries the destructive-ink class the spec reserves
+// for it.
 //
-// G-14.1.1-21 is the reason this file exists: one failure constant was
-// flashed for three different failures, so a failed SAVE reported a failed
-// restore and a failed DELETE told the user to delete the setup that had
-// just failed to delete. Per-action copy is now contracted, and this gate
-// pins it.
+// Two gaps are the reason this file exists:
+//   G-14.1.1-21 -- one failure constant was flashed for three different
+//     failures, so a failed SAVE reported a failed restore and a failed
+//     DELETE told the user to delete the setup that had just failed to
+//     delete. Per-action copy is now contracted, and this gate pins it.
+//   G-14.1.1-22 -- `deleteSetup` opened a stock ConfirmDialog with no class,
+//     so the phase's only destructive button rendered in stock accent while
+//     14-UI-SPEC.md:136 reserves `--color-danger` for exactly it.
 //
 // It DERIVES BOTH SIDES and compares as SET EQUALITY -- there is no
 // hand-kept list of expected copy anywhere in this file:
@@ -29,11 +34,13 @@
 // (which rows of a table shared with modes, panorama and dependent windows
 // belong to setups), never an expectation. Every string compared is derived.
 //
-// A no-internals shape check runs over the same derived service strings. An
-// empty derivation on either side fails DISTINCTLY as a broken instrument,
-// never passes as clean.
+// A no-internals shape check runs over the same derived service strings, and
+// the destructive-ink half derives the dialog class from the service and the
+// danger-scoped selectors from `modes.css` and requires the intersection --
+// neither side is a literal kept here either. An empty derivation on either
+// side fails DISTINCTLY as a broken instrument, never passes as clean.
 //
-// Honestly --quick: it reads two text files. No build, no browser, no
+// Honestly --quick: it reads three text files. No build, no browser, no
 // display, no network.
 //
 // Usage:
@@ -49,6 +56,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, '..');
 
 const SERVICE_REL = 'theia/extensions/modes/src/browser/setups-service.ts';
+const CSS_REL = 'theia/extensions/modes/src/browser/modes.css';
 const SPEC_REL = '.planning/milestones/v1.3-phases/14-modes-windows-setups/14-UI-SPEC.md';
 
 /**
@@ -264,11 +272,39 @@ function internalsOf(value) {
     return hits;
 }
 
+/** Class names handed to a dialog through the public Widget addClass API. */
+function derivedDialogClasses(rawSrc) {
+    const src = stripComments(rawSrc);
+    return [...src.matchAll(/\.addClass\(\s*'([^']+)'\s*\)/g)].map(m => m[1]);
+}
+
+/**
+ * Class names of the sheet's rules that set a property to the danger token.
+ * Comments are stripped first, then every innermost `selector { decls }`
+ * block is walked -- the leading `}` of the previous rule is deliberately NOT
+ * part of the pattern, because consuming it makes two ADJACENT rules
+ * unmatchable and the second one invisible to this gate.
+ */
+function derivedDangerClasses(cssSrc) {
+    const classes = [];
+    const stripped = cssSrc.replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const m of stripped.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        if (!/--color-danger/.test(m[2])) {
+            continue;
+        }
+        for (const hit of m[1].matchAll(/\.([A-Za-z][\w-]*)/g)) {
+            classes.push(hit[1]);
+        }
+    }
+    return classes;
+}
+
 /** @returns {string[]} failure messages -- empty means the gate holds. */
 function checkStatic(sources) {
     const failures = [];
     const serviceSrc = sources[SERVICE_REL] ?? '';
     const specSrc = sources[SPEC_REL] ?? '';
+    const cssSrc = sources[CSS_REL] ?? '';
 
     const { copy: derived, unresolved } = derivedServiceCopy(serviceSrc);
     const contracted = derivedSpecCopy(specSrc);
@@ -301,6 +337,20 @@ function checkStatic(sources) {
         }
     }
 
+    // G-14.1.1-22: the destructive-ink half. Both sides derived -- the class
+    // is read from the service, the danger-scoped selectors from the sheet --
+    // so the gate goes red on a removal at either end and on a second
+    // destructive dialog appearing in the phase.
+    const dialogClasses = derivedDialogClasses(serviceSrc);
+    const dangerClasses = new Set(derivedDangerClasses(cssSrc));
+    if (dialogClasses.length === 0) {
+        failures.push(`${SERVICE_REL} adds NO class to its confirmation dialog -- the Delete Setup confirm button cannot carry destructive ink (14-UI-SPEC.md reserves the danger token for exactly it)`);
+    } else if (dialogClasses.length > 1) {
+        failures.push(`${SERVICE_REL} tags ${dialogClasses.length} dialogs with a class (${dialogClasses.map(c => JSON.stringify(c)).join(', ')}) -- Delete Setup is the ONLY destructive action in the phase, so exactly one may carry destructive ink`);
+    } else if (!dangerClasses.has(dialogClasses[0])) {
+        failures.push(`the setups dialog class ${JSON.stringify(dialogClasses[0])} has no danger-scoped rule in ${CSS_REL} -- the confirm button renders in stock accent (danger-scoped classes found: ${[...dangerClasses].map(c => JSON.stringify(c)).join(', ') || 'none'})`);
+    }
+
     return failures;
 }
 
@@ -308,6 +358,7 @@ function readSources() {
     const read = rel => readFileSync(join(REPO_ROOT, rel), 'utf8');
     return {
         [SERVICE_REL]: read(SERVICE_REL),
+        [CSS_REL]: read(CSS_REL),
         [SPEC_REL]: read(SPEC_REL),
     };
 }
@@ -322,7 +373,7 @@ function main() {
     }
     const { copy } = derivedServiceCopy(sources[SERVICE_REL]);
     const contracted = derivedSpecCopy(sources[SPEC_REL]);
-    console.log(`${NAME}: PASS -- ${new Set(copy).size} painted setups strings match ${new Set(contracted).size} contracted literals as set equality, no internals in copy`);
+    console.log(`${NAME}: PASS -- ${new Set(copy).size} painted setups strings match ${new Set(contracted).size} contracted literals as set equality, no internals in copy, destructive ink scoped to exactly one dialog`);
 }
 
 /** Run one plant: assert it landed, then require the named drift to go red. */
@@ -383,10 +434,26 @@ function selfTest() {
         plant(state, 'empty service derivation', mutated, true, /broken instrument/);
     }
 
+    // Plant 5 (G-14.1.1-22): the addClass call removed must go red naming
+    // the dialog that lost its destructive class.
+    {
+        const service = real[SERVICE_REL].replace(/^\s*dialog\.addClass\('[^']+'\);\n/m, '');
+        const mutated = { ...real, [SERVICE_REL]: service };
+        plant(state, 'removed dialog addClass', mutated, !/addClass\(/.test(service), /adds NO class to its confirmation dialog/);
+    }
+
+    // Plant 6 (G-14.1.1-22): the danger-scoped CSS rule removed must go red
+    // naming the class that lost its rule.
+    {
+        const css = real[CSS_REL].replace(/\.pb-setup-delete-confirm \.theia-button\.main \{[^}]*\}/, '');
+        const mutated = { ...real, [CSS_REL]: css };
+        plant(state, 'removed danger-scoped CSS rule', mutated, !css.includes('.pb-setup-delete-confirm .theia-button.main'), /has no danger-scoped rule/);
+    }
+
     if (state.failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all four fault directions went red naming the drift`);
+    console.log(`${NAME} --self-test: PASS -- all six fault directions went red naming the drift`);
 }
 
 try {
