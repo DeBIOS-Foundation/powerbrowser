@@ -228,6 +228,39 @@ silently mint something new" discipline `view:` applies. The two-segment
 form is the only one this phase's own registry ever emits, so this case is
 reached only if an address is typed or constructed by hand.
 
+## `http:` / `https:` (web tab — the address is the page URL)
+
+GUI-02. The address of a web tab is its **current page URL as chrome reports
+it** — the canonical form after the first location change, so `example.com`
+typed into the pill becomes `https://example.com/` once the page has loaded.
+The registry reads it live from the widget, never from the options the tab
+was opened with: a tab that has navigated has moved on from its opening URL,
+and its address moves with it.
+
+Opening any `http` or `https` URI through the opener service lands in an
+in-shell web tab — a main-area Theia tab whose page is rendered by a
+chrome-owned overlay kept aligned with the tab's node. Every opener in the
+tree takes that route without knowing a web tab exists: the chrome bar
+(typed commits, suggestion rows, and "+", which opens the empty page),
+named-setup restore, Panorama, and a Theia link open all resolve to the same
+handler.
+
+The per-session tab counter is a construction option and never part of the
+address (general rule 4 above), so two tabs on one URL are two widgets with
+one address — the same address model as `terminal:` names, in reverse: here
+the user chose the URL and did not choose the counter. The chrome-side store
+keys its rows by that URL, so two tabs on one URL share one row and closing
+either removes it. That is a recorded ceiling, not a defect to file: telling
+the two apart in the store needs a per-tab key in the schema, which is out of
+scope for this milestone.
+
+A tab with no page (a fresh "+") carries the empty-page address internally
+and shows an **empty** pill with the address placeholder; the internal URL is
+never rendered.
+
+The browser-window destination below is unchanged and remains the only
+stock-window path.
+
 ## The four carve-outs
 
 These are the cases D-51 identified as unavoidable inside this phase's
@@ -252,9 +285,11 @@ document and the code never drift apart on what each one says.
 
 ## The browser-window destination (not a scheme)
 
-Every address above resolves to a **tab inside Theia**. There is one more
+Every address above resolves to a **tab inside Theia** — web addresses
+included, which since GUI-02 open as in-shell web tabs. There is one more
 destination a URL can be sent to, and it is deliberately not a scheme: a
-**stock Firefox browser window**, opened by the command
+**stock Firefox browser window**, opened by the palette command below, which
+is the one stock-window destination in the tree
 
 - id: `powerbrowser.open-browser-window`
 - label: **Open Browser Window**
