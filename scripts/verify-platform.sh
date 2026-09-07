@@ -3720,6 +3720,19 @@ run_own_checks() {
     # not a check.
     "gui06-chrome-bar-placement-self-test|node $REPO_ROOT/scripts/verify-chrome-bar-placement.mjs --self-test"
 
+    # NEW (14.1-03): GUI-02's bridge-contract gate. Derives the webTab* kind
+    # set from the chrome dispatch and the frontend message union, the wire
+    # event names across the actor child and its three frontend spellers,
+    # the open-handler priority, the overlay attribute order, the
+    # embedder-is-primary wall and the no-stock-window rule (with a
+    # positive control) from the tree at check time and compares them as
+    # set equality. Honestly --quick: text reads only, no build, no
+    # browser, no display, no network. The self-test rides alongside for
+    # the reason every other self-test row in this array gives -- a gate
+    # nobody has seen go red is not a check.
+    "gui02-web-tab-bridge|node $REPO_ROOT/scripts/verify-web-tab-bridge.mjs"
+    "gui02-web-tab-bridge-self-test|node $REPO_ROOT/scripts/verify-web-tab-bridge.mjs --self-test"
+
     # NEW (13-02): GUI-07's spike-verdict gate. Parses the strip-relocation
     # record for a one-line GREEN/RED verdict with a cause on RED plus the
     # Variant routing, and checks the zero-core claim against the
@@ -3744,13 +3757,43 @@ run_own_checks() {
     "gui07-mode-toggle-commands|node $REPO_ROOT/scripts/verify-mode-toggle-commands.mjs"
     "gui07-mode-toggle-commands-self-test|node $REPO_ROOT/scripts/verify-mode-toggle-commands.mjs --self-test"
 
-    # NEW (14-02): GUI-07's switch-path invariant gate. Derives the
-    # shell-mutating calls on every mode-switch path plus the mode command
-    # registry at check time and compares as set equality against one
-    # EXPECTED allowlist; red on any addition and any removal, distinctly on
-    # empty derivation. Honestly --quick: text reads only. No build, no
-    # browser, no display, no network. The self-test rides alongside for the
-    # reason every other self-test row in this array gives.
+    # NEW (14-02; wording corrected 14-04): GUI-07's switch-path invariant
+    # gate. This row is a TEXT derivation over two of our own source trees
+    # plus stock's type declarations. It never runs a shell. The wording that
+    # stood here until 14-04 -- "the shell-mutating calls on every mode-switch
+    # path ... red on any addition and any removal" -- claimed far more than
+    # the row can do, and reading it that way is part of why the mode switch
+    # shipped destroying main-area tabs with this row green. What it actually
+    # proves is three things:
+    #   1. the call NAMES reached through three receivers (this.shell,
+    #      this.perspectives, this.statusBar) plus the organising-slot seam,
+    #      inside FIVE named function bodies in mode-service.ts and
+    #      chrome-bar-widget.tsx, set-equal against one declared allowlist;
+    #   2. the forbidden layout vocabulary -- every method stock's
+    #      PerspectiveService and PerspectiveServiceInternal d.ts declare plus
+    #      every *LayoutData method of the shell d.ts -- searched whole-file
+    #      and receiverless across every .ts/.tsx under the modes and
+    #      chrome-bar sources, per name set-equal against the declared
+    #      exceptions. This half survives a mutation moved one hop into a
+    #      private helper, and it is the only thing in the tree that goes red
+    #      when an upstream re-pin ADDS a layout-swapping method our code then
+    #      calls;
+    #   3. that stock still calls descriptor.onDeactivate BEFORE it saves the
+    #      live layout and before it reads the target's snapshot back, derived
+    #      from perspective-service.js at check time -- the ordering the
+    #      main-area exemption depends on, which a re-pin could otherwise
+    #      rewrite with nothing in this tree noticing.
+    # What it CANNOT see is behaviour. It reads text, so it cannot tell
+    # whether a mode's SECOND visit leaves main-area tabs attached -- that is
+    # gui07-mode-switch-tabs-live in the full tier below, and this row is not
+    # a substitute for it. Within the anchored half, REMOVING a call shrinks
+    # the derived set and is reported as a dropped invariant surface, which is
+    # a prompt to review, not proof the surface was safe to drop; and a
+    # mutation reached through a receiver it does not name, or from a file
+    # outside those two src trees, is invisible to it. Honestly --quick: text
+    # reads only. No build, no browser, no display, no network. The self-test
+    # rides alongside for the reason every other self-test row in this array
+    # gives.
     "gui07-mode-switch-tabs-invariant|node $REPO_ROOT/scripts/verify-mode-switch-tabs-invariant.mjs"
     "gui07-mode-switch-tabs-invariant-self-test|node $REPO_ROOT/scripts/verify-mode-switch-tabs-invariant.mjs --self-test"
 
@@ -4655,6 +4698,32 @@ run_own_checks() {
       "sql-store-roundtrip-self-test|node $REPO_ROOT/scripts/verify-sql-store-roundtrip.mjs --self-test"
       "sql-store-absence|node $REPO_ROOT/scripts/verify-sql-store-absence.mjs"
       "sql-store-absence-self-test|node $REPO_ROOT/scripts/verify-sql-store-absence.mjs --self-test"
+
+      # NEW (14-04): GUI-07's tabs invariant, BEHAVIOURAL half -- the part
+      # gui07-mode-switch-tabs-invariant in the --quick set structurally
+      # cannot be. It boots the built binary headless, drives the shell's own
+      # supervised frontend over BiDi (withFirefoxPage(''), the same harness
+      # and the same empty-URL reason as gui01-browser-close-does-not-quit),
+      # and walks a mode route in which every MEASURED hop is a SECOND visit.
+      # That protocol is the whole point: stock's teardown is conditional on
+      # the target already having a saved layout (perspective-service.js:131),
+      # so a once-per-mode walk is green on a broken tree. It asserts the
+      # main-area AND bottom-area widget id sets as set equality in both
+      # directions plus isAttached per widget OBJECT (never re-looked-up by
+      # id -- shell.getWidgetById resolves against a FocusTracker that retains
+      # detached widgets), and derives every expectation -- shipped mode ids,
+      # both registerPerspective sinks, the seed's declared area, the
+      # organising slot id -- from the tree at check time.
+      #
+      # Registered as a plain `node` invocation like gui01-browser-close-does-
+      # not-quit rather than through _run_app_check_mjs: it launches and reaps
+      # its own browser, and needs no theia dev app on $APP_URL. It needs the
+      # built binary, so it is emphatically not --quick. The self-test boots
+      # five sessions (~2m15s: a clean control first, then four plants, each
+      # in its own session so one plant's damage cannot redden the next) and
+      # rides alongside for the reason every other self-test row gives.
+      "gui07-mode-switch-tabs-live|node $REPO_ROOT/scripts/verify-mode-switch-tabs-live.mjs"
+      "gui07-mode-switch-tabs-live-self-test|node $REPO_ROOT/scripts/verify-mode-switch-tabs-live.mjs --self-test"
     )
   fi
 
