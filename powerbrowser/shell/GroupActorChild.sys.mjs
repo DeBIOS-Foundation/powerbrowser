@@ -100,16 +100,29 @@ export class PowerBrowserGroupChild extends JSWindowActorChild {
     // compartment, so the result is a plain content object. The payload is
     // JSON-safe by construction -- requestId is a string and reply is the
     // parent's {ok, kind, ...} record of primitives.
+    //
+    // Through the Xray this actor holds on the window, `win.JSON` is an
+    // object whose methods are NOT callable -- `win.JSON.parse is not a
+    // function`, measured live by 14.1-03's web-tab check, which found that
+    // every reply on this channel had thrown here and every awaited request
+    // in the frontend had timed out. `wrappedJSObject` waives the Xray for
+    // exactly this call, so the content window's own JSON.parse runs on a
+    // primitive string and hands back a content object. That waiver is the
+    // one non-Xray touch in this file: the frontend origin is already the
+    // trusted party (the matches pin and the embedder-is-primary wall admit
+    // nothing else), and a string in, an object out exposes nothing of this
+    // scope to it.
     win.dispatchEvent(
       new win.CustomEvent("PowerBrowserGroupResponse", {
-        detail: win.JSON.parse(JSON.stringify({ requestId, reply })),
+        detail: win.wrappedJSObject.JSON.parse(JSON.stringify({ requestId, reply })),
       })
     );
   }
 
   // GUI-02 (14.1-01): chrome -> content. Same content-compartment rule as
   // sendResponse above -- no privileged clone helper, the CONTENT window's
-  // own JSON builds the detail -- so this file keeps zero privileged reach.
+  // own JSON (reached through the same Xray waiver, for the same measured
+  // reason) builds the detail -- so this file keeps zero privileged reach.
   receiveMessage(message) {
     if (!message || message.name !== "PowerBrowserWebTabState") {
       return;
@@ -120,7 +133,7 @@ export class PowerBrowserGroupChild extends JSWindowActorChild {
     }
     win.dispatchEvent(
       new win.CustomEvent("PowerBrowserWebTabState", {
-        detail: win.JSON.parse(JSON.stringify(message.data)),
+        detail: win.wrappedJSObject.JSON.parse(JSON.stringify(message.data)),
       })
     );
   }
