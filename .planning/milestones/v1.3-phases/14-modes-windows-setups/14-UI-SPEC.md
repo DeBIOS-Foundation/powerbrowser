@@ -194,12 +194,16 @@ Naming is fixed: **"chrome bar"**, mode names **"Coding"**, **"Browsing"**,
 | Primary CTA (modes) | **"Save as Mode"** — saves the current panel layout as a custom mode |
 | Setup dialog title | **"Save Setup"** |
 | Setup name placeholder | **"Setup name"** |
+| Setup picker placeholder | **"Restore Setup"** / **"Delete Setup"** — quick-pick placeholder naming the action being picked; the list rows are the saved setup names |
 | Empty setup name error | **"Give the setup a name — type a name and choose Save Setup."** |
 | Duplicate setup name error | **"A setup with this name already exists. Choose a different name, or delete the existing setup first."** |
 | Empty setups heading | **"No saved setups"** |
 | Empty setups body | **"Save the current windows, tabs, and mode as a setup to restore them later — choose Save Setup."** |
 | Setup row meta | **"{Mode} · {N} window(s) · {M} tab(s)"** — counts from stored data, singular/plural exact |
 | Restore-failure error | **"Power Browser couldn't restore this setup. Your current windows and tabs are unchanged — try again, or delete the setup and save a new one."** |
+| Setup save-failure error | **"Power Browser couldn't save this setup. Your saved setups are unchanged — try again, or choose a different name."** — the write failed, so the saved setups are exactly as they were; Save Setup is on screen and re-runnable |
+| Setup delete-failure error | **"Power Browser couldn't delete this setup. It's still in your list — try again."** — the write failed, so the setup is still listed; Delete Setup is on screen and re-runnable. Never the restore-failure copy: a failed delete must not tell the user to delete the setup that just failed to delete |
+| Setup gone-tabs notice | **"Power Browser restored this setup, but some tabs no longer exist. Geometry and mode are applied."** — the restore still completes on geometry plus mode rather than leaving the row half-applied with no explanation |
 | Setup mode-fallback notice | **"Power Browser restored this setup, but its saved mode is no longer available. Browsing is shown instead."** — restoring a setup whose stored mode id matches no shipped or custom mode falls back to Browsing (stock `switchPerspective` silently no-ops on unknown ids); the stored id is never shown |
 | Corrupt-mode fallback notice | **"Power Browser couldn't load the "{name}" mode. Browsing is shown instead."** (status-bar flash; custom data falls back to the shipped Browsing default, never a blank shell) |
 | Mode saved confirmation | **"Mode "{name}" saved."** (status-bar flash) |

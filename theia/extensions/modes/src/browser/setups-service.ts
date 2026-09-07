@@ -112,6 +112,24 @@ export const SETUPS_EMPTY_BODY = 'Save the current windows, tabs, and mode as a 
 export const SETUP_RESTORE_FAILURE = 'Power Browser couldn\'t restore this setup. Your current windows and tabs are unchanged — try again, or delete the setup and save a new one.';
 
 /**
+ * Contracted save-failure error (14-UI-SPEC.md, verbatim): flashes on the
+ * status bar when the setups write fails during Save Setup. The saved
+ * setups are left exactly as they were, so the copy says so and points at
+ * Save Setup, which is on screen and re-runnable. The caught error is
+ * never interpolated: it is diagnostics, not user copy.
+ */
+export const SETUP_SAVE_FAILURE = 'Power Browser couldn\'t save this setup. Your saved setups are unchanged \u2014 try again, or choose a different name.';
+
+/**
+ * Contracted delete-failure error (14-UI-SPEC.md, verbatim): flashes on the
+ * status bar when the setups write fails during Delete Setup. It names the
+ * delete and says the setup is still listed -- never the restore-failure
+ * copy, which would tell the user to delete the setup that just failed to
+ * delete. The caught error is never interpolated.
+ */
+export const SETUP_DELETE_FAILURE = 'Power Browser couldn\'t delete this setup. It\'s still in your list \u2014 try again.';
+
+/**
  * Contracted gone-tabs variant (14-UI-SPEC.md): the restore still completes
  * on geometry plus mode with this explanation naming the dropped tabs as
  * "some tabs no longer exist" -- the row is never left half-applied with no
@@ -365,7 +383,7 @@ export class SetupsService implements FrontendApplicationContribution {
             // truncate-then-read-your-own-write.
             await this.fileService.write(this.setupsUri, JSON.stringify({ version: SETUPS_STORE_VERSION, setups, lastSession: name }, undefined, 2));
         } catch {
-            void this.flash(SETUP_RESTORE_FAILURE);
+            void this.flash(SETUP_SAVE_FAILURE);
             return;
         }
         this.lastGoodSetups = setups;
@@ -456,7 +474,7 @@ export class SetupsService implements FrontendApplicationContribution {
                 lastSession: this.currentSetup === row.name ? null : this.currentSetup,
             }, undefined, 2));
         } catch {
-            void this.flash(SETUP_RESTORE_FAILURE);
+            void this.flash(SETUP_DELETE_FAILURE);
             return;
         }
         this.lastGoodSetups = setups;

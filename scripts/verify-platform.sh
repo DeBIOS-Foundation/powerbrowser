@@ -3873,6 +3873,20 @@ run_own_checks() {
     "gui08-panorama-copy|node $REPO_ROOT/scripts/verify-gui08-panorama-copy.mjs"
     "gui08-panorama-copy-self-test|node $REPO_ROOT/scripts/verify-gui08-panorama-copy.mjs --self-test"
 
+    # NEW (14.1.1-03): GUI-09's setups-copy gate, closing G-14.1.1-21 -- one
+    # failure constant was flashed for three different failures, so a failed
+    # save reported a failed restore and a failed delete told the user to
+    # delete. It derives BOTH sides -- the literal at every setups paint site
+    # in setups-service.ts, and the bolded literals of 14-UI-SPEC.md's
+    # Copywriting Contract rows that name a setups surface -- and compares
+    # them as set equality, so unreviewed copy and dropped contract each go
+    # red by name. The no-internals shape check rides the same derived
+    # strings. Honestly --quick: two text reads. No build, no browser, no
+    # display, no network. The self-test rides alongside for the reason every
+    # other self-test row in this array gives.
+    "gui09-setups-copy|node $REPO_ROOT/scripts/verify-gui09-setups-copy.mjs"
+    "gui09-setups-copy-self-test|node $REPO_ROOT/scripts/verify-gui09-setups-copy.mjs --self-test"
+
     # NEW (01-07): MIG-04's user-facing-copy gate. Static -- it reads
     # TheiaService.sys.mjs, never a built artifact -- so it is honestly
     # --quick, and that placement is the point: a leaked pref key must cost
