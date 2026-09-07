@@ -144,12 +144,19 @@ Pass 1 plans the eleven in-scope `fixable: yes` gaps (G-14.1.1-4, 5, 6, 7, 19, 2
 for a concurrently running session. Waves: 01, 03, 05 run in parallel; 02 and 04 follow.
 
 Plans:
+**Wave 1**
 
 - [ ] 14.1.1-01-PLAN.md — wave 1: web-tab lost-view (G-4), no restored tabs / no id collision (G-5), honest live instrument (G-20)
-- [ ] 14.1.1-02-PLAN.md — wave 2: overlay thumbnails for Panorama (G-6), dropdown never re-opens after Enter (G-7)
 - [ ] 14.1.1-03-PLAN.md — wave 1: setups save/delete failure copy (G-21), Delete Setup destructive ink (G-22)
-- [ ] 14.1.1-04-PLAN.md — wave 2: gBrowser stand-in member set (G-19), backend env-reader gate (G-24)
 - [ ] 14.1.1-05-PLAN.md — wave 1: internals-catalogue record (G-25), Phase 15 write-channel corrections (G-26)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 14.1.1-02-PLAN.md — wave 2: overlay thumbnails for Panorama (G-6), dropdown never re-opens after Enter (G-7)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 14.1.1-04-PLAN.md — wave 2: gBrowser stand-in member set (G-19), backend env-reader gate (G-24)
 
 ### Phase 15: Panorama Organising
 

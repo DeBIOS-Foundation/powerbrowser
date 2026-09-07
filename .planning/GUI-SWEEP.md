@@ -71,7 +71,11 @@ root_cause (or "unknown — investigate"), artifacts, fixable. Or tell Claude
 - **The other session's uncommitted files stay untouched:** `main-area-exemption.ts`,
   `mode-service.ts`, `modes-frontend-module.ts`, `group-actor-client.ts`,
   `browser-window-command.ts`, `tab-query-service.ts`, `jar.mn`, the three `verify-mode-*`
-  scripts, 14-04/14-05 plans, 14-UAT.md, GUI-DEFECTS.md (test 12). Do not stage or commit them.
+  scripts, 14-04/14-05 plans, 14-UAT.md. Do not stage or commit them.
+- **`GUI-DEFECTS.md` is released** (2026-09-07): it is committed and clean, so the rule above —
+  which is about the other session's *uncommitted* files — never applied to it. It may be edited
+  to move statuses. Two things are unchanged: only Chris marks an item CONFIRMED, and test 12
+  stays a `decision` gap that Step 3 owns.
 - **User-facing copy:** product named "Power Browser", plain language, a real on-screen next
   step, no internal identifier (no pref key, port, tab id, message kind, command id, raw
   exception). Every new string goes into the phase's copy table first.
