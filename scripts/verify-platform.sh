@@ -4724,6 +4724,23 @@ run_own_checks() {
       # rides alongside for the reason every other self-test row gives.
       "gui07-mode-switch-tabs-live|node $REPO_ROOT/scripts/verify-mode-switch-tabs-live.mjs"
       "gui07-mode-switch-tabs-live-self-test|node $REPO_ROOT/scripts/verify-mode-switch-tabs-live.mjs --self-test"
+
+      # NEW (14.1-03): GUI-02's behavioural half. Drives the built shell over
+      # WebDriver BiDi through "+", a typed address, a second typed address,
+      # the five-hop mode walk, the chrome-side tab store and close, and
+      # asserts the overlay context is aligned to the placeholder within
+      # 1 CSS px (read INSIDE the overlay with evaluateIn), navigated in
+      # place, hidden when not current, its store row present then absent,
+      # and removed on close -- with zero window.open calls. Every
+      # expectation is derived from the tree at check time. Registered as a
+      # plain `node` invocation like gui07 (it launches and reaps its own
+      # browser and serves its own pages). It needs the built binary and the
+      # last Theia app build, so it is emphatically not --quick. The
+      # self-test boots seven sessions (a clean control, then six plants,
+      # each in its own session) and rides alongside for the reason every
+      # other self-test row gives.
+      "gui02-web-tab-live|node $REPO_ROOT/scripts/verify-web-tab-live.mjs"
+      "gui02-web-tab-live-self-test|node $REPO_ROOT/scripts/verify-web-tab-live.mjs --self-test"
     )
   fi
 

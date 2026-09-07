@@ -151,6 +151,8 @@ export class ChromeBarWidget extends ReactWidget {
     protected mode = ChromeBarWidget.MODES[0];
     protected tabCount = 0;
     protected querySeq = 0;
+    /** True from a keystroke until the dropdown is closed on user intent; a debounced query fires only while armed. */
+    protected dropdownArmed = false;
     protected pillRef: HTMLDivElement | null = null;
 
     /**
@@ -190,7 +192,31 @@ export class ChromeBarWidget extends ReactWidget {
         this.update();
     };
 
+    /**
+     * Closes the dropdown on user intent (commit, Escape, blur) AND
+     * invalidates any query still in flight. Without the bump, a query
+     * started by the last keystroke and still outstanding at Enter would
+     * finish after the commit and re-open the dropdown over the page --
+     * measured live by 14.1-03's web-tab check, where the reopened
+     * dropdown counted as a blocking layer and the overlay stayed hidden.
+     */
+    protected closeDropdown(): void {
+        this.querySeq += 1;
+        this.dropdownArmed = false;
+        this.dropdownOpen = false;
+        this.highlightIndex = -1;
+    }
+
     protected async runQuery(prefix: string): Promise<void> {
+        // Only text typed since the last close may open the dropdown. The
+        // debounce delays this call, so a query scheduled by the last
+        // keystroke BEFORE Enter still arrives here AFTER the commit; the
+        // sequence bump in closeDropdown cannot see it because the sequence
+        // is taken below. Without this guard that late query re-opened the
+        // dropdown over the committed page.
+        if (!this.dropdownArmed) {
+            return;
+        }
         const seq = ++this.querySeq;
         // Row-level shimmer only past the contracted delay: local matches
         // paint synchronously with no spinner; the shimmer row appears only
@@ -229,6 +255,7 @@ export class ChromeBarWidget extends ReactWidget {
     protected onInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
         this.inputValue = e.target.value;
         this.commitFailed = false;
+        this.dropdownArmed = true;
         this.update();
         void this.debouncedQuery(this.inputValue);
     };
@@ -291,8 +318,7 @@ export class ChromeBarWidget extends ReactWidget {
         this.committedAddress = url;
         this.inputValue = url;
         this.commitFailed = false;
-        this.dropdownOpen = false;
-        this.highlightIndex = -1;
+        this.closeDropdown();
         this.update();
         try {
             await this.openCommittedUrl(url);
@@ -319,8 +345,7 @@ export class ChromeBarWidget extends ReactWidget {
         this.committedAddress = text;
         this.inputValue = text;
         this.commitFailed = false;
-        this.dropdownOpen = false;
-        this.highlightIndex = -1;
+        this.closeDropdown();
         this.update();
         const target = typedAddressTargetOf(text);
         if (!target) {
@@ -362,8 +387,7 @@ export class ChromeBarWidget extends ReactWidget {
             // Two-stage dismissal: first press closes the dropdown, second
             // restores the committed address.
             if (this.dropdownOpen) {
-                this.dropdownOpen = false;
-                this.highlightIndex = -1;
+                this.closeDropdown();
                 this.update();
             } else {
                 this.inputValue = this.committedAddress;
@@ -373,8 +397,7 @@ export class ChromeBarWidget extends ReactWidget {
     };
 
     protected onInputBlur = (): void => {
-        this.dropdownOpen = false;
-        this.highlightIndex = -1;
+        this.closeDropdown();
         this.update();
     };
 

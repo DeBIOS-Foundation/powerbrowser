@@ -769,20 +769,20 @@ export const PowerBrowserAPI = Object.freeze({
 
   /**
    * SQL-01 (12-01): opens the single chrome-side tab-store connection.
-   * Relative `tabs.sqlite` resolves against ProfD by construction, so the
-   * own-file rule needs no hand-rolled path join. WAL is pinned OUTSIDE any
-   * transaction (journal_mode is immutable inside one -- a silent no-op),
-   * with a journal_mode read-back assert rather than an assumption. Version
-   * guard: zero or stale runs the forward migration in one transaction with
-   * tableExists/indexExists pre-checks; newer-than-head refuses loudly,
-   * leaving the file untouched. Loud-write convention: throws naming the
-   * method and cause, never masks a failure as success.
+   * Relative `tabs.sqlite` resolves against ProfD by construction. WAL is
+   * pinned OUTSIDE any transaction with a read-back assert. openNotExclusive
+   * (14.1-03): mozStorage opens EXCLUSIVE by default, and an exclusive WAL
+   * writer keeps the index in heap (no -shm file), so the backend's readonly
+   * reader (TabQueryService, SQL-04) got SQLITE_BUSY on every query while the
+   * browser ran and served [] -- measured live. Version guard: zero or stale
+   * runs the forward migration in one transaction; newer-than-head refuses
+   * loudly. Loud-write convention: throws naming the method and cause.
    */
   async openTabStore() {
     if (tabStoreConn) {
       return tabStoreConn;
     }
-    const conn = await lazy.Sqlite.openConnection({ path: TAB_STORE_FILE_NAME });
+    const conn = await lazy.Sqlite.openConnection({ path: TAB_STORE_FILE_NAME, openNotExclusive: true });
     const modeRows = await conn.execute("PRAGMA journal_mode=WAL;");
     const mode = modeRows.length ? modeRows[0].getString(0) : "";
     if (mode !== "wal") {

@@ -255,9 +255,18 @@ export async function captureScreenshot(url, outputPath, { windowSize = '800,600
 
 /**
  * Launch `objdir/dist/bin/firefox` headless against `url`, connect over
- * WebDriver BiDi, and invoke `callback({ evaluate, waitFor, screenshot })`.
+ * WebDriver BiDi, and invoke
+ * `callback({ evaluate, evaluateIn, send, waitFor, screenshot, topLevelContexts })`.
  * Guarantees Firefox is killed and its temporary profile removed before
  * returning or throwing, including on SIGINT.
+ *
+ * `topLevelContexts()` re-queries the live context tree on every call, and
+ * `evaluateIn(context, expression)` (14.1-03) evaluates inside one of the
+ * contexts it returned. Together they are how a caller that opened a SECOND
+ * context reads inside it: `evaluate` is pinned to the launch-time context
+ * and can never see the other one. `send(method, params)` (14.1-03) is the
+ * raw BiDi command for what no named member covers -- trusted input via
+ * `input.performActions` -- and returns the command's `result`.
  *
  * `screenshot()` (added for Plan 05's pixel-comparison harness) captures
  * the CURRENT state of the already-loaded page via BiDi
@@ -419,6 +428,21 @@ export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN, st
             return result.result.result.value;
         };
 
+        // GUI-02 (14.1-03): the same evaluation against a caller-chosen
+        // context. `evaluate` is pinned to the launch-time context, so a
+        // caller that opened a SECOND context (an in-shell web-tab overlay
+        // is one) has no other way to read inside it. The context id comes
+        // from `topLevelContexts()`; an unknown id rejects with the BiDi
+        // error rather than evaluating anywhere else.
+        const evaluateIn = async (targetContext, expression) => {
+            const result = await client.send('script.evaluate', {
+                expression,
+                target: { context: targetContext },
+                awaitPromise: true,
+            });
+            return result.result.result.value;
+        };
+
         const screenshot = async () => {
             const result = await client.send('browsingContext.captureScreenshot', { context });
             return Buffer.from(result.result.data, 'base64');
@@ -430,8 +454,18 @@ export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN, st
         // the chrome window wrapping it is invisible on this platform
         // (WINDOWS.md 7), so the content context it owns is the only
         // observable.
+        // GUI-02 (14.1-03): the raw BiDi command, for the few things the
+        // named members above do not cover -- `input.performActions` in
+        // particular, which is the only way to deliver a TRUSTED pointer
+        // or key event into a page (a script-dispatched event is not user
+        // interaction to session history, so nothing evaluated in the page
+        // can stand in for a click). Returns the command's `result`.
+        const send = async (method, params) => (await client.send(method, params)).result;
+
         return await callback({
             evaluate,
+            evaluateIn,
+            send,
             waitFor: (expr, opts) => waitFor(evaluate, expr, opts),
             screenshot,
             topLevelContexts,
@@ -530,11 +564,77 @@ async function runSelfTest() {
         fail(`single-context session threw: ${err.message}`);
     }
 
+    // Case 3 (14.1-03): evaluateIn targets the context it is handed, and
+    // ONLY that one. A helper that silently evaluated in the wrong context
+    // would make every geometry assertion built on it meaningless, so both
+    // halves are proven: the named context answers exactly as `evaluate`
+    // does, and an unknown id rejects instead of evaluating anywhere.
+    try {
+        await withFirefoxPage('', async ({ evaluate, evaluateIn, topLevelContexts }) => {
+            const seen = await topLevelContexts();
+            if (seen.length === 0) {
+                fail('evaluateIn case saw zero top-level contexts on a bare launch');
+                return;
+            }
+            const viaIn = await evaluateIn(seen[0].context, 'location.href');
+            const viaEvaluate = await evaluate('location.href');
+            if (typeof viaIn !== 'string' || viaIn === '' || viaIn !== viaEvaluate) {
+                fail(
+                    `evaluateIn(${seen[0].context}) returned ${JSON.stringify(viaIn)}, `
+                    + `expected the non-empty href evaluate returns: ${JSON.stringify(viaEvaluate)}`
+                );
+                return;
+            }
+            let rejected = false;
+            try {
+                await evaluateIn('no-such-context', '1');
+            } catch {
+                rejected = true;
+            }
+            if (!rejected) {
+                fail('evaluateIn(\'no-such-context\') resolved instead of rejecting -- it evaluated somewhere');
+                return;
+            }
+            console.log('firefox-bidi: --self-test PASS -- evaluateIn reads the named context and rejects an unknown one');
+        });
+    } catch (err) {
+        fail(`evaluateIn session threw: ${err.message}`);
+    }
+
+    // Case 4 (14.1-03): `send` is the raw command and returns its `result`
+    // -- proven on a command whose answer the same session can cross-check
+    // (`browsingContext.getTree` against `topLevelContexts`), and an
+    // unknown method must reject rather than resolve to nothing.
+    try {
+        await withFirefoxPage('', async ({ send, topLevelContexts }) => {
+            const tree = await send('browsingContext.getTree', {});
+            const seen = await topLevelContexts();
+            const ids = (tree && tree.contexts ? tree.contexts : []).map(c => c.context);
+            if (ids.length === 0 || ids.length !== seen.length || !seen.every(c => ids.includes(c.context))) {
+                fail(`send('browsingContext.getTree') returned contexts ${JSON.stringify(ids)}, topLevelContexts saw ${JSON.stringify(seen.map(c => c.context))}`);
+                return;
+            }
+            let rejected = false;
+            try {
+                await send('no.suchCommand', {});
+            } catch {
+                rejected = true;
+            }
+            if (!rejected) {
+                fail('send(\'no.suchCommand\') resolved instead of rejecting');
+                return;
+            }
+            console.log('firefox-bidi: --self-test PASS -- send returns the raw result and rejects an unknown command');
+        });
+    } catch (err) {
+        fail(`send session threw: ${err.message}`);
+    }
+
     if (failures.length !== 0) {
         process.exitCode = 1;
         return;
     }
-    console.log('firefox-bidi: --self-test PASS');
+    console.log('firefox-bidi: --self-test PASS -- 4 cases');
 }
 
 // Import guard: importing this module (six live scripts reuse withFirefoxPage
