@@ -14,6 +14,9 @@
  *   2. a typed address committed with Enter in the pill (React-compatible
  *      value write + `input` event, then a `keydown` Enter);
  *   3. a second typed address, which must navigate the SAME overlay;
+ *   3b. the overlay dropped from under the widget (chrome asked to close the
+ *      tab while the placeholder stays open, which is what a chrome-side
+ *      restart leaves behind), then ONE Reload;
  *   4. the mode walk Coding -> Browsing -> Organising -> Browsing -> Coding,
  *      derived from mode-descriptors.ts in source order, through the modes
  *      activate command (second visits included);
@@ -32,6 +35,11 @@
  * first commit and enabled after the second; the tab stays attached and in
  * the main area across every hop, realigned wherever it is current and
  * hidden (`document.hidden` in the overlay) wherever it is not; a store row
+ * a dropped overlay puts the shipped lost-view copy in the tab body with no
+ * user action and ONE Reload brings the page back aligned (G-14.1.1-4 -- made
+ * non-vacuous by the clean control passing all three while the
+ * `lost-view-ignored` plant, which restores the discarded geometry reply,
+ * fails them); a store row
  * for the served URL is readable after navigation and gone after close; no
  * context carries a served URL after close; the main-area id set after close
  * equals the set before "+"; the shell's own POWERBROWSER_SHELL_READY line
@@ -140,6 +148,13 @@ function derive() {
     if (!blockingSelector) {
         failures.push(`${WEB_TAB_REL}: derived NO blocking-layer selector -- a hidden overlay could not be explained by the layer that hid it`);
     }
+    // Double-quoted in source (the copy carries an apostrophe). Read here so
+    // the lost-view assertion compares against the shipped literal rather
+    // than a second hand-typed copy of it.
+    const lostViewCopy = /LOST_VIEW_COPY\s*=\s*"([^"]+)"/.exec(webTab)?.[1];
+    if (!lostViewCopy) {
+        failures.push(`${WEB_TAB_REL}: derived NO lost-view copy -- the lost-view assertion has no shipped string to compare the tab body against`);
+    }
     const handlerClass = /export class (\w+)\s+implements OpenHandler/.exec(webTab)?.[1];
     if (!handlerClass) {
         failures.push(`${WEB_TAB_REL}: derived NO open-handler class -- the protocol resolves the handler by its class name and cannot invent one`);
@@ -184,7 +199,8 @@ function derive() {
     const walk = shipped.length === 3 ? [shipped[0], shipped[1], shipped[2], shipped[1], shipped[0]] : [];
 
     return {
-        failures, factoryId, emptyUrl, stateEvent, requestEvent, blockingSelector, handlerClass, widgetClass, channelClass,
+        failures, factoryId, emptyUrl, stateEvent, requestEvent, blockingSelector, lostViewCopy,
+        handlerClass, widgetClass, channelClass,
         newTabCommandId, inputClass, shipped, activateCommandId, organisingWidgetId, walk,
     };
 }
@@ -365,6 +381,34 @@ function phaseExpression(cfg, phase, arg) {
                 proto.publish = function () {};
                 report.notes.push('PLANT no-geometry: ' + cfg.widgetClass + '.prototype.publish is a no-op, so chrome never receives a rect');
             }
+        } else if (cfg.plant === 'lost-view-ignored') {
+            const proto = Object.getPrototypeOf(__getByName(container, cfg.widgetClass));
+            if (typeof proto.publish !== 'function') {
+                fail('plant lost-view-ignored could not be applied: ' + cfg.widgetClass + '.prototype.publish is not a function');
+            } else {
+                // The pre-fix behaviour, restored without re-implementing the
+                // rect computation: the real publish still runs, but its
+                // geometry request is dispatched through the channel's
+                // fire-and-forget path and its reply is discarded, exactly as
+                // it was before G-14.1.1-4 was closed.
+                const realPublish = proto.publish;
+                proto.publish = function () {
+                    const channel = this.channel;
+                    if (channel && !channel.__pbGeometryReplyDiscarded) {
+                        channel.__pbGeometryReplyDiscarded = true;
+                        const realRequest = channel.request.bind(channel);
+                        channel.request = msg => {
+                            if (msg && msg.kind === 'webTabGeometry') {
+                                channel.send(msg);
+                                return new Promise(() => {});
+                            }
+                            return realRequest(msg);
+                        };
+                    }
+                    return realPublish.call(this);
+                };
+                report.notes.push('PLANT lost-view-ignored: the geometry publish dispatches fire-and-forget, so the unknown-tab outcome of its reply is discarded');
+            }
         } else if (cfg.plant === 'state-ignored') {
             if (typeof P.channel.onState !== 'function') {
                 fail('plant state-ignored could not be applied: ' + cfg.channelClass + '.onState is not a function');
@@ -455,6 +499,45 @@ function phaseExpression(cfg, phase, arg) {
             pushes: P.pushes.slice(),
             visibility: P.visibility(),
             lastSent: P.widget.lastSent,
+        };`,
+
+        // G-14.1.1-4. The overlay is dropped from under a widget that does not
+        // know it: chrome is asked to close the tab while the placeholder stays
+        // open, which is what a chrome-side restart leaves behind. From there
+        // the contract is two things -- the body must read the lost-view line
+        // with no user action, and ONE Reload must bring the page back.
+        lostView: `
+        report.steps.push('drop the overlay from under the widget');
+        report.lostView = { closeWhere: undefined, stateText: undefined, lostView: undefined };
+        // The widget's own body node, not a hand-kept CSS class: a rename is a
+        // named lost-view red rather than a silently unreadable body.
+        const stateText = () => {
+            const node = P.widget.stateNode;
+            if (!node) {
+                fail('lost-view: the widget exposes no state node, so the body copy cannot be read at all (broken instrument, never a clean pass)');
+                return undefined;
+            }
+            return node.textContent;
+        };
+        const closeReply = await P.channel.request({ kind: 'webTabClose', tabId: P.widget.tabId });
+        report.lostView.closeWhere = closeReply && closeReply.where;
+        // One geometry publish that the dedupe cannot skip: this is the message
+        // chrome answers while the user is idle, and the only one it answers.
+        P.widget.lastSent = '';
+        P.widget.publish();
+        await P.settle();
+        report.lostView.stateText = stateText();
+        report.lostView.lostView = P.widget.lostView;
+
+        report.steps.push('one Reload');
+        const reloadReply = await P.widget.reload();
+        report.lostView.reloadReplyWhere = reloadReply && reloadReply.where;
+        await P.settle();
+        report.lostView.afterOneReload = {
+            lostView: P.widget.lostView,
+            hasPage: P.widget.hasPage,
+            stateText: stateText(),
+            rect: P.placeholderRect(),
         };`,
 
         hop: `
@@ -671,6 +754,28 @@ async function drive(derived, plant) {
                     }
                 }
 
+                // G-14.1.1-4: drop the overlay from under the widget, then read
+                // the body and recover in ONE Reload. The recovery re-opens the
+                // overlay, so the context id changes here and every read below
+                // must use the re-acquired one -- the walk realigns against it.
+                const lost = await phase('lostView');
+                report.lostView = lost.lostView;
+                if (lost.lostView) {
+                    contexts = await awaitContexts(topLevelContexts, seen => seen.some(c => c.url === cfg.servedB));
+                    report.contextsAfterLostView = contexts.map(c => c.url);
+                    const recovered = contexts.filter(c => c.url === cfg.servedB);
+                    if (recovered.length !== 1) {
+                        report.failures.push(`lost-view: after one Reload exactly one top-level browsing context should carry ${cfg.servedB} (the re-created overlay), saw ${recovered.length} in ${JSON.stringify(report.contextsAfterLostView)}`);
+                        overlay = undefined;
+                    } else {
+                        overlay = recovered[0].context;
+                        report.overlayContextAfterLostView = overlay;
+                        if (lost.lostView.afterOneReload) {
+                            await align('after the lost-view reload', overlay, lost.lostView.afterOneReload.rect);
+                        }
+                    }
+                }
+
                 // The mode walk: every hop a second visit somewhere.
                 for (const id of derived.walk) {
                     const h = (await phase('hop', id)).hop;
@@ -777,6 +882,21 @@ function assertReport(derived, report) {
     if (b.backDisabled !== false) {
         failures.push(`Back is ${b.backDisabled === true ? 'disabled' : 'unreadable'} after the second commit, expected enabled (one entry behind)`);
     }
+    // G-14.1.1-4. Non-vacuous by construction: the clean control must satisfy
+    // all three, and the `lost-view-ignored` plant -- which restores the
+    // fire-and-forget geometry publish whose reply the widget used to discard
+    // -- must fail (a) and (b).
+    const lost = report.lostView ?? {};
+    if (lost.stateText !== derived.lostViewCopy) {
+        failures.push(`lost-view: after chrome dropped the overlay the tab body reads ${JSON.stringify(lost.stateText)}, expected the shipped lost-view copy ${JSON.stringify(derived.lostViewCopy)} with no user action (chrome answered the close with ${JSON.stringify(lost.closeWhere)})`);
+    }
+    if (lost.lostView !== true) {
+        failures.push(`lost-view: the widget did not mark the view lost after one geometry publish to a chrome that no longer holds the tab (lostView=${JSON.stringify(lost.lostView)}) -- the unknown-tab outcome of the geometry reply was discarded`);
+    }
+    const recovered = lost.afterOneReload ?? {};
+    if (recovered.lostView !== false || recovered.hasPage !== true) {
+        failures.push(`lost-view: one Reload did not bring the page back (lostView=${JSON.stringify(recovered.lostView)}, hasPage=${JSON.stringify(recovered.hasPage)}, body ${JSON.stringify(recovered.stateText)}, reload reply where ${JSON.stringify(lost.reloadReplyWhere)}) -- the contract is one click, not two`);
+    }
     const hops = report.hops ?? [];
     if (hops.length !== derived.walk.length) {
         failures.push(`walked ${hops.length} hop(s), expected ${derived.walk.length}: ${derived.walk.join(' -> ')}`);
@@ -836,6 +956,8 @@ function printReport(report) {
         console.log(`${NAME}: state pushes received (${b.pushes.length}); last: ${b.pushes.slice(-3).join(' | ')}`);
         console.log(`${NAME}: after B: last published ${b.lastSent}; visibility ${JSON.stringify(b.visibility)}`);
     }
+    const lost = report.lostView ?? {};
+    console.log(`${NAME}: lostView: chrome answered the close with ${JSON.stringify(lost.closeWhere)}; body after the drop ${JSON.stringify(lost.stateText)}, lostView ${JSON.stringify(lost.lostView)}; after one Reload: lostView ${JSON.stringify((lost.afterOneReload ?? {}).lostView)}, hasPage ${JSON.stringify((lost.afterOneReload ?? {}).hasPage)}, reload reply where ${JSON.stringify(lost.reloadReplyWhere)}, re-acquired overlay context ${report.overlayContextAfterLostView}`);
     console.log(`${NAME}: rows after navigation: ${JSON.stringify((report.rowsAfterNavigation ?? []).map(r => r.url))}; rows after close: ${JSON.stringify((report.rowsAfterClose ?? []).map(r => r.url))}`);
     console.log(`${NAME}: contexts after close: ${JSON.stringify(report.contextsAfterClose ?? [])}; main-area ids before/after: [${(report.mainIdsBefore ?? []).join(', ')}] / [${(report.mainIdsAfterClose ?? []).join(', ')}]; window.open calls: ${report.windowOpenCalls}; ${SHELL_READY_SENTINEL} lines: ${report.shellReadyLines}`);
     for (const note of report.notes ?? []) {
@@ -891,6 +1013,10 @@ async function selfTest() {
         { name: 'handler falls back to a popup', plant: 'popup', expect: 'window.open' },
         // Geometry is never published, so the overlay never reaches the placeholder.
         { name: 'geometry never published', plant: 'no-geometry', expect: 'rect' },
+        // The geometry reply is discarded again (G-14.1.1-4's pre-fix
+        // behaviour), so a dropped overlay leaves the body blank until the
+        // user clicks Reload.
+        { name: 'the geometry reply is discarded', plant: 'lost-view-ignored', expect: 'lost-view' },
         // Chrome's pushes never reach the widget, so the pill keeps the typed text.
         { name: 'state pushes ignored', plant: 'state-ignored', expect: 'pill' },
         // The store reader returns nothing.
@@ -937,7 +1063,8 @@ async function selfTest() {
         console.error(`${NAME} --self-test: FAIL -- ${failed} case(s) did not behave as required`);
         return 1;
     }
-    console.log(`${NAME} --self-test: PASS -- the clean control is green and all six planted faults went red`);
+    const plants = cases.filter(c => !c.expectClean);
+    console.log(`${NAME} --self-test: PASS -- the clean control is green and all ${plants.length} planted faults went red: ${plants.map(c => c.plant).join(', ')}`);
     return 0;
 }
 

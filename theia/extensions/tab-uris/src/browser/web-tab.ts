@@ -31,6 +31,12 @@ export const WEB_TAB_STATE_EVENT = 'PowerBrowserWebTabState';
 /** Ack budget for the requests whose reply decides UI state; matches the group channel's. */
 export const WEB_TAB_ACK_TIMEOUT_MS = 5000;
 export const WEB_TAB_OPEN_HANDLER_ID = 'powerbrowser.web-tab-open-handler';
+/**
+ * The one reply outcome that means chrome no longer holds this tab's overlay
+ * (`PowerBrowserAPI.webTabOpen`'s documented `where` vocabulary). Spelled once
+ * here because two separate code paths fold it into lost view.
+ */
+export const UNKNOWN_TAB_OUTCOME = 'unknown-tab';
 
 /**
  * Wire names of the group channel. Spelled locally rather than imported for
@@ -322,7 +328,7 @@ export class WebTabWidget extends BaseWidget {
 
     /** A reply that means chrome no longer renders (or never rendered) this tab. */
     protected static lostReply(reply: WebTabReply): boolean {
-        return reply.ok !== true || reply.where === 'unknown-tab';
+        return reply.ok !== true || reply.where === UNKNOWN_TAB_OUTCOME;
     }
 
     /** Label: page title -> page URL -> "New Tab". Caption: URL or "New Tab". Text values only, never markup. */
@@ -391,7 +397,18 @@ export class WebTabWidget extends BaseWidget {
         super.dispose();
     }
 
-    /** Coalesced geometry publish: one rAF per widget, latest rect wins, identical messages skipped. */
+    /**
+     * Coalesced geometry publish: one rAF per widget, latest rect wins,
+     * identical messages skipped.
+     *
+     * The reply IS read (G-14.1.1-4). Geometry is the one message chrome
+     * answers on every layout change, and the only one sent while the user is
+     * idle, so its outcome is the only evidence available that the overlay is
+     * gone before the user touches anything. Only the unknown-tab outcome
+     * counts: `lostReply()`'s `ok !== true` arm is deliberately NOT reused
+     * here, because a slow frame's `timeout` reply would then blank a live
+     * page -- a worse defect than the one this closes.
+     */
     publish(): void {
         cancelAnimationFrame(this.raf);
         this.raf = requestAnimationFrame(() => {
@@ -413,7 +430,18 @@ export class WebTabWidget extends BaseWidget {
                 return;
             }
             this.lastSent = key;
-            this.channel.send(msg);
+            // Not awaited: `publish()` stays synchronous for its many callers.
+            // The rAF coalescing and the `lastSent` dedupe above are what bound
+            // the number of outstanding requests during a splitter drag, and
+            // each request drops its listener on settle or at the ack timeout.
+            void this.channel.request(msg).then(reply => {
+                if (this.isDisposed) {
+                    return;
+                }
+                if (reply.where === UNKNOWN_TAB_OUTCOME) {
+                    this.setLostView(true);
+                }
+            });
         });
     }
 
@@ -442,13 +470,31 @@ export class WebTabWidget extends BaseWidget {
      */
     async reload(): Promise<WebTabReply> {
         if (this.lostView) {
-            const reply = await this.channel.request({ kind: 'webTabOpen', tabId: this.tabId, url: this.url });
-            this.setLostView(reply.ok !== true);
-            this.lastSent = '';
-            this.publish();
-            return reply;
+            return this.reopen();
         }
-        return this.settle(await this.channel.request({ kind: 'webTabReload', tabId: this.tabId }));
+        const reply = this.settle(await this.channel.request({ kind: 'webTabReload', tabId: this.tabId }));
+        // "One Reload, not two" (G-14.1.1-4). The overlay was dropped between
+        // the last geometry publish and this click, so `publish()`'s reply
+        // handler had nothing to observe; `settle()` has only just marked the
+        // view lost. Re-issue the open in the SAME click rather than making the
+        // user press Reload a second time to get the page back.
+        if (this.lostView) {
+            return this.reopen();
+        }
+        return reply;
+    }
+
+    /**
+     * Re-issues the open for the current URL and republishes geometry from
+     * scratch, so the re-created overlay gets a rect the dedupe would
+     * otherwise have skipped. Both Reload arms above end here.
+     */
+    protected async reopen(): Promise<WebTabReply> {
+        const reply = await this.channel.request({ kind: 'webTabOpen', tabId: this.tabId, url: this.url });
+        this.setLostView(reply.ok !== true);
+        this.lastSent = '';
+        this.publish();
+        return reply;
     }
 
     /** Folds a navigation reply into the lost-view state and hands it back. */
