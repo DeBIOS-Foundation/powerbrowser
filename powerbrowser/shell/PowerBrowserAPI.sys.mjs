@@ -135,12 +135,23 @@ function groupSenderSpecIsTheia(spec) {
 
 function groupSenderIsTheia(actorRef) {
   let spec = "";
+  let embeddedByPrimary = false;
   try {
     spec = actorRef?.browsingContext?.currentWindowGlobal?.documentURI?.spec ?? "";
+    // GUI-02 (14.1-01): the embedder-is-primary wall (T-14.1-01). The host
+    // check above admits ANY loopback sender, and a user can now browse to
+    // a loopback page INSIDE a web-tab overlay: the actor child loads there
+    // too (the `matches` pin is by origin), and that page would pass the
+    // host check. Its top browsing context is embedded by the overlay
+    // element, which carries no `primary`; only the Theia frame
+    // (powerbrowser.xhtml's `<xul:browser primary="true">`) does.
+    embeddedByPrimary =
+      actorRef?.browsingContext?.top?.embedderElement?.getAttribute("primary") === "true";
   } catch {
     spec = "";
+    embeddedByPrimary = false;
   }
-  return groupSenderSpecIsTheia(spec);
+  return embeddedByPrimary && groupSenderSpecIsTheia(spec);
 }
 
 const TAB_STORE_FILE_NAME = "tabs.sqlite";
@@ -1610,6 +1621,30 @@ export const PowerBrowserAPI = Object.freeze({
           }
           return { ok: true, kind, where: PowerBrowserAPI.webTabClose(data.tabId) };
         }
+        case "webTabBack": {
+          if (!webTabIdIsValid(data.tabId)) {
+            return { ok: false, reason: "validation", message: "handleGroupMutation: refusing malformed tabId" };
+          }
+          return { ok: true, kind, where: PowerBrowserAPI.webTabBack(data.tabId) };
+        }
+        case "webTabForward": {
+          if (!webTabIdIsValid(data.tabId)) {
+            return { ok: false, reason: "validation", message: "handleGroupMutation: refusing malformed tabId" };
+          }
+          return { ok: true, kind, where: PowerBrowserAPI.webTabForward(data.tabId) };
+        }
+        case "webTabReload": {
+          if (!webTabIdIsValid(data.tabId)) {
+            return { ok: false, reason: "validation", message: "handleGroupMutation: refusing malformed tabId" };
+          }
+          return { ok: true, kind, where: PowerBrowserAPI.webTabReload(data.tabId) };
+        }
+        case "webTabFocus": {
+          if (!webTabIdIsValid(data.tabId)) {
+            return { ok: false, reason: "validation", message: "handleGroupMutation: refusing malformed tabId" };
+          }
+          return { ok: true, kind, where: PowerBrowserAPI.webTabFocus(data.tabId) };
+        }
         // GUI-01: a side-effect-free liveness answer, so the frontend can know
         // BEFORE a click whether this channel is available.
         //
@@ -2155,9 +2190,84 @@ export const PowerBrowserAPI = Object.freeze({
     // live check observes.
     win.gBrowser.tabs.push({ linkedBrowser: browser });
     const entry = { browser, uri: null, listener: null, titleListener: null, owner: actorRef };
+    // The progress listener: every navigation inside the overlay reaches
+    // the pill, the strip and the store from here. It must QI to
+    // nsISupportsWeakReference as well (the parent-side web progress holds
+    // listeners weakly, BrowsingContextWebProgress.cpp:49-51), and it is
+    // held strongly on the entry for the reason the map's comment gives.
+    // Store rows (SC4): keyed by page URL, http(s) top-level non-same-
+    // document location changes only -- a hash change is not a new tab and
+    // the empty page never matches, so a bare "+" writes no row.
+    entry.listener = {
+      QueryInterface: ChromeUtils.generateQI(["nsIWebProgressListener", "nsISupportsWeakReference"]),
+      onLocationChange(webProgress, request, location, flags) {
+        if (!webProgress.isTopLevel) {
+          return;
+        }
+        const locationSpec = location.spec;
+        const sameDocument = !!(flags & Ci.nsIWebProgressListener.LOCATION_CHANGE_SAME_DOCUMENT);
+        if (!sameDocument && /^https?:\/\//i.test(locationSpec)) {
+          if (entry.uri && entry.uri !== locationSpec) {
+            PowerBrowserAPI.removeTabRow(entry.uri).catch(() => {});
+          }
+          entry.uri = locationSpec;
+          PowerBrowserAPI.writeTabRow({ uri: locationSpec, url: locationSpec, title: browser.contentTitle, chromeWin: win }).catch(err => {
+            PowerBrowserAPI.log("error", `[web-tab] writeTabRow failed for ${locationSpec}: ${err && err.message ? err.message : err}`);
+          });
+        }
+        PowerBrowserAPI.webTabPush(theiaBrowser, tabId, browser, browser.webProgress.isLoadingDocument);
+      },
+      onStateChange(webProgress, request, stateFlags) {
+        if (!webProgress.isTopLevel || !(stateFlags & Ci.nsIWebProgressListener.STATE_IS_NETWORK)) {
+          return;
+        }
+        PowerBrowserAPI.webTabPush(theiaBrowser, tabId, browser, !!(stateFlags & Ci.nsIWebProgressListener.STATE_START));
+      },
+    };
+    browser.addProgressListener(entry.listener, Ci.nsIWebProgress.NOTIFY_LOCATION | Ci.nsIWebProgress.NOTIFY_STATE_NETWORK);
+    // Title: dispatched on the embedder <browser> element itself
+    // (WindowGlobalParent.cpp:563-566), the same event tabbrowser.js reads
+    // for tab.label. Upserts the row (same key) and pushes.
+    entry.titleListener = () => {
+      if (entry.uri) {
+        PowerBrowserAPI.writeTabRow({ uri: entry.uri, url: entry.uri, title: browser.contentTitle, chromeWin: win }).catch(err => {
+          PowerBrowserAPI.log("error", `[web-tab] writeTabRow failed for ${entry.uri}: ${err && err.message ? err.message : err}`);
+        });
+      }
+      PowerBrowserAPI.webTabPush(theiaBrowser, tabId, browser, browser.webProgress.isLoadingDocument);
+    };
+    browser.addEventListener("pagetitlechanged", entry.titleListener);
     webTabs.set(tabId, entry);
     const where = PowerBrowserAPI.webTabNavigate(tabId, spec);
     return where === "loading" ? "opened" : where;
+  },
+
+  /**
+   * GUI-02 (14.1-01): chrome -> frontend. One state push per navigation
+   * event, through the SAME actor pair the requests ride: the Theia frame's
+   * WindowGlobal's parent actor sends to its child, which re-dispatches the
+   * payload into the content window as a PowerBrowserWebTabState event.
+   * Primitives only -- URL, title, three booleans -- never the launch token,
+   * a pref, or an object. The frame can be mid-swap (no WindowGlobal, or one
+   * the actor's `matches` pin refuses), so a throw here is logged and
+   * dropped rather than allowed to unwind a progress notification.
+   */
+  webTabPush(theiaBrowser, tabId, browser, loading) {
+    try {
+      theiaBrowser.browsingContext.currentWindowGlobal
+        .getActor(GROUP_ACTOR_NAME)
+        .sendAsyncMessage("PowerBrowserWebTabState", {
+          kind: "state",
+          tabId,
+          url: browser.currentURI.spec,
+          title: browser.contentTitle,
+          loading: !!loading,
+          canGoBack: browser.canGoBack,
+          canGoForward: browser.canGoForward,
+        });
+    } catch (err) {
+      PowerBrowserAPI.log("error", `[web-tab] state push for ${tabId} failed: ${err && err.message ? err.message : err}`);
+    }
   },
 
   /**
@@ -2227,6 +2337,24 @@ export const PowerBrowserAPI = Object.freeze({
     }
     const { browser } = entry;
     const win = browser.ownerDocument.defaultView;
+    // Listener removal is best-effort on teardown (the startTabStoreTriggers
+    // idiom): a frameloader already torn down throws here, and the element
+    // removal below is what matters.
+    try {
+      browser.removeProgressListener(entry.listener);
+    } catch {
+      // best-effort
+    }
+    try {
+      browser.removeEventListener("pagetitlechanged", entry.titleListener);
+    } catch {
+      // best-effort
+    }
+    if (entry.uri) {
+      PowerBrowserAPI.removeTabRow(entry.uri).catch(err => {
+        PowerBrowserAPI.log("error", `[web-tab] removeTabRow failed for ${entry.uri}: ${err && err.message ? err.message : err}`);
+      });
+    }
     try {
       const tabs = win.gBrowser.tabs;
       const index = tabs.findIndex(tab => tab.linkedBrowser === browser);
@@ -2240,6 +2368,77 @@ export const PowerBrowserAPI = Object.freeze({
     browser.remove();
     webTabs.delete(tabId);
     return "closed";
+  },
+
+  /** GUI-02 (14.1-01): session-history navigation on one overlay; "unknown-tab" or "done". */
+  webTabBack(tabId) {
+    const entry = webTabs.get(tabId);
+    if (!entry) {
+      return "unknown-tab";
+    }
+    entry.browser.goBack();
+    return "done";
+  },
+
+  webTabForward(tabId) {
+    const entry = webTabs.get(tabId);
+    if (!entry) {
+      return "unknown-tab";
+    }
+    entry.browser.goForward();
+    return "done";
+  },
+
+  webTabReload(tabId) {
+    const entry = webTabs.get(tabId);
+    if (!entry) {
+      return "unknown-tab";
+    }
+    entry.browser.reload();
+    return "done";
+  },
+
+  /** GUI-02 (14.1-01): keyboard entry into the page (UI-SPEC A14): focuses the overlay's docshell. */
+  webTabFocus(tabId) {
+    const entry = webTabs.get(tabId);
+    if (!entry) {
+      return "unknown-tab";
+    }
+    entry.browser.focus();
+    return "done";
+  },
+
+  /**
+   * GUI-02 (14.1-01): the reserved accel+L path (UI-SPEC A13). A focused
+   * overlay page swallows every key Theia would otherwise bind, so leaving
+   * the page has to start in chrome: the shell's <key reserved="true"> calls
+   * this, which hands focus back to the Theia frame and asks the frontend,
+   * over the same push channel, to focus the address pill.
+   */
+  webTabFocusAddress(theiaBrowser) {
+    try {
+      theiaBrowser.focus();
+      theiaBrowser.browsingContext.currentWindowGlobal
+        .getActor(GROUP_ACTOR_NAME)
+        .sendAsyncMessage("PowerBrowserWebTabState", { kind: "focusAddress" });
+    } catch (err) {
+      PowerBrowserAPI.log("error", `[web-tab] focusAddress push failed: ${err && err.message ? err.message : err}`);
+    }
+  },
+
+  /**
+   * GUI-02 (14.1-01, T-14.1-05): drops every overlay a frontend WindowGlobal
+   * opened, called from the parent actor's didDestroy. A sidecar swap or a
+   * frontend reload replaces the WindowGlobal and its actor; without this
+   * the overlays it created would outlive it -- pages still rendering and
+   * playing audio behind a shell that no longer knows they exist.
+   */
+  webTabDropOwnedBy(actorRef) {
+    for (const [tabId, entry] of [...webTabs]) {
+      if (entry.owner === actorRef) {
+        PowerBrowserAPI.webTabClose(tabId);
+      }
+    }
   },
 
   /**
@@ -2333,5 +2532,11 @@ export class PowerBrowserGroupParent extends GroupActorBase {
       return undefined;
     }
     return PowerBrowserAPI.handleGroupMutation(message.data, this);
+  }
+
+  // GUI-02 (14.1-01): overlays never outlive the frontend WindowGlobal that
+  // opened them (see webTabDropOwnedBy).
+  didDestroy() {
+    PowerBrowserAPI.webTabDropOwnedBy(this);
   }
 }
