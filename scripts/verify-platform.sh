@@ -4458,6 +4458,24 @@ run_own_checks() {
     "sql-store-second-writer-self-test|node $REPO_ROOT/scripts/verify-sql-store-second-writer.mjs --self-test"
     "sql-store-soak|node $REPO_ROOT/scripts/verify-sql-store-soak.mjs"
     "sql-store-soak-self-test|node $REPO_ROOT/scripts/verify-sql-store-soak.mjs --self-test"
+    # NEW (14.1.1-04): G-14.1.1-24's backend environment gate, the nearest
+    # structural sibling of the second-writer scan above and registered beside
+    # it for that reason. powerbrowser-env.ts scrubs every product-prefixed key
+    # out of process.env at MODULE LOAD, so a backend module that reads the live
+    # environment directly finds nothing and fails SILENTLY -- GUI-DEFECTS item
+    # 9, guarded until now by a comment in tab-query-service.ts, and a comment
+    # is not a check. Two derived assertions: the set of backend files touching
+    # the live environment at all equals a two-entry allowlist each carrying its
+    # reason (red on an ungated new reader AND on a stale entry), and the set
+    # reading a prefixed key straight off it is empty. The prefix is derived
+    # from the capture loop itself, so the rebrand cannot leave the gate
+    # matching a dead prefix. Assertion B is negated, so the row reports its
+    # scanned-file count and fails distinctly at zero -- a clean result over an
+    # empty walk proves nothing. Honestly --quick: text reads only. No build,
+    # no browser, no display, no network. The self-test rides alongside for the
+    # reason every other self-test row in this array gives.
+    "backend-env-readers|node $REPO_ROOT/scripts/verify-backend-env-readers.mjs"
+    "backend-env-readers-self-test|node $REPO_ROOT/scripts/verify-backend-env-readers.mjs --self-test"
     # NEW (12-CODE-REVIEW.md WR-03): the tab-uris reader typecheck. Honestly
     # --quick per the function comment above: the extension's own tsc over
     # its own project, --noEmit, seconds, no build/browser/display/network.
