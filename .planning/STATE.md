@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: "14.1"
 current_phase_name: In-Theia Web Tabs (GUI-02)
 status: executing
-stopped_at: Completed 14.1-01-PLAN.md
-last_updated: "2026-09-07T05:42:01.580Z"
+stopped_at: Completed 14.1-02-PLAN.md
+last_updated: "2026-09-07T05:59:11.603Z"
 last_activity: 2026-09-06
 last_activity_desc: Phase 14.1 execution started
-state_head: b76358fbd096ff154375e4f38351357e94a43415
+state_head: 9e8f773adb07766269c4e809e9b6a7e7e307079e
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
 milestone_name: Browser GUI
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 ## Current Position
 
 Phase: 14.1 (In-Theia Web Tabs (GUI-02)) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-09-06 — Phase 14.1 execution started
 
@@ -113,6 +113,7 @@ Last activity: 2026-09-06 — Phase 14.1 execution started
 | Phase 13-chrome-bar-strip-relocation-spike P04 | n/a | 3 tasks | 4 files |
 | Phase 13-chrome-bar-strip-relocation-spike P05 | n/a | 2 tasks | 4 files |
 | Phase 14.1 P01 | 25min | 3 tasks | 9 files |
+| Phase 14.1 P02 | 11min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -281,6 +282,8 @@ Recent decisions affecting current work:
 - [Phase 13]: [Phase 13-05]: Placement gate derives addWidget area plus UI-SPEC order at check time; empty derivation fails as broken instrument; area respell, order flip, order deletion each proven red
 - [Phase 14.1]: 14.1-01: overlay styled via CSSOM property writes (shell CSP drops inline style attributes); live check asserts returned widget + dock currentTitle, not shell.currentWidget (headless FocusTracker)
 - [Phase 14.1]: 14.1-01: embedder-is-primary wall lives inside groupSenderIsTheia (shared predicate; gui08 guard-line anchor byte-identical)
+- [Phase 14.1]: 14.1-02: pill typing guard is focused AND edited (inputValue !== committedAddress), not focus alone -- nothing moves focus on Enter, so a focus-only guard would block chrome's canonical URL from replacing the typed text
+- [Phase 14.1]: 14.1-02: chrome bar routes every http(s) commit, suggestion row and '+' through the in-shell web tab (active tab navigated, else opener -> WebTabOpenHandler); suggestions gate two-sided (web-tab import present, stock-window const absent, routing anchor present)
 
 ### Pending Todos
 
@@ -377,8 +380,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-07T05:42:01.559Z
-Stopped at: Completed 14.1-01-PLAN.md
+Last session: 2026-09-07T05:59:11.581Z
+Stopped at: Completed 14.1-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
