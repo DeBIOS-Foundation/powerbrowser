@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v1.3
 current_phase: 14.1.1
-current_phase_name: gui-conformance-sweep
+current_phase_name: GUI Conformance Sweep (INSERTED)
 status: executing
-stopped_at: Completed 14.1-03-PLAN.md
-last_updated: "2026-09-07T17:48:10.884Z"
-last_activity: 2026-09-06
-last_activity_desc: Phase 14.1 execution started
-state_head: 8ca48186f2cecad97e8687ac8641956c9851ed5d
+stopped_at: Completed 14.1.1-01-PLAN.md
+last_updated: "2026-09-07T18:32:35.928Z"
+last_activity: 2026-09-07
+last_activity_desc: Phase 14.1.1 execution started
+state_head: 85237825ec8e5f5c9451b7a282f477d4973a4a0b
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 11
-  completed_plans: 6
+  completed_plans: 7
 milestone_name: Browser GUI
 ---
 
@@ -24,14 +24,14 @@ milestone_name: Browser GUI
 See: .planning/PROJECT.md (updated 2026-09-06)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 14.1 — In-Theia Web Tabs (GUI-02)
+**Current focus:** Phase 14.1.1 — GUI Conformance Sweep (INSERTED)
 
 ## Current Position
 
-Phase: 14.1.1 (gui-conformance-sweep) — READY TO EXECUTE
-Plan: 3 of 3
+Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-09-06 — Phase 14.1 execution started
+Last activity: 2026-09-07 — Phase 14.1.1 execution started
 
 ## Performance Metrics
 
@@ -115,6 +115,7 @@ Last activity: 2026-09-06 — Phase 14.1 execution started
 | Phase 14.1 P01 | 25min | 3 tasks | 9 files |
 | Phase 14.1 P02 | 11min | 2 tasks | 5 files |
 | Phase 14.1 P03 | 9h 38m | 3 tasks | 11 files |
+| Phase 14.1.1 P01 | 40 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -287,6 +288,10 @@ Recent decisions affecting current work:
 - [Phase 14.1]: 14.1-02: chrome bar routes every http(s) commit, suggestion row and '+' through the in-shell web tab (active tab navigated, else opener -> WebTabOpenHandler); suggestions gate two-sided (web-tab import present, stock-window const absent, routing anchor present)
 - [Phase 14.1]: 14.1-03: chrome bar binds to mainPanel.onDidChangeCurrent (strip selection), not focus-derived shell.currentWidget -- the overlay covers the placeholder so a web tab never receives DOM focus; addressOf falls back to NavigatableWidget.getUri for editor tabs
 - [Phase 14.1]: 14.1-03: GUI-02 gates are derive-and-compare with a positive control (browser-window-command.ts must keep window.open) and live geometry is read inside the overlay context via evaluateIn; Chris confirmed GUI-02 in his window 2026-09-07
+- [Phase 14.1.1]: 14.1.1-01: publish() folds only the unknown-tab outcome into lost view; lostReply's ok!==true arm is not reused because a timeout reply would blank a live page
+- [Phase 14.1.1]: 14.1.1-01: WEB_TAB_SESSION is a collision discriminator, never an authorisation token; the chrome-side origin wall stays the only authorisation
+- [Phase 14.1.1]: 14.1.1-01: a web tab from a persisted layout is refused at the WidgetFactory, and ShellLayoutRestorer's own catch drops it -- zero Theia-core edits
+- [Phase 14.1.1]: 14.1.1-01: shell.currentWidget demoted from assertion to record -- a check may not assert an observable it manufactures (new gap G-14.1.1-43, needs-chris)
 
 ### Pending Todos
 
@@ -384,8 +389,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-07T15:37:57.109Z
-Stopped at: Completed 14.1-03-PLAN.md
+Last session: 2026-09-07T18:32:25.569Z
+Stopped at: Completed 14.1.1-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
