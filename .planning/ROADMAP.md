@@ -136,12 +136,18 @@ Plans:
 **Goal:** Every `fixable: yes` gap in `14.1.1-UAT.md` is closed, each proved by a check that goes red without its fix; `needs-chris` and `decision` gaps gain evidence only and are never marked fixed by an executor
 **Requirements**: none mapped — this phase closes GUI conformance gaps, not requirement IDs
 **Depends on:** Phase 14.1
-**Plans:** 5/5 plans executed
+**Plans:** 10 plans — pass 1 (01–05) executed; pass 2 (06–10) planned
 **Protocol:** `.planning/GUI-SWEEP.md` (Step 2 — automated fix pass)
 
-Pass 1 plans the eleven in-scope `fixable: yes` gaps (G-14.1.1-4, 5, 6, 7, 19, 20, 21, 22, 24, 25,
-26). G-14.1.1-8, 9, 10, 23 and 27 are held for a second `--gaps` pass — each needs a file reserved
-for a concurrently running session. Waves: 01, 03, 05 run in parallel; 02 and 04 follow.
+Pass 1 planned the eleven in-scope `fixable: yes` gaps (G-14.1.1-4, 5, 6, 7, 19, 20, 21, 22, 24,
+25, 26). Verification found half 1 of the goal held for all eleven and half 2 — *proved by a check
+that goes red without its fix* — failed for two of them, with a third failure in the record itself.
+
+Pass 2 (plans 06–10) closes those three, plus G-14.1.1-9 and the `14-UI-SPEC` half of
+G-14.1.1-27, plus the four anti-pattern findings the verification recorded in unreserved files.
+**Held for pass 3:** G-14.1.1-8 (needs `tab-query-service.ts`), G-14.1.1-10 (needs
+`group-actor-client.ts`), G-14.1.1-23 (needs `mode-service.ts`) and G-14.1.1-27's `14-UAT.md`
+half — each held by a file the concurrently running session has uncommitted.
 
 Plans:
 **Wave 1**
@@ -157,6 +163,22 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 14.1.1-04-PLAN.md — wave 2: gBrowser stand-in member set (G-19), backend env-reader gate (G-24)
+
+*Pass 2 — gap closure against `14.1.1-VERIFICATION.md`*
+
+**Wave 1**
+
+- [ ] 14.1.1-06-PLAN.md — tracer: make the G-6 thumbnail proof attributable — a served page whose only capture opportunity is the hide, plus a plant that removes it
+- [ ] 14.1.1-08-PLAN.md — clean-checkout build order (G-9): token-gate before tab-uris, the edge declared, and a derive-and-compare `--quick` gate
+- [ ] 14.1.1-09-PLAN.md — anti-pattern findings in unreserved files: internal command id in user-facing copy (CR-03), a comment claiming an assertion a gate cannot make (WR-02), one reply read two ways in `web-tab.ts`
+
+**Wave 2** *(blocked on 06)*
+
+- [ ] 14.1.1-07-PLAN.md — G-20's red-ness proof: fifteen anchored message prefixes, pairwise-unique plant expects, and one decorative assertion deleted (WR-13)
+
+**Wave 3** *(blocked on 06, 07, 08, 09)*
+
+- [ ] 14.1.1-10-PLAN.md — the record: ten UAT statuses flipped with commit pointers, five new gap entries, GUI-DEFECTS 12/15/23/24/25 moved, catalogue line corrected (WR-10), Phase-14 placeholder rows superseded
 
 ### Phase 15: Panorama Organising
 
