@@ -37,18 +37,21 @@
  *  three spellings in source; the --self-test's discrimination proof shows
  *  this live half CAN go red on an unescaped implementation.
  *
- * Activation routing (13-04, G-13-3 facet 1): committing a suggestion
- * must navigate through its row URL on the stock-window channel. Derived
- * from the chrome-bar browser sources at check time: the widget imports
- * OPEN_BROWSER_WINDOW_COMMAND_ID and never re-spells the window-command id
- * string; the commit path references the row url field and never feeds the
- * opaque row key into a commit or open call (the React list key is the one
- * sanctioned row.uri use); no bare window.open literal and no search-engine
- * host literal (a small frozen list plus a query-param search pattern) may
- * appear in any chrome-bar browser source. An empty derivation -- zero
- * browser sources, or no widget source -- fails as a broken instrument,
- * never passes as clean. Zero routed call sites is a loud failure: call
- * sites exist, so there is no held-out STAGED pass.
+ * Activation routing (13-04, G-13-3 facet 1; retargeted by 14.1-02 /
+ * GUI-02): committing a suggestion must navigate through its row URL on the
+ * in-shell web-tab path. Derived from the chrome-bar browser sources at
+ * check time: the widget imports the web tab from tab-uris and carries the
+ * one routing line `await this.navigateWebTab(url);`; it never references
+ * the stock-window command const and never re-spells the window-command id
+ * string (only the GUI-01 palette command keeps that path); the commit path
+ * references the row url field and never feeds the opaque row key into a
+ * commit or open call (the React list key is the one sanctioned row.uri
+ * use); no bare window.open literal and no search-engine host literal (a
+ * small frozen list plus a query-param search pattern) may appear in any
+ * chrome-bar browser source. An empty derivation -- zero browser sources,
+ * no widget source, or a missing routing anchor -- fails as a broken
+ * instrument, never passes as clean. Zero routed call sites is a loud
+ * failure: call sites exist, so there is no held-out STAGED pass.
  *
  *  Honestly --quick: reads text sources, runs a scratch fixture through the
  *  stdlib engine, touches no build, no browser, no display, no network.
@@ -365,10 +368,11 @@ function checkLive() {
 }
 
 /**
- * Activation routing (13-04, G-13-3 facet 1): a committed suggestion must
- * navigate through its row URL on the stock-window channel -- never the
- * opaque row key (the blank-panel mint), never a re-spelled command id,
- * never a bare window.open bypass, never an invented search host.
+ * Activation routing (13-04, G-13-3 facet 1; GUI-02 retarget): a committed
+ * suggestion must navigate through its row URL on the in-shell web-tab path
+ * -- never the opaque row key (the blank-panel mint), never the stock-window
+ * command (imported or re-spelled), never a bare window.open bypass, never
+ * an invented search host.
  *
  * Derived from the chrome-bar browser sources at check time. The widget
  * half pins the commit routing; the every-file half pins the two bypasses
@@ -412,8 +416,14 @@ function checkActivationSources(entries) {
     } else {
         const rel = `${CHROME_BAR_BROWSER_DIR}/${CHROME_BAR_WIDGET_FILE}`;
         const src = widget.src;
-        if (!src.includes('OPEN_BROWSER_WINDOW_COMMAND_ID')) {
-            failures.push(`${rel}: does not import OPEN_BROWSER_WINDOW_COMMAND_ID -- suggestion activation must execute the imported stock-window command const, never a re-spelled string`);
+        if (!src.includes("from '@powerbrowser/tab-uris/lib/browser/web-tab'")) {
+            failures.push(`${rel}: does not import the web tab from tab-uris -- suggestion activation must route through the in-shell web tab imported from @powerbrowser/tab-uris/lib/browser/web-tab`);
+        }
+        if (src.includes('OPEN_BROWSER_WINDOW_COMMAND_ID')) {
+            failures.push(`${rel}: references OPEN_BROWSER_WINDOW_COMMAND_ID -- the chrome bar must not reach the stock-window command; only the GUI-01 palette command keeps that path`);
+        }
+        if (!src.includes('await this.navigateWebTab(url);')) {
+            failures.push(`${rel}: derived ZERO web-tab routing lines -- the anchor 'await this.navigateWebTab(url);' is absent, so the routing cannot be asserted (broken instrument, never a clean pass)`);
         }
         if (src.includes(`'${WINDOW_COMMAND_ID}'`)) {
             failures.push(`${rel}: re-spells the window-command id '${WINDOW_COMMAND_ID}' instead of importing the exported const -- the copy drifts silently from the tab-uris registration`);
@@ -483,7 +493,7 @@ function main() {
         failures.forEach(f => console.error(`  - ${f}`));
         return 1;
     }
-    console.log(`${NAME}: PASS -- search shape matches the declared contract and fixture semantics hold (prefix, escape, cap ${EXPECTED.uiCap}, recency); activation routes row URLs through the imported stock-window const (${activation.routed.length} file(s))`);
+    console.log(`${NAME}: PASS -- search shape matches the declared contract and fixture semantics hold (prefix, escape, cap ${EXPECTED.uiCap}, recency); activation routes row URLs through the in-shell web-tab path (${activation.routed.length} file(s))`);
     return 0;
 }
 
@@ -601,7 +611,7 @@ function selfTest() {
         {
             name: 'planted re-spelled window-command id',
             mutate: src => src.replace(
-                'await this.commands.executeCommand(OPEN_BROWSER_WINDOW_COMMAND_ID, url);',
+                'await this.navigateWebTab(url);',
                 `await this.commands.executeCommand('${WINDOW_COMMAND_ID}', url);`
             ),
             expect: WINDOW_COMMAND_ID,
@@ -617,7 +627,7 @@ function selfTest() {
         {
             name: 'planted bare window.open',
             mutate: src => src.replace(
-                'await this.commands.executeCommand(OPEN_BROWSER_WINDOW_COMMAND_ID, url);',
+                'await this.navigateWebTab(url);',
                 'window.open(url, \'_blank\');'
             ),
             expect: 'window.open',
