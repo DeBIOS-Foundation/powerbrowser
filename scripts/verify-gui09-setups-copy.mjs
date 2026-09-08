@@ -481,10 +481,62 @@ function selfTest() {
         plant(state, 'removed danger-scoped CSS rule', mutated, !css.includes('.pb-setup-delete-confirm .theia-button.main'), /has no danger-scoped rule/);
     }
 
+    // Plant 7 (14.1.1-09, CR-03) -- at the `throw new Error` site
+    // specifically: an internal identifier put back into the thrown refusal
+    // must go red naming the shape. This is the plant that proves the fifth
+    // paint site is load-bearing, so it carries its own POSITIVE CONTROL:
+    // the same scratch copy is re-derived with site 5 skipped (the
+    // pre-widening deriver), and that derivation must NOT see the planted
+    // identifier. The absence claim is safe to make only because the widened
+    // path above just went red on the identical input -- the instrument is
+    // proven capable of firing before its silence is read as evidence.
+    {
+        const service = real[SERVICE_REL].replace(
+            "'Power Browser can\\'t open this tab",
+            "'powerbrowser.setups.open-dependent: Power Browser can\\'t open this tab"
+        );
+        const mutated = { ...real, [SERVICE_REL]: service };
+        plant(
+            state,
+            'internal identifier back in the thrown refusal (throw site)',
+            mutated,
+            service.includes('powerbrowser.setups.open-dependent'),
+            /leaks the internal identifier "powerbrowser\.setups\.open"/
+        );
+        const preWidening = derivedServiceCopy(service, { throwSite: false });
+        const preWideningHits = [...new Set(preWidening.copy)]
+            .flatMap(internalsOf)
+            .filter(hit => hit.startsWith('powerbrowser.setups.open'));
+        if (preWideningHits.length) {
+            console.error(`${NAME} --self-test: FAIL -- the pre-widening deriver saw ${JSON.stringify(preWideningHits)}, so plant 7 proves nothing about the hole the fifth paint site closed`);
+            state.failed += 1;
+        } else {
+            console.log('  ok  pre-widening deriver (sites 1-4) on the same plant: GREEN -- the hole was real');
+        }
+    }
+
+    // Plant 8 (14.1.1-09, CR-03) -- also at the `throw new Error` site: an
+    // uncontracted raw literal thrown in place of the constant must go red as
+    // unresolved, naming the argument the derivation could not resolve.
+    {
+        const service = real[SERVICE_REL].replace(
+            'throw new Error(SETUP_DEPENDENT_UNSUPPORTED);',
+            "throw new Error('this tab cannot open in a dependent window');"
+        );
+        const mutated = { ...real, [SERVICE_REL]: service };
+        plant(
+            state,
+            'raw literal thrown instead of the contracted constant (throw site)',
+            mutated,
+            service.includes("throw new Error('this tab cannot open"),
+            /a setups paint site is fed .*this tab cannot open in a dependent window.*which names no exported copy constant/
+        );
+    }
+
     if (state.failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all six fault directions went red naming the drift`);
+    console.log(`${NAME} --self-test: PASS -- all eight fault directions went red naming the drift (two of them at the throw paint site), and the pre-widening deriver stayed green on plant 7`);
 }
 
 try {
