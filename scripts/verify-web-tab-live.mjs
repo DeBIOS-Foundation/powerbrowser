@@ -654,7 +654,7 @@ function phaseExpression(cfg, phase, arg) {
         const added = after.filter(id => !report.mainIdsBefore.includes(id));
         report.addedIds = added;
         if (added.length !== 1) {
-            fail('"+" added ' + added.length + ' main-area title(s) [' + added.join(', ') + '], expected exactly one');
+            fail('newtab: "+" added ' + added.length + ' main-area title(s) [' + added.join(', ') + '], expected exactly one');
         }
         const owners = P.shell.mainAreaTabBars
             .flatMap(bar => Array.from(bar.titles).map(title => title.owner))
@@ -681,7 +681,11 @@ function phaseExpression(cfg, phase, arg) {
         // --- TYPED COMMIT A ---------------------------------------------------
         report.steps.push('commit ' + cfg.typedA);
         P.commit(cfg.typedA);
-        await P.until(() => P.widget.hasPage && P.input() && P.input().value === cfg.servedA, 8000);
+        // The strip label is waited on beside the pill, and asserted below: the
+        // wait bounds a green run, it cannot manufacture one -- a label that
+        // never arrives times out here exactly as the pill already did.
+        await P.until(() => P.widget.hasPage && P.input() && P.input().value === cfg.servedA
+            && P.widget.title.label === cfg.servedATitle, 8000);
         await P.settle();
         report.afterA = {
             widgetUrl: P.widget.url,
@@ -690,6 +694,10 @@ function phaseExpression(cfg, phase, arg) {
             placeholderRect: P.placeholderRect(),
             uriOf: P.uriOf(),
             pill: P.input() ? P.input().value : undefined,
+            // Only a chrome state push can put the served page's <title> here
+            // (WebTabWidget.refreshTitle falls back to the URL, then to "New
+            // Tab"), so this reads the push itself rather than the bar binding.
+            titleLabel: P.widget.title.label,
             backDisabled: P.backDisabled(),
             mainIds: P.mainIds(),
         };`,
@@ -1012,6 +1020,12 @@ async function drive(derived, plant) {
         typedB: pages.urls.b.replace(/^http:/, 'HTTP:'),
         servedA: pages.urls.a,
         servedB: pages.urls.b,
+        // The <title> this script itself serves at /a. The widget's strip label
+        // can only carry it once chrome's state push has delivered it
+        // (WebTabWidget.applyState -> pageTitle -> refreshTitle), which is what
+        // makes the `push:` assertion separate a missing push from a missing
+        // strip binding.
+        servedATitle: PAGES['/a'].title,
         // The hanging page the thumbnail phase attributes its evidence to.
         servedC: pages.urls.c,
         servedOrigin: pages.origin,
@@ -1031,7 +1045,7 @@ async function drive(derived, plant) {
                 return __getByName(window.theia.container, 'FrontendApplicationStateService').state === 'ready';
             } catch (e) { return false; } })()`, { timeoutMs: 60000 });
 
-            const report = { failures: [], notes: [], steps: [], alignments: [], hops: [], servedA: cfg.servedA, servedB: cfg.servedB, servedC: cfg.servedC };
+            const report = { failures: [], notes: [], steps: [], alignments: [], hops: [], servedA: cfg.servedA, servedB: cfg.servedB, servedC: cfg.servedC, servedATitle: cfg.servedATitle };
             const phase = async (name, arg) => {
                 const part = JSON.parse(await evaluate(phaseExpression(cfg, name, arg)));
                 report.failures.push(...part.failures);
@@ -1045,7 +1059,7 @@ async function drive(derived, plant) {
                 const d = delta(overlay, placeholderRect);
                 report.alignments.push({ label, delta: d, overlay, placeholderRect });
                 if (!(d <= ALIGN_TOLERANCE_PX)) {
-                    report.failures.push(`${label}: the overlay rect ${rectString(overlay)} is not aligned with the placeholder rect ${rectString(placeholderRect)} (max delta ${d.toFixed(2)} CSS px, tolerance ${ALIGN_TOLERANCE_PX})`);
+                    report.failures.push(`align: ${label}: the overlay rect ${rectString(overlay)} is not aligned with the placeholder rect ${rectString(placeholderRect)} (max delta ${d.toFixed(2)} CSS px, tolerance ${ALIGN_TOLERANCE_PX})`);
                 }
                 return overlay;
             };
@@ -1065,7 +1079,7 @@ async function drive(derived, plant) {
                 const carrying = contexts.filter(c => c.url === cfg.servedA);
                 let overlay;
                 if (carrying.length !== 1) {
-                    report.failures.push(`expected exactly one top-level browsing context carrying ${cfg.servedA} (the overlay), saw ${carrying.length} in ${JSON.stringify(report.contextsAfterA)}`);
+                    report.failures.push(`context: expected exactly one top-level browsing context carrying ${cfg.servedA} (the overlay), saw ${carrying.length} in ${JSON.stringify(report.contextsAfterA)}`);
                 } else {
                     overlay = carrying[0].context;
                     report.overlayContext = overlay;
@@ -1110,7 +1124,7 @@ async function drive(derived, plant) {
                     report.overlayUrlAfterB = same ? same.url : undefined;
                     report.contextsAfterB = contexts.map(c => c.url);
                     if (!same || same.url !== cfg.servedB) {
-                        report.failures.push(`the second commit did not navigate the same overlay context in place: context ${overlay} now carries ${JSON.stringify(same ? same.url : '(gone)')}, expected ${cfg.servedB}; contexts: ${JSON.stringify(report.contextsAfterB)}`);
+                        report.failures.push(`nav: the second commit did not navigate the same overlay context in place: context ${overlay} now carries ${JSON.stringify(same ? same.url : '(gone)')}, expected ${cfg.servedB}; contexts: ${JSON.stringify(report.contextsAfterB)}`);
                     }
                     if (b.afterB) {
                         await align('after the second commit', overlay, b.afterB.placeholderRect);
@@ -1161,7 +1175,7 @@ async function drive(derived, plant) {
                 for (const id of derived.walk) {
                     const h = (await phase('hop', id)).hop;
                     if (!h) {
-                        report.failures.push(`the hop into '${id}' produced no record`);
+                        report.failures.push(`walk: the hop into '${id}' produced no record`);
                         continue;
                     }
                     report.hops.push(h);
@@ -1178,7 +1192,7 @@ async function drive(derived, plant) {
                             if (h.lastSentVisible === false) {
                                 report.notes.push(`FALLBACK after the hop into '${id}': document.hidden read ${JSON.stringify(o.hidden)} in the overlay while the tab was not current; the frontend's last published visible=false is the observable used instead`);
                             } else {
-                                report.failures.push(`after the hop into '${id}' the web tab is not current (current: [${h.currentTitleIds.join(', ')}]) but the overlay is not hidden: document.hidden=${JSON.stringify(o.hidden)}, last published visible=${JSON.stringify(h.lastSentVisible)}`);
+                                report.failures.push(`walk: after the hop into '${id}' the web tab is not current (current: [${h.currentTitleIds.join(', ')}]) but the overlay is not hidden: document.hidden=${JSON.stringify(o.hidden)}, last published visible=${JSON.stringify(h.lastSentVisible)}`);
                             }
                         }
                     }
@@ -1211,36 +1225,74 @@ async function drive(derived, plant) {
     }
 }
 
-/** Tree-side assertions over one live report. @returns {string[]} */
+/**
+ * FAILURE-MESSAGE FAMILIES (G-14.1.1-20). Every assertion message -- both the
+ * ones pushed inside `runProtocol`'s phases and the ones pushed here -- begins
+ * with exactly one of these fifteen tokens, and the token is the FIRST thing in
+ * the message:
+ *
+ *   newtab:     what "+" added -- title count, factory id, label, pill focus,
+ *               pill emptiness, dock currency, and the no-widget case
+ *   popup:      the window.open call count
+ *   context:    top-level browsing-context identity and count for the overlay
+ *   align:      overlay-versus-placeholder rect comparison, and its own
+ *               no-pair-measured broken-instrument guard
+ *   nav:        navigating the same context in place, uriOf vs the live URL,
+ *               Back enablement after each commit
+ *   pill:       the pill's value after each commit (the chrome bar's binding)
+ *   push:       state only a chrome push can supply (the widget's own strip label)
+ *   dropdown:   the commit issued inside the suggestion debounce window
+ *   lost-view:  the overlay dropped from under the widget, and the one Reload
+ *   walk:       the mode walk -- hop records, attachment, main-area membership,
+ *               the no-realignment guard, the organising slot
+ *   restore:    the foreign-id construction and the minted-id distinctness
+ *   store:      the store row readable after navigation
+ *   thumbnail:  the last-view snapshot attribution
+ *   close:      rows, contexts and main-area id residue after close
+ *   shell:      the POWERBROWSER_SHELL_READY line in the binary's stdout
+ *
+ * WHY: `--self-test` scores each plant by an ANCHORED PREFIX (startsWith), so a
+ * plant can only ever be credited with the family it names. A bare-substring
+ * expect could be satisfied by any message that happened to contain the word --
+ * which is exactly the defect this closed set exists to make impossible.
+ *
+ * NOT in the set, deliberately: the derivation failures (they lead with the file
+ * path they name and run before any plant), a plant that could not be applied,
+ * and a phase that threw. Those three report a BROKEN INSTRUMENT rather than a
+ * contract, they are caught by their own checks in `selfTest`, and no plant may
+ * be scored on them.
+ *
+ * Tree-side assertions over one live report. @returns {string[]}
+ */
 function assertReport(derived, report) {
     if (report.driveError) {
         return [`could not drive the live frontend: ${report.driveError}`];
     }
     const failures = [...report.failures];
     if (report.windowOpenCalls !== 0) {
-        failures.push(`window.open was called ${report.windowOpenCalls} time(s) -- "+" or a commit fell back to the popup path instead of an in-shell web tab`);
+        failures.push(`popup: window.open was called ${report.windowOpenCalls} time(s) -- "+" or a commit fell back to the popup path instead of an in-shell web tab`);
     }
     if (!report.widgetId) {
-        failures.push('"+" produced no web-tab widget in the main area, so nothing below it could be exercised');
+        failures.push('newtab: "+" produced no web-tab widget in the main area, so nothing below it could be exercised');
         if (!(report.shellReadyLines > 0)) {
-            failures.push(`the launched binary's stdout carried no ${SHELL_READY_SENTINEL} line -- this session never reached a real shell`);
+            failures.push(`shell: the launched binary's stdout carried no ${SHELL_READY_SENTINEL} line -- this session never reached a real shell`);
         }
         return failures;
     }
     if (report.widgetFactoryId !== derived.factoryId) {
-        failures.push(`the tab "+" added was created by factory '${report.widgetFactoryId}', not the web-tab factory '${derived.factoryId}'`);
+        failures.push(`newtab: the tab "+" added was created by factory '${report.widgetFactoryId}', not the web-tab factory '${derived.factoryId}'`);
     }
     if (report.newTabLabel !== 'New Tab') {
-        failures.push(`the new tab's label is ${JSON.stringify(report.newTabLabel)}, expected "New Tab"`);
+        failures.push(`newtab: the new tab's label is ${JSON.stringify(report.newTabLabel)}, expected "New Tab"`);
     }
     if (report.pillFocused !== true) {
-        failures.push('the address pill does not have focus after "+"');
+        failures.push('newtab: the address pill does not have focus after "+"');
     }
     if (report.pillValueAfterNewTab !== '') {
-        failures.push(`the address pill reads ${JSON.stringify(report.pillValueAfterNewTab)} after "+", expected empty`);
+        failures.push(`newtab: the address pill reads ${JSON.stringify(report.pillValueAfterNewTab)} after "+", expected empty`);
     }
     if (report.currentAfterNewTab !== true) {
-        failures.push(`the new tab '${report.widgetId}' is not the current title of its dock after "+" -- the tab was added without being activated`);
+        failures.push(`newtab: the new tab '${report.widgetId}' is not the current title of its dock after "+" -- the tab was added without being activated`);
     }
     // `shell.currentWidget` is NOT asserted (G-14.1.1-20). It is derived from
     // Lumino's FocusTracker, which a headless window never feeds, so the only
@@ -1252,23 +1304,34 @@ function assertReport(derived, report) {
     // recorded as test 43 in 14.1.1-UAT.md for Chris's screen to settle.
     const a = report.afterA ?? {};
     if (a.pill !== report.servedA) {
-        failures.push(`after the first commit the pill reads ${JSON.stringify(a.pill)}, expected the canonical URL ${report.servedA} from chrome's state push`);
+        failures.push(`pill: after the first commit the pill reads ${JSON.stringify(a.pill)}, expected the canonical URL ${report.servedA} from chrome's state push`);
+    }
+    // The observable that separates a missing PUSH from a missing BINDING
+    // (G-14.1.1-20). The pill above is written by the chrome bar, which learns
+    // its tab from the strip selection; the strip label below is written by the
+    // widget itself, and `WebTabWidget.refreshTitle` can only put the served
+    // page's <title> there once `applyState` -- the state push -- has delivered
+    // it, falling back to the URL and then to "New Tab" when it has not. So
+    // `focus-keyed-pill` (binding broken, pushes still arriving) fails the pill
+    // assertion and passes this one, while `state-ignored` fails both.
+    if (a.titleLabel !== report.servedATitle) {
+        failures.push(`push: the tab's strip label reads ${JSON.stringify(a.titleLabel)} after the first commit, expected the served page title ${JSON.stringify(report.servedATitle)} -- only chrome's state push can supply a page title to the widget, so the widget is not receiving state pushes at all`);
     }
     if (report.overlayUrlAfterA && a.uriOf !== report.overlayUrlAfterA) {
-        failures.push(`after the first commit uriOf(widget) is ${JSON.stringify(a.uriOf)} but the overlay's live URL is ${report.overlayUrlAfterA}`);
+        failures.push(`nav: after the first commit uriOf(widget) is ${JSON.stringify(a.uriOf)} but the overlay's live URL is ${report.overlayUrlAfterA}`);
     }
     if (a.backDisabled !== true) {
-        failures.push(`Back is ${a.backDisabled === false ? 'enabled' : 'unreadable'} after the first commit, expected disabled (no history behind)`);
+        failures.push(`nav: Back is ${a.backDisabled === false ? 'enabled' : 'unreadable'} after the first commit, expected disabled (no history behind)`);
     }
     const b = report.afterB ?? {};
     if (b.pill !== report.servedB) {
-        failures.push(`after the second commit the pill reads ${JSON.stringify(b.pill)}, expected ${report.servedB}`);
+        failures.push(`pill: after the second commit the pill reads ${JSON.stringify(b.pill)}, expected ${report.servedB}`);
     }
     if (report.overlayUrlAfterB && b.uriOf !== report.overlayUrlAfterB) {
-        failures.push(`after the second commit uriOf(widget) is ${JSON.stringify(b.uriOf)} but the overlay's live URL is ${report.overlayUrlAfterB}`);
+        failures.push(`nav: after the second commit uriOf(widget) is ${JSON.stringify(b.uriOf)} but the overlay's live URL is ${report.overlayUrlAfterB}`);
     }
     if (b.backDisabled !== false) {
-        failures.push(`Back is ${b.backDisabled === true ? 'disabled' : 'unreadable'} after the second commit, expected enabled (one entry behind)`);
+        failures.push(`nav: Back is ${b.backDisabled === true ? 'disabled' : 'unreadable'} after the second commit, expected enabled (one entry behind)`);
     }
     // G-14.1.1-7. The fix is in tree; these three are what make a regression to
     // the pre-fix behaviour -- a query the last keystroke scheduled re-opening
@@ -1300,23 +1363,30 @@ function assertReport(derived, report) {
     }
     const hops = report.hops ?? [];
     if (hops.length !== derived.walk.length) {
-        failures.push(`walked ${hops.length} hop(s), expected ${derived.walk.length}: ${derived.walk.join(' -> ')}`);
+        failures.push(`walk: walked ${hops.length} hop(s), expected ${derived.walk.length}: ${derived.walk.join(' -> ')}`);
     }
     for (const h of hops) {
         if (!h.attached) {
-            failures.push(`the web tab is no longer attached after the hop into '${h.hop}'`);
+            failures.push(`walk: the web tab is no longer attached after the hop into '${h.hop}'`);
         }
         if (!h.inMain) {
-            failures.push(`the web tab is not in the main area after the hop into '${h.hop}'`);
+            failures.push(`walk: the web tab is not in the main area after the hop into '${h.hop}'`);
         }
     }
     const walkAlignments = (report.alignments ?? []).filter(x => x.label.startsWith('after the hop'));
     if (hops.length && walkAlignments.length === 0) {
-        failures.push('the web tab was current after none of the hops, so the walk asserted no realignment at all (broken instrument, never a clean pass)');
+        failures.push('walk: the web tab was current after none of the hops, so the walk asserted no realignment at all (broken instrument, never a clean pass)');
     }
     const organisingHops = hops.filter(h => h.hop === derived.shipped[2]);
     if (organisingHops.some(h => h.isCurrent)) {
-        failures.push(`the web tab stayed the current title while '${derived.shipped[2]}' was active -- the organising slot did not take the main area`);
+        failures.push(`walk: the web tab stayed the current title while '${derived.shipped[2]}' was active -- the organising slot did not take the main area`);
+    }
+    // The alignment message is pushed only where a rect PAIR was measured, so a
+    // fault that stops the overlay from existing at all leaves the alignment
+    // contract silently unasserted rather than red. Zero reads is a broken
+    // instrument, never a clean pass -- the same shape as the walk guard above.
+    if ((report.alignments ?? []).length === 0) {
+        failures.push('align: no overlay/placeholder rect pair could be measured in this run, so the alignment contract was not asserted at all (broken instrument, never a clean pass)');
     }
     // G-14.1.1-5.
     const restore = report.restoreRepeat ?? {};
@@ -1331,7 +1401,7 @@ function assertReport(derived, report) {
         failures.push(`restore: the refused construction still put a widget in the main area (ids: [${restoreBefore.join(', ')}])`);
     }
     if (!(report.rowsAfterNavigation ?? []).some(row => row.url === report.servedB)) {
-        failures.push(`no store row for ${report.servedB} was readable through ChromeBarSuggestionService.searchByPrefix after the navigation (rows: ${JSON.stringify(report.rowsAfterNavigation ?? [])})`);
+        failures.push(`store: no store row for ${report.servedB} was readable through ChromeBarSuggestionService.searchByPrefix after the navigation (rows: ${JSON.stringify(report.rowsAfterNavigation ?? [])})`);
     }
     // G-14.1.1-6. The card's `tab.thumbnail` branch has always rendered; what
     // it never had since 14.1 was a row to render, because the capture path
@@ -1353,19 +1423,19 @@ function assertReport(derived, report) {
         failures.push(`thumbnail: the stored snapshot is ${thumb.length} chars, outside the capture cap TAB_THUMBNAIL_CAPTURE_MAX_CHARS=${derived.thumbnailMaxChars} derived from ${SHELL_API_REL} -- over the cap the row must clear to NULL rather than store`);
     }
     if ((report.rowsAfterClose ?? []).some(row => row.url === report.servedA || row.url === report.servedB || row.url === report.servedC)) {
-        failures.push(`a store row for a served URL is still readable after the tab was closed (rows: ${JSON.stringify(report.rowsAfterClose)})`);
+        failures.push(`close: a store row for a served URL is still readable after the tab was closed (rows: ${JSON.stringify(report.rowsAfterClose)})`);
     }
     const leftover = (report.contextsAfterClose ?? []).filter(url => url === report.servedA || url === report.servedB || url === report.servedC);
     if (leftover.length) {
-        failures.push(`a top-level browsing context still carries a served URL after close: ${JSON.stringify(report.contextsAfterClose)} -- the overlay context was not removed`);
+        failures.push(`close: a top-level browsing context still carries a served URL after close: ${JSON.stringify(report.contextsAfterClose)} -- the overlay context was not removed`);
     }
     const before = [...(report.mainIdsBefore ?? [])].sort();
     const after = [...(report.mainIdsAfterClose ?? [])].sort();
     if (JSON.stringify(before) !== JSON.stringify(after)) {
-        failures.push(`the main-area id set after close [${after.join(', ')}] differs from the set before "+" [${before.join(', ')}] -- residue`);
+        failures.push(`close: the main-area id set after close [${after.join(', ')}] differs from the set before "+" [${before.join(', ')}] -- residue`);
     }
     if (!(report.shellReadyLines > 0)) {
-        failures.push(`the launched binary's stdout carried no ${SHELL_READY_SENTINEL} line -- this session never reached a real shell, so nothing it reported is about the product`);
+        failures.push(`shell: the launched binary's stdout carried no ${SHELL_READY_SENTINEL} line -- this session never reached a real shell, so nothing it reported is about the product`);
     }
     return failures;
 }
@@ -1377,7 +1447,7 @@ function printReport(report) {
     console.log(`${NAME}: served ${report.servedA}, ${report.servedB} and ${report.servedC} (the last one never ended); "+" added [${(report.addedIds ?? []).join(', ')}] from factory '${report.widgetFactoryId}' labelled ${JSON.stringify(report.newTabLabel)}; pill focused: ${report.pillFocused}; shell.currentWidget is the tab: ${report.isShellCurrentWidget}`);
     const a = report.afterA ?? {};
     const b = report.afterB ?? {};
-    console.log(`${NAME}: after A: pill ${JSON.stringify(a.pill)}, uriOf ${JSON.stringify(a.uriOf)}, overlay ${JSON.stringify(report.overlayUrlAfterA)}, Back disabled ${a.backDisabled}; after B: pill ${JSON.stringify(b.pill)}, uriOf ${JSON.stringify(b.uriOf)}, overlay ${JSON.stringify(report.overlayUrlAfterB)} (context ${report.overlayContext}), Back disabled ${b.backDisabled}`);
+    console.log(`${NAME}: after A: pill ${JSON.stringify(a.pill)}, uriOf ${JSON.stringify(a.uriOf)}, strip label ${JSON.stringify(a.titleLabel)} (served title ${JSON.stringify(report.servedATitle)}), overlay ${JSON.stringify(report.overlayUrlAfterA)}, Back disabled ${a.backDisabled}; after B: pill ${JSON.stringify(b.pill)}, uriOf ${JSON.stringify(b.uriOf)}, overlay ${JSON.stringify(report.overlayUrlAfterB)} (context ${report.overlayContext}), Back disabled ${b.backDisabled}`);
     for (const x of report.alignments ?? []) {
         console.log(`${NAME}: ${x.label}: overlay ${rectString(x.overlay)} vs placeholder ${rectString(x.placeholderRect)} -> delta ${x.delta.toFixed(2)} px`);
     }
