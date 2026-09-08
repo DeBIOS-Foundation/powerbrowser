@@ -590,15 +590,20 @@
    confirmations in the tree, so by DESIGN these are the only two
    danger-scoped confirm selectors this sheet may carry.
 
-   That limit is the design's, not a gate's (WR-02, 14.1.1-09). What
-   `gui09-setups-copy` actually asserts is narrower: that the setups service
-   tags exactly one dialog with a class, and that the class it tags has a
-   danger-scoped rule in this sheet. It does not enumerate this sheet's
-   danger selectors and does not go red on a third one appearing here. No
-   assertion is added for that on purpose -- the real invariant is one class
-   per destructive dialog, which the service-side assertion already covers,
-   and an enumerated selector list inside a gate would be exactly the
-   hand-kept expectation this project's verification rules forbid. */
+   That limit is the design's, not a gate's (WR-02, 14.1.1-09; corrected
+   14.1.1-12). What `gui09-setups-copy` asserts, kept separate from the
+   design statement above: it walks EVERY `ConfirmDialog` construction in
+   `setups-service.ts`, attributes each `addClass` to that dialog's own
+   binding, and requires each dialog to carry a class that has a
+   danger-scoped rule in this sheet -- so a second destructive dialog added
+   with no class is red (self-test plant 10), the case the previous wording
+   claimed was covered and was not. What it does NOT assert: it does not
+   enumerate this sheet's danger-scoped selectors and does not go red on a
+   third one appearing here; and it reads only `setups-service.ts`, so a
+   confirmation painted from another file in this extension is outside its
+   scope. No assertion is added for either on purpose -- an enumerated
+   selector list inside a gate would be exactly the hand-kept expectation
+   this project's verification rules forbid. */
 .pb-org-close-confirm .theia-button.main {
     color: var(--color-danger, #ff848b);
     border-color: var(--color-danger, #ff848b);
