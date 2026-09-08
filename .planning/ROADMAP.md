@@ -136,7 +136,7 @@ Plans:
 **Goal:** Every `fixable: yes` gap in `14.1.1-UAT.md` is closed, each proved by a check that goes red without its fix; `needs-chris` and `decision` gaps gain evidence only and are never marked fixed by an executor
 **Requirements**: none mapped — this phase closes GUI conformance gaps, not requirement IDs
 **Depends on:** Phase 14.1
-**Plans:** 10/10 plans executed — pass 1 (01–05) executed; pass 2 (06–10) planned
+**Plans:** 16 plans — pass 1 (01–05) executed; pass 2 (06–10) executed; pass 3 (11–16) planned
 **Protocol:** `.planning/GUI-SWEEP.md` (Step 2 — automated fix pass)
 
 Pass 1 planned the eleven in-scope `fixable: yes` gaps (G-14.1.1-4, 5, 6, 7, 19, 20, 21, 22, 24,
@@ -182,6 +182,33 @@ Plans:
 **Wave 4** *(blocked on 06, 07, 08, 09)*
 
 - [x] 14.1.1-10-PLAN.md — the record: ten UAT statuses flipped with commit pointers, five new gap entries, GUI-DEFECTS 12/15/23/24/25 moved, catalogue line corrected (WR-10), Phase-14 placeholder rows superseded
+
+*Pass 3 — gap closure against `14.1.1-VERIFICATION.md` (pass 2, `status: gaps_found`, 5/13)*
+
+Pass 2 closed two of pass 1's three gaps at the design level and failed the third — record
+truth — inside the plan written to fix it. Pass 3 closes the four remaining gaps, the six
+actionable advisories and the two informational review findings. **Still held for a later pass:**
+G-14.1.1-8, -10, -23 and the `14-UAT.md` half of -27, each blocked by a file the concurrently
+running session has uncommitted; G-14.1.1-9's clean-checkout `yarn build:extensions`, which
+needs a quiet tree; and the `verify-web-tab-live.mjs` plant reds, which need a display.
+
+**Wave 1** *(tracer, alone — the thinnest path through source, gate, registry and record)*
+
+- [ ] 14.1.1-11-PLAN.md — G-48 end to end: the attach-time reply routed through `lostReply()`, `refused-scheme` folded in, two derived assertions and two plants inside `gui02-web-tab-bridge`, and the record re-closed on the commits that earn it
+
+**Wave 2** *(blocked on 11)*
+
+- [ ] 14.1.1-12-PLAN.md — the gui09 setups-copy gate derives per dialog, not by position and count (gap 2), plus the `modes.css` and header claims that become true only after it (gap 3a, 3c)
+- [ ] 14.1.1-13-PLAN.md — the build-order gate sees side-effect imports (advisory 1), its two comments corrected (gap 3d), and GUI-DEFECTS item 11's stale note fixed (advisory 6)
+- [ ] 14.1.1-14-PLAN.md — `verify-web-tab-live.mjs` instrument honesty: no plant scored on a broken instrument (advisory 4), a plant for the three `close:` absence assertions (advisory 3), one red set per plant (advisory 2), IN-02 and IN-03
+
+**Wave 3** *(blocked on 12 — the gate and the file it derives from must not move in one wave)*
+
+- [ ] 14.1.1-15-PLAN.md — the dependent-window refusal ends on the affordance that exists, in `setups-service.ts` and `14-UI-SPEC.md` together (advisory 5)
+
+**Wave 4** *(blocked on 11, 12, 13, 14, 15)*
+
+- [ ] 14.1.1-16-PLAN.md — the record, written from the tree: G-45 re-closed with a guard named per site, G-44 annotated, every carry-forward recorded with a reason and a next step
 
 ### Phase 15: Panorama Organising
 
