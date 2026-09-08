@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 14.1.1
 current_phase_name: GUI Conformance Sweep (INSERTED)
 status: executing
-stopped_at: Completed 14.1.1-08-PLAN.md
-last_updated: "2026-09-08T03:36:30.185Z"
+stopped_at: Completed 14.1.1-06-PLAN.md
+last_updated: "2026-09-08T04:20:03.867Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 14.1.1 execution started
-state_head: 5be974bf320df70f22d13dfc05ea86095d3417c5
+state_head: 061685c2b479ffb7cf7a6126db1b32ef7cec2ee6
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 16
-  completed_plans: 12
+  completed_plans: 13
 milestone_name: Browser GUI
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 ## Current Position
 
 Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — EXECUTING
-Plan: 2 of 10
+Plan: 3 of 10
 Status: Ready to execute
 Last activity: 2026-09-07 — Phase 14.1.1 execution started
 
@@ -121,6 +121,7 @@ Last activity: 2026-09-07 — Phase 14.1.1 execution started
 | Phase 14.1.1 P02 | 1h 24m | 2 tasks | 4 files |
 | Phase 14.1.1 P04 | 25min | 2 tasks | 5 files |
 | Phase 14.1.1 P08 | 13 min | 3 tasks | 4 files |
+| Phase 14.1.1 P06 | 37 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -309,6 +310,8 @@ Recent decisions affecting current work:
 - [Phase 14.1.1]: verify-backend-env-readers.mjs derives the product environment prefix from powerbrowser-env.ts's capture loop rather than spelling it, so the Phase 2 rebrand cannot leave the gate matching a dead prefix
 - [Phase 14.1.1]: Theia extension edges are derived only from import/export specifiers, never from a bare @powerbrowser substring: prose comments mint five phantom edges
 - [Phase 14.1.1]: The clean-checkout yarn build:extensions is deferred to pass 3; running it would delete a concurrent session's live theia/**/lib trees, so G-14.1.1-9 flips to in_tree not fixed
+- [Phase 14.1.1]: The hanging-page shape shipped: /c is served written-but-never-ended, so it paints without reaching network STOP and the only capture site that can fill its row is the last-view hide
+- [Phase 14.1.1]: A plant that removes a CAUSE outranks one that removes a READ: hide-not-published makes P.hideOverlay a no-op and the thumbnail assertions go red, where the deleted thumb-not-scheduled only stubbed the reader
 
 ### Pending Todos
 
@@ -406,8 +409,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-08T03:36:30.151Z
-Stopped at: Completed 14.1.1-08-PLAN.md
+Last session: 2026-09-08T04:18:43.101Z
+Stopped at: Completed 14.1.1-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

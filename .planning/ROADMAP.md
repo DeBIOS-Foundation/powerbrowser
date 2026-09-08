@@ -136,7 +136,7 @@ Plans:
 **Goal:** Every `fixable: yes` gap in `14.1.1-UAT.md` is closed, each proved by a check that goes red without its fix; `needs-chris` and `decision` gaps gain evidence only and are never marked fixed by an executor
 **Requirements**: none mapped — this phase closes GUI conformance gaps, not requirement IDs
 **Depends on:** Phase 14.1
-**Plans:** 6/10 plans executed — pass 1 (01–05) executed; pass 2 (06–10) planned
+**Plans:** 7/10 plans executed — pass 1 (01–05) executed; pass 2 (06–10) planned
 **Protocol:** `.planning/GUI-SWEEP.md` (Step 2 — automated fix pass)
 
 Pass 1 planned the eleven in-scope `fixable: yes` gaps (G-14.1.1-4, 5, 6, 7, 19, 20, 21, 22, 24,
@@ -172,7 +172,7 @@ Plans:
 
 **Wave 2** *(blocked on 08)*
 
-- [ ] 14.1.1-06-PLAN.md — tracer: make the G-6 thumbnail proof attributable — a served page whose only capture opportunity is the hide, plus a plant that removes it
+- [x] 14.1.1-06-PLAN.md — tracer: make the G-6 thumbnail proof attributable — a served page whose only capture opportunity is the hide, plus a plant that removes it
 - [ ] 14.1.1-09-PLAN.md — anti-pattern findings in unreserved files: internal command id in user-facing copy (CR-03), a comment claiming an assertion a gate cannot make (WR-02), one reply read two ways in `web-tab.ts`
 
 **Wave 3** *(blocked on 06)*
