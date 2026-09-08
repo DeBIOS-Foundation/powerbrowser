@@ -1235,8 +1235,9 @@ async function drive(derived, plant) {
  *               pill emptiness, dock currency, and the no-widget case
  *   popup:      the window.open call count
  *   context:    top-level browsing-context identity and count for the overlay
- *   align:      overlay-versus-placeholder rect comparison, and its own
- *               no-pair-measured broken-instrument guard
+ *   align:      the overlay-versus-placeholder rect comparison (the contract
+ *               assertion); its no-pair-measured guard is a broken-instrument
+ *               report, which the scorer will not credit
  *   nav:        navigating the same context in place, uriOf vs the live URL,
  *               Back enablement after each commit
  *   pill:       the pill's value after each commit (the chrome bar's binding)
@@ -1262,8 +1263,17 @@ async function drive(derived, plant) {
  * contract, they are caught by their own checks in `selfTest`, and no plant may
  * be scored on them.
  *
+ * The same rule covers the five in-family guards that begin with a scoring
+ * prefix (`lost-view:`, `thumbnail:` twice, `walk:`, `align:`) and end with
+ * BROKEN_INSTRUMENT_MARKER: they say the instrument could not assert, not that
+ * the contract failed. Since 14.1.1-14 this is ENFORCED by the scorer rather
+ * than only asserted here -- a message carrying the marker scores nothing, and
+ * a case whose only messages in its family carry it fails naming that fact.
+ *
  * Tree-side assertions over one live report. @returns {string[]}
  */
+const BROKEN_INSTRUMENT_MARKER = 'broken instrument, never a clean pass';
+
 function assertReport(derived, report) {
     if (report.driveError) {
         return [`could not drive the live frontend: ${report.driveError}`];
@@ -1671,15 +1681,22 @@ async function selfTest() {
         }
         // ANCHORED, not substring: the expect is the first thing in the message
         // or it scores nothing, so a plant can only ever be credited with the
-        // family it names.
-        if (!failures.some(f => f.startsWith(testCase.expect))) {
-            console.error(`${NAME} --self-test: FAIL -- '${testCase.name}' did not go red naming '${testCase.expect}'; got: ${failures.join(' | ') || '(no failures at all)'}`);
-            failed++;
-        } else {
+        // family it names. And CONTRACT, not instrument: a message carrying
+        // BROKEN_INSTRUMENT_MARKER says the phase could not assert, so it is
+        // never credit for the plant -- see the failure-family block above.
+        const named = failures.filter(f => f.startsWith(testCase.expect));
+        const scored = named.filter(f => !f.includes(BROKEN_INSTRUMENT_MARKER));
+        if (scored.length) {
             console.log(`  ok  ${testCase.name} -> red, naming '${testCase.expect}'`);
-            for (const message of failures.filter(f => f.startsWith(testCase.expect)).slice(0, 2)) {
+            for (const message of scored.slice(0, 2)) {
                 console.log(`      ${message}`);
             }
+        } else if (named.length) {
+            console.error(`${NAME} --self-test: FAIL -- '${testCase.name}' named '${testCase.expect}' only through broken-instrument reports; no plant may be scored on one, so the '${testCase.expect}' family has no demonstrated contract red under this plant. The guard that fired: ${named[0]}`);
+            failed++;
+        } else {
+            console.error(`${NAME} --self-test: FAIL -- '${testCase.name}' did not go red naming '${testCase.expect}'; got: ${failures.join(' | ') || '(no failures at all)'}`);
+            failed++;
         }
     }
 
