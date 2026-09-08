@@ -506,7 +506,12 @@ export class WebTabWidget extends BaseWidget {
      */
     protected async reopen(): Promise<WebTabReply> {
         const reply = await this.channel.request({ kind: 'webTabOpen', tabId: this.tabId, url: this.url });
-        this.setLostView(reply.ok !== true);
+        // `lostReply()`, never a second inline spelling: an `ok: true` reply
+        // naming the unknown-tab outcome would otherwise read here as a
+        // successful reopen and leave the body blank. Two spellings of "this
+        // reply means chrome no longer renders the tab" is how the two drift
+        // apart -- the defect G-14.1.1-4 closed one site earlier.
+        this.setLostView(WebTabWidget.lostReply(reply));
         this.lastSent = '';
         this.publish();
         return reply;
