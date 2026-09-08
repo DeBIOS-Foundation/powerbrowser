@@ -120,15 +120,26 @@ function derivedChain(rootManifest) {
 }
 
 /**
+ * Strip `/* … *\/` blocks and `//` line comments. A `//` counts only when it
+ * begins a line or follows whitespace, so `http://…` inside a string and
+ * `\/\//` inside a regex literal survive. Same shape as
+ * verify-web-tab-bridge.mjs's stripComments; kept local so this gate has no
+ * import edge of its own.
+ */
+function stripComments(text) {
+    return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
+}
+
+/**
  * The `@powerbrowser` packages an extension imports, taken only from import
  * and export SPECIFIERS. Returns Map<packageName, firstImportingFileRel>.
  */
 function derivedImports(extDir, relBase) {
     const found = new Map();
     for (const file of sourceFiles(join(extDir, 'src'))) {
-        const src = readFileSync(file, 'utf8');
+        const src = stripComments(readFileSync(file, 'utf8'));
         const rel = join(relBase, file.slice(extDir.length + 1));
-        for (const m of src.matchAll(/\bfrom\s*['"]@powerbrowser\/([a-z0-9][a-z0-9-]*)/g)) {
+        for (const m of src.matchAll(/\b(?:from|import)\s*\(?\s*['"]@powerbrowser\/([a-z0-9][a-z0-9-]*)/g)) {
             if (!found.has(m[1])) {
                 found.set(m[1], rel);
             }
@@ -431,10 +442,28 @@ function selfTest() {
                 /ZERO extension directories.*broken instrument/);
         }
 
+        // (h) a backwards import written in the SIDE-EFFECT specifier form
+        // (`import '@powerbrowser/x/...';`) -- the form a `from`-only matcher
+        // cannot see (14.1.1-VERIFICATION advisory 1). The extension EARLIER
+        // in the chain is made to import the one LATER in it.
+        {
+            const edge = real.edges[0];
+            const root = freshCase();
+            const importerPkg = real.pkgNameOf.get(edge.importer);
+            const [target] = sourceFiles(join(root, EXTENSIONS_REL, edge.imported, 'src'));
+            const line = `\nimport '${SCOPE}/${importerPkg}/lib/browser/planted';\n`;
+            if (target) {
+                writeFileSync(target, readFileSync(target, 'utf8') + line);
+            }
+            plant(state, `side-effect backwards import of ${SCOPE}/${importerPkg} in ${edge.imported}`, root,
+                Boolean(target) && readFileSync(target, 'utf8').includes(line),
+                new RegExp(`backwards edge: ${edge.imported} .* imports @powerbrowser/${importerPkg}`));
+        }
+
         if (state.failed) {
             process.exit(1);
         }
-        console.log(`${NAME} --self-test: PASS -- all seven planted faults went red naming the drift`);
+        console.log(`${NAME} --self-test: PASS -- all eight planted faults went red naming the drift`);
     } finally {
         rmSync(scratch, { recursive: true, force: true });
     }
