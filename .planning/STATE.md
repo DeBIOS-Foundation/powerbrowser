@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 14.1.1
 current_phase_name: GUI Conformance Sweep (INSERTED)
 status: executing
-stopped_at: Completed 14.1.1-09-PLAN.md
-last_updated: "2026-09-08T04:34:14.873Z"
+stopped_at: Completed 14.1.1-07-PLAN.md
+last_updated: "2026-09-08T04:58:15.681Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 14.1.1 execution started
-state_head: bfdb9797b6762f52d98687b0bdda706af7d1f693
+state_head: b347623cdbd123fa576a1debde952fdbe6b0d188
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
 milestone_name: Browser GUI
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 ## Current Position
 
 Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — EXECUTING
-Plan: 4 of 10
+Plan: 5 of 10
 Status: Ready to execute
 Last activity: 2026-09-07 — Phase 14.1.1 execution started
 
@@ -123,6 +123,7 @@ Last activity: 2026-09-07 — Phase 14.1.1 execution started
 | Phase 14.1.1 P08 | 13 min | 3 tasks | 4 files |
 | Phase 14.1.1 P06 | 37 min | 3 tasks | 2 files |
 | Phase 14.1.1 P09 | 11 min | 3 tasks | 5 files |
+| Phase 14.1.1 P07 | 24 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -316,6 +317,9 @@ Recent decisions affecting current work:
 - [Phase 14.1.1]: The dependent-window refusal names no command id and no palette instruction, because SETUPS_OPEN_DEPENDENT carries no label and re-invoking it is not an affordance on screen
 - [Phase 14.1.1]: The copy gate's fifth paint site resolves only a bare identifier at a throw; a raw literal, concatenation or template there is unresolved and red
 - [Phase 14.1.1]: No enumerated danger-selector list was added to gui09-setups-copy: the real invariant is one class per destructive dialog, and a selector list would be the hand-kept expectation CLAUDE.md forbids
+- [Phase 14.1.1]: Anchored prefix scoring: every self-test plant is scored by startsWith on a stable message-family prefix, never a bare substring
+- [Phase 14.1.1]: The pill (chrome bar binding) and the tab strip label (widget state push) are two separate observables, so a broken binding and a missing push are told apart by two true assertions
+- [Phase 14.1.1]: A new rule ships beside literal fixture tables that prove it rejects each malformed shape AND accepts the well-formed one, printed every run
 
 ### Pending Todos
 
@@ -413,8 +417,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-08T04:34:05.635Z
-Stopped at: Completed 14.1.1-09-PLAN.md
+Last session: 2026-09-08T04:58:08.274Z
+Stopped at: Completed 14.1.1-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
