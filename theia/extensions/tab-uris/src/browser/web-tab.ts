@@ -49,6 +49,13 @@ export const WEB_TAB_OPEN_HANDLER_ID = 'powerbrowser.web-tab-open-handler';
  * here because two separate code paths fold it into lost view.
  */
 export const UNKNOWN_TAB_OUTCOME = 'unknown-tab';
+/**
+ * The reply outcome that means chrome declined to render the target at all
+ * (`PowerBrowserAPI`'s `webTabOpen`, `webTabNavigate` and `openStockTab`
+ * each return it for a non-http(s) URL). Spelled once here, beside the
+ * outcome above, because `lostReply()` folds both into lost view.
+ */
+export const REFUSED_SCHEME_OUTCOME = 'refused-scheme';
 
 /**
  * Wire names of the group channel. Spelled locally rather than imported for
@@ -343,7 +350,7 @@ export class WebTabWidget extends BaseWidget {
 
     /** A reply that means chrome no longer renders (or never rendered) this tab. */
     protected static lostReply(reply: WebTabReply): boolean {
-        return reply.ok !== true || reply.where === UNKNOWN_TAB_OUTCOME;
+        return reply.ok !== true || reply.where === UNKNOWN_TAB_OUTCOME || reply.where === REFUSED_SCHEME_OUTCOME;
     }
 
     /** Label: page title -> page URL -> "New Tab". Caption: URL or "New Tab". Text values only, never markup. */

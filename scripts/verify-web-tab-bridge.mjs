@@ -281,6 +281,19 @@ function checkBridge(raw) {
             failures.push(`lost-reply: ${WEB_TAB} folds a reply into lost-view state with the inline expression "${arg}" -- the one reading of "chrome no longer renders this tab" lives in lostReply(), and a second spelling is how the two drift apart`);
         }
     }
+    // Every outcome constant the file exports must be folded by lostReply():
+    // both sides derive from the same file, so a fourth constant added later
+    // is red until folded, and a deleted arm is red too.
+    const outcomeNames = derive(src[WEB_TAB], /export const ([A-Z][A-Z0-9_]*_OUTCOME)\s*=/g);
+    const lostReplyBody = classMethodBodies(src[WEB_TAB]).get('lostReply') || '';
+    if (outcomeNames.length === 0 || !lostReplyBody) {
+        failures.push(`lost-reply: ${WEB_TAB}: derived ZERO exported outcome constants (or no lostReply body) -- the parse found nothing, so this comparison proves nothing (broken instrument, never a clean pass)`);
+    }
+    for (const name of outcomeNames) {
+        if (!lostReplyBody.includes(name)) {
+            failures.push(`lost-reply: ${WEB_TAB} exports the outcome constant ${name} but lostReply() does not fold it -- a reply naming that outcome would read as a rendered tab at every site the predicate serves`);
+        }
+    }
 
     return failures;
 }
@@ -365,6 +378,11 @@ function selfTest() {
             name: 'planted inline lost-reply spelling',
             sources: { ...clean, [WEB_TAB]: clean[WEB_TAB].replaceAll('WebTabWidget.lostReply(reply)', 'reply.ok !== true') },
             expect: 'folds a reply into lost-view state with the inline expression',
+        },
+        {
+            name: 'planted unfolded outcome constant',
+            sources: { ...clean, [WEB_TAB]: clean[WEB_TAB].replace(' || reply.where === REFUSED_SCHEME_OUTCOME', '') },
+            expect: 'does not fold it',
         },
     ];
 
