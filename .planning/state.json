@@ -6,23 +6,23 @@
     {
       "number": "13",
       "name": "Chrome Bar + Strip-Relocation Spike",
-      "status": "complete"
+      "status": "in_progress"
     },
     {
       "number": "14",
       "name": "Modes + Windows & Setups",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "15",
       "name": "Panorama Organising",
-      "status": "pending"
+      "status": "complete"
     }
   ],
   "next": {
     "command": "/gsd:progress --next",
-    "label": "Advance to the next step (plan phase 13)",
-    "reason": "Phase 13 of 3 — needs a plan"
+    "label": "Advance to the next step",
+    "reason": "Phase 14.1.1 of 6 · executing"
   },
-  "updated_at": "2026-09-06T06:13:00.324Z"
+  "updated_at": "2026-09-08T03:36:29.305Z"
 }

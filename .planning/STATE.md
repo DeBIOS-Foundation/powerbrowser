@@ -1,19 +1,19 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.3
 current_phase: 14.1.1
 current_phase_name: GUI Conformance Sweep (INSERTED)
 status: executing
-stopped_at: Completed 14.1.1-04-PLAN.md
-last_updated: "2026-09-08T02:00:05.693Z"
+stopped_at: Completed 14.1.1-08-PLAN.md
+last_updated: "2026-09-08T03:36:30.185Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 14.1.1 execution started
-state_head: 43a19335f4a7368bf3565937e9fefa3fff61b98b
+state_head: 5be974bf320df70f22d13dfc05ea86095d3417c5
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 16
-  completed_plans: 11
+  completed_plans: 12
 milestone_name: Browser GUI
 ---
 
@@ -28,8 +28,8 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 
 ## Current Position
 
-Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — READY TO EXECUTE
-Plan: 5 of 5
+Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — EXECUTING
+Plan: 2 of 10
 Status: Ready to execute
 Last activity: 2026-09-07 — Phase 14.1.1 execution started
 
@@ -120,6 +120,7 @@ Last activity: 2026-09-07 — Phase 14.1.1 execution started
 | Phase 14.1.1 P05 | 6 min | 2 tasks | 3 files |
 | Phase 14.1.1 P02 | 1h 24m | 2 tasks | 4 files |
 | Phase 14.1.1 P04 | 25min | 2 tasks | 5 files |
+| Phase 14.1.1 P08 | 13 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -306,6 +307,8 @@ Recent decisions affecting current work:
 - [Phase 14.1.1]: G-14.1.1-19's gate asserts a positive gBrowser member-set equality, not the absence of a TypeError log line: the emitter is Gecko's console, so an absence assertion over it can never be shown to go red
 - [Phase 14.1.1]: G-14.1.1-24's truth was restated (empty prefixed-read set plus a two-entry environment-toucher allowlist) because the gap's literal wording is false against this tree in both halves
 - [Phase 14.1.1]: verify-backend-env-readers.mjs derives the product environment prefix from powerbrowser-env.ts's capture loop rather than spelling it, so the Phase 2 rebrand cannot leave the gate matching a dead prefix
+- [Phase 14.1.1]: Theia extension edges are derived only from import/export specifiers, never from a bare @powerbrowser substring: prose comments mint five phantom edges
+- [Phase 14.1.1]: The clean-checkout yarn build:extensions is deferred to pass 3; running it would delete a concurrent session's live theia/**/lib trees, so G-14.1.1-9 flips to in_tree not fixed
 
 ### Pending Todos
 
@@ -403,8 +406,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-07T22:16:30.425Z
-Stopped at: Completed 14.1.1-04-PLAN.md
+Last session: 2026-09-08T03:36:30.151Z
+Stopped at: Completed 14.1.1-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
