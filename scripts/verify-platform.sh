@@ -3906,6 +3906,26 @@ run_own_checks() {
     "gui09-setups-copy|node $REPO_ROOT/scripts/verify-gui09-setups-copy.mjs"
     "gui09-setups-copy-self-test|node $REPO_ROOT/scripts/verify-gui09-setups-copy.mjs --self-test"
 
+    # NEW (14.1.1-08): the Theia extension build-order gate, closing
+    # G-14.1.1-9 -- `build:extensions` hand-ordered tab-uris ahead of
+    # token-gate while tab-query-service.ts imports token-gate's lib and
+    # `theia/**/lib/` is gitignored, so a clean checkout compiled tab-uris
+    # against a lib that did not exist yet; the same edge was undeclared in
+    # tab-uris's own manifest, invisible to the workspace graph. The pair
+    # DERIVES all three inputs -- the chain out of `build:extensions`, the
+    # extension set out of the directory listing, and the edges out of
+    # import/export specifiers only -- then asserts set equality in both
+    # directions, no duplicate, every edge pointing backwards in the chain
+    # and every edge declared by its importer. It proves the ordering and
+    # declaration invariants a clean build depends on, NOT the clean build
+    # itself: the literal clean-lib build is deferred to pass 3, because
+    # running it here would delete a concurrent session's live
+    # `theia/**/lib` trees. Honestly --quick: text reads only. No build, no
+    # browser, no display, no network. The self-test rides alongside for the
+    # reason every other self-test row in this array gives.
+    "theia-build-order|node $REPO_ROOT/scripts/verify-theia-build-order.mjs"
+    "theia-build-order-self-test|node $REPO_ROOT/scripts/verify-theia-build-order.mjs --self-test"
+
     # NEW (01-07): MIG-04's user-facing-copy gate. Static -- it reads
     # TheiaService.sys.mjs, never a built artifact -- so it is honestly
     # --quick, and that placement is the point: a leaked pref key must cost
