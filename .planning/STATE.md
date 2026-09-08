@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 14.1.1
 current_phase_name: GUI Conformance Sweep (INSERTED)
 status: executing
-stopped_at: Completed 14.1.1-11-PLAN.md
-last_updated: "2026-09-08T09:09:51.899Z"
+stopped_at: Completed 14.1.1-12-PLAN.md
+last_updated: "2026-09-08T09:23:56.798Z"
 last_activity: 2026-09-08
 last_activity_desc: Phase 14.1.1 execution started
-state_head: fc6acf709987c025aecee443b25031c061814699
+state_head: e049a34ade6b88210b96718146d1b358f89cd8f0
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 22
-  completed_plans: 17
+  completed_plans: 18
 milestone_name: Browser GUI
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 ## Current Position
 
 Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — EXECUTING
-Plan: 2 of 16
+Plan: 3 of 16
 Status: Ready to execute
 Last activity: 2026-09-08 — Phase 14.1.1 execution started
 
@@ -126,6 +126,7 @@ Last activity: 2026-09-08 — Phase 14.1.1 execution started
 | Phase 14.1.1 P07 | 24 min | 2 tasks | 2 files |
 | Phase 14.1.1 P10 | 20 min | 3 tasks | 4 files |
 | Phase 14.1.1 P11 | 12 min | 3 tasks | 3 files |
+| Phase 14.1.1 P12 | 4 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -330,6 +331,8 @@ Recent decisions affecting current work:
 - [Phase 14.1.1]: 14.1.1-11: task 2's grep-count criterion (>=3 REFUSED_SCHEME_OUTCOME hits) logged as unsatisfiable rather than met by padding a comment; declaration and export are one line in the mandated shape
 - [Phase 14.1.1]: 14.1.1-11: test 48's evidence line in 14.1.1-UAT.md corrected alongside the gap record; same gap, same false claim, same commit
 - [Phase 14.1.1]: 14.1.1-11: a navigate whose scheme chrome refuses now marks the view lost (lost-view copy with Reload); accepted consequence of folding refused-scheme into lostReply()
+- [Phase 14.1.1]: 14.1.1-12: gui09-setups-copy derives ConfirmDialog copy and destructive ink PER DIALOG (confirmDialogs() brace-matched body; addClass attributed by each dialog's own binding); the 'exactly one dialog' count assertion is removed as a hand-kept number, and plants 9-10 prove a second dialog's uncontracted copy and a second dialog with no class both go red
+- [Phase 14.1.1]: 14.1.1-12: plant 10 asserts its copy half stays GREEN as well as its ink half going RED, so the red is attributable to the assertion under test; the modes.css comment keeps the design statement separate from the gate statement
 
 ### Pending Todos
 
@@ -427,8 +430,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-08T09:09:20.055Z
-Stopped at: Completed 14.1.1-11-PLAN.md
+Last session: 2026-09-08T09:23:56.758Z
+Stopped at: Completed 14.1.1-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

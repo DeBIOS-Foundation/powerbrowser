@@ -136,7 +136,7 @@ Plans:
 **Goal:** Every `fixable: yes` gap in `14.1.1-UAT.md` is closed, each proved by a check that goes red without its fix; `needs-chris` and `decision` gaps gain evidence only and are never marked fixed by an executor
 **Requirements**: none mapped — this phase closes GUI conformance gaps, not requirement IDs
 **Depends on:** Phase 14.1
-**Plans:** 11/16 plans executed — pass 1 (01–05) executed; pass 2 (06–10) executed; pass 3 (11–16) planned
+**Plans:** 12/16 plans executed — pass 1 (01–05) executed; pass 2 (06–10) executed; pass 3 (11–16) planned
 **Protocol:** `.planning/GUI-SWEEP.md` (Step 2 — automated fix pass)
 
 Pass 1 planned the eleven in-scope `fixable: yes` gaps (G-14.1.1-4, 5, 6, 7, 19, 20, 21, 22, 24,
@@ -198,7 +198,7 @@ needs a quiet tree; and the `verify-web-tab-live.mjs` plant reds, which need a d
 
 **Wave 2** *(blocked on 11)*
 
-- [ ] 14.1.1-12-PLAN.md — the gui09 setups-copy gate derives per dialog, not by position and count (gap 2), plus the `modes.css` and header claims that become true only after it (gap 3a, 3c)
+- [x] 14.1.1-12-PLAN.md — the gui09 setups-copy gate derives per dialog, not by position and count (gap 2), plus the `modes.css` and header claims that become true only after it (gap 3a, 3c)
 - [ ] 14.1.1-13-PLAN.md — the build-order gate sees side-effect imports (advisory 1), its two comments corrected (gap 3d), and GUI-DEFECTS item 11's stale note fixed (advisory 6)
 - [ ] 14.1.1-14-PLAN.md — `verify-web-tab-live.mjs` instrument honesty: no plant scored on a broken instrument (advisory 4), a plant for the three `close:` absence assertions (advisory 3), one red set per plant (advisory 2), IN-02 and IN-03
 
