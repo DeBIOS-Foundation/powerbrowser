@@ -102,7 +102,7 @@
  * only (D-69).
  */
 
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -624,12 +624,13 @@ function phaseExpression(cfg, phase, arg) {
             // than the chrome half. The two halves are the same chain: with no
             // geometry message saying visible=false, webTabGeometry's last-view
             // arm is never reached at all.
-            if (typeof P.hideOverlay !== 'function') {
-                fail('plant hide-not-published could not be applied: the probe carries no overlay-hide seam');
-            } else {
-                P.hideOverlay = async () => { };
-                report.notes.push('PLANT hide-not-published: the frontend never tells chrome the overlay stopped being visible, so the last-view arm of webTabGeometry is never reached and no capture is ever scheduled for the hanging page');
-            }
+            //
+            // No landing guard here, deliberately: P.hideOverlay is assigned
+            // unconditionally above in this same phase, so a typeof test on it
+            // could never be false (review IN-02). The PLANT note below is the
+            // landing evidence the self-test actually reads.
+            P.hideOverlay = async () => { };
+            report.notes.push('PLANT hide-not-published: the frontend never tells chrome the overlay stopped being visible, so the last-view arm of webTabGeometry is never reached and no capture is ever scheduled for the hanging page');
         } else if (cfg.plant === 'store-unread') {
             P.search = async () => [];
             report.notes.push('PLANT store-unread: the store reader returns no rows');
@@ -1013,7 +1014,10 @@ async function runProtocol(derived, plant) {
 
 async function drive(derived, plant) {
     const pages = await servePages();
-    const stdoutPath = join(mkdtempSync(join(tmpdir(), 'powerbrowser-web-tab-live-')), 'shell-stdout.log');
+    // Removed in the finally below (review IN-03): the stdout log is read
+    // inside the session callback, before that finally runs.
+    const scratchDir = mkdtempSync(join(tmpdir(), 'powerbrowser-web-tab-live-'));
+    const stdoutPath = join(scratchDir, 'shell-stdout.log');
     const cfg = {
         plant,
         handlerClass: derived.handlerClass,
@@ -1242,6 +1246,7 @@ async function drive(derived, plant) {
         }, { stdoutPath });
     } finally {
         await pages.close();
+        rmSync(scratchDir, { recursive: true, force: true });
     }
 }
 
