@@ -91,7 +91,7 @@
  * last Theia app build (fresh profile, so chrome-side edits are live, but the
  * frontend bundle is whatever `theia build` last wrote). Register it in the
  * full set, never the commit gate. One clean run is roughly a minute;
- * `--self-test` boots twelve sessions (the clean control plus eleven plants).
+ * `--self-test` boots thirteen sessions (the clean control plus twelve plants).
  *
  * Usage:
  *   node scripts/verify-web-tab-live.mjs
@@ -633,13 +633,33 @@ function phaseExpression(cfg, phase, arg) {
         } else if (cfg.plant === 'store-unread') {
             P.search = async () => [];
             report.notes.push('PLANT store-unread: the store reader returns no rows');
-        } else if (cfg.plant === 'newtab-popup') {
+        } else if (cfg.plant === 'newtab-noop') {
+            // Deliberately NOT a window.open reroute: the New Tab command routes
+            // handler.open(uri), which delegates straight to openUrl, so a
+            // popup here would drive the identical red set the 'popup' plant
+            // drives and neither red would name its own fault. A handler that
+            // does nothing proves 'newtab:' reachable with zero window.open
+            // calls, which leaves 'popup:' red under exactly one plant.
+            // (No backticks in this block: it lives inside a template literal.)
             const handlers = P.commands._handlers && P.commands._handlers[cfg.newTabCommandId];
             if (!handlers || !handlers.length) {
-                fail('plant newtab-popup could not be applied: no handler registered for ' + cfg.newTabCommandId);
+                fail('plant newtab-noop could not be applied: no handler registered for ' + cfg.newTabCommandId);
             } else {
-                handlers.splice(0, handlers.length, { execute: () => { window.open(cfg.emptyUrl, '_blank'); } });
-                report.notes.push('PLANT newtab-popup: ' + cfg.newTabCommandId + ' rerouted to window.open');
+                handlers.splice(0, handlers.length, { execute: () => { } });
+                report.notes.push('PLANT newtab-noop: ' + cfg.newTabCommandId + ' opens nothing at all');
+            }
+        } else if (cfg.plant === 'close-ignored') {
+            // The three 'close:' assertions are ABSENCE assertions (no store row
+            // for a served URL, no browsing context carrying one, no main-area
+            // id residue), and until this plant nothing in the file showed any
+            // of them could go red. Patched on the same widget prototype the
+            // no-geometry plant reaches; the widget "+" creates inherits it.
+            const proto = Object.getPrototypeOf(__getByName(container, cfg.widgetClass));
+            if (typeof proto.close !== 'function') {
+                fail('plant close-ignored could not be applied: ' + cfg.widgetClass + '.prototype.close is not a function');
+            } else {
+                proto.close = function () { };
+                report.notes.push('PLANT close-ignored: ' + cfg.widgetClass + '.prototype.close is a no-op, so the widget never closes and the overlay context, the store row and the main-area id all survive the close phase');
             }
         }
 
@@ -1270,6 +1290,18 @@ async function drive(derived, plant) {
  * than only asserted here -- a message carrying the marker scores nothing, and
  * a case whose only messages in its family carry it fails naming that fact.
  *
+ * UNPLANTED FAMILIES, stated rather than left to derive (14.1.1-14). Each is a
+ * known limitation with its reason, not an omission:
+ *   nav:, walk:  a plant would have to be keyed on the modes extension's
+ *                runtime shape, and mode-service.ts, group-actor-client.ts and
+ *                main-area-exemption.ts were held uncommitted by a concurrent
+ *                session when the other plants were added, so such a plant
+ *                would have been scored against code that pass could not see.
+ *                Plant them from a quiet tree.
+ *   shell:       asserts that the LAUNCHED BINARY printed its ready sentinel
+ *                to stdout. Every plant in this file runs in the page realm,
+ *                so no plant here can suppress it.
+ *
  * Tree-side assertions over one live report. @returns {string[]}
  */
 const BROKEN_INSTRUMENT_MARKER = 'broken instrument, never a clean pass';
@@ -1626,8 +1658,22 @@ async function selfTest() {
         { name: 'the overlay hide is never published', plant: 'hide-not-published', expect: 'thumbnail:' },
         // The store reader returns nothing.
         { name: 'store rows unread', plant: 'store-unread', expect: 'store:' },
-        // "+" itself regresses to a popup.
-        { name: 'New Tab rerouted to a popup', plant: 'newtab-popup', expect: 'newtab:' },
+        // "+" opens nothing at all. Proves `newtab:` reachable with ZERO
+        // window.open calls, so `popup:` is red under exactly one plant in this
+        // table (the `popup` plant above) and its scored red is caused by no
+        // other entry. What remains true and is not a defect: `newtab:` is also
+        // red under `popup`, because a fault deep enough to stop openUrl also
+        // stops "+" producing a widget -- a strict superset, not an ambiguity.
+        { name: 'New Tab opens nothing', plant: 'newtab-noop', expect: 'newtab:' },
+        // The widget never closes. Demonstrates that the three consecutive
+        // `close:` ABSENCE assertions -- no store row for a served URL, no
+        // browsing context carrying one, no main-area id residue -- are all
+        // reachable, which nothing in this file showed before. Honestly: this
+        // plant also disturbs the second-tab cleanup in the restoreRepeat phase
+        // (those owners call the same close), which is harmless because the
+        // `restore:` assertions read the foreign-id refusal and the minted-id
+        // distinctness, neither of which depends on a close.
+        { name: 'the widget never closes', plant: 'close-ignored', expect: 'close:' },
     ];
 
     // PRE-FLIGHT, before any session is booted: prove the guard on its own three
