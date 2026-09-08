@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 14.1.1
 current_phase_name: GUI Conformance Sweep (INSERTED)
 status: executing
-stopped_at: Completed 14.1.1-14-PLAN.md
-last_updated: "2026-09-08T09:46:10.221Z"
+stopped_at: Completed 14.1.1-15-PLAN.md
+last_updated: "2026-09-08T09:55:41.138Z"
 last_activity: 2026-09-08
 last_activity_desc: Phase 14.1.1 execution started
-state_head: c6db28f00011dac5a9b4251ee2dc5f6176fda078
+state_head: b243c81584445ce6335cd97a0cc9b46c6699b54e
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 22
-  completed_plans: 20
+  completed_plans: 21
 milestone_name: Browser GUI
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 ## Current Position
 
 Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — EXECUTING
-Plan: 5 of 16
+Plan: 6 of 16
 Status: Ready to execute
 Last activity: 2026-09-08 — Phase 14.1.1 execution started
 
@@ -129,6 +129,7 @@ Last activity: 2026-09-08 — Phase 14.1.1 execution started
 | Phase 14.1.1 P12 | 4 min | 3 tasks | 2 files |
 | Phase 14.1.1 P13 | 5 min | 2 tasks | 2 files |
 | Phase 14.1.1 P14 | 7 min | 3 tasks | 1 files |
+| Phase 14.1.1 P15 | 2 min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -335,6 +336,7 @@ Recent decisions affecting current work:
 - [Phase 14.1.1]: 14.1.1-11: a navigate whose scheme chrome refuses now marks the view lost (lost-view copy with Reload); accepted consequence of folding refused-scheme into lostReply()
 - [Phase 14.1.1]: 14.1.1-12: gui09-setups-copy derives ConfirmDialog copy and destructive ink PER DIALOG (confirmDialogs() brace-matched body; addClass attributed by each dialog's own binding); the 'exactly one dialog' count assertion is removed as a hand-kept number, and plants 9-10 prove a second dialog's uncontracted copy and a second dialog with no class both go red
 - [Phase 14.1.1]: 14.1.1-12: plant 10 asserts its copy half stays GREEN as well as its ink half going RED, so the red is attributable to the assertion under test; the modes.css comment keeps the design statement separate from the gate statement
+- [Phase 14.1.1]: Plan 15: dropped the untrue retry clause from the dependent-window refusal instead of adding a palette label to SETUPS_OPEN_DEPENDENT; a label is a Phase-14 product decision, not a conformance fix
 
 ### Pending Todos
 
@@ -432,8 +434,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-08T09:46:10.176Z
-Stopped at: Completed 14.1.1-14-PLAN.md
+Last session: 2026-09-08T09:55:41.101Z
+Stopped at: Completed 14.1.1-15-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

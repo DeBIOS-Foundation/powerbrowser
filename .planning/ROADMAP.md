@@ -136,7 +136,7 @@ Plans:
 **Goal:** Every `fixable: yes` gap in `14.1.1-UAT.md` is closed, each proved by a check that goes red without its fix; `needs-chris` and `decision` gaps gain evidence only and are never marked fixed by an executor
 **Requirements**: none mapped — this phase closes GUI conformance gaps, not requirement IDs
 **Depends on:** Phase 14.1
-**Plans:** 14/16 plans executed — pass 1 (01–05) executed; pass 2 (06–10) executed; pass 3 (11–16) planned
+**Plans:** 15/16 plans executed — pass 1 (01–05) executed; pass 2 (06–10) executed; pass 3 (11–16) planned
 **Protocol:** `.planning/GUI-SWEEP.md` (Step 2 — automated fix pass)
 
 Pass 1 planned the eleven in-scope `fixable: yes` gaps (G-14.1.1-4, 5, 6, 7, 19, 20, 21, 22, 24,
@@ -204,7 +204,7 @@ needs a quiet tree; and the `verify-web-tab-live.mjs` plant reds, which need a d
 
 **Wave 3** *(blocked on 12 — the gate and the file it derives from must not move in one wave)*
 
-- [ ] 14.1.1-15-PLAN.md — the dependent-window refusal ends on the affordance that exists, in `setups-service.ts` and `14-UI-SPEC.md` together (advisory 5)
+- [x] 14.1.1-15-PLAN.md — the dependent-window refusal ends on the affordance that exists, in `setups-service.ts` and `14-UI-SPEC.md` together (advisory 5)
 
 **Wave 4** *(blocked on 11, 12, 13, 14, 15)*
 
