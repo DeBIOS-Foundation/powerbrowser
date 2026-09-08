@@ -22,6 +22,13 @@
  *      activate command (second visits included);
  *   5. the chrome-side tab store, read through the frontend's own
  *      ChromeBarSuggestionService (a reader independent of the writer);
+ *   5b. thumbnail attribution: the overlay navigated to a THIRD served page
+ *      whose response is written but never ended -- the document commits and
+ *      paints while the network never reaches STOP, so the on-load capture arm
+ *      cannot fire for it -- and then hidden through the product's own
+ *      geometry message, leaving the last-view arm of `webTabGeometry`
+ *      (PowerBrowserAPI.sys.mjs:2358-2365) as the only site that can account
+ *      for the snapshot the row ends up carrying;
  *   6. the tab's close glyph (`widget.close()`).
  *
  * WHAT IT ASSERTS, each a named failure: zero `window.open` calls; exactly
@@ -42,7 +49,18 @@
  * fails them); a web tab described under a FOREIGN session's id is refused by
  * the same `WidgetFactory` seam the stock layout restorer calls, and a second
  * "+" mints an id distinct from the first (G-14.1.1-5); a store row
- * for the served URL is readable after navigation and gone after close; no
+ * for the served URL is readable after navigation and gone after close; four
+ * thumbnail assertions in the order the attribution runs -- the row for the
+ * hanging page carries NO snapshot before the hide, then carries one, that
+ * snapshot is a PNG data URL, and its length is inside the capture cap derived
+ * from the boundary file (G-14.1.1-6); that evidence is ATTRIBUTABLE because
+ * the hanging page never reaches network STOP, so the hide is the only capture
+ * opportunity its row ever had. The residual limitation, stated rather than
+ * implied: no plant in this file can edit chrome-side source -- every plant
+ * runs in the page realm -- so `hide-not-published` removes the FRONTEND half
+ * of that one causal chain, and deleting the chrome-side last-view arm at
+ * PowerBrowserAPI.sys.mjs:2358-2365 produces the same three reds, which is the
+ * property G-14.1.1-6 asks for. Also: no
  * context carries a served URL after close; the main-area id set after close
  * equals the set before "+"; the shell's own POWERBROWSER_SHELL_READY line
  * is PRESENT in the launched binary's stdout (never an absence assertion).
@@ -73,7 +91,7 @@
  * last Theia app build (fresh profile, so chrome-side edits are live, but the
  * frontend bundle is whatever `theia build` last wrote). Register it in the
  * full set, never the commit gate. One clean run is roughly a minute;
- * `--self-test` boots ten sessions (the clean control plus nine plants).
+ * `--self-test` boots twelve sessions (the clean control plus eleven plants).
  *
  * Usage:
  *   node scripts/verify-web-tab-live.mjs
@@ -789,7 +807,7 @@ function phaseExpression(cfg, phase, arg) {
         }, 5000);
         report.rowsAfterNavigation = rows.map(row => ({ url: row.url, title: row.title }));`,
 
-        // G-14.1.1-6 -- THUMBNAIL ATTRIBUTION. Since 14.1 every tab Chris opens
+        // G-14.1.1-6 -- thumbnail attribution. Since 14.1 every tab Chris opens
         // is an overlay, so if the capture path can only see stock tabs every
         // Panorama card falls to the no-thumbnail state. Proving the LAST-VIEW
         // arm is what fills the row needs a page whose row nothing else can
