@@ -1,183 +1,181 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-09-04
+**Analysis Date:** 2026-09-07
 
 ## Directory Layout
 
 ```
 Power-Browser/
-├── powerbrowser/           # Gecko-side platform: shell + branding + policies
-│   ├── shell/              # Chrome window, boundary, supervisor (the owned core)
-│   ├── branding/           # Hand-written Phase 1 branding dirs (dev/release) — byte-identity reference
-│   ├── branding-generated/ # Build-consumed symlink/copy target (points at generated/branding/*)
-│   ├── distribution/       # policies.json
-│   └── INTERNAL-APIS.md    # Derived catalogue of every Firefox-internal touchpoint
-├── theia/                  # Theia sidecar: app composition + @powerbrowser/* extensions
-│   ├── applications/browser/ # App assembly (package.json composition)
-│   └── extensions/         # tab-uris/ token-gate/ branding/ customize/
-├── patches/                # Gecko patch stack (010 identity, 020 shell hook)
-├── upstream/               # Pinned ESR checkout (git-ignored, never hand-edited)
-├── scripts/                # verify-platform.sh registry + ~30 checkers + generator + lib/
-├── tools/                  # Reserved / empty at this snapshot
-├── brand/                  # Rebrand input: mark.svg (single icon source)
-├── configuration.toml      # Rebrand input: the manifest (defaults layer)
-├── generated/              # Generator output (git-ignored): branding/, .mozconfig, *.desktop
-├── inventory/              # brand-tokens.json — rename machinery source of truth
-├── docs/                   # BUILD.md, CUSTOMIZE.md, URI-SCHEMES.md
-├── objdir/                 # Dev-variant Gecko build output (git-ignored)
-├── objdir-release/         # Release-variant Gecko build output (git-ignored, usually absent)
-├── .planning/              # GSD planning record (ROADMAP, REQUIREMENTS, phases/, codebase/)
-├── .mozconfig              # Generated dev build config (copy of generated/ output)
-├── flake.nix               # Nix dev shells: .#firefox (Gecko toolchain), .#theia (Node/yarn)
-└── CLAUDE.md               # Project hard rules (no Theia fork, boundary, bridge, no-space path)
+├── configuration.toml       # The rebrand manifest — one of only two rebrand inputs
+├── brand/                   # The other rebrand input: mark.svg + HUMAN-REVIEW.md
+├── generated/               # Derived build surfaces written by scripts/generate.mjs
+├── powerbrowser/            # Chrome-side shell, branding literals, packaging
+├── patches/                 # The entire Gecko change set (2 patches)
+├── upstream/                # Fetched Gecko checkout at a pinned ESR tag — never hand-edited
+├── theia/                   # Theia sidecar: application + @powerbrowser/* extensions
+├── scripts/                 # Generator, guards, and ~60 verify-* checks
+├── inventory/               # brand-tokens.json — the only file that may name the origin product
+├── docs/                    # BUILD, REBRANDING, RELEASING, CUSTOMIZE, URI-SCHEMES, CRASH-POLICY
+├── .planning/               # GSD planning tree (PROJECT, ROADMAP, REQUIREMENTS, phases)
+├── .github/                 # CI workflows, including rebase-upstream.yml
+├── flake.nix / flake.lock   # Nix dev shells: .#firefox and .#theia
+├── defs.mk / .mozconfig     # Build entry configuration
+├── toolchain-baseline.txt   # Pinned toolchain versions
+└── objdir*/                 # Gecko build outputs (dev, release, nplus1) — not source
 ```
 
 ## Directory Purposes
 
+**`powerbrowser/`:**
+- Purpose: everything that ships inside the Gecko build and is not a patch
+- Contains: the chrome shell, hand-written branding literals, packaging, distribution policy
+- Key files: `powerbrowser/INTERNAL-APIS.md`, `powerbrowser/endpoint-allowlist.json`, `powerbrowser/distribution/policies.json`, `powerbrowser/identity.configure.comparand`
+
 **`powerbrowser/shell/`:**
-- Purpose: The owned Gecko core — startup window, internals boundary, sidecar supervisor
-- Contains: `.sys.mjs` modules, chrome document/script/style, XPCOM/build manifests, sidecar pref defaults
-- Key files: `PowerBrowserAPI.sys.mjs`, `TheiaService.sys.mjs`, `powerbrowser.js`, `powerbrowser.xhtml`, `powerbrowser.css`, `powerbrowser-sidecar.js`, `components.conf`, `jar.mn`, `moz.build`
+- Purpose: the privileged chrome layer
+- Contains: `PowerBrowserAPI.sys.mjs` (2592 lines — the sole internals boundary), `TheiaService.sys.mjs` (1407 — the sidecar supervisor), `powerbrowser.js` (357 — the classic-script bootstrap), `powerbrowser.xhtml`, `powerbrowser.css`, `GroupActorChild.sys.mjs`, `powerbrowser-sidecar.js` (preprocessed prefs), `moz.build`, `jar.mn`, `components.conf`
 
-**`powerbrowser/branding/` + `powerbrowser/branding-generated/`:**
-- Purpose: `branding/` holds the Phase 1 hand-written `dev`/`release` branding directories — the byte-identity reference the generator must reproduce; `branding-generated/` is what the build actually consumes
-- Contains: Per variant `brand.ftl`, `brand.properties`, `moz.build`, `content/`, `locales/`, `pref/firefox-branding.js`, icon rasters
-- Key files: `powerbrowser/branding/dev/*`, `powerbrowser/branding/release/*`
-
-**`theia/extensions/`:**
-- Purpose: All `@powerbrowser/*` Theia extensions — the only Theia-side code this project owns
-- Contains: Four extensions, each with `package.json`, `src/`, `tsconfig.json`, compiled `lib/` (git-ignored)
-- Key files: `tab-uris/src/browser/tab-uri-registry.ts`, `token-gate/src/node/powerbrowser-env.ts`, `branding/src/browser/powerbrowser-frontend-module.ts`, `customize/src/browser/customize-frontend-module.ts`
-
-**`theia/applications/browser/`:**
-- Purpose: Sidecar composition — which `@theia/*` packages ship and which `@powerbrowser/*` extensions compose in
-- Contains: `package.json` (the composition), `src-gen/` (generated), `lib/` (built backend+frontend, git-ignored)
-- Key files: `theia/applications/browser/package.json`
-
-**`patches/`:**
-- Purpose: The entire Gecko diff — hook-only by design after startup selection moved into `PowerBrowserSingleInstanceHandler`
-- Contains: `010-powerbrowser-identity.patch` (identity imply_options), `020-powerbrowser-shell.patch` (adds `powerbrowser/shell` to the build)
-- Key files: `patches/010-powerbrowser-identity.patch`, `patches/020-powerbrowser-shell.patch`
-
-**`scripts/`:**
-- Purpose: Verification registry, checkers, rebrand generator, lifecycle helpers
-- Contains: `verify-platform.sh` (the driver), `verify-*.mjs` / `verify-*.sh` checks, `generate.mjs`, `rename-brand.mjs`, `scan-brand-residue.mjs`, `apply-patches.sh`, `check-*.sh`, `smoke-*.sh`, `lib/` (`config-schema.json`, `toml.cjs`, `firefox-bidi.mjs`)
-- Key files: `scripts/verify-platform.sh`, `scripts/generate.mjs`, `scripts/lib/config-schema.json`
+**`powerbrowser/branding/{dev,release}/`:**
+- Purpose: the hand-written branding literals Phase 2's generated output must match byte-for-byte
+- Contains: `configure.sh`, `moz.build`, `default{16,32,48,64,128}.png`, `content/` (`aboutDialog.css`, `jar.mn`), `locales/en-US/` (`brand.ftl`, `brand.properties`), `pref/firefox-branding.js`
 
 **`generated/`:**
-- Purpose: Generator output only — never hand-edited; `node scripts/generate.mjs --check` asserts it matches `configuration.toml`
-- Contains: `branding/dev|release/`, `.mozconfig`-equivalent, `powerbrowser.desktop`, `powerbrowser-release.desktop`
-- Generated: Yes
-- Committed: No (git-ignored)
+- Purpose: the derived mirror of the above, written only by `scripts/generate.mjs`
+- Contains: `.mozconfig`, `identity.configure`, `branding/{dev,release}/` (adds `firefox.ico`, `firefox.icns`, `branding.nsi`, `firefox.VisualElementsManifest.xml`), `installer/{dev,release}/`, `theia-frontend-config.json`, `theia-branding.json`, `theia-telemetry.json`, `theia-plugins.json`, `endpoint-hosts.json`, `upstream-pins.env`, `webextensions-settings.json`, `ai-backend.json`, the desktop files
+- Generated: Yes. Committed: Yes (it is the comparand).
+
+**`theia/`:**
+- Purpose: the sidecar GUI, a yarn workspace over `applications/*` and `extensions/*`
+- Key file: `theia/package.json` pins every `@theia/*` to `1.74.1` under `resolutions` and defines the ordered `build:extensions` chain
+
+**`theia/applications/browser/`:**
+- Purpose: the composed Theia app; depends on all eight `@powerbrowser/*` extensions and the `@theia/*` set
+- Key file: `theia/applications/browser/package.json` — carries the `theia.frontend.config` block (applicationName, `powerbrowserBranding`, `powerbrowserTelemetry`, `powerbrowserPrivilegedJs`, `powerbrowserAiBackend`, legal notices)
+- `src-gen/` and `lib/` are build outputs
+
+**`theia/extensions/`:**
+- Purpose: all Theia-side additions, one `@powerbrowser/*` package each
+- `branding/` — welcome page, favicon, mark, AI layout
+- `token-gate/` — backend token enforcement, parent watchdog, env readers
+- `tab-uris/` — the `factoryId ↔ URI` registry, web tabs, view/terminal open handlers, node-side tab query service
+- `customize/` — user CSS and (default-off) privileged JS
+- `telemetry/` — opt-in sender, preferences, logger
+- `modes/` — mode service, group model, panorama, organising tree/widget, setups, dependent windows, group actor client
+- `chrome-bar/` — commands, keybindings, suggestion service (frontend + node impl)
+- `backend-opencode/` — ACP supervisor, chat agent, preset commands, MCP contribution, changeset emitter
+
+**`patches/`:**
+- Purpose: the entire Gecko diff
+- Contains: `010-powerbrowser-identity.patch` (`browser/moz.configure`), `020-powerbrowser-shell.patch` (`browser/moz.build`)
+
+**`upstream/`:**
+- Purpose: the pinned Gecko checkout
+- Generated: Yes, by `scripts/fetch-upstream.sh`. Committed: No. Never hand-edited, never catalogued as project source.
+
+**`scripts/`:**
+- Purpose: the generator, the boundary/patch/Theia guards, and every verification check
+- Key files: `generate.mjs`, `verify-platform.sh` (the single driver and registry), `check-internals-boundary.sh`, `check-patch-surface.sh`, `diff-theia-core.sh`, `scan-brand-residue.mjs`, `apply-patches.sh`, `fetch-upstream.sh`, `rebase-upstream.sh`, `rename-brand.mjs`, `crash-collector.mjs`
+- `scripts/lib/` — `toml.cjs` (vendored TOML parser), `config-schema.json`, `firefox-bidi.mjs`
 
 **`inventory/`:**
-- Purpose: Rename machinery — the machine-readable token inventory shared by the rename executor and the residue scan
-- Contains: `brand-tokens.json` (the only file allowed to name the originating product)
-- Key files: `inventory/brand-tokens.json`
-
-**`docs/`:**
-- Purpose: Human references for build, customization, and tab addresses
-- Contains: `BUILD.md` (timings name tree/host/toolchain), `CUSTOMIZE.md`, `URI-SCHEMES.md` (all five URI schemes)
+- Purpose: brand-token classification for the residue scan
+- Key file: `inventory/brand-tokens.json` — the only file permitted to spell the originating product's name
 
 ## Key File Locations
 
 **Entry Points:**
-- `powerbrowser/shell/PowerBrowserAPI.sys.mjs` (`PowerBrowserSingleInstanceHandler.handle`): process-startup window selection
-- `powerbrowser/shell/powerbrowser.xhtml`: shell document loaded as the startup window
-- `powerbrowser/shell/powerbrowser.js`: chrome bootstrap (`DOMContentLoaded` → sentinels → `TheiaService.start`)
-- `theia/applications/browser/lib/backend/main.js`: sidecar backend main (built artifact; composition source is `theia/applications/browser/package.json`)
-- `scripts/verify-platform.sh`: verification entry (`--quick` | `--only <label>` | `--gate` | full)
-- `scripts/generate.mjs`: rebrand entry (`--check` | `--self-test` | emit)
+- `powerbrowser/shell/powerbrowser.xhtml`: the shell window document
+- `powerbrowser/shell/powerbrowser.js`: chrome bootstrap
+- `theia/applications/browser/package.json`: the Theia app composition
+- `scripts/generate.mjs`: rebrand generation
+- `scripts/verify-platform.sh`: the verification driver
 
 **Configuration:**
-- `configuration.toml`: rebrand manifest (identity/product/legal/theia/variants) — defaults layer
-- `scripts/lib/config-schema.json`: manifest schema the generator validates against
-- `powerbrowser/shell/powerbrowser-sidecar.js`: sidecar pref defaults (preprocessed `#filter substitution`, `POWERBROWSER_DEV_TREE` from `moz.build`)
-- `powerbrowser/distribution/policies.json`: distribution policies
-- `powerbrowser/endpoint-allowlist.json`: allowed/denied network hosts + gating prefs (read by `scripts/verify-endpoints.sh`)
-- `.mozconfig`: active dev build config (generated copy — edit `configuration.toml`, regenerate, copy over)
-- `flake.nix`: Nix shells (`.#firefox` clang/Gecko toolchain, `.#theia` Node 22/yarn)
-- `theia/package.json`: yarn workspaces root (`applications/*`, `extensions/*`), `@theia/*@1.74.1` resolutions
+- `configuration.toml`: the brand manifest and defaults layer
+- `.mozconfig`, `defs.mk`, `toolchain-baseline.txt`: build config
+- `flake.nix`: `nix develop .#firefox` (Gecko toolchain) and `.#theia` (Node/yarn)
+- `powerbrowser/shell/powerbrowser-sidecar.js`: sidecar prefs (node path, backend main, timeouts, log size)
+- `powerbrowser/endpoint-allowlist.json`: permitted network hosts
 
 **Core Logic:**
-- `powerbrowser/shell/PowerBrowserAPI.sys.mjs`: internals boundary + single-instance handler
-- `powerbrowser/shell/TheiaService.sys.mjs`: sidecar supervisor (~1100 lines; resolve/spawn/gate/swap/health/restart/quit)
-- `theia/extensions/tab-uris/src/browser/tab-uri-registry.ts`: tab-URI registry (frozen bridge shape)
-- `theia/extensions/tab-uris/src/browser/view-factory-table.ts`: `view:` coverage contract
-- `theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts`: fail-closed gate + health route + readiness sentinel
-- `theia/extensions/token-gate/src/node/powerbrowser-env.ts`: env capture/scrub + stdin token read
-- `theia/extensions/token-gate/src/node/parent-watchdog-backend-contribution.ts`: dies-with-browser watchdog
+- `powerbrowser/shell/PowerBrowserAPI.sys.mjs`: internals boundary
+- `powerbrowser/shell/TheiaService.sys.mjs`: sidecar supervisor
+- `theia/extensions/tab-uris/src/browser/tab-uri-registry.ts`: bridge-facing registry
+- `theia/extensions/modes/src/browser/mode-service.ts`: mode switching
 
-**Testing:**
-- `scripts/verify-platform.sh`: the only driver — `CHECKS+=(...)` registry near the bottom of the file
-- `scripts/verify-*.mjs`: static/derived-shape checks (`verify-registry-shape.mjs`, `verify-shell-error-copy.mjs`, `verify-shell-error-contract.mjs`, `verify-branding*.mjs`, `verify-gui01-*.mjs`, `verify-uri-roundtrip.mjs`, `verify-customize-inert.mjs`, `verify-dev-flag-off.mjs`, …)
-- `scripts/smoke-theia.sh`, `scripts/smoke-firefox.sh`: smoke gates registered first in the full set
-- `scripts/lib/firefox-bidi.mjs`: BiDi helper for checks that drive the live binary
-- No `*.test.*` / `*.spec.*` unit-test convention — verification is check-script + `--self-test` per check, not a JS test runner
+**Testing / Verification:**
+- `scripts/verify-platform.sh`: registry of all checks
+- `scripts/verify-*.mjs`: individual checks, most with a `--self-test`
+- `scripts/smoke-firefox.sh`, `scripts/smoke-theia.sh`: smoke runs
+
+**Documentation:**
+- `powerbrowser/INTERNAL-APIS.md`: boundary catalogue (derived from the guard script)
+- `docs/BUILD.md`, `docs/REBRANDING.md`, `docs/RELEASING.md`, `docs/CUSTOMIZE.md`, `docs/URI-SCHEMES.md`, `docs/CRASH-POLICY.md`
+- `.planning/phases/01-platform-extraction-and-rename/01-UI-SPEC.md`: the user-facing copy contract
 
 ## Naming Conventions
 
 **Files:**
-- Gecko chrome: lowercase `powerbrowser.<ext>` (`powerbrowser.js`, `powerbrowser.xhtml`, `powerbrowser.css`, `powerbrowser-sidecar.js`); privileged modules `PascalCase.sys.mjs` (`PowerBrowserAPI.sys.mjs`, `TheiaService.sys.mjs`); build manifests lowercase (`moz.build`, `jar.mn`, `components.conf`)
-- Theia extensions: kebab-case package dirs (`tab-uris/`, `token-gate/`), kebab-case source files (`tab-uri-registry.ts`, `view-factory-table.ts`, `browser-window-command.ts`, `powerbrowser-env.ts`); module manifests `*-frontend-module.ts` (browser) / `*-backend-module.ts` (node); React widgets `*.tsx` (`powerbrowser-welcome-widget.tsx`, `powerbrowser-about-dialog.tsx`)
-- Scripts: `verify-<area>.mjs|.sh` per check, `check-<surface>.sh` for guards, `smoke-<half>.sh` for smoke gates; `lib/` helpers (`toml.cjs`, `config-schema.json`, `firefox-bidi.mjs`)
-- Patches: zero-padded sequence `NNN-<slug>.patch` (`010-powerbrowser-identity.patch`, `020-powerbrowser-shell.patch`)
-- Planning: `UPPERCASE.md` for codebase maps (`ARCHITECTURE.md`, `STRUCTURE.md`); phase dirs under `.planning/phases/`
+- Chrome ES modules: `PascalCase.sys.mjs` (`PowerBrowserAPI.sys.mjs`, `TheiaService.sys.mjs`, `GroupActorChild.sys.mjs`)
+- Chrome classic scripts and assets: `lowercase-hyphen` (`powerbrowser.js`, `powerbrowser-sidecar.js`)
+- TypeScript: `kebab-case.ts`, with role suffixes — `*-frontend-module.ts`, `*-backend-module.ts`, `*-contribution.ts`, `*-service.ts`, `*-service-impl.ts`, `*-commands.ts`, `*-keybindings.ts`, `*-widget.ts`
+- Checks: `scripts/verify-<subject>.mjs` (or `.sh`); guards: `scripts/check-<subject>.sh`
+- Patches: `NNN-powerbrowser-<subject>.patch`
 
 **Directories:**
-- Kebab-case throughout (`tab-uris/`, `token-gate/`, `powerbrowser/`, `sidecar-state-*`); Theia source split `src/browser/` vs `src/node/` by runtime; compiled output always `lib/` (git-ignored); per-variant branding `dev/` vs `release/`
+- Theia extension internals mirror Theia's own split: `src/browser/`, `src/node/`, `src/common/`
+- Branding variants are always `dev/` and `release/`, in both `powerbrowser/branding/` and `generated/branding/`
+
+**Identifiers:**
+- Theia packages are scoped `@powerbrowser/<extension-dir-name>`
+- Chrome sentinels are `POWERBROWSER_<SCREAMING_SNAKE>` on stdout
+- Actor messages are `PowerBrowser<Thing>` (`PowerBrowserGroupRequest`, `PowerBrowserGroupMutation`, `PowerBrowserWebTabState`)
+- Requirement/decision tags appear in comments as `GUI-NN`, `SHELL-NN`, `SQL-NN`, `D-NN`, `T-NN-NN`
 
 ## Where to Add New Code
 
-**New Feature (Gecko shell behaviour):**
-- Primary code: `powerbrowser/shell/` — new privileged capability goes as a method on `PowerBrowserAPI` in `powerbrowser/shell/PowerBrowserAPI.sys.mjs` + catalogue row in `powerbrowser/INTERNAL-APIS.md`; policy/lifecycle goes in `powerbrowser/shell/TheiaService.sys.mjs` (which must keep importing nothing else)
-- Chrome UI: `powerbrowser/shell/powerbrowser.xhtml` + `powerbrowser/shell/powerbrowser.js` (new `window.powerbrowser*` global) + `powerbrowser/shell/powerbrowser.css`
-- Tests: append one row to the `CHECKS` registry in `scripts/verify-platform.sh` (never a sibling driver); static checks live in `scripts/verify-<area>.mjs` with a `--self-test` planting addition + removal
+**A new privileged capability (anything touching Gecko):**
+- Add a method to `powerbrowser/shell/PowerBrowserAPI.sys.mjs` — never a second file
+- Add a row to `powerbrowser/INTERNAL-APIS.md`
+- Verify with `scripts/check-internals-boundary.sh --catalogue`
 
-**New Component/Module (Theia side):**
-- Implementation: new dir under `theia/extensions/<name>/src/browser/` (frontend) or `src/node/` (backend), wired via a new `ContainerModule` (`<name>-frontend-module.ts` / `<name>-backend-module.ts`), composed by adding `@powerbrowser/<name>` to `theia/applications/browser/package.json` dependencies; never edit `@theia/*` sources
-- Tab-addressable view: add the factory id row to `theia/extensions/tab-uris/src/browser/view-factory-table.ts` (coverage contract) — the runtime discovery in `tab-uri-registry.ts` needs no change; update `docs/URI-SCHEMES.md` and expect `scripts/verify-registry-shape.mjs` / `verify-uri-roundtrip.mjs` to cover it
+**A new GUI feature:**
+- New extension: `theia/extensions/<name>/src/browser/` (+ `src/node/`, `src/common/` as needed), a `package.json` named `@powerbrowser/<name>`, a dependency line in `theia/applications/browser/package.json`, and an entry in the ordered `build:extensions` chain in `theia/package.json`
+- Existing extension: add the file next to its peers and bind it in that extension's `*-frontend-module.ts` / `*-backend-module.ts`
 
-**Utilities:**
-- Shared shell helpers: methods on `PowerBrowserAPI` (`powerbrowser/shell/PowerBrowserAPI.sys.mjs`) for anything touching platform internals
-- Shared Theia helpers: alongside the owning extension (e.g. `existing-scheme-coverage.ts` in `theia/extensions/tab-uris/src/browser/`); cross-extension reads via DI (`ctx.container.get/isBound`), not direct imports
-- Check helpers: `scripts/lib/` (BiDi, schema, vendored TOML parser — note `scripts/lib/toml.cjs` is vendored with a digest pinned in its header; do not hand-edit)
+**A change to Firefox source:**
+- Patch `upstream/`, regenerate the patch into `patches/`, re-run `scripts/check-patch-surface.sh`. Never edit a hunk body by hand.
 
-**Rebrand-affecting change:**
-- Inputs only: `configuration.toml` + `brand/mark.svg`; run `node scripts/generate.mjs`, then copy the matching file(s) out of `generated/` over the build-consumed location (Phase 2 does not write in place); never hand-edit `generated/`, `.mozconfig`, `*.desktop`, or `powerbrowser/branding-generated/`
+**A new branding value:**
+- Add the key to `configuration.toml`, teach `scripts/generate.mjs` to emit it into `generated/`, and write the matching hand-written literal under `powerbrowser/branding/<variant>/`
+
+**A new check:**
+- Implement `scripts/verify-<subject>.mjs` with a `--self-test` that plants faults, derive its expectation from the tree at check time, and append **one row** to the `CHECKS` registry in `scripts/verify-platform.sh`. Do not create a sibling driver.
+
+**Documentation:**
+- Operator-facing: `docs/`
+- Planning artifacts: `.planning/phases/<phase>/`
 
 ## Special Directories
 
 **`upstream/`:**
-- Purpose: Pinned ESR checkout materialised by `scripts/fetch-upstream.sh`
-- Generated: Yes (fetch, ~1.1 GB)
-- Committed: No (git-ignored; `git -C upstream diff` must stay empty)
-
-**`objdir/` / `objdir-release/`:**
-- Purpose: Gecko build outputs for the `dev` / `release` variants (`MOZ_OBJDIR`)
-- Generated: Yes (`./mach build`, ~47–54 min full)
-- Committed: No (git-ignored)
+- Purpose: pinned Gecko source. Generated: Yes (`scripts/fetch-upstream.sh`). Committed: No. Invariant: `git -C upstream diff` is empty.
 
 **`generated/`:**
-- Purpose: Rebrand generator output (33 targets: branding dirs, `.mozconfig`, `.desktop`, icon rasters)
-- Generated: Yes (`node scripts/generate.mjs`)
-- Committed: No (git-ignored; `--check` asserts freshness)
+- Purpose: derived build surfaces. Generated: Yes (`scripts/generate.mjs`). Committed: Yes — it is the byte-identical comparand for the hand-written layer.
 
-**`theia/**/lib/` + `theia/**/node_modules/`:**
-- Purpose: Compiled extension/app output (`tsc`) and yarn installs
-- Generated: Yes (`yarn build`, `yarn install --frozen-lockfile`)
-- Committed: No (git-ignored)
+**`objdir/`, `objdir-release/`, `objdir-nplus1/`:**
+- Purpose: Gecko build outputs (`objdir/dist/bin/powerbrowser` is the runnable binary). Generated: Yes. Committed: No.
 
-**`powerbrowser/branding/`:**
-- Purpose: Phase 1 hand-written branding literals — the byte-identity reference, not build input
-- Generated: No
-- Committed: Yes (deliberate: Phase 2 acceptance is byte-identity against these files; no generator/template may have produced them)
+**`theia/**/node_modules/`, `theia/applications/browser/{lib,src-gen}/`, `theia/extensions/*/lib/`:**
+- Purpose: yarn installs and build output. Generated: Yes. Committed: No.
 
 **`.planning/`:**
-- Purpose: GSD record — `PROJECT.md`, `ROADMAP.md`, `REQUIREMENTS.md`, `phases/`, `codebase/`, `research/`
-- Generated: No (working record; excluded from the brand-residue scan by design)
-- Committed: Yes
+- Purpose: GSD planning tree — `PROJECT.md`, `ROADMAP.md`, `REQUIREMENTS.md`, `state.json`, `phases/`, `milestones/`, `codebase/`. Committed: Yes.
+
+**`.direnv/`, `.mozbuild/`:**
+- Purpose: Nix/direnv and mozbuild caches. Committed: No.
 
 ---
 
-*Structure analysis: 2026-09-04*
+*Structure analysis: 2026-09-07*

@@ -1,230 +1,260 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-09-04
+**Analysis Date:** 2026-09-07
 
-## Tech Debt
+Scope: project code only — `powerbrowser/`, `theia/`, `patches/`, `scripts/`, `inventory/`,
+`brand/`. `upstream/` is a pinned, never-hand-edited Gecko checkout and is deliberately not
+audited here.
 
-**Uncommitted working tree (03-02 icon pipeline WIP):**
-- Issue: The working tree is dirty mid-phase. `scripts/generate.mjs` carries ~+340/-17 uncommitted lines (the GEN-02 raster step: `rasterizeIcons`, `iconSourceFailures`, `ICON_SIZES`, `MARK_SVG_REL`), plus uncommitted edits to `scripts/verify-generated-identity.mjs` (5→33 targets) and `scripts/verify-platform.sh` (seventeen-fault prose). The old `.planning/codebase/*.md` set shows as deleted, and `.planning/phases/01-platform-extraction-and-rename/01-VERIFICATION.md` was flipped `human_needed`→`passed` without a commit. None of this is lost, but the next session must reconcile (commit or revert) before trusting any gate output — byte-identity results measured now reflect uncommitted TARGETS rows.
-- Files: `scripts/generate.mjs`, `scripts/verify-generated-identity.mjs`, `scripts/verify-platform.sh`, `.planning/phases/01-platform-extraction-and-rename/01-VERIFICATION.md`
-- Impact: Any `--quick` or byte-identity run until commit is against uncommitted expectations; a `git stash` or careless checkout silently drops the icon pipeline.
-- Fix approach: Finish 03-02 task 1 (commit per-task atomically per the phase's own convention), or `git stash` deliberately. Never run the tier-3 build proof from a dirty tree.
+Every entry is tagged:
 
-**Generator monolith growth:**
-- Issue: `scripts/generate.mjs` is already 2694 committed lines (~3000 with the uncommitted icon step) and is the single file for every emitter (shell, desktop, mozconfig, locale, layout, icons, and soon installer fields). Each phase appends another section plus frozen TARGETS rows plus self-test cases. There is no module split because the byte-identity gate and `--self-test` conventions assume one file.
-- Files: `scripts/generate.mjs`
-- Impact: Merge conflicts on every parallel phase (3 and 4 both touch it); review burden per plan grows; one syntax error disables all 33 targets.
-- Fix approach: Accept until Phase 5; if split, keep `TARGETS` and the banner in one module and move emitter families behind the same function signature, with the identity gate unchanged.
-
-**Single-driver verifier scale:**
-- Issue: `scripts/verify-platform.sh` is 4126 lines and every new check means appending a row plus a shell function in the same file. The registry pattern is deliberate (CLAUDE.md one-driver rule), but shell is doing work (BiDi orchestration, planted-fault extraction) at the edge of what stays readable.
-- Files: `scripts/verify-platform.sh`
-- Impact: Slow to navigate; a quoting bug in one row can break `--quick` for all rows.
-- Fix approach: No split allowed by project rule; keep functions small and keep per-check logic in the `.mjs` siblings (`scripts/verify-*.mjs`) with the `.sh` row as a thin invocation.
-
-**Patch 010 still carries brand values (MIG-05 scope):**
-- Issue: `patches/010-powerbrowser-identity.patch` hardcodes `imply_option("MOZ_APP_VENDOR", "DeBIOS")` and `imply_option("MOZ_APP_UA_NAME", "Firefox")`. Patch 020 is already hook-only, but 010 is not — Phase 5 must de-configure it into an `include()` of `generated/identity.configure`, which does not exist yet (03-04 scope, GEN-01 still open).
-- Files: `patches/010-powerbrowser-identity.patch`
-- Impact: Every ESR rebase replays literal brand values through a three-way merge; a downstream rebrand today still requires patch context to stay valid.
-- Fix approach: 03-04 emits `generated/identity.configure`; Phase 5 regenerates 010 as hook-only. Do not hand-edit the hunk (patch hashes degrade to silent no-ops — regenerate via `scripts/check-patch-surface.sh` + `apply-patches.sh` flow).
-
-**Upstream pins not yet in the manifest (CFG-06):**
-- Issue: The Firefox ESR tag and Theia release pin live in `scripts/fetch-upstream.sh`, `flake.nix` (`firefox-esr-153-unwrapped`, `nodejs_22`), and `theia/package.json` (`@theia/*@1.74.1`), not in `configuration.toml`. Single-pin uptake is Phase 5 work.
-- Files: `scripts/fetch-upstream.sh`, `flake.nix`, `theia/package.json`
-- Impact: Version strings can drift across files today with no gate to catch it.
-- Fix approach: Phase 5 moves pins into `[upstreams]` and makes fetch/build scripts consume them; add a pin-consistency registry row at that time.
-
-**Placeholder mark still shipped:**
-- Issue: `brand/mark.svg` is the IEC 60417-5009 power glyph placeholder (D-11), and the ten tracked PNG rasters under `powerbrowser/branding/{dev,release}/` are derived from it. The icon pipeline (03-02) faithfully reproduces placeholder bytes — correct mechanism, placeholder content.
-- Files: `brand/mark.svg`, `powerbrowser/branding/dev/default*.png`, `powerbrowser/branding/release/default*.png`
-- Impact: None on gates; the shipped icon is not a real product mark. A downstream replacing it exercises the squareness rule for the first time with real artwork.
-- Fix approach: Real logo arrives with branding work; keep the non-square hard-fail (never letterbox silently).
-
-## Known Bugs
-
-**Default-env build is red until 03-02 lands (expected, tracked):**
-- Symptoms: `smoke-firefox` FAILs on `FINAL_TARGET_FILES default128.png` because the default `--with-branding` dir is now the generated tree, which has no PNG rasters yet. `branding-variant-divergence` and `verify-branding-identity-release` fail on missing `objdir-release/dist`.
-- Files: `generated/branding/dev/` (no `default*.png` committed path yet — rasters exist only in uncommitted TARGETS), `.mozconfig`
-- Trigger: Any `mach build` or full `verify-platform.sh` run on the default tree before 03-02 commits.
-- Workaround: 03-01 proved both variants configure exit-0 with scratch-copied current PNGs; `--quick` is the commit gate and is green. Do not gate anything on a default build before 03-02 lands.
-
-**BiDi harness double-window (WINDOWS.md 14, open):**
-- Symptoms: Every `withFirefoxPage` caller that passes a URL launches TWO windows (shell plus a stock browser window for the URL arg), and `contexts[0]` resolves to the shell's supervised Theia frontend rather than the passed URL. The four `_run_app_check_mjs` checks boot a dev app at `localhost:3000` they then do not read.
-- Files: `scripts/lib/firefox-bidi.mjs`
-- Trigger: Any harness check passing a URL argument.
-- Workaround: Checks currently pass despite the extra window; fix when a check needs to actually read the URL content.
-
-**Unrun launch-lifecycle checks (WINDOWS.md 11, 19 — open):**
-- Symptoms: ~20 launch-lifecycle checks (`side03-*`, `side04-*`, `side05-*`, `shell03-*`, `cr01-*`, `harness-display-available`) became runnable with 01-04's build but were never run; `shell03-budget-exhausted-error` and `shell03-auto-dismiss-on-selfheal` were not re-run after 01-11 changed error-layer behavior.
-- Files: `scripts/verify-platform.sh`
-- Trigger: Full-suite runs requiring a display, a launched browser, and ~47–54 min tier-3 builds.
-- Workaround: None needed pre-gate; schedule before milestone close. Neither deferred check clicks Retry, so neither is expected to move — but "expected" is not "observed."
-
-**Release objdir never built (WINDOWS.md 10, open):**
-- Symptoms: `verify-branding-identity-release` and `branding-variant-divergence` have never run — both read `objdir-release/dist/bin`, i.e. a second full ~47 min release build that was explicitly declined.
-- Files: `scripts/verify-platform.sh`, `scripts/verify-branding-identity.mjs`
-- Trigger: Any release-variant verification.
-- Workaround: Runnable the moment a release objdir exists; schedule one release build before milestone close.
-
-## Security Considerations
-
-**Internals-boundary guard has a known hole (WINDOWS.md 13, open):**
-- Risk: `ChromeUtils.registerWindowActor` is absent from `FORBIDDEN_PATTERNS` in `scripts/check-internals-boundary.sh`. A future JSWindowActor pair (the rejected GUI-01 candidate B) would add a second Firefox-internal touchpoint outside `powerbrowser/shell/PowerBrowserAPI.sys.mjs` while the guard reports PASS.
-- Files: `scripts/check-internals-boundary.sh`, `powerbrowser/INTERNAL-APIS.md`
-- Current mitigation: Nothing in-tree uses it (candidate B was not adopted), so the hole is latent, not exploited. The catalogue (`powerbrowser/INTERNAL-APIS.md`, 65 lines) is the human-readable half.
-- Recommendations: Any commit introducing an actor pair must add the pattern in the same commit — record this in the plan's acceptance criteria when that work is ever proposed.
-
-**Customize privileged-JS surface (dev-flag gated):**
-- Risk: `theia/extensions/customize/src/browser/powerbrowser-privileged-js.ts` hands `customize.js` the DI container, the application shell, and the tab-URI registry when the dev flag is on. That is arbitrary-code-execution-by-design behind a flag — correct for "vibe-code your own browser," but the flag is the entire security boundary.
-- Files: `theia/extensions/customize/src/browser/powerbrowser-privileged-js.ts`, `scripts/verify-dev-flag-off.mjs`, `scripts/verify-customize-inert.mjs`
-- Current mitigation: `verify-dev-flag-off` and `verify-customize-inert` prove the surface is inert with the flag off; GUI-03 perceptual half confirmed by live UAT 2026-09-01.
-- Recommendations: Never widen the `PowerBrowserPrivilegedJsSurface` without a matching gate assertion; the `Symbol.for` registry key must keep matching `scripts/verify-dev-flag-off.mjs` exactly (documented in the source header).
-
-**Token-gate is the whole SEC-01 boundary:**
-- Risk: The Theia backend has filesystem and process-spawn access in the same process tree as untrusted web content. `theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts` (per-launch credential, loopback-only, fail-closed, ahead of framework middleware) is the single control.
-- Files: `theia/extensions/token-gate/src/node/`
-- Current mitigation: Satisfied and recorded; parent-watchdog contribution reaps orphans.
-- Recommendations: Any change to backend composition (Phase 4 extensions!) must re-prove SEC-01 — EXT-01 entries add backend modules, which is exactly the `mini-browser`/`vhost` pattern rejected at the D-22 gate. Vet each declared extension's backend surface before bundling.
-
-**Generator sink-injection guards must grow with each emitter:**
-- Risk: `configure.sh` is sourced by the build, `.desktop` `Exec=`/`Icon=` are line-oriented, and 03-03 adds NSIS (`!define` quotes, `${}`) plus XML/plist (`&<>"`) sinks. Each sink has its own metacharacters; the schema regex is the primary guard and `assertEmittable`/`UNEMITTABLE` the sink-side backstop (see `scripts/generate.mjs:596` and `scripts/lib/config-schema.json`).
-- Files: `scripts/generate.mjs`, `scripts/lib/config-schema.json`
-- Current mitigation: Phase 2 pattern (reject, never escape) with hostile-value self-test cases; 03-02 keeps the invariant structurally (no manifest value ever joined into the inkscape argv — fixed literal `brand/mark.svg`, frozen `ICON_SIZES`).
-- Recommendations: Every 03-03 schema key that reaches NSIS/XML/shell needs both a `regex` and a sink assertion plus a hostile self-test case (quotes, `${}`, `&<>`, trailing spaces, newlines). A silent-escape fix is a vulnerability, not a cleanup — reject loudly.
-
-**Mozilla egress carve-out awaits TEL-03:**
-- Risk: Three Mozilla hosts stay `allow` in `powerbrowser/endpoint-allowlist.json` (Remote Settings + signature CDN + attachments CDN) because disabling them also kills CRLite revocation data. Mozilla telemetry/crash endpoints are `deny` today, but per-downstream repointing is Phase 4 scope.
-- Files: `powerbrowser/endpoint-allowlist.json`, `scripts/verify-endpoints.sh`
-- Current mitigation: `allowlist-doc-consistency` forces every allow entry to carry a written reason in REQUIREMENTS.md, not just the JSON.
-- Recommendations: TEL-03 must make these manifest-driven; until then any downstream ships Mozilla-bound polling with only a documented reason as cover.
-
-**Squareness check parses text, not pixels:**
-- Risk: `iconSourceFailuresForText` (uncommitted, `scripts/generate.mjs`) accepts artwork on the strength of a `viewBox` regex. An SVG with a square viewBox but non-square `width`/`height` attributes, or square canvas with off-center content, passes the rule and ships a visually wrong icon set. A missing viewBox fails closed (good), but a lying viewBox passes.
-- Files: `scripts/generate.mjs` (`iconSourceFailuresForText`), `brand/mark.svg`
-- Current mitigation: IHDR-exact output assertion catches size errors, not aesthetic ones; GEN-02's visual judgement is an explicit manual verification.
-- Recommendations: Keep the text check as the fast fail, but the 03-04 tier-3 proof should include a human look at the built icon (already planned as manual-only). Consider asserting `width`/`height` attributes agree with the viewBox when present.
-
-## Performance Bottlenecks
-
-**Tier-3 Gecko build (~47–54 min, 13 GB objdir):**
-- Problem: A full `./mach build` takes 2830s wall on the reference host (`docs/BUILD.md` timings, tree/host/toolchain named). `objdir/` is 13 GB, `upstream/` 5.6 GB. This cost shapes everything: release-objdir checks unrun, launch checks unexercised, re-verification deferred to phase gates.
-- Files: `objdir/` (gitignored), `docs/BUILD.md` (tiered loop: tier 1 `./mach run`, tier 2 `build faster` ~1.84s warm, tier 3 full)
-- Cause: Gecko.
-- Improvement path: None available — the tiered loop in `docs/BUILD.md` is the mitigation. Keep `--quick` (~10s, no build/browser/display/network) as the commit gate; schedule exactly one tier-3 build per phase per the validation strategy.
-
-**Residual-brand backstop scan (55s over 463,930 files):**
-- Problem: The `--extra-root` backstop walk over the live 5.6 GB `upstream/` takes ~55s. It runs in `rebase-upstream.sh` post-replay and CI, not in `--quick`, but a developer running it casually pays nearly a minute.
-- Files: `scripts/scan-brand-residue.mjs`, `scripts/rebase-upstream.sh`
-- Cause: Full-tree walk outside the git index by design (that is what makes it independent).
-- Improvement path: None — speed would come from narrowing scope, which is exactly what the check must not do. Keep it out of `--quick`.
-
-**Inkscape raster determinism pinned to one host version:**
-- Problem: The byte-identity gate compares emitted PNGs against Phase 1 rasters produced by inkscape 1.4.4 on this host. A different inkscape version (or different freetype/harfbuzz underneath) can emit different bytes for the same SVG, turning the gate red on every machine but this one.
-- Files: `scripts/generate.mjs` (`rasterizeIcons` via `spawnSync('inkscape', ...)`), `powerbrowser/branding/*/default*.png` (comparands)
-- Cause: Raster output is toolchain-version-sensitive; the acceptance test is byte equality.
-- Improvement path: If a second host goes red, record the version matrix in `docs/BUILD.md` and either pin inkscape in `flake.nix` (`#firefox` shell) or relax the gate to IHDR-exact + perceptual hash for PNGs while keeping byte-identity for text. Do not silently re-baseline the comparands.
-
-## Fragile Areas
-
-**TheiaService.sys.mjs supervisor (1349 lines, five defect waves):**
-- Files: `powerbrowser/shell/TheiaService.sys.mjs`, `powerbrowser/shell/powerbrowser.js`, `powerbrowser/shell/PowerBrowserAPI.sys.mjs`
-- Why fragile: The launch/supervision path has shipped five consecutive defect classes (state-keying conflation, missing terminal handler, Retry-erases-error-layer, unconditional recovery probe, user-driven unrecoverable re-entry — WINDOWS.md 18/20/21), each found by verification or review rather than by a registered check, each green through full suites. The file concentrates one-time init, port pinning, health loops, recovery probes, error painting, retry gating, and quit observation in one object with cross-cutting `_swapped`/`_errorShown`/`_errorRecoverable` flags.
-- Safe modification: Touch one route per plan; extend `scripts/verify-shell-error-contract.mjs` scenarios (in-process harness driving the shipped files) and `scripts/verify-start-path-recovery.mjs` derived rules in the same commit; observe red-before-green per the project's planted-fault discipline.
-- Test coverage: Strongest in the repo for what it covers — but the residual gap is structural: **no registered check drives a rejection out of either long-lived supervisor loop** (`_healthLoop`, `_recoveryProbeLoop`), so terminal-handler coverage for those two roots rests on the source-derived rule, not a runtime red (WINDOWS.md 18 residual).
-
-**Overlay-symlink + moz.build depth pin:**
-- Files: `powerbrowser/branding-generated` (setup-created, gitignored), `scripts/fetch-upstream.sh` (`ensure_branding_overlay`), `.mozconfig` (line 15 `--with-branding` spelling), `scripts/generate.mjs` (depth-3 documentation)
-- Why fragile: The `--with-branding` VALUE must sit exactly 3 levels under topsrcdir because the branding `moz.build` does a `../../../` include — proven twice by red configures in-session (direct `../generated` path rejected by the sandbox; one-level-deeper link escapes topsrcdir). A tracked symlink variant was tried and reverted because the residue scan reads it as EISDIR and fails.
-- Safe modification: Never commit the symlink; never move the branding dir depth; `ensure_branding_overlay` is idempotent and proven — re-run it rather than hand-creating links. If the link is missing, `configure` fails, not the build — the failure is loud, which is the good news.
-- Test coverage: Real `mach configure` exit-0 + `MOZ_BRANDING_DIRECTORY` grep for both variants (03-01 proof); no registry row runs configure (too heavy for `--quick` by design).
-
-**Byte-identity EXPECTED lists are hand-kept in two files:**
-- Files: `scripts/generate.mjs` (frozen `TARGETS`), `scripts/verify-generated-identity.mjs` (`EXPECTED` + provenance comments)
-- Why fragile: Adding TARGETS rows without extending EXPECTED goes red as surplus (03-01 deviation 1 — the plan's own "no further wiring" note was wrong). The set-equality comparison in both directions is what saves this from silent drift, but every emitter plan must remember the two-file dance.
-- Safe modification: Follow the 03-01 precedent — new rows carry `NEW (xx-yy)` provenance, count prose updated in both scripts, gate run before commit.
-- Test coverage: `generated-byte-identity` + `generate-self-test` (17 planted faults with the uncommitted icon cases) both in `--quick`.
-
-**Residue scan vs symlinks (EISDIR):**
-- Files: `scripts/scan-brand-residue.mjs`, `inventory/brand-tokens.json`
-- Why fragile: The scan follows `git ls-files`; a tracked symlink into gitignored `generated/` fails the gate as EISDIR. Today's answer (setup-created links, gitignored) works but relies on every future contributor knowing not to `git add` the overlay. The `--extra-root` mode additionally skips symlinks structurally (else `upstream/powerbrowser` → repo root rescans the tree through a second path).
-- Safe modification: Keep both symlinks gitignored (`/generated/`, `/powerbrowser/branding-generated` in `.gitignore`); if the scan ever reports EISDIR, the fix is untracking the link, not touching the scanner.
-- Test coverage: `--self-test` hermetic rows (clean/planted/missing-root) plus chmod-000 unreadable-file row (fails loudly as root by design).
-
-**About-dialog suppression selectors:**
-- Files: `powerbrowser/branding/{dev,release}/content/aboutDialog.css`, `scripts/verify-about-dialog-suppression.mjs`
-- Why fragile: Suppression is CSS `display:none` over upstream markup the project does not own — an ESR rebase that renames an element id or adds a fourth outbound link silently restores vendor content or breaks the build respectively. The 01-18→01-21 arc (bare container killed the internal `about:license` disclosure; union-vs-per-variant coverage hole) shows how many ways this breaks.
-- Safe modification: The checker derives selectors from shipped stylesheets and the element tree from upstream markup at check time, per-variant, with `DISCLOSURE_HREF` as the must-survive control — extend it, don't bypass it. `rebase-upstream.sh` runs the scan post-replay; watch its output on every uptake.
-- Test coverage: Four planted faults (deletion, narrowing, disclosure-reach, empty-match) proven red; `rebase-upstream.sh` + CI wired.
-
-## Scaling Limits
-
-**Disk and host assumptions:**
-- Current capacity: Working tree needs ~20 GB (`upstream/` 5.6 GB + `objdir/` 13 GB + Theia `node_modules`) on a path with no space character (Nix `NIX_LDFLAGS` splits on spaces — `/home/chris/coding/Power-Browser` is compliant).
-- Limit: A second `objdir-release/` doubles the build dir; fresh-clone onboarding requires `fetch-upstream.sh` (multi-GB fetch) + `yarn install` + a 47+ min build before any launch check runs.
-- Scaling path: No change planned; `docs/BUILD.md` documents the tiers. CI cannot reasonably run tier-3 per commit.
-
-**Node version skew:**
-- Current capacity: Flake pins `nodejs_22` for both shells; host `node` here reports v24.19.0. `scripts/generate.mjs` and all verifiers run on the host node today.
-- Limit: A Node-version-sensitive behavior (e.g. `node:util` parse, TOML vendored parser `scripts/lib/toml.cjs`) could pass here and fail in the shell or vice versa.
-- Scaling path: Run `verify-platform.sh --quick` inside `nix develop .#theia` before milestone close to confirm no skew; consider a node-version assertion row if skew ever bites.
-
-## Dependencies at Risk
-
-**Theia 1.74.1 (49 `@theia/*` packages + 4 `@powerbrowser/*` extensions):**
-- Risk: Theia core is consumed as npm deps, never forked — but Phase 4 adds manifest-declared Open VSX downloads (`theia download:plugins` semantics unexercised; hash-verifiable pins unknown per ROADMAP research note). Each bundled extension is new backend/frontend surface against the SEC-01 boundary (see token-gate note above).
-- Impact: A malicious or compromised Open VSX entry bundled at build time runs inside the sidecar with backend access.
-- Migration plan: Phase 4 must define pin semantics (hash-verified, fail-loud on unpinned/unreachable) before any non-trivial extension list; re-audit backend modules per entry (`vhost`/filesystem-style surfaces are reject-signals per the D-22 precedent).
-
-**Gecko ESR 153 (5.6 GB `upstream/`, never hand-edited):**
-- Risk: Every rebase replays the patch stack and re-derives suppression/allowlist expectations from upstream markup. `git -C upstream diff` staying empty is the invariant; `scripts/rebase-upstream.sh` + `apply-patches.sh --self-test` (blob-pruned pristine check against vacuous pass) is the machinery.
-- Impact: An ESR point release that restructures `browser/` markup or `moz.configure` can break patches, suppression selectors, and the `--with-branding` depth pin simultaneously (UPD-01 is the acceptance test).
-- Migration plan: Phase 5 (hook-only patches, one-pin uptake). Until then, never adopt an ESR bump without the full rebase tooling run.
-
-**Vendored TOML parser (`scripts/lib/toml.cjs`, smol-toml 1.8.0, single file):**
-- Risk: Vendored to keep `--quick` dependency-free (npm pin would require `npm ci` before the gate runs). A TOML spec edge (multiline strings, dotted keys, array-of-tables) the vendored parser mishandles becomes a config-parsing divergence with no upstream update path except re-vendoring.
-- Impact: Low today — `scripts/verify-vendored-parser.mjs` gates it; the manifest schema stays within basic tables/strings/arrays by convention.
-- Migration plan: Re-vendor on any TOML feature need; never hand-patch the vendored file without updating `scripts/lib/toml.LICENSE` provenance.
-
-## Missing Critical Features
-
-**Phase 3 remainder (GEN-02 second half, GEN-03, GEN-01 close):**
-- Problem: PNG rasters are emitted only in the uncommitted tree; `scripts/verify-icon-ihdr.mjs` (100-line plan artifact) does not exist; ICO/ICNS writers are unwritten; Windows NSIS/MSIX + macOS DMG/icns emitters are 03-03 scope; `generated/identity.configure` + patch-010 regen + tier-3 artifact proof are 03-04 scope. GEN-01/02/03 all read Pending in REQUIREMENTS.md.
-- Blocks: Linux build-verified branding (criterion 1–2), single-edit propagation proof (criterion 4), and everything downstream of `generated/` layout stability (Phase 5 hook-only patches).
-
-**Phase 4 Theia surface (GEN-05, EXT-01, TEL-01..03):**
-- Problem: No Theia-side branding from manifest keys (rebrand still needs TS recompile for welcome/about strings), no declared-extension pipeline, no telemetry sender — and Theia ships no destination, so Power Browser implements the only one.
-- Blocks: The "no TypeScript recompile for a rebrand" criterion and the entire downstream-extension story. Highest-unknown phase per research (Open VSX pin semantics).
-
-**Phase 5–7 (MIG-05, CFG-06, UPD-01/02, VER-01..03, DOC-01/02, CFG-05):**
-- Problem: `docs/REBRANDING.md` does not exist (`docs/` holds `BUILD.md`, `CUSTOMIZE.md`, `URI-SCHEMES.md` only); `PB_CONFIG_DIR` is a comment in `scripts/generate.mjs:170`, not code; adversarial fixtures ("Zebra" excursion) unbuilt; Sourcerer-as-downstream unattempted; trademark findings still low-confidence web sources needing primary-policy re-verification with named human review of `brand/` (Phase 6 research note).
-- Blocks: Milestone acceptance — the stranger-rebrand core value is unproven end to end until Phase 7.
-
-## Test Coverage Gaps
-
-**No Tier-3 proof since the branding-dir switch:**
-- What's not tested: Everything that reads the built artifact after 03-01 changed what `--with-branding` points at. `smoke-firefox`, `verify-branding-identity.mjs` (six surfaces + positive control), and all launch-lifecycle checks predate the overlay wiring.
-- Files: `scripts/smoke-firefox.sh`, `scripts/verify-branding-identity.mjs`, `scripts/verify-platform.sh`
-- Risk: The tree is green on static gates and red-or-unrun on every runtime gate — exactly the posture 01-04's build closed last time. A wiring defect that only manifests in a packaged build (missing `FINAL_TARGET_FILES`, jar.mn packaging slip) is invisible until the tier-3 run.
-- Priority: High — one full build + artifact verification closes it; owned by 03-04.
-
-**Windows/macOS installer outputs unverifiable in v1:**
-- What's not tested: NSIS/MSIX/plist/tile emitters get schema-completeness checks only; no packaging host exists (deferred to v2 PKG-01).
-- Files: (03-03 scope — emitters unwritten)
-- Risk: Schema-complete ≠ installable; a malformed installer field ships silently until a Windows/macOS host exists.
-- Priority: Medium — sink-guard self-tests plus hostile fixtures are the v1 backstop; record the build-verification deferral explicitly in 03-03's summary as was done for the release objdir.
-
-**Display-surface scan boundary:**
-- What's not tested: `verify-branding-preflight.mjs` derives display surfaces by walking `theia/extensions/branding/src/browser/` — a surface authored outside that directory and outside inventory-declared variant files is invisible to the scan and rests on code review (01-08 residual, WINDOWS.md 17 reason).
-- Files: `scripts/verify-branding-preflight.mjs`, `theia/extensions/branding/src/browser/`
-- Risk: A new Theia extension rendering the product name in identifier form passes all gates.
-- Priority: Medium — Phase 4 (which adds Theia-surface emitters and possibly new brand-rendering files) must extend the walk or the inventory, not rely on reviewers remembering.
-
-**No framework test runner (deliberate):**
-- What's not tested: There is no jest/vitest/mocha anywhere — per-script `--self-test` fault planting registered as `verify-platform.sh` rows is the entire automated strategy, by design (CLAUDE.md one-driver rule, 03-VALIDATION.md).
-- Files: `scripts/verify-platform.sh` (registry), each `scripts/verify-*.mjs` (`--self-test`)
-- Risk: Cross-script interaction bugs (e.g. TARGETS↔EXPECTED↔inventory triple drift) are caught only where a set-equality comparison was explicitly written; uncovered interactions stay uncovered without a coverage tool to say so.
-- Priority: Low — the planted-fault discipline (every row proven red before green) is a stronger guarantee than a runner would add; just keep enforcing it for every new row.
+- **[CATALOGUED]** — already recorded with an owner or plan in `.planning/WINDOWS.md`,
+  `.planning/GUI-DEFECTS.md`, or a phase VERIFICATION report. Reflected, not rediscovered.
+- **[NEW]** — found in this pass and not recorded anywhere. These are the entries that earn
+  their place in this document.
 
 ---
 
-*Concerns audit: 2026-09-04*
+## Tech Debt
+
+### [NEW] The verification suite is 2.8× the size of the product it verifies
+
+- Files: `scripts/` (48,273 lines across 74 files, 60 of them `verify-*`), versus
+  `powerbrowser/` (6,086) plus `theia/extensions/**/src` (11,009) = 17,095 lines of product.
+- The two largest files in the repo are gates, not product: `scripts/verify-platform.sh`
+  (5,053 lines) and `scripts/generate.mjs` (5,882). `scripts/verify-branding-preflight.mjs`
+  (1,782) and `scripts/verify-web-tab-live.mjs` (1,700) each exceed the largest product file
+  (`powerbrowser/shell/PowerBrowserAPI.sys.mjs`, 2,592).
+- Impact: every product change carries a proportionally larger gate-maintenance cost, and each
+  new gate is itself unverified code that can only be trusted through its own `--self-test`.
+  The project's own rules make this partly deliberate (derive-and-compare gates are longer than
+  hand-kept lists), so the concern is the *trend*, not the existence.
+- Fix approach: before adding a check, ask whether an existing registry row can be extended.
+  `scripts/verify-platform.sh` is one file and one registry by design (CLAUDE.md
+  `## Verification`); the growth pressure now falls on the per-check `.mjs` files, where shared
+  derivation helpers belong in `scripts/lib/` rather than being re-authored per gate.
+
+### [NEW] `TabQueryService` swallows every error into an empty result
+
+- File: `theia/extensions/tab-uris/src/node/tab-query-service.ts` — five bare `catch` blocks
+  (lines 114, 140, 147, 162, 189, 216, 235) each return `null`, `undefined`, or `[]` with no
+  log line.
+- Impact: this swallow is the *mechanism* behind three separately-catalogued defects
+  (GUI-DEFECTS items 9, 18, 19 — env scrubbing, `SQLITE_BUSY`, and an unresolvable
+  `better-sqlite3` binding). Each of those three causes was fixed; the swallow that hid all
+  three for months is unchanged, so a fourth cause produces the identical silent `[]` and
+  Panorama looks merely empty rather than broken.
+- Fix approach: log the caught error once per distinct cause on the backend's existing stderr
+  channel, or return a discriminated `{ rows } | { error }` so the frontend can render a real
+  failure state. Do not add a gate first — the observability is the fix.
+
+### [NEW] `better-sqlite3` is an esbuild external with no packaging gate
+
+- Files: `theia/applications/browser/esbuild.mjs:28`,
+  `theia/extensions/tab-uris/src/node/tab-query-service.ts:25`.
+- Marking the module external (the fix for GUI-DEFECTS item 19) means the bundle resolves the
+  native binding at runtime from `node_modules`. Nothing in `scripts/` references
+  `better_sqlite3.node` or asserts the binding ships — `scripts/verify-installer-build-proof.mjs`
+  does not cover it.
+- Impact: an installer or packaging step that omits the native module reintroduces the exact
+  silent-`[]` failure item 19 closed, and the swallow above guarantees it fails quietly.
+- Fix approach: one assertion in the installer proof that the native binding exists inside the
+  packaged tree.
+
+### [NEW] Two of the three ESLint-invisible workarounds are documented only in prose
+
+- `-purgecaches` after editing `powerbrowser/shell/*.js`: zero occurrences anywhere in
+  `scripts/` or `docs/`. It exists only in CLAUDE.md and in session memory, where it has
+  already invalidated one live test.
+- `git ls-files` blindness in `scripts/scan-brand-residue.mjs:329` — an unstaged new file is
+  invisible to the brand-residue gate. Documented in the script's own header (line 92) and in
+  CLAUDE.md; not enforced.
+- Impact: both are single-step traps that produce a *green* result on a broken tree, which is
+  the worst failure shape this project has.
+- Fix approach (cheap, and in that order): have `scripts/smoke-firefox.sh` / the launch path
+  pass `-purgecaches` unconditionally in dev; have `scan-brand-residue.mjs` warn when
+  `git status --porcelain` reports untracked non-ignored files, naming them.
+
+## Known Bugs
+
+### [CATALOGUED] GUI defects still open on Chris's screen
+
+`.planning/GUI-DEFECTS.md` is the live register; it is maintained one item at a time and each
+item closes only on Chris's confirmation. Still `OPEN` there:
+
+- Item 2 — tabs do not move between modes (Variant B; Phase 13 spike proved the mechanics, the
+  blocking instrument `scripts/diff-theia-core.sh` now passes, so the re-probe can reopen).
+- Item 4 — Organising / Panorama near-empty; both blockers cleared and real rows now flow, open
+  pending confirmation in the real window.
+- Item 13 — no gate for the group channel: `wantUntrusted` (`powerbrowser/shell/PowerBrowserAPI.sys.mjs`)
+  can silently regress with every other assertion green.
+- Item 16 — nothing committed.
+
+Items 5–7, 9, 17–20 are `IN TREE`: code landed, not yet seen working.
+
+### [NEW] `.planning/GUI-DEFECTS.md` item 11 is stale — the defect it describes is fixed
+
+- Item 11 ("Clean build breaks — `build:extensions` is a hand-ordered `&&` chain") is recorded
+  `OPEN`, but `scripts/verify-theia-build-order.mjs` landed in 14.1.1-08 and derives the chain,
+  the extension set, and the import edges from the tree, asserting all four properties. The
+  chain in `theia/package.json:69` now orders `token-gate` ahead of `tab-uris`.
+- Impact: a register that carries a false `OPEN` is read as noise, which is how the next real
+  `OPEN` gets skipped.
+- Fix approach: mark item 11 `CONFIRMED FIXED` with the reproducer
+  (`scripts/verify-platform.sh --only theia-build-order`), in the same form items 12, 14, 15,
+  23–25 already use.
+
+### [CATALOGUED] Two open broken-windows ledger entries
+
+`.planning/WINDOWS.md` (`open_count: 2`):
+
+- Item 11 — ~20 launch-lifecycle checks (`side03-*`, `side04-*`, `side05-*`, `shell03-*`,
+  `cr01-*`, `harness-display-available`) became runnable with 01-04's build but have never been
+  run. Not blocked — unexercised.
+- Item 19 — `shell03-budget-exhausted-error` and `shell03-auto-dismiss-on-selfheal` not re-run
+  against a repackaged binary after 01-11 changed the error layer's visible behaviour.
+
+`scripts/verify-platform.sh --gate` reads this ledger's own JSON block
+(`ledger_entry_status()`, line 4911) and applies the exclusions keyed on entries that are still
+`open`, so closing an entry automatically tightens the gate.
+
+## Security Considerations
+
+### [CATALOGUED] Token gate is the trust root, and its dev bypass is a named env var
+
+- File: `theia/extensions/token-gate/src/node/token-gate-backend-contribution.ts`.
+- The gate replaces Theia's stock `BrowserConnectionTokenBackendContribution`, which never
+  rejects a plain GET of the index document (comment at line 9). Unconfigured token is
+  fail-closed. On a supervised launch the token arrives over stdin
+  (`theia/extensions/token-gate/src/node/powerbrowser-env.ts:122`) so it never appears in
+  `/proc/<pid>/environ`.
+- `POWERBROWSER_TOKEN_DISABLE=1` disables the gate entirely and the backend is reachable
+  without a token. It is set by `scripts/smoke-theia.sh:99` and `scripts/verify-platform.sh:217`
+  only; `powerbrowser/shell/TheiaService.sys.mjs:644` explicitly blanks it on the supervised
+  path, and the gate writes a loud stderr warning when it fires.
+- Residual, **[NEW]**: the bypass is also the documented live-debug loop (session memory, "Live
+  GUI debug loop"). A developer who leaves a `POWERBROWSER_TOKEN_DISABLE=1` sidecar running on
+  :4000 has an unauthenticated Node process with extension-host file and terminal access bound
+  to a local port. Mitigation is the stderr warning only; no timeout, no loopback-only bind
+  assertion.
+
+### [CATALOGUED] Sidecar lifetime versus quit observer
+
+Ledger item 20 (2e) documented a launch that could reach a live backend with no registered quit
+observer, leaving a Node process with the extension host's file and terminal surface outliving
+the browser while still holding its token. Fixed in 01-12 by registering
+`PowerBrowserAPI.onQuitGranted` ahead of the settings-folder try/catch and retaining the
+unregister function. Residual recorded there: nothing proves Gecko's
+`quit-application-granted` topic actually fires the retained observer in a real quit — that rests
+on the human record, because chrome-context Marionette is platform-blocked on Linux.
+
+### [NEW] One internals boundary, one file, 2,592 lines
+
+`powerbrowser/shell/PowerBrowserAPI.sys.mjs` is the sole anti-corruption layer and is enforced
+as such by `scripts/check-internals-boundary.sh`. The rule is right; the consequence is that a
+single file concentrates every privileged Firefox touchpoint, including the `wantUntrusted`
+message surface that GUI-DEFECTS item 13 says has no gate. A regression there is privileged
+by construction.
+
+## Performance Bottlenecks
+
+### [CATALOGUED] Full Gecko build is 47–54 minutes
+
+`docs/BUILD.md` records the tier-3 cost on the reference host; `--quick` runs in seconds and is
+the commit gate. This is why the static gates exist and is not itself a defect.
+
+### [NEW] 44 GB of build output on disk
+
+`objdir/` (13G), `objdir-release/` (13G), `objdir-nplus1/` (13G), `upstream/` (5.6G) — all
+gitignored, none reclaimed. Impact is local disk only, but `objdir-nplus1` is a rebase-proof
+artifact that is not needed between rebases.
+
+## Fragile Areas
+
+Each of these has bitten this project for real. All four are stated in CLAUDE.md; the
+*enforcement* status is what varies.
+
+| Area | Files | Why fragile | Enforced by |
+|---|---|---|---|
+| Patch stack | `patches/010-powerbrowser-identity.patch`, `patches/020-powerbrowser-shell.patch` | A hand-edited hunk body without recomputed blob hashes degrades the three-way merge into a **silent no-op** — the patch appears to apply and changes nothing. Regenerate from a patched tree; never text-edit. | `scripts/check-patch-surface.sh`, `scripts/apply-patches.sh --self-test` |
+| Brand-residue scan | `scripts/scan-brand-residue.mjs:329`, `inventory/brand-tokens.json` | Iterates `git ls-files`; an unstaged new file is invisible. `inventory/brand-tokens.json` is the only file allowed to name the originating product. | Nothing enforces the staging precondition — **[NEW]**, see Tech Debt |
+| Chrome JS startup cache | `powerbrowser/shell/*.js` | Edits are silently served from cache without `-purgecaches`; already invalidated one live test. | Nothing — **[NEW]**, see Tech Debt |
+| Repo path | Repo root | `pkgs.mkShell` appends an rpath to space-separated `NIX_LDFLAGS`; a space in the path breaks every native link step, in Gecko and in Theia's node-gyp modules alike. `/home/chris/coding/Power-Browser` is compliant. | Nothing automated; documented only |
+
+### [NEW] The uncommitted working tree spans shipped code
+
+`git status --porcelain` reports 25 paths, including `powerbrowser/shell/jar.mn`,
+`theia/extensions/modes/src/browser/mode-service.ts`,
+`theia/extensions/modes/src/browser/main-area-exemption.ts` (added, staged),
+`theia/extensions/tab-uris/src/node/tab-query-service.ts`, and
+`scripts/verify-mode-switch-tabs-live.mjs` (added). GUI-DEFECTS item 16 records "nothing
+committed" as a repo problem; what is not recorded is that a **concurrent session may also be
+committing to `main`** (session memory), so `git add -A` here can sweep another session's work.
+Commit with explicit paths, and re-read `.planning/STATE.md` first.
+
+## Scaling Limits
+
+### [NEW] `scripts/verify-platform.sh` at 5,053 lines is a single-file registry
+
+The one-driver rule is load-bearing (the sibling drivers `verify-phase-0{2,3,4,5}.sh` were
+deleted to create it and must not return). At current growth the file is approaching the size
+where a merge between two concurrent sessions on `main` becomes a conflict every time, since
+every new check appends a row to the same file.
+
+Mitigation that preserves the rule: keep the per-check logic in its own `scripts/verify-*.mjs`
+and keep the registry row to a single line, so the shared-file diff is one line per check.
+
+## Dependencies at Risk
+
+### [NEW] Every `@theia/*` package is pinned to 1.74.1 through `resolutions`
+
+- File: `theia/package.json` — a large explicit `resolutions` block pinning ~40 `@theia/*`
+  packages plus `@theia/monaco-editor-core` at `1.108.201`.
+- This is correct given hard rule 1 (adopt upstream Theia by re-pinning a version, never by
+  editing it), but the pin is hand-maintained across ~40 entries: an upgrade is a 40-line edit
+  where one missed entry produces a mixed-version tree.
+- `scripts/verify-extension-pins.mjs` and `scripts/verify-upstream-pins.mjs` exist and should be
+  checked as the first step of any Theia version bump.
+
+## Missing Critical Features
+
+### [CATALOGUED] Group channel has no gate
+
+GUI-DEFECTS item 13. `wantUntrusted` can silently regress while every other assertion stays
+green — the same shape as the five-defect channel outage in item 10, which "had never once
+worked" and was invisible to every check in the registry.
+
+## Test Coverage Gaps
+
+### [CATALOGUED] The launch-lifecycle checks have never been run
+
+Ledger item 11: ~20 checks that launch a real browser. Not blocked — unexercised.
+
+### [CATALOGUED] Chrome-context Marionette is platform-blocked on Linux
+
+Ledger item 7. Consequence, restated across ledger items 15, 16, 18, 20, 21: no registered check
+can ever cover a pixel or a chrome-context interaction. Those rest permanently on the human
+record via UAT documents such as
+`.planning/phases/01-platform-extraction-and-rename/01-UAT.md`.
+
+### [NEW] The supervisor's error contract is proven under Node, not under Gecko
+
+`scripts/verify-shell-error-contract.mjs` imports `powerbrowser/shell/TheiaService.sys.mjs` with
+`ChromeUtils` faked and runs the chrome bootstrap through `node:vm`. This proves the
+classification-to-probe wiring, the spawn counts, and the sentinel ordering. It does not prove
+that Gecko's `quit-application-granted` fires the retained observer, and it does not prove the
+pixels of a repainted error layer. Recorded as a residual inside ledger items 20 and 21 but not
+tracked anywhere as an open coverage gap in its own right.
+
+### [NEW] No registered check drives a rejection out of the two long-lived supervisor loops
+
+`_healthLoop` and `_recoveryProbeLoop` in `powerbrowser/shell/TheiaService.sys.mjs`: their
+terminal handlers rest on the source-derived coverage rule in
+`scripts/verify-start-path-recovery.mjs`, not on an observed runtime red. Doing better would need
+a fault injected into a mid-session code path with no external control surface. Priority: low —
+the static derivation is genuinely two-directional — but it is the one place in the supervisor
+where a fix could be wrong and still green.
+
+---
+
+*Concerns audit: 2026-09-07*
