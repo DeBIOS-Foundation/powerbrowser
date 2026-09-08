@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 14.1.1
 current_phase_name: GUI Conformance Sweep (INSERTED)
 status: executing
-stopped_at: Completed 14.1.1-10-PLAN.md
-last_updated: "2026-09-08T05:18:14.018Z"
-last_activity: 2026-09-07
+stopped_at: Completed 14.1.1-11-PLAN.md
+last_updated: "2026-09-08T09:09:51.899Z"
+last_activity: 2026-09-08
 last_activity_desc: Phase 14.1.1 execution started
-state_head: 8509dc735537655cef921494cf76d746127b548c
+state_head: fc6acf709987c025aecee443b25031c061814699
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 16
-  completed_plans: 16
+  total_plans: 22
+  completed_plans: 17
 milestone_name: Browser GUI
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 
 ## Current Position
 
-Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — ALL PLANS EXECUTED
-Plan: 10 of 10
-Status: Phase complete on disk (10 PLANs, 10 SUMMARYs). Next: GUI-SWEEP Step 3 — Chris walks 14.1.1-UAT.md. Counter was stale at 5 when 14.1.1-10 ran; corrected to disk here.
-Last activity: 2026-09-07 — Phase 14.1.1 execution started
+Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — EXECUTING
+Plan: 2 of 16
+Status: Ready to execute
+Last activity: 2026-09-08 — Phase 14.1.1 execution started
 
 ## Performance Metrics
 
@@ -125,6 +125,7 @@ Last activity: 2026-09-07 — Phase 14.1.1 execution started
 | Phase 14.1.1 P09 | 11 min | 3 tasks | 5 files |
 | Phase 14.1.1 P07 | 24 min | 2 tasks | 2 files |
 | Phase 14.1.1 P10 | 20 min | 3 tasks | 4 files |
+| Phase 14.1.1 P11 | 12 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -325,6 +326,10 @@ Recent decisions affecting current work:
 - [Phase 14.1.1]: 14.1.1-10: every closed gap carries a closed_by: line naming the plan and short sha confirmed against git log; gap 46 names its closing plan and task with NO sha, because a commit cannot cite its own hash
 - [Phase 14.1.1]: 14.1.1-10: the register check asserts the invariants around the fixed set (pointer present, needs-chris never fixed, Summary numbers match contents), deliberately NOT its membership
 - [Phase 14.1.1]: 14.1.1-10: GUI-DEFECTS items closed on a reproducible check read CONFIRMED FIXED and state what that reproducer does NOT assert; CONFIRMED stays reserved for Chris's own window
+- [Phase 14.1.1]: 14.1.1-11: the setLostView call-site regex excludes the declaration by the member-call dot and admits one nesting level; the planned lazy-to-semicolon pattern captured the arrow function's closing paren at the attach site
+- [Phase 14.1.1]: 14.1.1-11: task 2's grep-count criterion (>=3 REFUSED_SCHEME_OUTCOME hits) logged as unsatisfiable rather than met by padding a comment; declaration and export are one line in the mandated shape
+- [Phase 14.1.1]: 14.1.1-11: test 48's evidence line in 14.1.1-UAT.md corrected alongside the gap record; same gap, same false claim, same commit
+- [Phase 14.1.1]: 14.1.1-11: a navigate whose scheme chrome refuses now marks the view lost (lost-view copy with Reload); accepted consequence of folding refused-scheme into lostReply()
 
 ### Pending Todos
 
@@ -422,8 +427,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-08T07:35:00.000Z
-Stopped at: Planned Phase 14.1.1 pass 3 — six gap-closure plans (14.1.1-11 .. -16) written and plan-checker verified
+Last session: 2026-09-08T09:09:20.055Z
+Stopped at: Completed 14.1.1-11-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

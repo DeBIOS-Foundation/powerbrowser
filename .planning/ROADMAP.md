@@ -136,7 +136,7 @@ Plans:
 **Goal:** Every `fixable: yes` gap in `14.1.1-UAT.md` is closed, each proved by a check that goes red without its fix; `needs-chris` and `decision` gaps gain evidence only and are never marked fixed by an executor
 **Requirements**: none mapped — this phase closes GUI conformance gaps, not requirement IDs
 **Depends on:** Phase 14.1
-**Plans:** 16 plans — pass 1 (01–05) executed; pass 2 (06–10) executed; pass 3 (11–16) planned
+**Plans:** 11/16 plans executed — pass 1 (01–05) executed; pass 2 (06–10) executed; pass 3 (11–16) planned
 **Protocol:** `.planning/GUI-SWEEP.md` (Step 2 — automated fix pass)
 
 Pass 1 planned the eleven in-scope `fixable: yes` gaps (G-14.1.1-4, 5, 6, 7, 19, 20, 21, 22, 24,
@@ -194,7 +194,7 @@ needs a quiet tree; and the `verify-web-tab-live.mjs` plant reds, which need a d
 
 **Wave 1** *(tracer, alone — the thinnest path through source, gate, registry and record)*
 
-- [ ] 14.1.1-11-PLAN.md — G-48 end to end: the attach-time reply routed through `lostReply()`, `refused-scheme` folded in, two derived assertions and two plants inside `gui02-web-tab-bridge`, and the record re-closed on the commits that earn it
+- [x] 14.1.1-11-PLAN.md — G-48 end to end: the attach-time reply routed through `lostReply()`, `refused-scheme` folded in, two derived assertions and two plants inside `gui02-web-tab-bridge`, and the record re-closed on the commits that earn it
 
 **Wave 2** *(blocked on 11)*
 
