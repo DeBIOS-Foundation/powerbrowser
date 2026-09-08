@@ -22,6 +22,12 @@ recorded so it surfaces in `audit-open`, `audit-uat` and `complete-milestone`.
   quiet tree, then confirm `scripts/verify-platform.sh --quick` ends
   `verify-platform: PASS -- all checks passed`. Not done here because a concurrent session
   is serving a running sidecar out of `theia/**/lib` and `theia/node_modules`.
+  **Still open at 14.1.1-06 (2026-09-08), with the symptom shifted:** the run now ends red on
+  `ai-opencode-presets` ALONE — `ai-opencode-tracer` passes — and the integrity stage inside
+  `nix develop .#theia` now reads `Top level patterns don't match` rather than `Flags don't
+  match`. Same check, same next step. 14.1.1-06 changed one standalone script that
+  `diff-theia-core.sh` never reads, so it is not the cause, and the plan forbids every build
+  step `yarn install` would be.
 
 - The literal clean-checkout `yarn build:extensions` was not run
   status: open
