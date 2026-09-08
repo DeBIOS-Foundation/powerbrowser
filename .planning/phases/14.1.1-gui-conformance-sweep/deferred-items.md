@@ -55,3 +55,7 @@ recorded so it surfaces in `audit-open`, `audit-uat` and `complete-milestone`.
   this plan does not own. Ledger population is best-effort and never blocks execution.
   **Next step:** reconcile row 10 in the fenced JSON block, then re-append the two items
   above with `--kind unrun-verify --phase 14.1.1`.
+
+- Markdownlint MD060 table-column-style warnings on `.planning/GUI-DEFECTS.md` separator rows (lines 20, 29, 46)
+  status: open
+  **What:** pre-existing `|---|---|` separator rows lack the compact-style spacing; cosmetic, not introduced by 14.1.1-13, whose item 11 edit sits at line 47.
