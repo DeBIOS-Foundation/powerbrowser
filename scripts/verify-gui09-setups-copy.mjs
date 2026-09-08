@@ -217,14 +217,15 @@ function derivedServiceCopy(rawSrc, opts = {}) {
         }
     }
 
-    // Paint site 3: the Delete Setup confirmation's own fields.
-    const dialogAt = src.indexOf('new ConfirmDialog({');
-    if (dialogAt >= 0) {
-        const dialog = src.slice(dialogAt, dialogAt + 600);
-        for (const m of dialog.matchAll(/\b(?:title|ok|cancel)\s*:\s*'((?:[^'\\]|\\.)*)'/g)) {
+    // Paint site 3: every ConfirmDialog's own title/msg/ok/cancel fields,
+    // one dialog at a time over that dialog's matched object literal
+    // (14.1.1-12, gap 2). A second dialog is read exactly like the first;
+    // the positional `indexOf` plus fixed slice this replaces read only one.
+    for (const dialog of confirmDialogs(src)) {
+        for (const m of dialog.body.matchAll(/\b(?:title|ok|cancel)\s*:\s*'((?:[^'\\]|\\.)*)'/g)) {
             copy.push(unescapeLiteral(m[1]));
         }
-        const msg = dialog.match(/\bmsg\s*:\s*(\w+)\(/);
+        const msg = dialog.body.match(/\bmsg\s*:\s*(\w+)\(/);
         if (msg) {
             if (templates.has(msg[1])) {
                 copy.push(templates.get(msg[1]));
@@ -303,10 +304,59 @@ function internalsOf(value) {
     return hits;
 }
 
-/** Class names handed to a dialog through the public Widget addClass API. */
+/**
+ * Every `new ConfirmDialog({ ... })` construction in the comment-stripped
+ * source, in source order, as `{ binding, body }`: `binding` is the simple
+ * `const`/`let`/`var` name the construction is assigned to (undefined when
+ * it is not assigned to one), `body` is the object literal from its opening
+ * `{` to the matching `}`.
+ *
+ * This is a BRACE COUNTER, not a parser. A `{` or `}` inside a string
+ * literal would confuse it; template interpolations are balanced, so they
+ * do not; the service today contains neither case. That limit is stated
+ * here beside the code in place of the fixed 600-character slice it
+ * replaces, which silently truncated a long dialog and read unrelated code
+ * after a short one.
+ */
+function confirmDialogs(src) {
+    const dialogs = [];
+    for (const m of src.matchAll(/(?:(?:const|let|var)\s+(\w+)\s*=\s*)?new ConfirmDialog\(\s*\{/g)) {
+        const open = m.index + m[0].length - 1;
+        let depth = 0;
+        let close = src.length - 1;
+        for (let i = open; i < src.length; i += 1) {
+            if (src[i] === '{') {
+                depth += 1;
+            } else if (src[i] === '}' && --depth === 0) {
+                close = i;
+                break;
+            }
+        }
+        dialogs.push({ binding: m[1], body: src.slice(open, close + 1) });
+    }
+    return dialogs;
+}
+
+/**
+ * Per dialog, the class names handed to THAT dialog through the public
+ * Widget addClass API -- matched by a pattern anchored on the dialog's own
+ * binding, never by a file-wide count of `.addClass(` calls. An unbound
+ * construction gets `classes: []`, because a class cannot be attributed to
+ * a construction that is never bound; checkStatic() flags it. Two dialogs
+ * bound to the same name in different scopes would share attributions; the
+ * service today binds each dialog to its own name.
+ *
+ * @returns {{ binding: string | undefined, classes: string[] }[]}
+ */
 function derivedDialogClasses(rawSrc) {
     const src = stripComments(rawSrc);
-    return [...src.matchAll(/\.addClass\(\s*'([^']+)'\s*\)/g)].map(m => m[1]);
+    return confirmDialogs(src).map(({ binding }) => {
+        if (!binding) {
+            return { binding, classes: [] };
+        }
+        const addClass = new RegExp('\\b' + binding + '\\.addClass\\(\\s*\'([^\']+)\'\\s*\\)', 'g');
+        return { binding, classes: [...src.matchAll(addClass)].map(m => m[1]) };
+    });
 }
 
 /**
@@ -368,18 +418,34 @@ function checkStatic(sources) {
         }
     }
 
-    // G-14.1.1-22: the destructive-ink half. Both sides derived -- the class
-    // is read from the service, the danger-scoped selectors from the sheet --
-    // so the gate goes red on a removal at either end and on a second
-    // destructive dialog appearing in the phase.
-    const dialogClasses = derivedDialogClasses(serviceSrc);
+    // G-14.1.1-22: the destructive-ink half, per dialog (14.1.1-12). Both
+    // sides derived -- each dialog's class from its own binding in the
+    // service, the danger-scoped selectors from the sheet -- so the gate goes
+    // red on a removal at either end AND on a second dialog that adds no
+    // class. There is deliberately no count assertion: "exactly one dialog"
+    // would be a hand-kept number with nothing in the tree to derive it
+    // from; "every dialog carries a danger-scoped class" is derived on both
+    // sides.
+    const dialogs = derivedDialogClasses(serviceSrc);
     const dangerClasses = new Set(derivedDangerClasses(cssSrc));
-    if (dialogClasses.length === 0) {
-        failures.push(`${SERVICE_REL} adds NO class to its confirmation dialog -- the Delete Setup confirm button cannot carry destructive ink (14-UI-SPEC.md reserves the danger token for exactly it)`);
-    } else if (dialogClasses.length > 1) {
-        failures.push(`${SERVICE_REL} tags ${dialogClasses.length} dialogs with a class (${dialogClasses.map(c => JSON.stringify(c)).join(', ')}) -- Delete Setup is the ONLY destructive action in the phase, so exactly one may carry destructive ink`);
-    } else if (!dangerClasses.has(dialogClasses[0])) {
-        failures.push(`the setups dialog class ${JSON.stringify(dialogClasses[0])} has no danger-scoped rule in ${CSS_REL} -- the confirm button renders in stock accent (danger-scoped classes found: ${[...dangerClasses].map(c => JSON.stringify(c)).join(', ') || 'none'})`);
+    const dangerList = [...dangerClasses].map(c => JSON.stringify(c)).join(', ') || 'none';
+    if (dialogs.length === 0) {
+        failures.push(`derived ZERO ConfirmDialog constructions from ${SERVICE_REL} -- the dialog enumeration matches nothing, so the destructive-ink comparison proves nothing (broken instrument, not a clean tree)`);
+    }
+    for (const { binding, classes } of dialogs) {
+        if (!binding) {
+            failures.push(`${SERVICE_REL} constructs a ConfirmDialog that is not assigned to a binding, so no class can be attributed to it -- the destructive-ink assertion cannot see whether it carries one`);
+            continue;
+        }
+        if (classes.length === 0) {
+            failures.push(`${SERVICE_REL} adds NO class to the confirmation dialog bound to "${binding}" -- 14-UI-SPEC.md:218 contracts one confirmation on this surface and it is destructive, so every dialog here must carry the danger-scoped class`);
+            continue;
+        }
+        for (const cls of classes) {
+            if (!dangerClasses.has(cls)) {
+                failures.push(`the setups dialog class ${JSON.stringify(cls)} on the dialog bound to "${binding}" has no danger-scoped rule in ${CSS_REL} -- the confirm button renders in stock accent (danger-scoped classes found: ${dangerList})`);
+            }
+        }
     }
 
     return failures;
@@ -470,7 +536,7 @@ function selfTest() {
     {
         const service = real[SERVICE_REL].replace(/^\s*dialog\.addClass\('[^']+'\);\n/m, '');
         const mutated = { ...real, [SERVICE_REL]: service };
-        plant(state, 'removed dialog addClass', mutated, !/addClass\(/.test(service), /adds NO class to its confirmation dialog/);
+        plant(state, 'removed dialog addClass', mutated, !/addClass\(/.test(service), /adds NO class to the confirmation dialog/);
     }
 
     // Plant 6 (G-14.1.1-22): the danger-scoped CSS rule removed must go red
