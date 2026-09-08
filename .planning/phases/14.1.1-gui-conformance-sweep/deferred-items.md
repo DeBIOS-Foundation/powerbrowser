@@ -28,6 +28,12 @@ recorded so it surfaces in `audit-open`, `audit-uat` and `complete-milestone`.
   match`. Same check, same next step. 14.1.1-06 changed one standalone script that
   `diff-theia-core.sh` never reads, so it is not the cause, and the plan forbids every build
   step `yarn install` would be.
+  **Still open at 14.1.1-07 (2026-09-08), symptom shifted back:** BOTH rows are red again
+  (`ai-opencode-tracer` and `ai-opencode-presets`), through the same `diff-theia-core.sh
+  --quick` stage, which now reports `Git tree ... is dirty` alongside the same `Top level
+  patterns don't match`. The dirty tree is the concurrent session's in-flight phase-14 work,
+  not this plan's: 14.1.1-07 changed one standalone script `diff-theia-core.sh` never reads.
+  Same next step, still forbidden by this plan's no-build constraint.
 
 - The literal clean-checkout `yarn build:extensions` was not run
   status: open

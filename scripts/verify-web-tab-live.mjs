@@ -1396,10 +1396,13 @@ function assertReport(derived, report) {
     if (!restore.secondMintedId || restore.secondMintedId === restore.mintedId) {
         failures.push(`restore: the two ids minted in this session are ${JSON.stringify(restore.mintedId)} and ${JSON.stringify(restore.secondMintedId)} -- a second "+" must never reuse an id, or two widgets drive one overlay`);
     }
-    const restoreBefore = [...(restore.mainIdsAfter ?? [])];
-    if (restoreBefore.includes(`${derived.factoryId}:${restore.foreignId}`)) {
-        failures.push(`restore: the refused construction still put a widget in the main area (ids: [${restoreBefore.join(', ')}])`);
-    }
+    // WR-13: a third assertion here read `restore.mainIdsAfter` for the refused
+    // id and has been DELETED. `getOrCreateWidget` never adds to the shell, so
+    // its condition could not be false under any product behaviour -- an
+    // assertion that cannot go red is not evidence, and a check may not carry
+    // one. The ids stay on the report as a recorded observation and are printed
+    // by `printReport`, the same demotion 14.1.1-01 applied to
+    // `shell.currentWidget`.
     if (!(report.rowsAfterNavigation ?? []).some(row => row.url === report.servedB)) {
         failures.push(`store: no store row for ${report.servedB} was readable through ChromeBarSuggestionService.searchByPrefix after the navigation (rows: ${JSON.stringify(report.rowsAfterNavigation ?? [])})`);
     }
@@ -1499,6 +1502,65 @@ async function main() {
 }
 
 /**
+ * The rule the self-test case table must satisfy, as a PURE function so it can
+ * be exercised without booting anything (G-14.1.1-20). Two ways a plant expect
+ * stops being evidence, both of which this file shipped before:
+ *   - a BARE WORD expect ('pill', 'row', 'rect') is satisfied by any failure
+ *     message that merely contains it, so a plant can be credited with a red it
+ *     did not cause;
+ *   - a SHARED expect makes two plants indistinguishable, so neither one's red
+ *     says anything about the fault it planted.
+ * @param {{plant?: string, expect?: string, expectClean?: boolean}[]} cases
+ * @returns {string[]} one message per fault; empty when the table is well formed
+ */
+function expectTableFaults(cases) {
+    const faults = [];
+    const plants = cases.filter(testCase => !testCase.expectClean);
+    for (const testCase of plants) {
+        if (typeof testCase.expect !== 'string' || !testCase.expect.endsWith(':')) {
+            faults.push(`plant '${testCase.plant}' carries the unanchored expect ${JSON.stringify(testCase.expect)} -- an expect must be a message-family prefix ending in ':', or any message merely containing the word can satisfy it`);
+        }
+    }
+    const sharers = new Map();
+    for (const testCase of plants) {
+        sharers.set(testCase.expect, [...(sharers.get(testCase.expect) ?? []), testCase.plant]);
+    }
+    for (const [expect, plantNames] of sharers) {
+        if (plantNames.length > 1) {
+            faults.push(`the expect ${JSON.stringify(expect)} is shared by ${plantNames.length} plants (${plantNames.join(', ')}) -- two plants scored on one prefix cannot be told apart, so a red there names neither fault`);
+        }
+    }
+    return faults;
+}
+
+/**
+ * The guard's OWN planted faults, declared beside it and run every time. Three
+ * literal tables: a duplicate must be rejected naming the prefix and both
+ * plants, a bare word must be rejected naming the word, and a well-formed table
+ * must be ACCEPTED -- the third is what stops "red on everything" from passing
+ * for a working guard. This is the standing, re-runnable record CLAUDE.md's
+ * Verification section requires of a new check, rather than a dev-time edit
+ * reverted before commit.
+ */
+const EXPECT_TABLE_FIXTURES = [
+    {
+        what: 'a duplicated expect is rejected, naming the prefix and both plants',
+        cases: [{ plant: 'x', expect: 'a:' }, { plant: 'y', expect: 'a:' }],
+        holds: faults => faults.length === 1 && faults[0].includes('"a:"') && faults[0].includes('(x, y)'),
+    },
+    {
+        what: 'an unanchored expect is rejected, naming the bare word',
+        cases: [{ plant: 'x', expect: 'pill' }],
+        holds: faults => faults.length === 1 && faults[0].includes('"pill"'),
+    },
+    {
+        what: 'a well-formed table is accepted (the guard is not red on everything)',
+        cases: [{ plant: 'x', expect: 'a:' }, { plant: 'y', expect: 'b:' }],
+        holds: faults => faults.length === 0,
+    },
+];
+
+/**
  * Fault plants. The clean control runs FIRST: a plant harness whose clean
  * pass is already red proves nothing about the plants that follow. Each
  * plant runs in its OWN browser session so no plant inherits another's
@@ -1517,40 +1579,72 @@ async function selfTest() {
         { name: 'clean control (no plant)', plant: '', expectClean: true },
         // The frontend never reaches chrome: no overlay is ever created, so
         // the served URL appears in no context.
-        { name: 'requests swallowed before the actor child', plant: 'swallow', expect: 'context' },
+        { name: 'requests swallowed before the actor child', plant: 'swallow', expect: 'context:' },
         // The open handler regresses to the GUI-01 popup path.
-        { name: 'handler falls back to a popup', plant: 'popup', expect: 'window.open' },
+        { name: 'handler falls back to a popup', plant: 'popup', expect: 'popup:' },
         // Geometry is never published, so the overlay never reaches the placeholder.
-        { name: 'geometry never published', plant: 'no-geometry', expect: 'rect' },
+        { name: 'geometry never published', plant: 'no-geometry', expect: 'align:' },
         // The geometry reply is discarded again (G-14.1.1-4's pre-fix
         // behaviour), so a dropped overlay leaves the body blank until the
         // user clicks Reload.
-        { name: 'the geometry reply is discarded', plant: 'lost-view-ignored', expect: 'lost-view' },
+        { name: 'the geometry reply is discarded', plant: 'lost-view-ignored', expect: 'lost-view:' },
         // The factory admits any construction id again (G-14.1.1-5's pre-fix
         // behaviour), so a persisted layout re-creates last session's tabs.
-        { name: 'the factory re-creates a described web tab', plant: 'restore-recreates', expect: 'restore' },
+        { name: 'the factory re-creates a described web tab', plant: 'restore-recreates', expect: 'restore:' },
         // The pill is re-keyed on DOM focus of the placeholder instead of the
         // strip's selection (G-14.1.1-20). A placeholder covered by the chrome
         // overlay never receives DOM focus in real use, so the pill stays on
-        // the typed text -- and nothing in this check props it up any more.
-        { name: 'the pill is keyed on focus, not on the strip selection', plant: 'focus-keyed-pill', expect: 'pill' },
-        // Chrome's pushes never reach the widget, so the pill keeps the typed text.
-        { name: 'state pushes ignored', plant: 'state-ignored', expect: 'pill' },
+        // the typed text -- and nothing in this check props it up any more. The
+        // widget itself keeps receiving chrome's pushes here, so `push:` stays
+        // GREEN and only the bar's own family goes red.
+        { name: 'the pill is keyed on focus, not on the strip selection', plant: 'focus-keyed-pill', expect: 'pill:' },
+        // Chrome's pushes never reach the WIDGET, so nothing can put the served
+        // page's <title> in its strip label. Scored on `push:` rather than on
+        // the pill: the pill also goes red here, but it goes red under
+        // focus-keyed-pill too, and one prefix per family is what tells the two
+        // apart.
+        { name: 'state pushes ignored', plant: 'state-ignored', expect: 'push:' },
         // The bar stays armed across the commit (G-14.1.1-7's pre-fix
         // behaviour), so the query the last keystroke scheduled re-opens the
         // dropdown over the committed page and occludes the overlay.
-        { name: 'the dropdown re-arms across the commit', plant: 'dropdown-rearms', expect: 'dropdown' },
+        { name: 'the dropdown re-arms across the commit', plant: 'dropdown-rearms', expect: 'dropdown:' },
         // The overlay hide is never published (G-14.1.1-6), so webTabGeometry's
         // last-view arm is never reached and the hanging page -- whose network
         // never reaches STOP, so nothing else can fill its row -- ends the run
         // with no snapshot at all. This is the attribution plant: it removes the
         // frontend half of the very causal chain the chrome-side arm completes.
-        { name: 'the overlay hide is never published', plant: 'hide-not-published', expect: 'thumbnail' },
+        { name: 'the overlay hide is never published', plant: 'hide-not-published', expect: 'thumbnail:' },
         // The store reader returns nothing.
-        { name: 'store rows unread', plant: 'store-unread', expect: 'row' },
+        { name: 'store rows unread', plant: 'store-unread', expect: 'store:' },
         // "+" itself regresses to a popup.
-        { name: 'New Tab rerouted to a popup', plant: 'newtab-popup', expect: 'window.open' },
+        { name: 'New Tab rerouted to a popup', plant: 'newtab-popup', expect: 'newtab:' },
     ];
+
+    // PRE-FLIGHT, before any session is booted: prove the guard on its own three
+    // fixtures, then run it against the real table. A malformed case table is a
+    // hard stop, not a silent ambiguity -- which is what makes the defect this
+    // task fixed impossible to re-introduce.
+    let preflightFailed = 0;
+    for (const fixture of EXPECT_TABLE_FIXTURES) {
+        const faults = expectTableFaults(fixture.cases);
+        if (fixture.holds(faults)) {
+            console.log(`  ok  pre-flight: ${fixture.what}`);
+        } else {
+            console.error(`${NAME} --self-test: FAIL -- the expect-table guard misbehaved on its own fixture (${fixture.what}); it returned: ${faults.join(' | ') || '(nothing)'}`);
+            preflightFailed++;
+        }
+    }
+    if (preflightFailed) {
+        console.error(`${NAME} --self-test: FAIL -- ${preflightFailed} pre-flight fixture(s) failed, so the case-table guard cannot be trusted and no plant was run`);
+        return 1;
+    }
+    const tableFaults = expectTableFaults(cases);
+    if (tableFaults.length) {
+        for (const message of tableFaults) {
+            console.error(`${NAME} --self-test: FAIL -- the case table is malformed: ${message}`);
+        }
+        return 1;
+    }
 
     let failed = 0;
     for (const testCase of cases) {
@@ -1575,12 +1669,15 @@ async function selfTest() {
             failed++;
             continue;
         }
-        if (!failures.some(f => f.includes(testCase.expect))) {
+        // ANCHORED, not substring: the expect is the first thing in the message
+        // or it scores nothing, so a plant can only ever be credited with the
+        // family it names.
+        if (!failures.some(f => f.startsWith(testCase.expect))) {
             console.error(`${NAME} --self-test: FAIL -- '${testCase.name}' did not go red naming '${testCase.expect}'; got: ${failures.join(' | ') || '(no failures at all)'}`);
             failed++;
         } else {
             console.log(`  ok  ${testCase.name} -> red, naming '${testCase.expect}'`);
-            for (const message of failures.filter(f => f.includes(testCase.expect)).slice(0, 2)) {
+            for (const message of failures.filter(f => f.startsWith(testCase.expect)).slice(0, 2)) {
                 console.log(`      ${message}`);
             }
         }
