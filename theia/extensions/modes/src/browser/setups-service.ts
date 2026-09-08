@@ -138,6 +138,15 @@ export const SETUP_DELETE_FAILURE = 'Power Browser couldn\'t delete this setup. 
 export const SETUP_GONE_TABS_NOTICE = 'Power Browser restored this setup, but some tabs no longer exist. Geometry and mode are applied.';
 
 /**
+ * Contracted dependent-window refusal (14-UI-SPEC.md, verbatim): thrown when
+ * the current tab hosts no extractable content, so there is nothing a
+ * dependent window could show. It names no command id -- the command carries
+ * no palette label, so re-invoking it is not an affordance the user has; the
+ * only real next step on screen is selecting a different tab.
+ */
+export const SETUP_DEPENDENT_UNSUPPORTED = 'Power Browser can\'t open this tab in its own window. Select a terminal or editor tab first, then try again.';
+
+/**
  * Contracted unknown-mode fallback notice (14-UI-SPEC.md): stock
  * `switchPerspective` silently no-ops on unknown ids (never throws), so the
  * restore pre-validates against shipped + custom ids and falls back to
@@ -507,10 +516,9 @@ export class SetupsService implements FrontendApplicationContribution {
     async openDependent(widgetId?: string): Promise<void> {
         const widget = widgetId !== undefined ? this.findWidget(widgetId) : this.shell.activeWidget;
         if (!widget || !ExtractableWidget.is(widget)) {
-            throw new Error(
-                'powerbrowser.setups.open-dependent: this tab cannot open in a dependent window -- ' +
-                'choose a tab with hosted content (a terminal or an editor) and invoke the command again from the command palette'
-            );
+            // Theia renders a thrown command error verbatim, so the message
+            // is the contracted constant and nothing else -- never an id.
+            throw new Error(SETUP_DEPENDENT_UNSUPPORTED);
         }
         this.secondaryWindows.moveWidgetToSecondaryWindow(widget);
     }

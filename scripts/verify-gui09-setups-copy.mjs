@@ -19,11 +19,18 @@
 // It DERIVES BOTH SIDES and compares as SET EQUALITY -- there is no
 // hand-kept list of expected copy anywhere in this file:
 //   * from `setups-service.ts`, comments stripped first, the user-facing
-//     literal at every enumerated PAINT SITE (each `flash(...)` argument
-//     resolved through the exported constant and template-function tables,
-//     the quick-input prompt and placeholder, the ConfirmDialog
-//     title/msg/ok/cancel fields, and the `pickSetup` placeholders), with
-//     each interpolation slot normalised to `{name}`;
+//     literal at every one of the FIVE enumerated PAINT SITES (each
+//     `flash(...)` argument resolved through the exported constant and
+//     template-function tables, the quick-input prompt and placeholder, the
+//     ConfirmDialog title/msg/ok/cancel fields, the `pickSetup`
+//     placeholders, and every `throw new Error(...)` argument), with each
+//     interpolation slot normalised to `{name}`;
+//     The fifth site was added by 14.1.1-09 (CR-03): Theia renders a thrown
+//     command error verbatim, so a thrown string is user copy. It resolves
+//     only a bare identifier; a raw literal, concatenation or template at
+//     that site is UNRESOLVED and red, which is the point -- after this, a
+//     thrown user-facing string that is not a contracted constant cannot
+//     reach the screen past the commit gate.
 //   * from `14-UI-SPEC.md`, the bolded literals of the Copywriting Contract
 //     rows that name a setups surface.
 // A literal in the service with no table row is UNREVIEWED COPY; a table
@@ -82,6 +89,7 @@ const SETUP_ROW_LABELS = Object.freeze([
     'Setup save-failure error',
     'Setup delete-failure error',
     'Setup gone-tabs notice',
+    'Dependent-window unsupported-tab error',
     'Setup mode-fallback notice',
     'Setup saved confirmation',
     'Destructive confirmation',
@@ -147,8 +155,14 @@ function templateTable(src) {
  * The user-facing literal at every enumerated paint site of the setups
  * service. Returns { copy, unresolved } -- an argument naming no known
  * constant or helper is a broken instrument, not a silent skip.
+ *
+ * `opts.throwSite` exists ONLY for the self-test's plant 7, which needs the
+ * pre-widening derivation (paint sites 1-4) to show that the hole this plan
+ * closed was real. It is the SAME code with site 5 skipped, never a
+ * hand-copied replica that could drift away from the real deriver.
  */
-function derivedServiceCopy(rawSrc) {
+function derivedServiceCopy(rawSrc, opts = {}) {
+    const withThrowSite = opts.throwSite !== false;
     const src = stripComments(rawSrc);
     const consts = constantTable(src);
     const templates = templateTable(src);
@@ -223,6 +237,23 @@ function derivedServiceCopy(rawSrc) {
     // Paint site 4: the quick-pick placeholders naming the picked action.
     for (const m of src.matchAll(/this\.pickSetup\(\s*'((?:[^'\\]|\\.)*)'\s*\)/g)) {
         copy.push(unescapeLiteral(m[1]));
+    }
+
+    // Paint site 5 (14.1.1-09, CR-03): every `throw new Error(...)` argument.
+    // Theia renders a thrown command error verbatim, so this IS a paint site.
+    // Only a bare identifier resolves; a raw literal, a concatenation or a
+    // template goes to `unresolved` and is red. That asymmetry is the point:
+    // thrown user-facing copy must be a contracted constant like every other
+    // string this service paints.
+    if (withThrowSite) {
+        for (const m of src.matchAll(/throw new Error\(\s*([\s\S]*?)\s*\)\s*;/g)) {
+            const arg = m[1].trim();
+            if (/^\w+$/.test(arg)) {
+                resolveIdent(arg);
+            } else {
+                unresolved.push(arg);
+            }
+        }
     }
 
     return { copy: copy.map(normaliseSlots), unresolved };
@@ -373,7 +404,7 @@ function main() {
     }
     const { copy } = derivedServiceCopy(sources[SERVICE_REL]);
     const contracted = derivedSpecCopy(sources[SPEC_REL]);
-    console.log(`${NAME}: PASS -- ${new Set(copy).size} painted setups strings match ${new Set(contracted).size} contracted literals as set equality, no internals in copy, destructive ink scoped to exactly one dialog`);
+    console.log(`${NAME}: PASS -- ${new Set(copy).size} painted setups strings, derived from five paint sites, match ${new Set(contracted).size} contracted literals as set equality, no internals in copy, destructive ink scoped to exactly one dialog`);
 }
 
 /** Run one plant: assert it landed, then require the named drift to go red. */
