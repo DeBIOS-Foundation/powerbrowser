@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 14.1.1
 current_phase_name: GUI Conformance Sweep (INSERTED)
 status: executing
-stopped_at: Completed 14.1.1-15-PLAN.md
-last_updated: "2026-09-08T09:55:41.138Z"
+stopped_at: Completed 14.1.1-16-PLAN.md
+last_updated: "2026-09-08T10:11:51.344Z"
 last_activity: 2026-09-08
 last_activity_desc: Phase 14.1.1 execution started
-state_head: b243c81584445ce6335cd97a0cc9b46c6699b54e
+state_head: b61b98a3f10bac770db67a4e8abd4e3a81d33c91
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 22
-  completed_plans: 21
+  completed_plans: 22
 milestone_name: Browser GUI
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 ## Current Position
 
 Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — EXECUTING
-Plan: 6 of 16
+Plan: 7 of 16
 Status: Ready to execute
 Last activity: 2026-09-08 — Phase 14.1.1 execution started
 
@@ -130,6 +130,7 @@ Last activity: 2026-09-08 — Phase 14.1.1 execution started
 | Phase 14.1.1 P13 | 5 min | 2 tasks | 2 files |
 | Phase 14.1.1 P14 | 7 min | 3 tasks | 1 files |
 | Phase 14.1.1 P15 | 2 min | 1 tasks | 2 files |
+| Phase 14.1.1 P16 | 10 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -337,6 +338,9 @@ Recent decisions affecting current work:
 - [Phase 14.1.1]: 14.1.1-12: gui09-setups-copy derives ConfirmDialog copy and destructive ink PER DIALOG (confirmDialogs() brace-matched body; addClass attributed by each dialog's own binding); the 'exactly one dialog' count assertion is removed as a hand-kept number, and plants 9-10 prove a second dialog's uncontracted copy and a second dialog with no class both go red
 - [Phase 14.1.1]: 14.1.1-12: plant 10 asserts its copy half stays GREEN as well as its ink half going RED, so the red is attributable to the assertion under test; the modes.css comment keeps the design statement separate from the gate statement
 - [Phase 14.1.1]: Plan 15: dropped the untrue retry clause from the dependent-window refusal instead of adding a palette label to SETUPS_OPEN_DEPENDENT; a label is a Phase-14 product decision, not a conformance fix
+- [Phase 14.1.1]: 14.1.1-16: the general G-45 invariant is recorded as NOT machine-checkable in its own field; the record claims only the four sites whose --self-test plants go red
+- [Phase 14.1.1]: 14.1.1-16: pass-3 roadmap boxes 11-15 were already ticked by each plan's metadata commit; the tree derivation confirmed all five, so no box changed and no not-done note was written
+- [Phase 14.1.1]: 14.1.1-16: G-14.1.1-8's in_tree status left as found (criterion said open); the protected fact is its deferred_to line and the held file, both intact
 
 ### Pending Todos
 
@@ -434,8 +438,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-08T09:55:41.101Z
-Stopped at: Completed 14.1.1-15-PLAN.md
+Last session: 2026-09-08T10:11:51.306Z
+Stopped at: Completed 14.1.1-16-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

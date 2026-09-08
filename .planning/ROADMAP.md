@@ -136,7 +136,7 @@ Plans:
 **Goal:** Every `fixable: yes` gap in `14.1.1-UAT.md` is closed, each proved by a check that goes red without its fix; `needs-chris` and `decision` gaps gain evidence only and are never marked fixed by an executor
 **Requirements**: none mapped — this phase closes GUI conformance gaps, not requirement IDs
 **Depends on:** Phase 14.1
-**Plans:** 15/16 plans executed — pass 1 (01–05) executed; pass 2 (06–10) executed; pass 3 (11–15) executed, 16 executing
+**Plans:** 16/16 plans executed — pass 1 (01–05) executed; pass 2 (06–10) executed; pass 3 (11–16) executed
 **Protocol:** `.planning/GUI-SWEEP.md` (Step 2 — automated fix pass)
 
 Pass 1 planned the eleven in-scope `fixable: yes` gaps (G-14.1.1-4, 5, 6, 7, 19, 20, 21, 22, 24,
@@ -208,7 +208,7 @@ needs a quiet tree; and the `verify-web-tab-live.mjs` plant reds, which need a d
 
 **Wave 4** *(blocked on 11, 12, 13, 14, 15)*
 
-- [ ] 14.1.1-16-PLAN.md — the record, written from the tree: G-45 re-closed with a guard named per site, G-44 annotated, every carry-forward recorded with a reason and a next step
+- [x] 14.1.1-16-PLAN.md — the record, written from the tree: G-45 re-closed with a guard named per site, G-44 annotated, every carry-forward recorded with a reason and a next step
 
 ### Phase 15: Panorama Organising
 
