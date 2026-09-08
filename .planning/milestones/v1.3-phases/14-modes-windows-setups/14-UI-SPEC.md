@@ -209,8 +209,8 @@ Naming is fixed: **"chrome bar"**, mode names **"Coding"**, **"Browsing"**,
 | Corrupt-mode fallback notice | **"Power Browser couldn't load the "{name}" mode. Browsing is shown instead."** (status-bar flash; custom data falls back to the shipped Browsing default, never a blank shell) |
 | Mode saved confirmation | **"Mode "{name}" saved."** (status-bar flash) |
 | Setup saved confirmation | **"Setup "{name}" saved."** (status-bar flash) |
-| Organising placeholder heading | **"Organising arrives next"** |
-| Organising placeholder body | **"The freeform canvas for arranging tabs lands in the next update — your tabs stay exactly where they left them."** |
+| Organising placeholder heading | **"Organising arrives next"** — **SUPERSEDED by the Phase-15 canvas.** Phase 15 replaced the placeholder with the real Panorama canvas, so this row no longer describes what ships; it stays as the Phase-14 record. See 14-UAT.md test 6 (`result: superseded`). |
+| Organising placeholder body | **"The freeform canvas for arranging tabs lands in the next update — your tabs stay exactly where they left them."** — **SUPERSEDED by the Phase-15 canvas**, same reason as the heading row above. Neither string appears in any source file; the shipping surface is `organising-widget.ts`. |
 | Organising placeholder button | **"Back to Browsing"** — selects the Browsing mode |
 | Dependent tab-closed state heading | **"This tab is closed"** |
 | Dependent tab-closed state body | **"The tab shown in this window was closed. Close this window to return to Power Browser."** |
@@ -242,7 +242,15 @@ every mode; only side-panel visibility and the main-area view change:
   No `[features]`/`[modes]` manifest flag exists anywhere in this contract.
 - A mode switch is never destructive and never needs confirmation.
 
-### Organising placeholder slot (Phase-15 canvas explicitly out)
+### Organising placeholder slot (Phase-15 canvas explicitly out) — SUPERSEDED
+
+> **Superseded by the Phase-15 canvas (noted 2026-09-07, 14.1.1-10).** Phase 15
+> replaced the placeholder with the real Panorama canvas, so the Phase-14
+> contract for this slot no longer describes what ships. 14-UAT.md test 6
+> records the same fact with `result: superseded`. The section is kept, not
+> deleted, so a later reader sees both what Phase 14 contracted and what
+> replaced it. What the Organising area shows now is contracted by
+> 14.1-UI-SPEC and 15-UI-SPEC and tested as 14-UAT.md test 9.
 
 - The Organising main area renders one centred static panel (max-width
   480px): the contracted heading, body, and a single Theia stock
