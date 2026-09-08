@@ -38,9 +38,12 @@
 // by name, so the gate goes red on an addition AND on a removal. The
 // ConfirmDialog site (paint site 3) is enumerated, not positional: since
 // 14.1.1-12 it walks EVERY `new ConfirmDialog({...})` construction in the
-// service, reads each one's own object literal, and attributes each
-// `addClass` to that dialog's own binding -- so a second dialog's copy and
-// a second dialog's missing class are both red (self-test plants 9 and 10).
+// service, reads all four copy fields of each one's own object literal
+// (`title`, `ok`, `cancel` as literals; `msg` in any of the four forms the
+// flash site accepts, since pass-3 CR-01), and attributes each `addClass`
+// to that dialog's own binding -- so a second dialog's copy, its body text
+// in particular, and a second dialog's missing class are all red (self-test
+// plants 9, 10, 11 and 12).
 // Two limits, stated here because a comment may claim only the reach that
 // exists: the gate reads ONLY `setups-service.ts`, so a confirmation painted
 // from another file in the modes extension is outside its scope; and each
