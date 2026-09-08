@@ -101,6 +101,23 @@ function apiMethodBody(text, name) {
 }
 
 /**
+ * The bodies of every four-space-indented class member `name(…) {` (with any
+ * `protected`/`private`/`public`, `static`, `async` prefix), keyed by name,
+ * each running to the next member declared at the same indentation.
+ * @returns {Map<string, string>}
+ */
+function classMethodBodies(text) {
+    const member = /^ {4}(?:protected |private |public )?(?:static )?(?:async )?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^{]*)?\{/gm;
+    const matches = [...text.matchAll(member)];
+    const bodies = new Map();
+    matches.forEach((m, i) => {
+        const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
+        bodies.set(m[1], text.slice(m.index, end));
+    });
+    return bodies;
+}
+
+/**
  * @returns {string[]} failure messages -- empty means the bridge contract holds.
  */
 function checkBridge(raw) {
@@ -246,6 +263,25 @@ function checkBridge(raw) {
         failures.push(`${CHILD}: receiveMessage( absent -- chrome's state push has no content-side receiver`);
     }
 
+    // 8. LOST REPLY (G-14.1.1-48): one reading of "chrome no longer renders
+    // this tab". Every setLostView call-site argument is a bare identifier or
+    // boolean (the setter's own parameter; publish()'s documented `true`) or
+    // a call to the class's shared predicate -- never an inline expression.
+    // The call-site pattern requires the member-call `.`, so the method
+    // declaration itself is not a site; the argument may carry one level of
+    // nested parentheses (the predicate call), and stops at the paren that
+    // closes setLostView rather than at the one that closes an enclosing
+    // arrow function.
+    const lostSites = derive(src[WEB_TAB], /\.setLostView\(\s*((?:[^();]|\([^()]*\))*?)\s*\)/g);
+    if (lostSites.length === 0) {
+        failures.push(`lost-reply: ${WEB_TAB}: derived ZERO setLostView call sites -- the parse found nothing, so this comparison proves nothing (broken instrument, never a clean pass)`);
+    }
+    for (const arg of lostSites) {
+        if (!/^(?:[A-Za-z_$][\w$]*|true|false|WebTabWidget\.lostReply\([^)]*\))$/.test(arg)) {
+            failures.push(`lost-reply: ${WEB_TAB} folds a reply into lost-view state with the inline expression "${arg}" -- the one reading of "chrome no longer renders this tab" lives in lostReply(), and a second spelling is how the two drift apart`);
+        }
+    }
+
     return failures;
 }
 
@@ -324,6 +360,11 @@ function selfTest() {
             name: 'planted loss of the GUI-01 popup (positive control)',
             sources: { ...clean, [BWC]: clean[BWC].replace(/window\.open\(/, 'windowOpen(') },
             expect: 'browser-window-command',
+        },
+        {
+            name: 'planted inline lost-reply spelling',
+            sources: { ...clean, [WEB_TAB]: clean[WEB_TAB].replaceAll('WebTabWidget.lostReply(reply)', 'reply.ok !== true') },
+            expect: 'folds a reply into lost-view state with the inline expression',
         },
     ];
 

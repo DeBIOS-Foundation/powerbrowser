@@ -360,7 +360,7 @@ export class WebTabWidget extends BaseWidget {
         // Lost-view detection (UI-SPEC A10/A11): the open is awaited, and a
         // refusal, a nack or silence (timeout included) marks the view lost.
         void this.channel.request({ kind: 'webTabOpen', tabId: this.tabId, url: this.url })
-            .then(reply => this.setLostView(reply.ok !== true));
+            .then(reply => this.setLostView(WebTabWidget.lostReply(reply)));
         this.publish();
         if (!this.listening) {
             this.listening = true;
