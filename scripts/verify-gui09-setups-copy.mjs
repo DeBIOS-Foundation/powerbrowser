@@ -189,16 +189,25 @@ function derivedServiceCopy(rawSrc, opts = {}) {
         }
     };
 
-    // Paint site 1: every status-bar flash argument.
-    for (const m of src.matchAll(/this\.flash\(\s*([^;]+?)\s*\)\s*;/g)) {
-        const arg = m[1].trim();
+    /**
+     * The four ways one argument can name copy: a composite that splices
+     * constants, a template-helper call, a bare identifier, or a raw
+     * literal. Anything else is unresolved and red.
+     *
+     * Shared by the flash site and the ConfirmDialog `msg` field so the two
+     * cannot see different subsets of those forms. They did: `msg` matched
+     * only `ident(`, so a raw literal or a bare constant in a dialog body
+     * was neither counted as copy nor reported (14.1.1 pass-3 CR-01), and a
+     * second dialog whose body was uncontracted text passed green.
+     */
+    const resolveArg = (arg) => {
         if (arg.startsWith('`')) {
-            // A composite flash paints only the constants it splices, so
-            // each is derived on its own; the composite is not new copy.
+            // A composite paints only the constants it splices, so each is
+            // derived on its own; the composite is not new copy.
             for (const slot of arg.matchAll(/\$\{\s*(\w+)\s*\}/g)) {
                 resolveIdent(slot[1]);
             }
-            continue;
+            return;
         }
         const call = arg.match(/^(\w+)\(.*\)$/);
         if (call) {
@@ -207,17 +216,22 @@ function derivedServiceCopy(rawSrc, opts = {}) {
             } else {
                 unresolved.push(call[1]);
             }
-            continue;
+            return;
         }
         if (/^\w+$/.test(arg)) {
             resolveIdent(arg);
-            continue;
+            return;
         }
         if (/^'((?:[^'\\]|\\.)*)'$/.test(arg)) {
             copy.push(unescapeLiteral(arg.slice(1, -1)));
-            continue;
+            return;
         }
         unresolved.push(arg);
+    };
+
+    // Paint site 1: every status-bar flash argument.
+    for (const m of src.matchAll(/this\.flash\(\s*([^;]+?)\s*\)\s*;/g)) {
+        resolveArg(m[1].trim());
     }
 
     // Paint site 2: the save dialog's quick-input prompt and placeholder.
@@ -237,13 +251,13 @@ function derivedServiceCopy(rawSrc, opts = {}) {
         for (const m of dialog.body.matchAll(/\b(?:title|ok|cancel)\s*:\s*'((?:[^'\\]|\\.)*)'/g)) {
             copy.push(unescapeLiteral(m[1]));
         }
-        const msg = dialog.body.match(/\bmsg\s*:\s*(\w+)\(/);
+        // The whole `msg:` value, to end of its line, minus a trailing
+        // comma -- then resolved by the same dispatch the flash site uses.
+        // A value the line match cannot capture whole (a call broken across
+        // lines) lands in `unresolved` and is red, never a silent skip.
+        const msg = dialog.body.match(/\bmsg\s*:\s*(.+?),?\s*$/m);
         if (msg) {
-            if (templates.has(msg[1])) {
-                copy.push(templates.get(msg[1]));
-            } else {
-                unresolved.push(msg[1]);
-            }
+            resolveArg(msg[1].trim());
         }
     }
 
@@ -664,10 +678,60 @@ function selfTest() {
         }
     }
 
+    // Plants 11 and 12 (pass-3 CR-01) exercise the two `msg:` forms the
+    // pre-fix deriver could not see at all. Both carry the danger class and
+    // reuse the first dialog's contracted title/ok/cancel, so the ink half
+    // and the rest of the copy set stay green and the ONLY red is the one
+    // the dialog's own body text causes.
+
+    // Plant 11: a raw literal body. Pre-fix this was neither copy nor
+    // unresolved -- the gate printed PASS over uncontracted dialog text.
+    {
+        const service = real[SERVICE_REL].replace(ADD_CLASS_ANCHOR, ADD_CLASS_ANCHOR
+            + '            const second = new ConfirmDialog({\n'
+            + "                title: 'Delete Setup',\n"
+            + "                msg: 'Everything you saved will be wiped.',\n"
+            + "                ok: 'Delete',\n"
+            + "                cancel: 'Cancel',\n"
+            + '            });\n'
+            + "            second.addClass('pb-setup-delete-confirm');\n");
+        const mutated = { ...real, [SERVICE_REL]: service };
+        plant(
+            state,
+            'raw literal dialog body (msg)',
+            mutated,
+            service.includes("msg: 'Everything you saved will be wiped.'"),
+            /unreviewed copy.*Everything you saved will be wiped\./
+        );
+    }
+
+    // Plant 12: a bare identifier naming an exported constant with no
+    // Copywriting Contract row. Same hole, one form over: pre-fix the
+    // identifier did not match `ident(` either, so it too was invisible.
+    {
+        const service = real[SERVICE_REL].replace(ADD_CLASS_ANCHOR, ADD_CLASS_ANCHOR
+            + '            const second = new ConfirmDialog({\n'
+            + "                title: 'Delete Setup',\n"
+            + '                msg: WIPE_BODY,\n'
+            + "                ok: 'Delete',\n"
+            + "                cancel: 'Cancel',\n"
+            + '            });\n'
+            + "            second.addClass('pb-setup-delete-confirm');\n")
+            + "\nexport const WIPE_BODY = 'Everything you saved will be wiped.';\n";
+        const mutated = { ...real, [SERVICE_REL]: service };
+        plant(
+            state,
+            'uncontracted exported constant as dialog body (msg)',
+            mutated,
+            service.includes('msg: WIPE_BODY') && service.includes('export const WIPE_BODY'),
+            /unreviewed copy.*Everything you saved will be wiped\./
+        );
+    }
+
     if (state.failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all ten fault directions went red naming the drift (two at the throw paint site, two from a second ConfirmDialog), and the pre-widening deriver stayed green on plant 7`);
+    console.log(`${NAME} --self-test: PASS -- all twelve fault directions went red naming the drift (two at the throw paint site, four from a second ConfirmDialog, two of those its body copy), and the pre-widening deriver stayed green on plant 7`);
 }
 
 try {
