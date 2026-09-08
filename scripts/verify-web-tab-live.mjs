@@ -225,9 +225,18 @@ function derive() {
     // G-14.1.1-6: the capture cap the stored snapshot must fit inside. Read
     // off the boundary file that enforces it so the number is never typed
     // twice -- raising the cap there raises it here, and nowhere else.
-    const thumbnailMaxChars = Number(/TAB_THUMBNAIL_CAPTURE_MAX_CHARS\s*=\s*(\d+)/.exec(read(SHELL_API_REL))?.[1]);
+    const shellApi = read(SHELL_API_REL);
+    const thumbnailMaxChars = Number(/TAB_THUMBNAIL_CAPTURE_MAX_CHARS\s*=\s*(\d+)/.exec(shellApi)?.[1]);
     if (!thumbnailMaxChars) {
         failures.push(`${SHELL_API_REL}: derived NO thumbnail capture cap -- the stored snapshot's length could only be checked against a hand-typed number`);
+    }
+    // The settle window the thumbnail phase must outwait before it reads its
+    // baseline: a baseline read inside the window would be a race, not an
+    // absence, and the attribution would rest on timing rather than on the
+    // hanging page. Read off the same boundary file, never hand-typed.
+    const thumbnailSettleMs = Number(/TAB_THUMBNAIL_SETTLE_MS\s*=\s*(\d+)/.exec(shellApi)?.[1]);
+    if (!thumbnailSettleMs) {
+        failures.push(`${SHELL_API_REL}: derived NO thumbnail settle window -- the baseline read could only be timed by a guess, so its absence would prove nothing`);
     }
 
     const shipped = [...read(DESCRIPTORS_REL).matchAll(/^\s*id:\s*'([^']+)'/gm)].map(m => m[1]);
@@ -250,7 +259,7 @@ function derive() {
         failures, factoryId, emptyUrl, stateEvent, requestEvent, blockingSelector, lostViewCopy,
         handlerClass, widgetClass, channelClass, chromeBarContributionClass,
         newTabCommandId, inputClass, shipped, activateCommandId, organisingWidgetId, walk,
-        thumbnailMaxChars, chromeBarWidgetClass, debounceMs, dropdownClass,
+        thumbnailMaxChars, thumbnailSettleMs, chromeBarWidgetClass, debounceMs, dropdownClass,
     };
 }
 
@@ -261,6 +270,13 @@ function derive() {
 const PAGES = {
     '/a': { title: 'Web tab A' },
     '/b': { title: 'Web tab B' },
+    // G-14.1.1-6 thumbnail attribution. This response is written and NEVER
+    // ended, so the document commits and paints while the network never
+    // reaches STOP -- which takes the onStateChange capture arm
+    // (PowerBrowserAPI.sys.mjs:2263) out of the set of sites that could have
+    // filled this page's row. Its held socket is destroyed at teardown by
+    // closeAllConnections, or server.close() would never resolve.
+    '/c': { title: 'Web tab C', hang: true },
 };
 
 function servePages() {
@@ -271,8 +287,19 @@ function servePages() {
             res.end('not found');
             return;
         }
+        // The padding is not decoration: the HTML parser flushes on byte count
+        // as well as on end-of-stream, so a hanging page that is too short
+        // could sit unparsed in a buffer and never paint at all.
+        const padding = page.hang ? `<!--${'x'.repeat(4096)}-->` : '';
+        const html = `<!doctype html><html><head><title>${page.title}</title></head><body><h1>${page.title}</h1>${padding}</body></html>`;
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-        res.end(`<!doctype html><html><head><title>${page.title}</title></head><body><h1>${page.title}</h1></body></html>`);
+        if (page.hang) {
+            // Written, never ended: chunked, so the document commits and paints
+            // while the load never completes and no network STOP is reached.
+            res.write(html);
+            return;
+        }
+        res.end(html);
     });
     return new Promise((resolve, reject) => {
         server.on('error', reject);
@@ -281,8 +308,14 @@ function servePages() {
             const origin = `http://127.0.0.1:${port}`;
             resolve({
                 origin,
-                urls: { a: `${origin}/a`, b: `${origin}/b` },
-                close: () => new Promise(done => server.close(() => done())),
+                urls: { a: `${origin}/a`, b: `${origin}/b`, c: `${origin}/c` },
+                // closeAllConnections FIRST: the hanging page holds its socket
+                // open for the life of the run, and server.close() alone would
+                // wait for it forever.
+                close: () => new Promise(done => {
+                    server.closeAllConnections();
+                    server.close(() => done());
+                }),
             });
         });
     });
@@ -426,6 +459,16 @@ function phaseExpression(cfg, phase, arg) {
         // thumb-not-scheduled plant has one seam.
         const groups = __getByName(container, 'GroupQueryService');
         P.thumbnailOf = uri => groups.getThumbnail(uri);
+        // G-14.1.1-6: the ONE geometry message that tells chrome the overlay
+        // stopped being visible, behind a named seam so a plant can remove this
+        // hide alone -- the mode walk's own hides must keep working or the walk
+        // assertions would go red for an unrelated reason.
+        // send, NOT request: the geometry reply is deliberately withheld by the
+        // lost-view-ignored plant, and a phase that awaited it would hang that
+        // whole session rather than let the plant go red on its own assertion.
+        P.hideOverlay = async () => {
+            P.channel.send({ kind: 'webTabGeometry', tabId: P.widget.tabId, x: 0, y: 0, w: 0, h: 0, visible: false });
+        };
 
         if (cfg.plant === 'swallow') {
             const realDispatch = document.dispatchEvent.bind(document);
@@ -741,24 +784,51 @@ function phaseExpression(cfg, phase, arg) {
         }, 5000);
         report.rowsAfterNavigation = rows.map(row => ({ url: row.url, title: row.title }));`,
 
-        // G-14.1.1-6. Since 14.1 every tab Chris opens is an overlay, so if the
-        // capture path can only see stock tabs every Panorama card falls to the
-        // no-thumbnail state. Hide the overlay through the product's own
-        // geometry message -- the same one a mode switch away publishes -- so
-        // the last-view schedule site is exercised, then wait past the settle
-        // window and read the row back. The bytes themselves NEVER enter the
-        // report: presence, prefix and length only.
+        // G-14.1.1-6 -- THUMBNAIL ATTRIBUTION. Since 14.1 every tab Chris opens
+        // is an overlay, so if the capture path can only see stock tabs every
+        // Panorama card falls to the no-thumbnail state. Proving the LAST-VIEW
+        // arm is what fills the row needs a page whose row nothing else can
+        // fill, which is what servedC is: its response is written and never
+        // ended, so the document commits and paints while the network never
+        // reaches STOP and the onStateChange arm at PowerBrowserAPI.sys.mjs:2263
+        // never fires for it. The overlay is navigated there through the
+        // widget's own navigate() (the same webTabNavigate the pill commit
+        // issues), the row written by chrome's onLocationChange is waited for,
+        // the derived settle window is outwaited twice over, the baseline is
+        // read and must be ABSENT -- and only then is the overlay hidden. The
+        // snapshot the row ends up carrying is therefore attributable to
+        // webTabGeometry's last-view arm at :2358-2365 and to nothing else. The
+        // bytes themselves NEVER enter the report: absence, presence, prefix and
+        // length only.
         thumbnail: `
+        report.steps.push('navigate the overlay to the hanging page ' + cfg.servedC);
+        report.thumbnail = { hasThumbnail: false, prefixOk: false, length: 0, rowPresent: false, baseline: { absent: undefined, length: 0 } };
+        await P.widget.navigate(cfg.servedC);
+        // The row is written by the overlay's own onLocationChange, so its
+        // presence is the proof that chrome's entry.uri is now servedC -- which
+        // is what makes servedC the URI any capture would be keyed on.
+        report.thumbnail.rowPresent = await P.until(async () => {
+            const rows = await P.search(cfg.servedOrigin, 8);
+            return rows.some(row => row.url === cfg.servedC);
+        }, 10000);
+        if (!report.thumbnail.rowPresent) {
+            fail('thumbnail: no store row for the hanging page ' + cfg.servedC + ' appeared after the overlay was navigated there, so chrome never took it as the overlay current URI and no capture could be keyed on it (broken instrument, never a clean pass)');
+        }
+        // Longer than twice the derived settle window: whatever any other arm
+        // might have scheduled for this URI has certainly fired by now, so the
+        // baseline below is a real absence rather than a race.
+        await new Promise(resolve => setTimeout(resolve, cfg.thumbnailSettleMs * 2 + 500));
+        const baseline = await P.thumbnailOf(cfg.servedC);
+        report.thumbnail.baseline = {
+            absent: !(typeof baseline === 'string' && baseline.length > 0),
+            length: typeof baseline === 'string' ? baseline.length : 0,
+        };
+
         report.steps.push('hide the overlay, then read its last-view snapshot');
-        report.thumbnail = { hasThumbnail: false, prefixOk: false, length: 0 };
-        // send, NOT request: the geometry reply is deliberately withheld by the
-        // lost-view-ignored plant, and a phase that awaited it would hang that
-        // whole session rather than let the plant go red on its own assertion.
-        // Nothing here needs the reply -- the evidence is the stored row below.
-        P.channel.send({ kind: 'webTabGeometry', tabId: P.widget.tabId, x: 0, y: 0, w: 0, h: 0, visible: false });
+        await P.hideOverlay();
         let snapshot;
         await P.until(async () => {
-            snapshot = await P.thumbnailOf(cfg.servedB);
+            snapshot = await P.thumbnailOf(cfg.servedC);
             return typeof snapshot === 'string' && snapshot.length > 0;
         }, 8000);
         report.thumbnail.hasThumbnail = typeof snapshot === 'string' && snapshot.length > 0;
@@ -824,7 +894,7 @@ function phaseExpression(cfg, phase, arg) {
         let rows = [];
         await P.until(async () => {
             rows = await P.search(cfg.servedOrigin, 8);
-            return !rows.some(row => row.url === cfg.servedA || row.url === cfg.servedB);
+            return !rows.some(row => row.url === cfg.servedA || row.url === cfg.servedB || row.url === cfg.servedC);
         }, 5000);
         report.rowsAfterClose = rows.map(row => ({ url: row.url, title: row.title }));
         report.mainIdsAfterClose = P.mainIds();
@@ -913,7 +983,10 @@ async function drive(derived, plant) {
         typedB: pages.urls.b.replace(/^http:/, 'HTTP:'),
         servedA: pages.urls.a,
         servedB: pages.urls.b,
+        // The hanging page the thumbnail phase attributes its evidence to.
+        servedC: pages.urls.c,
         servedOrigin: pages.origin,
+        thumbnailSettleMs: derived.thumbnailSettleMs,
         debounceMs: derived.debounceMs,
         dropdownClass: derived.dropdownClass,
         chromeBarWidgetClass: derived.chromeBarWidgetClass,
@@ -929,7 +1002,7 @@ async function drive(derived, plant) {
                 return __getByName(window.theia.container, 'FrontendApplicationStateService').state === 'ready';
             } catch (e) { return false; } })()`, { timeoutMs: 60000 });
 
-            const report = { failures: [], notes: [], steps: [], alignments: [], hops: [], servedA: cfg.servedA, servedB: cfg.servedB };
+            const report = { failures: [], notes: [], steps: [], alignments: [], hops: [], servedA: cfg.servedA, servedB: cfg.servedB, servedC: cfg.servedC };
             const phase = async (name, arg) => {
                 const part = JSON.parse(await evaluate(phaseExpression(cfg, name, arg)));
                 report.failures.push(...part.failures);
@@ -1091,7 +1164,7 @@ async function drive(derived, plant) {
                     rowsAfterClose: closed.rowsAfterClose, mainIdsAfterClose: closed.mainIdsAfterClose,
                     widgetDisposed: closed.widgetDisposed, windowOpenCalls: closed.windowOpenCalls,
                 });
-                contexts = await awaitContexts(topLevelContexts, seen => !seen.some(c => c.url === cfg.servedA || c.url === cfg.servedB));
+                contexts = await awaitContexts(topLevelContexts, seen => !seen.some(c => c.url === cfg.servedA || c.url === cfg.servedB || c.url === cfg.servedC));
                 report.contextsAfterClose = contexts.map(c => c.url);
             }
 
@@ -1233,21 +1306,27 @@ function assertReport(derived, report) {
     }
     // G-14.1.1-6. The card's `tab.thumbnail` branch has always rendered; what
     // it never had since 14.1 was a row to render, because the capture path
-    // could only find a stock tab.
+    // could only find a stock tab. The four assertions below are ordered as the
+    // attribution runs: absent before the hide, present after it, a PNG, inside
+    // the cap.
     const thumb = report.thumbnail ?? {};
+    const baseline = thumb.baseline ?? {};
+    if (baseline.absent !== true) {
+        failures.push(`thumbnail: the store row for ${report.servedC} already carried a snapshot (${baseline.length} chars) BEFORE the overlay was hidden -- that page's response is never ended, so it never reaches network STOP and no other capture site should have been able to fill its row; this phase can therefore no longer attribute the snapshot to the last-view hide (broken instrument, never a clean pass)`);
+    }
     if (thumb.hasThumbnail !== true) {
-        failures.push(`thumbnail: the store row for ${report.servedB} carries no last-view snapshot after the overlay loaded and was hidden -- an in-shell web tab captured nothing, so its Panorama card falls to the text fallback`);
+        failures.push(`thumbnail: the store row for ${report.servedC} carries no last-view snapshot after the overlay was hidden -- an in-shell web tab captured nothing on its last view, so its Panorama card falls to the text fallback`);
     }
     if (thumb.prefixOk !== true) {
-        failures.push(`thumbnail: the stored snapshot for ${report.servedB} is not a PNG data URL (length ${thumb.length}) -- GUI-08 contracts a PNG last-view snapshot`);
+        failures.push(`thumbnail: the stored snapshot for ${report.servedC} is not a PNG data URL (length ${thumb.length}) -- GUI-08 contracts a PNG last-view snapshot`);
     }
     if (!(thumb.length > 0 && thumb.length <= derived.thumbnailMaxChars)) {
         failures.push(`thumbnail: the stored snapshot is ${thumb.length} chars, outside the capture cap TAB_THUMBNAIL_CAPTURE_MAX_CHARS=${derived.thumbnailMaxChars} derived from ${SHELL_API_REL} -- over the cap the row must clear to NULL rather than store`);
     }
-    if ((report.rowsAfterClose ?? []).some(row => row.url === report.servedA || row.url === report.servedB)) {
+    if ((report.rowsAfterClose ?? []).some(row => row.url === report.servedA || row.url === report.servedB || row.url === report.servedC)) {
         failures.push(`a store row for a served URL is still readable after the tab was closed (rows: ${JSON.stringify(report.rowsAfterClose)})`);
     }
-    const leftover = (report.contextsAfterClose ?? []).filter(url => url === report.servedA || url === report.servedB);
+    const leftover = (report.contextsAfterClose ?? []).filter(url => url === report.servedA || url === report.servedB || url === report.servedC);
     if (leftover.length) {
         failures.push(`a top-level browsing context still carries a served URL after close: ${JSON.stringify(report.contextsAfterClose)} -- the overlay context was not removed`);
     }
@@ -1266,7 +1345,7 @@ function printReport(report) {
     if (report.driveError) {
         return;
     }
-    console.log(`${NAME}: served ${report.servedA} and ${report.servedB}; "+" added [${(report.addedIds ?? []).join(', ')}] from factory '${report.widgetFactoryId}' labelled ${JSON.stringify(report.newTabLabel)}; pill focused: ${report.pillFocused}; shell.currentWidget is the tab: ${report.isShellCurrentWidget}`);
+    console.log(`${NAME}: served ${report.servedA}, ${report.servedB} and ${report.servedC} (the last one never ended); "+" added [${(report.addedIds ?? []).join(', ')}] from factory '${report.widgetFactoryId}' labelled ${JSON.stringify(report.newTabLabel)}; pill focused: ${report.pillFocused}; shell.currentWidget is the tab: ${report.isShellCurrentWidget}`);
     const a = report.afterA ?? {};
     const b = report.afterB ?? {};
     console.log(`${NAME}: after A: pill ${JSON.stringify(a.pill)}, uriOf ${JSON.stringify(a.uriOf)}, overlay ${JSON.stringify(report.overlayUrlAfterA)}, Back disabled ${a.backDisabled}; after B: pill ${JSON.stringify(b.pill)}, uriOf ${JSON.stringify(b.uriOf)}, overlay ${JSON.stringify(report.overlayUrlAfterB)} (context ${report.overlayContext}), Back disabled ${b.backDisabled}`);
@@ -1286,7 +1365,8 @@ function printReport(report) {
     console.log(`${NAME}: restoreRepeat: minted ${JSON.stringify(restore.mintedId)} (session segment ${JSON.stringify(restore.mintedIdPrefix)}), second "+" minted ${JSON.stringify(restore.secondMintedId)}; foreign id ${JSON.stringify(restore.foreignId)} refused: ${restore.refusedForeignId}${restore.refusalMessage ? ` (${restore.refusalMessage})` : ''}; main-area ids after: [${(restore.mainIdsAfter ?? []).join(', ')}]`);
     console.log(`${NAME}: rows after navigation: ${JSON.stringify((report.rowsAfterNavigation ?? []).map(r => r.url))}; rows after close: ${JSON.stringify((report.rowsAfterClose ?? []).map(r => r.url))}`);
     const thumb = report.thumbnail ?? {};
-    console.log(`${NAME}: thumbnail: hasThumbnail ${thumb.hasThumbnail}, prefixOk ${thumb.prefixOk}, length ${thumb.length} -- bytes deliberately not printed`);
+    const baseline = thumb.baseline ?? {};
+    console.log(`${NAME}: thumbnail attribution on ${report.servedC}: row present ${thumb.rowPresent}; baseline before the hide: absent ${baseline.absent} (length ${baseline.length}); after the hide: hasThumbnail ${thumb.hasThumbnail}, prefixOk ${thumb.prefixOk}, length ${thumb.length} -- bytes deliberately not printed`);
     const late = report.dropdownAfterEnter ?? {};
     console.log(`${NAME}: dropdownAfterEnter: typed ${JSON.stringify(late.typed)}, dropdownPresent ${late.dropdownPresent}, overlayVisible ${late.overlayVisible}, pill ${JSON.stringify(late.pill)}, overlay ${JSON.stringify(late.overlayRect)}`);
     console.log(`${NAME}: contexts after close: ${JSON.stringify(report.contextsAfterClose ?? [])}; main-area ids before/after: [${(report.mainIdsBefore ?? []).join(', ')}] / [${(report.mainIdsAfterClose ?? []).join(', ')}]; window.open calls: ${report.windowOpenCalls}; ${SHELL_READY_SENTINEL} lines: ${report.shellReadyLines}`);
