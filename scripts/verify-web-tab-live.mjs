@@ -455,8 +455,10 @@ function phaseExpression(cfg, phase, arg) {
         // G-14.1.1-6: the last-view snapshot reader. NOT ChromeBarSuggestionService
         // -- its row projection drops the thumbnail column, so the only frontend
         // reader that can see one is GroupQueryService, the same backend handle
-        // (TabQueryService) behind one more RPC method. Wrapped here so the
-        // thumb-not-scheduled plant has one seam.
+        // (TabQueryService) behind one more RPC method. Wrapped here so every
+        // phase reads a snapshot through one seam; no plant strips this reader
+        // any more -- stripping the READ scored the thumbnail assertions without
+        // touching any capture site, which is the defect 14.1.1-06 removed.
         const groups = __getByName(container, 'GroupQueryService');
         P.thumbnailOf = uri => groups.getThumbnail(uri);
         // G-14.1.1-6: the ONE geometry message that tells chrome the overlay
@@ -588,24 +590,27 @@ function phaseExpression(cfg, phase, arg) {
                 };
                 report.notes.push('PLANT dropdown-rearms: ' + cfg.chromeBarWidgetClass + '.prototype.closeDropdown leaves the bar armed, so a query still in flight at Enter re-opens the dropdown over the committed page');
             }
-        } else if (cfg.plant === 'thumb-not-scheduled') {
-            // DOCUMENTED LIMITATION -- this is an ASSERTION test, not a
-            // capture-path test, and must not be read as one. The schedule
-            // and the capture both live entirely chrome-side (the overlay's
-            // own progress listener and webTabGeometry in
-            // PowerBrowserAPI.sys.mjs), while every plant here runs in the page
-            // realm, so no seam this plant can reach removes the schedule
-            // itself. It strips the snapshot off the READ instead, which
-            // proves the three thumbnail assertions are separate from the row
-            // assertions and go red on their own -- it does NOT prove the
-            // capture path is what filled them. What proves that is the RED
-            // recorded before the fix landed: the same phase, same reader, no
-            // plant, and no snapshot in the row.
-            if (typeof P.thumbnailOf !== 'function') {
-                fail('plant thumb-not-scheduled could not be applied: the probe carries no thumbnail reader seam');
+        } else if (cfg.plant === 'hide-not-published') {
+            // WHAT THE RED PROVES: that the stored snapshot exists only because
+            // the overlay was hidden. The thumbnail phase runs on a page whose
+            // response is never ended, so the network-STOP arm never fires for
+            // it and the hide is the ONLY site that can fill its row; removing
+            // the hide therefore empties the row and the same three assertions
+            // that a deletion of the chrome-side last-view arm at
+            // PowerBrowserAPI.sys.mjs:2358-2365 would empty go red here. That is
+            // the attribution G-14.1.1-6 asks for.
+            //
+            // WHAT IT DOES NOT PROVE, plainly: no plant in this file can edit
+            // chrome-side source -- every plant runs in the page realm -- so
+            // this removes the FRONTEND half of that one causal chain rather
+            // than the chrome half. The two halves are the same chain: with no
+            // geometry message saying visible=false, webTabGeometry's last-view
+            // arm is never reached at all.
+            if (typeof P.hideOverlay !== 'function') {
+                fail('plant hide-not-published could not be applied: the probe carries no overlay-hide seam');
             } else {
-                P.thumbnailOf = async () => undefined;
-                report.notes.push('PLANT thumb-not-scheduled: the last-view snapshot reader returns nothing (assertion test -- the chrome-side capture path is not reachable from the page realm)');
+                P.hideOverlay = async () => { };
+                report.notes.push('PLANT hide-not-published: the frontend never tells chrome the overlay stopped being visible, so the last-view arm of webTabGeometry is never reached and no capture is ever scheduled for the hanging page');
             }
         } else if (cfg.plant === 'store-unread') {
             P.search = async () => [];
@@ -810,10 +815,15 @@ function phaseExpression(cfg, phase, arg) {
         report.thumbnail.rowPresent = await P.until(async () => {
             const rows = await P.search(cfg.servedOrigin, 8);
             return rows.some(row => row.url === cfg.servedC);
-        }, 10000);
+        }, 6000);
+        // Bail rather than wait out the two polls below when the row never
+        // arrived: without it there is nothing to attribute a snapshot to, and
+        // in a session where every actor request times out (the swallow plant)
+        // the waits would push this phase past the BiDi evaluate budget and the
+        // plant would report 'could not be driven' instead of its own red.
         if (!report.thumbnail.rowPresent) {
             fail('thumbnail: no store row for the hanging page ' + cfg.servedC + ' appeared after the overlay was navigated there, so chrome never took it as the overlay current URI and no capture could be keyed on it (broken instrument, never a clean pass)');
-        }
+        } else {
         // Longer than twice the derived settle window: whatever any other arm
         // might have scheduled for this URI has certainly fired by now, so the
         // baseline below is a real absence rather than a race.
@@ -839,7 +849,8 @@ function phaseExpression(cfg, phase, arg) {
         // not this phase's leftovers.
         P.widget.lastSent = '';
         P.widget.publish();
-        await P.settle();`,
+        await P.settle();
+        }`,
 
         // G-14.1.1-5. Both halves of the gap, one mechanism. The stock layout
         // restorer describes every widget that has a WidgetManager description
@@ -1441,11 +1452,12 @@ async function selfTest() {
         // behaviour), so the query the last keystroke scheduled re-opens the
         // dropdown over the committed page and occludes the overlay.
         { name: 'the dropdown re-arms across the commit', plant: 'dropdown-rearms', expect: 'dropdown' },
-        // No last-view snapshot reaches the row (G-14.1.1-6). See the plant's
-        // own comment: it strips the read, not the chrome-side schedule, so it
-        // proves the thumbnail assertions are reachable and independent of the
-        // row assertions -- not that the capture path filled them.
-        { name: 'no last-view snapshot on the row', plant: 'thumb-not-scheduled', expect: 'thumbnail' },
+        // The overlay hide is never published (G-14.1.1-6), so webTabGeometry's
+        // last-view arm is never reached and the hanging page -- whose network
+        // never reaches STOP, so nothing else can fill its row -- ends the run
+        // with no snapshot at all. This is the attribution plant: it removes the
+        // frontend half of the very causal chain the chrome-side arm completes.
+        { name: 'the overlay hide is never published', plant: 'hide-not-published', expect: 'thumbnail' },
         // The store reader returns nothing.
         { name: 'store rows unread', plant: 'store-unread', expect: 'row' },
         // "+" itself regresses to a popup.
