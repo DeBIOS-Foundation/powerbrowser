@@ -141,10 +141,12 @@ export const SETUP_GONE_TABS_NOTICE = 'Power Browser restored this setup, but so
  * Contracted dependent-window refusal (14-UI-SPEC.md, verbatim): thrown when
  * the current tab hosts no extractable content, so there is nothing a
  * dependent window could show. It names no command id -- the command carries
- * no palette label, so re-invoking it is not an affordance the user has; the
- * only real next step on screen is selecting a different tab.
+ * no palette label and nothing invokes it, so the only real next step on
+ * screen is selecting a different tab, which is what the sentence says and
+ * all it says. If the command is ever given a palette label, a retry clause
+ * becomes true and may be restored here and in the spec row together.
  */
-export const SETUP_DEPENDENT_UNSUPPORTED = 'Power Browser can\'t open this tab in its own window. Select a terminal or editor tab first, then try again.';
+export const SETUP_DEPENDENT_UNSUPPORTED = 'Power Browser can\'t open this tab in its own window. Select a terminal or editor tab first.';
 
 /**
  * Contracted unknown-mode fallback notice (14-UI-SPEC.md): stock
