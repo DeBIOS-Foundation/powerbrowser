@@ -35,17 +35,29 @@
 //     rows that name a setups surface.
 // A literal in the service with no table row is UNREVIEWED COPY; a table
 // row with no literal in the service is DROPPED CONTRACT. Both are reported
-// by name, so the gate goes red on an addition AND on a removal.
+// by name, so the gate goes red on an addition AND on a removal. The
+// ConfirmDialog site (paint site 3) is enumerated, not positional: since
+// 14.1.1-12 it walks EVERY `new ConfirmDialog({...})` construction in the
+// service, reads each one's own object literal, and attributes each
+// `addClass` to that dialog's own binding -- so a second dialog's copy and
+// a second dialog's missing class are both red (self-test plants 9 and 10).
+// Two limits, stated here because a comment may claim only the reach that
+// exists: the gate reads ONLY `setups-service.ts`, so a confirmation painted
+// from another file in the modes extension is outside its scope; and each
+// dialog body is found by brace counting, so a `{` or `}` inside a string
+// literal would confuse it (see confirmDialogs()).
 //
 // The one hand-kept datum is SETUP_ROW_LABELS below -- a SCOPE SELECTOR
 // (which rows of a table shared with modes, panorama and dependent windows
 // belong to setups), never an expectation. Every string compared is derived.
 //
 // A no-internals shape check runs over the same derived service strings, and
-// the destructive-ink half derives the dialog class from the service and the
-// danger-scoped selectors from `modes.css` and requires the intersection --
-// neither side is a literal kept here either. An empty derivation on either
-// side fails DISTINCTLY as a broken instrument, never passes as clean.
+// the destructive-ink half derives each dialog's class from its own binding
+// in the service and the danger-scoped selectors from `modes.css`, and
+// requires every dialog to carry a class in that set -- neither side is a
+// literal kept here either, and there is no count assertion. An empty
+// derivation on either side fails DISTINCTLY as a broken instrument, never
+// passes as clean.
 //
 // Honestly --quick: it reads three text files. No build, no browser, no
 // display, no network.
@@ -470,7 +482,9 @@ function main() {
     }
     const { copy } = derivedServiceCopy(sources[SERVICE_REL]);
     const contracted = derivedSpecCopy(sources[SPEC_REL]);
-    console.log(`${NAME}: PASS -- ${new Set(copy).size} painted setups strings, derived from five paint sites, match ${new Set(contracted).size} contracted literals as set equality, no internals in copy, destructive ink scoped to exactly one dialog`);
+    const dialogs = derivedDialogClasses(sources[SERVICE_REL]);
+    const ink = dialogs.map(d => `"${d.binding}" carries ${d.classes.map(c => JSON.stringify(c)).join(' + ')}`).join('; ');
+    console.log(`${NAME}: PASS -- ${new Set(copy).size} painted setups strings, derived from five paint sites, match ${new Set(contracted).size} contracted literals as set equality, no internals in copy, ${dialogs.length} ConfirmDialog construction(s) each with a danger-scoped class (${ink})`);
 }
 
 /** Run one plant: assert it landed, then require the named drift to go red. */
@@ -599,10 +613,61 @@ function selfTest() {
         );
     }
 
+    // Plants 9 and 10 (14.1.1-12, gap 2) insert a SECOND ConfirmDialog
+    // immediately after the first dialog's addClass line -- the anchor is the
+    // exact text of that line, so a drifted anchor fails as `did not land`
+    // rather than passing silently.
+    const ADD_CLASS_ANCHOR = "            dialog.addClass('pb-setup-delete-confirm');\n";
+
+    // Plant 9: a second dialog whose title/ok/cancel have no Copywriting
+    // Contract row. It carries the danger class so the ink half stays green
+    // and only the copy half fires -- red naming one of ITS OWN literals,
+    // which the positional pre-change gate could not see at all.
+    {
+        const service = real[SERVICE_REL].replace(ADD_CLASS_ANCHOR, ADD_CLASS_ANCHOR
+            + '            const second = new ConfirmDialog({\n'
+            + "                title: 'Discard Draft',\n"
+            + '                msg: setupDeleteBody(row.name),\n'
+            + "                ok: 'Discard',\n"
+            + "                cancel: 'Keep',\n"
+            + '            });\n'
+            + "            second.addClass('pb-setup-delete-confirm');\n");
+        const mutated = { ...real, [SERVICE_REL]: service };
+        plant(state, 'second ConfirmDialog with uncontracted copy', mutated, service.includes('Discard Draft'), /Discard Draft/);
+    }
+
+    // Plant 10: a second destructive dialog carrying NO class. Its literals
+    // are the contracted ones the first dialog already uses, so the derived
+    // copy SET is unchanged and the copy half stays green -- the only red is
+    // the ink one, naming the binding that lacks a class. The absence of a
+    // copy-set red is asserted too, because that is what makes the red
+    // attributable to the ink half rather than to the plant's own text.
+    {
+        const service = real[SERVICE_REL].replace(ADD_CLASS_ANCHOR, ADD_CLASS_ANCHOR
+            + '            const second = new ConfirmDialog({\n'
+            + "                title: 'Delete Setup',\n"
+            + '                msg: setupDeleteBody(row.name),\n'
+            + "                ok: 'Delete',\n"
+            + "                cancel: 'Cancel',\n"
+            + '            });\n');
+        const mutated = { ...real, [SERVICE_REL]: service };
+        const landed = service.includes('const second = new ConfirmDialog');
+        plant(state, 'second destructive dialog with no class', mutated, landed, /adds NO class to the confirmation dialog bound to "second"/);
+        if (landed) {
+            const copyReds = checkStatic(mutated).filter(f => /unreviewed copy|dropped contract/.test(f));
+            if (copyReds.length) {
+                console.error(`${NAME} --self-test: FAIL -- plant 10 also went red on the copy set (${copyReds.join(' | ')}), so its ink red is not attributable`);
+                state.failed += 1;
+            } else {
+                console.log('  ok  plant 10 copy half: GREEN -- the red is the ink assertion alone');
+            }
+        }
+    }
+
     if (state.failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all eight fault directions went red naming the drift (two of them at the throw paint site), and the pre-widening deriver stayed green on plant 7`);
+    console.log(`${NAME} --self-test: PASS -- all ten fault directions went red naming the drift (two at the throw paint site, two from a second ConfirmDialog), and the pre-widening deriver stayed green on plant 7`);
 }
 
 try {
