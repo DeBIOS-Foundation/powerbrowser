@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 14.1.1
 current_phase_name: GUI Conformance Sweep (INSERTED)
 status: executing
-stopped_at: Completed 14.1.1-06-PLAN.md
-last_updated: "2026-09-08T04:20:03.867Z"
+stopped_at: Completed 14.1.1-09-PLAN.md
+last_updated: "2026-09-08T04:34:14.873Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 14.1.1 execution started
-state_head: 061685c2b479ffb7cf7a6126db1b32ef7cec2ee6
+state_head: bfdb9797b6762f52d98687b0bdda706af7d1f693
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 16
-  completed_plans: 13
+  completed_plans: 14
 milestone_name: Browser GUI
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 ## Current Position
 
 Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — EXECUTING
-Plan: 3 of 10
+Plan: 4 of 10
 Status: Ready to execute
 Last activity: 2026-09-07 — Phase 14.1.1 execution started
 
@@ -122,6 +122,7 @@ Last activity: 2026-09-07 — Phase 14.1.1 execution started
 | Phase 14.1.1 P04 | 25min | 2 tasks | 5 files |
 | Phase 14.1.1 P08 | 13 min | 3 tasks | 4 files |
 | Phase 14.1.1 P06 | 37 min | 3 tasks | 2 files |
+| Phase 14.1.1 P09 | 11 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -312,6 +313,9 @@ Recent decisions affecting current work:
 - [Phase 14.1.1]: The clean-checkout yarn build:extensions is deferred to pass 3; running it would delete a concurrent session's live theia/**/lib trees, so G-14.1.1-9 flips to in_tree not fixed
 - [Phase 14.1.1]: The hanging-page shape shipped: /c is served written-but-never-ended, so it paints without reaching network STOP and the only capture site that can fill its row is the last-view hide
 - [Phase 14.1.1]: A plant that removes a CAUSE outranks one that removes a READ: hide-not-published makes P.hideOverlay a no-op and the thumbnail assertions go red, where the deleted thumb-not-scheduled only stubbed the reader
+- [Phase 14.1.1]: The dependent-window refusal names no command id and no palette instruction, because SETUPS_OPEN_DEPENDENT carries no label and re-invoking it is not an affordance on screen
+- [Phase 14.1.1]: The copy gate's fifth paint site resolves only a bare identifier at a throw; a raw literal, concatenation or template there is unresolved and red
+- [Phase 14.1.1]: No enumerated danger-selector list was added to gui09-setups-copy: the real invariant is one class per destructive dialog, and a selector list would be the hand-kept expectation CLAUDE.md forbids
 
 ### Pending Todos
 
@@ -409,8 +413,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-08T04:18:43.101Z
-Stopped at: Completed 14.1.1-06-PLAN.md
+Last session: 2026-09-08T04:34:05.635Z
+Stopped at: Completed 14.1.1-09-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
