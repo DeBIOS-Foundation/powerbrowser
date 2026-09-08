@@ -513,11 +513,19 @@ export class WebTabWidget extends BaseWidget {
      */
     protected async reopen(): Promise<WebTabReply> {
         const reply = await this.channel.request({ kind: 'webTabOpen', tabId: this.tabId, url: this.url });
-        // `lostReply()`, never a second inline spelling: an `ok: true` reply
-        // naming the unknown-tab outcome would otherwise read here as a
-        // successful reopen and leave the body blank. Two spellings of "this
-        // reply means chrome no longer renders the tab" is how the two drift
-        // apart -- the defect G-14.1.1-4 closed one site earlier.
+        // One reading of "chrome no longer renders this tab" (G-14.1.1-48):
+        // every site that folds an open-or-navigate reply -- onAfterAttach,
+        // this reopen, and settle() -- reaches lost-view state through
+        // `lostReply()`. publish()'s narrower unknown-tab-only arm is the one
+        // deliberate exception, for the reason its own doc comment gives: a
+        // slow frame's timeout reply must not blank a live page. The `lost-reply`
+        // assertions in scripts/verify-web-tab-bridge.mjs guard both halves
+        // (`scripts/verify-platform.sh --only gui02-web-tab-bridge`): each
+        // setLostView call-site argument must be the predicate call or a bare
+        // identifier/boolean, and each exported outcome constant must appear
+        // inside lostReply(). Not covered: a reading spelled as an `if` guard
+        // around a bare boolean is invisible to the call-site pattern, and
+        // publish()'s documented arm is the only instance of that shape here.
         this.setLostView(WebTabWidget.lostReply(reply));
         this.lastSent = '';
         this.publish();
