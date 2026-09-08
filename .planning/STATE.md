@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 14.1.1
 current_phase_name: GUI Conformance Sweep (INSERTED)
 status: executing
-stopped_at: Completed 14.1.1-07-PLAN.md
-last_updated: "2026-09-08T04:58:15.681Z"
+stopped_at: Completed 14.1.1-10-PLAN.md
+last_updated: "2026-09-08T05:18:14.018Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 14.1.1 execution started
-state_head: b347623cdbd123fa576a1debde952fdbe6b0d188
+state_head: 8509dc735537655cef921494cf76d746127b548c
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 16
-  completed_plans: 15
+  completed_plans: 16
 milestone_name: Browser GUI
 ---
 
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-09-06)
 
 ## Current Position
 
-Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — EXECUTING
-Plan: 5 of 10
-Status: Ready to execute
+Phase: 14.1.1 (GUI Conformance Sweep (INSERTED)) — ALL PLANS EXECUTED
+Plan: 10 of 10
+Status: Phase complete on disk (10 PLANs, 10 SUMMARYs). Next: GUI-SWEEP Step 3 — Chris walks 14.1.1-UAT.md. Counter was stale at 5 when 14.1.1-10 ran; corrected to disk here.
 Last activity: 2026-09-07 — Phase 14.1.1 execution started
 
 ## Performance Metrics
@@ -124,6 +124,7 @@ Last activity: 2026-09-07 — Phase 14.1.1 execution started
 | Phase 14.1.1 P06 | 37 min | 3 tasks | 2 files |
 | Phase 14.1.1 P09 | 11 min | 3 tasks | 5 files |
 | Phase 14.1.1 P07 | 24 min | 2 tasks | 2 files |
+| Phase 14.1.1 P10 | 20 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -320,6 +321,10 @@ Recent decisions affecting current work:
 - [Phase 14.1.1]: Anchored prefix scoring: every self-test plant is scored by startsWith on a stable message-family prefix, never a bare substring
 - [Phase 14.1.1]: The pill (chrome bar binding) and the tab strip label (widget state push) are two separate observables, so a broken binding and a missing push are told apart by two true assertions
 - [Phase 14.1.1]: A new rule ships beside literal fixture tables that prove it rejects each malformed shape AND accepts the well-formed one, printed every run
+- [Phase 14.1.1]: 14.1.1-10: G-14.1.1-9 recorded in_tree, not fixed — the theia-build-order gate proves the ordering and declaration invariants, but the clean-checkout yarn build:extensions was never run because it deletes the theia/**/lib trees the live sidecar is served from
+- [Phase 14.1.1]: 14.1.1-10: every closed gap carries a closed_by: line naming the plan and short sha confirmed against git log; gap 46 names its closing plan and task with NO sha, because a commit cannot cite its own hash
+- [Phase 14.1.1]: 14.1.1-10: the register check asserts the invariants around the fixed set (pointer present, needs-chris never fixed, Summary numbers match contents), deliberately NOT its membership
+- [Phase 14.1.1]: 14.1.1-10: GUI-DEFECTS items closed on a reproducible check read CONFIRMED FIXED and state what that reproducer does NOT assert; CONFIRMED stays reserved for Chris's own window
 
 ### Pending Todos
 
@@ -417,8 +422,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-08T04:58:08.274Z
-Stopped at: Completed 14.1.1-07-PLAN.md
+Last session: 2026-09-08T05:18:04.987Z
+Stopped at: Completed 14.1.1-10-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

@@ -136,7 +136,7 @@ Plans:
 **Goal:** Every `fixable: yes` gap in `14.1.1-UAT.md` is closed, each proved by a check that goes red without its fix; `needs-chris` and `decision` gaps gain evidence only and are never marked fixed by an executor
 **Requirements**: none mapped — this phase closes GUI conformance gaps, not requirement IDs
 **Depends on:** Phase 14.1
-**Plans:** 9/10 plans executed — pass 1 (01–05) executed; pass 2 (06–10) planned
+**Plans:** 10/10 plans executed — pass 1 (01–05) executed; pass 2 (06–10) planned
 **Protocol:** `.planning/GUI-SWEEP.md` (Step 2 — automated fix pass)
 
 Pass 1 planned the eleven in-scope `fixable: yes` gaps (G-14.1.1-4, 5, 6, 7, 19, 20, 21, 22, 24,
@@ -181,7 +181,7 @@ Plans:
 
 **Wave 4** *(blocked on 06, 07, 08, 09)*
 
-- [ ] 14.1.1-10-PLAN.md — the record: ten UAT statuses flipped with commit pointers, five new gap entries, GUI-DEFECTS 12/15/23/24/25 moved, catalogue line corrected (WR-10), Phase-14 placeholder rows superseded
+- [x] 14.1.1-10-PLAN.md — the record: ten UAT statuses flipped with commit pointers, five new gap entries, GUI-DEFECTS 12/15/23/24/25 moved, catalogue line corrected (WR-10), Phase-14 placeholder rows superseded
 
 ### Phase 15: Panorama Organising
 
