@@ -22,12 +22,18 @@
 //   * the EXTENSION SET -- the directory names actually present under
 //     `theia/extensions`;
 //   * the EDGES -- for each extension, the other extensions it imports,
-//     taken ONLY from import/export specifiers of the form
-//     `from '@powerbrowser/<name>...'` in its own `src` tree. A bare
+//     taken ONLY from import/export specifiers in its own `src` tree, in
+//     both specifier forms: the `from '@powerbrowser/<name>...'` form of a
+//     named import or re-export, and the side-effect
+//     `import '@powerbrowser/<name>...'` form (plus the dynamic
+//     `import('@powerbrowser/<name>...')` call). The match is anchored to
+//     that `from`/`import` keyword adjacent to the quoted specifier; a bare
 //     `@powerbrowser/<name>` occurrence anywhere else is deliberately NOT
 //     accepted: prose comments in branding, chrome-bar, customize, modes,
 //     tab-uris and telemetry all carry that string, and a substring scan
-//     mints phantom edges from every one of them.
+//     mints phantom edges from every one of them. Comments are stripped
+//     before matching, so an import spelled inside a doc comment cannot
+//     satisfy the anchor either.
 //
 // Four assertions ride those derivations, each red on an addition AND on a
 // removal: chain equals extension set as SET EQUALITY in both directions; no
@@ -132,7 +138,12 @@ function stripComments(text) {
 
 /**
  * The `@powerbrowser` packages an extension imports, taken only from import
- * and export SPECIFIERS. Returns Map<packageName, firstImportingFileRel>.
+ * and export SPECIFIERS after comments are stripped: the `from '…'` form of
+ * a named import or re-export, the side-effect `import '…'` form, and the
+ * dynamic `import('…')` call. Each match is anchored to that keyword
+ * adjacent to the quoted specifier; a bare `@powerbrowser/<name>` string
+ * with no keyword before it is not an edge. Returns
+ * Map<packageName, firstImportingFileRel>.
  */
 function derivedImports(extDir, relBase) {
     const found = new Map();
