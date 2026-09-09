@@ -814,6 +814,21 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
     }
 
     protected applyStripHome(modeId: string): void {
+        // An unknown mode arranges NOTHING. Every rule below is phrased by
+        // exclusion -- not coding, not browsing -- so an empty id used to
+        // satisfy both and hide the dock bar AND the strip, leaving no tabs
+        // anywhere. That is not hypothetical: it fired 22 times during
+        // startup before the attribute existed, and once on every tab open
+        // and close whose re-assert read the attribute mid-transition. It is
+        // the "tabs vanish after switching back and forth" report, and the
+        // earlier re-assert fix made it easier to hit rather than causing it.
+        //
+        // Leaving the shell alone is the only safe reading of "I do not know
+        // which mode this is": the arrangement already on screen was applied
+        // by a mode that did know.
+        if (!modeId) {
+            return;
+        }
         // One rule, phrased by exclusion: Coding wears the IDE dress, every
         // other mode wears the browser one. The same rule the rails and the
         // status bar already follow in ModeService, so a mode cannot end up
