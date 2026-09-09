@@ -77,12 +77,28 @@ export class TabStripWidget extends ReactWidget {
     }
 
     /**
-     * The main dock's widgets in dock order. Read on every render rather than
-     * cached: the dock is the model, and a cached copy here would be the
-     * second source of truth this widget exists to avoid.
+     * The main dock's widgets in dock order, minus the surfaces that are a
+     * MODE rather than a tab. Read on every render rather than cached: the
+     * dock is the model, and a cached copy here would be the second source of
+     * truth this widget exists to avoid.
+     *
+     * Organising's canvas lives in the main area because that is where a
+     * full-window surface goes, but it is not something the user opened and
+     * cannot be closed or switched away from like a page -- listing it put
+     * "Organising" in the strip beside the real tabs, which is what Chris saw
+     * on 2026-09-08 and described as the mode thinking it is a tab.
+     *
+     * Spelled rather than imported for the same reason as the strip id in
+     * ModeService: @powerbrowser/chrome-bar already imports
+     * @powerbrowser/modes, and OrganisingWidget is exported from there, but
+     * this list is about presentation in THIS view and naming it here keeps
+     * the exclusion visible where the rendering happens.
      */
+    static readonly MODE_SURFACES: readonly string[] = ['powerbrowser.modes.organising'];
+
     protected mainTabs(): Widget[] {
-        return [...this.shell.mainPanel.widgets()];
+        return [...this.shell.mainPanel.widgets()]
+            .filter(widget => !TabStripWidget.MODE_SURFACES.includes(widget.id));
     }
 
     protected activateTab(widget: Widget): void {

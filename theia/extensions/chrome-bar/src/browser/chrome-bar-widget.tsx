@@ -828,7 +828,12 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         // canvas. Showing the strip there fills exactly that, and the tabs
         // stay reachable while their cards are being arranged below.
         const ideDress = modeId === 'coding';
-        this.tabStrip.setHidden(ideDress);
+        // The strip is Browsing's home only. Organising's tabs are the cards
+        // on its canvas, so a strip there would be the same tabs twice -- it
+        // was carried there briefly only to fill the space the menubar left,
+        // which the per-mode top-panel height in chrome-bar.css now removes
+        // the need for.
+        this.tabStrip.setHidden(modeId !== 'browsing');
         for (const widget of this.shell.topPanel.widgets) {
             if (ChromeBarContribution.IDE_TOP_FURNITURE.includes(widget.id)) {
                 widget.setHidden(!ideDress);
