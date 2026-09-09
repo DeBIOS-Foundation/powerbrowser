@@ -798,6 +798,16 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
     protected observeMode(): void {
         const apply = () => this.applyStripHome(document.body.getAttribute(MODE_ATTRIBUTE) ?? '');
         new MutationObserver(apply).observe(document.body, { attributeFilter: [MODE_ATTRIBUTE] });
+        // Re-assert on every shell add and remove, not only on a mode change.
+        // The dock creates its tab bars as it needs them, and a bar that
+        // appears after the switch has never been told which mode it is in --
+        // it takes Lumino's default, which is visible. Reported live as tabs
+        // vanishing in Coding after opening a tab in Browsing, and it is a
+        // race, not a wrong flag: the same switch is correct when the dock
+        // happens to settle first. Re-applying is idempotent, so the cure is
+        // to stop depending on the order at all.
+        this.shell.onDidAddWidget(() => apply());
+        this.shell.onDidRemoveWidget(() => apply());
         // The launch activation may have landed before this ran, in which
         // case no mutation is coming and the attribute is already correct.
         apply();
