@@ -6,8 +6,6 @@ import {
     FrontendApplicationContribution,
     OpenerService,
     ReactWidget,
-    StatusBar,
-    StatusBarAlignment,
     Widget,
 } from '@theia/core/lib/browser';
 import { CommandRegistry, Disposable } from '@theia/core/lib/common';
@@ -57,7 +55,7 @@ function typedAddressTargetOf(text: string): string | undefined {
 
 /**
  * GUI-06 (13-03): the chrome bar widget -- nav buttons, address pill with
- * suggestions, new-tab, mode toggle, and tab-count chip.
+ * suggestions, new-tab, and the mode toggle.
  *
  * A React contribution added once at startup to the top shell area -- the
  * plain Lumino panel above the main dock, so no core patch and no dock
@@ -76,7 +74,8 @@ function typedAddressTargetOf(text: string): string | undefined {
  * as React text nodes only, never markup (T-13-03-01); address commits
  * route through the existing opener with empty as a no-op and no
  * evaluation surface (T-13-03-03); the toggle is selection state only and
- * never touches a tab, with the chip asserting the invariant on every
+ * never touches a tab, with the before/after countTabs comparison in
+ * selectMode asserting the invariant on every
  * switch (T-13-03-04); a refused or unacknowledged web-tab navigation takes
  * the same throw-and-catch path a blocked popup once did, with no new dialog
  * authored (T-13-03-05).
@@ -112,8 +111,6 @@ export class ChromeBarWidget extends ReactWidget {
     @inject(ApplicationShell)
     protected readonly shell: ApplicationShell;
 
-    @inject(StatusBar)
-    protected readonly statusBar: StatusBar;
 
     // No PerspectiveService here by design: every mode switch this widget
     // issues -- shipped segment and custom row alike -- goes through the mode
@@ -150,7 +147,6 @@ export class ChromeBarWidget extends ReactWidget {
     protected commitFailed = false;
     protected shimmer = false;
     protected mode = ChromeBarWidget.MODES[0];
-    protected tabCount = 0;
     protected querySeq = 0;
     /** True from a keystroke until the dropdown is closed on user intent; a debounced query fires only while armed. */
     protected dropdownArmed = false;
@@ -487,24 +483,6 @@ export class ChromeBarWidget extends ReactWidget {
     }
 
     /**
-     * The tab-count chip: a plain count published to the status bar,
-     * asserting the tabs invariant on every switch. The toggle below is
-     * selection state only with shell consequences deferred, so before and
-     * after must agree -- a mismatch is logged, never thrown, and the
-     * switch still lands.
-     */
-    publishTabCount(): void {
-        this.tabCount = this.countTabs();
-        // Handled, never floating: a rejection during teardown is noise in
-        // exactly the logs used for diagnosis.
-        void this.statusBar.setElement('powerbrowser.chrome-bar.tab-count', {
-            text: `${this.tabCount} tabs`,
-            alignment: StatusBarAlignment.RIGHT,
-        }).catch(() => undefined);
-        this.update();
-    }
-
-    /**
      * Segment selection activates the matching shipped mode through the
      * imported mode command const -- the identical channel selectCustomMode
      * uses below, never a re-spelled string.
@@ -517,15 +495,15 @@ export class ChromeBarWidget extends ReactWidget {
      * Coding switched perspective and then showed no Theia view. Custom rows
      * never had the bug because they always routed through the command.
      *
-     * The toggle stays selection state only: the segment is set and the chip
-     * re-asserted even when activation throws, and a tab-count mismatch is
+     * The toggle stays selection state only: the segment is set and
+     * repainted even when activation throws, and a tab-count mismatch is
      * logged, never thrown. Segment labels map to mode ids by lowercasing --
      * the shipped-mode defaults gate asserts that rule, so a label that stops
      * mapping fails the gate instead of silently switching nothing. The
      * repaint path is unchanged: the stock perspective event still fires at
      * the end of the switch (one hop deeper now, inside the command), and
      * the contribution's onDidChangePerspective subscription re-asserts the
-     * toggle and the chip from it.
+     * toggle from it.
      */
     protected selectMode = (next: string) => async (): Promise<void> => {
         if (this.mode === next && this.activeCustomId === undefined) {
@@ -545,13 +523,13 @@ export class ChromeBarWidget extends ReactWidget {
                 `[@powerbrowser/chrome-bar] tabs invariant broken by a mode switch: ${before} tabs before, ${after} after`
             );
         }
-        this.publishTabCount();
+        this.update();
     };
 
     /**
      * GUI-07 (14-02): custom-mode activation routes through the imported mode
      * command const (never a re-spelled string) so panel flags, the
-     * placeholder slot, and the chip re-assert run the same switch path as
+     * placeholder slot re-assert run the same switch path as
      * shipped segments. The stock perspective event repaints the toggle.
      */
     protected selectCustomMode = (id: string) => async (): Promise<void> => {
@@ -578,7 +556,7 @@ export class ChromeBarWidget extends ReactWidget {
 
     /**
      * Stock perspective changes from anywhere else (commands, palette,
-     * layout restore) re-assert the toggle and the chip. Unknown ids leave
+     * layout restore) re-assert the toggle. Unknown ids leave
      * the shipped selection untouched and still re-assert the count.
      */
     syncModeFromPerspective(id: string): void {
@@ -592,7 +570,7 @@ export class ChromeBarWidget extends ReactWidget {
         } else {
             this.activeCustomId = undefined;
         }
-        this.publishTabCount();
+        this.update();
     }
 
     protected renderDropdown(): React.ReactNode {
@@ -745,7 +723,6 @@ export class ChromeBarWidget extends ReactWidget {
                     </div>
                 )}
             </div>
-            <span className='pb-chrome-bar-tab-count' aria-label={`${this.tabCount} tabs`}>{this.tabCount}</span>
         </div>;
     }
 }
@@ -768,13 +745,12 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
 
     /**
      * One current-widget sync for the subscription and the startup seed:
-     * the shared navigable-tab predicate, the pill's address and the chip
-     * all follow the shell's current widget.
+     * the shared navigable-tab predicate and the pill's address both
+     * follow the shell's current widget.
      */
     protected syncCurrentWidget(widget: Widget | undefined): void {
         setCurrentWebTab(widget);
         this.barWidget.onCurrentWidgetChanged(widget);
-        this.barWidget.publishTabCount();
     }
 
     async onStart(): Promise<void> {
@@ -798,11 +774,6 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         if (activePerspective !== undefined) {
             this.barWidget.syncModeFromPerspective(activePerspective);
         }
-        // Live chip: republish on every shell add, remove, and
-        // current-change so the count never goes stale between mode
-        // switches (no mode switch required).
-        this.shell.onDidAddWidget(() => this.barWidget.publishTabCount());
-        this.shell.onDidRemoveWidget(() => this.barWidget.publishTabCount());
         // GUI-02: the SELECTED MAIN-AREA TAB drives the navigable-tab
         // predicate and the pill -- the dock's current title, not the
         // focus-derived shell.currentWidget. A web tab's body is covered by
@@ -815,7 +786,6 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         // ordering hazard).
         this.shell.mainPanel.onDidChangeCurrent(title => this.syncCurrentWidget(title?.owner));
         this.syncCurrentWidget(this.shell.mainPanel.currentTitle?.owner);
-        this.shell.onDidChangeCurrentWidget(() => this.barWidget.publishTabCount());
         // The landing half of chrome's reserved accel+L: from inside a page
         // the shell key asks the frontend to focus the address, the channel
         // re-emits it here, and the pill takes focus with its content
@@ -824,6 +794,5 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         // The portalled dropdown positions against the viewport, so a
         // window resize re-derives its geometry while open.
         window.addEventListener('resize', () => this.barWidget.repositionDropdown());
-        this.barWidget.publishTabCount();
     }
 }

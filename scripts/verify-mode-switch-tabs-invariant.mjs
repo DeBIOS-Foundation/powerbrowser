@@ -128,7 +128,11 @@ const EXPECTED_SWITCH_CALLS = Object.freeze([
     'collapsePanel',
     'openOrganisingSlot',
     'closeOrganisingSlot',
-    'setElement',
+    // 'setElement' left with the tab-count chip (14-UI-SPEC amended
+    // 2026-09-08): the chip was the only status-bar element the switch path
+    // wrote, and the invariant it displayed is now asserted by the
+    // before/after countTabs comparison in selectMode plus the live row,
+    // never by a rendered count.
 ]);
 
 const EXPECTED_COMMAND_IDS = Object.freeze([
@@ -144,7 +148,6 @@ const SWITCH_FUNCTIONS = Object.freeze([
     { rel: WIDGET_REL, name: 'selectMode', pattern: /selectMode\s*=\s*\([^)]*\)\s*=>/ },
     { rel: WIDGET_REL, name: 'selectCustomMode', pattern: /selectCustomMode\s*=\s*\([^)]*\)\s*=>/ },
     { rel: WIDGET_REL, name: 'syncModeFromPerspective', pattern: /syncModeFromPerspective\s*\([^)]*\)\s*(?::\s*[^{]+)?\{/ },
-    { rel: WIDGET_REL, name: 'publishTabCount', pattern: /publishTabCount\s*\(\s*\)\s*(?::\s*[^{]+)?\{/ },
 ]);
 
 function diff(actual, expected) {

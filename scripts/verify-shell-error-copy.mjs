@@ -557,7 +557,6 @@ const EXPECTED_WIDGET_COPY = new Set([
   "Enter opens the address · Esc closes suggestions",
   "Power Browser couldn&apos;t load suggestions. Press Enter to visit what you typed.",
   "Power Browser couldn&apos;t open that address. Press Enter to try again.",
-  "${this.tabCount} tabs",
 ]);
 
 function normalizeInterp(value) {

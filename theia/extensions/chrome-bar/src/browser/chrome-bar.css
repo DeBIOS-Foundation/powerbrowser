@@ -230,14 +230,6 @@
     font-weight: 600;
 }
 
-.pb-chrome-bar-tab-count {
-    flex: none;
-    font-size: 13px;
-    line-height: 1.4;
-    color: var(--color-text-muted, #9a99a8);
-    white-space: nowrap;
-}
-
 }
 
 /* GUI-06 (13-UI-SPEC "Single chrome bar, full-bleed, 40px", ratified order
