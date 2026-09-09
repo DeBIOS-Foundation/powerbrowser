@@ -795,7 +795,35 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
      * it is set once per activation, it is set last, and reading it here
      * needs no import that would close the cycle.
      */
+    /**
+     * TEMPORARY (2026-09-09). The dock bar still vanishes in Coding after
+     * switching modes, with the unknown-mode guard in place, so the remaining
+     * path is not applyStripHome deciding wrongly -- something else is hiding
+     * the bar. This watches the bar's own class and logs a stack at the
+     * moment `lm-mod-hidden` lands, which names the caller instead of
+     * inviting another guess. Remove once the cause is known.
+     */
+    protected watchTabBarVisibility(): void {
+        const observer = new MutationObserver(records => {
+            for (const record of records) {
+                const target = record.target as HTMLElement;
+                if (!target.classList || !target.classList.contains('lm-TabBar')) {
+                    continue;
+                }
+                if (!target.closest('#theia-main-content-panel')) {
+                    continue;
+                }
+                const hidden = target.classList.contains('lm-mod-hidden');
+                const mode = document.body.getAttribute(MODE_ATTRIBUTE);
+                const stack = (new Error().stack ?? '').split('\n').slice(2, 8).map(l => l.trim()).join(' <- ');
+                console.log(`[pb-bar] hidden=${hidden} mode=${mode} :: ${stack}`);
+            }
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+    }
+
     protected observeMode(): void {
+        this.watchTabBarVisibility();
         const apply = () => this.applyStripHome(document.body.getAttribute(MODE_ATTRIBUTE) ?? '');
         new MutationObserver(apply).observe(document.body, { attributeFilter: [MODE_ATTRIBUTE] });
         // Re-assert on every shell add and remove, not only on a mode change.
@@ -859,6 +887,19 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         for (const bar of this.shell.mainPanel.tabBars()) {
             bar.setHidden(!ideDress);
         }
+        // Showing a tab bar changes its class; it does not, on its own, make
+        // the dock re-run its layout. Without this the dock kept allocating
+        // the content as if the bar were still hidden, so the page was drawn
+        // at the bar's own y and the bar was underneath it -- present,
+        // not hidden, and invisible. That is the "tab bar disappears" report,
+        // and the geometry log is what identified it: in Coding the web tab's
+        // content node was at y=72, the bar's position, instead of the 107 a
+        // 35px bar puts it at.
+        //
+        // fit() re-measures, update() repaints. Cheap, and only on a mode
+        // switch or a tab add/remove.
+        this.shell.mainPanel.fit();
+        this.shell.mainPanel.update();
     }
 
     async onStart(): Promise<void> {
