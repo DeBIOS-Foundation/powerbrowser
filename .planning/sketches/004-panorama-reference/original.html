@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<title>Firefox Panorama — the original</title>
+
+<!--
+  A static render of Firefox Panorama as it actually shipped, using
+  Mozilla's OWN stylesheets and Panorama's own DOM structure, both taken
+  from mozilla-release at FIREFOX_44_0_RELEASE -- the last release before
+  the feature was removed in Firefox 45.
+
+    panorama-original/structural-tabview.css
+      = browser/components/tabview/tabview.css   (verbatim, MPL-2.0)
+    panorama-original/linux-theme-tabview.css
+      = browser/themes/linux/tabview/tabview.css (verbatim, MPL-2.0)
+
+  The markup below is what groupitems.js and tabitems.js build:
+  GroupItem's container is .groupItem holding .resizer, .titlebar >
+  .title-container > input.name + .title-shield, .close, .stackExpander
+  and .appTabTrayContainer > .appTabTray; TabItems.fragment() builds
+  .tab > (.thumb > canvas) + (.favicon > img) + span.tab-title + .close.
+  Groups and tabs are BOTH appended to <body> and positioned absolutely in
+  page coordinates -- a tab is not a child of its group's element. Default
+  tab size is TabItems.tabWidth 160 x tabHeight 120.
+
+  Nothing here is interactive. It is the look, not the behaviour; the
+  behaviour is in index.html beside it.
+
+  Note the palette: Panorama on Linux was LIGHT. Power Browser's dark
+  Organising canvas is our own design decision, not a copy of this.
+-->
+
+<link rel="stylesheet" href="panorama-original/structural-tabview.css">
+<link rel="stylesheet" href="panorama-original/linux-theme-tabview.css">
+
+<style>
+/* ------------------------------------------------------------------
+   The only edits to Mozilla's rendering. Panorama's five decorative
+   images are chrome:// URLs that exist only inside Firefox, so each is
+   replaced by an inline equivalent. Nothing else is overridden.
+   ------------------------------------------------------------------ */
+
+/* System colour keywords resolve against the host, so pin the two
+   Panorama relied on to what a Firefox 4 Linux theme actually showed. */
+#bg { background-color: #f0f0f0; }
+.groupItem { background-color: #fafafa; }
+
+/* chrome://global/skin/icons/close.svg */
+.close {
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="%23555" stroke-width="2" fill="none" stroke-linecap="round"/></svg>');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
+  width: 16px;
+  height: 16px;
+}
+.groupItem > .close { background-size: 14px 14px; }
+
+/* chrome://global/skin/icons/resizer.png */
+.resizer {
+  background-image: none;
+  background: linear-gradient(135deg, transparent 45%, #999 45%, #999 55%, transparent 55%,
+                                       transparent 70%, #999 70%, #999 80%, transparent 80%);
+  opacity: .5;
+}
+
+/* chrome://browser/skin/tabview/stack-expander.png */
+.stackExpander {
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="1" y="1" width="22" height="22" rx="4" fill="%23ffffff" stroke="%23aaa"/><path d="M7 14l5-5 5 5" stroke="%23555" stroke-width="2" fill="none" stroke-linecap="round"/></svg>');
+  background-repeat: no-repeat;
+}
+
+/* chrome://browser/skin/tabview/edit-light.png, shown in an untitled
+   group's placeholder until the title is hovered. */
+input.name::placeholder {
+  opacity: 1;
+  font-style: italic;
+  color: GrayText;
+}
+
+/* Panorama drew tab thumbnails into a <canvas> from the live page. These
+   are painted by the script at the end of the file instead. */
+.tab canvas { display: block; width: 100%; height: 100%; }
+.favicon img { width: 16px; height: 16px; display: block; }
+
+/* Provenance banner. Not part of Panorama. */
+#provenance {
+  position: fixed; inset: 0 0 auto 0; z-index: 9999;
+  background: #22212a; color: #fbfbfe; padding: 8px 14px;
+  font: 12px/1.5 system-ui, sans-serif;
+}
+#provenance b { color: #8ad4ff; }
+#provenance a { color: #8ad4ff; }
+#provenance span { color: #9a99a8; }
+</style>
+</head>
+<body>
+
+<div id="provenance">
+  <b>Firefox Panorama, as it shipped</b> — rendered with Mozilla's own
+  <span>browser/components/tabview/tabview.css</span> and
+  <span>browser/themes/linux/tabview/tabview.css</span> at
+  <span>FIREFOX_44_0_RELEASE</span>, over the DOM that
+  <span>groupitems.js</span> and <span>tabitems.js</span> build. Static — the
+  working version is <a href="index.html">index.html</a> beside this file.
+</div>
+
+<div id="bg"></div>
+<div id="content"></div>
+
+<!-- ============ Group 1: the active group, three tabs in a grid ============ -->
+<div class="groupItem activeGroupItem" data-id="1" style="left:40px; top:110px; width:392px; height:316px;">
+  <div class="titlebar">
+    <div class="title-container">
+      <input class="name" value="Reading" placeholder="Name this tab group" readonly>
+      <div class="title-shield"></div>
+    </div>
+  </div>
+  <div class="close" title="Close group"></div>
+  <div class="appTabTrayContainer"><div class="appTabTray"></div></div>
+  <div class="resizer" style="display:block"></div>
+</div>
+
+<div class="tab" style="left:52px; top:136px; width:160px; height:135px;" data-shot="1">
+  <div class="thumb"><canvas moz-opaque width="160" height="120"></canvas></div>
+  <div class="favicon"><img alt="" data-hue="205"></div>
+  <span class="tab-title">Firefox Panorama — Wikipedia</span>
+  <div class="close"></div>
+</div>
+<div class="tab" style="left:224px; top:136px; width:160px; height:135px;" data-shot="2">
+  <div class="thumb"><canvas moz-opaque width="160" height="120"></canvas></div>
+  <div class="favicon"><img alt="" data-hue="30"></div>
+  <span class="tab-title">Tab Candy project page</span>
+  <div class="close"></div>
+</div>
+<div class="tab" style="left:52px; top:283px; width:160px; height:135px;" data-shot="3">
+  <div class="thumb"><canvas moz-opaque width="160" height="120"></canvas></div>
+  <div class="favicon"><img alt="" data-hue="120"></div>
+  <span class="tab-title">Aza Raskin: Tab Candy</span>
+  <div class="close"></div>
+</div>
+
+<!-- ======= Group 2: never named — the italic placeholder is the prompt ======= -->
+<div class="groupItem" data-id="2" style="left:460px; top:110px; width:220px; height:170px;">
+  <div class="titlebar">
+    <div class="title-container">
+      <input class="name" value="" placeholder="Name this tab group" readonly>
+      <div class="title-shield"></div>
+    </div>
+  </div>
+  <div class="close" title="Close group"></div>
+  <div class="appTabTrayContainer"><div class="appTabTray"></div></div>
+  <div class="resizer" style="display:block"></div>
+</div>
+
+<div class="tab" style="left:472px; top:136px; width:120px; height:106px;" data-shot="4">
+  <div class="thumb"><canvas moz-opaque width="120" height="90"></canvas></div>
+  <div class="favicon"><img alt="" data-hue="280"></div>
+  <span class="tab-title">Lumino DockPanel</span>
+  <div class="close"></div>
+</div>
+
+<!-- ===== Group 3: too small for its tabs, so they stack behind an expander ==== -->
+<div class="groupItem" data-id="3" style="left:710px; top:110px; width:200px; height:170px;">
+  <div class="titlebar">
+    <div class="title-container">
+      <input class="name" value="Work" placeholder="Name this tab group" readonly>
+      <div class="title-shield"></div>
+    </div>
+  </div>
+  <div class="close" title="Close group"></div>
+  <div class="appTabTrayContainer"><div class="appTabTray"></div></div>
+  <div class="stackExpander" style="display:block; left:88px;"></div>
+  <div class="resizer" style="display:block"></div>
+</div>
+
+<div class="tab stacked" style="left:772px; top:150px; width:90px; height:68px; z-index:3; transform:rotate(-4deg)" data-shot="5">
+  <div class="thumb"><canvas moz-opaque width="90" height="68"></canvas></div>
+  <span class="tab-title">SQLite WAL mode</span>
+</div>
+<div class="tab stacked" style="left:766px; top:156px; width:90px; height:68px; z-index:2; transform:rotate(2deg)" data-shot="6">
+  <div class="thumb"><canvas moz-opaque width="90" height="68"></canvas></div>
+</div>
+<div class="tab stacked" style="left:778px; top:160px; width:90px; height:68px; z-index:1; transform:rotate(6deg)" data-shot="7">
+  <div class="thumb"><canvas moz-opaque width="90" height="68"></canvas></div>
+</div>
+
+<!-- ==== A closed group: hidden behind Undo Close Group, not destroyed yet ==== -->
+<div class="undo" style="left:460px; top:320px; width:220px; height:106px;">
+  <span>Undo Close Group</span>
+  <div class="close"></div>
+</div>
+
+<script>
+// Panorama painted each thumbnail from the live page into the tab's canvas
+// (TabItem.updateCanvas). There is no live page here, so each canvas gets a
+// plausible stand-in: a browser-ish header band and body text.
+for (const canvas of document.querySelectorAll('.tab canvas')) {
+  const cx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const hue = (Number(canvas.closest('.tab').dataset.shot) * 47) % 360;
+  cx.fillStyle = '#fff';
+  cx.fillRect(0, 0, w, h);
+  cx.fillStyle = `hsl(${hue} 45% 55%)`;
+  cx.fillRect(0, 0, w, Math.round(h * 0.16));
+  cx.fillStyle = 'rgba(255,255,255,0.75)';
+  cx.fillRect(6, Math.round(h * 0.05), Math.round(w * 0.38), Math.round(h * 0.06));
+  cx.fillStyle = '#3a3a3a';
+  cx.fillRect(8, Math.round(h * 0.26), Math.round(w * 0.62), Math.round(h * 0.07));
+  cx.fillStyle = '#c9c9c9';
+  for (let i = 0; i < 6; i++) {
+    const y = Math.round(h * (0.42 + i * 0.09));
+    if (y > h - 6) { break; }
+    cx.fillRect(8, y, Math.round(w * (i % 3 === 2 ? 0.5 : 0.84)), Math.max(2, Math.round(h * 0.035)));
+  }
+}
+
+// Favicons were fetched per tab; a flat colour square stands in.
+for (const img of document.querySelectorAll('.favicon img')) {
+  const hue = img.dataset.hue || 0;
+  img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="hsl(${hue} 55% 50%)"/></svg>`);
+}
+</script>
+</body>
+</html>
