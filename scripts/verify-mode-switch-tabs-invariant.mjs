@@ -133,6 +133,16 @@ const EXPECTED_SWITCH_CALLS = Object.freeze([
     // wrote, and the invariant it displayed is now asserted by the
     // before/after countTabs comparison in selectMode plus the live row,
     // never by a rendered count.
+    //
+    // 'setHidden' arrives with the same amendment's per-mode furniture rule:
+    // Coding keeps the left icon rail and the status bar, Browsing and
+    // Organising do not. It is allowlisted for the FURNITURE only. Both
+    // targets are chrome -- the status-bar widget and the left panel's
+    // container -- and neither is a content tab, so the tabs invariant is
+    // untouched by it. A setHidden reaching a main-area widget would be the
+    // regression this gate exists to catch; DECLARED_LAYOUT_USES still bounds
+    // which files may touch layout at all.
+    'setHidden',
 ]);
 
 const EXPECTED_COMMAND_IDS = Object.freeze([

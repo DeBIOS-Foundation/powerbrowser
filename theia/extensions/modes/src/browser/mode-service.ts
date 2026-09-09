@@ -6,6 +6,7 @@ import {
     StatusBarAlignment,
     WidgetManager,
 } from '@theia/core/lib/browser';
+import { StatusBarImpl } from '@theia/core/lib/browser/status-bar/status-bar';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
 import { StorageService } from '@theia/core/lib/browser/storage-service';
 import { QuickInputService } from '@theia/core/lib/common/quick-pick-service';
@@ -14,6 +15,7 @@ import { FileChangeType } from '@theia/filesystem/lib/common/files';
 import { UserStorageUri } from '@theia/userstorage/lib/browser/user-storage-uri';
 import pDebounce from 'p-debounce';
 import { SHIPPED_MODES, closeOrganisingSlot, openOrganisingSlot } from './mode-descriptors';
+import { publishModeAttribute } from './mode-attribute';
 
 /**
  * GUI-07 (14-02): custom modes as user-storage data over the shipped defaults.
@@ -175,6 +177,9 @@ export class ModeService implements FrontendApplicationContribution {
     @inject(StatusBar)
     protected readonly statusBar: StatusBar;
 
+    @inject(StatusBarImpl)
+    protected readonly statusBarWidget: StatusBarImpl;
+
     @inject(WidgetManager)
     protected readonly widgetManager: WidgetManager;
 
@@ -274,6 +279,33 @@ export class ModeService implements FrontendApplicationContribution {
         } else {
             closeOrganisingSlot();
         }
+        // 14-UI-SPEC per-mode furniture (amended 2026-09-08): Coding is the
+        // only mode that keeps the left icon rail and the status bar;
+        // Browsing is a browser and Organising is a full-screen canvas.
+        //
+        // Not CSS. Lumino positions both absolutely, so `display: none` hides
+        // them while their space stays reserved -- measured live 2026-09-08,
+        // the main area kept x=48 h=973 with the furniture hidden by
+        // stylesheet. `setHidden` is the shell's own path and relayouts: the
+        // same measurement showed main reaching x=0 w=1968 h=995.
+        //
+        // AFTER the panel flags above, not before, and that order is
+        // load-bearing: `leftPanelHandler.collapse()` calls the handler's own
+        // refresh(), which re-shows the container. Hiding the rail first
+        // therefore did nothing at all -- `container.isHidden` read back
+        // false and the rail stayed 48px wide in every mode (measured
+        // 2026-09-08 against the built sidecar, which is the only reason this
+        // was caught: the gate and the typecheck were both green over it).
+        //
+        // The menubar is deliberately NOT hidden here: Theia sizes the top
+        // panel as a unit (setTopPanelVisibility hides the whole thing) and
+        // our URL row shares it, so hiding the menubar alone leaves the main
+        // area at y=72 with 32px of dead space above it. It is solved by the
+        // strip relocation, which moves the bar out of the top panel anyway.
+        const keepsFurniture = target === 'coding';
+        this.statusBarWidget.setHidden(!keepsFurniture);
+        this.shell.leftPanelHandler.container.setHidden(!keepsFurniture);
+        publishModeAttribute(target);
     }
 
     /**
