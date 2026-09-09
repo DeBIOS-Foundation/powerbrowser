@@ -13,12 +13,59 @@ ship). Sketch 002 winner B is PENDING this verdict by committed direction.
 **Binary under test:** `objdir/dist/bin/powerbrowser` (existing build, unrebuilt).
 **App under test:** the supervised Theia sidecar the binary launches
 (`theia/applications/browser/lib`, reused as built).
-**Verdict: RED** — relocation mechanics proven live (6/6 moves resolve as
-requested, identity preserved), but the zero-core-modification pillar is
-unprovable by its ratified instrument: `diff-theia-core.sh --quick` is red on
-pre-existing install-state drift (cause below), so the GUI-07 entry criterion
-is not met. Fallback: strip stays top per Variant A; modes still ship.
-Re-probe path is cheap (realign `node_modules`, re-run check + probe).
+**Verdict: GREEN** — both pillars proven on the tree of 2026-09-08: the
+relocation mechanics re-measured live at 6/6 (below), and zero Theia-core
+modification proven by the ratified instrument, `diff-theia-core.sh --quick`
+exiting 0 ("PASS -- zero changes inside @theia/*"). The GUI-07 entry criterion
+is met. Routing: **Variant B** strip work proceeds — the strip relocates per
+mode. This supersedes the RED recorded on 2026-09-05, whose sole blocking
+cause was the instrument, not the mechanics.
+
+### Re-probe, 2026-09-08 (supersedes the 2026-09-05 RED)
+
+The 2026-09-05 verdict was RED for one reason: `diff-theia-core.sh --quick`
+could not exit clean on pre-existing `node_modules` install drift, with
+"file-tampering evidence: none". That drift is gone. Both pillars re-run:
+
+**Pillar 1 — zero core modification.** `nix develop .#theia --command bash
+scripts/diff-theia-core.sh --quick` → exit 0, 1 second:
+
+```
+diff-theia-core: stage 1 -- yarn check --integrity
+yarn check v1.22.22
+success Folder in sync.
+diff-theia-core: PASS -- zero changes inside @theia/* (--quick: stage 1 only)
+```
+
+`git -C upstream diff` is empty; the spike shipped no file under `theia/` or
+`scripts/`.
+
+**Pillar 2 — relocation mechanics, re-measured.** Driven against the live
+sidecar frontend through `window.theia.container` → `ApplicationShell`,
+moving the `welcome` main-area widget with `shell.addWidget(widget, {area})`
+and reading `shell.getAreaFor(widget)` back. Public API only: no core patch,
+no rebind, no panel surgery.
+
+| # | Requested | From | Resolved | Same instance | Attached |
+|---|-----------|------|----------|---------------|----------|
+| 1 | bottom | main | bottom | yes | yes |
+| 2 | main | bottom | main | yes | yes |
+| 3 | bottom | main | bottom | yes | yes |
+| 4 | main | bottom | main | yes | yes |
+| 5 | bottom | main | bottom | yes | yes |
+| 6 | main | bottom | main | yes | yes |
+
+6/6 resolved as requested, identity preserved across every move, no resolver
+veto (a forced placement back into `main` would be RED data per T-13-01-04;
+none occurred).
+
+**Instrument note.** The gate that audits this record,
+`scripts/verify-strip-spike-verdict.mjs`, could not have detected the stale
+RED before commit `7f001b2`: its `coreDiffExit()` passed a whole command line
+as one argument to `nix develop --command` and returned 127 on every tree, so
+both arms requiring `=== 0` were unreachable. The instrument invocation was
+fixed first, the gate then reported the RED as stale, and this re-probe
+answers it.
 
 ---
 

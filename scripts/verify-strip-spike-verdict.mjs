@@ -295,15 +295,23 @@ function selfTest() {
             expect: 'ZERO verdict lines',
         },
         {
-            // The record's proofs document a red instrument; flipping the
-            // verdict to GREEN while keeping that body must go red. On a
-            // tree where the instrument is red it names GREEN against the
-            // core-diff pillar; on a realigned tree it names the Variant-B
-            // routing the flipped line no longer carries.
-            name: 'GREEN-with-dirty-core',
-            mutate: text => text.replace('**Verdict: RED**', '**Verdict: GREEN**'),
+            // Flip the verdict to whichever one the record does NOT carry,
+            // leaving its proof body untouched: a verdict that disagrees with
+            // its own evidence must go red either way. The direction is
+            // derived from the record rather than hardcoded -- pinning it to
+            // one spelling made the plant stop landing the moment the verdict
+            // was re-recorded, and a plant that cannot land proves nothing.
+            //   RED body + GREEN line  -> red on the core-diff pillar or the
+            //                             missing Variant B routing.
+            //   GREEN body + RED line  -> red naming the stale verdict (the
+            //                             instrument is green) or the missing
+            //                             Variant A fallback routing.
+            name: 'verdict flipped against its own evidence',
+            mutate: text => (/\*\*Verdict:\s*RED\*\*/.test(text)
+                ? text.replace('**Verdict: RED**', '**Verdict: GREEN**')
+                : text.replace('**Verdict: GREEN**', '**Verdict: RED**')),
             expect: null,
-            expectAny: ['GREEN', 'Variant B'],
+            expectAny: ['GREEN', 'Variant B', 'Variant A', 'stale'],
         },
     ];
 
