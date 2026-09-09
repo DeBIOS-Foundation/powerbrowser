@@ -45,8 +45,20 @@ const EXPECTED_ORDER = Object.freeze([
     'status bar',
 ]);
 
-/** The shell area the bar is contributed to -- above the tab-strip dock. */
+/**
+ * The shell area every widget this file contributes goes to.
+ *
+ * AMENDED 2026-09-08 with the strip relocation: the top panel now carries TWO
+ * of ours, the URL row and the tab strip's Browsing home, so the assertion is
+ * "every contributed area is top" rather than "there is exactly one". Pinning
+ * the count was pinning Variant A -- the fallback this phase left behind --
+ * and the count is not the property worth protecting. Which area they land in
+ * is; a contribution that drifted to 'main' or 'bottom' still fails.
+ */
 const EXPECTED_AREA = 'top';
+
+/** Contributions expected in the top panel, for the message on drift. */
+const EXPECTED_TOP_CONTRIBUTIONS = 2;
 
 /** Every `area: '...'` value carried by an `addWidget` call, in source order. */
 function derivedAreasOf(source) {
@@ -102,8 +114,13 @@ function checkPlacement(sources) {
 
     const expectedRun = EXPECTED_ORDER.join(' → ');
     const derivedRun = order.join(' → ');
-    if (areas.length !== 1 || areas[0] !== EXPECTED_AREA) {
-        failures.push(`${WIDGET_REL}: contribution area drifted -- derived [${areas.join(', ')}], expected exactly ['${EXPECTED_AREA}'] (the ratified Variant-A order [${expectedRun}] places the chrome bar immediately above the tab strip)`);
+    const strays = areas.filter(area => area !== EXPECTED_AREA);
+    if (areas.length === 0) {
+        failures.push(`${WIDGET_REL}: derived ZERO addWidget areas -- the contribution enumeration matches nothing, so this comparison proves nothing (broken instrument, not a clean tree)`);
+    } else if (strays.length) {
+        failures.push(`${WIDGET_REL}: contribution area drifted -- derived [${areas.join(', ')}], every one must be '${EXPECTED_AREA}' (the contracted order [${expectedRun}] keeps both the URL row and the strip's Browsing home in the top panel)`);
+    } else if (areas.length !== EXPECTED_TOP_CONTRIBUTIONS) {
+        failures.push(`${WIDGET_REL}: derived ${areas.length} top-panel contribution(s), expected ${EXPECTED_TOP_CONTRIBUTIONS} (the URL row and the tab strip). A third would be an unreviewed addition to the panel the strip's geometry depends on; edit EXPECTED_TOP_CONTRIBUTIONS with the reason.`);
     }
     if (derivedRun !== expectedRun) {
         failures.push(`${SPEC_REL}: contracted order drifted -- derived [${derivedRun}], expected [${expectedRun}] (the contribution area derives as [${areas.join(', ')}])`);
@@ -130,7 +147,7 @@ function main() {
         failures.forEach(f => console.error(`  - ${f}`));
         return 1;
     }
-    console.log(`${NAME}: PASS -- area '${EXPECTED_AREA}' with the chrome bar immediately above the tab strip`);
+    console.log(`${NAME}: PASS -- ${EXPECTED_TOP_CONTRIBUTIONS} contribution(s), every one in area '${EXPECTED_AREA}', with the contracted region order intact`);
     return 0;
 }
 
@@ -153,7 +170,12 @@ function selfTest() {
                 "addWidget(this.barWidget, { area: 'top' })",
                 "addWidget(this.barWidget, { area: 'main' })"
             ),
-            expect: '[main]',
+            // The derived list now carries both top-panel contributions, so
+            // the plant reads as [main, top]. Match the stray itself rather
+            // than the whole rendered list: pinning the exact list made this
+            // plant fail on the day a second contribution landed, reporting a
+            // drifted expectation instead of the drift it exists to catch.
+            expect: "must be 'top'",
         },
         {
             name: 'planted order flip',

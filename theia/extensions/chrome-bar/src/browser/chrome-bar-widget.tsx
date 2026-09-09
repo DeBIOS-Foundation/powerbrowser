@@ -35,6 +35,8 @@ import { ModeService } from '@powerbrowser/modes/lib/browser/mode-service';
 // by identity, and a re-spelled string would keep counting it the day the
 // widget renames.
 import { OrganisingWidget } from '@powerbrowser/modes/lib/browser/organising-widget';
+import { TabStripWidget } from './tab-strip-widget';
+import { MODE_ATTRIBUTE } from '@powerbrowser/modes/lib/browser/mode-attribute';
 import '../../src/browser/chrome-bar.css';
 
 /**
@@ -736,6 +738,15 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
     @inject(ChromeBarWidget)
     protected readonly barWidget: ChromeBarWidget;
 
+    @inject(TabStripWidget)
+    protected readonly tabStrip: TabStripWidget;
+
+    /**
+     * Top-panel widgets that belong to the IDE dress and not the browser one,
+     * by their stock ids. Browsing hides them; the strip takes the space.
+     */
+    static readonly IDE_TOP_FURNITURE: readonly string[] = ['theia:menubar', 'theia:icon'];
+
     @inject(PerspectiveService)
     protected readonly perspectives: PerspectiveService;
 
@@ -753,9 +764,80 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         this.barWidget.onCurrentWidgetChanged(widget);
     }
 
+    /**
+     * GUI-07 strip relocation: put the tabs in the home this mode contracts.
+     *
+     * Browsing shows the top-panel strip, hides the menubar whose 30px it
+     * occupies, and hides the dock's own tab bar. Every other mode is the
+     * reverse. 14-UI-SPEC per-mode shell map, amended 2026-09-08.
+     *
+     * This lives here rather than in `ModeService.activateMode` with the rest
+     * of the per-mode shell work, and the reason is a dependency cycle, not
+     * taste: `@powerbrowser/chrome-bar` already imports `@powerbrowser/modes`
+     * (the activate command, ModeService, OrganisingWidget), so the mode
+     * service cannot import the strip back. Reaching it by
+     * `shell.getWidgetById` instead does not work either -- Theia's
+     * `addWidget` only tracks main/bottom/left/right, `case 'top'` is a bare
+     * `topPanel.addWidget`, so no top-panel widget is ever in the registry.
+     * That was not theory: the first cut hid the dock's bar and left the
+     * strip hidden with it, showing no tabs at all in Browsing.
+     *
+     * Driven by `body[data-pb-mode]`, which `ModeService.activateMode`
+     * writes at the end of EVERY switch including the launch one. The
+     * perspective event was the obvious hook and is the wrong one: stock
+     * `switchPerspective` returns silently for an already-active id, so
+     * arriving in Browsing when Browsing is already the perspective fires
+     * nothing, and the launch seed lost the same race the toggle's own seed
+     * exists to work around. Live, that showed as a correct strip after any
+     * real switch and no strip at all on a fresh page.
+     *
+     * An attribute the mode service already publishes has neither problem:
+     * it is set once per activation, it is set last, and reading it here
+     * needs no import that would close the cycle.
+     */
+    protected observeMode(): void {
+        const apply = () => this.applyStripHome(document.body.getAttribute(MODE_ATTRIBUTE) ?? '');
+        new MutationObserver(apply).observe(document.body, { attributeFilter: [MODE_ATTRIBUTE] });
+        // The launch activation may have landed before this ran, in which
+        // case no mutation is coming and the attribute is already correct.
+        apply();
+    }
+
+    protected applyStripHome(modeId: string): void {
+        const tabsAtTop = modeId === 'browsing';
+        this.tabStrip.setHidden(!tabsAtTop);
+        for (const widget of this.shell.topPanel.widgets) {
+            if (ChromeBarContribution.IDE_TOP_FURNITURE.includes(widget.id)) {
+                widget.setHidden(tabsAtTop);
+            }
+        }
+        // Every generated bar, not just the first: a split editor has more
+        // than one, and leaving the others visible would show the tabs twice.
+        for (const bar of this.shell.mainPanel.tabBars()) {
+            bar.setHidden(tabsAtTop);
+        }
+    }
+
     async onStart(): Promise<void> {
         if (!this.shell.getWidgetById(ChromeBarWidget.ID)) {
             await this.shell.addWidget(this.barWidget, { area: 'top' });
+        }
+        // Two calls, both load-bearing. `addWidget` is what REGISTERS the
+        // widget with the shell, so `getWidgetById` can find it -- the mode
+        // service reaches the strip that way, because importing the class
+        // there would close a dependency cycle (chrome-bar already imports
+        // @powerbrowser/modes). Registering via topPanel.insertWidget alone
+        // looked right and was not: the strip rendered, `getWidgetById`
+        // returned undefined, the mode service's `strip?.setHidden` no-opped,
+        // and Browsing hid the dock's bar with nothing put in its place.
+        //
+        // `insertWidget(0, ...)` then HOISTS it, because addWidget appends and
+        // the top panel is a BoxPanel that stacks in child order -- appended,
+        // the strip would sit under the URL row instead of above it. Moving an
+        // already-parented child is what Panel.insertWidget does.
+        if (!this.shell.getWidgetById(TabStripWidget.ID)) {
+            await this.shell.addWidget(this.tabStrip, { area: 'top' });
+            this.shell.topPanel.insertWidget(0, this.tabStrip);
         }
         this.perspectives.onDidChangePerspective(id => {
             this.barWidget.syncModeFromPerspective(id);
@@ -770,6 +852,7 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         // requested mode is already selected, so clicking the segment the
         // toggle already claimed was a no-op and Coding was unreachable until
         // the user round-tripped through another mode.
+        this.observeMode();
         const activePerspective = this.perspectives.getActivePerspectiveId();
         if (activePerspective !== undefined) {
             this.barWidget.syncModeFromPerspective(activePerspective);

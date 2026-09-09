@@ -267,3 +267,78 @@
     height: 40px;
     overflow: visible;
 }
+
+/* GUI-07: the tab strip's Browsing home, at the very top above the URL row.
+   Sized to the 32px the menubar's absence frees inside the top panel's fixed
+   72px -- [strip 32][URL row 40] occupies exactly what [menubar 30][URL row
+   40] did, which is why nothing has to resize. */
+.pb-tab-strip {
+    background: var(--color-bg, #1c1b22);
+    border-bottom: 1px solid var(--color-border, #3f3e4a);
+    overflow: hidden;
+}
+
+.pb-tab-strip-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 32px;
+    padding: 0 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+/* Firefox/Chrome tab feel: rounded top corners, the active one lifted out of
+   the strip's ground onto the surface the URL row sits on. */
+.pb-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    min-width: 120px;
+    max-width: 210px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    background: transparent;
+    color: var(--color-text-muted, #9a99a8);
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: nowrap;
+    cursor: pointer;
+    flex: none;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.pb-tab:hover {
+    background: var(--color-surface-raised, #35343f);
+}
+
+.pb-tab.is-active {
+    background: var(--color-surface, #2b2a33);
+    border-color: var(--color-border, #3f3e4a);
+    color: var(--color-text, #fbfbfe);
+}
+
+.pb-tab-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pb-tab-close {
+    flex: none;
+    opacity: 0.45;
+    font-size: 11px;
+}
+
+.pb-tab-close:hover {
+    opacity: 1;
+}
+
+.pb-tab:focus-visible,
+.pb-tab-close:focus-visible {
+    outline: 2px solid var(--color-primary, #00a6f5);
+    outline-offset: 2px;
+}

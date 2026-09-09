@@ -18,6 +18,7 @@ import { CHROME_SUGGESTION_PATH, ChromeBarSuggestionService } from './chrome-bar
 import { ChromeBarCommandContribution } from './chrome-bar-commands';
 import { ChromeBarKeybindingContribution } from './chrome-bar-keybindings';
 import { ChromeBarContribution, ChromeBarWidget } from './chrome-bar-widget';
+import { TabStripWidget } from './tab-strip-widget';
 
 export default new ContainerModule(bind => {
     bind(ChromeBarSuggestionService).toDynamicValue(ctx =>
@@ -28,6 +29,7 @@ export default new ContainerModule(bind => {
     bind(ChromeBarKeybindingContribution).toSelf().inSingletonScope();
     bind(KeybindingContribution).toService(ChromeBarKeybindingContribution);
     bind(ChromeBarWidget).toSelf().inSingletonScope();
+    bind(TabStripWidget).toSelf().inSingletonScope();
     bind(ChromeBarContribution).toSelf().inSingletonScope();
     bind(FrontendApplicationContribution).toService(ChromeBarContribution);
 });

@@ -17,6 +17,7 @@ import pDebounce from 'p-debounce';
 import { SHIPPED_MODES, closeOrganisingSlot, openOrganisingSlot } from './mode-descriptors';
 import { publishModeAttribute } from './mode-attribute';
 
+
 /**
  * GUI-07 (14-02): custom modes as user-storage data over the shipped defaults.
  *
@@ -305,6 +306,11 @@ export class ModeService implements FrontendApplicationContribution {
         const keepsFurniture = target === 'coding';
         this.statusBarWidget.setHidden(!keepsFurniture);
         this.shell.leftPanelHandler.container.setHidden(!keepsFurniture);
+        // Both rails, not just the left: the right one is the same 48px of
+        // IDE dress on the other edge, and leaving it behind put a strip of
+        // icons down the side of an otherwise clean browser window.
+        this.shell.rightPanelHandler.container.setHidden(!keepsFurniture);
+
         publishModeAttribute(target);
     }
 
