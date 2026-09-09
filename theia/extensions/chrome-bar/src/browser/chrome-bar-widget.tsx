@@ -814,17 +814,30 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
     }
 
     protected applyStripHome(modeId: string): void {
-        const tabsAtTop = modeId === 'browsing';
-        this.tabStrip.setHidden(!tabsAtTop);
+        // One rule, phrased by exclusion: Coding wears the IDE dress, every
+        // other mode wears the browser one. The same rule the rails and the
+        // status bar already follow in ModeService, so a mode cannot end up
+        // half-dressed -- and a future mode gets the browser shell unless it
+        // asks for the IDE, rather than inheriting the IDE from a list nobody
+        // updated.
+        //
+        // Organising is why this is not `=== 'browsing'`. It had the menubar
+        // and no strip, which was both wrong to look at and geometrically
+        // stuck: the top panel is pinned at 72px, so hiding the menubar with
+        // nothing to take its place leaves 32px of dead space above the
+        // canvas. Showing the strip there fills exactly that, and the tabs
+        // stay reachable while their cards are being arranged below.
+        const ideDress = modeId === 'coding';
+        this.tabStrip.setHidden(ideDress);
         for (const widget of this.shell.topPanel.widgets) {
             if (ChromeBarContribution.IDE_TOP_FURNITURE.includes(widget.id)) {
-                widget.setHidden(tabsAtTop);
+                widget.setHidden(!ideDress);
             }
         }
         // Every generated bar, not just the first: a split editor has more
         // than one, and leaving the others visible would show the tabs twice.
         for (const bar of this.shell.mainPanel.tabBars()) {
-            bar.setHidden(tabsAtTop);
+            bar.setHidden(!ideDress);
         }
     }
 
