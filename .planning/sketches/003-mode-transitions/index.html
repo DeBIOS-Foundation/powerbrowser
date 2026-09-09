@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketch 003 — Mode Transitions</title>
+<style>
+:root{
+  --color-bg:#1c1b22; --color-surface:#2b2a33; --color-surface-raised:#35343f;
+  --color-border:#3f3e4a; --color-text:#fbfbfe; --color-text-muted:#9a99a8;
+  --color-primary:#00a6f5; --color-accent:#8ad4ff;
+  --font-sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,monospace;
+  --radius-sm:4px; --radius-md:8px; --radius-full:9999px;
+  --shadow-md:0 4px 6px rgba(0,0,0,.45);
+  --ease:.15s ease; --slide:.2s ease;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#141319;color:var(--color-text);font:14px/1.4 var(--font-sans);padding:24px}
+h1{font-size:18px;margin:0 0 4px}
+.lede{color:var(--color-text-muted);margin:0 0 18px;max-width:80ch}
+.lede b{color:var(--color-accent);font-weight:600}
+
+.win{width:100%;max-width:1100px;border:1px solid var(--color-border);border-radius:var(--radius-md);
+  overflow:hidden;background:var(--color-bg);box-shadow:var(--shadow-md)}
+.menubar{display:flex;gap:16px;padding:6px 12px;background:var(--color-surface);
+  border-bottom:1px solid var(--color-border);font-size:12px;color:var(--color-text-muted);
+  overflow:hidden;transition:height var(--slide),padding var(--slide),opacity var(--ease)}
+
+/* Only CODING keeps the IDE furniture. Browsing is a browser; Organising is a
+   full-screen canvas. Neither wants a menubar, an icon rail, or a status bar,
+   so the rule is scoped by exclusion rather than listing the two modes -- a
+   fourth mode should have to opt IN to the furniture, not be silently given
+   it by a selector nobody updated. */
+.win:not([data-mode="coding"]) .menubar{height:0;padding-top:0;padding-bottom:0;opacity:0;border-bottom-width:0}
+.win:not([data-mode="coding"]) .rail{width:0;border-right-width:0}
+.win:not([data-mode="coding"]) .status{height:0;padding-top:0;padding-bottom:0;opacity:0}
+
+/* ============ HOME 1: the very top, Firefox/Chrome style (BROWSING) ============ */
+.topstrip{display:flex;align-items:flex-end;gap:2px;padding:0 8px;height:0;overflow:hidden;
+  background:#232128;border-bottom:1px solid var(--color-border);
+  transition:height var(--slide),opacity var(--ease);opacity:0}
+.win[data-mode="browsing"] .topstrip{height:36px;opacity:1}
+.topstrip .tab{height:30px;min-width:150px;max-width:210px;padding:0 10px;
+  border-radius:var(--radius-sm) var(--radius-sm) 0 0;background:transparent;border:1px solid transparent;
+  border-bottom:none;display:flex;align-items:center;gap:8px;font-size:12px;
+  color:var(--color-text-muted);white-space:nowrap;cursor:pointer;transition:background var(--ease)}
+.topstrip .tab:hover{background:var(--color-surface)}
+.topstrip .tab.on{background:var(--color-surface);border-color:var(--color-border);color:var(--color-text)}
+.topstrip .tab .fav{width:11px;height:11px;border-radius:2px;background:var(--color-primary);flex:none;opacity:.75}
+.topstrip .tab .ttl{flex:1;overflow:hidden;text-overflow:ellipsis}
+.topstrip .tab .x{opacity:.45}
+
+/* ============ the URL row — IDENTICAL in all three modes ============ */
+.chrome{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--color-surface);
+  border-bottom:1px solid var(--color-border);min-height:48px}
+.btn{width:26px;height:26px;flex:none;display:grid;place-items:center;border:1px solid var(--color-border);
+  border-radius:var(--radius-sm);background:transparent;color:var(--color-text-muted);font-size:13px;cursor:pointer}
+.pill{flex:1;min-width:0;height:28px;display:flex;align-items:center;padding:0 12px;background:var(--color-bg);
+  border:1px solid var(--color-border);border-radius:var(--radius-full);
+  font-family:var(--font-mono);font-size:12px;color:var(--color-text-muted)}
+.toggle{display:flex;gap:4px;flex:none}
+.seg{width:92px;height:30px;border:1px solid var(--color-border);border-radius:var(--radius-sm);
+  background:transparent;color:var(--color-text-muted);font-size:13px;cursor:pointer;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:all var(--ease)}
+.seg:hover{background:var(--color-surface-raised)}
+.seg.is-active{color:var(--color-primary);font-weight:600;box-shadow:inset 0 -2px 0 var(--color-primary)}
+.chip{flex:none;padding:2px 8px;border-radius:var(--radius-full);background:var(--color-surface-raised);
+  color:var(--color-text-muted);font-size:12px}
+.chip b{color:var(--color-accent)}
+
+.body{display:flex;height:352px}
+.rail{width:44px;flex:none;background:var(--color-surface);border-right:1px solid var(--color-border);
+  display:flex;flex-direction:column;align-items:center;gap:14px;padding-top:12px;color:var(--color-text-muted);
+  overflow:hidden;transition:width var(--slide)}
+.left{width:0;flex:none;background:var(--color-surface);border-right:1px solid var(--color-border);
+  overflow:hidden;transition:width var(--slide);font-size:12px}
+.win[data-mode="coding"] .left{width:190px}
+.left .hd{padding:8px 12px;color:var(--color-text-muted);letter-spacing:.08em;font-size:11px}
+.left .row{padding:3px 12px 3px 22px;color:var(--color-text);white-space:nowrap}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+
+/* ============ HOME 2: docked in the editor area (CODING) ============ */
+.docktabs{display:flex;gap:2px;background:var(--color-surface);border-bottom:1px solid var(--color-border);
+  padding:0 8px;max-height:0;overflow:hidden;opacity:0;
+  transition:max-height var(--slide),opacity var(--ease)}
+.win[data-mode="coding"] .docktabs{max-height:34px;opacity:1}
+.docktabs .tab{display:flex;align-items:center;gap:6px;height:30px;padding:0 12px;font-size:12px;
+  color:var(--color-text-muted);border:1px solid transparent;border-bottom:none;
+  border-radius:var(--radius-sm) var(--radius-sm) 0 0;white-space:nowrap;cursor:pointer}
+.docktabs .tab.on{color:var(--color-text);background:var(--color-bg);border-color:var(--color-border)}
+.docktabs .tab .x{opacity:.45}
+
+.stage{flex:1;position:relative;background:var(--color-bg);overflow:hidden}
+.page{position:absolute;inset:0;display:grid;place-items:center;color:var(--color-text-muted);
+  transition:opacity var(--ease)}
+.win[data-mode="organising"] .page{opacity:0}
+.bottom{height:0;background:var(--color-surface);border-top:1px solid var(--color-border);
+  overflow:hidden;transition:height var(--slide);font-size:12px;color:var(--color-text-muted)}
+.win[data-mode="coding"] .bottom{height:72px}
+.bottom .tabs{display:flex;gap:14px;padding:6px 12px;border-bottom:1px solid var(--color-border)}
+.bottom .tabs span:first-child{color:var(--color-text)}
+.bottom .out{padding:8px 12px;font-family:var(--font-mono)}
+
+/* ============ HOME 3: the Panorama canvas (ORGANISING) ============ */
+.canvas{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity var(--ease);
+  background-image:radial-gradient(var(--color-border) 1px,transparent 1px);background-size:22px 22px}
+.win[data-mode="organising"] .canvas{opacity:1;pointer-events:auto}
+.group{position:absolute;background:rgba(43,42,51,.72);border:1px solid var(--color-border);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-md)}
+.group h4{margin:0;padding:6px 10px;font-size:11px;font-weight:600;color:var(--color-text-muted);
+  border-bottom:1px solid var(--color-border);cursor:grab;letter-spacing:.04em}
+.group .cards{display:flex;gap:8px;padding:10px;flex-wrap:wrap}
+.card{width:96px;background:var(--color-surface-raised);border:1px solid var(--color-border);
+  border-radius:var(--radius-sm);overflow:hidden;cursor:pointer;transition:border-color var(--ease)}
+.card:hover{border-color:var(--color-primary)}
+.card .thumb{height:56px;background:linear-gradient(140deg,#3d3c49,#26252e);position:relative}
+.card .thumb::after{content:'';position:absolute;left:8px;right:8px;top:10px;height:4px;border-radius:2px;
+  background:rgba(255,255,255,.10);box-shadow:0 9px 0 rgba(255,255,255,.07),0 18px 0 rgba(255,255,255,.05)}
+.card .u{font-family:var(--font-mono);font-size:9px;color:var(--color-text-muted);padding:4px 5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-top:1px solid var(--color-border)}
+.handle{position:absolute;right:3px;bottom:2px;color:var(--color-text-muted);font-size:11px;cursor:nwse-resize}
+.tray{position:absolute;left:14px;right:14px;bottom:10px;border:1px dashed var(--color-border);
+  border-radius:var(--radius-md);padding:8px 10px;display:flex;gap:8px;align-items:center;
+  background:rgba(28,27,34,.55)}
+.tray .lbl{font-size:10px;color:var(--color-text-muted);letter-spacing:.05em;margin-right:2px}
+.cvtools{position:absolute;right:14px;top:12px;display:flex;gap:6px;align-items:center}
+.cvtools .t{height:24px;padding:0 10px;border:1px solid var(--color-border);border-radius:var(--radius-sm);
+  background:var(--color-surface);color:var(--color-text-muted);font-size:11px;display:grid;place-items:center;cursor:pointer}
+.cvtools .t.on{color:var(--color-primary);border-color:var(--color-primary)}
+
+.status{display:flex;align-items:center;gap:14px;padding:4px 12px;background:var(--color-primary);
+  color:#04202e;font-size:12px;font-weight:500;overflow:hidden;
+  transition:height var(--slide),padding var(--slide),opacity var(--ease)}
+.status .right{margin-left:auto}
+
+.note{margin:14px 0 0;padding:10px 14px;border-left:2px solid var(--color-primary);background:var(--color-surface);
+  border-radius:0 var(--radius-sm) var(--radius-sm) 0;color:var(--color-text-muted);font-size:13px;
+  max-width:1100px;min-height:66px}
+.note b{color:var(--color-text)}
+.note code{font-family:var(--font-mono);font-size:12px;color:var(--color-accent)}
+.fixed{margin:16px 0 0;max-width:1100px;font-size:13px;color:var(--color-text-muted);
+  border-top:1px solid var(--color-border);padding-top:12px}
+.fixed b{color:var(--color-text)}
+</style>
+</head>
+<body>
+
+<h1>Sketch 003 — the tabs have three homes</h1>
+<p class="lede">The URL row never changes — same buttons, same address field, same <b>+</b>, in every
+mode. The tabs never change either: the same two are open throughout. The only thing a mode switch
+moves is <b>where the tabs live</b>.</p>
+
+<div class="win" id="win" data-mode="browsing">
+  <div class="menubar"><span>File</span><span>Edit</span><span>Selection</span><span>View</span><span>Go</span><span>Run</span><span>Terminal</span><span>Help</span></div>
+
+  <!-- HOME 1 — very top, Firefox/Chrome -->
+  <div class="topstrip">
+    <div class="tab on" data-t="0"><span class="fav"></span><span class="ttl">Welcome</span><span class="x">✕</span></div>
+    <div class="tab" data-t="1"><span class="fav"></span><span class="ttl">docs.rs — gecko</span><span class="x">✕</span></div>
+  </div>
+
+  <!-- URL ROW — identical in all three modes -->
+  <div class="chrome">
+    <button class="btn">‹</button><button class="btn">›</button><button class="btn">⟳</button>
+    <div class="pill">https://docs.rs/gecko</div>
+    <button class="btn" title="New tab">+</button>
+    <div class="toggle">
+      <button class="seg" data-m="coding">Coding</button>
+      <button class="seg is-active" data-m="browsing">Browsing</button>
+      <button class="seg" data-m="organising">Organising</button>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="rail"><span>▤</span><span>⌕</span><span>⎇</span><span>⚙</span></div>
+    <div class="left">
+      <div class="hd">EXPLORER</div>
+      <div class="row">▾ TEMP</div>
+      <div class="row">Test_Sourcer.md</div>
+      <div class="row">configuration.toml</div>
+    </div>
+
+    <div class="main">
+      <!-- HOME 2 — docked into the editor area -->
+      <div class="docktabs">
+        <div class="tab on" data-t="0">Welcome <span class="x">✕</span></div>
+        <div class="tab" data-t="1">docs.rs — gecko <span class="x">✕</span></div>
+      </div>
+
+      <div class="stage">
+        <div class="page" id="page">page content</div>
+
+        <!-- HOME 3 — Panorama -->
+        <div class="canvas">
+          <div class="cvtools"><span class="t on">Canvas</span><span class="t">Tree</span><span class="t">−</span><span class="t">+</span></div>
+          <div class="group" style="left:28px;top:16px;width:232px">
+            <h4>RESEARCH</h4>
+            <div class="cards">
+              <div class="card"><div class="thumb"></div><div class="u">docs.rs</div></div>
+              <div class="card"><div class="thumb"></div><div class="u">nixos.wiki</div></div>
+            </div>
+            <span class="handle">◢</span>
+          </div>
+          <div class="group" style="left:300px;top:58px;width:136px">
+            <h4>READING</h4>
+            <div class="cards">
+              <div class="card"><div class="thumb"></div><div class="u">bugzilla</div></div>
+            </div>
+            <span class="handle">◢</span>
+          </div>
+          <div class="tray"><span class="lbl">UNGROUPED</span>
+            <div class="card"><div class="thumb"></div><div class="u">Welcome</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom">
+        <div class="tabs"><span>Problems</span><span>Output</span><span>Terminal</span></div>
+        <div class="out">$ ./mach build&nbsp;&nbsp;<span style="color:#8ad38a">✓ 149s</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status"><span>⊗ 0&nbsp;&nbsp;⚠ 0</span></div>
+</div>
+
+<p class="note" id="note"></p>
+
+<p class="fixed"><b>Constant in all three:</b> the URL row — back / forward / reload / address /
+<b>+</b> / mode toggle. It does not move, hide, or lose a control. <b>Also constant:</b> the two open
+tabs themselves. <b>The only variable is the tabs' address:</b> very top → editor dock → canvas.</p>
+
+<script>
+const NOTES = {
+  browsing:  '<b>Browsing — tabs at the very top.</b> Full-width strip above the URL row, in the title-bar position Firefox and Chrome use. Panels hidden, page maximised. Nothing else on screen competes with the page.',
+  coding:    '<b>Coding — tabs docked in the editor area.</b> The strip leaves the top and reappears as editor tabs above the content, beside Explorer and over the terminal. <b>URL row and + stay exactly where they were.</b>',
+  organising:'<b>Organising — tabs become the canvas.</b> Firefox Panorama: every tab is a thumbnail card inside a group box you drag by its header and resize by the ◢ corner. Ungrouped tabs wait in the dashed tray. Click a card to dive back to Browsing on that tab.'
+};
+const win = document.getElementById('win'), note = document.getElementById('note'), page = document.getElementById('page');
+function set(m){
+  win.dataset.mode = m;
+  document.querySelectorAll('.seg').forEach(s => s.classList.toggle('is-active', s.dataset.m === m));
+  note.innerHTML = NOTES[m];
+  page.textContent = m === 'coding' ? 'editor content' : 'page content';
+}
+document.querySelectorAll('.seg').forEach(s => s.onclick = () => set(s.dataset.m));
+document.querySelectorAll('.topstrip .tab, .docktabs .tab').forEach(t => t.onclick = () => {
+  const i = t.dataset.t;
+  document.querySelectorAll('.topstrip .tab, .docktabs .tab').forEach(o => o.classList.toggle('on', o.dataset.t === i));
+});
+document.querySelectorAll('.card').forEach(c => c.onclick = () => set('browsing'));
+set('browsing');
+</script>
+</body>
+</html>

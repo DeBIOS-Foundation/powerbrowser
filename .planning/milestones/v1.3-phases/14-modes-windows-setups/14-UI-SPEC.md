@@ -19,13 +19,39 @@ windows host tab content only, never a second IDE frame; core-close kills the
 session, relaunch restores. Never fork/patch Theia core; never modify Gecko
 outside the 2 hook-only patches.
 
-**Binding constraint (13-01 spike verdict RED).** The tab strip **STAYS TOP in
-all modes** per the Variant-A fallback. Modes reshape panels and visibility;
-no Phase-14 surface relocates the strip, and no contract below may be read as
-requiring relocation. Sketch 002-B intent is bounded accordingly: mode
-differences are panel visibility + main-area view, strip position fixed.
-Phase-15 organising CANVAS is out of scope — this phase contracts only the
-mode switch into an organising placeholder slot, not the canvas.
+**Binding constraint — AMENDED 2026-09-08 (13-01 spike re-probed GREEN).**
+The Variant-A fallback below is **superseded**. The 2026-09-05 RED rested
+solely on `diff-theia-core.sh --quick` failing on pre-existing install drift;
+that instrument exits 0 on today's tree, and the relocation mechanics were
+re-measured live at 6/6 through the public `ApplicationShell` API. The spike
+record now reads `Verdict: GREEN` and routes to **Variant B**.
+
+The tab strip therefore **RELOCATES per mode** (sketch 002-B, sketch 003):
+
+| Mode | Tab strip lives | Shell furniture |
+|------|-----------------|-----------------|
+| Browsing | Very top, above the URL row, Firefox/Chrome title-bar position | none — no menubar, no left icon rail, no status bar |
+| Coding | Docked in the editor area, beside Explorer and above the bottom panel | all present — Coding is the ONLY mode that keeps them |
+| Organising | The Panorama canvas — every tab is a card | none — same stripping as Browsing |
+
+Two constants hold across every mode, and no contract below may be read as
+permitting either to change (owner statement, 2026-09-08 — *"the tabs never
+change and the URL bar always stays in place; what happens is the location of
+the tabs changes between the three different modes"*):
+
+- **The URL row.** Back / forward / reload / address field / `+` / mode
+  toggle. Present and identical in all three modes; it never hides and never
+  loses a control. This overrides sketch 002's "Coding starts with the nav row
+  hidden in B (IDE state)" — Coding keeps the URL and the `+`.
+- **The tabs themselves.** No tab is closed, moved windows, or detached by a
+  mode change.
+
+~~*Superseded:* The tab strip STAYS TOP in all modes per the Variant-A
+fallback; no Phase-14 surface relocates the strip.~~
+
+Phase-15 organising CANVAS remains out of scope for Phase 14 — this phase
+contracts only the mode switch into an organising placeholder slot. Sketch 003
+shows the canvas as the strip's third home; delivering it is Phase 15.
 
 **Inherits from 13-UI-SPEC** (do not contradict): design system `none`,
 spacing ramp, typography delegation (3 sizes / 2 weights), color tokens,
@@ -222,21 +248,29 @@ Naming is fixed: **"chrome bar"**, mode names **"Coding"**, **"Browsing"**,
 
 ## Interaction Contract (GUI-07 + GUI-09, net-new)
 
-### Modes reshape panels and visibility — the strip never moves
+### Modes reshape panels, visibility, and where the strip lives
 
-Per-mode shell map (prescriptive, RED-bounded). The tab strip stays top in
-every mode; only side-panel visibility and the main-area view change:
+Per-mode shell map (prescriptive). AMENDED 2026-09-08: the strip column is
+new, and the furniture column carries Browsing's stripped chrome. The URL row
+is absent from this table because it is invariant — see the binding constraint
+above.
 
-| Mode | Left panel | Right panel | Bottom panel | Main area |
-|------|-----------|-------------|--------------|-----------|
-| Browsing (launch default) | hidden | hidden | hidden | Tab content, maximised |
-| Coding | visible (Explorer) | per saved layout | visible | Tab content beside visible panels |
-| Organising | hidden | hidden | hidden | Organising placeholder slot (see below) |
+| Mode | Tab strip | Left panel | Right panel | Bottom panel | Main area | Menubar / icon rail / status bar |
+|------|-----------|-----------|-------------|--------------|-----------|----------------------------------|
+| Browsing (launch default) | Very top, above the URL row | hidden | hidden | hidden | Tab content, maximised | all three hidden |
+| Coding | Docked in the editor area | visible (Explorer) | per saved layout | visible | Tab content beside visible panels | all three visible |
+| Organising | The Panorama canvas (Phase 15; placeholder slot in Phase 14) | hidden | hidden | hidden | Organising placeholder slot (see below) | all three hidden |
 
 - Switching selects the toggle segment with immediate visual state (≤150ms);
-  panels slide (≤200ms, instant under reduced motion). Content tabs never
-  unmount, close, move windows, or detach — the status-bar tab-count chip
-  re-asserts the invariant on every switch (carried pattern).
+  panels slide and the strip changes home (≤200ms, instant under reduced
+  motion). Content tabs never unmount, close, move windows, or detach.
+- **The tab-count chip is removed** (owner decision, 2026-09-08) — from the
+  status bar and from the URL row alike. The invariant it asserted still
+  holds and is still enforced, but by the switch-invariant gate rather than by
+  a visible chip: `scripts/verify-mode-switch-tabs-invariant.mjs` derives the
+  shell-mutating calls in `activateMode` at check time, and the live row
+  measures tab identity across switches. Superseded wording: *"the status-bar
+  tab-count chip re-asserts the invariant on every switch (carried pattern)"*.
 - Custom modes save the current panel visibility/layout as data with shipped
   defaults behind them; a custom mode never alters a shipped default in place.
   No `[features]`/`[modes]` manifest flag exists anywhere in this contract.
