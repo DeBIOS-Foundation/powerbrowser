@@ -11,7 +11,8 @@
     "create_tag": true,
     "phase_branch_template": "gsd/phase-{phase}-{slug}",
     "milestone_branch_template": "gsd/{milestone}-{slug}",
-    "quick_branch_template": null
+    "quick_branch_template": null,
+    "allow_default_branch_commits": true
   },
   "workflow": {
     "research": true,
@@ -43,5 +44,16 @@
     "enabled": true
   },
   "mode": "balanced",
-  "granularity": "standard"
+  "granularity": "standard",
+  "graphify": {
+    "enabled": true
+  },
+  "gsd_graph": {
+    "enabled": true,
+    "auto_update": true,
+    "store_dir": ".gsd-graph",
+    "report_on_sync": true,
+    "communities_on_sync": false,
+    "full_on_enable": true
+  }
 }

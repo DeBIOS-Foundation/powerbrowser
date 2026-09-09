@@ -1,24 +1,55 @@
 #!/usr/bin/env node
 /**
  * GUI-07's shipped-mode defaults gate (14-01): the three shipped modes are
- * the contract between the modes extension and the chrome-bar toggle.
+ * the contract between the modes extension, the mode service's switch path,
+ * and the chrome-bar toggle. Three sources that must agree, and this gate is
+ * where they are made to.
  *
- * Descriptor ids, labels, order, and the placement map are DERIVED from
- * `mode-descriptors.ts` at check time, the toggle segments from the widget
- * `MODES` literal, and both are compared to the one EXPECTED const below as
- * SET EQUALITY: a surplus mode is an unreviewed default, a missing one is a
- * dead toggle segment, a reworded label breaks the toggle mapping, and a
- * placement drift moves panels nobody reviewed -- each reported by name. An
- * empty derivation fails as a broken instrument, never passes as clean. The
- * widget never imports the descriptors: both sides agree through this gate,
- * and the label-to-id rule the bridge relies on (lowercased labels equal
- * descriptor ids, in order) is asserted here rather than trusted.
+ * Everything here is DERIVED from the tree on both sides and compared as SET
+ * EQUALITY. There is no declared copy of the shipped modes in this file: a
+ * hand-kept expectation list can only ever agree with the tree it was copied
+ * from, so `mode-descriptors.ts` IS the expectation and every comparison
+ * below runs it against an independent second source:
+ *
+ * 1. ORDER, IDS AND LABELS vs the chrome-bar toggle. The shipped modes are
+ *    read in `SHIPPED_MODES` export order -- the array the toggle's order
+ *    actually comes from, not the order the consts happen to be written in --
+ *    and compared to the widget's `MODES` literal. The widget never imports
+ *    the descriptors, so the bridge rule it relies on (a segment label
+ *    lowercased IS the descriptor id) is asserted here rather than trusted.
+ *
+ * 2. VIEW PLACEMENTS vs `ensureInArea` on the switch path. A descriptor's
+ *    `viewPlacements` is applied by stock on a mode's FIRST activation only
+ *    (perspective-service.js:151-193): every later activation reaches
+ *    `expand(id)`, which is a pure find over the widgets already docked
+ *    (side-panel-handler.js:282-289) and does nothing on a miss. That gap is
+ *    the defect that left Coding showing no Theia view at all, and
+ *    `ModeService.ensureInArea` is the every-activation half that closes it.
+ *    A placement with no matching `ensureInArea` is first-visit-only by
+ *    construction, so the two sets are required to be equal.
+ *
+ * 3. COLLAPSE AREAS vs `visibilityFor` on the switch path. Same split: the
+ *    descriptor's `chromeOptions.collapseAreas` collapses on first activation,
+ *    `visibilityFor` decides what every activation asserts. An area collapsed
+ *    by one and left open by the other makes a mode look different on its
+ *    second visit than its first.
+ *
+ * 4. THE TOGGLE'S CHANNEL. Shipped segments must reach the mode command, not
+ *    stock perspective switching: everything a mode contracts -- the panel
+ *    map, the organising slot, the Explorer dock -- lives behind
+ *    `MODES_ACTIVATE_COMMAND_ID`, and a direct `switchPerspective` from the
+ *    widget skips all of it. Derived from the anchored `selectMode` body, so
+ *    an import that nothing calls does not satisfy it.
  *
  * Modes ship as data, never manifest flags: a scoped negated search fails on
  * any bare `[modes]` section in the configuration schema, the generator, or
  * the modes sources. Backtick-wrapped prose mentions (this file's own
  * contract discussion, descriptor comments) are exempt -- and the self-test
  * plants a bare flag in every scope to prove the search is not vacuous.
+ *
+ * Every derivation above fails as a broken instrument when it yields nothing:
+ * no descriptors, no toggle segments, no placements, no visibility flags.
+ * None of them can pass green-by-empty-set.
  *
  * Honestly --quick: reads text sources only. No build, no browser, no
  * display, no network.
@@ -36,6 +67,7 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const NAME = 'verify-mode-toggle-commands';
 
 const DESCRIPTORS_REL = 'theia/extensions/modes/src/browser/mode-descriptors.ts';
+const SERVICE_REL = 'theia/extensions/modes/src/browser/mode-service.ts';
 const WIDGET_REL = 'theia/extensions/chrome-bar/src/browser/chrome-bar-widget.tsx';
 const SCHEMA_REL = 'scripts/lib/config-schema.json';
 const GENERATOR_REL = 'scripts/generate.mjs';
@@ -49,29 +81,8 @@ const MODES_GLOB_RELS = [
     'theia/extensions/modes/src/browser/dependent-windows.ts',
 ];
 
-/**
- * The declared shipped-mode contract, in contracted toggle order. The ONE
- * hand-kept list in this file: editing it is how a deliberate contract
- * change is made -- it shows up in the diff for review. Everything it is
- * compared against is derived at check time.
- */
-const EXPECTED_MODES = Object.freeze([
-    Object.freeze({
-        id: 'coding', label: 'Coding',
-        collapseAreas: Object.freeze([]),
-        placements: Object.freeze({ 'explorer-view-container': 'left' }),
-    }),
-    Object.freeze({
-        id: 'browsing', label: 'Browsing',
-        collapseAreas: Object.freeze(['left', 'right', 'bottom']),
-        placements: Object.freeze({}),
-    }),
-    Object.freeze({
-        id: 'organising', label: 'Organising',
-        collapseAreas: Object.freeze(['left', 'right', 'bottom']),
-        placements: Object.freeze({}),
-    }),
-]);
+/** The shell areas a mode can collapse, per the stock chrome options. */
+const AREAS = Object.freeze(['left', 'right', 'bottom']);
 
 function diff(actual, expected) {
     const a = new Set(actual);
@@ -82,52 +93,91 @@ function diff(actual, expected) {
     };
 }
 
-/** Every `id: '...'` value in the descriptors source, in source order. */
-function derivedIdsOf(source) {
-    const ids = [];
-    for (const match of source.matchAll(/^\s*id:\s*'([^']+)'/gm)) {
-        ids.push(match[1]);
-    }
-    return ids;
-}
-
-/** Maps each derived id to its `label: '...'` value. */
-function derivedLabelsById(source) {
-    const out = {};
-    for (const match of source.matchAll(/^\s*id:\s*'([^']+)',\s*\n\s*label:\s*'([^']+)'/gm)) {
-        out[match[1]] = match[2];
-    }
-    return out;
+/**
+ * Blank every string literal and comment with SAME-LENGTH whitespace, so
+ * brace matching sees code shape only while every offset still indexes the
+ * raw source -- the derivations below need the string VALUES, so bodies are
+ * located on the mask and sliced out of the original.
+ */
+function maskLiterals(src) {
+    const blank = m => m.replace(/[^\n]/g, ' ');
+    return src
+        .replace(/`(?:[^`\\]|\\.)*`/g, blank)
+        .replace(/'(?:[^'\\\n]|\\.)*'/g, blank)
+        .replace(/"(?:[^"\\\n]|\\.)*"/g, blank)
+        .replace(/\/\*[\s\S]*?\*\//g, blank)
+        .replace(/(^|[^:])\/\/.*$/gm, (m, lead) => lead + blank(m.slice(lead.length)));
 }
 
 /**
- * Splits the source into per-descriptor segments keyed by id, then reads
- * each segment's `collapseAreas: [...]` list and `['view', 'area']`
- * placement rows. A descriptor with no collapse block collapses nothing;
- * one with an empty Map places nothing.
+ * The raw text between the braces of the first definition matching `anchor`.
+ * Scanning starts at the END of the match, not its start: a method whose
+ * anchor spans its return type (`visibilityFor(...): { left: boolean ... }`)
+ * would otherwise have that type object read as its body.
  */
-function derivedPlacementById(source) {
-    const segments = {};
-    const blocks = source.split(/^const \w+: PerspectiveDescriptor = \{$/m).slice(1);
-    for (const block of blocks) {
-        const idMatch = /^\s*id:\s*'([^']+)'/m.exec(block);
-        if (!idMatch) {
+function bodyOf(src, anchor) {
+    const masked = maskLiterals(src);
+    const match = anchor.exec(masked);
+    if (!match) {
+        return undefined;
+    }
+    const open = masked.indexOf('{', match.index + match[0].length - 1);
+    if (open < 0) {
+        return undefined;
+    }
+    let depth = 0;
+    for (let i = open; i < masked.length; i += 1) {
+        if (masked[i] === '{') {
+            depth += 1;
+        } else if (masked[i] === '}') {
+            depth -= 1;
+            if (depth === 0) {
+                return src.slice(open + 1, i);
+            }
+        }
+    }
+    return undefined;
+}
+
+/**
+ * The shipped modes, in `SHIPPED_MODES` export order. Order comes from the
+ * export array rather than the order the descriptor consts are written in:
+ * the export is what the toggle's order is actually built from, so reordering
+ * it -- without moving a single descriptor block -- must be what this sees.
+ */
+function derivedShippedModes(source) {
+    const exported = /export const SHIPPED_MODES[^=]*=\s*\[([^\]]*)\]/.exec(source);
+    if (!exported) {
+        return { error: `${DESCRIPTORS_REL}: no SHIPPED_MODES export array found -- the shipped-mode order cannot be derived, so every comparison below would prove nothing` };
+    }
+    const constNames = [...exported[1].matchAll(/[A-Za-z_$][\w$]*/g)].map(m => m[0]);
+    const modes = [];
+    const failures = [];
+    for (const constName of constNames) {
+        const block = bodyOf(source, new RegExp(`const\\s+${constName}\\s*:\\s*PerspectiveDescriptor\\s*=\\s*\\{`));
+        if (block === undefined) {
+            failures.push(`${DESCRIPTORS_REL}: no descriptor block found for exported mode '${constName}' -- it is listed in SHIPPED_MODES but has no PerspectiveDescriptor literal`);
             continue;
         }
-        const collapseMatch = /collapseAreas:\s*\[([^\]]*)\]/.exec(block);
-        const collapse = collapseMatch
-            ? [...collapseMatch[1].matchAll(/'([^']+)'/g)].map(m => m[1])
-            : [];
-        // Read placements from the block with the collapse list removed:
-        // `['right', 'bottom']` inside a collapse list is not a placement.
-        const deCollapsed = block.replace(/collapseAreas:\s*\[[^\]]*\]/, '');
-        const placements = {};
-        for (const m of deCollapsed.matchAll(/\[\s*'([^']+)'\s*,\s*'([^']+)'\s*\]/g)) {
-            placements[m[1]] = m[2];
+        const id = /\bid:\s*'([^']+)'/.exec(block);
+        const label = /\blabel:\s*'([^']+)'/.exec(block);
+        if (!id || !label) {
+            failures.push(`${DESCRIPTORS_REL}: descriptor '${constName}' is missing an ${id ? 'label' : 'id'} literal -- the id/label pair the toggle bridge maps on is broken`);
+            continue;
         }
-        segments[idMatch[1]] = { collapseAreas: collapse, placements };
+        const collapse = /collapseAreas:\s*\[([^\]]*)\]/.exec(block);
+        const placementRegion = /viewPlacements:\s*new Map[^(]*\(\s*\[([\s\S]*?)\]\s*\)/.exec(block);
+        modes.push({
+            constName,
+            id: id[1],
+            label: label[1],
+            collapseAreas: collapse ? [...collapse[1].matchAll(/'([^']+)'/g)].map(m => m[1]) : [],
+            placements: placementRegion
+                ? [...placementRegion[1].matchAll(/\[\s*'([^']+)'\s*,\s*'([^']+)'\s*\]/g)].map(m => `${m[1]}->${m[2]}`)
+                : [],
+        });
     }
-    return segments;
+    return { modes, failures };
 }
 
 /** The widget `MODES = [...]` literal, in source order. */
@@ -137,6 +187,45 @@ function derivedModesLiteralOf(source) {
         return [];
     }
     return [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1]);
+}
+
+/** Every `ensureInArea('view', 'area')` call on the mode service's switch path. */
+function derivedEnsureInAreaOf(source) {
+    return [...source.matchAll(/\bensureInArea\(\s*'([^']+)'\s*,\s*'([^']+)'\s*\)/g)].map(m => `${m[1]}->${m[2]}`);
+}
+
+/**
+ * The per-mode panel flags `visibilityFor` returns: `{ byId, fallback }`,
+ * each entry mapping an area to its literal source text. Only a literal
+ * `false` collapses -- an expression (Coding reads the live right panel)
+ * asserts nothing about that area, which is exactly why the comparison is
+ * against the descriptor's collapse list and not its complement.
+ */
+function derivedVisibilityFlags(source) {
+    const body = bodyOf(source, /visibilityFor\s*\([^)]*\)\s*:\s*\{[^}]*\}\s*\{/);
+    if (body === undefined) {
+        return undefined;
+    }
+    const flagsOf = text => {
+        const out = {};
+        for (const area of AREAS) {
+            const m = new RegExp(`\\b${area}:\\s*([^,}]+)`).exec(text);
+            if (m) {
+                out[area] = m[1].trim();
+            }
+        }
+        return Object.keys(out).length === AREAS.length ? out : undefined;
+    };
+    const byId = {};
+    for (const m of body.matchAll(/target\s*===\s*'([^']+)'\s*\)\s*\{\s*return\s*\{([^}]*)\}/g)) {
+        const flags = flagsOf(m[2]);
+        if (flags) {
+            byId[m[1]] = flags;
+        }
+    }
+    const returns = [...body.matchAll(/return\s*\{([^}]*)\}/g)];
+    const fallback = returns.length ? flagsOf(returns[returns.length - 1][1]) : undefined;
+    return fallback ? { byId, fallback } : undefined;
 }
 
 /**
@@ -162,70 +251,93 @@ function derivedManifestFlags(sources, rels) {
 function checkModes(sources) {
     const failures = [];
     const descriptorsSrc = sources[DESCRIPTORS_REL] ?? '';
+    const serviceSrc = sources[SERVICE_REL] ?? '';
     const widgetSrc = sources[WIDGET_REL] ?? '';
 
-    const ids = derivedIdsOf(descriptorsSrc);
-    if (ids.length === 0) {
-        failures.push(`${DESCRIPTORS_REL}: derived ZERO descriptor ids -- no id: '...' line found, so this comparison proves nothing`);
+    const shipped = derivedShippedModes(descriptorsSrc);
+    if (shipped.error) {
+        failures.push(shipped.error);
         return failures;
     }
-    const expectedIds = EXPECTED_MODES.map(m => m.id);
-    const idDiff = diff(ids, expectedIds);
-    if (idDiff.surplus.length) {
-        failures.push(`${DESCRIPTORS_REL}: descriptor ids NOT in the declared contract (unreviewed shipped mode): ${idDiff.surplus.join(', ')}`);
+    failures.push(...shipped.failures);
+    const modes = shipped.modes;
+    if (modes.length === 0) {
+        failures.push(`${DESCRIPTORS_REL}: derived ZERO shipped modes -- no descriptor block resolved from SHIPPED_MODES, so every comparison below would pass on an empty set`);
+        return failures;
     }
-    if (idDiff.missing.length) {
-        failures.push(`${DESCRIPTORS_REL}: declared contract ids are GONE (dead toggle segment): ${idDiff.missing.join(', ')}`);
-    }
-    if (ids.join(',') !== expectedIds.join(',')) {
-        failures.push(`${DESCRIPTORS_REL}: descriptor order drifted (got [${ids.join(', ')}], contract is [${expectedIds.join(', ')}]) -- the toggle contract is order-sensitive`);
-    }
+    const ids = modes.map(m => m.id);
+    const labels = modes.map(m => m.label);
 
-    const labels = derivedLabelsById(descriptorsSrc);
-    for (const expected of EXPECTED_MODES) {
-        if (!(expected.id in labels)) {
-            failures.push(`${DESCRIPTORS_REL}: no label derived for descriptor '${expected.id}' -- the id/label pair the bridge maps on is broken`);
-        } else if (labels[expected.id] !== expected.label) {
-            failures.push(`${DESCRIPTORS_REL}: label drift on '${expected.id}' (got '${labels[expected.id]}', contract is '${expected.label}')`);
-        }
-    }
-
-    const placements = derivedPlacementById(descriptorsSrc);
-    for (const expected of EXPECTED_MODES) {
-        const actual = placements[expected.id];
-        if (!actual) {
-            failures.push(`${DESCRIPTORS_REL}: no descriptor block derived for '${expected.id}' -- placement comparison proves nothing for it`);
-            continue;
-        }
-        if (actual.collapseAreas.join(',') !== [...expected.collapseAreas].join(',')) {
-            failures.push(`${DESCRIPTORS_REL}: collapse drift on '${expected.id}' (got [${actual.collapseAreas.join(', ')}], contract is [${[...expected.collapseAreas].join(', ')}])`);
-        }
-        const actualRows = Object.entries(actual.placements).map(([v, a]) => `${v}->${a}`).sort().join(',');
-        const expectedRows = Object.entries(expected.placements).map(([v, a]) => `${v}->${a}`).sort().join(',');
-        if (actualRows !== expectedRows) {
-            failures.push(`${DESCRIPTORS_REL}: placement drift on '${expected.id}' (got {${actualRows || 'none'}}, contract is {${expectedRows || 'none'}})`);
-        }
-    }
-
-    // Toggle agreement through the gate, never imports: the widget literal
-    // lowercased must equal the descriptor ids in order -- the exact rule
-    // the bridge's switchPerspective mapping relies on.
+    // 1. Descriptors vs the toggle. The widget never imports the descriptors:
+    // the two literals agree here or nowhere.
     const segments = derivedModesLiteralOf(widgetSrc);
     if (segments.length === 0) {
         failures.push(`${WIDGET_REL}: derived ZERO toggle segments -- no MODES = [...] literal found, so the agreement comparison proves nothing`);
-    } else if (segments.map(s => s.toLowerCase()).join(',') !== expectedIds.join(',')) {
-        failures.push(`${WIDGET_REL}: toggle segments [${segments.join(', ')}] disagree with descriptor ids [${expectedIds.join(', ')}] (lowercased, in order) -- the bridge would switch nothing`);
+    } else {
+        const labelDiff = diff(segments, labels);
+        if (labelDiff.surplus.length) {
+            failures.push(`${WIDGET_REL}: toggle segments with no shipped descriptor (dead segment): ${labelDiff.surplus.join(', ')}`);
+        }
+        if (labelDiff.missing.length) {
+            failures.push(`${DESCRIPTORS_REL}: shipped descriptor labels with no toggle segment (unreachable mode): ${labelDiff.missing.join(', ')}`);
+        }
+        if (segments.join(',') !== labels.join(',')) {
+            failures.push(`toggle order drifted: segments [${segments.join(', ')}] against SHIPPED_MODES [${labels.join(', ')}] -- the toggle contract is order-sensitive`);
+        }
+        if (segments.map(s => s.toLowerCase()).join(',') !== ids.join(',')) {
+            failures.push(`${WIDGET_REL}: lowercased toggle segments [${segments.map(s => s.toLowerCase()).join(', ')}] are not the descriptor ids [${ids.join(', ')}] -- the widget sends the lowercased label as the mode id, so the toggle would switch nothing`);
+        }
     }
 
-    // Bridge presence: the toggle must route through the stock service.
-    if (!widgetSrc.includes('switchPerspective')) {
-        failures.push(`${WIDGET_REL}: no switchPerspective call -- the toggle is not bridged to stock perspective switching`);
+    // 2. First-activation placements vs the every-activation dock. Stock
+    // applies viewPlacements once; ensureInArea is what makes visit two match
+    // visit one, so the two sets are the same set or the mode is broken on
+    // one of the two paths.
+    const declaredPlacements = modes.flatMap(m => m.placements);
+    if (declaredPlacements.length === 0) {
+        failures.push(`${DESCRIPTORS_REL}: derived ZERO view placements across every shipped mode -- no descriptor places a view, so the placement comparison would pass on an empty set`);
+    } else {
+        const applied = derivedEnsureInAreaOf(serviceSrc);
+        const placementDiff = diff(applied, declaredPlacements);
+        if (placementDiff.surplus.length) {
+            failures.push(`${SERVICE_REL}: ensureInArea docks a view no shipped descriptor places: ${placementDiff.surplus.join(', ')} -- the switch path moves a view the mode contract does not declare`);
+        }
+        if (placementDiff.missing.length) {
+            failures.push(`${SERVICE_REL}: shipped view placement with no ensureInArea on the switch path: ${placementDiff.missing.join(', ')} -- stock applies viewPlacements on a mode's FIRST activation only, so this view would be missing on every later visit`);
+        }
+    }
+
+    // 3. First-activation collapse vs the every-activation panel flags.
+    const visibility = derivedVisibilityFlags(serviceSrc);
+    if (!visibility) {
+        failures.push(`${SERVICE_REL}: could not derive the visibilityFor panel flags -- the every-activation half of the collapse contract is unreadable, so the comparison proves nothing`);
+    } else {
+        for (const mode of modes) {
+            const flags = visibility.byId[mode.id] ?? visibility.fallback;
+            const collapsedByService = AREAS.filter(area => flags[area] === 'false');
+            const collapseDiff = diff(collapsedByService, mode.collapseAreas);
+            if (collapseDiff.surplus.length) {
+                failures.push(`${SERVICE_REL}: visibilityFor collapses [${collapseDiff.surplus.join(', ')}] for '${mode.id}' but its descriptor does not -- the mode would look different on its first activation than on every later one`);
+            }
+            if (collapseDiff.missing.length) {
+                failures.push(`${DESCRIPTORS_REL}: descriptor '${mode.id}' collapses [${collapseDiff.missing.join(', ')}] on first activation but visibilityFor leaves it open afterwards -- the mode would not stay collapsed`);
+            }
+        }
+    }
+
+    // 4. The toggle's channel: shipped segments activate the MODE, not a bare
+    // perspective. Anchored on selectMode so an unused import cannot satisfy
+    // it, and named as a const so the string is never re-spelled.
+    const selectModeBody = bodyOf(widgetSrc, /selectMode\s*=\s*\([^)]*\)\s*=>/);
+    if (selectModeBody === undefined) {
+        failures.push(`${WIDGET_REL}: the selectMode body was not found -- the shipped-segment channel cannot be derived, so this proves nothing`);
+    } else if (!/executeCommand\(\s*MODES_ACTIVATE_COMMAND_ID\s*,/.test(selectModeBody)) {
+        failures.push(`${WIDGET_REL}: selectMode does not execute MODES_ACTIVATE_COMMAND_ID -- a shipped segment that switches the perspective directly skips the mode's panel map, its Explorer dock and the organising slot, which is exactly why Coding used to show no view`);
     }
 
     // Modes ship as data: no manifest flag in schema, generator, or sources.
     const flagRels = [SCHEMA_REL, GENERATOR_REL, ...MODES_GLOB_RELS];
-    const flags = derivedManifestFlags(sources, flagRels);
-    for (const row of flags) {
+    for (const row of derivedManifestFlags(sources, flagRels)) {
         failures.push(`${row.rel}:${row.line}: bare [modes] manifest flag -- modes ship as descriptors plus user data only`);
     }
 
@@ -234,7 +346,7 @@ function checkModes(sources) {
 
 function readSources() {
     const out = {};
-    for (const rel of [DESCRIPTORS_REL, WIDGET_REL, SCHEMA_REL, GENERATOR_REL, ...MODES_GLOB_RELS]) {
+    for (const rel of [DESCRIPTORS_REL, SERVICE_REL, WIDGET_REL, SCHEMA_REL, GENERATOR_REL, ...MODES_GLOB_RELS]) {
         try {
             out[rel] = readFileSync(join(REPO_ROOT, rel), 'utf8');
         } catch {
@@ -248,14 +360,16 @@ function main() {
     if (process.argv.includes('--self-test')) {
         return selfTest();
     }
-    const failures = checkModes(readSources());
+    const sources = readSources();
+    const failures = checkModes(sources);
     if (failures.length) {
-        console.error(`${NAME}: FAIL -- the shipped-mode defaults drifted from the declared contract.`);
-        console.error(`If the change is deliberate, edit EXPECTED_MODES in this script in the SAME commit so the contract change is visible in the diff.`);
+        console.error(`${NAME}: FAIL -- the shipped-mode sources disagree.`);
+        console.error(`Nothing here is hand-kept: mode-descriptors.ts, mode-service.ts and the chrome-bar toggle are each derived and compared, so a deliberate change means changing them TOGETHER.`);
         failures.forEach(f => console.error(`  - ${f}`));
         return 1;
     }
-    console.log(`${NAME}: PASS -- ${EXPECTED_MODES.length} shipped modes (ids, labels, order, placements) match the declared contract and the toggle agrees`);
+    const count = derivedShippedModes(sources[DESCRIPTORS_REL] ?? '').modes.length;
+    console.log(`${NAME}: PASS -- ${count} shipped modes agree across the descriptors, the switch path and the toggle (order, ids, labels, placements, collapse), and the toggle activates modes through the mode command`);
     return 0;
 }
 
@@ -269,6 +383,7 @@ function selfTest() {
     }
 
     const cleanDescriptors = clean[DESCRIPTORS_REL];
+    const cleanService = clean[SERVICE_REL];
     const cleanWidget = clean[WIDGET_REL];
     const cases = [
         {
@@ -288,26 +403,18 @@ function selfTest() {
             expect: 'Browsing',
         },
         {
-            name: 'planted reorder',
-            mutate: sources => {
-                const browsingBlock = /const browsing: PerspectiveDescriptor = \{[\s\S]*?\n\};\n/.exec(cleanDescriptors);
-                const organisingBlock = /const organising: PerspectiveDescriptor = \{[\s\S]*?\n\};\n/.exec(cleanDescriptors);
-                if (!browsingBlock || !organisingBlock) {
-                    return { ...sources, [DESCRIPTORS_REL]: cleanDescriptors };
-                }
-                const TOKEN = '/* planted-reorder-token */';
-                return {
-                    ...sources,
-                    [DESCRIPTORS_REL]: cleanDescriptors
-                        .replace(browsingBlock[0], TOKEN)
-                        .replace(organisingBlock[0], browsingBlock[0])
-                        .replace(TOKEN, organisingBlock[0]),
-                };
-            },
-            expect: 'order',
+            // Reordering the EXPORT, without moving a descriptor block: the
+            // toggle's order comes from this array, so this is the reorder
+            // that a block-order derivation would have missed entirely.
+            name: 'planted SHIPPED_MODES export reorder',
+            mutate: sources => ({ ...sources, [DESCRIPTORS_REL]: cleanDescriptors.replace(
+                '= [coding, browsing, organising];',
+                '= [coding, organising, browsing];'
+            ) }),
+            expect: 'order drifted',
         },
         {
-            name: 'planted placement drift',
+            name: 'planted collapse drift',
             mutate: sources => ({ ...sources, [DESCRIPTORS_REL]: cleanDescriptors.replace(
                 "    chromeOptions: { collapseAreas: ['left', 'right', 'bottom'] },\n};\n\nconst organising",
                 "    chromeOptions: { collapseAreas: ['left', 'right'] },\n};\n\nconst organising"
@@ -315,9 +422,38 @@ function selfTest() {
             expect: 'bottom',
         },
         {
+            // The D3 shape: the descriptor still places the view, but nothing
+            // docks it on a later activation, so Coding shows no Theia view
+            // from its second visit onward.
+            name: 'planted ensureInArea removal (placement becomes first-visit-only)',
+            mutate: sources => ({ ...sources, [SERVICE_REL]: cleanService.replace(
+                "            await this.ensureInArea('explorer-view-container', 'left');\n",
+                ''
+            ) }),
+            expect: 'explorer-view-container',
+        },
+        {
             name: 'planted manifest flag',
             mutate: sources => ({ ...sources, [DESCRIPTORS_REL]: cleanDescriptors + "\n// planted flag below\n[modes]\n" }),
             expect: '[modes]',
+        },
+        {
+            name: 'planted toggle reorder',
+            mutate: sources => ({ ...sources, [WIDGET_REL]: cleanWidget.replace(
+                "static readonly MODES = ['Coding', 'Browsing', 'Organising'];",
+                "static readonly MODES = ['Browsing', 'Coding', 'Organising'];"
+            ) }),
+            expect: 'order drifted',
+        },
+        {
+            // The regression F2 fixed: a shipped segment switching the
+            // perspective directly, one hop shallower than the mode command.
+            name: 'planted direct perspective switch in selectMode',
+            mutate: sources => ({ ...sources, [WIDGET_REL]: cleanWidget.replace(
+                'await this.commands.executeCommand(MODES_ACTIVATE_COMMAND_ID, next.toLowerCase());',
+                'await this.perspectives.switchPerspective(next.toLowerCase());'
+            ) }),
+            expect: 'MODES_ACTIVATE_COMMAND_ID',
         },
     ];
 
@@ -337,25 +473,6 @@ function selfTest() {
             failed++;
         } else {
             console.log(`  ok  ${testCase.name} -> red, naming '${testCase.expect}'`);
-        }
-    }
-
-    // The widget half needs its own plant: a reordered MODES literal must
-    // break the toggle/descriptor agreement even when descriptors are clean.
-    const reorderedWidget = cleanWidget.replace(
-        "static readonly MODES = ['Coding', 'Browsing', 'Organising'];",
-        "static readonly MODES = ['Browsing', 'Coding', 'Organising'];"
-    );
-    if (reorderedWidget === cleanWidget) {
-        console.error(`${NAME} --self-test: FAIL -- 'planted toggle reorder' did not modify the widget; the anchor it edits has drifted`);
-        failed++;
-    } else {
-        const failures = checkModes({ ...clean, [WIDGET_REL]: reorderedWidget });
-        if (!failures.some(f => f.includes('toggle segments'))) {
-            console.error(`${NAME} --self-test: FAIL -- 'planted toggle reorder' did not go red on the agreement; got: ${failures.join(' | ') || '(no failures at all)'}`);
-            failed++;
-        } else {
-            console.log(`  ok  planted toggle reorder -> red, naming the agreement`);
         }
     }
 

@@ -65,7 +65,25 @@ export class GroupActorClient {
     mutate(msg: GroupMutation): Promise<GroupReply> {
         this.ensureListening();
         const requestId = `group-${Date.now().toString(36)}-${(this.seq += 1)}`;
-        window.dispatchEvent(new CustomEvent(GROUP_REQUEST_EVENT, { detail: { requestId, msg } }));
+        // Dispatch on `document`, bubbling. Both halves are load-bearing and
+        // 15-01 had neither, which is why this channel never once worked.
+        //
+        // JSWindowActor `events` listeners are installed on the WINDOW ROOT
+        // (JSActorService::RegisterChromeEventTarget -> RegisterListenersFor,
+        // "Register event listeners on the newly added Window Root"). An event
+        // dispatched on `window` with the default bubbles:false has a
+        // propagation path that never reaches that root, so the actor child was
+        // never instantiated and every mutation waited out the full 5s ack
+        // timeout into the contracted save-error bar.
+        //
+        // `document` + bubbles:true is exactly the shape upstream uses for the
+        // same job -- see aboutLogins.mjs:296,
+        // `document.dispatchEvent(new CustomEvent("AboutLoginsInit", { bubbles: true }))`.
+        // Keep both; dropping either silently kills the channel again, and the
+        // failure looks like a store error rather than a transport one.
+        document.dispatchEvent(
+            new CustomEvent(GROUP_REQUEST_EVENT, { detail: { requestId, msg }, bubbles: true })
+        );
         return new Promise<GroupReply>((resolve, reject) => {
             const timer = window.setTimeout(() => {
                 this.pending.delete(requestId);

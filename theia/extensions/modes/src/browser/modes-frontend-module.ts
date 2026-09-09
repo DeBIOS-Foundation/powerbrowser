@@ -18,6 +18,7 @@ import { CommandContribution } from '@theia/core/lib/common';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
 import { bindViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
 import { GROUP_PATH, GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-query-service';
+import { MainAreaExemption } from './main-area-exemption';
 import { SHIPPED_MODES } from './mode-descriptors';
 import { ModeService } from './mode-service';
 import { ModesCommandContribution } from './modes-commands';
@@ -45,6 +46,14 @@ export class ModesContribution implements FrontendApplicationContribution {
 export default new ContainerModule(bind => {
     bind(ModesContribution).toSelf().inSingletonScope();
     bind(FrontendApplicationContribution).toService(ModesContribution);
+    // GUI-07: the main-area exemption binds BEFORE the mode service, so its
+    // onDidInitializeLayout has stripped the hydrated layouts and chained the
+    // registered descriptors before the mode service's own hook performs the
+    // launch switch. It does not rely on that order -- it chains descriptors in
+    // onStart and again on every switch -- but a contribution list is walked in
+    // bind order, and the cheapest way to keep the guarantee is to bind it first.
+    bind(MainAreaExemption).toSelf().inSingletonScope();
+    bind(FrontendApplicationContribution).toService(MainAreaExemption);
     // GUI-07 (14-02): the custom-modes service and the mode commands bind
     // statically beside the shipped registration, in the same voice (D-50).
     bind(ModeService).toSelf().inSingletonScope();

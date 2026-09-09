@@ -10,6 +10,17 @@
 
 browser.jar:
 %  content powerbrowser %content/powerbrowser/
+# GUI-08 fix: a JSWindowActor CHILD module is loaded in the CONTENT process,
+# and a chrome:// package is not loadable there -- the load fails with
+# "Failed to load chrome://powerbrowser/content/GroupActorChild.sys.mjs" and
+# the actor child silently never runs. This resource alias exists solely so
+# GroupActorChild.sys.mjs has a content-process-loadable URI, matching how
+# every upstream actor child is shipped (resource:///actors/*.sys.mjs in
+# browser/components/DesktopActorRegistry.sys.mjs; not one uses chrome://).
+# The parent half stays on chrome:// because it only ever loads in the parent
+# process. resource:// is not web-reachable, so the no-web-access property
+# stated above is unchanged.
+%  resource powerbrowser %content/powerbrowser/
    content/powerbrowser/powerbrowser.xhtml         (powerbrowser.xhtml)
    content/powerbrowser/powerbrowser.js            (powerbrowser.js)
    content/powerbrowser/powerbrowser.css           (powerbrowser.css)

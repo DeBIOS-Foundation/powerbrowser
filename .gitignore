@@ -78,3 +78,4 @@ result-*
 .vscode/
 .gsd/
 opencode.json
+.gsd-graph/

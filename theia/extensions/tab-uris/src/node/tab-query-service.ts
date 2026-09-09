@@ -23,6 +23,7 @@
 import { injectable } from '@theia/core/shared/inversify';
 import { join } from 'path';
 import Database from 'better-sqlite3';
+import { POWERBROWSER_ENV } from '@powerbrowser/token-gate/lib/node/powerbrowser-env';
 import { browserTabKeyOf } from '../browser/browser-tab-uri';
 
 /** One projected tab row, mirroring the chrome-side store projection. */
@@ -81,9 +82,29 @@ export class TabQueryService {
     // bindings" on every websocket connection and the suggestion RPC hangs
     // (stuck shimmer). The supervisor already exports
     // POWERBROWSER_PROFILE_DIR into the backend environment; read it here at
-    // construction (per-connection, lazy) and re-point later via
-    // setProfileDir.
-    private profileDir: string = process.env.POWERBROWSER_PROFILE_DIR ?? '';
+    // construction and re-point later via setProfileDir.
+    //
+    // POWERBROWSER_ENV, never `process.env`. token-gate's powerbrowser-env.ts
+    // captures every POWERBROWSER_*-prefixed key and DELETES it out of
+    // process.env at module load, so the supervisor's handshake is not
+    // inherited by every terminal, task, debug adapter and plugin host the
+    // backend later forks. Its own doc comment states the rule this line used
+    // to break -- "every reader ... must use this instead of process.env --
+    // reading process.env directly would find nothing" -- and it found
+    // nothing: the scrub runs when token-gate's backend module is loaded
+    // (src-gen/backend/server.js:64), thirty-one loads ahead of this
+    // extension's (:95), so the read resolved to '' on every launch,
+    // openIfNeeded() bailed on the empty profileDir, and listGroups() /
+    // getGroupTabs() / listUngroupedTabs() served [] unconditionally. That
+    // reads on screen as the contracted empty state, which is why an
+    // unconditional blindness bug looked like an absence of data.
+    //
+    // Construction time is safe, and NOT merely because of that load order:
+    // the import above is itself the ordering guarantee. Requiring
+    // powerbrowser-env runs its capture to completion before this module's
+    // class body is evaluated, so `captured` is populated whichever
+    // extension reaches it first. A deferred read would buy nothing.
+    private profileDir: string = POWERBROWSER_ENV['POWERBROWSER_PROFILE_DIR'] ?? '';
 
     /** Points the reader at a profile directory, resetting any open handle. */
     setProfileDir(dir: string): void {

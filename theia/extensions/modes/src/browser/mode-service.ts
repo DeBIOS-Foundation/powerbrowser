@@ -4,6 +4,7 @@ import {
     FrontendApplicationContribution,
     StatusBar,
     StatusBarAlignment,
+    WidgetManager,
 } from '@theia/core/lib/browser';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
 import { StorageService } from '@theia/core/lib/browser/storage-service';
@@ -19,7 +20,10 @@ import { SHIPPED_MODES, closeOrganisingSlot, openOrganisingSlot } from './mode-d
  *
  * Schema (resolves 14-RESEARCH.md Open Question 2, modes half): the customs
  * file holds an object with a numeric version plus a customs array whose rows
- * carry a name, side-panel visibility flags, and a shell layout snapshot.
+ * carry a name and side-panel visibility flags. A row once also carried a
+ * shell layout snapshot; nothing ever read it back, so the field is gone --
+ * the reader already drops unknown fields, so an old file still loads and the
+ * version did not move.
  * Validation is hand-rolled total parsing: unknown fields are dropped, rows
  * with an unusable name are dropped silently, rows with a readable name but
  * unreadable fields are dropped with the contracted fallback notice naming
@@ -52,7 +56,12 @@ import { SHIPPED_MODES, closeOrganisingSlot, openOrganisingSlot } from './mode-d
  * side-panel expand and collapse, contribution-routed placeholder open and
  * close through the descriptor slot seam, and -- via the widget's
  * publishTabCount on the same stock event -- the chip re-assertion. No switch
- * path closes, moves, or detaches a tab (T-14-02-04).
+ * path closes, moves, or detaches a tab (T-14-02-04). The one addition is
+ * ensureInArea, which DOCKS the Explorer before expanding it: stock's
+ * `expand(id)` is a pure find over widgets already in the dock, so with the
+ * view absent it returned undefined having done nothing, and Coding showed no
+ * Theia view at all. Adding a widget is additive by construction -- it cannot
+ * detach one.
  */
 
 /** Accepted store versions. Newer writers are read leniently: unknown fields drop. */
@@ -66,7 +75,6 @@ export interface CustomModeSnapshot {
     leftVisible: boolean;
     rightVisible: boolean;
     bottomVisible: boolean;
-    layout: unknown;
 }
 
 const SHIPPED_IDS: ReadonlySet<string> = new Set(SHIPPED_MODES.map(descriptor => descriptor.id));
@@ -134,17 +142,13 @@ function parseModeStore(raw: string): ParsedModeStore {
             badNames.push(name);
             continue;
         }
-        const layout = 'layout' in row ? row['layout'] : null;
-        if (layout !== null && typeof layout !== 'object') {
-            badNames.push(name);
-            continue;
-        }
+        // A `layout` written by an older build is an unknown field now and
+        // drops with the rest of them -- it is not a reason to reject the row.
         customs.push({
             name,
             leftVisible: row['leftVisible'] as boolean,
             rightVisible: row['rightVisible'] as boolean,
             bottomVisible: row['bottomVisible'] as boolean,
-            layout,
         });
     }
     return { ok: true, customs, badNames };
@@ -171,6 +175,9 @@ export class ModeService implements FrontendApplicationContribution {
     @inject(StatusBar)
     protected readonly statusBar: StatusBar;
 
+    @inject(WidgetManager)
+    protected readonly widgetManager: WidgetManager;
+
     protected readonly modesUri = UserStorageUri.resolve('modes.json');
     protected readonly debouncedReload = pDebounce(() => this.reloadCustomModes(), 150);
     protected lastGoodCustoms: CustomModeSnapshot[] = [];
@@ -182,17 +189,6 @@ export class ModeService implements FrontendApplicationContribution {
         // deadlock documented in the customize-css header. Shipped modes are
         // already registered synchronously by ModesContribution.
         void this.loadCustomModes();
-        // GUI-07 (14-UI-SPEC: "Browsing (launch default)"): nothing else
-        // activates a mode on a normal launch. ModesContribution only
-        // REGISTERS the descriptors, and reapplyPersistedMode() re-activates
-        // custom ids only, so a shipped id was restored by nobody. The shell
-        // therefore opened on stock Theia's own layout while the toggle
-        // asserted its first literal label -- and because activateMode()
-        // early-returns on the already-active id, the mode the toggle falsely
-        // claimed could not be entered by clicking it. Fire-and-forget for the
-        // same reason as loadCustomModes above: awaiting a read here re-enters
-        // the boot-chain deadlock documented in the customize-css header.
-        void this.applyLaunchMode();
         this.fileService.onDidFilesChange(event => {
             // A DELETED change is a deliberate absence: reset immediately,
             // bypassing the keep-last-good guard (same shape as customize).
@@ -207,6 +203,34 @@ export class ModeService implements FrontendApplicationContribution {
     }
 
     /**
+     * GUI-07 (14-UI-SPEC: "Browsing (launch default)"): nothing else activates
+     * a mode on a normal launch. ModesContribution only REGISTERS the
+     * descriptors, and reapplyPersistedMode() re-activates custom ids only, so
+     * a shipped id was restored by nobody. The shell therefore opened on stock
+     * Theia's own layout while the toggle asserted its first literal label --
+     * and because activateMode() early-returns on the already-active id, the
+     * mode the toggle falsely claimed could not be entered by clicking it.
+     *
+     * This hook, not onStart: a fire-and-forget switch from onStart resolves
+     * BEFORE the shell is even attached (frontend-application.js:59-66 runs
+     * startContributions, then attachShell, then initializeLayout), so it
+     * snapshotted an empty pre-attach layout under 'default' and left the
+     * active id pointing at a perspective the restorer then had no layout for
+     * -- stock's own "No saved layout for perspective ... falling back to
+     * default" warning. onDidInitializeLayout fires at :68, strictly after
+     * initializeLayout at :66, and is awaited at :211-213 before the app
+     * reaches 'ready'. Awaiting it here is deliberate and is why the promise is
+     * returned rather than voided: the launch mode must be settled before
+     * SetupsService re-applies the last session at 'ready', which is also why
+     * reachedState('ready') is the wrong hook. Nothing on this path touches the
+     * backend -- it reads local storage only -- so it cannot re-enter the
+     * boot-chain deadlock documented in the customize-css header.
+     */
+    onDidInitializeLayout(): Promise<void> {
+        return this.applyLaunchMode();
+    }
+
+    /**
      * The mode switch path: stock switch, explicit panel flags, placeholder
      * slot, and -- through the widget's stock-event subscription -- the chip
      * re-assertion. Unknown ids resolve to shipped Browsing, so this never
@@ -215,22 +239,22 @@ export class ModeService implements FrontendApplicationContribution {
      */
     async activateMode(id: string): Promise<void> {
         const target = this.resolveTarget(id);
-        try {
-            await this.perspectives.switchPerspective(target);
-        } catch {
-            try {
-                await this.perspectives.switchPerspective('browsing');
-            } catch {
-                // Last resort: stock misbehaves twice -- the shell keeps its
-                // current layout and the callers (all void) see no rejection.
-            }
-            closeOrganisingSlot();
-            return;
-        }
+        // Unguarded on purpose, and the fallback switch that used to sit in a
+        // catch here is gone with the catch: stock's doSwitchPerspective returns
+        // silently for an already-active id (perspective-service.js:114-116) and
+        // for an unregistered one (:117-120), and swallows every layout failure
+        // into logger.warn (:142-144). The only statements it leaves outside
+        // that try are the descriptor hooks at :122-124 and :145-147, and every
+        // descriptor this extension registers now wraps its hooks
+        // (main-area-exemption.ts), so switchPerspective has no path left to
+        // reject -- the catch could never run, and the 'browsing' retry inside
+        // it was unreachable code claiming to be a safety net.
+        await this.perspectives.switchPerspective(target);
         const flags = this.visibilityFor(target);
         // collapse() floats a promise (expand is sync void): attach the
         // no-op catch so a shutdown-time rejection is silence, not noise.
         if (flags.left) {
+            await this.ensureInArea('explorer-view-container', 'left');
             this.shell.leftPanelHandler.expand('explorer-view-container');
         } else {
             void this.shell.leftPanelHandler.collapse().catch(() => undefined);
@@ -249,6 +273,36 @@ export class ModeService implements FrontendApplicationContribution {
             openOrganisingSlot();
         } else {
             closeOrganisingSlot();
+        }
+    }
+
+    /**
+     * Put a view in an area before expanding it. Stock's `expand(id)`
+     * (side-panel-handler.js:282-289) is a pure find over the widgets ALREADY
+     * in that dock: a miss returns undefined having done nothing, which is why
+     * Coding could collapse into a mode with no Theia view at all. The only
+     * stock code that ever ADDS the view is applyViewPlacements, and that runs
+     * on a mode's FIRST activation only -- once Coding has a saved layout
+     * without the Explorer, nothing else can put it back.
+     *
+     * Additive by construction: it creates or fetches the widget and adds it,
+     * and has no branch that can detach, move, or close anything. The guard is
+     * real parentage, NOT `shell.getWidgetById`, which resolves against the
+     * shell's FocusTracker (application-shell.js:1923-1929) and keeps returning
+     * a DETACHED widget until it is disposed -- in the exact failure case being
+     * fixed here it would report the view present and this would do nothing.
+     * The whole body is guarded because a widget-manager failure is a missing
+     * side view, never a reason to abandon the rest of the switch.
+     */
+    protected async ensureInArea(viewId: string, area: 'left' | 'right'): Promise<void> {
+        try {
+            const widget = await this.widgetManager.getOrCreateWidget(viewId);
+            if (widget.isAttached && this.shell.getAreaFor(widget) === area) {
+                return;
+            }
+            await this.shell.addWidget(widget, { area });
+        } catch {
+            // The mode still switches; the view is simply not there this time.
         }
     }
 
@@ -280,7 +334,6 @@ export class ModeService implements FrontendApplicationContribution {
             leftVisible: this.shell.isExpanded('left'),
             rightVisible: this.shell.isExpanded('right'),
             bottomVisible: this.shell.isExpanded('bottom'),
-            layout: this.snapshotLayout(),
         };
         const customs = [...this.lastGoodCustoms, row];
         try {
@@ -327,14 +380,6 @@ export class ModeService implements FrontendApplicationContribution {
         }
         const id = customModeIdFor(name);
         return this.lastGoodCustoms.some(row => row.name.toLowerCase() === folded || customModeIdFor(row.name) === id);
-    }
-
-    protected snapshotLayout(): unknown {
-        try {
-            return JSON.parse(JSON.stringify(this.shell.getLayoutData()));
-        } catch {
-            return null;
-        }
     }
 
     protected async flash(text: string): Promise<void> {
