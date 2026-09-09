@@ -42,9 +42,18 @@
    ------------------------------------------------------------------ */
 
 /* System colour keywords resolve against the host, so pin the two
-   Panorama relied on to what a Firefox 4 Linux theme actually showed. */
+   Panorama relied on to what a Firefox 4 Linux theme actually showed.
+   #bg is height:100% of the body, so both need a height to fill against. */
+html, body { height: 100%; }
 #bg { background-color: #f0f0f0; }
 .groupItem { background-color: #fafafa; }
+
+/* The .tab box is the thumbnail only -- .tab-title sits at top:100%, BELOW
+   it, and .tab is overflow:visible so it hangs outside the box. That is
+   Panorama's own look, and _gridArrange leaves room for it. Here the bounds
+   are written by hand, so tab boxes are border-box to make the numbers below
+   mean what they say. */
+.tab { box-sizing: border-box; }
 
 /* chrome://global/skin/icons/close.svg */
 .close {
@@ -122,19 +131,19 @@ input.name::placeholder {
   <div class="resizer" style="display:block"></div>
 </div>
 
-<div class="tab" style="left:52px; top:136px; width:160px; height:135px;" data-shot="1">
+<div class="tab" style="left:52px; top:136px; width:160px; height:120px;" data-shot="1">
   <div class="thumb"><canvas moz-opaque width="160" height="120"></canvas></div>
   <div class="favicon"><img alt="" data-hue="205"></div>
   <span class="tab-title">Firefox Panorama — Wikipedia</span>
   <div class="close"></div>
 </div>
-<div class="tab" style="left:224px; top:136px; width:160px; height:135px;" data-shot="2">
+<div class="tab" style="left:224px; top:136px; width:160px; height:120px;" data-shot="2">
   <div class="thumb"><canvas moz-opaque width="160" height="120"></canvas></div>
   <div class="favicon"><img alt="" data-hue="30"></div>
   <span class="tab-title">Tab Candy project page</span>
   <div class="close"></div>
 </div>
-<div class="tab" style="left:52px; top:283px; width:160px; height:135px;" data-shot="3">
+<div class="tab" style="left:52px; top:280px; width:160px; height:120px;" data-shot="3">
   <div class="thumb"><canvas moz-opaque width="160" height="120"></canvas></div>
   <div class="favicon"><img alt="" data-hue="120"></div>
   <span class="tab-title">Aza Raskin: Tab Candy</span>
@@ -154,7 +163,7 @@ input.name::placeholder {
   <div class="resizer" style="display:block"></div>
 </div>
 
-<div class="tab" style="left:472px; top:136px; width:120px; height:106px;" data-shot="4">
+<div class="tab" style="left:472px; top:136px; width:120px; height:90px;" data-shot="4">
   <div class="thumb"><canvas moz-opaque width="120" height="90"></canvas></div>
   <div class="favicon"><img alt="" data-hue="280"></div>
   <span class="tab-title">Lumino DockPanel</span>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Panorama — three decisions</title>
+<style>
+:root {
+  --bg: #1c1b22; --surface: #2b2a33; --raised: #35343f; --border: #3f3e4a;
+  --text: #fbfbfe; --muted: #9a99a8; --primary: #00a6f5; --accent: #8ad4ff;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 system-ui, sans-serif; padding: 16px 20px 28px; }
+h1 { font-size: 15px; margin: 0 0 4px; }
+h1 + p { color: var(--muted); margin: 0 0 18px; font-size: 12px; }
+h2 { font-size: 13px; margin: 22px 0 8px; padding-top: 14px; border-top: 1px solid var(--border); }
+h2 small { color: var(--muted); font-weight: 400; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.opt { border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: #211f26; }
+.opt h3 { font-size: 12px; margin: 0 0 2px; }
+.opt h3 em { font-style: normal; color: var(--accent); }
+.opt .why { color: var(--muted); font-size: 11px; margin: 0 0 9px; min-height: 30px; }
+
+/* --- shared mock furniture --- */
+.mock { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.mock-strip { display: flex; gap: 1px; background: #15141a; padding: 3px 4px 0; height: 26px; align-items: stretch; }
+.mtab { display: flex; align-items: center; gap: 4px; padding: 0 7px; background: var(--surface); color: var(--muted);
+        border-radius: 3px 3px 0 0; font-size: 10px; white-space: nowrap; max-width: 130px; overflow: hidden; }
+.mtab.on { background: var(--raised); color: var(--text); }
+.mtab .dot { width: 7px; height: 7px; border-radius: 2px; flex: 0 0 7px; }
+.mtab.ghost { opacity: .3; }
+.canv { position: relative; height: 150px; padding: 8px;
+        background: radial-gradient(circle at 1px 1px, #2a2932 1px, transparent 0) 0 0/16px 16px; }
+.box { position: absolute; border: 1px solid var(--border); border-radius: 6px; background: rgba(43,42,51,.55); padding: 4px; }
+.box.on { border-color: var(--primary); }
+.box .bt { font-size: 10px; margin-bottom: 4px; display: block; }
+.box .bt.un { color: var(--muted); font-style: italic; }
+.cards { display: flex; flex-wrap: wrap; gap: 3px; }
+.c { width: 34px; height: 26px; border: 1px solid var(--border); border-radius: 3px; background: var(--raised); }
+.c.faint { opacity: .32; border-style: dashed; }
+.tray { border-top: 1px solid var(--border); background: #232228; padding: 5px 8px; display: flex; align-items: center; gap: 7px; }
+.tray b { font-size: 10px; font-weight: 500; color: var(--muted); }
+.rail { width: 26px; background: #232228; border-right: 1px solid var(--border); }
+.split { display: flex; height: 150px; }
+.note { font-size: 10px; color: var(--muted); margin-top: 6px; }
+.badge { font-size: 9px; border-radius: 3px; padding: 0 4px; background: #26352a; color: #8ad38a; margin-left: 5px; }
+.badge.b { background: #3a3a26; color: #d3cf8a; }
+.restore { font-size: 9px; color: var(--accent); border: 1px dashed var(--border); border-radius: 3px; padding: 1px 5px; }
+</style>
+</head>
+<body>
+
+<h1>Three decisions, as pictures</h1>
+<p>Each one changes what gets built. Pick a side per row.</p>
+
+<!-- ============================ DECISION 1 ============================ -->
+<h2>1 · Does Organising keep the “Ungrouped” tray? <small>— Panorama has none</small></h2>
+<div class="pair">
+
+  <div class="opt">
+    <h3><em>A</em> — Keep the tray <span class="badge">what we built</span></h3>
+    <p class="why">A tab with no group lands in a strip along the bottom. Always in the same place, so it is an easy drop target and an easy “where did that go”.</p>
+    <div class="mock">
+      <div class="canv" style="height:170px">
+        <div class="box on" style="left:10px; top:8px; width:120px;">
+          <span class="bt">Reading</span>
+          <div class="cards"><div class="c"></div><div class="c"></div><div class="c"></div></div>
+        </div>
+        <div class="box" style="left:145px; top:8px; width:84px;">
+          <span class="bt un">Name this group</span>
+          <div class="cards"><div class="c"></div><div class="c"></div></div>
+        </div>
+      </div>
+      <div class="tray">
+        <b>Ungrouped</b>
+        <div class="cards"><div class="c"></div><div class="c"></div><div class="c"></div></div>
+      </div>
+    </div>
+    <p class="note">Cost: a tab can sit outside every group forever, and the tray fills up on its own — which is what happens today.</p>
+  </div>
+
+  <div class="opt">
+    <h3><em>B</em> — No tray, Panorama-pure</h3>
+    <p class="why">Every tab is always in exactly one group. Drag one onto bare canvas and it gets its own group there and then; empty a group and it disappears.</p>
+    <div class="mock">
+      <div class="canv" style="height:170px">
+        <div class="box on" style="left:10px; top:8px; width:120px;">
+          <span class="bt">Reading</span>
+          <div class="cards"><div class="c"></div><div class="c"></div><div class="c"></div></div>
+        </div>
+        <div class="box" style="left:145px; top:8px; width:84px;">
+          <span class="bt un">Name this group</span>
+          <div class="cards"><div class="c"></div><div class="c"></div></div>
+        </div>
+        <div class="box" style="left:60px; top:88px; width:84px;">
+          <span class="bt un">Name this group</span>
+          <div class="cards"><div class="c"></div></div>
+        </div>
+      </div>
+    </div>
+    <p class="note">Cost: no fixed “spare tabs” shelf — a loose tab is a one-card group sitting on the canvas.</p>
+  </div>
+
+</div>
+
+<!-- ============================ DECISION 2 ============================ -->
+<h2>2 · Which modes filter their tab bar to the active group?</h2>
+<div class="pair">
+
+  <div class="opt">
+    <h3><em>A</em> — Browsing only</h3>
+    <p class="why">The Browsing strip shows the active group. Coding’s bar keeps showing everything, because it also carries editors and terminals that are not in any tab group.</p>
+    <div class="mock">
+      <div class="mock-strip">
+        <div class="mtab on"><span class="dot" style="background:#4a9"></span>Wikipedia</div>
+        <div class="mtab"><span class="dot" style="background:#a84"></span>Tab Candy</div>
+        <div class="mtab"><span class="dot" style="background:#48a"></span>Aza Raskin</div>
+      </div>
+      <div class="note" style="padding:3px 8px">Browsing — group “Reading”, 3 of 10 tabs</div>
+      <div class="mock-strip" style="border-top:1px solid var(--border)">
+        <div class="mtab on">index.ts</div>
+        <div class="mtab">bash</div>
+        <div class="mtab"><span class="dot" style="background:#4a9"></span>Wikipedia</div>
+        <div class="mtab"><span class="dot" style="background:#84a"></span>Lumino</div>
+        <div class="mtab"><span class="dot" style="background:#a44"></span>SQLite</div>
+      </div>
+      <div class="note" style="padding:3px 8px 7px">Coding — unfiltered, all 10 tabs plus editors</div>
+    </div>
+    <p class="note">Coding stays a workbench; groups only shape Browsing.</p>
+  </div>
+
+  <div class="opt">
+    <h3><em>B</em> — Every mode filters</h3>
+    <p class="why">Coding’s bar hides web tabs outside the active group; editors and terminals are untouched. One group means one context everywhere.</p>
+    <div class="mock">
+      <div class="mock-strip">
+        <div class="mtab on"><span class="dot" style="background:#4a9"></span>Wikipedia</div>
+        <div class="mtab"><span class="dot" style="background:#a84"></span>Tab Candy</div>
+        <div class="mtab"><span class="dot" style="background:#48a"></span>Aza Raskin</div>
+      </div>
+      <div class="note" style="padding:3px 8px">Browsing — group “Reading”, 3 of 10 tabs</div>
+      <div class="mock-strip" style="border-top:1px solid var(--border)">
+        <div class="mtab on">index.ts</div>
+        <div class="mtab">bash</div>
+        <div class="mtab"><span class="dot" style="background:#4a9"></span>Wikipedia</div>
+        <div class="mtab ghost"><span class="dot" style="background:#84a"></span>Lumino</div>
+        <div class="mtab ghost"><span class="dot" style="background:#a44"></span>SQLite</div>
+      </div>
+      <div class="note" style="padding:3px 8px 7px">Coding — same group; the faded two are hidden, not closed</div>
+    </div>
+    <p class="note">Switching group changes what you see while coding too. More consistent, more surprising.</p>
+  </div>
+
+</div>
+
+<!-- ============================ DECISION 3 ============================ -->
+<h2>3 · Tabs the store remembers but that are no longer open</h2>
+<div class="pair">
+
+  <div class="opt">
+    <h3><em>A</em> — Hide them <span class="badge b">Panorama’s answer</span></h3>
+    <p class="why">The canvas is exactly the open tabs. A closed tab leaves no card. The store keeps membership only so a tab that is still open lands in the right group.</p>
+    <div class="mock">
+      <div class="canv" style="height:110px">
+        <div class="box on" style="left:10px; top:8px; width:160px;">
+          <span class="bt">Reading &nbsp;<span style="color:var(--muted);font-size:9px">3 tabs</span></span>
+          <div class="cards"><div class="c"></div><div class="c"></div><div class="c"></div></div>
+        </div>
+      </div>
+    </div>
+    <p class="note">Simple and honest: what you see is what is open. Nothing to restore from here.</p>
+  </div>
+
+  <div class="opt">
+    <h3><em>B</em> — Show them as restorable</h3>
+    <p class="why">Closed tabs stay as faded cards in their old group, with a way to bring them back. The group becomes a saved reading list, not just a live view.</p>
+    <div class="mock">
+      <div class="canv" style="height:110px">
+        <div class="box on" style="left:10px; top:8px; width:200px;">
+          <span class="bt">Reading &nbsp;<span style="color:var(--muted);font-size:9px">3 open · 2 closed</span></span>
+          <div class="cards">
+            <div class="c"></div><div class="c"></div><div class="c"></div>
+            <div class="c faint"></div><div class="c faint"></div>
+          </div>
+          <div style="margin-top:5px"><span class="restore">Reopen 2 closed tabs</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="note">More useful, more state to keep honest — and it needs a rule for when a remembered tab is finally forgotten.</p>
+  </div>
+
+</div>
+
+</body>
+</html>
