@@ -795,35 +795,7 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
      * it is set once per activation, it is set last, and reading it here
      * needs no import that would close the cycle.
      */
-    /**
-     * TEMPORARY (2026-09-09). The dock bar still vanishes in Coding after
-     * switching modes, with the unknown-mode guard in place, so the remaining
-     * path is not applyStripHome deciding wrongly -- something else is hiding
-     * the bar. This watches the bar's own class and logs a stack at the
-     * moment `lm-mod-hidden` lands, which names the caller instead of
-     * inviting another guess. Remove once the cause is known.
-     */
-    protected watchTabBarVisibility(): void {
-        const observer = new MutationObserver(records => {
-            for (const record of records) {
-                const target = record.target as HTMLElement;
-                if (!target.classList || !target.classList.contains('lm-TabBar')) {
-                    continue;
-                }
-                if (!target.closest('#theia-main-content-panel')) {
-                    continue;
-                }
-                const hidden = target.classList.contains('lm-mod-hidden');
-                const mode = document.body.getAttribute(MODE_ATTRIBUTE);
-                const stack = (new Error().stack ?? '').split('\n').slice(2, 8).map(l => l.trim()).join(' <- ');
-                console.log(`[pb-bar] hidden=${hidden} mode=${mode} :: ${stack}`);
-            }
-        });
-        observer.observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
-    }
-
     protected observeMode(): void {
-        this.watchTabBarVisibility();
         const apply = () => this.applyStripHome(document.body.getAttribute(MODE_ATTRIBUTE) ?? '');
         new MutationObserver(apply).observe(document.body, { attributeFilter: [MODE_ATTRIBUTE] });
         // Re-assert on every shell add and remove, not only on a mode change.

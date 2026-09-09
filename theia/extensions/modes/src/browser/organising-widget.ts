@@ -54,6 +54,9 @@ import '../../src/browser/modes.css';
 
 type OrganisingView = 'canvas' | 'tree';
 
+/** Pointer travel before a card press becomes a drag rather than a click. */
+const CARD_DRAG_THRESHOLD = 4;
+
 const ZOOM_STEPS = [25, 50, 75, 100, 125, 150, 200];
 const DEFAULT_ZOOM_INDEX = 3;
 
@@ -395,12 +398,6 @@ export class OrganisingWidget extends Widget {
         grip.addEventListener('keydown', event => this.stepBoxResize(event, group.id));
         box.append(grip);
 
-        box.addEventListener('dragover', event => this.allowCardDrop(event, box));
-        box.addEventListener('dragleave', () => box.classList.remove('is-drop-target'));
-        box.addEventListener('drop', event => {
-            box.classList.remove('is-drop-target');
-            void this.dropCard(event, group.id);
-        });
         return box;
     }
 
@@ -408,7 +405,7 @@ export class OrganisingWidget extends Widget {
         const card = document.createElement('div');
         card.className = 'pb-org-card';
         card.dataset.u = tab.uri;
-        card.draggable = true;
+        // No `draggable`: see beginCardDrag for why HTML5 drag cannot work here.
         card.tabIndex = tabbable ? 0 : -1;
         card.title = tab.title;
         if (tab.thumbnail) {
@@ -441,28 +438,7 @@ export class OrganisingWidget extends Widget {
                 this.moveCardFocus(card, -1);
             }
         });
-        card.addEventListener('dragstart', event => {
-            this.dragCard = { uri: tab.uri, fromGroup: groupId };
-            card.classList.add('is-dragging');
-            if (event.dataTransfer) {
-                event.dataTransfer.effectAllowed = 'move';
-                event.dataTransfer.setData('text/plain', tab.uri);
-            }
-        });
-        card.addEventListener('dragend', () => {
-            this.dragCard = undefined;
-            card.classList.remove('is-dragging');
-            this.clearDropTargets();
-        });
-        card.addEventListener('dragover', event => {
-            event.stopPropagation();
-            this.allowCardDrop(event, card);
-        });
-        card.addEventListener('dragleave', () => card.classList.remove('is-drop-target'));
-        card.addEventListener('drop', event => {
-            card.classList.remove('is-drop-target');
-            void this.dropCardOntoCard(event, tab.uri, groupId);
-        });
+        card.addEventListener('pointerdown', event => this.beginCardDrag(event, card, tab, groupId));
         return card;
     }
 
@@ -824,15 +800,105 @@ export class OrganisingWidget extends Widget {
         });
     }
 
-    protected allowCardDrop(event: DragEvent, host: HTMLElement): void {
-        if (!this.dragCard) {
+    /**
+     * Card drag, on pointer events rather than HTML5 drag-and-drop.
+     *
+     * HTML5 drag cannot work in this embedding, and the failure is total
+     * rather than partial. The Theia frontend runs inside `<xul:browser
+     * type="content" remote="true">` (powerbrowser.xhtml), and a drag session
+     * started in a remote content process must be driven by the parent
+     * process -- which in Firefox is tabbrowser's job. This chrome window has
+     * no drag plumbing at all, so the session opens and is cancelled in the
+     * same gesture. Measured in the built browser: `dragstart` fired,
+     * `dragend` followed immediately, and no `dragover`, `dragenter` or
+     * `drop` was dispatched anywhere in the document.
+     *
+     * Pointer events carry no such dependency, and this widget already proves
+     * it: `beginBoxMove` and `beginBoxResize` drag group boxes with
+     * `setPointerCapture` and have always worked here. Cards now use the same
+     * mechanism, so the canvas has ONE drag mechanism instead of two, and the
+     * one it has is the one that works in the shell we ship.
+     *
+     * A click still dives to the tab -- nothing happens until the pointer
+     * passes CARD_DRAG_THRESHOLD, so press-and-release is untouched.
+     */
+    protected beginCardDrag(event: PointerEvent, card: HTMLElement, tab: PanoramaTab, groupId: string | null): void {
+        if (event.button !== 0) {
             return;
         }
-        event.preventDefault();
-        if (event.dataTransfer) {
-            event.dataTransfer.dropEffect = 'move';
-        }
-        host.classList.add('is-drop-target');
+        const startX = event.clientX;
+        const startY = event.clientY;
+        let dragging = false;
+
+        // The dragged card sits under the pointer, so it is hidden for the
+        // hit test and restored immediately -- elementFromPoint would
+        // otherwise only ever name the card being dragged.
+        const hitTest = (ev: PointerEvent): HTMLElement | null => {
+            const prior = card.style.visibility;
+            card.style.visibility = 'hidden';
+            const under = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+            card.style.visibility = prior;
+            return under;
+        };
+
+        const onMove = (ev: PointerEvent): void => {
+            if (!dragging) {
+                if (Math.abs(ev.clientX - startX) < CARD_DRAG_THRESHOLD && Math.abs(ev.clientY - startY) < CARD_DRAG_THRESHOLD) {
+                    return;
+                }
+                dragging = true;
+                this.dragCard = { uri: tab.uri, fromGroup: groupId };
+                card.classList.add('is-dragging');
+                card.setPointerCapture(ev.pointerId);
+            }
+            this.clearDropTargets();
+            const host = hitTest(ev)?.closest('.pb-org-card, .pb-org-box, .pb-org-tray, .pb-org-canvas') as HTMLElement | null;
+            if (host && host !== card) {
+                host.classList.add('is-drop-target');
+            }
+        };
+
+        const detach = (): void => {
+            card.removeEventListener('pointermove', onMove);
+            card.removeEventListener('pointerup', finish);
+            card.removeEventListener('pointercancel', cancel);
+        };
+
+        const finish = (ev: PointerEvent): void => {
+            detach();
+            if (!dragging) {
+                return;
+            }
+            card.classList.remove('is-dragging');
+            this.clearDropTargets();
+            const under = hitTest(ev);
+            const targetCard = under?.closest('.pb-org-card') as HTMLElement | null;
+            const targetBox = under?.closest('.pb-org-box') as HTMLElement | null;
+            if (targetCard && targetCard !== card && targetCard.dataset.u) {
+                const owner = targetCard.closest('.pb-org-box') as HTMLElement | null;
+                void this.dropCardOntoCard(ev, targetCard.dataset.u, owner?.dataset.g ?? null);
+            } else if (targetBox && targetBox.dataset.g) {
+                void this.dropCard(ev, targetBox.dataset.g);
+            } else if (under?.closest('.pb-org-tray')) {
+                void this.dropCard(ev, null);
+            } else if (under?.closest('.pb-org-canvas')) {
+                void this.dropCardOnField(ev);
+            } else {
+                // Released outside every target: the arrangement is unchanged.
+                this.dragCard = undefined;
+            }
+        };
+
+        const cancel = (): void => {
+            detach();
+            card.classList.remove('is-dragging');
+            this.clearDropTargets();
+            this.dragCard = undefined;
+        };
+
+        card.addEventListener('pointermove', onMove);
+        card.addEventListener('pointerup', finish);
+        card.addEventListener('pointercancel', cancel);
     }
 
     protected clearDropTargets(): void {
@@ -841,7 +907,7 @@ export class OrganisingWidget extends Widget {
         }
     }
 
-    protected async dropCard(event: DragEvent, toGroup: string | null): Promise<void> {
+    protected async dropCard(event: MouseEvent, toGroup: string | null): Promise<void> {
         event.preventDefault();
         const drag = this.dragCard;
         this.dragCard = undefined;
@@ -864,7 +930,7 @@ export class OrganisingWidget extends Widget {
      * BOTH sources, not just the drag source (WR-03: a cross-group drop
      * onto a sole card in B emptied B without dissolving it).
      */
-    protected async dropCardOntoCard(event: DragEvent, targetUri: string, targetGroup: string | null): Promise<void> {
+    protected async dropCardOntoCard(event: MouseEvent, targetUri: string, targetGroup: string | null): Promise<void> {
         event.preventDefault();
         event.stopPropagation();
         const drag = this.dragCard;
@@ -890,7 +956,7 @@ export class OrganisingWidget extends Widget {
     }
 
     /** Card-onto-field: auto-draws one box around the dropped card. */
-    protected async dropCardOnField(event: DragEvent): Promise<void> {
+    protected async dropCardOnField(event: MouseEvent): Promise<void> {
         const target = event.target as HTMLElement | null;
         if (target && target.closest('.pb-org-box, .pb-org-card')) {
             return;
@@ -928,7 +994,7 @@ export class OrganisingWidget extends Widget {
      * transform touches the layer only, so dividing the layer-relative point
      * by the zoom factor recovers the stored bounds space.
      */
-    protected canvasPoint(event: DragEvent): { x: number; y: number } {
+    protected canvasPoint(event: MouseEvent): { x: number; y: number } {
         const zoom = ZOOM_STEPS[this.zoomIndex] / 100;
         try {
             const rect = this.canvasRoot.getBoundingClientRect();
@@ -1087,18 +1153,6 @@ export class OrganisingWidget extends Widget {
         this.canvasRoot = document.createElement('div');
         this.canvasRoot.className = 'pb-org-canvas';
         this.canvasRoot.dataset.canvas = 'true';
-        this.canvasRoot.addEventListener('dragover', event => {
-            const target = event.target as HTMLElement | null;
-            if (target && target.closest('.pb-org-box, .pb-org-card')) {
-                return;
-            }
-            this.allowCardDrop(event, this.canvasRoot);
-        });
-        this.canvasRoot.addEventListener('dragleave', () => this.canvasRoot.classList.remove('is-drop-target'));
-        this.canvasRoot.addEventListener('drop', event => {
-            this.canvasRoot.classList.remove('is-drop-target');
-            void this.dropCardOnField(event);
-        });
         this.canvasLayer.append(this.canvasRoot);
         this.canvasHost.append(this.canvasLayer);
 
@@ -1109,12 +1163,6 @@ export class OrganisingWidget extends Widget {
         this.trayRoot = document.createElement('div');
         this.trayRoot.className = 'pb-org-tray';
         this.trayRoot.dataset.tray = 'true';
-        this.trayRoot.addEventListener('dragover', event => this.allowCardDrop(event, this.trayRoot));
-        this.trayRoot.addEventListener('dragleave', () => this.trayRoot.classList.remove('is-drop-target'));
-        this.trayRoot.addEventListener('drop', event => {
-            this.trayRoot.classList.remove('is-drop-target');
-            void this.dropCard(event, null);
-        });
 
         this.node.append(this.toolbar, this.loadBar, this.saveBar, this.canvasHost, this.treeRoot, this.trayRoot);
     }
