@@ -99,3 +99,39 @@ titled "Organising" — no canvas, no cards.
    chip re-asserts the invariant on every switch"). The invariant still holds;
    its on-screen proof no longer exists. If this sketch becomes the design,
    that line needs amending or the invariant needs another home.
+
+## Implementation status (2026-09-08)
+
+**Landed:**
+
+- `7f001b2` — the spike-verdict gate's core instrument never ran (127 on every
+  tree), so its zero-core pillar asserted nothing in either direction. Fixed.
+- `9a72c91` — spike re-probed **GREEN**, routing to Variant B. Both pillars
+  measured on today's tree: `diff-theia-core.sh --quick` exit 0, and 6/6 live
+  moves through `shell.addWidget(widget, {area})` with identity preserved.
+  GUI-07's entry criterion is met.
+- `3cefed6` — 14-UI-SPEC amended: the strip relocates per mode, Browsing and
+  Organising drop the IDE furniture, the URL row and the tabs are invariant,
+  the tab-count chip is removed.
+
+**Written but NOT committed — `chip-removal.patch` beside this file.**
+
+Removes the tab-count chip from `chrome-bar-widget.tsx` (field, `publishTabCount`,
+the `<span>`, the `StatusBar` injection and its four subscriptions), its CSS
+rule, and its entry in `verify-shell-error-copy.mjs`. Typechecks clean; the
+copy gate and its self-test pass.
+
+It is not committed because `scripts/verify-mode-switch-tabs-invariant.mjs`
+declares `publishTabCount` as a switch-path anchor and `setElement` as
+allowlisted surface, and the gate requires that contract to change in the SAME
+commit. That file currently carries 328 uncommitted lines from a concurrent
+session, so `git add` on it would sweep their work into this commit.
+
+To land it: once the tree is clean, `git apply` the patch, then delete
+`'setElement'` from `EXPECTED_SWITCH_CALLS` and the `publishTabCount` anchor
+entry from the switch-path list, and commit the four files together.
+
+**Not started — needs `mode-service.ts`, also contested:** the strip
+relocation itself, the per-mode DOM marker the furniture CSS needs (no
+per-mode class exists on the shell today — verified live), and the Browsing /
+Organising furniture stripping.
