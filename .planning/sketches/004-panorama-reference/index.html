@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Panorama reference — low-fidelity</title>
+<style>
+:root {
+  --color-bg: #1c1b22;
+  --color-surface: #2b2a33;
+  --color-surface-raised: #35343f;
+  --color-border: #3f3e4a;
+  --color-text: #fbfbfe;
+  --color-text-muted: #9a99a8;
+  --color-primary: #00a6f5;
+  --color-accent: #8ad4ff;
+  --color-danger: #ff848b;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: 13px/1.4 var(--font-sans);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ---- the fake tab strip: proves "active group filters the strip" ---- */
+#strip {
+  display: flex; align-items: stretch; gap: 1px;
+  height: 33px; flex: 0 0 33px;
+  background: #15141a; padding: 0 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+.strip-tab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 10px; max-width: 200px; min-width: 90px;
+  background: var(--color-surface); color: var(--color-text-muted);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  margin-top: 3px; font-size: 12px; cursor: default;
+  overflow: hidden; white-space: nowrap;
+}
+.strip-tab.is-active { background: var(--color-surface-raised); color: var(--color-text); }
+.strip-tab .fav { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 10px; }
+.strip-tab .label { overflow: hidden; text-overflow: ellipsis; }
+.strip-plus {
+  align-self: center; margin-left: 4px; width: 24px; height: 24px;
+  display: grid; place-items: center; border-radius: var(--radius-sm);
+  color: var(--color-text-muted); cursor: pointer;
+}
+.strip-plus:hover { background: var(--color-surface); color: var(--color-text); }
+#strip-note { margin-left: auto; align-self: center; font-size: 11px; color: var(--color-text-muted); padding-right: 8px; }
+
+/* ---- toolbar ---- */
+#toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-bottom: 1px solid var(--color-border);
+  background: #211f26; flex: 0 0 auto;
+}
+button.tb {
+  background: var(--color-surface); color: var(--color-text);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  padding: 4px 10px; font: inherit; cursor: pointer;
+}
+button.tb:hover { background: var(--color-surface-raised); }
+#search {
+  margin-left: auto; display: flex; align-items: center; gap: 6px;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); padding: 3px 8px;
+}
+#search input {
+  background: transparent; border: 0; outline: 0; color: var(--color-text);
+  font: inherit; width: 200px;
+}
+#search.is-off { opacity: 0.55; }
+#hint { font-size: 11px; color: var(--color-text-muted); }
+
+/* ---- canvas ---- */
+#stage { flex: 1 1 auto; display: flex; min-height: 0; }
+#canvas {
+  position: relative; flex: 1 1 auto; overflow: hidden;
+  background:
+    radial-gradient(circle at 1px 1px, #2a2932 1px, transparent 0) 0 0/24px 24px;
+  cursor: crosshair;
+}
+
+.group {
+  position: absolute; border: 1px solid var(--color-border);
+  background: rgba(43,42,51,0.55); border-radius: var(--radius-md);
+  display: flex; flex-direction: column; cursor: default;
+}
+.group.is-active { border-color: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary) inset; }
+.group.is-target { border-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-accent) inset; }
+.group-header {
+  display: flex; align-items: center; gap: 6px;
+  height: 26px; flex: 0 0 26px; padding: 0 6px; cursor: move;
+}
+.group-title {
+  font-size: 12px; font-weight: 500; padding: 1px 4px; border-radius: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%;
+}
+.group-title.is-untitled { color: var(--color-text-muted); font-style: italic; }
+.group-title:hover { background: var(--color-surface-raised); }
+.group-title input { background: #15141a; border: 1px solid var(--color-primary); color: var(--color-text); font: inherit; width: 140px; }
+.group-count { font-size: 11px; color: var(--color-text-muted); }
+.group-spacer { flex: 1 1 auto; }
+.group-btn {
+  width: 18px; height: 18px; display: grid; place-items: center;
+  border-radius: 3px; color: var(--color-text-muted); cursor: pointer; font-size: 14px; line-height: 1;
+}
+.group-btn:hover { background: var(--color-surface-raised); color: var(--color-text); }
+.group-body { position: relative; flex: 1 1 auto; overflow: hidden; }
+.group-resize {
+  position: absolute; right: 0; bottom: 0; width: 16px; height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, var(--color-border) 50%);
+  border-bottom-right-radius: var(--radius-md);
+}
+
+.card {
+  position: absolute; background: var(--color-surface-raised);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  overflow: hidden; cursor: pointer;
+  display: flex; flex-direction: column;
+  transition: left .12s ease, top .12s ease, width .12s ease, height .12s ease;
+}
+.card.no-anim { transition: none; }
+.card.is-active { border-color: var(--color-primary); }
+.card.is-dragging { opacity: 0.7; transition: none; z-index: 999; pointer-events: none; }
+.card.is-dim { opacity: 0.25; }
+.card.is-match { border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+.card-shot { flex: 1 1 auto; background: #15141a; position: relative; }
+.card-shot::after {
+  content: ''; position: absolute; inset: 6px;
+  background: repeating-linear-gradient(180deg, #26252e 0 3px, transparent 3px 8px);
+}
+.card-foot { display: flex; align-items: center; gap: 4px; padding: 2px 4px; flex: 0 0 16px; }
+.card-fav { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 8px; }
+.card-label { font-size: 9px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-close {
+  position: absolute; right: 2px; top: 2px; width: 14px; height: 14px;
+  display: none; place-items: center; border-radius: 3px;
+  background: rgba(0,0,0,0.6); color: var(--color-text); font-size: 11px; line-height: 1;
+}
+.card:hover .card-close { display: grid; }
+.card.is-stacked { pointer-events: none; }
+.card.is-stacked.top { pointer-events: auto; }
+
+.drop-space { position: absolute; border: 1px dashed var(--color-accent); border-radius: var(--radius-sm); opacity: 0.6; }
+.stack-badge {
+  position: absolute; right: 4px; bottom: 4px; z-index: 10;
+  background: rgba(0,0,0,0.7); border-radius: 10px; padding: 1px 7px;
+  font-size: 11px; color: var(--color-text);
+}
+.expander {
+  position: absolute; left: 50%; bottom: 2px; transform: translateX(-50%); z-index: 10;
+  background: rgba(0,0,0,0.7); border-radius: 8px; padding: 0 8px;
+  font-size: 11px; color: var(--color-accent); cursor: pointer;
+}
+.group-plus {
+  position: absolute; right: 18px; top: 4px; z-index: 10;
+  width: 16px; height: 16px; display: grid; place-items: center;
+  border-radius: 3px; color: var(--color-text-muted); font-size: 13px; cursor: pointer;
+}
+.group-plus:hover { background: var(--color-surface-raised); color: var(--color-text); }
+
+.undo-box {
+  position: absolute; border: 1px dashed var(--color-border); border-radius: var(--radius-md);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  background: rgba(43,42,51,0.35); color: var(--color-text-muted);
+}
+.undo-box button { background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 4px 10px; font: inherit; cursor: pointer; }
+.undo-box .discard { position: absolute; right: 4px; top: 2px; cursor: pointer; }
+
+#band { position: absolute; border: 1px solid var(--color-primary); background: rgba(0,166,245,0.10); border-radius: var(--radius-md); display: none; pointer-events: none; }
+.snapline { position: absolute; background: var(--color-accent); opacity: 0.7; pointer-events: none; }
+
+#expand-veil { position: absolute; inset: 0; background: rgba(0,0,0,0.55); display: none; z-index: 500; }
+#expand-tray {
+  position: absolute; z-index: 501; display: none;
+  background: var(--color-surface); border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md); padding: 10px;
+}
+#expand-tray h4 { margin: 0 0 8px; font-size: 12px; font-weight: 500; }
+
+/* ---- legend ---- */
+#legend {
+  flex: 0 0 300px; overflow-y: auto; padding: 10px 12px;
+  border-left: 1px solid var(--color-border); background: #211f26;
+}
+#legend h3 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+#legend h3:not(:first-child) { margin-top: 14px; }
+#legend ol { margin: 0; padding-left: 18px; }
+#legend li { margin: 5px 0; font-size: 12px; }
+#legend .have { color: var(--color-text-muted); }
+#legend .gap { color: var(--color-text); }
+#legend .tag { font-size: 10px; border-radius: 3px; padding: 0 4px; margin-right: 4px; }
+#legend .tag.have { background: #26352a; color: #8ad38a; }
+#legend .tag.gap { background: #3a262a; color: var(--color-danger); }
+#legend p { color: var(--color-text-muted); font-size: 11px; margin: 6px 0; }
+kbd { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 3px; padding: 0 3px; font: 11px var(--font-mono); }
+</style>
+</head>
+<body>
+
+<div id="strip"><span id="strip-note"></span></div>
+
+<div id="toolbar">
+  <button class="tb" id="new-group">New Group</button>
+  <span id="hint">Drag on empty canvas to draw a group · type to search · <kbd>Ctrl</kbd>+<kbd>`</kbd> next group</span>
+  <div id="search" class="is-off">
+    <span>⌕</span><input id="search-input" placeholder="Search tab groups" autocomplete="off">
+  </div>
+</div>
+
+<div id="stage">
+  <div id="canvas">
+    <div id="band"></div>
+    <div id="expand-veil"></div>
+    <div id="expand-tray"><h4></h4></div>
+  </div>
+  <div id="legend"></div>
+</div>
+
+<script>
+'use strict';
+
+// ---------------------------------------------------------------------------
+// Model. Deliberately flat and in-memory: this file is a behavioural
+// reference for porting into the real widget, not an implementation of it.
+// Panorama has NO ungrouped tray -- every tab belongs to exactly one group,
+// and a tab dragged onto bare canvas immediately gets a group of its own.
+// ---------------------------------------------------------------------------
+
+let nextId = 1;
+const uid = p => p + (nextId++);
+
+const groups = [];
+const tabs = [];
+let activeGroupId = null;
+let activeTabId = null;
+let expandedGroupId = null;
+let searchTerm = '';
+
+const MIN_W = 180, MIN_H = 120;
+const HEADER_H = 26, PAD = 6, GAP = 5;
+const CARD_ASPECT = 0.72;          // height / width
+const MIN_CARD_W = 66;             // below this a group stacks instead of gridding
+const SNAP = 8;
+const UNDO_MS = 15000;
+
+function seed() {
+  const make = (title, host) => ({ id: uid('t'), title, url: 'https://' + host + '/', group: null });
+  const g1 = { id: uid('g'), title: 'Reading', x: 40,  y: 30,  w: 320, h: 230, hidden: false };
+  const g2 = { id: uid('g'), title: '',        x: 400, y: 30,  w: 260, h: 190, hidden: false };
+  const g3 = { id: uid('g'), title: 'Work',    x: 40,  y: 290, w: 430, h: 200, hidden: false };
+  groups.push(g1, g2, g3);
+  const rows = [
+    ['Firefox Panorama — Wikipedia', 'en.wikipedia.org', g1],
+    ['Tab Candy project page', 'wiki.mozilla.org', g1],
+    ['Aza Raskin: Tab Candy', 'azarask.in', g1],
+    ['Lumino DockPanel API', 'lumino.readthedocs.io', g2],
+    ['Theia ApplicationShell', 'eclipse-theia.github.io', g2],
+    ['SQLite WAL mode', 'sqlite.org', g3],
+    ['nsIWebProgressListener', 'searchfox.org', g3],
+    ['Pointer events spec', 'w3.org', g3],
+    ['CSS containment', 'developer.mozilla.org', g3],
+    ['Gecko remote browsers', 'firefox-source-docs.mozilla.org', g3],
+  ];
+  for (const [title, host, g] of rows) {
+    const t = make(title, host);
+    t.group = g.id;
+    tabs.push(t);
+  }
+  activeGroupId = g1.id;
+  activeTabId = tabs[0].id;
+}
+
+const groupById = id => groups.find(g => g.id === id);
+const tabById = id => tabs.find(t => t.id === id);
+const tabsOf = id => tabs.filter(t => t.group === id);
+const liveGroups = () => groups.filter(g => !g.hidden);
+
+function hue(text) {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) { h = (h * 31 + text.charCodeAt(i)) % 360; }
+  return h;
+}
+
+// ---------------------------------------------------------------------------
+// Layout. Panorama's _gridArrange picks the largest uniform card size that
+// fits every child; when that size falls under a floor it _stackArrange's
+// instead and offers an expand control. Both are reproduced here.
+// ---------------------------------------------------------------------------
+
+function layoutOf(group) {
+  const n = tabsOf(group.id).length;
+  const boxW = group.w - PAD * 2;
+  const boxH = group.h - HEADER_H - PAD;
+  if (n === 0) { return { mode: 'empty', cards: [] }; }
+
+  let best = null;
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    const w = Math.floor((boxW - GAP * (cols - 1)) / cols);
+    const hByRow = Math.floor((boxH - GAP * (rows - 1)) / rows);
+    const h = Math.min(Math.floor(w * CARD_ASPECT), hByRow);
+    const wFit = Math.floor(h / CARD_ASPECT);
+    if (h < 24 || wFit < 24) { continue; }
+    if (!best || wFit > best.w) { best = { cols, rows, w: wFit, h }; }
+  }
+
+  if (!best || best.w < MIN_CARD_W) {
+    return { mode: 'stack', cards: [] };
+  }
+  const cards = [];
+  tabsOf(group.id).forEach((t, i) => {
+    const c = i % best.cols, r = Math.floor(i / best.cols);
+    cards.push({ tab: t, x: PAD + c * (best.w + GAP), y: PAD + r * (best.h + GAP), w: best.w, h: best.h });
+  });
+  return { mode: 'grid', cards, cell: best };
+}
+
+// ---------------------------------------------------------------------------
+// Render
+// ---------------------------------------------------------------------------
+
+const canvas = document.getElementById('canvas');
+const band = document.getElementById('band');
+let dropSpace = null;       // {groupId, index} while a card hovers a group
+let suppress = false;       // set during a live drag so re-render cannot fight it
+
+function render() {
+  if (suppress) { return; }
+  renderStrip();
+  renderCanvas();
+  renderExpanded();
+}
+
+function renderStrip() {
+  const strip = document.getElementById('strip');
+  strip.textContent = '';
+  const g = groupById(activeGroupId);
+  const list = g ? tabsOf(g.id) : [];
+  for (const t of list) {
+    const el = document.createElement('div');
+    el.className = 'strip-tab' + (t.id === activeTabId ? ' is-active' : '');
+    const fav = document.createElement('span');
+    fav.className = 'fav';
+    fav.style.background = `hsl(${hue(t.url)} 55% 55%)`;
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = t.title;
+    el.append(fav, label);
+    el.onclick = () => { activeTabId = t.id; render(); };
+    strip.append(el);
+  }
+  const plus = document.createElement('div');
+  plus.className = 'strip-plus';
+  plus.textContent = '+';
+  plus.title = 'New tab in the active group';
+  plus.onclick = () => newTabIn(activeGroupId);
+  strip.append(plus);
+  const note = document.createElement('span');
+  note.id = 'strip-note';
+  note.textContent = g
+    ? `strip shows only "${g.title || 'Name this tab group'}" — ${list.length} tab${list.length === 1 ? '' : 's'}`
+    : 'no active group';
+  strip.append(note);
+}
+
+function renderCanvas() {
+  for (const node of [...canvas.querySelectorAll('.group, .undo-box')]) { node.remove(); }
+  for (const g of groups) {
+    canvas.append(g.hidden ? buildUndoBox(g) : buildGroup(g));
+  }
+}
+
+function buildGroup(g) {
+  const el = document.createElement('div');
+  el.className = 'group' + (g.id === activeGroupId ? ' is-active' : '');
+  el.dataset.g = g.id;
+  el.style.left = g.x + 'px';
+  el.style.top = g.y + 'px';
+  el.style.width = g.w + 'px';
+  el.style.height = g.h + 'px';
+
+  const header = document.createElement('div');
+  header.className = 'group-header';
+  const title = document.createElement('span');
+  title.className = 'group-title' + (g.title ? '' : ' is-untitled');
+  title.textContent = g.title || 'Name this tab group';
+  title.title = 'Click to rename';
+  title.onclick = e => { e.stopPropagation(); startRename(g, title); };
+  const count = document.createElement('span');
+  count.className = 'group-count';
+  const n = tabsOf(g.id).length;
+  count.textContent = n + (n === 1 ? ' tab' : ' tabs');
+  const spacer = document.createElement('span');
+  spacer.className = 'group-spacer';
+  header.append(title, count, spacer);
+
+  // Panorama hides the close button on the only remaining group
+  // (GroupItems.updateGroupCloseButtons + getUnclosableGroupItemId).
+  if (liveGroups().length > 1) {
+    const close = document.createElement('span');
+    close.className = 'group-btn';
+    close.textContent = '×';
+    close.title = 'Close group';
+    close.onclick = e => { e.stopPropagation(); closeGroup(g); };
+    header.append(close);
+  }
+  header.addEventListener('pointerdown', e => beginGroupMove(e, g, el));
+  el.append(header);
+
+  const body = document.createElement('div');
+  body.className = 'group-body';
+  fillBody(g, body);
+  el.append(body);
+
+  const grip = document.createElement('div');
+  grip.className = 'group-resize';
+  grip.title = 'Resize group';
+  grip.addEventListener('pointerdown', e => beginGroupResize(e, g, el));
+  el.append(grip);
+
+  el.addEventListener('pointerdown', () => { setActiveGroup(g.id); });
+  return el;
+}
+
+/**
+ * A group's contents: grid, stack, or empty hint, plus its own "+".
+ * Split out so a live resize can re-pack the cards without rebuilding the
+ * group element and re-arming the pointer capture on its grip.
+ */
+function fillBody(g, body) {
+  body.textContent = '';
+  const layout = layoutOf(g);
+
+  if (layout.mode === 'empty') {
+    const hint = document.createElement('div');
+    hint.style.cssText = 'padding:10px;font-size:11px;color:var(--color-text-muted)';
+    hint.textContent = 'Empty group — drag a tab here.';
+    body.append(hint);
+  } else if (layout.mode === 'stack') {
+    const list = tabsOf(g.id);
+    list.slice(0, 6).forEach((t, i) => {
+      const card = buildCard(t, g.id);
+      card.classList.add('is-stacked', 'no-anim');
+      if (i === 0) { card.classList.add('top'); }
+      const w = Math.min(g.w - 40, 120), h = Math.floor(w * CARD_ASPECT);
+      card.style.width = w + 'px';
+      card.style.height = h + 'px';
+      card.style.left = ((g.w - w) / 2 + i * 3) + 'px';
+      card.style.top = ((g.h - HEADER_H - h) / 2 + i * 3) + 'px';
+      card.style.transform = `rotate(${(i - 2) * 1.2}deg)`;
+      card.style.zIndex = String(10 - i);
+      body.append(card);
+    });
+    const badge = document.createElement('div');
+    badge.className = 'stack-badge';
+    badge.textContent = list.length;
+    const exp = document.createElement('div');
+    exp.className = 'expander';
+    exp.textContent = '⌃ expand';
+    exp.onclick = e => { e.stopPropagation(); expandedGroupId = g.id; render(); };
+    body.append(badge, exp);
+  } else {
+    for (const c of layout.cards) {
+      const card = buildCard(c.tab, g.id);
+      card.style.left = c.x + 'px';
+      card.style.top = c.y + 'px';
+      card.style.width = c.w + 'px';
+      card.style.height = c.h + 'px';
+      body.append(card);
+    }
+    if (dropSpace && dropSpace.groupId === g.id && layout.cell) {
+      const cell = layout.cell;
+      const i = dropSpace.index;
+      const c = i % cell.cols, r = Math.floor(i / cell.cols);
+      const space = document.createElement('div');
+      space.className = 'drop-space';
+      space.style.left = (PAD + c * (cell.w + GAP)) + 'px';
+      space.style.top = (PAD + r * (cell.h + GAP)) + 'px';
+      space.style.width = cell.w + 'px';
+      space.style.height = cell.h + 'px';
+      body.append(space);
+    }
+  }
+
+  const plus = document.createElement('div');
+  plus.className = 'group-plus';
+  plus.textContent = '+';
+  plus.title = 'New tab in this group';
+  plus.onclick = e => { e.stopPropagation(); newTabIn(g.id); };
+  body.append(plus);
+}
+
+function buildCard(t, groupId) {
+  const card = document.createElement('div');
+  card.className = 'card' + (t.id === activeTabId ? ' is-active' : '');
+  card.dataset.t = t.id;
+  card.title = t.title + '\n' + t.url;
+  if (searchTerm) {
+    card.classList.add(matches(t) ? 'is-match' : 'is-dim');
+  }
+  const shot = document.createElement('div');
+  shot.className = 'card-shot';
+  shot.style.background = `hsl(${hue(t.url)} 25% 13%)`;
+  const foot = document.createElement('div');
+  foot.className = 'card-foot';
+  const fav = document.createElement('span');
+  fav.className = 'card-fav';
+  fav.style.background = `hsl(${hue(t.url)} 55% 55%)`;
+  const label = document.createElement('span');
+  label.className = 'card-label';
+  label.textContent = t.title;
+  foot.append(fav, label);
+  const close = document.createElement('span');
+  close.className = 'card-close';
+  close.textContent = '×';
+  close.title = 'Close tab';
+  close.onclick = e => { e.stopPropagation(); closeTab(t); };
+  card.append(shot, foot, close);
+  card.addEventListener('pointerdown', e => beginCardDrag(e, card, t, groupId));
+  return card;
+}
+
+function buildUndoBox(g) {
+  const el = document.createElement('div');
+  el.className = 'undo-box';
+  el.style.left = g.x + 'px';
+  el.style.top = g.y + 'px';
+  el.style.width = g.w + 'px';
+  el.style.height = g.h + 'px';
+  const btn = document.createElement('button');
+  btn.textContent = 'Undo Close Group';
+  btn.onclick = e => { e.stopPropagation(); undoClose(g); };
+  const note = document.createElement('span');
+  note.style.fontSize = '11px';
+  note.textContent = tabsOf(g.id).length + ' tabs hidden';
+  const discard = document.createElement('span');
+  discard.className = 'discard';
+  discard.textContent = '×';
+  discard.title = 'Discard closed group';
+  discard.onclick = e => { e.stopPropagation(); reallyClose(g); };
+  el.append(btn, note, discard);
+  return el;
+}
+
+function renderExpanded() {
+  const veil = document.getElementById('expand-veil');
+  const tray = document.getElementById('expand-tray');
+  const g = expandedGroupId ? groupById(expandedGroupId) : null;
+  if (!g) { veil.style.display = 'none'; tray.style.display = 'none'; return; }
+  veil.style.display = 'block';
+  veil.onclick = () => { expandedGroupId = null; render(); };
+  tray.textContent = '';
+  const h4 = document.createElement('h4');
+  h4.textContent = (g.title || 'Name this tab group') + ' — expanded (Esc to collapse)';
+  tray.append(h4);
+  const list = tabsOf(g.id);
+  const cols = Math.ceil(Math.sqrt(list.length));
+  const cw = 120, ch = Math.floor(cw * CARD_ASPECT);
+  const rows = Math.ceil(list.length / cols);
+  const w = cols * (cw + GAP) + 20, h = rows * (ch + GAP) + 44;
+  tray.style.width = w + 'px';
+  tray.style.height = h + 'px';
+  tray.style.left = Math.max(8, Math.min(canvas.clientWidth - w - 8, g.x + g.w / 2 - w / 2)) + 'px';
+  tray.style.top = Math.max(8, Math.min(canvas.clientHeight - h - 8, g.y + g.h / 2 - h / 2)) + 'px';
+  const holder = document.createElement('div');
+  holder.style.cssText = 'position:relative;height:' + (h - 34) + 'px';
+  list.forEach((t, i) => {
+    const card = buildCard(t, g.id);
+    card.classList.add('no-anim');
+    card.style.left = ((i % cols) * (cw + GAP)) + 'px';
+    card.style.top = (Math.floor(i / cols) * (ch + GAP)) + 'px';
+    card.style.width = cw + 'px';
+    card.style.height = ch + 'px';
+    holder.append(card);
+  });
+  tray.append(holder);
+  tray.style.display = 'block';
+}
+
+// ---------------------------------------------------------------------------
+// Group lifecycle
+// ---------------------------------------------------------------------------
+
+function setActiveGroup(id) {
+  if (activeGroupId === id) { return; }
+  activeGroupId = id;
+  const list = tabsOf(id);
+  // Panorama's _makeClosestTabActive: switching group selects a tab in it.
+  if (list.length && !list.some(t => t.id === activeTabId)) { activeTabId = list[0].id; }
+  render();
+}
+
+function newGroup(x, y, w, h) {
+  const g = { id: uid('g'), title: '', x, y, w: Math.max(MIN_W, w), h: Math.max(MIN_H, h), hidden: false };
+  groups.push(g);
+  pushAway(g);
+  return g;
+}
+
+function newTabIn(groupId) {
+  if (!groupId) { return; }
+  const t = { id: uid('t'), title: 'New Tab', url: 'about:blank', group: groupId };
+  tabs.push(t);
+  activeTabId = t.id;
+  setActiveGroup(groupId);
+  render();
+}
+
+function closeTab(t) {
+  const gid = t.group;
+  tabs.splice(tabs.indexOf(t), 1);
+  if (activeTabId === t.id) {
+    const rest = tabsOf(gid);
+    activeTabId = rest.length ? rest[0].id : null;
+  }
+  closeIfEmpty(gid);
+  render();
+}
+
+/** Panorama keeps a closed group HIDDEN behind an Undo button for ~15s. */
+function closeGroup(g) {
+  g.hidden = true;
+  g.undoTimer = setTimeout(() => reallyClose(g), UNDO_MS);
+  if (activeGroupId === g.id) {
+    const next = liveGroups()[0];
+    activeGroupId = next ? next.id : null;
+    const list = next ? tabsOf(next.id) : [];
+    activeTabId = list.length ? list[0].id : null;
+  }
+  render();
+}
+
+function undoClose(g) {
+  clearTimeout(g.undoTimer);
+  g.hidden = false;
+  setActiveGroup(g.id);
+  render();
+}
+
+function reallyClose(g) {
+  clearTimeout(g.undoTimer);
+  for (const t of tabsOf(g.id)) { tabs.splice(tabs.indexOf(t), 1); }
+  const i = groups.indexOf(g);
+  if (i >= 0) { groups.splice(i, 1); }
+  render();
+}
+
+/** closeIfEmpty: a group emptied by its last tab leaving dissolves at once. */
+function closeIfEmpty(groupId) {
+  const g = groupById(groupId);
+  if (g && !g.hidden && tabsOf(groupId).length === 0) {
+    const i = groups.indexOf(g);
+    groups.splice(i, 1);
+    if (activeGroupId === g.id) {
+      const next = liveGroups()[0];
+      activeGroupId = next ? next.id : null;
+    }
+  }
+}
+
+function startRename(g, titleEl) {
+  const input = document.createElement('input');
+  input.value = g.title;
+  input.maxLength = 60;
+  input.placeholder = 'Name this tab group';
+  titleEl.textContent = '';
+  titleEl.append(input);
+  input.focus();
+  input.select();
+  input.addEventListener('pointerdown', e => e.stopPropagation());
+  const commit = () => { g.title = input.value.trim(); render(); };
+  input.onblur = commit;
+  input.onkeydown = e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { commit(); }
+    if (e.key === 'Escape') { render(); }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Snapping (trench.js) and push-away (items.js)
+// ---------------------------------------------------------------------------
+
+/** Candidate guide lines: every other group's four edges, plus the canvas. */
+function trenches(exceptId) {
+  const xs = [0, canvas.clientWidth], ys = [0, canvas.clientHeight];
+  for (const g of liveGroups()) {
+    if (g.id === exceptId) { continue; }
+    xs.push(g.x, g.x + g.w);
+    ys.push(g.y, g.y + g.h);
+  }
+  return { xs, ys };
+}
+
+function snapValue(v, candidates) {
+  let best = null;
+  for (const c of candidates) {
+    const d = Math.abs(v - c);
+    if (d <= SNAP && (best === null || d < Math.abs(v - best))) { best = c; }
+  }
+  return best;
+}
+
+function clearSnapLines() {
+  for (const n of [...canvas.querySelectorAll('.snapline')]) { n.remove(); }
+}
+
+function drawSnapLine(xory, at) {
+  const el = document.createElement('div');
+  el.className = 'snapline';
+  if (xory === 'x') { el.style.cssText = `left:${at}px;top:0;width:1px;height:100%`; }
+  else { el.style.cssText = `top:${at}px;left:0;height:1px;width:100%`; }
+  canvas.append(el);
+}
+
+/** Snaps a moving rect's leading AND trailing edges; returns the new x/y. */
+function snapRect(rect, exceptId) {
+  const { xs, ys } = trenches(exceptId);
+  clearSnapLines();
+  let { x, y } = rect;
+  const sxL = snapValue(x, xs), sxR = snapValue(x + rect.w, xs);
+  if (sxL !== null) { x = sxL; drawSnapLine('x', sxL); }
+  else if (sxR !== null) { x = sxR - rect.w; drawSnapLine('x', sxR); }
+  const syT = snapValue(y, ys), syB = snapValue(y + rect.h, ys);
+  if (syT !== null) { y = syT; drawSnapLine('y', syT); }
+  else if (syB !== null) { y = syB - rect.h; drawSnapLine('y', syB); }
+  return { x, y };
+}
+
+function overlap(a, b) {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+/** Panorama pushes overlapping groups apart along the cheaper axis. */
+function pushAway(anchor) {
+  for (let pass = 0; pass < 8; pass++) {
+    let moved = false;
+    for (const g of liveGroups()) {
+      if (g === anchor || !overlap(anchor, g)) { continue; }
+      // Four ways out, cheapest first -- but only ones that stay on the
+      // canvas. Picking the cheapest unconditionally and clamping at 0
+      // instead lets the cheapest direction be one the clamp cancels, and
+      // the two groups then stay overlapped however many passes run.
+      const options = [
+        { cost: anchor.x + anchor.w - g.x, x: anchor.x + anchor.w + GAP, y: g.y },
+        { cost: g.x + g.w - anchor.x, x: anchor.x - g.w - GAP, y: g.y },
+        { cost: anchor.y + anchor.h - g.y, x: g.x, y: anchor.y + anchor.h + GAP },
+        { cost: g.y + g.h - anchor.y, x: g.x, y: anchor.y - g.h - GAP },
+      ].filter(o => o.x >= 0 && o.y >= 0).sort((p, q) => p.cost - q.cost);
+      const pick = options[0] || { x: anchor.x + anchor.w + GAP, y: g.y };
+      g.x = Math.max(0, pick.x);
+      g.y = Math.max(0, pick.y);
+      moved = true;
+    }
+    if (!moved) { break; }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Gestures. Pointer events throughout -- HTML5 drag does not work inside the
+// shell's remote content frame, which is why the real widget uses these too.
+// ---------------------------------------------------------------------------
+
+function beginGroupMove(e, g, el) {
+  if (e.button !== 0 || e.target.closest('input, .group-btn')) { return; }
+  e.preventDefault();
+  e.stopPropagation();
+  setActiveGroup(g.id);
+  el.setPointerCapture(e.pointerId);
+  el.style.zIndex = '400';
+  suppress = true;
+  const ox = e.clientX - g.x, oy = e.clientY - g.y;
+  const move = ev => {
+    const raw = { x: ev.clientX - ox, y: ev.clientY - oy, w: g.w, h: g.h };
+    const s = snapRect(raw, g.id);
+    g.x = Math.max(0, s.x);
+    g.y = Math.max(0, s.y);
+    el.style.left = g.x + 'px';
+    el.style.top = g.y + 'px';
+  };
+  const up = () => {
+    el.removeEventListener('pointermove', move);
+    el.removeEventListener('pointerup', up);
+    clearSnapLines();
+    suppress = false;
+    pushAway(g);
+    render();
+  };
+  el.addEventListener('pointermove', move);
+  el.addEventListener('pointerup', up);
+}
+
+function beginGroupResize(e, g, el) {
+  if (e.button !== 0) { return; }
+  e.preventDefault();
+  e.stopPropagation();
+  const grip = e.currentTarget;
+  grip.setPointerCapture(e.pointerId);
+  suppress = true;
+  const bw = g.w, bh = g.h, sx = e.clientX, sy = e.clientY;
+  const move = ev => {
+    g.w = Math.max(MIN_W, bw + (ev.clientX - sx));
+    g.h = Math.max(MIN_H, bh + (ev.clientY - sy));
+    const { xs, ys } = trenches(g.id);
+    clearSnapLines();
+    const r = snapValue(g.x + g.w, xs);
+    if (r !== null) { g.w = Math.max(MIN_W, r - g.x); drawSnapLine('x', r); }
+    const b = snapValue(g.y + g.h, ys);
+    if (b !== null) { g.h = Math.max(MIN_H, b - g.y); drawSnapLine('y', b); }
+    el.style.width = g.w + 'px';
+    el.style.height = g.h + 'px';
+    // Live reflow: the grid re-packs, and drops to a stack when it must.
+    // Only the body is refilled, so the grip keeps its pointer capture.
+    fillBody(g, el.querySelector('.group-body'));
+  };
+  const up = () => {
+    clearSnapLines();
+    suppress = false;
+    pushAway(g);
+    render();
+  };
+  grip.addEventListener('pointermove', move);
+  grip.addEventListener('pointerup', up);
+}
+
+/** Rubber-band on empty canvas draws a new group (UI._createGroupItemOnDrag). */
+canvas.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || e.target !== canvas) { return; }
+  e.preventDefault();
+  canvas.setPointerCapture(e.pointerId);
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  band.style.display = 'block';
+  const move = ev => {
+    const x = ev.clientX - r.left, y = ev.clientY - r.top;
+    band.style.left = Math.min(sx, x) + 'px';
+    band.style.top = Math.min(sy, y) + 'px';
+    band.style.width = Math.abs(x - sx) + 'px';
+    band.style.height = Math.abs(y - sy) + 'px';
+  };
+  const up = ev => {
+    canvas.removeEventListener('pointermove', move);
+    canvas.removeEventListener('pointerup', up);
+    band.style.display = 'none';
+    const x = ev.clientX - r.left, y = ev.clientY - r.top;
+    const w = Math.abs(x - sx), h = Math.abs(y - sy);
+    if (w < 30 && h < 30) { return; }           // a bare click is not a group
+    const g = newGroup(Math.min(sx, x), Math.min(sy, y), w, h);
+    setActiveGroup(g.id);
+    render();
+    const title = canvas.querySelector(`[data-g="${g.id}"] .group-title`);
+    if (title) { startRename(g, title); }       // Panorama focuses the new name
+  };
+  canvas.addEventListener('pointermove', move);
+  canvas.addEventListener('pointerup', up);
+});
+
+const DRAG_THRESHOLD = 4;
+
+function beginCardDrag(e, card, t, groupId) {
+  if (e.button !== 0 || e.target.closest('.card-close')) { return; }
+  e.preventDefault();
+  const sx = e.clientX, sy = e.clientY;
+  let dragging = false;
+  let ghost = null;
+
+  const hit = ev => {
+    const prior = ghost ? ghost.style.display : null;
+    if (ghost) { ghost.style.display = 'none'; }
+    const under = document.elementFromPoint(ev.clientX, ev.clientY);
+    if (ghost) { ghost.style.display = prior; }
+    return under;
+  };
+
+  const move = ev => {
+    if (!dragging) {
+      if (Math.abs(ev.clientX - sx) < DRAG_THRESHOLD && Math.abs(ev.clientY - sy) < DRAG_THRESHOLD) { return; }
+      dragging = true;
+      card.setPointerCapture(ev.pointerId);
+      const r = card.getBoundingClientRect();
+      ghost = card.cloneNode(true);
+      ghost.classList.add('is-dragging', 'no-anim');
+      ghost.style.width = r.width + 'px';
+      ghost.style.height = r.height + 'px';
+      ghost.style.position = 'fixed';
+      document.body.append(ghost);
+      card.style.opacity = '0.25';
+    }
+    ghost.style.left = (ev.clientX - 30) + 'px';
+    ghost.style.top = (ev.clientY - 20) + 'px';
+
+    for (const n of [...canvas.querySelectorAll('.group.is-target')]) { n.classList.remove('is-target'); }
+    const under = hit(ev);
+    const box = under && under.closest('.group');
+    if (box && box.dataset.g) {
+      box.classList.add('is-target');
+      const idx = dropIndexIn(groupById(box.dataset.g), ev);
+      if (!dropSpace || dropSpace.groupId !== box.dataset.g || dropSpace.index !== idx) {
+        dropSpace = { groupId: box.dataset.g, index: idx };
+        const keep = suppress; suppress = false; renderCanvas(); suppress = keep;
+        box.classList.add('is-target');
+      }
+    } else if (dropSpace) {
+      dropSpace = null;
+      const keep = suppress; suppress = false; renderCanvas(); suppress = keep;
+    }
+  };
+
+  const up = ev => {
+    card.removeEventListener('pointermove', move);
+    card.removeEventListener('pointerup', up);
+    card.style.opacity = '';
+    if (!dragging) { return; }
+    // A completed drag still fires a click; swallow exactly one so the drop
+    // is the only thing the gesture does.
+    card.addEventListener('click', c => { c.stopPropagation(); c.preventDefault(); }, { capture: true, once: true });
+    const under = hit(ev);
+    if (ghost) { ghost.remove(); }
+    const targetIndex = dropSpace ? dropSpace.index : null;
+    const targetGroupId = dropSpace ? dropSpace.groupId : null;
+    dropSpace = null;
+    for (const n of [...canvas.querySelectorAll('.group.is-target')]) { n.classList.remove('is-target'); }
+
+    if (targetGroupId) {
+      moveTab(t, targetGroupId, targetIndex);
+    } else if (under === canvas || (under && under.id === 'canvas')) {
+      // Dragged onto bare canvas: Panorama makes a new group around it.
+      const r = canvas.getBoundingClientRect();
+      const g = newGroup(ev.clientX - r.left - 90, ev.clientY - r.top - 60, 220, 160);
+      moveTab(t, g.id, 0);
+      setActiveGroup(g.id);
+    }
+    closeIfEmpty(groupId);
+    render();
+  };
+
+  card.addEventListener('pointermove', move);
+  card.addEventListener('pointerup', up);
+}
+
+/** Which grid slot the pointer is over -- Panorama's dropIndex/drop-space. */
+function dropIndexIn(g, ev) {
+  if (!g) { return 0; }
+  const layout = layoutOf(g);
+  if (layout.mode !== 'grid' || !layout.cell) { return tabsOf(g.id).length; }
+  const el = canvas.querySelector(`[data-g="${g.id}"] .group-body`);
+  if (!el) { return tabsOf(g.id).length; }
+  const r = el.getBoundingClientRect();
+  const cell = layout.cell;
+  const col = Math.max(0, Math.min(cell.cols - 1, Math.floor((ev.clientX - r.left - PAD) / (cell.w + GAP))));
+  const row = Math.max(0, Math.floor((ev.clientY - r.top - PAD) / (cell.h + GAP)));
+  return Math.max(0, Math.min(tabsOf(g.id).length, row * cell.cols + col));
+}
+
+function moveTab(t, toGroupId, index) {
+  const from = t.group;
+  tabs.splice(tabs.indexOf(t), 1);
+  t.group = toGroupId;
+  const members = tabsOf(toGroupId);
+  const at = index === null || index >= members.length
+    ? (members.length ? tabs.indexOf(members[members.length - 1]) + 1 : tabs.length)
+    : tabs.indexOf(members[index]);
+  tabs.splice(at, 0, t);
+  if (from !== toGroupId) { closeIfEmpty(from); }
+}
+
+// ---------------------------------------------------------------------------
+// Search (search.js): any printable key opens it; matches highlight, the
+// rest dim; Enter goes to the top match; Esc closes it.
+// ---------------------------------------------------------------------------
+
+const searchBox = document.getElementById('search');
+const searchInput = document.getElementById('search-input');
+
+function matches(t) {
+  const q = searchTerm.toLowerCase();
+  return t.title.toLowerCase().includes(q) || t.url.toLowerCase().includes(q);
+}
+
+searchInput.addEventListener('input', () => {
+  searchTerm = searchInput.value.trim();
+  searchBox.classList.toggle('is-off', !searchTerm);
+  render();
+});
+searchInput.addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.key === 'Escape') { searchTerm = ''; searchInput.value = ''; searchInput.blur(); searchBox.classList.add('is-off'); render(); }
+  if (e.key === 'Enter') {
+    const top = tabs.find(matches);
+    if (top) { goTo(top); }
+  }
+});
+
+function goTo(t) {
+  activeTabId = t.id;
+  setActiveGroup(t.group);
+  render();
+}
+
+// ---------------------------------------------------------------------------
+// Keyboard (UI._setTabViewFrameKeyHandlers)
+// ---------------------------------------------------------------------------
+
+function cardCenter(t) {
+  const el = canvas.querySelector(`[data-t="${t.id}"]`);
+  if (!el) { return null; }
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+/** Arrows move to the nearest card in that direction, ACROSS groups. */
+function spatialMove(dir) {
+  const me = activeTabId && cardCenter(tabById(activeTabId));
+  if (!me) { return; }
+  const pass = {
+    ArrowRight: c => c.x > me.x + 4, ArrowLeft: c => c.x < me.x - 4,
+    ArrowDown: c => c.y > me.y + 4, ArrowUp: c => c.y < me.y - 4,
+  }[dir];
+  let best = null;
+  for (const t of tabs) {
+    if (t.id === activeTabId) { continue; }
+    const g = groupById(t.group);
+    if (!g || g.hidden) { continue; }
+    const c = cardCenter(t);
+    if (!c || !pass(c)) { continue; }
+    const d = Math.hypot(c.x - me.x, c.y - me.y);
+    if (!best || d < best.d) { best = { t, d }; }
+  }
+  if (best) { activeTabId = best.t.id; setActiveGroup(best.t.group); render(); }
+}
+
+window.addEventListener('keydown', e => {
+  if (document.activeElement === searchInput || e.target.tagName === 'INPUT') { return; }
+
+  if (e.key === 'Escape') {
+    if (expandedGroupId) { expandedGroupId = null; render(); }
+    else if (searchTerm) { searchTerm = ''; searchInput.value = ''; searchBox.classList.add('is-off'); render(); }
+    return;
+  }
+  if (e.key.startsWith('Arrow')) { e.preventDefault(); spatialMove(e.key); return; }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (activeTabId) { goTo(tabById(activeTabId)); }
+    else { newTabIn(activeGroupId); }
+    return;
+  }
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const list = tabsOf(activeGroupId);
+    if (list.length < 2) { return; }
+    const i = list.findIndex(t => t.id === activeTabId);
+    const next = (i + (e.shiftKey ? -1 : 1) + list.length) % list.length;
+    activeTabId = list[next].id;
+    render();
+    return;
+  }
+  if (e.key === '`' && e.ctrlKey) {
+    e.preventDefault();
+    const list = liveGroups();
+    if (!list.length) { return; }
+    const i = list.findIndex(g => g.id === activeGroupId);
+    setActiveGroup(list[(i + (e.shiftKey ? -1 : 1) + list.length) % list.length].id);
+    return;
+  }
+  // Any printable key opens search and takes the character.
+  if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    searchBox.classList.remove('is-off');
+    searchInput.focus();
+  }
+});
+
+document.getElementById('new-group').onclick = () => {
+  const g = newGroup(30 + groups.length * 18, 30 + groups.length * 18, 260, 190);
+  setActiveGroup(g.id);
+  render();
+  const title = canvas.querySelector(`[data-g="${g.id}"] .group-title`);
+  if (title) { startRename(g, title); }
+};
+
+// ---------------------------------------------------------------------------
+// Legend: the gap analysis, on screen beside the thing it describes.
+// ---------------------------------------------------------------------------
+
+const LEGEND = [
+  ['Strip shows only the active group’s tabs', 'gap', 'Click a group. The strip above re-populates. This is the point of Panorama and Power Browser does not do it yet — our strip lists every tab in every group.'],
+  ['Draw a group by dragging on empty canvas', 'gap', 'Press on the dotted background and drag out a rectangle. It becomes a group and focuses its name.'],
+  ['Close group → Undo Close Group', 'gap', 'The group hides and leaves an Undo button for 15s. Power Browser instead asks a "you can’t undo this" dialog.'],
+  ['Last group has no close button', 'gap', 'Close groups until one is left — its × disappears.'],
+  ['Per-card close button', 'gap', 'Hover a card; × appears top-right.'],
+  ['Per-group + opens a tab in that group', 'gap', 'The + at each group’s top-right, and the one in the strip, both add to that group.'],
+  ['Search', 'gap', 'Just start typing. Matches outline, everything else dims. Enter jumps to the top match.'],
+  ['Stacking when a group is too small', 'gap', 'Shrink a group with its corner grip until the cards will not fit — they fan into a stack with a count.'],
+  ['Expand a stacked group', 'gap', 'Click "expand" on a stack. Esc collapses it.'],
+  ['Drop-space at the insertion point', 'gap', 'Drag a card over a group: a dashed slot opens where it would land, and it lands there.'],
+  ['Snapping to other groups and canvas edges', 'gap', 'Drag or resize a group near another — it snaps and shows the guide line.'],
+  ['Groups push each other apart', 'gap', 'Drop a group on top of another; the other slides clear.'],
+  ['Cards reflow and scale with the group', 'gap', 'Resize a group — the grid re-packs live and the cards change size. Ours are fixed-size and wrap.'],
+  ['Spatial arrow-key navigation', 'gap', 'Arrows move to the nearest card in that direction, across group boundaries. Ours only cycles inside one group.'],
+  ['Tab / Shift+Tab cycles within the group', 'gap', ''],
+  ['Ctrl+` / Ctrl+Shift+` next / previous group', 'gap', ''],
+  ['Click a card opens that tab', 'have', 'In Power Browser this currently opens a stock Firefox window instead of switching in-shell.'],
+  ['Drag a card between groups', 'have', ''],
+  ['Drag a card onto bare canvas → new group', 'have', 'Panorama has no "Ungrouped" tray at all; every tab is in a group. Ours has a tray.'],
+  ['Move / resize a group', 'have', ''],
+  ['Rename a group', 'have', 'Panorama renames on single click; ours on double click.'],
+  ['Empty group dissolves', 'have', ''],
+];
+
+const legend = document.getElementById('legend');
+(() => {
+  const intro = document.createElement('p');
+  intro.textContent = 'Low-fidelity Firefox Panorama, rebuilt from the Firefox 44 tabview source. Everything below is live in this page. The tag says whether Power Browser’s Organising mode has it today.';
+  legend.append(intro);
+  const h = document.createElement('h3');
+  h.textContent = 'Behaviours';
+  legend.append(h);
+  const ol = document.createElement('ol');
+  for (const [name, state, note] of LEGEND) {
+    const li = document.createElement('li');
+    li.className = state;
+    const tag = document.createElement('span');
+    tag.className = 'tag ' + state;
+    tag.textContent = state === 'have' ? 'in PB' : 'missing';
+    li.append(tag, document.createTextNode(name));
+    if (note) {
+      const p = document.createElement('p');
+      p.textContent = note;
+      li.append(p);
+    }
+    ol.append(li);
+  }
+  legend.append(ol);
+})();
+
+seed();
+render();
+window.addEventListener('resize', render);
+</script>
+</body>
+</html>
