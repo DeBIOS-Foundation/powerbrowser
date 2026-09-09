@@ -64,6 +64,8 @@ const RECORD_REL = '.planning/phases/13-chrome-bar-strip-relocation-spike/13-SPI
 const RECORD_PHASE_DIR = '13-chrome-bar-strip-relocation-spike';
 const RECORD_FILE = '13-SPIKE-STRIP-RELOCATION.md';
 const CORE_DIFF_REL = 'scripts/diff-theia-core.sh';
+/** Shell's "command not found": the instrument never ran, so it is not evidence. */
+const EXIT_NOT_FOUND = 127;
 
 /**
  * Milestone archival moves phase dirs to
@@ -115,10 +117,21 @@ function hasCoreCause(record, verdictLine) {
     return /diff-theia-core|zero-core|core-diff|core modification/i.test(`${verdictLine}\n${record}`);
 }
 
-/** Exit code of the ratified zero-core instrument (never reimplemented). */
+/**
+ * Exit code of the ratified zero-core instrument (never reimplemented).
+ *
+ * The argv is one element per token on purpose. `--command` takes a program
+ * followed by its arguments; handing it the single string
+ * `bash scripts/diff-theia-core.sh --quick` made nix look for a program of
+ * that entire name and return 127 on every tree there has ever been. Both
+ * arms that read this value require `=== 0`, so a permanent 127 meant the
+ * stale-RED detector could never fire and no GREEN verdict could ever pass:
+ * the zero-core pillar asserted nothing. 127 is now surfaced as a broken
+ * instrument (see EXIT_NOT_FOUND) rather than counted as a red tree.
+ */
 function coreDiffExit() {
     try {
-        execFileSync('nix', ['develop', '.#theia', '--command', `bash ${CORE_DIFF_REL} --quick`], {
+        execFileSync('nix', ['develop', '.#theia', '--command', 'bash', CORE_DIFF_REL, '--quick'], {
             cwd: REPO_ROOT,
             stdio: 'pipe',
             timeout: 120000,
@@ -201,7 +214,13 @@ function checkVerdict(record, instruments, overrides = {}) {
         failures.push(`${RECORD_REL}: GREEN verdict does not route to Variant B -- the strip-work decision is missing`);
     }
 
-    if (verdict === 'GREEN') {
+    // 127 is the shell's "command not found": the instrument did not run, so
+    // its exit code is not evidence about the tree in either direction. Say so
+    // instead of letting a broken invocation stand in for a red instrument --
+    // that substitution is what made this pillar unfalsifiable.
+    if (instruments.coreDiffExit === EXIT_NOT_FOUND) {
+        failures.push(`the core-diff instrument did not run (exit ${EXIT_NOT_FOUND}, command not found) -- the zero-core pillar is unproven in BOTH directions, so this gate proves nothing about ${CORE_DIFF_REL} (broken instrument, not a verdict result)`);
+    } else if (verdict === 'GREEN') {
         if (instruments.coreDiffExit !== 0) {
             failures.push(`${RECORD_REL}: verdict claims GREEN but the core-diff instrument is red (exit ${instruments.coreDiffExit}) -- zero-core modification is unproven; re-probe or re-record`);
         }
