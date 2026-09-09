@@ -826,6 +826,15 @@ export class OrganisingWidget extends Widget {
         if (event.button !== 0) {
             return;
         }
+        // The same preventDefault beginBoxMove does, and for a sharper reason
+        // here. Without it the press SELECTS the card's text, Gecko then
+        // starts a NATIVE drag of that selection, and the parent chrome
+        // window treats a dropped URL as "open this" -- dragging a card
+        // opened the page in a stock browser window instead of moving it.
+        // Preventing the default also drops focus, so the card takes it back
+        // explicitly and keyboard navigation is unaffected.
+        event.preventDefault();
+        card.focus();
         const startX = event.clientX;
         const startY = event.clientY;
         let dragging = false;
@@ -869,6 +878,15 @@ export class OrganisingWidget extends Widget {
             if (!dragging) {
                 return;
             }
+            // A drag still ends in a `click`, and the card's click handler
+            // dives to the tab -- so a completed drop ALSO opened the tab,
+            // in a stock window. Swallow exactly one click, in capture, so
+            // the drop is the only thing the gesture does. A press without a
+            // drag never reaches here, so plain clicks are untouched.
+            card.addEventListener('click', event => {
+                event.stopPropagation();
+                event.preventDefault();
+            }, { capture: true, once: true });
             card.classList.remove('is-dragging');
             this.clearDropTargets();
             const under = hitTest(ev);

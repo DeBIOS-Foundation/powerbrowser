@@ -332,6 +332,12 @@
     border-radius: 4px;
     overflow: hidden;
     transition: all 0.15s ease;
+    /* No selection to drag: a selected card title becomes a NATIVE text
+       drag, which the parent chrome window opens as a URL in a stock
+       browser window. preventDefault in beginCardDrag stops it forming from
+       a press; this stops one surviving from an earlier click. */
+    user-select: none;
+    -moz-user-select: none;
 }
 
 .pb-org-card-thumb {
