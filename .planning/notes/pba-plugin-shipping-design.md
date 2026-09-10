@@ -133,3 +133,31 @@ handed over per session, as Phase 16 does for opencode.
 - Re-pinning Theia to a version that bridges VS Code chat participants natively: unverified, and would still lack Change Sets and the MCP handoff.
 - The sidecar spawning DSH (Phase 16's shape): host-specific, versions with Power Browser.
 - DSH as a toolbox for Theia's native agents only: inverts the harness. Kept as coexistence instead: DSH is an agent in the picker and also exposes tools to Coder and Architect.
+
+# Resolved later the same day (2026-09-10)
+
+- **DSH is DeepSeek Harness**, DeepSeek AI's open-source agent harness (`@deepseek-ai/dsh`,
+  0.1.3-alpha.1, developer preview with breaking changes). "Deep Sea" was a transcription.
+  Checkout: `/home/chris/coding/DeepSeek-Harness`; upstream GitHub access is read-only.
+  It is third-party: **pin a version, never vendor or patch it** (the Theia rule applied
+  to DSH). Everything-is-a-plugin on Cordis; tools are `ToolDefinition`s
+  (`docs/subsystems/tools.md`); skills are SKILL.md directories via
+  `packages/skill/skill-filesystem`, the same convention Theia and Claude use.
+- **Transport: ACP over JSON-RPC stdio exists.** `@deepseek-ai/dsh-acp` (`packages/acp/acp`)
+  is an automation-only Agent Client Protocol server: create/resume sessions, attach
+  standard MCP servers, select model and reasoning effort, prompt/cancel, semantic
+  execution updates. Started with `dsh --profile acp`. This is the same shape Phase 16's
+  supervisor consumes from `opencode acp`, so that ACP client logic (lifecycle,
+  permission asks, `session/new` MCP handoff, Change Set staging) ports into the PBA
+  .vsix as-is rather than staying host-specific. A richer alternative exists in
+  `packages/sdk` (JSON-RPC protocol plus TypeScript and Python clients with session
+  events and subagent completions).
+- **Native UI:** `dsh web` serves the Web UI at `http://127.0.0.1:3080`, so the
+  native-UI button opens that URL as an in-Theia web tab.
+- **Launcher caveat:** DSH's loader uses a native addon that fails on nixpkgs-built Node
+  and needs an official Node binary (see `run-dsh.sh` in the checkout). The .vsix must
+  resolve which Node runs DSH rather than inheriting the plugin host's; on the reference
+  host that is `~/.local/opt/node-v24.9.0-official/bin`.
+- **Still open:** whether citations can ride the ACP stream as data (the ACP server emits
+  standard messages only, "never private DSH presentation data"), or need a DSH-side
+  plugin emitting a side channel; and the exact npm launch form of the ACP profile.
