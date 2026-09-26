@@ -102,7 +102,14 @@ function check({ apiSrc, doc, uris, planning }) {
     return failures;
 }
 
-const read = rel => readFileSync(join(REPO_ROOT, rel), 'utf8');
+const read = rel => {
+    try {
+        return readFileSync(join(REPO_ROOT, rel), 'utf8');
+    } catch (error) {
+        console.error(`verify-ng-019-tab-store-doc: FAIL -- cannot read ${rel}: ${error.code || error.message}`);
+        process.exit(1);
+    }
+};
 const tree = {
     apiSrc: read(API),
     doc: read(DOC),

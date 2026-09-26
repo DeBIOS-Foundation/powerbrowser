@@ -36,8 +36,12 @@ const instrument = readFileSync(join(REPO_ROOT, 'scripts/verify-sql-store-absenc
 if (!/from '\.\/lib\/startup-wiring\.mjs'/.test(instrument)) {
     failures.push('the absence instrument does not take its wiring answer from scripts/lib/startup-wiring.mjs');
 }
-const branch = /if \(!startupWiringPresent\(\)\) \{([\s\S]*?)\n  \}/.exec(instrument);
-if (!branch || !/\bfail\(/.test(branch[1]) || /\bstaged\(/.test(branch[1])) {
+/** `text` with comments removed and string literals emptied: only code is left to hold a call. */
+const codeOf = text => text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g,
+    token => (token[0] === '/' ? '' : token[0] + token[0]));
+const branch = /^\s*if \(!startupWiringPresent\(\)\) \{([\s\S]*?)\n  \}/m.exec(instrument);
+const body = branch ? codeOf(branch[1]) : '';
+if (!branch || !/\bfail\(/.test(body) || /\bstaged\(/.test(body)) {
     failures.push('absent startup wiring ends the absence instrument as STAGED (exit 0), not as a failure');
 }
 if (failures.length) {

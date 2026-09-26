@@ -10,9 +10,13 @@ await runCheck('verify-ng-004-new-tab-row-unknown-uri-error', async ({ expect })
     const profile = newProfile('ng004');
     await withShell(profile, async ({ run }) => {
         const out = await run(`
-            const tab = await A.open('about:blank');
+            // The New Tab command itself (G6), not the opener it calls.
+            const before = A.webTabs();
+            await A.get('CommandRegistry').executeCommand('powerbrowser.chrome-bar.new-tab');
             await A.sleep(1000);
-            const key = await A.cardKey(tab);
+            const opened = A.webTabs().filter(w => !before.includes(w));
+            if (opened.length !== 1) throw new Error('the New Tab command opened ' + opened.length + ' web tab(s), want 1');
+            const key = await A.cardKey(opened[0]);
             const group = await A.model().createGroup(A.actor(), { x: 40, y: 40 });
             const missing = 'web:ng004-missing';
             return {

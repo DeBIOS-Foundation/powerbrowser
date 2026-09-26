@@ -21,13 +21,19 @@ await runCheck('verify-ng-001-one-key-rule', async ({ pages, expect }) => {
             const editor = A.mainWidgets().find(w => typeof w.getResourceUri === 'function'
                 && String(w.getResourceUri()).startsWith('untitled:'));
             const group = await A.model().createGroup(A.actor(), { x: 40, y: 40 });
-            for (const w of [term, editor].filter(Boolean)) {
-                await A.model().moveCard(A.actor(), await A.cardKey(w), group.id).catch(() => undefined);
+            const grouping = [];
+            for (const [kind, w] of [['terminal', term], ['editor', editor]]) {
+                if (w) {
+                    const key = await A.cardKey(w);
+                    const result = await A.outcome(() => A.model().moveCard(A.actor(), key, group.id));
+                    grouping.push({ kind, key, result, inGroup: A.model().getTabs(group.id).some(t => t.uri === key) });
+                }
             }
             return {
                 webTabId: web.tabId,
                 termKey: A.registry().uriOf(term).toString(true),
                 editorKey: editor ? editor.getResourceUri().toString(true) : null,
+                grouping,
             };
         `);
         await waitUntil(() => tabsOf(profile).some(r => r.url === a) && tabsOf(profile).some(r => r.url === s), 20000);
@@ -36,6 +42,9 @@ await runCheck('verify-ng-001-one-key-rule', async ({ pages, expect }) => {
     });
     const rows = tabsOf(profile);
     expect(seen.editorKey, 'no untitled editor opened, so the editor kind was not exercised');
+    for (const g of seen.grouping) {
+        expect(g.result.resolved && g.inGroup, `setup: grouping the ${g.kind} (card ${g.key}) failed: ${g.result.resolved ? 'the card is not in the group' : g.result.message}`);
+    }
     expect(rows.some(r => r.uri === `web:${seen.webTabId}` && r.url === a), `the in-shell tab on ${a} has no row keyed web:${seen.webTabId}; rows: ${show(rows)}`);
     expect(rows.some(r => r.url === s && /^stock:/.test(r.uri)), `the stock tab on ${s} has no row keyed stock:<id>; rows: ${show(rows)}`);
     expect(rows.some(r => r.uri === seen.termKey), `the grouped terminal has no row keyed by its registry address ${seen.termKey}; rows: ${show(rows)}`);

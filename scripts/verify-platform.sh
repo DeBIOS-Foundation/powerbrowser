@@ -4804,6 +4804,7 @@ run_own_checks() {
       "ng-015-real-migration-from-every-version|node $REPO_ROOT/scripts/verify-ng-015-real-migration-from-every-version.mjs"
       "ng-017-sql05-restarts-real-browser|node $REPO_ROOT/scripts/verify-ng-017-sql05-restarts-real-browser.mjs"
       "ng-018-scheduled-integrity-check|node $REPO_ROOT/scripts/verify-ng-018-scheduled-integrity-check.mjs"
+      "ng-085-quit-closes-store|node $REPO_ROOT/scripts/verify-ng-085-quit-closes-store.mjs"
 
       # NEW (14-04): GUI-07's tabs invariant, BEHAVIOURAL half -- the part
       # gui07-mode-switch-tabs-invariant in the --quick set structurally

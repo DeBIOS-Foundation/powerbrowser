@@ -21,11 +21,21 @@ import { readStore } from './tab-store-fixtures.mjs';
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-/** Polls `probe` until it returns something truthy or `ms` passes; resolves that value or undefined. */
+/**
+ * Polls `probe` until it returns something truthy or `ms` passes; resolves
+ * that value or undefined. A probe that throws counts as "not yet": this is
+ * the one place a read error is tolerated (a read can race the browser's
+ * write). Every other read throws, so runCheck reports it as `harness:`.
+ */
 export async function waitUntil(probe, ms = 20000, stepMs = 250) {
     const end = Date.now() + ms;
     for (;;) {
-        const value = await probe();
+        let value;
+        try {
+            value = await probe();
+        } catch {
+            value = undefined;
+        }
         if (value) {
             return value;
         }
@@ -52,6 +62,36 @@ export function assertCleanTree() {
 }
 
 const profiles = [];
+const privatePaths = new Set();
+let signalsHooked = false;
+
+function removePrivateData() {
+    privatePaths.forEach(path => rmSync(path, { recursive: true, force: true }));
+    privatePaths.clear();
+}
+
+/**
+ * Marks `path` as holding a copy of real browsing data (decisions.md R7). It
+ * is removed on every exit a check controls -- removeProfiles (runCheck's
+ * finally), SIGINT and SIGTERM -- and PB_NG_KEEP_PROFILES never keeps it.
+ */
+export function holdsPrivateData(path) {
+    if (!signalsHooked) {
+        signalsHooked = true;
+        for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+            process.once(signal, () => {
+                removeProfiles();
+                // During a launch, firefox-bidi's own SIGINT handler unwinds
+                // the browser (its CR-03 note); exiting here would orphan it.
+                if (process.listenerCount(signal) === 0) {
+                    process.exit(code);
+                }
+            });
+        }
+    }
+    privatePaths.add(path);
+    return path;
+}
 
 /**
  * A fresh profile (space-free, outside the repo) with the prefs every wave A
@@ -76,11 +116,13 @@ export function newProfile(name, extraPrefs = {}) {
 }
 
 export function removeProfiles() {
+    const kept = profiles.splice(0).filter(dir => !privatePaths.has(dir));
+    removePrivateData();
     if (process.env.PB_NG_KEEP_PROFILES === '1') {
-        console.log(`kept profiles: ${profiles.join(' ')}`);
+        console.log(`kept profiles: ${kept.join(' ')}`);
         return;
     }
-    profiles.splice(0).forEach(dir => rmSync(dir, { recursive: true, force: true }));
+    kept.forEach(dir => rmSync(dir, { recursive: true, force: true }));
 }
 
 /** Pages the overlays load: every path links to /b; /hang accepts and never answers. */
@@ -106,12 +148,9 @@ export async function servePages() {
     };
 }
 
+/** The store's tab rows. A read error throws: an unreadable store is never "no rows". */
 export function tabsOf(profile) {
-    try {
-        return readStore(join(profile, 'tabs.sqlite')).tabs;
-    } catch {
-        return [];
-    }
+    return readStore(join(profile, 'tabs.sqlite')).tabs;
 }
 
 export const show = rows => JSON.stringify(rows.map(r => ({ uri: r.uri, url: r.url, group_id: r.group_id, closed_at: r.closed_at })));
@@ -183,11 +222,16 @@ window.__ngA = window.__ngA || (function () {
         },
         cardKey: async function (widget) {
             var org = await A.organising();
-            var widgets = A.mainWidgets().filter(function (w) { return w !== org; });
-            var live = org.liveTabs();
-            var at = widgets.indexOf(widget);
-            if (at < 0 || !live[at]) throw new Error('the Panorama model has no card for widget ' + widget.id);
-            return live[at].uri;
+            // The model's own key for the one main-panel widget with this id:
+            // liveTabs() runs over a main panel narrowed to that widget, so no
+            // list position can pair a card with the wrong widget.
+            var panel = Object.create(org.shell.mainPanel, { widgets: { value: function () {
+                return Array.from(org.shell.mainPanel.widgets()).filter(function (w) { return w.id === widget.id; });
+            } } });
+            var view = Object.create(org, { shell: { value: Object.create(org.shell, { mainPanel: { value: panel } }) } });
+            var live = org.liveTabs.call(view);
+            if (live.length !== 1) throw new Error('the Panorama model has ' + live.length + ' card(s) for widget ' + widget.id + ', want 1');
+            return live[0].uri;
         },
         confirmDialog: async function () {
             var button;
@@ -209,8 +253,9 @@ window.__ngA = window.__ngA || (function () {
  * fn({ run, topLevelContexts, evaluateIn, send, ... }). `run(body)` evaluates
  * an async function body in the Theia frame with `A` bound to the helpers and
  * resolves its JSON result; a throw inside rejects naming the page error.
+ * `stdoutPath` tees the browser's stdout (its dump() channel) to that file.
  */
-export async function withShell(profileDir, fn, { url = '' } = {}) {
+export async function withShell(profileDir, fn, { url = '', stdoutPath } = {}) {
     return withFirefoxPage(url, async page => {
         await page.waitFor('window.theia && window.theia.container ? true : false', { timeoutMs: 90000 });
         await page.evaluate(`${PAGE_HELPERS}; true`);
@@ -232,7 +277,7 @@ export async function withShell(profileDir, fn, { url = '' } = {}) {
             return parsed.out;
         };
         return fn({ ...page, run });
-    }, { profileDir });
+    }, { profileDir, stdoutPath });
 }
 
 /**

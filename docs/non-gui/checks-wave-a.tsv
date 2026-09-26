@@ -18,3 +18,4 @@ NG-017	scripts/verify-ng-017-sql05-restarts-real-browser.mjs::ng-017-sql05-resta
 NG-018	scripts/verify-ng-018-scheduled-integrity-check.mjs::ng-018-scheduled-integrity-check	node scripts/verify-ng-018-scheduled-integrity-check.mjs  # live-main
 NG-019	scripts/verify-ng-019-tab-store-doc.mjs::ng-019-tab-store-doc	node scripts/verify-ng-019-tab-store-doc.mjs  # quick
 NG-020	scripts/verify-ng-020-absence-wiring-by-call.mjs::ng-020-absence-wiring-by-call	node scripts/verify-ng-020-absence-wiring-by-call.mjs  # quick
+NG-085	scripts/verify-ng-085-quit-closes-store.mjs::ng-085-quit-closes-store	node scripts/verify-ng-085-quit-closes-store.mjs  # live-main

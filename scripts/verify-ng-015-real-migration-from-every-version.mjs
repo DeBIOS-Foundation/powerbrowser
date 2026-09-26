@@ -11,10 +11,12 @@
 // var PB_REAL_PROFILE_FIXTURE names it (decisions.md R7), a copy of a real
 // profile's store; without that variable it prints a notice and skips that one
 // fixture. Supersedes the phase-11 exercise, which replays v1 in node:sqlite.
+// Every copy of the real store is private data: it is removed on every exit
+// (never kept by PB_NG_KEEP_PROFILES), and no failure line prints its values.
 
-import { copyFileSync, existsSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { assertCleanTree, newProfile, removeProfiles, sleep, withShell } from './lib/ng-a-live.mjs';
+import { holdsPrivateData, newProfile, runCheck, sleep, withShell } from './lib/ng-a-live.mjs';
 import { REPO_ROOT, buildStore, newStage, readStore, schemaHead } from './lib/tab-store-fixtures.mjs';
 
 const NAME = 'verify-ng-015-real-migration-from-every-version';
@@ -44,85 +46,69 @@ function expectedKey(oldKey, rowId) {
     return oldKey;
 }
 
-const failures = [];
-const expect = (ok, message) => {
-    if (!ok) {
-        failures.push(message);
-    }
-};
-
-async function exercise(label, fixturePath) {
+/**
+ * Launches the built browser on a profile holding a copy of `fixturePath` and
+ * compares the store before and after. With `privateData` (the real profile,
+ * R7) the profile is marked private, rows are named by row_id and columns by
+ * name, and no key, URL, title or thumbnail value is ever printed.
+ */
+async function exercise(label, fixturePath, { expect, failures }, { privateData = false } = {}) {
     const before = readStore(fixturePath);
     const profile = newProfile(`ng015-${label.replace(/[^A-Za-z0-9]/g, '')}`);
-    // The -wal (and -shm) travel with the file, so a staged WAL's committed pages are migrated too.
-    for (const suffix of ['', '-wal', '-shm']) {
-        if (existsSync(`${fixturePath}${suffix}`)) {
-            copyFileSync(`${fixturePath}${suffix}`, join(profile, `tabs.sqlite${suffix}`));
-        }
+    if (privateData) {
+        holdsPrivateData(profile);
     }
+    copyStore(fixturePath, join(profile, 'tabs.sqlite'));
     await withShell(profile, async () => sleep(3000));
     const after = readStore(join(profile, 'tabs.sqlite'));
     const head = schemaHead();
+    const name = old => (privateData ? `row_id ${old.row_id}` : `row ${old.uri}`);
+    const detail = text => (privateData ? '' : ` (${text})`);
     expect(after.version === head, `${label}: the writer left tabs.sqlite at version ${after.version}, want the head ${head}`);
     expect(head > before.version, `${label}: the head (${head}) is not newer than the fixture's version ${before.version}, so no migration ran from it`);
     for (const old of before.tabs) {
         const now = after.tabs.find(r => r.row_id === old.row_id);
         if (!now) {
-            failures.push(`${label}: row ${old.uri} is gone after the migration`);
+            failures.push(`${label}: ${name(old)} was removed during the launch, by the migration or by the sweep's prune`);
             continue;
         }
         const key = expectedKey(old.uri, old.row_id);
-        expect(now.uri === key, `${label}: row ${old.uri} is keyed ${now.uri}, want ${key}`);
+        expect(now.uri === key, `${label}: ${name(old)} is not keyed by the head's key rule${detail(`keyed ${now.uri}, want ${key}`)}`);
         for (const col of ['url', 'title', 'group_id', 'thumbnail', 'x', 'y', 'ord']) {
             if (col in old) {
-                expect(now[col] === old[col], `${label}: row ${old.uri} lost ${col} (${JSON.stringify(old[col])} -> ${JSON.stringify(now[col])})`);
+                expect(now[col] === old[col], `${label}: ${name(old)} lost ${col}${detail(`${JSON.stringify(old[col])} -> ${JSON.stringify(now[col])}`)}`);
             }
         }
     }
     expect(JSON.stringify(after.groups) === JSON.stringify(before.groups), `${label}: the groups changed across the migration`);
 }
 
-/** Copies a store into the stage (its -wal and -shm too when the -wal is non-empty), never opening the original. */
-function stageCopy(stage, source) {
-    const copy = join(stage, `given-${basename(source)}`);
-    copyFileSync(source, copy);
-    if (existsSync(`${source}-wal`) && statSync(`${source}-wal`).size > 0) {
-        for (const suffix of ['-wal', '-shm']) {
-            if (existsSync(`${source}${suffix}`)) {
-                copyFileSync(`${source}${suffix}`, `${copy}${suffix}`);
-            }
+/** Copies a store with its -wal and -shm (when present) byte for byte, never opening it, so a WAL's committed pages travel too. */
+function copyStore(from, to) {
+    for (const suffix of ['', '-wal', '-shm']) {
+        if (existsSync(`${from}${suffix}`)) {
+            copyFileSync(`${from}${suffix}`, `${to}${suffix}`);
         }
     }
-    return copy;
+    return to;
 }
 
-assertCleanTree();
-const stage = newStage('ng015');
-try {
+await runCheck(NAME, async ({ expect, failures }) => {
+    // The stage takes the real profile's store (R7), so it is private from the start.
+    const stage = holdsPrivateData(newStage('ng015'));
+    const stageCopy = source => copyStore(source, join(stage, `given-${basename(source)}`));
     for (const version of SHIPPED_VERSIONS) {
         const path = join(stage, `tabs-v${version}.sqlite`);
         buildStore(path, version, SEED);
-        await exercise(`v${version}`, path);
+        await exercise(`v${version}`, path, { expect, failures });
     }
-    await exercise('phase-11 tabs-v1.sqlite', stageCopy(stage, PHASE11_FIXTURE));
+    await exercise('phase-11 tabs-v1.sqlite', stageCopy(PHASE11_FIXTURE), { expect, failures });
     const real = process.env.PB_REAL_PROFILE_FIXTURE;
     if (!real) {
         console.log(`${NAME}: notice -- PB_REAL_PROFILE_FIXTURE is not set; the real-profile fixture was skipped (decisions.md R7)`);
     } else if (!existsSync(real)) {
         failures.push(`PB_REAL_PROFILE_FIXTURE names ${real}, which does not exist`);
     } else {
-        await exercise('real profile', stageCopy(stage, real));
+        await exercise('real profile', stageCopy(real), { expect, failures }, { privateData: true });
     }
-} catch (error) {
-    failures.push(`harness: ${error && error.stack ? error.stack : error}`);
-} finally {
-    removeProfiles();
-    // The stage holds a copy of the real profile's store (R7); it never outlives the run.
-    rmSync(stage, { recursive: true, force: true });
-}
-if (failures.length) {
-    console.error(`${NAME}: FAIL`);
-    failures.forEach(f => console.error(`  ${f}`));
-    process.exit(1);
-}
-console.log(`${NAME}: PASS -- the writer migrated v${SHIPPED_VERSIONS.join(', v')} and the given fixtures to the head, every row carried`);
+});
