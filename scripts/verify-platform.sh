@@ -2609,15 +2609,32 @@ check_desktop_entry_quick() {
   ' "$REPO_ROOT"
 }
 
-# NG-051: exit 0 when the application package.json composes the opencode adapter.
+# NG-051: exit 0 when the application package.json composes the opencode adapter,
+# 1 when it does not, 2 when the file cannot be read or parsed. Only exit 1 means
+# "absent": any other exit (a read error, a missing node) makes the held row fail.
 adapter_composed() {
-  node -e 'const p = require(process.argv[1]); process.exit(p.dependencies && p.dependencies["@powerbrowser/backend-opencode"] ? 0 : 1)' \
-    "$THEIA_DIR/applications/browser/package.json"
+  node -e '
+    let composed;
+    try {
+      const p = require(process.argv[1]);
+      composed = Boolean(p.dependencies && p.dependencies["@powerbrowser/backend-opencode"]);
+    } catch (err) {
+      console.error(`adapter_composed: cannot read ${process.argv[1]}: ${err.message}`);
+      process.exit(2);
+    }
+    process.exit(composed ? 0 : 1);
+  ' "$THEIA_DIR/applications/browser/package.json"
 }
 
 check_ai_opencode_held() {
-  if adapter_composed; then
+  local rc=0
+  adapter_composed || rc=$?
+  if [ "$rc" -eq 0 ]; then
     echo "ai-opencode-held: FAIL -- the adapter is composed, so its six rows must run instead of this one" >&2
+    return 1
+  fi
+  if [ "$rc" -ne 1 ]; then
+    echo "ai-opencode-held: FAIL -- cannot tell whether the adapter is composed (adapter_composed exited $rc), so the six ai-opencode rows are not proven absent" >&2
     return 1
   fi
   echo "ai-opencode-held: PASS -- the opencode adapter is not in the default build ([ai] backend = \"off\"); held rows: ai-opencode-tracer, ai-opencode-tracer-self-test, ai-opencode-presets, ai-opencode-presets-self-test, ai-opencode-bridge, ai-opencode-bridge-self-test. To run them: set [ai] backend = \"opencode\", regenerate, copy powerbrowserAiBackend over, add the @powerbrowser/backend-opencode dependency, yarn build, then scripts/verify-platform.sh --quick."

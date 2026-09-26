@@ -7,7 +7,8 @@ own, and how to turn the backend on or off.
 
 ## Turning it on or off
 
-The backend is **off by default**, and since non-GUI decision D2(b) the adapter is not part of the default build. Turning it on takes these steps:
+The backend is **off by default**, and the adapter is not part of the
+default build. Turning it on takes these steps:
 
 1. In `configuration.toml`, set the selection key:
    ```toml
@@ -32,9 +33,11 @@ The backend is **off by default**, and since non-GUI decision D2(b) the adapter 
 5. Rebuild the sidecar, then check the gate:
    `node scripts/verify-opencode-bridge.mjs`.
 
-To turn it back off, set both values to `"off"`, remove the dependency, and rebuild. With the backend off, no opencode process starts and the sidecar has no `/mcp` endpoint. The
-`@OpenCode` picker entry and its review toggle disappear entirely when
-off -- they are skipped at composition time, not merely hidden.
+To turn it back off, set both values to `"off"`, remove the dependency,
+and rebuild. With the backend off, no opencode process starts and the
+sidecar has no `/mcp` endpoint. The `@OpenCode` picker entry and its
+review toggle disappear entirely when off -- they are skipped at
+composition time, not merely hidden.
 
 ## Shared side: sessions, variables, skills
 
