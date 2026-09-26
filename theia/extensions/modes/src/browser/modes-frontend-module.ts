@@ -14,7 +14,7 @@
 import { ContainerModule } from '@theia/core/shared/inversify';
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { FrontendApplicationContribution, WebSocketConnectionProvider, WidgetFactory } from '@theia/core/lib/browser';
-import { CommandContribution } from '@theia/core/lib/common';
+import { CommandContribution, MenuContribution } from '@theia/core/lib/common';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
 import { bindViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
 import { GROUP_PATH, GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-query-service';
@@ -67,6 +67,7 @@ export default new ContainerModule(bind => {
     bind(FrontendApplicationContribution).toService(SetupsService);
     bind(SetupsCommandContribution).toSelf().inSingletonScope();
     bind(CommandContribution).toService(SetupsCommandContribution);
+    bind(MenuContribution).toService(SetupsCommandContribution);
     // GUI-09 (14-03): the dependent-windows contribution binds statically
     // beside the setups binds, in the same voice (D-50).
     bind(DependentWindowsContribution).toSelf().inSingletonScope();
