@@ -1,5 +1,5 @@
 {
-  "ledger_version": 193,
+  "ledger_version": 195,
   "frozen_at": null,
   "items": [
     {
@@ -44,11 +44,11 @@
     {
       "id": "NG-004",
       "text": "A New Tab opened with \"+\" and no URL has a row; setTabGroupId, setTabPosition and setGroupOrder work on it, and a mutation on an unknown URI returns an error instead of doing nothing. Evidence: PBA:2463-2466 writes no row; PBA:995, 1046 return silently.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:19",
       "test_ref": "scripts/verify-ng-004-new-tab-row-unknown-uri-error.mjs::ng-004-new-tab-row-unknown-uri-error",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "a1fe5da: ng-004-new-tab-row-unknown-uri-error passes in main",
       "owner": "",
       "phase": "",
       "deferred_at": "",
