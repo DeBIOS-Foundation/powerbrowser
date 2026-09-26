@@ -35,7 +35,8 @@ export type GroupMutation =
     | { kind: 'closeGroup'; id: string }
     | { kind: 'setActiveGroup'; id: string }
     | { kind: 'trackTab'; uri: string; url: string; title: string }
-    | { kind: 'closeTab'; uri: string };
+    | { kind: 'closeTab'; uri: string }
+    | { kind: 'touchTab'; uri: string };
 
 /** Parent ack shape: `{ ok: true, ...echo } | { ok: false, reason }`. */
 export interface GroupReply {

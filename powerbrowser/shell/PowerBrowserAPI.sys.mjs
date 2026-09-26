@@ -129,6 +129,15 @@ function webTabKeyIsValid(key) {
   return typeof key === "string" && /^web:[A-Za-z0-9_-]{1,64}$/.test(key);
 }
 
+// NG-010: a stable short hash for keying a closed tab the store never saw.
+function stringHash(text) {
+  let hash = 5381;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(36);
+}
+
 // NG-085: the store's connection is closed from Sqlite.sys.mjs's own shutdown
 // barrier (profile-before-change), which Sqlite lifts before it waits for its
 // open connections to close. Without it that wait never ended and every quit
@@ -1243,8 +1252,10 @@ export const PowerBrowserAPI = Object.freeze({
    * SQL. An upsert reopens the row (closed_at NULL): a tab being written is
    * open. created_at is set once, on insert; an empty title never blanks a
    * stored one (a reopened tab writes before its page has a title).
+   * last_active is 'last seen open'; last_accessed is 'last looked at' and
+   * only moves when given (NG-009).
    */
-  async writeTabRow({ uri, url, title, lastActive, chromeWin }) {
+  async writeTabRow({ uri, url, title, lastActive, lastAccessed, chromeWin }) {
     if (chromeWin && lazy.PrivateBrowsingUtils.isWindowPrivate(chromeWin)) {
       return "skipped-private";
     }
@@ -1252,11 +1263,12 @@ export const PowerBrowserAPI = Object.freeze({
     const now = Date.now();
     try {
       await conn.executeCached(
-        `INSERT INTO tabs (uri, url, title, last_active, created_at) VALUES (:uri, :url, :title, :last_active, :now)
+        `INSERT INTO tabs (uri, url, title, last_active, created_at, last_accessed) VALUES (:uri, :url, :title, :last_active, :now, :last_accessed)
          ON CONFLICT (uri) DO UPDATE SET url=excluded.url,
            title=CASE WHEN excluded.title = '' THEN tabs.title ELSE excluded.title END,
-           last_active=excluded.last_active, closed_at=NULL`,
-        { uri, url, title: title ?? "", last_active: lastActive ?? now, now }
+           last_active=excluded.last_active,
+           last_accessed=COALESCE(excluded.last_accessed, tabs.last_accessed), closed_at=NULL`,
+        { uri, url, title: title ?? "", last_active: lastActive ?? now, now, last_accessed: lastAccessed ?? null }
       );
     } catch (err) {
       throw new Error(`writeTabRow: upsert failed for ${uri}: ${err && err.message ? err.message : err}`);
@@ -1281,6 +1293,22 @@ export const PowerBrowserAPI = Object.freeze({
     await conn.execute("UPDATE tabs SET closed_at = :now WHERE uri = :uri AND closed_at IS NULL", { uri, now: Date.now() });
   },
 
+  /** NG-009: the user looked at this tab now (a web or Theia tab was activated). */
+  async touchTabRow(uri) {
+    const conn = await PowerBrowserAPI.openTabStore();
+    await conn.execute("UPDATE tabs SET last_accessed = :now WHERE uri = :uri", { uri, now: Date.now() });
+  },
+
+  /** NG-010: a closed tab from sessionstore; an open row it names is closed, an absent one inserted as history. */
+  async writeClosedTabRow({ uri, url, title, closedAt }) {
+    const conn = await PowerBrowserAPI.openTabStore();
+    await conn.executeCached(
+      `INSERT INTO tabs (uri, url, title, last_active, closed_at) VALUES (:uri, :url, :title, :closed_at, :closed_at)
+       ON CONFLICT (uri) DO UPDATE SET closed_at = COALESCE(tabs.closed_at, excluded.closed_at)`,
+      { uri, url, title: title ?? "", closed_at: closedAt }
+    );
+  },
+
   /**
    * NG-005: stock rows sessionstore no longer lists as open are closed -- the
    * window was closed, or the tab was restored under its saved key and the key
@@ -1303,9 +1331,14 @@ export const PowerBrowserAPI = Object.freeze({
    * NG-005: at startup no in-shell web tab can be open -- the frontend has not
    * loaded. A web row nobody grouped or placed ended with the last session and
    * becomes closed-tab history; grouped or placed ones stay as Panorama cards.
+   * T2-R3: an orphan about:blank row (url '') never had a page, so it is
+   * deleted, not kept as fake closed-tab history.
    */
   async closeEndedWebRows() {
     const conn = await PowerBrowserAPI.openTabStore();
+    await conn.execute(
+      "DELETE FROM tabs WHERE closed_at IS NULL AND uri GLOB 'web:*' AND group_id IS NULL AND x IS NULL AND url = ''"
+    );
     await conn.execute(
       "UPDATE tabs SET closed_at = :now WHERE closed_at IS NULL AND uri GLOB 'web:*' AND group_id IS NULL AND x IS NULL",
       { now: Date.now() }
@@ -1664,13 +1697,25 @@ export const PowerBrowserAPI = Object.freeze({
    * data URL through writeThumbnail -- over the capture cap, or with no live
    * browser, the row clears to NULL and the card keeps its contracted text
    * fallback. Private windows skip here as well as at schedule time (v1
-   * writeTabRow precedent -- no private column exists to select on). Never
+   * writeTabRow precedent -- no private column exists to select on). A row
+   * already closed (T2-C3) is skipped before anything else: the settle timer
+   * fires after the close, the tab is gone, and the no-live-tab path would
+   * otherwise clear the kept history's snapshot to NULL. Never
    * throws: capture failures are silent by contract, never a spinner/glyph.
    */
   async captureTabThumbnail(uri) {
     try {
       if (typeof uri !== "string" || !uri) {
         return "refused-empty";
+      }
+      try {
+        const conn = await PowerBrowserAPI.openTabStore();
+        const rows = await conn.execute("SELECT closed_at FROM tabs WHERE uri = :uri", { uri });
+        if (rows.length && rows[0].getResultByName("closed_at") !== null) {
+          return "skipped-closed";
+        }
+      } catch {
+        // The closed check is best-effort; the capture below still runs.
       }
       const found = PowerBrowserAPI.findTabBrowserForUri(uri);
       if (!found) {
@@ -2070,6 +2115,14 @@ export const PowerBrowserAPI = Object.freeze({
           await PowerBrowserAPI.closeTabRow(data.uri);
           return { ok: true, kind, uri: data.uri };
         }
+        // NG-009: a web or Theia tab was activated; stock selection arrives as TabSelect.
+        case "touchTab": {
+          if (typeof data.uri !== "string" || !data.uri || data.uri.startsWith("stock:")) {
+            return { ok: false, reason: "validation", message: "handleGroupMutation: refusing malformed tab key" };
+          }
+          await PowerBrowserAPI.touchTabRow(data.uri);
+          return { ok: true, kind, uri: data.uri };
+        }
         // GUI-01 (F9): the navigation kind, riding the group pair rather than
         // a second actor pair -- one channel means one origin wall
         // (groupSenderIsTheia above) and one boundary file, which is the whole
@@ -2368,7 +2421,44 @@ export const PowerBrowserAPI = Object.freeze({
           if (!entry || !entry.url || !uri) {
             continue;
           }
-          rows.push({ uri, url: entry.url, title: entry.title ?? "", last_active: now });
+          rows.push({
+            uri,
+            url: entry.url,
+            title: entry.title ?? "",
+            last_active: now,
+            last_accessed: Number.isFinite(tab.lastAccessed) ? tab.lastAccessed : null,
+          });
+        }
+      }
+      return rows;
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * NG-010: sessionstore's recently closed tabs (each non-private window's
+   * _closedTabs) as closed-history rows. A tab the store keyed keeps its key
+   * (the custom tab value travels with the closed entry); one it never saw is
+   * keyed from when it closed and its address, so the same entry projects to
+   * the same row on every sweep. Never throws.
+   */
+  parseSessionStoreClosedRows() {
+    try {
+      const state = JSON.parse(lazy.SessionStore.getBrowserState());
+      const rows = [];
+      for (const win of state.windows ?? []) {
+        if (win.isPrivate) {
+          continue;
+        }
+        for (const closed of win._closedTabs ?? []) {
+          const tab = closed.state ?? {};
+          const entry = tab.entries?.[(tab.index ?? tab.entries?.length ?? 1) - 1];
+          if (!entry || !entry.url || !Number.isFinite(closed.closedAt)) {
+            continue;
+          }
+          const uri = tab.extData?.[STOCK_TAB_KEY_VALUE] || `stock:closed-${closed.closedAt.toString(36)}-${stringHash(entry.url)}`;
+          rows.push({ uri, url: entry.url, title: entry.title ?? closed.title ?? "", last_active: closed.closedAt, closed_at: closed.closedAt });
         }
       }
       return rows;
@@ -2467,9 +2557,9 @@ export const PowerBrowserAPI = Object.freeze({
       await conn.executeTransaction(async () => {
         for (const row of restoreRows) {
           await conn.execute(
-            `INSERT INTO tabs (uri, url, title, last_active, created_at) VALUES (:uri, :url, :title, :last_active, :last_active)
-             ON CONFLICT (uri) DO UPDATE SET url=excluded.url, title=excluded.title, last_active=excluded.last_active`,
-            { uri: row.uri, url: row.url, title: row.title, last_active: row.last_active }
+            `INSERT INTO tabs (uri, url, title, last_active, created_at, closed_at) VALUES (:uri, :url, :title, :last_active, :last_active, :closed_at)
+             ON CONFLICT (uri) DO UPDATE SET url=excluded.url, title=excluded.title, last_active=excluded.last_active, closed_at=excluded.closed_at`,
+            { uri: row.uri, url: row.url, title: row.title, last_active: row.last_active, closed_at: row.closed_at ?? null }
           );
         }
       });
@@ -2521,7 +2611,7 @@ export const PowerBrowserAPI = Object.freeze({
     } else {
       PowerBrowserAPI.log("error", "[tab-store-integrity] integrity_check reported corruption; quarantining");
       try {
-        await PowerBrowserAPI.quarantineAndRebuildTabStore(PowerBrowserAPI.parseSessionStoreTabRows());
+        await PowerBrowserAPI.quarantineAndRebuildTabStore([...PowerBrowserAPI.parseSessionStoreClosedRows(), ...PowerBrowserAPI.parseSessionStoreTabRows()]);
       } catch (err) {
         PowerBrowserAPI.log("error", `[tab-store-integrity] rebuild failed (${PowerBrowserAPI.tabStoreFailureClass(err)})`);
       }
@@ -2554,7 +2644,7 @@ export const PowerBrowserAPI = Object.freeze({
     let state = "ready";
     if (verdict === "corrupt") {
       try {
-        await PowerBrowserAPI.quarantineAndRebuildTabStore(PowerBrowserAPI.parseSessionStoreTabRows());
+        await PowerBrowserAPI.quarantineAndRebuildTabStore([...PowerBrowserAPI.parseSessionStoreClosedRows(), ...PowerBrowserAPI.parseSessionStoreTabRows()]);
         state = "rebuilt";
       } catch (err) {
         PowerBrowserAPI.log("error", `[ensureTabStore] rebuild failed (${PowerBrowserAPI.tabStoreFailureClass(err)})`);
@@ -2576,20 +2666,34 @@ export const PowerBrowserAPI = Object.freeze({
    * makes the roundtrip gate deterministic. Loud errors propagate to the caller.
    */
   async sweepTabStoreFromSessionStore() {
+    // Closed first, open last: one snapshot never lists a tab as both, and
+    // the open writes win for anything reopened since.
+    // NG-010/NG-011: retention is the setting closed_retention_days; F11: a
+    // close older than the window is never inserted, so the sweep never
+    // churns insert-then-prune on the same row.
+    const days = Number(await PowerBrowserAPI.readTabStoreSetting("closed_retention_days"));
+    const retentionMs = Number.isFinite(days) && days >= 0 ? days * 24 * 60 * 60 * 1000 : TAB_STORE_CLOSED_RETENTION_MS;
+    const cutoff = Date.now() - retentionMs;
+    for (const row of PowerBrowserAPI.parseSessionStoreClosedRows().slice(0, TAB_STORE_SWEEP_MAX_WRITES)) {
+      if (row.closed_at < cutoff) {
+        continue;
+      }
+      await PowerBrowserAPI.writeClosedTabRow({ uri: row.uri, url: row.url, title: row.title, closedAt: row.closed_at });
+    }
     const live = PowerBrowserAPI.parseSessionStoreTabRows();
-    const liveUris = live.map(row => row.uri);
     for (const row of live.slice(0, TAB_STORE_SWEEP_MAX_WRITES)) {
       await PowerBrowserAPI.writeTabRow({
         uri: row.uri,
         url: row.url,
         title: row.title,
         lastActive: row.last_active,
+        lastAccessed: row.last_accessed ?? undefined,
       });
     }
     if (stockRestoreDone) {
-      await PowerBrowserAPI.closeAbsentStockRows(liveUris);
+      await PowerBrowserAPI.closeAbsentStockRows(live.map(row => row.uri));
     }
-    await PowerBrowserAPI.pruneClosedTabRows(Date.now() - TAB_STORE_CLOSED_RETENTION_MS);
+    await PowerBrowserAPI.pruneClosedTabRows(cutoff);
   },
 
   /**
@@ -2657,6 +2761,7 @@ export const PowerBrowserAPI = Object.freeze({
           uri,
           url: spec,
           title: (tab && tab.label) || "",
+          lastAccessed: event.type === "TabSelect" ? Date.now() : undefined,
           chromeWin,
         }).catch(err => {
           PowerBrowserAPI.log("error", `[tab-store-trigger] write failed: ${err && err.message ? err.message : err}`);

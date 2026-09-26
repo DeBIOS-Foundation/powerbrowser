@@ -177,7 +177,7 @@ export type WindowMessage =
     | { kind: 'windowDragRegions'; rects: { x: number; y: number; w: number; h: number }[]; height: number };
 
 /** NG-001: row messages on the same channel. A user close ends the row's open life (closed-tab history). */
-export type TabRowMessage = { kind: 'closeTab'; uri: string };
+export type TabRowMessage = { kind: 'closeTab'; uri: string } | { kind: 'touchTab'; uri: string };
 
 export type ShellMessage = WebTabMessage | WindowMessage | TabRowMessage;
 
@@ -448,6 +448,12 @@ export class WebTabWidget extends BaseWidget {
         this.channel.send({ kind: 'webTabClose', tabId: this.tabId });
         this.channel.unregister(this.tabId);
         super.onCloseRequest(msg);
+    }
+
+    protected onActivateRequest(msg: Message): void {
+        super.onActivateRequest(msg);
+        // NG-009: the tab's row records when it was last looked at.
+        this.channel.send({ kind: 'touchTab', uri: this.rowKey });
     }
 
     dispose(): void {

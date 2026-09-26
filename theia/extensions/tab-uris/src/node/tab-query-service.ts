@@ -289,4 +289,10 @@ export class TabQueryService {
             'SELECT uri, url, title, last_active, group_id, thumbnail, x, y FROM tabs WHERE group_id IS NULL AND closed_at IS NULL ORDER BY last_active DESC'
         ).all() as GroupTabRow[]);
     }
+
+    /** NG-011: the settings table as key -> value, for the restore path and any other reader. */
+    async getSettings(): Promise<Record<string, string>> {
+        const rows = this.read('getSettings', db => db.prepare('SELECT key, value FROM settings').all()) as { key: string; value: string }[];
+        return Object.fromEntries(rows.map(row => [row.key, row.value]));
+    }
 }

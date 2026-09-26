@@ -20,6 +20,7 @@ export interface GroupQueryService {
     getGroupTabs(groupId: string): Promise<GroupTabRow[]>;
     getThumbnail(uri: string): Promise<string | undefined>;
     listUngroupedTabs(): Promise<GroupTabRow[]>;
+    getSettings(): Promise<Record<string, string>>;
 }
 
 export const GroupQueryService = Symbol('GroupQueryService');

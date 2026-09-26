@@ -15,7 +15,7 @@
  * painted change only if the replay fails again (15-UI-SPEC.md).
  */
 
-import { inject, injectable } from '@theia/core/shared/inversify';
+import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { ApplicationShell, OpenerService, Widget } from '@theia/core/lib/browser';
 import { NavigatableWidget } from '@theia/core/lib/browser/navigatable-types';
 import { Emitter, Event } from '@theia/core/lib/common';
@@ -140,6 +140,9 @@ export class GroupModel {
     /** Theia tabs whose close already reaches the store. */
     private readonly watched = new WeakSet<Widget>();
 
+    /** NG-009: every key the store holds a row for, open or not. */
+    private readonly stored = new Set<string>();
+
     /** The row key of a shell tab (`tabKeyOf`). */
     keyOf(widget: Widget): string {
         return tabKeyOf(widget, this.registry);
@@ -155,7 +158,24 @@ export class GroupModel {
         }
         const card = this.locateCard(uri)?.card;
         await client.mutate({ kind: 'trackTab', uri, url: card?.url ?? '', title: card?.title ?? '' });
+        this.stored.add(uri);
         this.watchClose(uri);
+    }
+
+    @postConstruct()
+    protected init(): void {
+        // NG-009: a Theia tab with a row records when it was last looked at;
+        // web tabs report their own activation.
+        this.shell.onDidChangeActiveWidget(({ newValue }) => {
+            if (!newValue) {
+                return;
+            }
+            const uri = this.keyOf(newValue);
+            if (this.stored.has(uri) && !/^(web|stock):/.test(uri)) {
+                this.actor.mutate({ kind: 'touchTab', uri })
+                    .catch(error => console.error('[@powerbrowser/modes] recording a tab access failed:', error));
+            }
+        });
     }
 
     /**
@@ -263,6 +283,13 @@ export class GroupModel {
                 const tab = this.parseTab(row);
                 return tab ? [tab] : [];
             }) : [];
+            // NG-009: every key the store holds a row for, open or not.
+            this.stored.clear();
+            for (const tabs of [...nextMembers.values(), tray]) {
+                for (const tab of tabs) {
+                    this.stored.add(tab.uri);
+                }
+            }
             if (live) {
                 // The shell decides which cards exist and what they are
                 // called; the store decides only which group each one is in
@@ -856,6 +883,41 @@ export class GroupModel {
             y: placed(row.y),
         };
     }
+}
+
+/** One web tab a previous session left, as the launch restore knows it. */
+export interface SavedWebTab {
+    key: string;
+    url: string;
+    lastAccessed: number | null;
+}
+
+/** One web tab the launch restore reopens. */
+export interface WebTabRestore {
+    key: string;
+    url: string;
+    withHistory: boolean;
+}
+
+/**
+ * NG-011: what the launch restore reopens, from the settings in tabs.sqlite.
+ * restore_behaviour 'none' reopens nothing (the tabs stay as Panorama cards).
+ * Otherwise a tab last looked at within restore_live_minutes of `quitAt`
+ * reopens with its back/forward history, one within restore_url_days at its
+ * URL only, and anything older is left as a card.
+ */
+export function planWebTabRestore(settings: Record<string, string>, tabs: readonly SavedWebTab[], quitAt: number): WebTabRestore[] {
+    if (settings.restore_behaviour === 'none') {
+        return [];
+    }
+    const minutes = Number(settings.restore_live_minutes ?? '5');
+    const days = Number(settings.restore_url_days ?? '30');
+    const liveMs = (Number.isFinite(minutes) ? minutes : 5) * 60 * 1000;
+    const urlMs = (Number.isFinite(days) ? days : 30) * 24 * 60 * 60 * 1000;
+    return tabs.flatMap(tab => {
+        const age = tab.lastAccessed === null ? Infinity : quitAt - tab.lastAccessed;
+        return age > urlMs ? [] : [{ key: tab.key, url: tab.url, withHistory: age <= liveMs }];
+    });
 }
 
 export type { GroupMutation };
