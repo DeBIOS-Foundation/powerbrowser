@@ -241,29 +241,22 @@ export class GroupModel {
                 return group ? [group] : [];
             }) : [];
             const nextMembers = new Map<string, PanoramaTab[]>();
+            // NG-012 (T3-R1): no per-read catch. A read failing mid-load fails
+            // the whole load -- an empty member list would draw an empty box,
+            // show its tabs as loose, and have Close Group confirm "0 tabs".
             for (const group of parsed) {
-                let tabs: PanoramaTab[] = [];
-                try {
-                    const memberRows = await reader.getGroupTabs(group.id);
-                    tabs = Array.isArray(memberRows) ? memberRows.flatMap(row => {
-                        const tab = this.parseTab(row);
-                        return tab ? [tab] : [];
-                    }) : [];
-                } catch {
-                    tabs = [];
-                }
-                nextMembers.set(group.id, tabs);
-            }
-            let tray: PanoramaTab[] = [];
-            try {
-                const trayRows = await reader.listUngroupedTabs();
-                tray = Array.isArray(trayRows) ? trayRows.flatMap(row => {
+                const memberRows = await reader.getGroupTabs(group.id);
+                const tabs = Array.isArray(memberRows) ? memberRows.flatMap(row => {
                     const tab = this.parseTab(row);
                     return tab ? [tab] : [];
                 }) : [];
-            } catch {
-                tray = [];
+                nextMembers.set(group.id, tabs);
             }
+            const trayRows = await reader.listUngroupedTabs();
+            let tray: PanoramaTab[] = Array.isArray(trayRows) ? trayRows.flatMap(row => {
+                const tab = this.parseTab(row);
+                return tab ? [tab] : [];
+            }) : [];
             if (live) {
                 // The shell decides which cards exist and what they are
                 // called; the store decides only which group each one is in
@@ -322,7 +315,8 @@ export class GroupModel {
             this.activeGroupId = active?.id;
             this.loaded = true;
             this.loadFailed = false;
-        } catch {
+        } catch (error) {
+            console.error('[@powerbrowser/modes] loading groups failed:', error);
             this.groups = [];
             this.members.clear();
             this.ungrouped = [];
