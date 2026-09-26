@@ -960,9 +960,7 @@ Stand-ins that stay labeled, never blessed (08-05 work): the wizard
 bitmaps (`wizHeader.bmp`, `wizHeaderRTL.bmp`, `wizWatermark.bmp`),
 `firefox64.ico` and `stubinstaller/` artwork come from
 `upstream/browser/branding/unofficial/` — the fork ships no wizard
-artwork yet; and `defines.nsi` still carries upstream's own Mozilla
-literals (`AppName`, certificate names, Mozilla telemetry URL) that a
-Windows shippable must replace. The row's PASS line says the compile
+artwork yet; and `defines.nsi` now takes `AppName` from the build's `MOZ_APP_NAME` and `CERTIFICATE_NAME` from the generated `CompanyName`, and the installer sends no telemetry ping (`patches/040-powerbrowser-nsis.patch`, NG-066, row `ng066-nsis-branding-no-ping`). `CERTIFICATE_ISSUER` stays upstream's until a fork Windows signing certificate exists (deferred with the Windows packaging row). The row's PASS line says the compile
 only.
 
 ### Packaging hosts (08-05): capability record
