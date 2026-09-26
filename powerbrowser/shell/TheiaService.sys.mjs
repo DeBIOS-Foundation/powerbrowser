@@ -91,6 +91,12 @@ export const TheiaService = {
   // every other field here (D-107): nothing in this block writes a file.
   _quitObserverOff: null,
 
+  // NG-032/NG-033: the unregister function PowerBrowserAPI.onQuitRequested
+  // returns, and whether this session's quit has already been held once for
+  // the frontend's flush. Detached in stop() beside _quitObserverOff.
+  _quitRequestOff: null,
+  _quitFlushStarted: false,
+
   // D-110: this project's first persistence -- a sidecar state file inside
   // _configDir, written on every successful spawn (first and respawn
   // alike) and removed on a clean stop. Derived once in start(), right
@@ -209,6 +215,16 @@ export const TheiaService = {
     // extension host's file access and terminal surface would outlive the
     // browser, still holding the token it was handed at spawn.
     this._quitObserverOff = PowerBrowserAPI.onQuitGranted(() => this.stop());
+
+    // NG-032/NG-033: hold the first quit request long enough for the frontend
+    // to write its session and layout while the backend still runs.
+    // Best-effort like the actor registration below, so it can never stall
+    // startup.
+    try {
+      this._quitRequestOff = PowerBrowserAPI.onQuitRequested(this._holdQuitForFlush.bind(this));
+    } catch (err) {
+      this._pushLog(`Quit flush not registered: ${err && err.message ? err.message : err}`);
+    }
 
     // 01-10: this was one of three unguarded throw sites in the start path --
     // a rejection here left `start()` altogether and, before the terminal
@@ -355,10 +371,40 @@ export const TheiaService = {
     // from inside its own notification is safe here, and the guard is what makes
     // the second of two stop() calls (the observer's, and a direct one) a no-op
     // rather than a throw.
+    if (this._quitRequestOff) {
+      this._quitRequestOff();
+      this._quitRequestOff = null;
+    }
     if (this._quitObserverOff) {
       this._quitObserverOff();
       this._quitObserverOff = null;
     }
+  },
+
+  /**
+   * NG-032/NG-033: the quit-request hook. The first request of a session with
+   * a live frontend is cancelled, the frontend is asked to flush (bounded by
+   * powerbrowser.shell.quitFlushTimeoutMs, default 3000), and the quit is then
+   * re-issued; that second request passes. With nothing to flush (no swap yet)
+   * or a flush already under way the request passes at once. If another
+   * observer cancels the re-issued quit (a page's leave prompt), the next quit
+   * request flushes again.
+   */
+  _holdQuitForFlush() {
+    if (this._quitFlushStarted || !this._swapped || !this._browserElement) {
+      return false;
+    }
+    this._quitFlushStarted = true;
+    const timeoutMs = PowerBrowserAPI.getIntPref("powerbrowser.shell.quitFlushTimeoutMs", 3000);
+    PowerBrowserAPI.flushShellState(this._browserElement, timeoutMs)
+      .then(acked => this._pushLog(acked ? "Frontend flushed before quit." : "Frontend did not acknowledge the quit flush in time; quitting anyway."))
+      .catch(err => this._pushLog(`Quit flush failed: ${err && err.message ? err.message : err}`))
+      .finally(() => {
+        if (!PowerBrowserAPI.quitApplication()) {
+          this._quitFlushStarted = false;
+        }
+      });
+    return true;
   },
 
   /** D-106: the buffered lines, newest last. Phase 5's diagnostics page reads this. */

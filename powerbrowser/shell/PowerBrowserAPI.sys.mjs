@@ -227,6 +227,17 @@ const SHELL_DOCUMENT_URL = "chrome://powerbrowser/content/powerbrowser.xhtml";
 const SHELL_CONTENT_BROWSER_ID = "powerbrowser-content";
 let groupSenderPort = null;
 
+// NG-033: the chrome half of the frontend's profile store (profile-storage.ts):
+// one JSON document per profile, written atomically by the one chrome-side
+// writer. The frontend sends the whole map; the cap keeps a runaway frontend
+// from filling the disk through this channel.
+const SHELL_MESSAGE_KINDS = new Set(["shellStateLoad", "shellStateSave", "shellFlushed"]);
+const SHELL_STATE_FILE_NAME = "powerbrowser-shell-state.json";
+const SHELL_STATE_MAX_CHARS = 16 * 1024 * 1024;
+// NG-032/NG-033: quit flushes chrome is waiting on, flushId -> resolve.
+const pendingShellFlushes = new Map();
+let shellFlushSeq = 0;
+
 function groupSenderIsTheia(actorRef) {
   let spec = "";
   let port = -1;
@@ -610,6 +621,25 @@ export const PowerBrowserAPI = Object.freeze({
     Services.prefs.getDefaultBranch("").setIntPref("toolkit.shutdown.fastShutdownStage", 0);
     Services.startup.quit(Ci.nsIAppStartup.eAttemptQuit);
     return true;
+  },
+
+  /**
+   * NG-032/NG-033: registers `callback` for every quit request -- upstream's
+   * quit paths (a stock window's Quit) and quitApplication above both announce
+   * one. A callback returning true cancels that request; an earlier observer's
+   * cancel is left as it is. Returns the unregister function.
+   */
+  onQuitRequested(callback) {
+    const observer = {
+      observe: subject => {
+        const cancelQuit = subject.QueryInterface(Ci.nsISupportsPRBool);
+        if (!cancelQuit.data && callback() === true) {
+          cancelQuit.data = true;
+        }
+      },
+    };
+    Services.obs.addObserver(observer, "quit-application-requested");
+    return () => Services.obs.removeObserver(observer, "quit-application-requested");
   },
 
   /**
@@ -1999,6 +2029,85 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
+   * NG-033: the parent-side dispatch for the frontend's profile store and the
+   * quit-flush acknowledgement, routed here from PowerBrowserGroupParent by
+   * kind. Same sender wall and reply shape as handleGroupMutation.
+   */
+  async handleShellMessage(data, actorRef) {
+    if (!groupSenderIsTheia(actorRef)) {
+      PowerBrowserAPI.log("error", "[handleShellMessage] rejecting non-Theia-origin sender");
+      return { ok: false, reason: "validation", message: "handleShellMessage: rejecting non-Theia-origin sender" };
+    }
+    const kind = data && data.kind;
+    const path = `${PowerBrowserAPI.getProfileDir()}/${SHELL_STATE_FILE_NAME}`;
+    try {
+      switch (kind) {
+        case "shellStateLoad": {
+          let state = "{}";
+          try {
+            state = await IOUtils.readUTF8(path);
+          } catch {
+            // Absent on a profile's first launch: the empty map.
+          }
+          return { ok: true, kind, state };
+        }
+        case "shellStateSave": {
+          const state = data.state;
+          if (typeof state !== "string" || state.length > SHELL_STATE_MAX_CHARS) {
+            return { ok: false, reason: "validation", message: "handleShellMessage: refusing a shell state that is not a string within the size cap" };
+          }
+          let parsed;
+          try {
+            parsed = JSON.parse(state);
+          } catch {
+            parsed = null;
+          }
+          if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+            return { ok: false, reason: "validation", message: "handleShellMessage: refusing a shell state that is not a JSON object" };
+          }
+          await IOUtils.writeUTF8(path, state, { tmpPath: `${path}.tmp` });
+          return { ok: true, kind };
+        }
+        case "shellFlushed": {
+          const resolve = pendingShellFlushes.get(data.flushId);
+          if (resolve) {
+            resolve();
+          }
+          return { ok: true, kind };
+        }
+        default:
+          return { ok: false, reason: "validation", message: `handleShellMessage: unknown kind ${String(kind)}` };
+      }
+    } catch (err) {
+      return { ok: false, reason: "store", message: `handleShellMessage: ${kind} failed: ${err && err.message ? err.message : err}` };
+    }
+  },
+
+  /**
+   * NG-032/NG-033: asks the Theia frame to write its session and layout now,
+   * over the push the web-tab state rides, and waits for its shellFlushed
+   * acknowledgement or `timeoutMs`. True on the ack; false on a timeout or
+   * when there is no frontend to ask. Never throws, so a quit is never held
+   * past the timeout.
+   */
+  async flushShellState(theiaBrowser, timeoutMs) {
+    const flushId = `flush-${Date.now().toString(36)}-${(shellFlushSeq += 1)}`;
+    const acked = new Promise(resolve => pendingShellFlushes.set(flushId, resolve));
+    try {
+      theiaBrowser.browsingContext.currentWindowGlobal
+        .getActor(GROUP_ACTOR_NAME)
+        .sendAsyncMessage("PowerBrowserWebTabState", { kind: "flushShellState", flushId });
+    } catch (err) {
+      pendingShellFlushes.delete(flushId);
+      PowerBrowserAPI.log("error", `[flushShellState] no frontend to flush: ${err && err.message ? err.message : err}`);
+      return false;
+    }
+    const done = await Promise.race([acked.then(() => true), PowerBrowserAPI.sleep(timeoutMs).then(() => false)]);
+    pendingShellFlushes.delete(flushId);
+    return done;
+  },
+
+  /**
    * GUI-08 (15-01): the parent-side dispatch for PowerBrowserGroupMutation
    * queries. Returns { ok: true, ...echo } on success, { ok: false, reason }
    * otherwise -- reason 'validation' for shape/origin/kind violations,
@@ -3149,6 +3258,11 @@ export class PowerBrowserGroupParent extends GroupActorBase {
   async receiveMessage(message) {
     if (!message || message.name !== "PowerBrowserGroupMutation") {
       return undefined;
+    }
+    // NG-033: the profile-store and quit-flush kinds have their own handler
+    // (handleShellMessage); every other kind is a group or web-tab mutation.
+    if (SHELL_MESSAGE_KINDS.has(message.data && message.data.kind)) {
+      return PowerBrowserAPI.handleShellMessage(message.data, this);
     }
     return PowerBrowserAPI.handleGroupMutation(message.data, this);
   }
