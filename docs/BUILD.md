@@ -136,17 +136,24 @@ there is no rebind seam. That is optional hardening, out of scope here.
 and the runtime installer. This project declares no `[[extensions]]`, so the
 `theiaPlugins` block stays absent and the build downloads nothing. A downstream that
 declares extensions gets them from `yarn build`'s `download:plugins` step, which is
-`scripts/download-plugins.mjs`:
-- npm and local-path tarballs are fetched or packed, checked against their manifest
-  `sha256`, and written to `plugins/<id>.tar.gz`;
-- every other kind goes through the stock `theia download:plugins --packed`;
-- every packed archive is then unpacked beside itself into `plugins/<id>/`. The
-  packed file is what the pin gate hashes; the folder is what Theia loads, because
-  its plugin deployer refuses packed files in a `THEIA_PLUGINS` or
-  `THEIA_DEFAULT_PLUGINS` folder (NG-073, check `ng073-declared-extension-loads`).
+`scripts/download-plugins.mjs`. Every `theiaPlugins` id must have an `[[extensions]]`
+entry that pins it, and each packed archive lands in the slot the pin gate hashes:
 
-A pin mismatch fails the build naming the entry, and nothing is placed by hand
-(NG-071, check `ng071-tarball-extensions-build`).
+- npm, local-path and direct-URL `.tar.gz` tarballs are fetched or packed and written to
+  `plugins/<id>.tar.gz`. A local-path folder is packed with none of its package scripts
+  run (`prepare` included);
+- every other kind goes through the stock `theia download:plugins --packed`;
+- a fetched archive already at its pin is reused, and any other slot is fetched again;
+- every slot is then hashed against its manifest `sha256` before anything is unpacked;
+- each declared archive is unpacked beside itself into `plugins/<id>/` (regular files and
+  folders only, no links), and anything undeclared is removed from `plugins/`. The packed
+  file is what the pin gate hashes; the folder is what Theia loads, because its plugin
+  deployer refuses packed files in a `THEIA_PLUGINS` or `THEIA_DEFAULT_PLUGINS` folder.
+
+A pin mismatch removes the entry and fails the build naming it, and nothing is placed
+by hand (NG-071, check `ng071-tarball-extensions-build`). The shipped sidecar is not yet
+told where `plugins/` is: NG-073 (check `ng073-declared-extension-loads`) stays open until
+the product passes that folder to it.
 
 **Environment variables the `start` script sets.** `applications/browser`'s
 `start` script exports two variables explicitly, rather than relying on
@@ -354,17 +361,24 @@ Staged host cells (the 08-05 capability record re-read, not re-proven):
   current): no reachable Windows host exists — qemu:///system is
   unmanageable without privilege and no guest is defined. Unblock
   (operator): provision pkg-win11 per the 08-05 capability record, then
-  run the download-plus-build procedure below with the placeholder
-  resolved to win32-x64 and the win32-x64 vsix pin above.
+  stage the entries with the placeholder resolved to win32-x64 and the
+  win32-x64 vsix pin above, run `yarn build` in the theia shell (its
+  `download:plugins` step installs every kind at its pin), then
+  `node scripts/verify-extension-pins.mjs`.
 - macOS sidecar build plus install over the darwin-arm64-resolved vsix
   set: staged-unexecuted. Provisioning error (08-05 record, still
   current): no macOS image exists anywhere reachable, no Apple hardware,
   and no lawful download path for a macOS image from Linux. Unblock
   (operator): provision pkg-macos per the 08-05 capability record, then
-  run the download-plus-build procedure below with the placeholder
-  resolved to darwin-arm64 and the darwin-arm64 vsix pin above.
+  stage the entries with the placeholder resolved to darwin-arm64 and the
+  darwin-arm64 vsix pin above, run `yarn build` in the theia shell (its
+  `download:plugins` step installs every kind at its pin), then
+  `node scripts/verify-extension-pins.mjs`.
 
-Verbatim drill transcript (nix-linux; run from the repo root):
+Verbatim drill transcript (nix-linux; run from the repo root). It records the
+2026-09-05 run and is not a procedure: since NG-071 its steps 4 to 6 are the one
+`yarn build` inside the theia shell, whose `download:plugins` step downloads, packs,
+pin-checks and unpacks every kind, followed by `node scripts/verify-extension-pins.mjs`.
 
 ```
 # 0. back up the two tracked files the drill stages:
