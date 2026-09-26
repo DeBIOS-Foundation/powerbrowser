@@ -11,7 +11,9 @@
 //     (dns.lookup and dns.promises.lookup). The session installs one extension through the
 //     DI-bound PluginServer (the backend's Open VSX download). Every recorded host must be
 //     covered by a row (exact, or a leading-dot suffix row, as layer 3 matches), and the
-//     registry host must have been seen (anti-vacuity).
+//     registry host must have been seen (anti-vacuity). The session runs with no AI key and
+//     sends no AI request, so a derived AI provider host in the log fails (R15: those hosts
+//     are contacted only after the user configures a key and sends a request).
 // Tier: full. Marker: live-clone.
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -54,6 +56,8 @@ const pl = dns.promises.lookup; dns.promises.lookup = function (h, ...a) { rec(h
 `);
         process.env.NODE_OPTIONS = `${process.env.NODE_OPTIONS ?? ''} --require ${hook}`.trim();
         process.env.XDG_CONFIG_HOME = join(dir, 'xdg');
+        delete process.env.ANTHROPIC_API_KEY;
+        delete process.env.OPENAI_API_KEY;
         await withFirefoxPage('', async ({ evaluate, waitFor }) => {
             await waitFor('window.theia && window.theia.container ? true : false', { timeoutMs: 90000 });
             await evaluate(`(() => {
@@ -69,6 +73,7 @@ const pl = dns.promises.lookup; dns.promises.lookup = function (h, ...a) { rec(h
         const seen = existsSync(log) ? [...new Set(readFileSync(log, 'utf8').split('\n').filter(Boolean))].filter(h => h !== 'localhost') : [];
         if (!seen.includes(new URL(vsx).host)) failures.push(`instrument: the sidecar never resolved ${new URL(vsx).host} during an extension install -- nothing was observed`);
         for (const h of seen) if (!covered(h)) failures.push(`the sidecar resolved ${h}, which has no endpoint-allowlist row`);
+        for (const h of seen) if (derived.get(h)?.startsWith('@theia/ai-')) failures.push(`the sidecar resolved ${h} (${derived.get(h)}) with no AI key configured and no AI request sent`);
     } finally {
         rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
     }
