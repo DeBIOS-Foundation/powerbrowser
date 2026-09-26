@@ -4435,6 +4435,13 @@ run_own_checks() {
     "crash-collector|node $REPO_ROOT/scripts/verify-crash-collector.mjs"
     "crash-collector-self-test|node $REPO_ROOT/scripts/verify-crash-collector.mjs --self-test"
 
+    # --- non-GUI wave E (NG-068, NG-070, NG-074): quick rows. No build, no browser,
+    # no display; ng068 binds a loopback port only and reads upstream/'s report.rs.
+    "ng068-crash-extra-part|node $REPO_ROOT/scripts/verify-ng-068-crash-extra-part.mjs"
+    "ng070-no-spaced-name|node $REPO_ROOT/scripts/verify-ng-070-no-spaced-name.mjs"
+    "ng070-no-spaced-name-self-test|node $REPO_ROOT/scripts/verify-ng-070-no-spaced-name.mjs --self-test"
+    "ng074-ci-green-on-main-self-test|node $REPO_ROOT/scripts/verify-ng-074-ci-main.mjs --self-test"
+
     # NEW (09-03): the WebExtensions declaration rows -- the manifest's
     # [[webextensions]] table reaches the policy engine as the tracked
     # ExtensionSettings key.
@@ -4679,6 +4686,21 @@ run_own_checks() {
       # literals stay labeled upstream stand-ins (see the script header);
       # fork wizard artwork plus the defines rebrand are 08-05 work.
       "installer-build-proof|node $REPO_ROOT/scripts/verify-installer-build-proof.mjs"
+
+      # --- non-GUI wave E (NG-051, NG-063..NG-067, NG-069, NG-071..NG-074): each needs a
+      # Gecko build, the packaged tree, the built sidecar, a browser, or the network.
+      # Commands and live-main/live-clone markers: docs/non-gui/checks-wave-e.tsv.
+      "ng051-backend-off|node $REPO_ROOT/scripts/verify-ng-051-backend-off.mjs"
+      "ng063-packaged-launch|node $REPO_ROOT/scripts/verify-ng-063-packaged-launch.mjs"
+      "ng064-update-url-from-manifest|node $REPO_ROOT/scripts/verify-ng-064-update-url.mjs"
+      "ng065-mar-signature-enforced|node $REPO_ROOT/scripts/verify-ng-065-mar-signature.mjs"
+      "ng066-nsis-branding-no-ping|node $REPO_ROOT/scripts/verify-ng-066-nsis-branding.mjs"
+      "ng067-frontend-errors-reach-telemetry|node $REPO_ROOT/scripts/verify-ng-067-frontend-errors.mjs"
+      "ng069-sidecar-egress|node $REPO_ROOT/scripts/verify-ng-069-sidecar-egress.mjs"
+      "ng071-tarball-extensions-build|node $REPO_ROOT/scripts/verify-ng-071-tarball-extensions.mjs"
+      "ng072-policies-packaged-webextension|node $REPO_ROOT/scripts/verify-ng-072-policies-webextension.mjs"
+      "ng073-declared-extension-loads|node $REPO_ROOT/scripts/verify-ng-073-declared-extension-loads.mjs"
+      "ng074-ci-green-on-main|node $REPO_ROOT/scripts/verify-ng-074-ci-main.mjs"
 
       # from verify-phase-04.sh
       "side02-token-negative|check_side02_token_negative"

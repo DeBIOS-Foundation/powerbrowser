@@ -1,0 +1,13 @@
+NG-051	scripts/verify-ng-051-backend-off.mjs::ng051-backend-off	node scripts/verify-ng-051-backend-off.mjs # live-clone
+NG-063	scripts/verify-ng-063-packaged-launch.mjs::ng063-packaged-launch	node scripts/verify-ng-063-packaged-launch.mjs # live-main
+NG-064	scripts/verify-ng-064-update-url.mjs::ng064-update-url-from-manifest	node scripts/verify-ng-064-update-url.mjs # live-main
+NG-065	scripts/verify-ng-065-mar-signature.mjs::ng065-mar-signature-enforced	node scripts/verify-ng-065-mar-signature.mjs # live-main
+NG-066	scripts/verify-ng-066-nsis-branding.mjs::ng066-nsis-branding-no-ping	node scripts/verify-ng-066-nsis-branding.mjs # live-main
+NG-067	scripts/verify-ng-067-frontend-errors.mjs::ng067-frontend-errors-reach-telemetry	node scripts/verify-ng-067-frontend-errors.mjs # live-clone
+NG-068	scripts/verify-ng-068-crash-extra-part.mjs::ng068-crash-extra-part	node scripts/verify-ng-068-crash-extra-part.mjs # quick
+NG-069	scripts/verify-ng-069-sidecar-egress.mjs::ng069-sidecar-egress	node scripts/verify-ng-069-sidecar-egress.mjs # live-clone
+NG-070	scripts/verify-ng-070-no-spaced-name.mjs::ng070-no-spaced-name	node scripts/verify-ng-070-no-spaced-name.mjs # quick
+NG-071	scripts/verify-ng-071-tarball-extensions.mjs::ng071-tarball-extensions-build	node scripts/verify-ng-071-tarball-extensions.mjs # live-clone
+NG-072	scripts/verify-ng-072-policies-webextension.mjs::ng072-policies-packaged-webextension	node scripts/verify-ng-072-policies-webextension.mjs # live-main
+NG-073	scripts/verify-ng-073-declared-extension-loads.mjs::ng073-declared-extension-loads	node scripts/verify-ng-073-declared-extension-loads.mjs # live-clone
+NG-074	scripts/verify-ng-074-ci-main.mjs::ng074-ci-green-on-main	node scripts/verify-ng-074-ci-main.mjs # live-main
