@@ -1,5 +1,5 @@
 {
-  "ledger_version": 85,
+  "ledger_version": 93,
   "frozen_at": null,
   "items": [
     {
@@ -967,106 +967,106 @@
     {
       "id": "NG-075",
       "text": "A Windows MSIX package is built. Evidence: docs/BUILD.md:966-967 staged-unexecuted; PKG-01 box checked (v1.1-REQUIREMENTS.md:31).",
-      "status": "open",
+      "status": "deferred-requested",
       "spec_ref": "docs/non-gui/GAPS.md:105",
       "test_ref": "",
       "code_ref": "",
       "evidence": "",
-      "owner": "",
-      "phase": "",
-      "deferred_at": "",
-      "reason": ""
+      "owner": "chris",
+      "phase": "999.2",
+      "deferred_at": "2026-09-25",
+      "reason": "D4(a) 2026-09-25: needs hosts, accounts or long builds outside this machine; backlog 999.2 distribution"
     },
     {
       "id": "NG-076",
       "text": "A macOS DMG with .icns is built. Evidence: same as NG-075.",
-      "status": "open",
+      "status": "deferred-requested",
       "spec_ref": "docs/non-gui/GAPS.md:106",
       "test_ref": "",
       "code_ref": "",
       "evidence": "",
-      "owner": "",
-      "phase": "",
-      "deferred_at": "",
-      "reason": ""
+      "owner": "chris",
+      "phase": "999.2",
+      "deferred_at": "2026-09-25",
+      "reason": "D4(a) 2026-09-25: needs hosts, accounts or long builds outside this machine; backlog 999.2 distribution"
     },
     {
       "id": "NG-077",
       "text": "The Windows and macOS install matrix and per-OS MAR update hop run. Evidence: docs/BUILD.md:997-998.",
-      "status": "open",
+      "status": "deferred-requested",
       "spec_ref": "docs/non-gui/GAPS.md:107",
       "test_ref": "",
       "code_ref": "",
       "evidence": "",
-      "owner": "",
-      "phase": "",
-      "deferred_at": "",
-      "reason": ""
+      "owner": "chris",
+      "phase": "999.2",
+      "deferred_at": "2026-09-25",
+      "reason": "D4(a) 2026-09-25: needs hosts, accounts or long builds outside this machine; backlog 999.2 distribution"
     },
     {
       "id": "NG-078",
       "text": "A release pipeline exists, per docs/RELEASING.md and SEED-001. Evidence: RELEASING.md:11-12; SEED-001 dormant; no release.yml.",
-      "status": "open",
+      "status": "deferred-requested",
       "spec_ref": "docs/non-gui/GAPS.md:108",
       "test_ref": "",
       "code_ref": "",
       "evidence": "",
-      "owner": "",
-      "phase": "",
-      "deferred_at": "",
-      "reason": ""
+      "owner": "chris",
+      "phase": "999.2",
+      "deferred_at": "2026-09-25",
+      "reason": "D4(a) 2026-09-25: needs hosts, accounts or long builds outside this machine; backlog 999.2 distribution"
     },
     {
       "id": "NG-079",
       "text": "updates.powerbrowser.org serves updates. Evidence: no DNS record.",
-      "status": "open",
+      "status": "deferred-requested",
       "spec_ref": "docs/non-gui/GAPS.md:109",
       "test_ref": "",
       "code_ref": "",
       "evidence": "",
-      "owner": "",
-      "phase": "",
-      "deferred_at": "",
-      "reason": ""
+      "owner": "chris",
+      "phase": "999.2",
+      "deferred_at": "2026-09-25",
+      "reason": "D4(a) 2026-09-25: needs hosts, accounts or long builds outside this machine; backlog 999.2 distribution"
     },
     {
       "id": "NG-080",
       "text": "A production crash-ingest host receives reports. Evidence: collector is loopback only (scripts/crash-collector.mjs:27, 89, 343).",
-      "status": "open",
+      "status": "deferred-requested",
       "spec_ref": "docs/non-gui/GAPS.md:110",
       "test_ref": "",
       "code_ref": "",
       "evidence": "",
-      "owner": "",
-      "phase": "",
-      "deferred_at": "",
-      "reason": ""
+      "owner": "chris",
+      "phase": "999.2",
+      "deferred_at": "2026-09-25",
+      "reason": "D4(a) 2026-09-25: needs hosts, accounts or long builds outside this machine; backlog 999.2 distribution"
     },
     {
       "id": "NG-081",
       "text": "Per-fixture Gecko builds (BLD-02) and fixture live builds (VER-03, DOC-02) run. Evidence: v1.0 07-VERIFICATION.md:18, 75 \"NOT RUN\".",
-      "status": "open",
+      "status": "deferred-requested",
       "spec_ref": "docs/non-gui/GAPS.md:111",
       "test_ref": "",
       "code_ref": "",
       "evidence": "",
-      "owner": "",
-      "phase": "",
-      "deferred_at": "",
-      "reason": ""
+      "owner": "chris",
+      "phase": "999.2",
+      "deferred_at": "2026-09-25",
+      "reason": "D4(a) 2026-09-25: needs hosts, accounts or long builds outside this machine; backlog 999.2 distribution"
     },
     {
       "id": "NG-082",
       "text": "Theia is re-pinned to 1.75.0 (UPD-02, UPD-04). Evidence: docs/BUILD.md:258-264 \"staged, not executed\".",
-      "status": "open",
+      "status": "deferred-requested",
       "spec_ref": "docs/non-gui/GAPS.md:112",
       "test_ref": "",
       "code_ref": "",
       "evidence": "",
-      "owner": "",
-      "phase": "",
-      "deferred_at": "",
-      "reason": ""
+      "owner": "chris",
+      "phase": "999.2",
+      "deferred_at": "2026-09-25",
+      "reason": "D4(a) 2026-09-25: needs hosts, accounts or long builds outside this machine; backlog 999.2 distribution"
     },
     {
       "id": "NG-083",
