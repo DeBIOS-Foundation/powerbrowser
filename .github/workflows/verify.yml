@@ -45,20 +45,24 @@ jobs:
           persist-credentials: false
           fetch-depth: 0 # gui07-strip-spike-verdict derives the 13-01 commits from history
 
-      # The three steps below run inside `nix develop .#theia`, so the shell
+      # The steps below run inside `nix develop .#theia`, so the shell
       # the flake pins -- not whatever the runner image happens to carry --
       # supplies node and inkscape. Pinned by SHA like every other action
       # here. No Gecko closure is fetched: this is the Node-side shell only.
       - name: Install Nix
         uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
 
-      # THE ORDER OF THE NEXT THREE STEPS IS LOAD-BEARING (plan 02-06).
+      # THE ORDER OF THE GENERATE / CHECK / FETCH / INSTALL-BUILD / VERIFY
+      # STEPS IS LOAD-BEARING (plan 02-06).
       # generated/ is git-ignored, so a fresh clone -- which every run of
       # this workflow is -- has no such directory. Running the freshness
       # check first would report every generated target as missing on a tree
       # with no defect at all, and a gate that is red for a non-defect is a
       # gate its readers learn to skip. Generate first, then --check asserts
       # idempotence (a second run produces the same bytes as the first).
+      # Fetch-upstream and install-and-build come next because the --quick
+      # rows the final step runs read the pinned upstream/ and the installed
+      # and built Theia workspace as inputs.
       - name: Generate the derived build surfaces
         run: nix develop .#theia --command node scripts/generate.mjs
 
@@ -76,7 +80,7 @@ jobs:
         run: nix develop .#theia --command bash -c 'bash scripts/fetch-upstream.sh && bash scripts/apply-patches.sh'
 
       - name: Install and build the Theia workspace
-        run: nix develop .#theia --command bash -c 'cd theia && yarn install --ignore-scripts --frozen-lockfile && (cd node_modules/drivelist && node-gyp rebuild) && yarn build'
+        run: nix develop .#theia --command bash -c 'cd theia && yarn install --ignore-scripts --frozen-lockfile && { if [ -d node_modules/drivelist ]; then (cd node_modules/drivelist && node-gyp rebuild); else echo "theia install - node_modules/drivelist is absent, the pinned workspace changed its native deps" >&2; exit 1; fi; } && yarn build'
 
       # The whole static table through the one driver -- the same gate
       # developers run locally before committing. Includes the Phase 6 rows
