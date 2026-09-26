@@ -6,10 +6,10 @@
 //   - a kept profile (withFirefoxPage's `profileDir`, f4818a0) and a private
 //     config home per check, so a check can quit and relaunch on the SAME
 //     profile (NG-032..NG-034) and setups.json / modes.json start empty;
-//   - the product's own quit: the core window's close button, or the close
-//     event the desktop's close sends to the window, driven in the chrome
-//     document through BiDi's "moz:scope": "chrome" tree (withFirefoxPage
-//     launches with --remote-allow-system-access);
+//   - the product's own quit: the core window's close button, or the core
+//     window closing without it (window.close(), as the desktop's close does),
+//     driven in the chrome document through BiDi's "moz:scope": "chrome" tree
+//     (withFirefoxPage launches with --remote-allow-system-access);
 //   - page-realm probes over window.theia.container, served pages, a port
 //     holder (the Review Focus port change), and constants derived from the
 //     tree so no check re-spells an id.
@@ -117,23 +117,26 @@ export async function probe(app, body, timeoutMs = 180000) {
     return JSON.parse(text);
 }
 
+/**
+ * Polls `fn` every 250 ms until it returns a truthy value within `timeoutMs`.
+ * A value that arrives after the deadline does not count. The timeout error
+ * carries the last error `fn` threw, so a harness red says what went wrong.
+ */
 export async function pollFor(fn, timeoutMs, what) {
     const end = Date.now() + timeoutMs;
-    for (;;) {
-        let value;
+    let lastError;
+    while (Date.now() <= end) {
         try {
-            value = await fn();
-        } catch {
-            value = undefined;
-        }
-        if (value) {
-            return value;
-        }
-        if (Date.now() > end) {
-            throw new Error(`timed out after ${timeoutMs} ms waiting for ${what}`);
+            const value = await fn();
+            if (value && Date.now() <= end) {
+                return value;
+            }
+        } catch (error) {
+            lastError = error;
         }
         await new Promise(resolve => setTimeout(resolve, 250));
     }
+    throw new Error(`timed out after ${timeoutMs} ms waiting for ${what}${lastError ? ` (last error: ${lastError.message})` : ''}`);
 }
 
 /**
@@ -152,10 +155,28 @@ export async function holdPort(port) {
     }, 10000, `port ${port} to be free to hold`);
 }
 
-/** Serves `pages` (`{ '/a': { title, body } }`) on 127.0.0.1; `url(path)` builds a served URL. */
+/**
+ * Serves `pages` (`{ '/a': { title, body } }`) on 127.0.0.1; `url(path)` builds
+ * a served URL. A POST to any path (a page's navigator.sendBeacon) is recorded
+ * in `received` as `{ path, body }`: how a page reports what it saw while it
+ * is going away, when no BiDi read can reach it any more.
+ */
 export async function servePages(pages) {
+    const received = [];
     const server = createHttpServer((request, response) => {
-        const page = pages[new URL(request.url, 'http://127.0.0.1').pathname];
+        const path = new URL(request.url, 'http://127.0.0.1').pathname;
+        if (request.method === 'POST') {
+            let body = '';
+            request.setEncoding('utf8');
+            request.on('data', chunk => { body += chunk; });
+            request.on('end', () => {
+                received.push({ path, body });
+                response.writeHead(204, { 'access-control-allow-origin': '*' });
+                response.end();
+            });
+            return;
+        }
+        const page = pages[path];
         if (!page) {
             response.writeHead(404, { 'content-type': 'text/plain' });
             response.end('not found');
@@ -166,7 +187,30 @@ export async function servePages(pages) {
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const origin = `http://127.0.0.1:${server.address().port}`;
-    return { origin, url: path => `${origin}${path}`, close: () => new Promise(resolve => server.close(() => resolve())) };
+    return { origin, url: path => `${origin}${path}`, received, close: () => new Promise(resolve => server.close(() => resolve())) };
+}
+
+/**
+ * The BiDi content context on `url` in a stock browser window: a chrome-scope
+ * window other than the shell document whose tabbrowser has a tab on `url`,
+ * and the only content context on `url`, so an in-shell web-tab overlay on
+ * the same page cannot stand in for it.
+ */
+export async function stockTabOn(app, url, timeoutMs = 20000) {
+    return pollFor(async () => {
+        const onUrl = (await app.contexts()).filter(entry => entry.url === url);
+        if (onUrl.length !== 1) {
+            return undefined;
+        }
+        for (const chromeWindow of (await app.contexts('chrome')).filter(entry => entry.url !== SHELL_DOCUMENT_URL)) {
+            const holds = await app.evaluateIn(chromeWindow.context,
+                `typeof gBrowser === 'object' && gBrowser.browsers.some(browser => browser.currentURI.spec === ${JSON.stringify(url)})`);
+            if (holds === true) {
+                return onUrl[0];
+            }
+        }
+        return undefined;
+    }, timeoutMs, `a stock browser window holding the only tab on ${url}`);
 }
 
 /** True while the profile's `lock` symlink exists (Gecko removes it when the browser exits). */
@@ -231,8 +275,12 @@ export async function withShell(profile, fn) {
             chrome,
             port: Number(await evaluate('location.port')),
             async quit({ how = 'button', timeoutMs = 30000 } = {}) {
-                const expression = how === 'close-event'
-                    ? `window.dispatchEvent(new Event('close', { cancelable: true })); true`
+                // 'window-close' closes the core window without its button, as
+                // the desktop's close does once nothing cancels it: a real
+                // close, where a synthetic 'close' Event would have no default
+                // action and close nothing.
+                const expression = how === 'window-close'
+                    ? `window.close(); true`
                     : `document.getElementById('powerbrowser-window-close').click(); true`;
                 // Not awaited: the chrome document may go away before the call returns.
                 evaluateIn(chrome, expression).catch(() => undefined);

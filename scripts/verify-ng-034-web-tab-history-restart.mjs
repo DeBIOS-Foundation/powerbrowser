@@ -75,16 +75,19 @@ await runCheck(LABEL, async ({ profile, fail, defer }) => {
                 return { count: tabs.length, onB: !!onB, canGoBack: onB ? onB.canGoBack : null };
             `);
             let wentBack = null;
+            let backButton = null;
             if (after.onB && after.canGoBack === true) {
-                await app.evaluate(`(() => {
+                backButton = await app.evaluate(`(() => {
                     const back = document.querySelector('.pb-chrome-bar-button[aria-label="Back"]');
                     if (back) back.click();
                     return !!back;
                 })()`);
-                wentBack = await pollFor(async () => (await app.contexts()).some(entry => entry.url === A), 15000, 'the tab going back to A')
-                    .catch(() => false);
+                if (backButton === true) {
+                    wentBack = await pollFor(async () => (await app.contexts()).some(entry => entry.url === A), 15000, 'the tab going back to A')
+                        .catch(() => false);
+                }
             }
-            return { port: app.port, after, wentBack };
+            return { port: app.port, after, backButton, wentBack };
         });
     } finally {
         await release();
@@ -93,7 +96,7 @@ await runCheck(LABEL, async ({ profile, fail, defer }) => {
         fail(`harness: the relaunch reused port ${first.port}; the check could not force the port change`);
         return;
     }
-    const { after, wentBack } = second;
+    const { after, backButton, wentBack } = second;
     if (after.count !== 1) {
         fail(`after the restart ${after.count} web tab(s) show A or B; the session quit with exactly one`);
     }
@@ -103,6 +106,10 @@ await runCheck(LABEL, async ({ profile, fail, defer }) => {
     }
     if (after.canGoBack !== true) {
         fail('after the restart the web tab on B cannot go Back; its back/forward history did not survive');
+        return;
+    }
+    if (backButton !== true) {
+        fail('harness: the chrome bar shows no Back button to press, so going Back could not be driven');
         return;
     }
     if (!wentBack) {

@@ -6,12 +6,14 @@
  * the backend stops only on quit-application-granted (TheiaService.sys.mjs:211).
  *
  * Two launches on one profile, each with a stock browser window opened
- * through the Open Browser Window command: the first closes the core window
- * with its close button, the second with the window's close event (what the
- * desktop's own close sends). Each must end the browser and the backend
- * process whose pid the supervisor reported.
+ * through the Open Browser Window command (confirmed in the chrome-scope
+ * tree, not an in-shell overlay on the same page): the first closes the core
+ * window with its close button, the second closes it without the button
+ * (window.close() in the chrome document, as the desktop's close does). Each
+ * must end the browser and the backend process whose pid the supervisor
+ * reported.
  */
-import { pollFor, probe, runCheck, servePages, sourceConst, withShell } from './lib/pb-relaunch.mjs';
+import { pollFor, probe, runCheck, servePages, sourceConst, stockTabOn, withShell } from './lib/pb-relaunch.mjs';
 
 const LABEL = 'ng-037-core-close-quits';
 const OPEN_BROWSER_WINDOW = sourceConst('theia/extensions/tab-uris/src/browser/browser-window-command.ts', 'OPEN_BROWSER_WINDOW_COMMAND_ID');
@@ -30,11 +32,10 @@ await runCheck(LABEL, async ({ profile, fail, defer }) => {
     const pages = await servePages({ '/stock': { title: 'NG037 stock' } });
     defer(pages.close);
     const STOCK = pages.url('/stock');
-    for (const how of ['button', 'close-event']) {
+    for (const how of ['button', 'window-close']) {
         const outcome = await withShell(profile, async app => {
             await probe(app, `await get('CommandRegistry').executeCommand(${JSON.stringify(OPEN_BROWSER_WINDOW)}, ${JSON.stringify(STOCK)}); return {};`);
-            const stock = await pollFor(async () => (await app.contexts()).find(entry => entry.url === STOCK), 20000, 'a stock browser window')
-                .catch(() => undefined);
+            const stock = await stockTabOn(app, STOCK).catch(() => undefined);
             if (!stock) {
                 return { error: 'no stock browser window opened, so the precondition does not hold' };
             }

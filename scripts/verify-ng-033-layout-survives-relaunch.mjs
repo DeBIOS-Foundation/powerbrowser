@@ -13,16 +13,24 @@
  * brings back tabs and mode, not these).
  *
  * Launch 3 (Review Focus): the page swallows chrome's quit-flush push, as a
- * hung frontend would, and the app must still exit within 20 s.
+ * hung frontend would, and the app must still exit within 20 s. The page
+ * beacons each push it swallows to this process, and the check requires a
+ * flushShellState among them: a flush that never reached the page on the
+ * push channel, or was never sent, proves nothing about the bound. The page
+ * also drops any shellFlushed acknowledgement where it is dispatched (the
+ * actor listens in the capture phase above the window, so no page listener
+ * can stop it), so a flush handler that runs before the check's listener
+ * still cannot answer.
  */
-import { holdPort, probe, runCheck, sourceConst, withShell } from './lib/pb-relaunch.mjs';
+import { holdPort, pollFor, probe, runCheck, servePages, sourceConst, withShell } from './lib/pb-relaunch.mjs';
 
 const LABEL = 'ng-033-layout-survives-relaunch';
 const ACTIVATE = sourceConst('theia/extensions/modes/src/browser/modes-commands.ts', 'MODES_ACTIVATE_COMMAND_ID');
 const STATE_EVENT = sourceConst('theia/extensions/tab-uris/src/browser/web-tab.ts', 'WEB_TAB_STATE_EVENT');
+const REQUEST_EVENT = sourceConst('theia/extensions/modes/src/browser/group-actor-client.ts', 'GROUP_REQUEST_EVENT');
 const LEFT_WIDTH = 333;
 
-await runCheck(LABEL, async ({ profile, fail }) => {
+await runCheck(LABEL, async ({ profile, fail, defer }) => {
     const first = await withShell(profile, async app => {
         const before = await probe(app, `
             const commands = get('CommandRegistry');
@@ -82,13 +90,36 @@ await runCheck(LABEL, async ({ profile, fail }) => {
         fail(`after the relaunch the left panel is ${after.leftSize} px, not ${LEFT_WIDTH}; the shell layout did not survive`);
     }
 
+    const collector = await servePages({});
+    defer(collector.close);
+    const SWALLOWED = collector.url('/swallowed');
     const third = await withShell(profile, async app => {
-        await app.evaluate(`window.addEventListener(${JSON.stringify(STATE_EVENT)}, event => {
-            const kind = event.detail && event.detail.kind;
-            if (kind !== 'state' && kind !== 'focusAddress') event.stopImmediatePropagation();
-        }, true); true`);
+        await app.evaluate(`(() => {
+            window.addEventListener(${JSON.stringify(STATE_EVENT)}, event => {
+                const kind = event.detail && event.detail.kind;
+                if (kind !== 'state' && kind !== 'focusAddress') {
+                    event.stopImmediatePropagation();
+                    navigator.sendBeacon(${JSON.stringify(SWALLOWED)}, String(kind));
+                }
+            }, true);
+            const dispatch = EventTarget.prototype.dispatchEvent;
+            EventTarget.prototype.dispatchEvent = function (event) {
+                const msg = event && event.type === ${JSON.stringify(REQUEST_EVENT)} && event.detail && event.detail.msg;
+                if (msg && msg.kind === 'shellFlushed') {
+                    navigator.sendBeacon(${JSON.stringify(SWALLOWED)}, 'shellFlushed');
+                    return true;
+                }
+                return dispatch.call(this, event);
+            };
+            return true;
+        })()`);
         return app.quit({ timeoutMs: 20000 });
     });
+    const flushSwallowed = await pollFor(() => collector.received.some(entry => entry.body === 'flushShellState'), 3000, 'the swallowed flush push')
+        .catch(() => false);
+    if (!flushSwallowed) {
+        fail(`the quit sent the page no flushShellState push on ${STATE_EVENT} (swallowed: ${JSON.stringify(collector.received.map(entry => entry.body))}), so the flush bound was not exercised`);
+    }
     if (third === 'timeout') {
         fail('with a frontend that never answers the quit flush, the app was still running 20 s after the core window closed; the flush must be bounded');
     }

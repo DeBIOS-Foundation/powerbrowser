@@ -13,7 +13,7 @@
  * reach the store. Positive control first: the shell's own frame gets ok:true
  * for probeChannel, so a refusal below is the wall and not a dead channel.
  */
-import { pollFor, probe, runCheck, servePages, sourceConst, withShell } from './lib/pb-relaunch.mjs';
+import { pollFor, probe, runCheck, servePages, sourceConst, stockTabOn, withShell } from './lib/pb-relaunch.mjs';
 
 const LABEL = 'ng-038-actor-refuses-hostile-senders';
 const OPEN_BROWSER_WINDOW = sourceConst('theia/extensions/tab-uris/src/browser/browser-window-command.ts', 'OPEN_BROWSER_WINDOW_COMMAND_ID');
@@ -50,7 +50,7 @@ await runCheck(LABEL, async ({ profile, fail, defer }) => {
             return { error: `the shell's own frame got no ok:true reply to probeChannel (${JSON.stringify(own)}), so a refusal below would prove nothing` };
         }
         await probe(app, `await get('CommandRegistry').executeCommand(${JSON.stringify(OPEN_BROWSER_WINDOW)}, ${JSON.stringify(HOSTILE)}); return {};`);
-        const stock = await pollFor(async () => (await app.contexts()).find(entry => entry.url === HOSTILE), 20000, 'the hostile page in a stock tab');
+        const stock = await stockTabOn(app, HOSTILE);
         const otherPort = JSON.parse(await app.evaluateIn(stock.context, attempt('ng038a')) ?? '[]');
         const sidecarPage = `http://127.0.0.1:${app.port}/ng038-probe`;
         await app.evaluateIn(stock.context, `location.href = ${JSON.stringify(sidecarPage)}; true`).catch(() => undefined);
@@ -72,7 +72,11 @@ await runCheck(LABEL, async ({ profile, fail, defer }) => {
     if (accepted(result.samePort).length) {
         fail(`a page on the sidecar's own port in a stock tab got ok:true for ${accepted(result.samePort).map(entry => entry.requestId).join(', ')}`);
     }
-    for (const id of ['ng038a', 'ng038b'].filter(id => (result.groups.ids || []).includes(id))) {
+    if (!Array.isArray(result.groups.ids)) {
+        fail(`harness: the group store could not be read (${JSON.stringify(result.groups)}), so whether a hostile group reached it is unknown`);
+        return;
+    }
+    for (const id of ['ng038a', 'ng038b'].filter(id => result.groups.ids.includes(id))) {
         fail(`the store holds group '${id}', written by a hostile sender`);
     }
 });
