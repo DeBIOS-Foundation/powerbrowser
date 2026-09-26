@@ -15,16 +15,15 @@
  * an open failure resolves to an empty answer with a lazy re-open attempt
  * on the next query instead of crashing the backend.
  *
- * Browser-tab lookups apply the beside-registry key rule from
- * `../browser/browser-tab-uri` identically to the chrome-side
- * `browserTabKey`, never a re-spelled copy of it.
+ * Rows are keyed by tab identity (docs/TAB-STORE.md); the page address is
+ * the `url` column. Panorama and suggestion reads serve open rows only
+ * (`closed_at IS NULL`).
  */
 
 import { injectable } from '@theia/core/shared/inversify';
 import { join } from 'path';
 import Database from 'better-sqlite3';
 import { POWERBROWSER_ENV } from '@powerbrowser/token-gate/lib/node/powerbrowser-env';
-import { browserTabKeyOf } from '../browser/browser-tab-uri';
 
 /** One projected tab row, mirroring the chrome-side store projection. */
 export interface TabQueryRow {
@@ -178,11 +177,19 @@ export class TabQueryService {
     }
 
     /**
-     * Browser-tab point read: applies the beside-registry key rule to the
-     * URL spec, then serves the same point read the writer keyed.
+     * The open row showing `urlSpec`, most recently active first. The page
+     * address is a column to match, never a key to rebuild (NG-001).
      */
     getBrowserTabByUrl(urlSpec: string): TabQueryRow | undefined {
-        return this.getByUri(browserTabKeyOf(urlSpec));
+        const db = this.openIfNeeded();
+        if (!db) {
+            return undefined;
+        }
+        try {
+            return db.prepare('SELECT uri, url, title, last_active FROM tabs WHERE url = ? AND closed_at IS NULL ORDER BY last_active DESC LIMIT 1').get(urlSpec) as TabQueryRow | undefined;
+        } catch {
+            return undefined;
+        }
     }
 
     /**
@@ -214,7 +221,8 @@ export class TabQueryService {
      * interpolated. Resolves [] when the store is not yet readable or the
      * query fails -- the same never-throw convention as the point reads and
      * the recency listing. Follows the UI side of the ordering contract
-     * (IN-02): recency serves UI reads.
+     * (IN-02): recency serves UI reads. Open http(s) rows only (NG-001): a
+     * closed tab is history, and an editor's or a New Tab's row has no page.
      */
     searchByPrefix(prefix: string, limit: number): TabQueryRow[] {
         const db = this.openIfNeeded();
@@ -224,7 +232,7 @@ export class TabQueryService {
         try {
             const pattern = `%${escapeLikePattern(prefix)}%`;
             return db.prepare(
-                'SELECT uri, url, title, last_active FROM tabs WHERE url LIKE ? ESCAPE \'\\\' OR title LIKE ? ESCAPE \'\\\' ORDER BY last_active DESC LIMIT ?'
+                'SELECT uri, url, title, last_active FROM tabs WHERE (url LIKE ? ESCAPE \'\\\' OR title LIKE ? ESCAPE \'\\\') AND closed_at IS NULL AND url LIKE \'http%\' ORDER BY last_active DESC LIMIT ?'
             ).all(pattern, pattern, limit) as TabQueryRow[];
         } catch {
             return [];
@@ -262,7 +270,7 @@ export class TabQueryService {
         }
         try {
             return db.prepare(
-                'SELECT uri, url, title, last_active, group_id, thumbnail, x, y, ord FROM tabs WHERE group_id = ? ORDER BY ord IS NULL, ord, uri'
+                'SELECT uri, url, title, last_active, group_id, thumbnail, x, y, ord FROM tabs WHERE group_id = ? AND closed_at IS NULL ORDER BY ord IS NULL, ord, uri'
             ).all(groupId) as GroupTabRow[];
         } catch {
             return [];
@@ -298,7 +306,7 @@ export class TabQueryService {
         }
         try {
             return db.prepare(
-                'SELECT uri, url, title, last_active, group_id, thumbnail, x, y FROM tabs WHERE group_id IS NULL ORDER BY last_active DESC'
+                'SELECT uri, url, title, last_active, group_id, thumbnail, x, y FROM tabs WHERE group_id IS NULL AND closed_at IS NULL ORDER BY last_active DESC'
             ).all() as GroupTabRow[];
         } catch {
             return [];

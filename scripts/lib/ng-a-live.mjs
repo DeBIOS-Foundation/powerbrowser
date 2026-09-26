@@ -67,10 +67,40 @@ export function assertCleanTree() {
 const profiles = [];
 const privatePaths = new Set();
 let signalsHooked = false;
+/** withShell launches whose browser may still be running. */
+let launches = 0;
+
+/** rmSync with retries: a directory the browser was still writing into can throw ENOTEMPTY once. */
+const removeTree = path => rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 
 function removePrivateData() {
-    privatePaths.forEach(path => rmSync(path, { recursive: true, force: true }));
+    privatePaths.forEach(removeTree);
     privatePaths.clear();
+}
+
+/**
+ * SIGINT/SIGTERM once private data is on disk. With no browser running the
+ * profiles go now and the process exits. During a launch the browser may
+ * still be writing into its profile, so deleting it here races the browser:
+ * firefox-bidi's own SIGINT handler kills the browser and unwinds the launch
+ * (its CR-03 note), and runCheck's finally then removes the profiles after
+ * the browser is dead. SIGTERM takes the same route. Never throws: a crash
+ * here would orphan the browser and leave part of the copy behind.
+ */
+function onSignal(signal, code) {
+    process.exitCode = code;
+    if (launches > 0) {
+        if (signal === 'SIGTERM') {
+            process.emit('SIGINT', 'SIGINT');
+        }
+        return;
+    }
+    try {
+        removeProfiles();
+    } catch (error) {
+        console.error(`ng-a-live: removing the profiles on ${signal} failed: ${error && error.message ? error.message : error}`);
+    }
+    process.exit(code);
 }
 
 /**
@@ -81,16 +111,8 @@ function removePrivateData() {
 export function holdsPrivateData(path) {
     if (!signalsHooked) {
         signalsHooked = true;
-        for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
-            process.once(signal, () => {
-                removeProfiles();
-                // During a launch, firefox-bidi's own SIGINT handler unwinds
-                // the browser (its CR-03 note); exiting here would orphan it.
-                if (process.listenerCount(signal) === 0) {
-                    process.exit(code);
-                }
-            });
-        }
+        process.on('SIGINT', () => onSignal('SIGINT', 130));
+        process.on('SIGTERM', () => onSignal('SIGTERM', 143));
     }
     privatePaths.add(path);
     return path;
@@ -125,7 +147,7 @@ export function removeProfiles() {
         console.log(`kept profiles: ${kept.join(' ')}`);
         return;
     }
-    kept.forEach(dir => rmSync(dir, { recursive: true, force: true }));
+    kept.forEach(removeTree);
 }
 
 /** Pages the overlays load: every path links to /b; /hang accepts and never answers. */
@@ -259,6 +281,15 @@ window.__ngA = window.__ngA || (function () {
  * `stdoutPath` tees the browser's stdout (its dump() channel) to that file.
  */
 export async function withShell(profileDir, fn, { url = '', stdoutPath } = {}) {
+    launches += 1;
+    try {
+        return await launchShell(profileDir, fn, { url, stdoutPath });
+    } finally {
+        launches -= 1;
+    }
+}
+
+async function launchShell(profileDir, fn, { url, stdoutPath }) {
     return withFirefoxPage(url, async page => {
         await page.waitFor('window.theia && window.theia.container ? true : false', { timeoutMs: 90000 });
         await page.evaluate(`${PAGE_HELPERS}; true`);

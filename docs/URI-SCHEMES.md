@@ -248,11 +248,13 @@ handler.
 The per-session tab counter is a construction option and never part of the
 address (general rule 4 above), so two tabs on one URL are two widgets with
 one address — the same address model as `terminal:` names, in reverse: here
-the user chose the URL and did not choose the counter. The chrome-side store
-keys its rows by that URL, so two tabs on one URL share one row and closing
-either removes it. That is a recorded ceiling, not a defect to file: telling
-the two apart in the store needs a per-tab key in the schema, which is out of
-scope for this milestone.
+the user chose the URL and did not choose the counter.
+
+The chrome-side store does not key its rows by the address. Each web tab has
+a row of its own, keyed `web:<id>` by the tab's identity, with the page
+address as a column (docs/TAB-STORE.md, "Row keys"): two tabs on one URL are
+two rows, a navigation updates the row in place, and closing a tab marks its
+row closed instead of deleting it.
 
 A tab with no page (a fresh "+") carries the empty-page address internally
 and shows an **empty** pill with the address placeholder; the internal URL is

@@ -46,7 +46,7 @@ import { registerOrganisingSlot } from './mode-descriptors';
 import { MODE_ATTRIBUTE } from './mode-attribute';
 import { ModeService } from './mode-service';
 import { GroupActorClient } from './group-actor-client';
-import { GroupModel, GROUP_BOX_MIN_H, GROUP_BOX_MIN_W, GROUP_TITLE_MAX_CHARS, LiveTab, PanoramaGroup, PanoramaTab, SESSION_TAB_PREFIX } from './group-model';
+import { GroupModel, GROUP_BOX_MIN_H, GROUP_BOX_MIN_W, GROUP_TITLE_MAX_CHARS, LiveTab, PanoramaGroup, PanoramaTab } from './group-model';
 import { buildTreeSection } from './organising-tree';
 import { fitTiles, TILE_ASPECT, TILE_GAP } from './organising-tiling';
 import { pushAway } from './organising-geometry';
@@ -256,7 +256,7 @@ export class OrganisingWidget extends Widget {
             if (box.width < 8 || box.height < 8) {
                 return;
             }
-            const uri = `${SESSION_TAB_PREFIX}${widget.id}`;
+            const uri = this.model.keyOf(widget);
             void this.actor.mutate({
                 kind: 'captureShellRegion',
                 rect: {
@@ -325,9 +325,9 @@ export class OrganisingWidget extends Widget {
      * Welcome page, which is a Theia widget rather than a web tab. A tab is a
      * tab -- if it has a tab in the strip it has a card on the canvas.
      *
-     * Only a page with its own http(s) URL can be keyed by that URL, which is
-     * the key the store uses. Everything else is keyed by the shell's widget
-     * id and its group is remembered for the session (`SESSION_TAB_PREFIX`).
+     * Every tab is keyed by `tabKeyOf` (GroupModel.keyOf), the store's own row
+     * key, so a New Tab, an editor or a terminal keeps its group and place
+     * across a restart like a page does; there are no session-only keys.
      *
      * Organising itself is excluded: it lives in the main area because that is
      * where a full-window surface goes, but it is a mode, not something the
@@ -347,11 +347,7 @@ export class OrganisingWidget extends Widget {
                 return [];
             }
             const page = widget instanceof WebTabWidget && widget.hasPage ? widget.url : '';
-            return [{
-                uri: page || `${SESSION_TAB_PREFIX}${widget.id}`,
-                url: page,
-                title: widget.title.label || page,
-            }];
+            return [{ uri: this.model.keyOf(widget), url: page, title: widget.title.label || page }];
         });
     }
 
@@ -1952,13 +1948,7 @@ export class OrganisingWidget extends Widget {
 
     /** The open widget a card stands for, matched on the key `liveTabs` built. */
     protected widgetForTab(tab: PanoramaTab): Widget | undefined {
-        return [...this.shell.mainPanel.widgets()].find(widget => {
-            if (widget === this) {
-                return false;
-            }
-            const page = widget instanceof WebTabWidget && widget.hasPage ? widget.url : '';
-            return (page || `${SESSION_TAB_PREFIX}${widget.id}`) === tab.uri;
-        });
+        return [...this.shell.mainPanel.widgets()].find(widget => widget !== this && this.model.keyOf(widget) === tab.uri);
     }
 
     protected async activateGroup(id: string): Promise<void> {

@@ -49,13 +49,14 @@
  * fails them); a web tab described under a FOREIGN session's id is refused by
  * the same `WidgetFactory` seam the stock layout restorer calls, and a second
  * "+" mints an id distinct from the first (G-14.1.1-5); a store row
- * for the served URL is readable after navigation and gone after close; four
- * thumbnail assertions in the order the attribution runs -- the row for the
- * hanging page carries NO snapshot before the hide, then carries one, that
- * snapshot is a PNG data URL, and its length is inside the capture cap derived
- * from the boundary file (G-14.1.1-6); that evidence is ATTRIBUTABLE because
- * the hanging page never reaches network STOP, so the hide is the only capture
- * opportunity its row ever had. The residual limitation, stated rather than
+ * for the served URL is readable after navigation and gone after close; three
+ * thumbnail assertions in the order the attribution runs -- after the hide the
+ * tab's row (NG-001: one row per tab, `web:<tabId>`) carries a snapshot that
+ * replaced the one it held before, that snapshot is a PNG data URL, and its
+ * length is inside the capture cap derived from the boundary file
+ * (G-14.1.1-6); that evidence is ATTRIBUTABLE because the hanging page never
+ * reaches network STOP and the baseline is read after the settle window, so
+ * the hide is the only capture opportunity on that page. The residual limitation, stated rather than
  * implied: no plant in this file can edit chrome-side source -- every plant
  * runs in the page realm -- so `hide-not-published` removes the FRONTEND half
  * of that one causal chain, and deleting the chrome-side last-view arm at
@@ -847,18 +848,20 @@ function phaseExpression(cfg, phase, arg) {
         // widget's own navigate() (the same webTabNavigate the pill commit
         // issues), the row written by chrome's onLocationChange is waited for,
         // the derived settle window is outwaited twice over, the baseline is
-        // read and must be ABSENT -- and only then is the overlay hidden. The
-        // snapshot the row ends up carrying is therefore attributable to
-        // webTabGeometry's last-view arm at :2358-2365 and to nothing else. The
-        // bytes themselves NEVER enter the report: absence, presence, prefix and
-        // length only.
+        // read -- and only then is the overlay hidden. NG-001: the row is the
+        // TAB's (web:<tabId>, WebTabWidget.rowKey), so the baseline may be the
+        // snapshot an earlier page of this tab left; nothing can change it
+        // once the settle window is outwaited, so a snapshot that REPLACES it
+        // after the hide is attributable to webTabGeometry's last-view arm and
+        // to nothing else. The bytes themselves NEVER enter the report:
+        // presence, replacement, prefix and length only.
         thumbnail: `
         report.steps.push('navigate the overlay to the hanging page ' + cfg.servedC);
         report.thumbnail = { hasThumbnail: false, prefixOk: false, length: 0, rowPresent: false, baseline: { absent: undefined, length: 0 } };
         await P.widget.navigate(cfg.servedC);
-        // The row is written by the overlay's own onLocationChange, so its
-        // presence is the proof that chrome's entry.uri is now servedC -- which
-        // is what makes servedC the URI any capture would be keyed on.
+        // The row is updated by the overlay's own onLocationChange, so a row on
+        // servedC is the proof that chrome took servedC as the tab's page --
+        // the page any capture keyed on the tab's row would photograph.
         report.thumbnail.rowPresent = await P.until(async () => {
             const rows = await P.search(cfg.servedOrigin, 8);
             return rows.some(row => row.url === cfg.servedC);
@@ -872,10 +875,10 @@ function phaseExpression(cfg, phase, arg) {
             fail('thumbnail: no store row for the hanging page ' + cfg.servedC + ' appeared after the overlay was navigated there, so chrome never took it as the overlay current URI and no capture could be keyed on it (broken instrument, never a clean pass)');
         } else {
         // Longer than twice the derived settle window: whatever any other arm
-        // might have scheduled for this URI has certainly fired by now, so the
-        // baseline below is a real absence rather than a race.
+        // might have scheduled for this tab has certainly fired by now, so the
+        // baseline below is settled rather than a race.
         await new Promise(resolve => setTimeout(resolve, cfg.thumbnailSettleMs * 2 + 500));
-        const baseline = await P.thumbnailOf(cfg.servedC);
+        const baseline = await P.thumbnailOf(P.widget.rowKey);
         report.thumbnail.baseline = {
             absent: !(typeof baseline === 'string' && baseline.length > 0),
             length: typeof baseline === 'string' ? baseline.length : 0,
@@ -884,13 +887,16 @@ function phaseExpression(cfg, phase, arg) {
         report.steps.push('hide the overlay, then read its last-view snapshot');
         await P.hideOverlay();
         let snapshot;
+        const fresh = () => typeof snapshot === 'string' && snapshot.length > 0 && snapshot !== baseline;
         await P.until(async () => {
-            snapshot = await P.thumbnailOf(cfg.servedC);
-            return typeof snapshot === 'string' && snapshot.length > 0;
+            snapshot = await P.thumbnailOf(P.widget.rowKey);
+            return fresh();
         }, 8000);
-        report.thumbnail.hasThumbnail = typeof snapshot === 'string' && snapshot.length > 0;
-        report.thumbnail.prefixOk = typeof snapshot === 'string' && snapshot.startsWith('data:image/png;base64,');
-        report.thumbnail.length = typeof snapshot === 'string' ? snapshot.length : 0;
+        // Only a snapshot that replaced the baseline is the hide's evidence.
+        const taken = fresh() ? snapshot : undefined;
+        report.thumbnail.hasThumbnail = typeof taken === 'string';
+        report.thumbnail.prefixOk = typeof taken === 'string' && taken.startsWith('data:image/png;base64,');
+        report.thumbnail.length = typeof taken === 'string' ? taken.length : 0;
         // Put the overlay back where the run found it, through the widget's own
         // publisher, so the phases after this one see the product's state and
         // not this phase's leftovers.
@@ -1288,8 +1294,8 @@ async function drive(derived, plant) {
  * contract, they are caught by their own checks in `selfTest`, and no plant may
  * be scored on them.
  *
- * The same rule covers the five in-family guards that begin with a scoring
- * prefix (`lost-view:`, `thumbnail:` twice, `walk:`, `align:`) and end with
+ * The same rule covers the four in-family guards that begin with a scoring
+ * prefix (`lost-view:`, `thumbnail:`, `walk:`, `align:`) and end with
  * BROKEN_INSTRUMENT_MARKER: they say the instrument could not assert, not that
  * the contract failed. Since 14.1.1-14 this is ENFORCED by the scorer rather
  * than only asserted here -- a message carrying the marker scores nothing, and
@@ -1455,16 +1461,13 @@ function assertReport(derived, report) {
     }
     // G-14.1.1-6. The card's `tab.thumbnail` branch has always rendered; what
     // it never had since 14.1 was a row to render, because the capture path
-    // could only find a stock tab. The four assertions below are ordered as the
-    // attribution runs: absent before the hide, present after it, a PNG, inside
-    // the cap.
+    // could only find a stock tab. The three assertions below are ordered as the
+    // attribution runs: a snapshot replacing the settled baseline after the
+    // hide (NG-001: the row is the tab's, so an earlier page's snapshot may be
+    // the baseline), a PNG, inside the cap.
     const thumb = report.thumbnail ?? {};
-    const baseline = thumb.baseline ?? {};
-    if (baseline.absent !== true) {
-        failures.push(`thumbnail: the store row for ${report.servedC} already carried a snapshot (${baseline.length} chars) BEFORE the overlay was hidden -- that page's response is never ended, so it never reaches network STOP and no other capture site should have been able to fill its row; this phase can therefore no longer attribute the snapshot to the last-view hide (broken instrument, never a clean pass)`);
-    }
     if (thumb.hasThumbnail !== true) {
-        failures.push(`thumbnail: the store row for ${report.servedC} carries no last-view snapshot after the overlay was hidden -- an in-shell web tab captured nothing on its last view, so its Panorama card falls to the text fallback`);
+        failures.push(`thumbnail: the tab's store row (on ${report.servedC}) carries no new last-view snapshot after the overlay was hidden -- an in-shell web tab captured nothing on its last view, so its Panorama card keeps an older page's picture or the text fallback`);
     }
     if (thumb.prefixOk !== true) {
         failures.push(`thumbnail: the stored snapshot for ${report.servedC} is not a PNG data URL (length ${thumb.length}) -- GUI-08 contracts a PNG last-view snapshot`);
