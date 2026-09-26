@@ -715,6 +715,14 @@ export const PowerBrowserAPI = Object.freeze({
   async restoreWebTabHistory(browser, tabData) {
     const { SessionHistory } = ChromeUtils.importESModule("resource://gre/modules/sessionstore/SessionHistory.sys.mjs");
     const browsingContext = browser.browsingContext;
+    // A fresh overlay commits its initial about:blank into session history a
+    // few ms after it is created. Restored before that commit, the about:blank
+    // is appended after the restored entries and becomes the current entry,
+    // so the tab reloads about:blank instead of its page. Wait for the commit
+    // (bounded); restoreFromParent then purges it.
+    for (let waited = 0; browsingContext.sessionHistory.count === 0 && waited < 3000; waited += 25) {
+      await PowerBrowserAPI.sleep(25);
+    }
     SessionHistory.restoreFromParent(browsingContext.sessionHistory, tabData);
     await SessionStoreUtils.restoreDocShellState(browsingContext, tabData.entries[tabData.index - 1].url, null);
     SessionStoreUtils.initializeRestore(browsingContext, SessionStoreUtils.constructSessionStoreRestoreData()).catch(err => {
