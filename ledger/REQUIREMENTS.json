@@ -1,15 +1,15 @@
 {
-  "ledger_version": 187,
+  "ledger_version": 189,
   "frozen_at": null,
   "items": [
     {
       "id": "NG-001",
       "text": "Every tab row (stock tab, in-shell web tab, editor, terminal) is keyed by the tab's stable registry URI, not by its page URL; the page URL is a column, and one key rule holds for all tab kinds. Evidence: PBA:780 keys stock tabs `webview:`+URL, PBA:2479 keys overlays by bare URL, docs/URI-SCHEMES.md:250-254, `webview:` is also the plugin-panel scheme (URI-SCHEMES.md:211-229).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:16",
       "test_ref": "scripts/verify-ng-001-one-key-rule.mjs::ng-001-one-key-rule",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "5364a13: ng-001-one-key-rule passes in main",
       "owner": "",
       "phase": "",
       "deferred_at": "",
