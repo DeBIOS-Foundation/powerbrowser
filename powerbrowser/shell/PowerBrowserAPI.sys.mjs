@@ -2296,18 +2296,47 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
-   * SQL-01 (12-01): startup integrity tripwire. Keying is exact: the result
-   * must be a single row with the value 'ok' and nothing else. An unopenable
-   * file counts as tripped. Never throws -- answers true/false only.
+   * SQL-01 (12-01): the integrity tripwire -- PRAGMA quick_check at startup,
+   * the full PRAGMA integrity_check on the schedule (`full`, NG-018). Keying
+   * is exact: the result must be a single row with the value 'ok' and nothing
+   * else. Answers "ok", "corrupt" for any other result, or the class of the
+   * failure when the open or the check throws (tabStoreFailureClass), so an
+   * unopenable file is "corrupt" only on a real corruption signal (ruling
+   * T6-R1). Never throws.
    */
-  async checkTabStoreIntegrity() {
+  async checkTabStoreIntegrity(full = false) {
     try {
       const conn = await PowerBrowserAPI.openTabStore();
-      const rows = await conn.execute("PRAGMA quick_check");
-      return rows.length === 1 && rows[0].getString(0) === "ok";
-    } catch {
-      return false;
+      const rows = await conn.execute(full ? "PRAGMA integrity_check" : "PRAGMA quick_check");
+      return rows.length === 1 && rows[0].getString(0) === "ok" ? "ok" : "corrupt";
+    } catch (err) {
+      return PowerBrowserAPI.tabStoreFailureClass(err);
     }
+  },
+
+  /**
+   * NG-013/NG-018 (ruling T6-R1): a fixed class for a tab-store failure, safe
+   * to log -- never the raw message, which can carry the profile path.
+   * "corrupt" is SQLITE_CORRUPT or SQLITE_NOTADB: SQLite's own text for them,
+   * which a failed statement's message carries, or NS_ERROR_FILE_CORRUPTED,
+   * which Sqlite.sys.mjs reports for a failed statement and a failed open
+   * alike; only it quarantines. A store newer than this build ("newer",
+   * MIGRATIONS.md rule 4), SQLITE_BUSY or SQLITE_LOCKED ("busy"), a timeout or
+   * any other failure ("other") never does.
+   */
+  tabStoreFailureClass(err) {
+    const message = String(err && err.message);
+    if (/refusing downgrade/.test(message)) {
+      return "newer";
+    }
+    const result = err && err.result;
+    if (/database disk image is malformed|file is not a database/.test(message) || result === Cr.NS_ERROR_FILE_CORRUPTED) {
+      return "corrupt";
+    }
+    if (result === Cr.NS_ERROR_STORAGE_BUSY || result === Cr.NS_ERROR_FILE_IS_LOCKED) {
+      return "busy";
+    }
+    return "other";
   },
 
   /**
@@ -2418,6 +2447,11 @@ export const PowerBrowserAPI = Object.freeze({
     // roundtrip proof's delete-then-rebuild procedure. Removal is
     // load-bearing, never best-effort: a failure throws into degraded.
     await IOUtils.remove(livePath);
+    // NG-085 (ruling T6-R1): like openTabStore, nothing reopens the store once
+    // its shutdown close has begun; the next launch rebuilds it.
+    if (tabStoreClosing) {
+      throw new Error("quarantineAndRebuildTabStore: the store is closed for shutdown");
+    }
     // 14.1-03 / NG-014: not exclusive, like openTabStore -- an exclusive
     // rebuilt connection served the backend reader SQLITE_BUSY until restart.
     closeTabStoreAtShutdown();
@@ -2464,60 +2498,66 @@ export const PowerBrowserAPI = Object.freeze({
 
   /**
    * NG-018: the full PRAGMA integrity_check SCHEMA.md:200-201 schedules beside
-   * the startup quick_check, which skips index contents. A failure quarantines
-   * and rebuilds from sessionstore, exactly as the startup tripwire does.
-   * Resolves true when the store is sound. Never throws.
+   * the startup quick_check, which skips index contents. Corruption
+   * quarantines and rebuilds from sessionstore, exactly as the startup
+   * tripwire does; nothing else does (ruling T6-R1). A store newer than this
+   * build stays degraded (F3, MIGRATIONS.md rule 4); a busy store, a timeout
+   * or any other failure is logged and retried at the next interval. Once the
+   * store is closing for shutdown it opens nothing (NG-085). Resolves true
+   * when the store is sound. Never throws.
    */
   async runScheduledIntegrityCheck() {
-    let ok = false;
-    try {
-      const conn = await PowerBrowserAPI.openTabStore();
-      const rows = await conn.execute("PRAGMA integrity_check");
-      ok = rows.length === 1 && rows[0].getString(0) === "ok";
-    } catch {
-      ok = false;
+    if (tabStoreClosing) {
+      return false;
     }
-    if (!ok) {
+    const verdict = await PowerBrowserAPI.checkTabStoreIntegrity(true);
+    if (verdict === "ok") {
+      return true;
+    }
+    if (verdict === "newer") {
+      PowerBrowserAPI.log("warn", "[tab-store-integrity] the store is newer than this build; left degraded, not quarantined");
+    } else if (verdict !== "corrupt") {
+      PowerBrowserAPI.log("warn", `[tab-store-integrity] integrity_check not run (${verdict}); not quarantined, retried at the next interval`);
+    } else {
+      PowerBrowserAPI.log("error", "[tab-store-integrity] integrity_check reported corruption; quarantining");
       try {
         await PowerBrowserAPI.quarantineAndRebuildTabStore(PowerBrowserAPI.parseSessionStoreTabRows());
       } catch (err) {
-        PowerBrowserAPI.log("error", `[tab-store-integrity] rebuild failed: ${err && err.message ? err.message : err}`);
+        PowerBrowserAPI.log("error", `[tab-store-integrity] rebuild failed (${PowerBrowserAPI.tabStoreFailureClass(err)})`);
       }
     }
-    return ok;
+    return false;
   },
 
   /**
    * SQL-01 (12-01): startup orchestration. Opens the store (running the
-   * version guard), fires the tripwire, and on any trip quarantines and
+   * version guard), fires the tripwire, and on corruption quarantines and
    * rebuilds from sessionstore before continuing degraded. An unopenable
-   * file is quarantined like a tripped one (NG-013); a store newer than
-   * this build is refused and left untouched (MIGRATIONS.md rule 4).
-   * Resolves 'ready' | 'rebuilt' | 'degraded' -- never throws, so startup
-   * never stalls on the store.
+   * file is quarantined like a tripped one when SQLite reports it corrupt
+   * (NG-013); a store newer than this build is refused and left untouched
+   * (MIGRATIONS.md rule 4), and a busy or otherwise failed open is never
+   * quarantined (ruling T6-R1). Resolves 'ready' | 'rebuilt' | 'degraded'
+   * -- never throws, so startup never stalls on the store.
    */
   async ensureTabStore() {
-    let openError = null;
-    try {
-      await PowerBrowserAPI.openTabStore();
-    } catch (err) {
-      openError = err;
-      PowerBrowserAPI.log("error", `[ensureTabStore] open failed: ${err && err.message ? err.message : err}`);
+    // WR-05 (12-CODE-REVIEW.md): the tripwire and its failure classes live in
+    // checkTabStoreIntegrity, shared with the scheduled check.
+    const verdict = await PowerBrowserAPI.checkTabStoreIntegrity();
+    if (verdict === "newer") {
+      PowerBrowserAPI.log("warn", "[ensureTabStore] the store is newer than this build; left untouched");
+      return "degraded";
     }
-    // MIGRATIONS.md rule 4: a store newer than this build is refused, left
-    // untouched and reported -- never quarantined.
-    if (openError && /refusing downgrade/.test(String(openError.message))) {
+    if (verdict !== "ok" && verdict !== "corrupt") {
+      PowerBrowserAPI.log("error", `[ensureTabStore] open failed (${verdict}); not quarantined`);
       return "degraded";
     }
     let state = "ready";
-    // NG-013: an unopenable file counts as tripped (MIGRATIONS.md:53), the same
-    // as a failed quick_check.
-    if (openError || !(await PowerBrowserAPI.checkTabStoreIntegrity())) {
+    if (verdict === "corrupt") {
       try {
         await PowerBrowserAPI.quarantineAndRebuildTabStore(PowerBrowserAPI.parseSessionStoreTabRows());
         state = "rebuilt";
       } catch (err) {
-        PowerBrowserAPI.log("error", `[ensureTabStore] rebuild failed: ${err && err.message ? err.message : err}`);
+        PowerBrowserAPI.log("error", `[ensureTabStore] rebuild failed (${PowerBrowserAPI.tabStoreFailureClass(err)})`);
         return "degraded";
       }
     }
@@ -2674,21 +2714,45 @@ export const PowerBrowserAPI = Object.freeze({
     Services.obs.addObserver(sweepObserver, "sessionstore-state-write-complete");
     // NG-018: the scheduled full integrity check. The interval is the setting
     // integrity_check_minutes (24 hours when absent), read before each wait so
-    // a changed setting applies from the next run. The stop function ends it.
+    // a changed setting applies from the next run. The stop function ends it
+    // and cancels the pending wait; the store's shutdown close ends it too
+    // (NG-085, ruling T6-R1), so no timer stays armed for a store that is gone.
     let integrityOff = false;
+    let cancelIntegrityWait = null;
     (async () => {
       while (!integrityOff) {
         const minutes = Number(await PowerBrowserAPI.readTabStoreSetting("integrity_check_minutes"));
-        await PowerBrowserAPI.sleep(Number.isFinite(minutes) && minutes > 0 ? minutes * 60 * 1000 : TAB_STORE_INTEGRITY_DEFAULT_MS);
+        if (integrityOff || tabStoreClosing) {
+          break;
+        }
+        // Held in pendingTimers until it fires or is cancelled, like sleep()'s.
+        await new Promise(resolve => {
+          const timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
+          const done = () => {
+            pendingTimers.delete(timer);
+            cancelIntegrityWait = null;
+            resolve();
+          };
+          cancelIntegrityWait = () => {
+            timer.cancel();
+            done();
+          };
+          pendingTimers.add(timer);
+          const ms = Number.isFinite(minutes) && minutes > 0 ? minutes * 60 * 1000 : TAB_STORE_INTEGRITY_DEFAULT_MS;
+          timer.initWithCallback({ notify: done }, ms, Ci.nsITimer.TYPE_ONE_SHOT);
+        });
         if (!integrityOff) {
           await PowerBrowserAPI.runScheduledIntegrityCheck();
         }
       }
     })().catch(err => {
-      PowerBrowserAPI.log("error", `[tab-store-integrity] ${err && err.message ? err.message : err}`);
+      PowerBrowserAPI.log("error", `[tab-store-integrity] schedule ended (${PowerBrowserAPI.tabStoreFailureClass(err)})`);
     });
     return () => {
       integrityOff = true;
+      if (cancelIntegrityWait) {
+        cancelIntegrityWait();
+      }
       for (const [container, name] of attached) {
         try {
           container.removeEventListener(name, onTabEvent);
