@@ -1005,6 +1005,9 @@ runs `./mach package` and adds these to the staged application directory:
   downloaded once into `.mozbuild/node-dist/` and sha256-checked against the pin;
 - `distribution/policies.json`.
 
+The Node download happens at build time and is deliberately not in the
+runtime allowlist: that file governs browser/sidecar egress only (R15).
+
 It then refreshes `precomplete` and rewrites
 `objdir/dist/<app>-<Version>.en-US.linux-x86_64.tar.xz`. A packaged install runs
 its own staged backend and Node unless a user pref names another path (NG-063).
