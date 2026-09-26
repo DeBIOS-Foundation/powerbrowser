@@ -1,5 +1,5 @@
 {
-  "ledger_version": 199,
+  "ledger_version": 201,
   "frozen_at": null,
   "items": [
     {
@@ -187,11 +187,11 @@
     {
       "id": "NG-015",
       "text": "A check runs the real migration code from fixture databases at every earlier version to head (v1\u2192head, v2\u2192head, v3\u2192head). Evidence: exercise-migrations.mjs covers v1; v2 only through a `node:sqlite` re-implementation; v3 and v4 have none.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:30",
       "test_ref": "scripts/verify-ng-015-real-migration-from-every-version.mjs::ng-015-real-migration-from-every-version",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "175b771: ng-015-real-migration-from-every-version passes in main",
       "owner": "",
       "phase": "",
       "deferred_at": "",
