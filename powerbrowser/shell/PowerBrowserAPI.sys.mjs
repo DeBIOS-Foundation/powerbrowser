@@ -602,6 +602,12 @@ export const PowerBrowserAPI = Object.freeze({
     if (cancelQuit.data) {
       return false;
     }
+    // A full shutdown, not release Gecko's fast shutdown: stage 1 _exit()s
+    // inside XPCOM shutdown before XREMain unlocks the profile
+    // (nsAppRunner.cpp, "see bug #386739"), so the profile's `lock` symlink
+    // outlived every quit and the exit could not be observed by it. Default
+    // branch: this quit only, never written to prefs.js.
+    Services.prefs.getDefaultBranch("").setIntPref("toolkit.shutdown.fastShutdownStage", 0);
     Services.startup.quit(Ci.nsIAppStartup.eAttemptQuit);
     return true;
   },
