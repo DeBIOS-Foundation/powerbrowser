@@ -51,7 +51,7 @@ const COMMANDS_REL = 'theia/extensions/modes/src/browser/setups-commands.ts';
  */
 const EXPECTED_STORE_FIELDS = Object.freeze(['version', 'setups', 'lastSession']);
 const EXPECTED_SETUP_FIELDS = Object.freeze(['name', 'modeId', 'windows', 'savedAt']);
-const EXPECTED_WINDOW_FIELDS = Object.freeze(['x', 'y', 'width', 'height', 'tabs', 'activeTab']);
+const EXPECTED_WINDOW_FIELDS = Object.freeze(['x', 'y', 'width', 'height', 'tabs', 'activeTab', 'modeId', 'dock']);
 const EXPECTED_COMMAND_IDS = Object.freeze([
     'powerbrowser.setups.save-setup',
     'powerbrowser.setups.delete-setup',

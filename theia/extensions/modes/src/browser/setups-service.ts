@@ -9,6 +9,7 @@ import {
     open,
 } from '@theia/core/lib/browser';
 import { FrontendApplicationStateService } from '@theia/core/lib/browser/frontend-application-state';
+import { DockLayout, DockPanel } from '@theia/core/shared/@lumino/widgets';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
 import { SecondaryWindowHandler, extractSecondaryWindow } from '@theia/core/lib/browser/secondary-window-handler';
 import { ExtractableWidget } from '@theia/core/lib/browser/widgets/extractable-widget';
@@ -69,6 +70,24 @@ export const SETUP_NAME_MAX = 60;
 /** User-storage file beside modes.json (never SQLite: single-writer rule). */
 export const SETUPS_STORE_FILENAME = 'setups.json';
 
+/**
+ * NG-036: one dock area of a window as tab URIs. A tab area keeps its tab
+ * order and its current tab; a split keeps its orientation and the children's
+ * relative sizes.
+ */
+export type SetupDockNode =
+    | { type: 'tabs'; tabs: string[]; current: string | null }
+    | { type: 'split'; orientation: 'horizontal' | 'vertical'; sizes: number[]; children: SetupDockNode[] };
+
+/** NG-036: where each tab of a window is docked -- the main area's split tree and the bottom panel's. */
+export interface SetupDock {
+    main: SetupDockNode | null;
+    bottom: SetupDockNode | null;
+}
+
+/** NG-036: the deepest split nesting a stored tree is read to; a deeper subtree is dropped. */
+const SETUP_DOCK_MAX_DEPTH = 8;
+
 export interface SetupWindowSnapshot {
     x: number;
     y: number;
@@ -76,6 +95,10 @@ export interface SetupWindowSnapshot {
     height: number;
     tabs: string[];
     activeTab: string | null;
+    /** NG-036: the mode this window was in; null for a dependent, which hosts tab content only and has no mode. */
+    modeId: string | null;
+    /** NG-036: the dock layout; absent on rows written before it, which restore from `tabs`. */
+    dock?: SetupDock;
 }
 
 export interface SetupSnapshot {
@@ -176,6 +199,60 @@ function isFiniteNumber(value: unknown): value is number {
     return typeof value === 'number' && Number.isFinite(value);
 }
 
+function parseSetupDockNode(entry: unknown, depth: number): SetupDockNode | null {
+    if (depth > SETUP_DOCK_MAX_DEPTH || typeof entry !== 'object' || entry === null) {
+        return null;
+    }
+    const node = entry as Record<string, unknown>;
+    if (node['type'] === 'tabs' && Array.isArray(node['tabs'])) {
+        const tabs = (node['tabs'] as unknown[]).filter((tab): tab is string => typeof tab === 'string' && tab.length > 0);
+        if (tabs.length === 0) {
+            return null;
+        }
+        const current = typeof node['current'] === 'string' && tabs.includes(node['current']) ? node['current'] as string : null;
+        return { type: 'tabs', tabs, current };
+    }
+    const orientation = node['orientation'];
+    if (node['type'] === 'split' && (orientation === 'horizontal' || orientation === 'vertical')
+        && Array.isArray(node['children']) && Array.isArray(node['sizes'])) {
+        const sizesIn = node['sizes'] as unknown[];
+        const children: SetupDockNode[] = [];
+        const sizes: number[] = [];
+        (node['children'] as unknown[]).forEach((child, index) => {
+            const parsed = parseSetupDockNode(child, depth + 1);
+            if (parsed) {
+                children.push(parsed);
+                const size = sizesIn[index];
+                sizes.push(isFiniteNumber(size) && size > 0 ? size : 1);
+            }
+        });
+        if (children.length === 0) {
+            return null;
+        }
+        return children.length === 1 ? children[0] : { type: 'split', orientation, sizes, children };
+    }
+    return null;
+}
+
+function parseSetupDock(entry: unknown): SetupDock | undefined {
+    if (typeof entry !== 'object' || entry === null) {
+        return undefined;
+    }
+    const dock = entry as Record<string, unknown>;
+    return { main: parseSetupDockNode(dock['main'], 0), bottom: parseSetupDockNode(dock['bottom'], 0) };
+}
+
+function widgetsOfArea(area: DockLayout.AreaConfig | null): Widget[] {
+    if (!area) {
+        return [];
+    }
+    return area.type === 'tab-area' ? area.widgets : area.children.flatMap(widgetsOfArea);
+}
+
+function firstTabArea(area: DockLayout.AreaConfig): DockLayout.ITabAreaConfig {
+    return area.type === 'tab-area' ? area : firstTabArea(area.children[0]);
+}
+
 /**
  * Total parse of one window row: rect numbers must be finite (validated
  * before any move call, T-14-03-01); tab lists keep strings only; anything
@@ -197,7 +274,9 @@ function parseSetupWindow(entry: unknown): SetupWindowSnapshot | null {
     const activeTab = typeof row['activeTab'] === 'string' && row['activeTab'].length > 0
         ? row['activeTab'] as string
         : null;
-    return { x: row['x'], y: row['y'], width: row['width'], height: row['height'], tabs, activeTab };
+    const modeId = typeof row['modeId'] === 'string' && row['modeId'].length > 0 ? row['modeId'] as string : null;
+    const dock = parseSetupDock(row['dock']);
+    return { x: row['x'], y: row['y'], width: row['width'], height: row['height'], tabs, activeTab, modeId, ...(dock ? { dock } : {}) };
 }
 
 /** Total parse of one setup row: nameless or windowless rows drop silently. */
@@ -433,10 +512,11 @@ export class SetupsService implements FrontendApplicationContribution {
         // apply. A bare switchPerspective applied the perspective and none of
         // those. activateMode resolves an unknown id to Browsing by itself;
         // `known` only chooses the contracted fallback notice below.
-        const knownCustom = this.modes.getCustomModes().some(custom => custom.id === row.modeId);
-        const known = SHIPPED_MODES.some(descriptor => descriptor.id === row.modeId) || knownCustom;
+        const modeId = row.windows[0].modeId ?? row.modeId;
+        const knownCustom = this.modes.getCustomModes().some(custom => custom.id === modeId);
+        const known = SHIPPED_MODES.some(descriptor => descriptor.id === modeId) || knownCustom;
         try {
-            await this.modes.activateMode(known ? row.modeId : 'browsing');
+            await this.modes.activateMode(known ? modeId : 'browsing');
         } catch {
             // activateMode has no rejecting path today; geometry and tabs still stand.
         }
@@ -542,6 +622,11 @@ export class SetupsService implements FrontendApplicationContribution {
             height: window.outerHeight,
             tabs: coreTabs.map(entry => entry.uri),
             activeTab: coreTabs.some(entry => entry.id === active) ? (coreTabs.find(entry => entry.id === active)?.uri ?? null) : null,
+            modeId: this.currentModeId(),
+            dock: {
+                main: this.dockNodeOf(this.shell.mainPanel.saveLayout().main),
+                bottom: this.dockNodeOf(this.shell.bottomPanel.saveLayout().main),
+            },
         };
         const dependents: SetupWindowSnapshot[] = [];
         for (const widget of this.secondaryWindows.widgets) {
@@ -554,9 +639,51 @@ export class SetupsService implements FrontendApplicationContribution {
                 height: win?.outerHeight ?? 600,
                 tabs: uri !== undefined ? [uri] : [],
                 activeTab: uri ?? null,
+                modeId: null,
             });
         }
         return [core, ...dependents];
+    }
+
+    /**
+     * NG-036: a Lumino area config as tab URIs. Web tabs keep the area's tab
+     * order verbatim (the NG-036 contract, asserted per tab bar); other
+     * URI-bearing tabs ride along in place (they restore with the area, never
+     * duplicated). Tabs with no URI (the Organising canvas, unowned widgets)
+     * are left out; empty areas and one-child splits collapse.
+     */
+    protected dockNodeOf(area: DockLayout.AreaConfig | null): SetupDockNode | null {
+        if (!area) {
+            return null;
+        }
+        if (area.type === 'tab-area') {
+            const tabs: string[] = [];
+            for (const widget of area.widgets) {
+                const uri = this.tabUriOf(widget);
+                if (uri !== undefined && !tabs.includes(uri)) {
+                    tabs.push(uri);
+                }
+            }
+            if (tabs.length === 0) {
+                return null;
+            }
+            const currentWidget = area.widgets[area.currentIndex];
+            const current = currentWidget ? this.tabUriOf(currentWidget) ?? null : null;
+            return { type: 'tabs', tabs, current: current !== null && tabs.includes(current) ? current : null };
+        }
+        const children: SetupDockNode[] = [];
+        const sizes: number[] = [];
+        area.children.forEach((child, index) => {
+            const node = this.dockNodeOf(child);
+            if (node) {
+                children.push(node);
+                sizes.push(area.sizes[index] ?? 1);
+            }
+        });
+        if (children.length === 0) {
+            return null;
+        }
+        return children.length === 1 ? children[0] : { type: 'split', orientation: area.orientation, sizes, children };
     }
 
     /** All core-model tabs as opaque URIs (registry first, editor resource fallback), with their widgets. */
@@ -657,6 +784,16 @@ export class SetupsService implements FrontendApplicationContribution {
                 placed.set(entry.uri, entry.widget);
             }
         }
+        // T6-M2: a URI open only in a dependent (secondary) window never
+        // appears in `allTabBars`, so seed the placer from the secondary
+        // handler too, first-wins as above -- otherwise a restore would
+        // reopen (duplicate) the dependent's tab instead of reusing it.
+        for (const widget of this.secondaryWindows.widgets) {
+            const uri = this.tabUriOf(widget);
+            if (uri !== undefined && !placed.has(uri)) {
+                placed.set(uri, widget);
+            }
+        }
         return async tab => {
             const existing = placed.get(tab);
             if (existing) {
@@ -679,9 +816,13 @@ export class SetupsService implements FrontendApplicationContribution {
         const place = this.tabPlacer();
         let dropped = 0;
         const core = row.windows[0];
-        for (const tab of core.tabs) {
-            if ((await place(tab)) === null) {
-                dropped += 1;
+        if (core.dock) {
+            dropped += await this.restoreDock(core.dock, place);
+        } else {
+            for (const tab of core.tabs) {
+                if ((await place(tab)) === null) {
+                    dropped += 1;
+                }
             }
         }
         // NG-030: the active tab is activated, never opened a second time.
@@ -704,6 +845,68 @@ export class SetupsService implements FrontendApplicationContribution {
             this.hostDependent(widgets, dependent);
         }
         return dropped;
+    }
+
+    /**
+     * NG-036: rebuilds the main area's split tree and the bottom panel's from a
+     * saved dock, placing every tab through `place` (so nothing already open is
+     * opened again). Lumino's restoreLayout unparents every widget of a panel
+     * the config leaves out, so each widget already in the panel and not placed
+     * by the setup rides along in the config's first tab area: a restore never
+     * closes or detaches a tab (notes/browser-window-model.md:46-49). Returns
+     * the number of saved tabs that no longer open.
+     */
+    protected async restoreDock(dock: SetupDock, place: (tab: string) => Promise<Widget | true | null>): Promise<number> {
+        let dropped = 0;
+        const build = async (node: SetupDockNode | null): Promise<DockLayout.AreaConfig | null> => {
+            if (!node) {
+                return null;
+            }
+            if (node.type === 'tabs') {
+                const widgets: Widget[] = [];
+                for (const tab of node.tabs) {
+                    const placed = await place(tab);
+                    if (placed === null) {
+                        dropped += 1;
+                    } else if (placed instanceof Widget && !widgets.includes(placed)) {
+                        widgets.push(placed);
+                    }
+                }
+                if (widgets.length === 0) {
+                    return null;
+                }
+                const current = node.current === null ? 0 : widgets.findIndex(widget => this.tabUriOf(widget) === node.current);
+                return { type: 'tab-area', widgets, currentIndex: Math.max(0, current) };
+            }
+            const children: DockLayout.AreaConfig[] = [];
+            const sizes: number[] = [];
+            for (let index = 0; index < node.children.length; index += 1) {
+                const child = await build(node.children[index]);
+                if (child) {
+                    children.push(child);
+                    sizes.push(node.sizes[index] ?? 1);
+                }
+            }
+            if (children.length === 0) {
+                return null;
+            }
+            return children.length === 1 ? children[0] : { type: 'split-area', orientation: node.orientation, children, sizes };
+        };
+        const main = await build(dock.main);
+        const bottom = await build(dock.bottom);
+        const assigned = new Set<Widget>([...widgetsOfArea(main), ...widgetsOfArea(bottom)]);
+        this.applyDockArea(this.shell.bottomPanel, bottom, assigned);
+        this.applyDockArea(this.shell.mainPanel, main, assigned);
+        return dropped;
+    }
+
+    protected applyDockArea(panel: DockPanel, area: DockLayout.AreaConfig | null, assigned: Set<Widget>): void {
+        if (!area) {
+            return;
+        }
+        const others = Array.from(panel.widgets()).filter(widget => !assigned.has(widget));
+        firstTabArea(area).widgets.push(...others);
+        panel.restoreLayout({ main: area });
     }
 
     /** One tab through the opener: unresolvable URIs drop (null), never throw out. */
