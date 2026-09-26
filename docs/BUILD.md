@@ -762,20 +762,13 @@ test -x objdir/dist/bin/updater && echo UPDATER_PRESENT
 `config.status` carries the flag. No `upstream/` edit and no new Gecko
 patch accompany the flip.
 
-Two baked-in facts the procedure works around rather than edits:
+Two facts about where the update URL lives:
 
-- `application.ini`'s `[AppUpdate]` URL bakes `aus5.mozilla.org`
-  (`MOZ_APPUPDATE_HOST` default in `upstream/build/moz.build:95`; no
-  `option(env=...)` binding exists upstream, so no mozconfig lever can
-  change it). It is NEVER used when the `AppUpdateURL` enterprise policy
-  is present — `getUpdateURL` prefers the policy
-  (`UpdateService.sys.mjs:5466`). A policy-less install therefore phones
-  Mozilla and fails `verify-endpoints.sh` layer 3 red on `aus5` by
-  design (fail-loud, observed live 08-04) — never silently green.
+- `application.ini`'s `[AppUpdate]` URL host comes from `configuration.toml` `[urls] update` (NG-064). `generated/identity.configure` emits `set_config("MOZ_APPUPDATE_HOST", …)`, which `upstream/build/moz.build:96` prefers over its `aus5.mozilla.org` default. It is a compiled value, so a change needs a tier-3 rebuild. The `AppUpdateURL` enterprise policy still wins when present (`UpdateService.sys.mjs:5466`), and `powerbrowser/distribution/policies.json` carries the same URL.
 - `app.update.url` as a pref does not exist (removed in Bug 1568994; the
   removal is noted in `upstream/browser/app/profile/firefox.js:156`), so
-  no pref file can carry the fork URL. The policy file is the only
-  mechanism.
+  no pref file can carry the fork URL. The policy file and the compiled
+  `application.ini` URL above are the only mechanisms.
 
 ### Policy install (REQUIRED post-build step)
 

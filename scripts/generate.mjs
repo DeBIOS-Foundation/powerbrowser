@@ -1516,6 +1516,15 @@ function emitIdentityConfigure(config, variant) {
         'imply_option("MOZ_SERVICES_HEALTHREPORT", False)',
         'imply_option("MOZ_NORMANDY", False)',
     ];
+    // NG-064: the update host comes from the manifest. upstream/build/moz.build:96 uses
+    // CONFIG["MOZ_APPUPDATE_HOST"] instead of its aus5 default when it is set. Unset
+    // means no line. A downstream that inherits the platform's own host is refused
+    // before any emission (non-GUI ruling R11; resolveConfig, Task 15).
+    const update = config.urls?.update;
+    if (!isUnset(update)) {
+        const host = new URL(assertEmittable('urls.update', update)).host;
+        lines.push(`set_config("MOZ_APPUPDATE_HOST", ${JSON.stringify(host)})`);
+    }
     return lines.join('\n') + '\n';
 }
 
@@ -5040,13 +5049,18 @@ function selfTest() {
 
     // TEL-03's green control, computed once: a fixture with a telemetry
     // endpoint, a crash-report URL and a support URL resolves to exactly
-    // those three hosts sorted, with the endpoint prefs repointed to the
-    // stated URLs -- and a fixture with none of them resolves to the lone
-    // inherited support host with both prefs blanked. Without this, a red
-    // result from the coverage gate could be the derivation broken on a
-    // clean manifest rather than on a drift. The expected hosts and prefs
-    // are literals: deriving them through the derivation would make the
-    // control agree with it no matter how wrong both were.
+    // those three hosts sorted plus the inherited urls.update host, with
+    // the endpoint prefs repointed to the stated URLs -- and a fixture
+    // with none of them resolves to the lone inherited support host plus
+    // the inherited urls.update host, with both prefs blanked. The
+    // update host is inherited from this project's own manifest (an
+    // optional key, so the mask never strips it): the derivation is over
+    // the MERGED config, so any default-layer contactable host reaches
+    // every fixture. Without this, a red result from the coverage gate
+    // could be the derivation broken on a clean manifest rather than on
+    // a drift. The expected hosts and prefs are literals: deriving them
+    // through the derivation would make the control agree with it no
+    // matter how wrong both were.
     const endpointHostsControl = (() => {
         const fixtureDir = mkdtempSync(join(tmpdir(), 'generate-selftest-endpoints-'));
         try {
@@ -5083,14 +5097,14 @@ function selfTest() {
             };
             return [
                 ...checkOne(
-                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "all"\nendpoint = "https://collector.example.org/v1/events"\n[urls]\ncrash_report = "https://crash.example.org/report"\n[installer]\nsupport_url = "https://example.org/support"\n`,
-                    ['collector.example.org', 'crash.example.org', 'example.org'],
+                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "all"\nendpoint = "https://collector.example.org/v1/events"\n[urls]\ncrash_report = "https://crash.example.org/report"\nupdate = "https://updates.example.org/update.xml"\n[installer]\nsupport_url = "https://example.org/support"\n`,
+                    ['collector.example.org', 'crash.example.org', 'example.org', 'updates.example.org'],
                     'https://collector.example.org/v1/events',
                     'https://crash.example.org/report',
                 ),
                 ...checkOne(
-                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}`,
-                    ['powerbrowser.org'],
+                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[urls]\nupdate = "https://updates.example.org/update.xml"\n`,
+                    ['powerbrowser.org', 'updates.example.org'],
                     '',
                     '',
                 ),
@@ -5693,11 +5707,12 @@ function selfTest() {
             resolved: () => brandingControl.length === 0,
         },
         {
-            // TEL-03's control: the stated endpoint and crash-report URLs
-            // derive to exactly their hosts plus the support host, with
-            // both endpoint prefs repointed -- and a fixture stating none
-            // of them derives the lone inherited support host with both
-            // prefs blanked. Without this, a red result from the coverage
+            // TEL-03's control: the stated endpoint, crash-report and
+            // update URLs derive to exactly their hosts plus the support
+            // host, with both endpoint prefs repointed -- and a fixture
+            // stating only an update URL derives the lone inherited
+            // support host plus the stated update host with both prefs
+            // blanked. Without this, a red result from the coverage
             // gate could be the derivation broken on a clean manifest
             // rather than on a drift.
             name: 'manifest endpoint hosts derive the stated hosts and repoint the prefs',

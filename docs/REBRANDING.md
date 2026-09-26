@@ -277,7 +277,7 @@ also echoed at generate time as a `generate: default applied` line.
 | Setting | Required? | If omitted | Reaches |
 |---|---|---|---|
 | `urls.release_notes` | Optional | Omitted from the endpoint-hosts fragment | `generated/endpoint-hosts.json` host coverage when stated |
-| `urls.update` | Optional | Omitted from the endpoint-hosts fragment | `generated/endpoint-hosts.json` host coverage when stated |
+| `urls.update` | Optional | No update host is emitted, so upstream's default stays. A downstream that states no `urls.update` inherits the platform's own host, and generate refuses it (Task 15, R11). | `application.ini` `[AppUpdate]` URL host (`MOZ_APPUPDATE_HOST`, through `generated/identity.configure`), and `generated/endpoint-hosts.json` host coverage. `powerbrowser/distribution/policies.json` `AppUpdateURL` must equal it (check `ng064-update-url-from-manifest`). |
 | `urls.crash_report` | Optional | Blank report URL default | Crash-report URL default plus `generated/endpoint-hosts.json` host coverage when stated |
 | `urls.homepage` | Optional | Omitted from the endpoint-hosts fragment | `generated/endpoint-hosts.json` host coverage when stated |
 | `urls.search` | Optional | Omitted from the endpoint-hosts fragment | `generated/endpoint-hosts.json` host coverage when stated |
