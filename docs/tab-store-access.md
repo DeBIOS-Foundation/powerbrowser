@@ -64,6 +64,8 @@ Joins every tab row to Firefox's history and bookmarks on the page address (`url
 - Open tabs you have never bookmarked: `{"bookmarked": false, "open": true}`
 - Bookmarks that are open right now: `{"bookmarked": true, "open": true}`
 
+Private windows are never included: their tabs are never written to the store, and neither the join above nor the address bar's history and bookmark suggestions (NG-023) ever offer a private page.
+
 ## Example
 
 ```sh

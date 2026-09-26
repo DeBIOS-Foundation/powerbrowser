@@ -3127,6 +3127,7 @@ const STORE_REQUEST_KINDS = new Set([
   "listBookmarkFolder",
   "projectSessionStoreTabs",
   "queryTabsWithPlaces",
+  "searchPlaces",
 ]);
 
 function isStoreRequestKind(kind) {
@@ -3192,6 +3193,9 @@ async function handleStoreRequest(data, actorRef) {
           limit: Number.isInteger(data.limit) ? data.limit : undefined,
         });
         return { ok: true, kind, rows };
+      }
+      case "searchPlaces": {
+        return { ok: true, kind, rows: await searchPlaces(data.text, data.limit) };
       }
       default: {
         return { ok: false, reason: "validation", message: `handleStoreRequest: unknown kind ${String(kind)}` };
@@ -3272,4 +3276,39 @@ async function queryTabsWithPlaces({ bookmarked, open, limit } = {}) {
   const rank = row => (row.frecency === null ? -Infinity : row.frecency);
   rows.sort((a, b) => (rank(a) === rank(b) ? 0 : rank(b) > rank(a) ? 1 : -1));
   return rows.slice(0, cap);
+}
+
+// NG-023: history and bookmark matches for the address bar
+// (13-UI-SPEC.md:141,192). A literal substring match over the address, the
+// page title and the bookmark title: typed %, _ and \ are escaped, as in
+// TabQueryService.searchByPrefix. Only http and https addresses are returned,
+// so a bookmarklet or a file: bookmark is never offered as somewhere to go.
+// Bookmarks come first, then history by frecency.
+async function searchPlaces(text, limit) {
+  const needle = typeof text === "string" ? text.slice(0, 256) : "";
+  const cap = Number.isInteger(limit) ? Math.min(Math.max(limit, 1), 50) : 8;
+  if (!needle.trim()) {
+    return [];
+  }
+  const pattern = `%${needle.replace(/[\\%_]/g, c => "\\" + c)}%`;
+  const places = await lazy.PlacesUtils.promiseDBConnection();
+  const rows = await places.executeCached(
+    `SELECT h.url AS url, COALESCE(MAX(b.title), h.title, '') AS title, h.frecency AS frecency,
+            MAX(b.guid) AS bookmark_guid
+       FROM moz_places h
+       LEFT JOIN moz_bookmarks b ON b.fk = h.id
+      WHERE (h.url LIKE :pattern ESCAPE '\\' OR h.title LIKE :pattern ESCAPE '\\' OR b.title LIKE :pattern ESCAPE '\\')
+        AND (substr(h.url, 1, 7) = 'http://' OR substr(h.url, 1, 8) = 'https://')
+        AND (h.visit_count > 0 OR b.id IS NOT NULL)
+      GROUP BY h.id
+      ORDER BY (MAX(b.guid) IS NOT NULL) DESC, h.frecency DESC
+      LIMIT :cap`,
+    { pattern, cap }
+  );
+  return rows.map(row => ({
+    url: row.getResultByName("url"),
+    title: row.getResultByName("title") ?? "",
+    frecency: row.getResultByName("frecency"),
+    bookmarked: row.getResultByName("bookmark_guid") !== null,
+  }));
 }

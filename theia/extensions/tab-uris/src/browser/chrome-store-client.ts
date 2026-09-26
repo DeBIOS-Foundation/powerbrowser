@@ -36,6 +36,14 @@ export interface SessionTabRow {
     last_active: number;
 }
 
+/** One history or bookmark match for the address bar (NG-023). */
+export interface PlaceMatch {
+    url: string;
+    title: string;
+    frecency: number | null;
+    bookmarked: boolean;
+}
+
 /** One tab row joined to Places (NG-024). */
 export interface TabPlacesRow {
     uri: string;
@@ -102,6 +110,11 @@ export class ChromeStoreClient {
 
     projectSessionStoreTabs(): Promise<SessionTabRow[]> {
         return this.field<SessionTabRow[]>({ kind: 'projectSessionStoreTabs' }, 'rows');
+    }
+
+    /** NG-023: http(s) history and bookmark matches for typed text, bookmarks first. */
+    searchPlaces(text: string, limit: number): Promise<PlaceMatch[]> {
+        return this.field<PlaceMatch[]>({ kind: 'searchPlaces', text, limit }, 'rows');
     }
 
     /** NG-024: tab rows joined to history and bookmarks, highest frecency first. */

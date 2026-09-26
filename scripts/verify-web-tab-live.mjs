@@ -467,7 +467,9 @@ function phaseExpression(cfg, phase, arg) {
         P.registry = __getByName(container, 'TabUriRegistry');
         P.channel = __getByName(container, cfg.channelClass);
         const handler = __getByName(container, cfg.handlerClass);
-        const suggestions = __getByName(container, 'ChromeBarSuggestionService');
+        // Tab rows only (NG-023): the address bar's own service also suggests
+        // history, which outlives a closed tab, and this check reads the store.
+        const suggestions = __getByName(container, 'ChromeBarTabSuggestions');
         // The store reader the check polls. Wrapped here so the store-unread
         // plant can replace the reader through one seam.
         P.search = (prefix, limit) => suggestions.searchByPrefix(prefix, limit);

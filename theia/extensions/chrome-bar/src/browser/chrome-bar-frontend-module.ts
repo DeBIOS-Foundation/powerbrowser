@@ -19,7 +19,8 @@ import {
     KeybindingContribution,
     WebSocketConnectionProvider,
 } from '@theia/core/lib/browser';
-import { CHROME_SUGGESTION_PATH, ChromeBarSuggestionService } from './chrome-bar-suggestion-service';
+import { CHROME_SUGGESTION_PATH, ChromeBarSuggestionService, ChromeBarTabSuggestions } from './chrome-bar-suggestion-service';
+import { ChromeBarPlacesSuggestions } from './chrome-bar-places-suggestions';
 import { ChromeBarCommandContribution } from './chrome-bar-commands';
 import { ChromeBarKeybindingContribution } from './chrome-bar-keybindings';
 import { ChromeBarContribution, ChromeBarWidget } from './chrome-bar-widget';
@@ -54,9 +55,12 @@ export default new ContainerModule((bind, _unbind, _isBound, rebind) => {
         rightPanel: { expandThreshold: 0 },
         bottomPanel: { expandThreshold: 0 },
     });
-    bind(ChromeBarSuggestionService).toDynamicValue(ctx =>
+    // NG-023: the backend proxy serves open-tab rows; the service the widget
+    // injects adds history and bookmark matches from chrome.
+    bind(ChromeBarTabSuggestions).toDynamicValue(ctx =>
         WebSocketConnectionProvider.createProxy<ChromeBarSuggestionService>(ctx.container, CHROME_SUGGESTION_PATH)
     ).inSingletonScope();
+    bind(ChromeBarSuggestionService).to(ChromeBarPlacesSuggestions).inSingletonScope();
     bind(ChromeBarCommandContribution).toSelf().inSingletonScope();
     bind(CommandContribution).toService(ChromeBarCommandContribution);
     bind(ChromeBarKeybindingContribution).toSelf().inSingletonScope();
