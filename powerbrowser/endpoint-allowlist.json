@@ -140,6 +140,11 @@
       "host": "api.openai.com",
       "disposition": "allow",
       "reason": "User-initiated (NG-069, R15): the AI chat and completion feature through @theia/ai-openai (the openai package base URL). It is contacted only after the user configures an OpenAI API key and sends a request. With no key configured it is never contacted, and nothing is sent at startup."
+    },
+    {
+      "host": "nodejs.org",
+      "disposition": "allow",
+      "reason": "Build-time only (NG-063, R13): powerbrowser/packaging/package-linux.sh downloads the pinned official Node release (powerbrowser/packaging/node-runtime.json, sha256-checked) when the Linux package is made. The installed browser and its sidecar never contact it."
     }
   ],
   "prefs": [

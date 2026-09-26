@@ -8,9 +8,10 @@
 // TheiaService.sys.mjs) and the chrome bootstrap's dump() sentinel
 // channel. Preprocessed (JS_PREFERENCE_PP_FILES, #filter substitution
 // above) so the POWERBROWSER_DEV_TREE define substitutes to the repo root at
-// build time -- no user-specific absolute path is ever checked into the
-// repo (powerbrowser/shell/moz.build defines POWERBROWSER_DEV_TREE from the
-// mozbuild TOPSRCDIR global).
+// build time. These defaults serve dev runs out of objdir/dist/bin.
+// A packaged install (powerbrowser/packaging/package-linux.sh) carries its
+// own theia/ and node/ beside the binary; TheiaService prefers those
+// staged copies unless a user value is set (NG-063).
 
 // Empty string: resolve `node` on PATH at spawn time.
 pref("powerbrowser.sidecar.nodePath", "");

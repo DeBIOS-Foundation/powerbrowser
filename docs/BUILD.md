@@ -770,12 +770,9 @@ Two facts about where the update URL lives:
   no pref file can carry the fork URL. The policy file and the compiled
   `application.ini` URL above are the only mechanisms.
 
-### Policy install (REQUIRED post-build step)
+### Policy install (dev runs only)
 
-`powerbrowser/distribution/policies.json` carries the fork descriptor URL
-plus the two telemetry/studies disables. `DisableAppUpdate` was removed
-in 08-04 — it contradicted a self-updating client. A full rebuild does
-not produce the installed copy, and a clobbered objdir loses it:
+The Linux package carries `distribution/policies.json` (`powerbrowser/packaging/package-linux.sh`, NG-072). A run straight out of `objdir/dist/bin` does not, and a clobbered objdir loses any copy, so a dev run still needs:
 
 ```
 mkdir -p objdir/dist/bin/distribution
@@ -997,6 +994,26 @@ decision per RESEARCH open question 1 and is NOT procured in this phase.
 - The per-OS install → launch → uninstall → no-residue matrix, plus the
   alongside-stock-Firefox interleaved launch, run there (matrix section
   below records the Linux cells green and the staged cells with unblocks).
+
+### Linux package (NG-063, NG-072)
+
+`nix develop .#firefox --command bash powerbrowser/packaging/package-linux.sh`
+runs `./mach package` and adds these to the staged application directory:
+- `theia/`: the built app's `lib/` without source maps, its `package.json`, and
+  `plugins/` when present;
+- `node/`: the official Node release pinned in `powerbrowser/packaging/node-runtime.json`,
+  downloaded once into `.mozbuild/node-dist/` and sha256-checked against the pin;
+- `distribution/policies.json`.
+
+It then refreshes `precomplete` and rewrites
+`objdir/dist/<app>-<Version>.en-US.linux-x86_64.tar.xz`. A packaged install runs
+its own staged backend and Node unless a user pref names another path (NG-063).
+`objdir/dist/bin` is untouched, so dev runs keep the dev tree. Bump Node by
+rerunning the pin step in the non-GUI wave E plan, Task 10 Step 2.
+The Gecko binaries are built in the Nix shell, so the package runs where those
+store paths exist.
+
+Checks: `ng063-packaged-launch`, `ng072-policies-packaged-webextension`.
 
 ### Per-OS install matrix with update hops (08-05)
 
