@@ -216,25 +216,67 @@ function groupSenderSpecIsTheia(spec) {
   }
 }
 
+// NG-038: the actor serves one frame -- the shell's own content browser, in
+// the shell window, on the sidecar's live port. `matches` cannot carry a port
+// (MatchPattern compares hosts only), and stock tabbrowser marks its selected
+// tab's browser primary="true" too (upstream tabbrowser.js:728, 1720), so a
+// 127.0.0.1 page in a selected stock tab passed both the host check and the
+// primary wall. TheiaService._swap sets the port before it navigates the
+// frame; until then every sender is refused.
+const SHELL_DOCUMENT_URL = "chrome://powerbrowser/content/powerbrowser.xhtml";
+const SHELL_CONTENT_BROWSER_ID = "powerbrowser-content";
+let groupSenderPort = null;
+
+// NG-033: the chrome half of the frontend's profile store (profile-storage.ts):
+// one JSON document per profile, written atomically by the one chrome-side
+// writer. The frontend sends the whole map; the cap keeps a runaway frontend
+// from filling the disk through this channel.
+const SHELL_MESSAGE_KINDS = new Set(["shellStateLoad", "shellStateSave", "shellFlushed", "shellArmWebTabHistory"]);
+const SHELL_STATE_FILE_NAME = "powerbrowser-shell-state.json";
+const SHELL_STATE_MAX_CHARS = 16 * 1024 * 1024;
+// NG-032/NG-033: quit flushes chrome is waiting on, flushId -> resolve.
+const pendingShellFlushes = new Map();
+let shellFlushSeq = 0;
+
+// NG-034: saved back/forward history of in-shell web tabs, by tabs.sqlite row
+// key. Read once at startup; a key's history is restored only after the
+// frontend arms it (shellArmWebTabHistory), and only once.
+const WEB_TAB_HISTORY_FILE_NAME = "powerbrowser-web-tab-history.json";
+const WEB_TAB_ROW_KEY_RE = /^web:[A-Za-z0-9_-]{1,64}$/;
+let savedWebTabHistories = {};
+const armedWebTabHistories = new Set();
+
 function groupSenderIsTheia(actorRef) {
   let spec = "";
+  let port = -1;
   let embeddedByPrimary = false;
+  let embeddedByShell = false;
   try {
-    spec = actorRef?.browsingContext?.currentWindowGlobal?.documentURI?.spec ?? "";
-    // GUI-02 (14.1-01): the embedder-is-primary wall (T-14.1-01). The host
-    // check above admits ANY loopback sender, and a user can now browse to
-    // a loopback page INSIDE a web-tab overlay: the actor child loads there
-    // too (the `matches` pin is by origin), and that page would pass the
-    // host check. Its top browsing context is embedded by the overlay
-    // element, which carries no `primary`; only the Theia frame
-    // (powerbrowser.xhtml's `<xul:browser primary="true">`) does.
-    embeddedByPrimary =
-      actorRef?.browsingContext?.top?.embedderElement?.getAttribute("primary") === "true";
+    const documentURI = actorRef?.browsingContext?.currentWindowGlobal?.documentURI;
+    spec = documentURI?.spec ?? "";
+    port = documentURI?.port ?? -1;
+    // GUI-02 (14.1-01): the embedder-is-primary wall (T-14.1-01). A loopback
+    // page inside a web-tab overlay loads the actor child too (the `matches`
+    // pin is by origin); its top browsing context is embedded by the overlay
+    // element, which carries no `primary`.
+    const embedder = actorRef?.browsingContext?.top?.embedderElement;
+    embeddedByPrimary = embedder?.getAttribute("primary") === "true";
+    // NG-038: and primary is not enough -- stock tabbrowser sets it on its
+    // selected tab. Only the shell window's own content browser qualifies.
+    embeddedByShell =
+      embedder?.id === SHELL_CONTENT_BROWSER_ID && embedder?.ownerDocument?.documentURI === SHELL_DOCUMENT_URL;
   } catch {
     spec = "";
     embeddedByPrimary = false;
+    embeddedByShell = false;
   }
-  return embeddedByPrimary && groupSenderSpecIsTheia(spec);
+  return (
+    embeddedByPrimary &&
+    embeddedByShell &&
+    groupSenderPort !== null &&
+    port === groupSenderPort &&
+    groupSenderSpecIsTheia(spec)
+  );
 }
 
 const TAB_STORE_FILE_NAME = "tabs.sqlite";
@@ -563,6 +605,156 @@ export const PowerBrowserAPI = Object.freeze({
     const observer = { observe: () => callback() };
     Services.obs.addObserver(observer, "quit-application-granted");
     return () => Services.obs.removeObserver(observer, "quit-application-granted");
+  },
+
+  /**
+   * NG-037: quits the whole application the way upstream's quit paths do:
+   * announce quit-application-requested so any observer may cancel (a page's
+   * leave prompt; the shell's own flush, NG-032/NG-033), then an attempted
+   * quit that closes every window, stock browser windows included. The
+   * backend stops on the quit-application-granted that follows
+   * (TheiaService.stop). Returns false when an observer cancelled.
+   */
+  quitApplication() {
+    const cancelQuit = Cc["@mozilla.org/supports-PRBool;1"].createInstance(Ci.nsISupportsPRBool);
+    Services.obs.notifyObservers(cancelQuit, "quit-application-requested");
+    if (cancelQuit.data) {
+      return false;
+    }
+    // A full shutdown, not release Gecko's fast shutdown: stage 1 _exit()s
+    // inside XPCOM shutdown before XREMain unlocks the profile
+    // (nsAppRunner.cpp, "see bug #386739"), so the profile's `lock` symlink
+    // outlived every quit and the exit could not be observed by it. Default
+    // branch: this quit only, never written to prefs.js.
+    Services.prefs.getDefaultBranch("").setIntPref("toolkit.shutdown.fastShutdownStage", 0);
+    Services.startup.quit(Ci.nsIAppStartup.eAttemptQuit);
+    return true;
+  },
+
+  /**
+   * NG-032/NG-033, final-review I1: runs the whole quit flush synchronously on
+   * the quit-application-granted path, before TheiaService.stop() kills the
+   * backend. Never cancels: by granted time the quit -- a plain quit, a
+   * restart, a safe-mode or silent restart -- is final and carries whatever
+   * intent its requester announced, so there is nothing to re-issue and no
+   * requester left to tell it was cancelled. The async chain below (the
+   * frontend ack wait plus the history-file write) settles while the nested
+   * event loop spins, bounded by the same quitFlushTimeoutMs the old hold
+   * passed to flushShellState (the XPIProvider.sys.mjs awaitPromise shape).
+   * Never throws, so a quit is never held past the timeout.
+   */
+  runQuitFlushSync(theiaBrowser, timeoutMs) {
+    let finished = false;
+    PowerBrowserAPI.flushShellState(theiaBrowser, timeoutMs)
+      .then(async acked => {
+        PowerBrowserAPI.log("info", acked ? "Frontend flushed before quit." : "Frontend did not acknowledge the quit flush in time; quitting anyway.");
+        PowerBrowserAPI.log("info", `Saved back/forward history for ${await PowerBrowserAPI.saveWebTabHistories()} web tab(s).`);
+      })
+      .catch(err => PowerBrowserAPI.log("error", `Quit flush failed (${err && err.name ? err.name : "error"}); quitting anyway.`))
+      .finally(() => {
+        finished = true;
+      });
+    const deadline = Date.now() + timeoutMs;
+    try {
+      Services.tm.spinEventLoopUntil("PowerBrowserAPI.sys.mjs:runQuitFlushSync", () => finished || Date.now() >= deadline);
+    } catch (err) {
+      PowerBrowserAPI.log("error", `Quit flush spin failed (${err && err.name ? err.name : "error"}); quitting anyway.`);
+    }
+  },
+
+  /** NG-034: reads last session's web-tab histories once, before any web tab can reopen. Never throws. */
+  async loadWebTabHistories() {
+    try {
+      const value = await IOUtils.readJSON(`${PowerBrowserAPI.getProfileDir()}/${WEB_TAB_HISTORY_FILE_NAME}`);
+      savedWebTabHistories = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    } catch {
+      savedWebTabHistories = {};
+    }
+  },
+
+  /**
+   * NG-034: writes the back/forward history of every open in-shell web tab,
+   * by row key, for the next launch. Runs inside the quit flush. Returns the
+   * number of tabs saved; never throws.
+   */
+  async saveWebTabHistories() {
+    const histories = {};
+    const path = `${PowerBrowserAPI.getProfileDir()}/${WEB_TAB_HISTORY_FILE_NAME}`;
+    try {
+      const { SessionHistory } = ChromeUtils.importESModule("resource://gre/modules/sessionstore/SessionHistory.sys.mjs");
+      for (const entry of webTabs.values()) {
+        const sessionHistory = entry.browser.browsingContext?.sessionHistory;
+        if (!entry.rowKey || !sessionHistory || sessionHistory.count === 0) {
+          continue;
+        }
+        histories[entry.rowKey] = SessionHistory.collectFromParent(entry.browser.currentURI?.spec ?? "about:blank", true, sessionHistory);
+      }
+      await IOUtils.writeJSON(path, histories, { tmpPath: `${path}.tmp` });
+    } catch (err) {
+      // Final-review M3: IOUtils rejections name the profile path, which
+      // carries the OS user name -- log the fixed string plus err.name only.
+      PowerBrowserAPI.log("error", `[saveWebTabHistories] write failed (${err && err.name ? err.name : "error"})`);
+      return 0;
+    }
+    return Object.keys(histories).length;
+  },
+
+  /**
+   * NG-034: the saved history for `rowKey` when the frontend armed it, once.
+   * Only http(s) entries are admitted, top-level and subframes alike -- the
+   * same scheme wall webTabOpen and webTabNavigate apply -- so a tampered file
+   * cannot smuggle a file: or chrome: URL in through an entry's children.
+   * The serialized triggering principals ride the entries untouched (SessionHistory
+   * restores what it is given); the wall covers URLs, not principals, and a
+   * tampered profile is already the sessionstore-tampering position.
+   */
+  takeWebTabHistory(rowKey) {
+    if (!armedWebTabHistories.delete(rowKey) || !Object.prototype.hasOwnProperty.call(savedWebTabHistories, rowKey)) {
+      return null;
+    }
+    const data = savedWebTabHistories[rowKey];
+    delete savedWebTabHistories[rowKey];
+    const entries = data && Array.isArray(data.entries) ? data.entries : [];
+    if (entries.length === 0 || !Number.isInteger(data.index) || data.index < 1 || data.index > entries.length) {
+      return null;
+    }
+    const entryUrlOk = item => item && typeof item.url === "string" && /^https?:\/\//i.test(item.url);
+    const treeOk = items => Array.isArray(items) && items.every(item => entryUrlOk(item) && (!item.children || treeOk(item.children)));
+    if (!entries.every(item => entryUrlOk(item) && (!item.children || treeOk(item.children)))) {
+      return null;
+    }
+    return data;
+  },
+
+  /**
+   * NG-034: loads `browser` from saved history the way SessionStore restores
+   * a tab in the parent process (SessionStore.sys.mjs _restoreHistory and
+   * _restoreTabEntry): history first, then the docshell state, then a restore
+   * that reloads the current entry.
+   */
+  async restoreWebTabHistory(browser, tabData) {
+    const { SessionHistory } = ChromeUtils.importESModule("resource://gre/modules/sessionstore/SessionHistory.sys.mjs");
+    const browsingContext = browser.browsingContext;
+    // A fresh overlay commits its initial about:blank into session history a
+    // few ms after it is created. Restored before that commit, the about:blank
+    // is appended after the restored entries and becomes the current entry,
+    // so the tab reloads about:blank instead of its page. Wait for the commit
+    // (bounded); restoreFromParent then purges it. The wait expiring is not a
+    // failure -- the restore is still attempted below, on whatever history the
+    // overlay has by then.
+    for (let waited = 0; browsingContext.sessionHistory.count === 0 && waited < 3000; waited += 25) {
+      await PowerBrowserAPI.sleep(25);
+    }
+    if (browsingContext.sessionHistory.count === 0) {
+      PowerBrowserAPI.log("warn", "[restoreWebTabHistory] initial history entry not yet committed; attempting restore anyway");
+    }
+    SessionHistory.restoreFromParent(browsingContext.sessionHistory, tabData);
+    await SessionStoreUtils.restoreDocShellState(browsingContext, tabData.entries[tabData.index - 1].url, null);
+    SessionStoreUtils.initializeRestore(browsingContext, SessionStoreUtils.constructSessionStoreRestoreData()).catch(err => {
+      // Final-review M3: keep IOUtils/XPCOM error text (it can carry the
+      // absolute profile path) out of the log -- fixed string plus err.name.
+      PowerBrowserAPI.log("error", `[restoreWebTabHistory] settle failed (${err && err.name ? err.name : "error"})`);
+    });
   },
 
   /**
@@ -1943,6 +2135,108 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
+   * NG-038: records the sidecar's live port for the sender wall. Called by
+   * TheiaService._swap before the Theia frame is navigated, and only there. A
+   * non-positive or non-integer port clears it, which refuses every sender.
+   */
+  setGroupSenderPort(port) {
+    groupSenderPort = Number.isInteger(port) && port > 0 ? port : null;
+  },
+
+  /**
+   * NG-033: the parent-side dispatch for the frontend's profile store and the
+   * quit-flush acknowledgement, routed here from PowerBrowserGroupParent by
+   * kind. Same sender wall and reply shape as handleGroupMutation.
+   */
+  async handleShellMessage(data, actorRef) {
+    if (!groupSenderIsTheia(actorRef)) {
+      PowerBrowserAPI.log("error", "[handleShellMessage] rejecting non-Theia-origin sender");
+      return { ok: false, reason: "validation", message: "handleShellMessage: rejecting non-Theia-origin sender" };
+    }
+    const kind = data && data.kind;
+    const path = `${PowerBrowserAPI.getProfileDir()}/${SHELL_STATE_FILE_NAME}`;
+    try {
+      switch (kind) {
+        case "shellStateLoad": {
+          let state = "{}";
+          try {
+            state = await IOUtils.readUTF8(path);
+          } catch {
+            // Absent on a profile's first launch: the empty map.
+          }
+          if (state.length > SHELL_STATE_MAX_CHARS) {
+            return { ok: false, reason: "store", message: "handleShellMessage: the stored shell state exceeds the size cap" };
+          }
+          return { ok: true, kind, state };
+        }
+        case "shellStateSave": {
+          const state = data.state;
+          if (typeof state !== "string" || state.length > SHELL_STATE_MAX_CHARS) {
+            return { ok: false, reason: "validation", message: "handleShellMessage: refusing a shell state that is not a string within the size cap" };
+          }
+          let parsed;
+          try {
+            parsed = JSON.parse(state);
+          } catch {
+            parsed = null;
+          }
+          if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+            return { ok: false, reason: "validation", message: "handleShellMessage: refusing a shell state that is not a JSON object" };
+          }
+          await IOUtils.writeUTF8(path, state, { tmpPath: `${path}.tmp` });
+          return { ok: true, kind };
+        }
+        case "shellFlushed": {
+          const resolve = pendingShellFlushes.get(data.flushId);
+          if (resolve) {
+            resolve();
+          }
+          return { ok: true, kind };
+        }
+        case "shellArmWebTabHistory": {
+          if (typeof data.key !== "string" || !WEB_TAB_ROW_KEY_RE.test(data.key)) {
+            return { ok: false, reason: "validation", message: "handleShellMessage: refusing a malformed web-tab row key" };
+          }
+          armedWebTabHistories.add(data.key);
+          return { ok: true, kind };
+        }
+        default:
+          return { ok: false, reason: "validation", message: `handleShellMessage: unknown kind ${String(kind)}` };
+      }
+    } catch (err) {
+      // Final-review M3: the IOUtils failure names the profile file -- reply
+      // with the fixed string plus err.name, never the message text.
+      return { ok: false, reason: "store", message: `handleShellMessage: ${kind} failed (store ${err && err.name ? err.name : "error"})` };
+    }
+  },
+
+  /**
+   * NG-032/NG-033: asks the Theia frame to write its session and layout now,
+   * over the push the web-tab state rides, and waits for its shellFlushed
+   * acknowledgement or `timeoutMs`. True on the ack; false on a timeout or
+   * when there is no frontend to ask. Never throws, so a quit is never held
+   * past the timeout.
+   */
+  async flushShellState(theiaBrowser, timeoutMs) {
+    const flushId = `flush-${Date.now().toString(36)}-${(shellFlushSeq += 1)}`;
+    const acked = new Promise(resolve => pendingShellFlushes.set(flushId, resolve));
+    try {
+      theiaBrowser.browsingContext.currentWindowGlobal
+        .getActor(GROUP_ACTOR_NAME)
+        .sendAsyncMessage("PowerBrowserWebTabState", { kind: "flushShellState", flushId });
+    } catch (err) {
+      pendingShellFlushes.delete(flushId);
+      // Final-review M3: the actor/send failure text can carry internal paths
+      // -- fixed string plus err.name only.
+      PowerBrowserAPI.log("error", `[flushShellState] no frontend to flush (${err && err.name ? err.name : "error"})`);
+      return false;
+    }
+    const done = await Promise.race([acked.then(() => true), PowerBrowserAPI.sleep(timeoutMs).then(() => false)]);
+    pendingShellFlushes.delete(flushId);
+    return done;
+  },
+
+  /**
    * GUI-08 (15-01): the parent-side dispatch for PowerBrowserGroupMutation
    * queries. Returns { ok: true, ...echo } on success, { ok: false, reason }
    * otherwise -- reason 'validation' for shape/origin/kind violations,
@@ -2728,7 +3022,8 @@ export const PowerBrowserAPI = Object.freeze({
     win.gBrowser.tabs.push({ linkedBrowser: browser });
     // NG-001: the row key is the tab's identity -- the key the frontend sent
     // (a reopened card's row) or web:<tabId> -- never the page URL.
-    const entry = { browser, uri: key || `web:${tabId}`, listener: null, titleListener: null, owner: actorRef };
+    // NG-034: that value is also the web-tab history key (saveWebTabHistories).
+    const entry = { browser, uri: key || `web:${tabId}`, listener: null, titleListener: null, owner: actorRef, rowKey: key || `web:${tabId}` };
     // NG-004: the row exists from the moment the tab does, a New Tab on the
     // empty page included, so every Panorama mutation has a row to act on.
     PowerBrowserAPI.writeTabRow({ uri: entry.uri, url: spec === "about:blank" ? "" : spec, title: "", chromeWin: win }).catch(err => {
@@ -2792,6 +3087,19 @@ export const PowerBrowserAPI = Object.freeze({
     };
     browser.addEventListener("pagetitlechanged", entry.titleListener);
     webTabs.set(tabId, entry);
+    // NG-034: a tab the frontend reopened from last session's snapshot, with
+    // its history armed, gets its back/forward history back; any other tab
+    // loads its URL through the null-principal navigate below.
+    const history = PowerBrowserAPI.takeWebTabHistory(entry.rowKey);
+    if (history) {
+      PowerBrowserAPI.restoreWebTabHistory(browser, history).catch(err => {
+        // Final-review M3: the restore failure can carry XPCOM/IOUtils text
+        // with the profile path -- fixed string plus err.name only.
+        PowerBrowserAPI.log("error", `[web-tab] history restore failed (${err && err.name ? err.name : "error"})`);
+        PowerBrowserAPI.webTabNavigate(tabId, spec);
+      });
+      return "opened";
+    }
     const where = PowerBrowserAPI.webTabNavigate(tabId, spec);
     return where === "loading" ? "opened" : where;
   },
@@ -3093,6 +3401,11 @@ export class PowerBrowserGroupParent extends GroupActorBase {
   async receiveMessage(message) {
     if (!message || message.name !== "PowerBrowserGroupMutation") {
       return undefined;
+    }
+    // NG-033: the profile-store and quit-flush kinds have their own handler
+    // (handleShellMessage); every other kind is a group or web-tab mutation.
+    if (SHELL_MESSAGE_KINDS.has(message.data && message.data.kind)) {
+      return PowerBrowserAPI.handleShellMessage(message.data, this);
     }
     return PowerBrowserAPI.handleGroupMutation(message.data, this);
   }

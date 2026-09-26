@@ -11,6 +11,8 @@ import { TerminalUriOpenHandler } from './terminal-open-handler';
 import { PowerBrowserOutputOpenHandler, PowerBrowserWebviewOpenHandler } from './existing-scheme-coverage';
 import { BrowserWindowCommandContribution } from './browser-window-command';
 import { WEB_TAB_FACTORY_ID, WebTabChannel, WebTabOpenHandler, WebTabOptions, WebTabWidget, isCurrentSessionTabId } from './web-tab';
+import { LocalStorageService } from '@theia/core/lib/browser/storage-service';
+import { ProfileStorageService, ShellStateFlushContribution } from './profile-storage';
 
 /**
  * Registers an `OpenHandler` after the app's first `OpenerService.open()`
@@ -165,4 +167,20 @@ export default new ContainerModule((bind, _unbind, isBound, rebind) => {
             });
         },
     })).inSingletonScope();
+
+    // NG-033: Theia's storage lives in the browser profile, not in the
+    // per-launch frontend origin's localStorage (profile-storage.ts header).
+    // A guarded rebind, the in-tree idiom (D-47), of LocalStorageService, not
+    // StorageService: StorageService stays @theia/workspace's
+    // WorkspaceStorageService, which prefixes each key with the workspace and
+    // writes through LocalStorageService (ruling F8), so ShellLayoutRestorer's
+    // perspective layouts and ModeService reach the profile store per workspace.
+    bind(ProfileStorageService).toSelf().inSingletonScope();
+    if (isBound(LocalStorageService)) {
+        rebind(LocalStorageService).toService(ProfileStorageService);
+    } else {
+        bind(LocalStorageService).toService(ProfileStorageService);
+    }
+    bind(ShellStateFlushContribution).toSelf().inSingletonScope();
+    bind(FrontendApplicationContribution).toService(ShellStateFlushContribution);
 });
