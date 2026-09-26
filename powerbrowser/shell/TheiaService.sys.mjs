@@ -296,6 +296,14 @@ export const TheiaService = {
       this._pushLog(`Tab triggers not attached: ${err && err.message ? err.message : err}`);
     }
 
+    // NG-034: last session's web-tab histories, read before the frontend can
+    // reopen a web tab. Best-effort like the store above.
+    try {
+      await PowerBrowserAPI.loadWebTabHistories();
+    } catch (err) {
+      this._pushLog(`Web tab history not loaded: ${err && err.message ? err.message : err}`);
+    }
+
     // GUI-08 (15-01): register the PowerBrowserGroup actor pair beside the
     // tab-store wiring above (before _restart/swap), through PowerBrowserAPI
     // only (D-96: this file imports nothing else). Best-effort like the
@@ -397,7 +405,10 @@ export const TheiaService = {
     this._quitFlushStarted = true;
     const timeoutMs = PowerBrowserAPI.getIntPref("powerbrowser.shell.quitFlushTimeoutMs", 3000);
     PowerBrowserAPI.flushShellState(this._browserElement, timeoutMs)
-      .then(acked => this._pushLog(acked ? "Frontend flushed before quit." : "Frontend did not acknowledge the quit flush in time; quitting anyway."))
+      .then(async acked => {
+        this._pushLog(acked ? "Frontend flushed before quit." : "Frontend did not acknowledge the quit flush in time; quitting anyway.");
+        this._pushLog(`Saved back/forward history for ${await PowerBrowserAPI.saveWebTabHistories()} web tab(s).`);
+      })
       .catch(err => this._pushLog(`Quit flush failed: ${err && err.message ? err.message : err}`))
       .finally(() => {
         if (!PowerBrowserAPI.quitApplication()) {

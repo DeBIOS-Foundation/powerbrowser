@@ -231,12 +231,20 @@ let groupSenderPort = null;
 // one JSON document per profile, written atomically by the one chrome-side
 // writer. The frontend sends the whole map; the cap keeps a runaway frontend
 // from filling the disk through this channel.
-const SHELL_MESSAGE_KINDS = new Set(["shellStateLoad", "shellStateSave", "shellFlushed"]);
+const SHELL_MESSAGE_KINDS = new Set(["shellStateLoad", "shellStateSave", "shellFlushed", "shellArmWebTabHistory"]);
 const SHELL_STATE_FILE_NAME = "powerbrowser-shell-state.json";
 const SHELL_STATE_MAX_CHARS = 16 * 1024 * 1024;
 // NG-032/NG-033: quit flushes chrome is waiting on, flushId -> resolve.
 const pendingShellFlushes = new Map();
 let shellFlushSeq = 0;
+
+// NG-034: saved back/forward history of in-shell web tabs, by tabs.sqlite row
+// key. Read once at startup; a key's history is restored only after the
+// frontend arms it (shellArmWebTabHistory), and only once.
+const WEB_TAB_HISTORY_FILE_NAME = "powerbrowser-web-tab-history.json";
+const WEB_TAB_ROW_KEY_RE = /^web:[A-Za-z0-9_-]{1,64}$/;
+let savedWebTabHistories = {};
+const armedWebTabHistories = new Set();
 
 function groupSenderIsTheia(actorRef) {
   let spec = "";
@@ -640,6 +648,78 @@ export const PowerBrowserAPI = Object.freeze({
     };
     Services.obs.addObserver(observer, "quit-application-requested");
     return () => Services.obs.removeObserver(observer, "quit-application-requested");
+  },
+
+  /** NG-034: reads last session's web-tab histories once, before any web tab can reopen. Never throws. */
+  async loadWebTabHistories() {
+    try {
+      const value = await IOUtils.readJSON(`${PowerBrowserAPI.getProfileDir()}/${WEB_TAB_HISTORY_FILE_NAME}`);
+      savedWebTabHistories = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    } catch {
+      savedWebTabHistories = {};
+    }
+  },
+
+  /**
+   * NG-034: writes the back/forward history of every open in-shell web tab,
+   * by row key, for the next launch. Runs inside the quit flush. Returns the
+   * number of tabs saved; never throws.
+   */
+  async saveWebTabHistories() {
+    const histories = {};
+    const path = `${PowerBrowserAPI.getProfileDir()}/${WEB_TAB_HISTORY_FILE_NAME}`;
+    try {
+      const { SessionHistory } = ChromeUtils.importESModule("resource://gre/modules/sessionstore/SessionHistory.sys.mjs");
+      for (const entry of webTabs.values()) {
+        const sessionHistory = entry.browser.browsingContext?.sessionHistory;
+        if (!entry.rowKey || !sessionHistory || sessionHistory.count === 0) {
+          continue;
+        }
+        histories[entry.rowKey] = SessionHistory.collectFromParent(entry.browser.currentURI?.spec ?? "about:blank", true, sessionHistory);
+      }
+      await IOUtils.writeJSON(path, histories, { tmpPath: `${path}.tmp` });
+    } catch (err) {
+      PowerBrowserAPI.log("error", `[saveWebTabHistories] ${err && err.message ? err.message : err}`);
+      return 0;
+    }
+    return Object.keys(histories).length;
+  },
+
+  /**
+   * NG-034: the saved history for `rowKey` when the frontend armed it, once.
+   * Only http(s) entries are admitted -- the scheme wall webTabOpen and
+   * webTabNavigate apply -- so a tampered file cannot load file: or chrome:.
+   */
+  takeWebTabHistory(rowKey) {
+    if (!armedWebTabHistories.delete(rowKey) || !Object.prototype.hasOwnProperty.call(savedWebTabHistories, rowKey)) {
+      return null;
+    }
+    const data = savedWebTabHistories[rowKey];
+    delete savedWebTabHistories[rowKey];
+    const entries = data && Array.isArray(data.entries) ? data.entries : [];
+    if (entries.length === 0 || !Number.isInteger(data.index) || data.index < 1 || data.index > entries.length) {
+      return null;
+    }
+    if (!entries.every(item => item && typeof item.url === "string" && /^https?:\/\//i.test(item.url))) {
+      return null;
+    }
+    return data;
+  },
+
+  /**
+   * NG-034: loads `browser` from saved history the way SessionStore restores
+   * a tab in the parent process (SessionStore.sys.mjs _restoreHistory and
+   * _restoreTabEntry): history first, then the docshell state, then a restore
+   * that reloads the current entry.
+   */
+  async restoreWebTabHistory(browser, tabData) {
+    const { SessionHistory } = ChromeUtils.importESModule("resource://gre/modules/sessionstore/SessionHistory.sys.mjs");
+    const browsingContext = browser.browsingContext;
+    SessionHistory.restoreFromParent(browsingContext.sessionHistory, tabData);
+    await SessionStoreUtils.restoreDocShellState(browsingContext, tabData.entries[tabData.index - 1].url, null);
+    SessionStoreUtils.initializeRestore(browsingContext, SessionStoreUtils.constructSessionStoreRestoreData()).catch(err => {
+      PowerBrowserAPI.log("error", `[restoreWebTabHistory] ${err && err.message ? err.message : err}`);
+    });
   },
 
   /**
@@ -2078,6 +2158,13 @@ export const PowerBrowserAPI = Object.freeze({
           }
           return { ok: true, kind };
         }
+        case "shellArmWebTabHistory": {
+          if (typeof data.key !== "string" || !WEB_TAB_ROW_KEY_RE.test(data.key)) {
+            return { ok: false, reason: "validation", message: "handleShellMessage: refusing a malformed web-tab row key" };
+          }
+          armedWebTabHistories.add(data.key);
+          return { ok: true, kind };
+        }
         default:
           return { ok: false, reason: "validation", message: `handleShellMessage: unknown kind ${String(kind)}` };
       }
@@ -2896,7 +2983,8 @@ export const PowerBrowserAPI = Object.freeze({
     win.gBrowser.tabs.push({ linkedBrowser: browser });
     // NG-001: the row key is the tab's identity -- the key the frontend sent
     // (a reopened card's row) or web:<tabId> -- never the page URL.
-    const entry = { browser, uri: key || `web:${tabId}`, listener: null, titleListener: null, owner: actorRef };
+    // NG-034: that value is also the web-tab history key (saveWebTabHistories).
+    const entry = { browser, uri: key || `web:${tabId}`, listener: null, titleListener: null, owner: actorRef, rowKey: key || `web:${tabId}` };
     // NG-004: the row exists from the moment the tab does, a New Tab on the
     // empty page included, so every Panorama mutation has a row to act on.
     PowerBrowserAPI.writeTabRow({ uri: entry.uri, url: spec === "about:blank" ? "" : spec, title: "", chromeWin: win }).catch(err => {
@@ -2960,6 +3048,17 @@ export const PowerBrowserAPI = Object.freeze({
     };
     browser.addEventListener("pagetitlechanged", entry.titleListener);
     webTabs.set(tabId, entry);
+    // NG-034: a tab the frontend reopened from last session's snapshot, with
+    // its history armed, gets its back/forward history back; any other tab
+    // loads its URL through the null-principal navigate below.
+    const history = PowerBrowserAPI.takeWebTabHistory(entry.rowKey);
+    if (history) {
+      PowerBrowserAPI.restoreWebTabHistory(browser, history).catch(err => {
+        PowerBrowserAPI.log("error", `[web-tab] history restore failed: ${err && err.message ? err.message : err}`);
+        PowerBrowserAPI.webTabNavigate(tabId, spec);
+      });
+      return "opened";
+    }
     const where = PowerBrowserAPI.webTabNavigate(tabId, spec);
     return where === "loading" ? "opened" : where;
   },

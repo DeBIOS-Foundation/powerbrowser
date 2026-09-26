@@ -49,7 +49,8 @@ interface ShellStateReply {
 type ShellStateMessage =
     | { kind: 'shellStateLoad' }
     | { kind: 'shellStateSave'; state: string }
-    | { kind: 'shellFlushed'; flushId: string };
+    | { kind: 'shellFlushed'; flushId: string }
+    | { kind: 'shellArmWebTabHistory'; key: string };
 
 const NO_CHROME = 'no-chrome';
 type ShellStateOutcome = ShellStateReply | typeof NO_CHROME;
@@ -116,6 +117,12 @@ export class ProfileStorageService extends LocalStorageService {
     /** Tells chrome the flush it asked for is done (PowerBrowserAPI.flushShellState waits on it). */
     async acknowledgeFlush(flushId: string): Promise<void> {
         await this.request({ kind: 'shellFlushed', flushId });
+    }
+
+    /** NG-034: asks chrome to restore `rowKey`'s saved back/forward history on that tab's next open. */
+    async armWebTabHistory(rowKey: string): Promise<boolean> {
+        const reply = await this.request({ kind: 'shellArmWebTabHistory', key: rowKey });
+        return reply !== NO_CHROME && reply.ok;
     }
 
     protected load(): Promise<Record<string, unknown> | undefined> {

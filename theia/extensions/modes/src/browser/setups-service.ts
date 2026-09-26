@@ -6,10 +6,14 @@ import {
     StatusBar,
     StatusBarAlignment,
     Widget,
+    WidgetManager,
     open,
 } from '@theia/core/lib/browser';
 import { FrontendApplicationStateService } from '@theia/core/lib/browser/frontend-application-state';
 import { DockLayout, DockPanel } from '@theia/core/shared/@lumino/widgets';
+import type { Title } from '@theia/core/shared/@lumino/widgets';
+import { GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-query-service';
+import { WEB_TAB_FACTORY_ID, WEB_TAB_OPEN_HANDLER_ID, WEB_TAB_SESSION, WebTabOptions, WebTabWidget } from '@powerbrowser/tab-uris/lib/browser/web-tab';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
 import { SecondaryWindowHandler, extractSecondaryWindow } from '@theia/core/lib/browser/secondary-window-handler';
 import { ExtractableWidget } from '@theia/core/lib/browser/widgets/extractable-widget';
@@ -84,6 +88,16 @@ export interface SessionSnapshot {
     windows: SetupWindowSnapshot[];
     /** Milliseconds since the epoch. */
     savedAt: number;
+    /** NG-034: the web tabs to reopen on their own rows; empty in a snapshot saved before this field. */
+    webTabs: SavedSessionWebTab[];
+}
+
+/** NG-034: one web tab of the saved session, as wave A's restore plan reads it (planWebTabRestore). */
+export interface SavedSessionWebTab {
+    rowKey: string;
+    url: string;
+    /** Milliseconds since the epoch the tab was last the current tab; null when never recorded. */
+    lastAccessed: number | null;
 }
 
 /**
@@ -372,7 +386,13 @@ function parseSessionSnapshot(entry: unknown): SessionSnapshot | undefined {
     if (windows.length === 0) {
         return undefined;
     }
-    return { modeId: row['modeId'] as string, windows, savedAt: isFiniteNumber(row['savedAt']) ? row['savedAt'] : 0 };
+    const webTabs: SavedSessionWebTab[] = (Array.isArray(row['webTabs']) ? row['webTabs'] as unknown[] : []).flatMap(item => {
+        const tab = typeof item === 'object' && item !== null ? item as Record<string, unknown> : {};
+        return typeof tab['rowKey'] === 'string' && /^web:[A-Za-z0-9_-]{1,64}$/.test(tab['rowKey']) && typeof tab['url'] === 'string'
+            ? [{ rowKey: tab['rowKey'], url: tab['url'], lastAccessed: isFiniteNumber(tab['lastAccessed']) ? tab['lastAccessed'] : null }]
+            : [];
+    });
+    return { modeId: row['modeId'] as string, windows, savedAt: isFiniteNumber(row['savedAt']) ? row['savedAt'] : 0, webTabs };
 }
 
 /**
@@ -440,6 +460,17 @@ export class SetupsService implements FrontendApplicationContribution {
     @inject(ProfileStorageService)
     protected readonly profileStorage: ProfileStorageService;
 
+    @inject(WidgetManager)
+    protected readonly widgets: WidgetManager;
+
+    /** NG-034: read by wave A's restore plan (GroupQueryService.getSettings, wave A Task 10). */
+    @inject(GroupQueryService)
+    protected readonly groupReader: GroupQueryService;
+
+    /** NG-034: when each web tab (by row key) was last the current main-area tab. */
+    protected webTabAccess = new Map<string, number>();
+    protected restoreSeq = 0;
+
     protected readonly setupsUri = UserStorageUri.resolve(SETUPS_STORE_FILENAME);
     protected readonly debouncedReload = pDebounce(() => this.reloadSetups(), 150);
     protected lastGoodSetups: SetupSnapshot[] = [];
@@ -464,6 +495,12 @@ export class SetupsService implements FrontendApplicationContribution {
         // the last-session pointer, which onStop could never write (the
         // backend is stopped before the page unloads).
         this.profileStorage.onWillFlush(event => event.waitUntil(this.saveSession()));
+        // NG-034: the last-accessed time wave A's restore plan ages tabs by.
+        this.shell.mainPanel.onDidChangeCurrent((title: Title<Widget> | undefined) => {
+            if (title?.owner instanceof WebTabWidget) {
+                this.webTabAccess.set(title.owner.rowKey, Date.now());
+            }
+        });
         // Ready-ordered applicator: runs after core layout restore, so the
         // last-session pointer re-applies onto the restored shell with no
         // race (14-RESEARCH.md Pattern 1 ordering).
@@ -489,9 +526,39 @@ export class SetupsService implements FrontendApplicationContribution {
 
     /** NG-032: the unnamed session snapshot and the last-session pointer, written inside the quit flush. */
     protected async saveSession(): Promise<void> {
-        const session: SessionSnapshot = { modeId: this.currentModeId(), windows: this.snapshotWindows(), savedAt: Date.now() };
+        const now = Date.now();
+        const current = this.shell.mainPanel.currentTitle?.owner;
+        const webTabs: SavedSessionWebTab[] = this.shell.getWidgets('main')
+            .filter((widget): widget is WebTabWidget => widget instanceof WebTabWidget)
+            .map(tab => ({ rowKey: tab.rowKey, url: tab.url, lastAccessed: tab === current ? now : this.webTabAccess.get(tab.rowKey) ?? null }));
+        const session: SessionSnapshot = { modeId: this.currentModeId(), windows: this.snapshotWindows(), savedAt: now, webTabs };
         await this.profileStorage.setData(SESSION_STORAGE_KEY, session);
         await this.persistLastSession(this.currentSetup);
+    }
+
+    /**
+     * NG-034: reopens one of last session's web tabs on its own tabs.sqlite row
+     * (wave A: WebTabOptions.key), so the row keeps its group, place and
+     * thumbnail. With `withHistory`, chrome first arms the tab's saved
+     * back/forward history, which webTabOpen restores instead of loading
+     * `url`. Wave A's Task 10 decides withHistory per tab (planWebTabRestore);
+     * this call shape is fixed for it.
+     */
+    async restoreWebTab(tab: { rowKey: string; url: string; withHistory: boolean }): Promise<Widget | undefined> {
+        if (tab.withHistory) {
+            await this.profileStorage.armWebTabHistory(tab.rowKey);
+        }
+        // This session's discriminator in the id, so the web-tab factory admits it.
+        const options: WebTabOptions = { id: `wt-${WEB_TAB_SESSION}-restored-${(this.restoreSeq += 1)}`, url: tab.url, key: tab.rowKey };
+        try {
+            const widget = await this.widgets.getOrCreateWidget<WebTabWidget>(WEB_TAB_FACTORY_ID, options);
+            if (!widget.isAttached) {
+                await this.shell.addWidget(widget, { area: 'main' });
+            }
+            return widget;
+        } catch {
+            return undefined;
+        }
     }
 
     /** Save the current windows, tabs, and mode under a typed name. */
@@ -562,9 +629,9 @@ export class SetupsService implements FrontendApplicationContribution {
      * never shows a chosen setup's gone-tabs notice, but a mode it can no
      * longer resolve still gets the contracted fallback notice.
      */
-    protected async applySnapshot(row: { modeId: string; windows: SetupWindowSnapshot[] }, notify: boolean): Promise<void> {
+    protected async applySnapshot(row: { modeId: string; windows: SetupWindowSnapshot[] }, notify: boolean, openWebTabs = true): Promise<void> {
         this.applyGeometry(row.windows[0]);
-        const dropped = await this.placeTabs(row);
+        const dropped = await this.placeTabs(row, openWebTabs);
         const modeId = row.windows[0].modeId ?? row.modeId;
         // NG-029: the mode goes through ModeService.activateMode, the path the
         // mode toggle takes (GUI-DEFECTS item 6), so the panel map, the Explorer
@@ -870,7 +937,7 @@ export class SetupsService implements FrontendApplicationContribution {
      * web tabs on one page share one registry address (docs/URI-SCHEMES.md:250-254),
      * so a setup restores that page once.
      */
-    protected tabPlacer(): (tab: string) => Promise<Widget | true | null> {
+    protected tabPlacer(openWebTabs = true): (tab: string) => Promise<Widget | true | null> {
         const placed = new Map<string, Widget>();
         for (const entry of this.tabsOfShell()) {
             if (!placed.has(entry.uri)) {
@@ -892,6 +959,12 @@ export class SetupsService implements FrontendApplicationContribution {
             if (existing) {
                 return existing;
             }
+            // NG-034: in the session restore, web tabs come back only through
+            // restoreWebTab (on their rows, per wave A's plan); a web page the
+            // plan left closed must not come back through the opener instead.
+            if (!openWebTabs && await this.isWebTabUri(tab)) {
+                return null;
+            }
             const opened = await this.openTabUri(tab);
             if (opened instanceof Widget) {
                 placed.set(tab, opened);
@@ -900,13 +973,21 @@ export class SetupsService implements FrontendApplicationContribution {
         };
     }
 
+    protected async isWebTabUri(tab: string): Promise<boolean> {
+        try {
+            return (await this.opener.getOpener(new URI(tab))).id === WEB_TAB_OPEN_HANDLER_ID;
+        } catch {
+            return false;
+        }
+    }
+
     /**
      * Place every recorded tab through the placer. Returns the count of URIs
      * that no longer resolve (dropped, never forced -- T-14-03-02). Dependent
      * rows re-host through the stock handler after their tabs resolve.
      */
-    protected async placeTabs(row: Pick<SetupSnapshot, 'windows'>): Promise<number> {
-        const place = this.tabPlacer();
+    protected async placeTabs(row: Pick<SetupSnapshot, 'windows'>, openWebTabs = true): Promise<number> {
+        const place = this.tabPlacer(openWebTabs);
         let dropped = 0;
         const core = row.windows[0];
         if (core.dock) {
@@ -1168,7 +1249,17 @@ export class SetupsService implements FrontendApplicationContribution {
         }
         if (saved) {
             this.currentSetup = pointer;
-            await this.applySnapshot(saved, false);
+            for (const tab of saved.webTabs) {
+                if (tab.lastAccessed !== null) {
+                    this.webTabAccess.set(tab.rowKey, tab.lastAccessed);
+                }
+            }
+            // NG-034: web tabs first, on their rows. Wave A's Task 10 replaces
+            // this loop with its restore plan (restore_behaviour, age tiers).
+            for (const tab of saved.webTabs) {
+                await this.restoreWebTab({ rowKey: tab.rowKey, url: tab.url, withHistory: true });
+            }
+            await this.applySnapshot(saved, false, false);
             return;
         }
         if (pointer) {
