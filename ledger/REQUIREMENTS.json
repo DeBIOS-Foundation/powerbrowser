@@ -1,0 +1,10 @@
+{
+  "ledger_version": 1,
+  "frozen_at": null,
+  "items": [],
+  "current_phase": null,
+  "check_cmd": null,
+  "mockup_freeze": null,
+  "scope_lock": null,
+  "check_locks": null
+}

@@ -1,0 +1,9 @@
+ai-opencode-tracer
+gui07-strip-spike-verdict
+gui08-canvas-geometry
+gui08-canvas-geometry-self-test
+gui08-panorama-copy
+gui08-panorama-copy-self-test
+gui08-persistence-roundtrip
+gui08-persistence-roundtrip-self-test
+internals-catalogue
