@@ -3670,6 +3670,17 @@ run_own_checks() {
     "internals-boundary-self-test|bash $REPO_ROOT/scripts/check-internals-boundary.sh --self-test"
     "internals-boundary|bash $REPO_ROOT/scripts/check-internals-boundary.sh"
     "internals-catalogue|bash $REPO_ROOT/scripts/check-internals-boundary.sh --catalogue"
+    # NG-039 (non-GUI wave C): the boundary guard detects the two Firefox
+    # internals the 2026-09-25 audit found uncatalogued (wrappedJSObject,
+    # drawSnapshot), and every occurrence of either has a catalogue row. It
+    # plants its own fixtures and reads text only: honestly --quick.
+    "ng-039-internals-detects-waivers|node $REPO_ROOT/scripts/verify-ng-039-internals-waivers.mjs"
+    # NG-040: every INTERNAL-APIS.md line reference matches the file, both
+    # directions (occurrence -> row through check-internals-boundary.sh
+    # --catalogue; row -> line and method here). The self-test runs on
+    # scratch fixtures only, for the reason every self-test row gives.
+    "ng-040-internals-catalogue-lines|node $REPO_ROOT/scripts/verify-ng-040-internals-catalogue-lines.mjs"
+    "ng-040-internals-catalogue-lines-self-test|node $REPO_ROOT/scripts/verify-ng-040-internals-catalogue-lines.mjs --self-test"
 
     # from verify-phase-05.sh -- registered outside the --quick guard there too,
     # for the reason its own comment gives: they need no browser, no display and
@@ -4812,6 +4823,24 @@ run_own_checks() {
       # other self-test row gives.
       "gui02-web-tab-live|node $REPO_ROOT/scripts/verify-web-tab-live.mjs"
       "gui02-web-tab-live-self-test|node $REPO_ROOT/scripts/verify-web-tab-live.mjs --self-test"
+
+      # NG-029..NG-038 (non-GUI wave C): the built shell driven through the
+      # command registry, the actor channel, the core window's close button in
+      # the chrome document and real quit-and-relaunch cycles on one kept
+      # profile (withFirefoxPage's profileDir, via scripts/lib/pb-relaunch.mjs).
+      # Each launches and reaps its own browser, so each is a plain node row
+      # like gui07 above; none is --quick. Their demonstrated red is each row's
+      # pre-build record-fail (docs/non-gui/checks-wave-c.tsv).
+      "ng-029-setup-restore-activates-mode|node $REPO_ROOT/scripts/verify-ng-029-setup-restore-mode.mjs"
+      "ng-030-setup-restore-opens-tabs-once|node $REPO_ROOT/scripts/verify-ng-030-setup-restore-dedup.mjs"
+      "ng-031-setup-commands-reachable|node $REPO_ROOT/scripts/verify-ng-031-setup-commands-reachable.mjs"
+      "ng-032-quit-restores-session|node $REPO_ROOT/scripts/verify-ng-032-quit-restores-session.mjs"
+      "ng-033-layout-survives-relaunch|node $REPO_ROOT/scripts/verify-ng-033-layout-survives-relaunch.mjs"
+      "ng-034-web-tab-history-survives-restart|node $REPO_ROOT/scripts/verify-ng-034-web-tab-history-restart.mjs"
+      "ng-035-custom-mode-saves-layout|node $REPO_ROOT/scripts/verify-ng-035-custom-mode-layout.mjs"
+      "ng-036-setup-records-dock-layout|node $REPO_ROOT/scripts/verify-ng-036-setup-dock-layout.mjs"
+      "ng-037-core-close-quits|node $REPO_ROOT/scripts/verify-ng-037-core-close-quits.mjs"
+      "ng-038-actor-refuses-hostile-senders|node $REPO_ROOT/scripts/verify-ng-038-actor-sender-wall.mjs"
     )
   fi
 

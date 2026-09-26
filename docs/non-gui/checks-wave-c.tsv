@@ -1,0 +1,12 @@
+NG-029	scripts/verify-ng-029-setup-restore-mode.mjs::ng-029-setup-restore-activates-mode	node scripts/verify-ng-029-setup-restore-mode.mjs # live-clone
+NG-030	scripts/verify-ng-030-setup-restore-dedup.mjs::ng-030-setup-restore-opens-tabs-once	node scripts/verify-ng-030-setup-restore-dedup.mjs # live-clone
+NG-031	scripts/verify-ng-031-setup-commands-reachable.mjs::ng-031-setup-commands-reachable	node scripts/verify-ng-031-setup-commands-reachable.mjs # live-clone
+NG-032	scripts/verify-ng-032-quit-restores-session.mjs::ng-032-quit-restores-session	node scripts/verify-ng-032-quit-restores-session.mjs # live-main
+NG-033	scripts/verify-ng-033-layout-survives-relaunch.mjs::ng-033-layout-survives-relaunch	node scripts/verify-ng-033-layout-survives-relaunch.mjs # live-main
+NG-034	scripts/verify-ng-034-web-tab-history-restart.mjs::ng-034-web-tab-history-survives-restart	node scripts/verify-ng-034-web-tab-history-restart.mjs # live-main
+NG-035	scripts/verify-ng-035-custom-mode-layout.mjs::ng-035-custom-mode-saves-layout	node scripts/verify-ng-035-custom-mode-layout.mjs # live-clone
+NG-036	scripts/verify-ng-036-setup-dock-layout.mjs::ng-036-setup-records-dock-layout	node scripts/verify-ng-036-setup-dock-layout.mjs # live-clone
+NG-037	scripts/verify-ng-037-core-close-quits.mjs::ng-037-core-close-quits	node scripts/verify-ng-037-core-close-quits.mjs # live-main
+NG-038	scripts/verify-ng-038-actor-sender-wall.mjs::ng-038-actor-refuses-hostile-senders	node scripts/verify-ng-038-actor-sender-wall.mjs # live-main
+NG-039	scripts/verify-ng-039-internals-waivers.mjs::ng-039-internals-detects-waivers	node scripts/verify-ng-039-internals-waivers.mjs # quick
+NG-040	scripts/verify-ng-040-internals-catalogue-lines.mjs::ng-040-internals-catalogue-lines	node scripts/verify-ng-040-internals-catalogue-lines.mjs # quick

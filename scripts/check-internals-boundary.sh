@@ -332,6 +332,18 @@ EOF
   return "$overall"
 }
 
+# --scan <dir>: the same boundary scan over any directory. NG-039's check
+# plants fixtures in a scratch directory and needs the guard's own verdict
+# on them; the default path below stays powerbrowser/shell.
+if [ "${1:-}" = "--scan" ]; then
+  if [ -z "${2:-}" ]; then
+    echo "check-internals-boundary: FAIL -- --scan requires a directory" >&2
+    exit 1
+  fi
+  scan_internals_boundary "$2"
+  exit $?
+fi
+
 if [ "${1:-}" = "--self-test" ]; then
   run_self_test
   exit $?
