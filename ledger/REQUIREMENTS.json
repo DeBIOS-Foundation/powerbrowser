@@ -1,5 +1,5 @@
 {
-  "ledger_version": 189,
+  "ledger_version": 191,
   "frozen_at": null,
   "items": [
     {
@@ -18,11 +18,11 @@
     {
       "id": "NG-002",
       "text": "Navigating a tab keeps its row: group_id, x/y, ord and thumbnail survive a link click. Evidence: `onLocationChange` deletes the old row and inserts a new one (PBA:2473-2480, 1078-1092).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:17",
       "test_ref": "scripts/verify-ng-002-navigation-keeps-row.mjs::ng-002-navigation-keeps-row",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "a5442cc: ng-002-navigation-keeps-row passes in main",
       "owner": "",
       "phase": "",
       "deferred_at": "",
