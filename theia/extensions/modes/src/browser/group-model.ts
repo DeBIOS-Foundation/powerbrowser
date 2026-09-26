@@ -16,12 +16,13 @@
  */
 
 import { inject, injectable } from '@theia/core/shared/inversify';
-import { ApplicationShell, Widget } from '@theia/core/lib/browser';
+import { ApplicationShell, OpenerService, Widget } from '@theia/core/lib/browser';
 import { NavigatableWidget } from '@theia/core/lib/browser/navigatable-types';
 import { Emitter, Event } from '@theia/core/lib/common';
+import URI from '@theia/core/lib/common/uri';
 import type { GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-query-service';
 import { TabUriRegistry } from '@powerbrowser/tab-uris/lib/browser/tab-uri-registry';
-import { WebTabWidget } from '@powerbrowser/tab-uris/lib/browser/web-tab';
+import { EMPTY_PAGE_URL, WebTabOpenerOptions, WebTabWidget } from '@powerbrowser/tab-uris/lib/browser/web-tab';
 import { GroupActorClient } from './group-actor-client';
 import type { GroupMutation } from './group-actor-client';
 
@@ -58,6 +59,8 @@ export interface PanoramaTab {
      */
     x?: number;
     y?: number;
+    /** false for a card whose tab is not open in the shell (NG-008); undefined when the model was loaded without a shell. */
+    open?: boolean;
 }
 
 /**
@@ -130,6 +133,9 @@ export class GroupModel {
 
     @inject(GroupActorClient)
     protected readonly actor: GroupActorClient;
+
+    @inject(OpenerService)
+    protected readonly openers: OpenerService;
 
     /** Theia tabs whose close already reaches the store. */
     private readonly watched = new WeakSet<Widget>();
@@ -272,13 +278,16 @@ export class GroupModel {
                 }
                 const claimed = new Set<string>();
                 for (const [id, tabs] of nextMembers) {
-                    nextMembers.set(id, tabs.flatMap(tab => {
+                    nextMembers.set(id, tabs.flatMap((tab): PanoramaTab[] => {
                         const open = liveByUri.get(tab.uri);
-                        if (!open) {
-                            return [];
+                        if (open) {
+                            claimed.add(tab.uri);
+                            return [{ ...tab, url: open.url || tab.url, title: open.title || tab.title, open: true }];
                         }
-                        claimed.add(tab.uri);
-                        return [{ ...tab, url: open.url, title: open.title || tab.title }];
+                        // NG-007/NG-008: a grouped tab that is not open keeps its
+                        // card -- its row is open or restorable -- and reopens from
+                        // it. A stock tab lives in a stock window, never here.
+                        return tab.uri.startsWith('stock:') ? [] : [{ ...tab, open: false }];
                     }));
                 }
                 // Everything else open is in the tray, placed where the store
@@ -688,6 +697,20 @@ export class GroupModel {
             }
         };
         await this.persist(`active:${id}`, apply, revert, () => client.mutate({ kind: 'setActiveGroup', id }));
+    }
+
+    /**
+     * NG-008: reopens a card whose tab is not open, through the opener every
+     * other surface uses. A web card reopens on the row it already has (the
+     * opener carries its key), so its group, place and thumbnail stay with it;
+     * any other tab reopens by its own address, in the main area where cards live.
+     */
+    async reopen(tab: PanoramaTab): Promise<void> {
+        const web = tab.uri.startsWith('web:');
+        const target = new URI(web ? (tab.url || EMPTY_PAGE_URL) : tab.uri);
+        const options: WebTabOpenerOptions = web ? { rowKey: tab.uri } : { widgetOptions: { area: 'main' } } as WebTabOpenerOptions;
+        const opener = await this.openers.getOpener(target, options);
+        await opener.open(target, options);
     }
 
     /**

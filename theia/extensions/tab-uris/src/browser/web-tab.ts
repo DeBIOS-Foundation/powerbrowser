@@ -1,5 +1,5 @@
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
-import { ApplicationShell, BaseWidget, Message, OpenHandler, Widget, WidgetManager } from '@theia/core/lib/browser';
+import { ApplicationShell, BaseWidget, Message, OpenHandler, OpenerOptions, Widget, WidgetManager } from '@theia/core/lib/browser';
 import { Emitter, Event as TheiaEvent } from '@theia/core/lib/common';
 import URI from '@theia/core/lib/common/uri';
 // Resolved through src/, not './': the build is `tsc -b` alone, which emits
@@ -627,6 +627,11 @@ export function isCurrentSessionTabId(id: string): boolean {
     return typeof id === 'string' && id.startsWith(`wt-${WEB_TAB_SESSION}-`);
 }
 
+/** NG-008: opener options a Panorama card passes to reopen a web tab on the row it already has. */
+export interface WebTabOpenerOptions extends OpenerOptions {
+    rowKey?: string;
+}
+
 /**
  * Opens `http:`/`https:` URIs (and the empty page) as in-shell web tabs.
  * Priority 1000 clears stock `HttpOpenHandler` at 500 -- whose `open()`
@@ -651,12 +656,12 @@ export class WebTabOpenHandler implements OpenHandler {
         return /^https?$/.test(uri.scheme) || uri.toString(true) === EMPTY_PAGE_URL ? 1000 : 0;
     }
 
-    async open(uri: URI): Promise<WebTabWidget> {
-        return this.openUrl(uri.toString(true));
+    async open(uri: URI, options?: WebTabOpenerOptions): Promise<WebTabWidget> {
+        return this.openUrl(uri.toString(true), options?.rowKey);
     }
 
-    async openUrl(url: string): Promise<WebTabWidget> {
-        const options: WebTabOptions = { id: `wt-${WEB_TAB_SESSION}-${++nextTabSeq}`, url };
+    async openUrl(url: string, rowKey?: string): Promise<WebTabWidget> {
+        const options: WebTabOptions = { id: `wt-${WEB_TAB_SESSION}-${++nextTabSeq}`, url, ...(rowKey ? { key: rowKey } : {}) };
         const widget = await this.widgetManager.getOrCreateWidget<WebTabWidget>(WEB_TAB_FACTORY_ID, options);
         if (!widget.isAttached) {
             this.shell.addWidget(widget, { area: 'main' });

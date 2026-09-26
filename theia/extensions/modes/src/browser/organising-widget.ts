@@ -1920,29 +1920,33 @@ export class OrganisingWidget extends Widget {
      * It used to call `window.open(url, '_blank')`, which has no
      * `nsIBrowserDOMWindow` to divert it and therefore opens a whole stock
      * Firefox window (CLAUDE.md hard rule 5) -- so arranging tabs and then
-     * opening one threw you out of Power Browser entirely, and the address bar
-     * still read the organising view because nothing in the shell had changed.
+     * opening one threw you out of Power Browser entirely.
      *
-     * The tab is already here: it is a widget in the main area, and this card
-     * was built from it. Activating it shows the page and the chrome bar
-     * follows the active widget, so the address bar reads the tab's own URL
-     * without being told. Leaving Organising is part of the gesture -- it is
-     * what Panorama's zoomIn does, and what "open this one" means.
+     * A card whose tab is open activates that widget; the chrome bar follows
+     * the active widget, so the address bar reads the tab's own URL without
+     * being told. A card whose tab is not open (NG-008) reopens it through
+     * the opener (`GroupModel.reopen`) -- docs/URI-SCHEMES.md: every opener,
+     * Panorama included, resolves to the same handler -- and a reopened web
+     * tab writes the card's own row, so it keeps its group, place and
+     * thumbnail. Leaving Organising is part of the gesture -- it is what
+     * Panorama's zoomIn does, and what "open this one" means.
      */
     protected dive(tab: PanoramaTab, groupId: string | null): void {
         if (groupId !== null) {
             void this.activateGroup(groupId);
         }
         const widget = this.widgetForTab(tab);
-        if (!widget) {
-            return;
-        }
         // Browsing for a page, Coding for an editor or the Welcome view --
         // each tab lands in the mode that is built to show it.
         void this.modes.activateMode(tab.url ? 'browsing' : 'coding')
             .catch(error => console.error('[@powerbrowser/modes] mode switch on dive failed:', error))
             .finally(() => {
-                void this.shell.activateWidget(widget.id);
+                if (widget) {
+                    void this.shell.activateWidget(widget.id);
+                    return;
+                }
+                // NG-008: the tab is not open -- reopen it through the opener.
+                this.model.reopen(tab).catch(error => console.error('[@powerbrowser/modes] reopening a tab from its card failed:', error));
             });
     }
 
