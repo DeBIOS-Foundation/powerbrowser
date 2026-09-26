@@ -46,3 +46,26 @@ recorded NG checks. Command:
 
 It prints the new failures; empty output passes. NG-016 and NG-040 own two baseline rows
 (`gui08-persistence-roundtrip`, `internals-catalogue`) and must turn them green.
+
+## Controller rulings on the drafters' questions (2026-09-25)
+
+- **R1 Check files and the TSV.** Every row's check lives in its own file (`scripts/verify-ng-NNN-<slug>.mjs`, shared helpers allowed under `scripts/lib/`), and is also registered in `scripts/verify-platform.sh`. `lock-checks` digests the check file, so one file per row keeps a registration edit from breaking the lock. `docs/non-gui/checks-wave-X.tsv` has exactly three tab-separated fields: `NG-NNN`, the test ref `scripts/verify-ng-NNN-<slug>.mjs::<label>`, and a command that contains that file path; the tier may follow the command as a trailing ` # live-main|live-clone|quick` (the kit runs the command through a shell, so the comment is inert).
+- **R2 Ownership (wave A Q1).** The seven regions wave A listed go to wave A: `liveTabs()`, the key line in `scheduleShellCapture` and the import in `organising-widget.ts`; the `GroupMutation` union in `group-actor-client.ts`; `getSettings` on `GroupQueryService`; the `closed_at` column in `verify-chrome-bar-suggestions.mjs`'s fixture; the expectation in `verify-gui08-close-exactness.mjs`; PowerBrowserAPI.sys.mjs :45–109 (DDL markers, store constants); deleting `browser-tab-uri.ts`. Wave B's additions to the `GroupMutation` union are `Needs: wave-a`.
+- **R3 Kept profile (wave A Q2).** Done in main as `f4818a0`: `withFirefoxPage(url, cb, { profileDir })` and appended `user.js` overrides.
+- **R4 Pointer lines (wave A Q3).** The controller adds the pointer to `docs/TAB-STORE.md` in the v1.2 SCHEMA.md and MIGRATIONS.md when wave A merges.
+- **R5 NG-011 restore (wave A Q4).** Wave C names its launch-restore entry point and per-tab restore; its saved session records, per web tab, `rowKey`, `url`, `last_accessed`, plus the save time.
+- **R6 Wave A Q5 rulings** (minted `web:`/`stock:` keys; settings defaults; not-open cards for grouped tabs only; Theia-drawn rows written when first organised; a quit never closes a row) stand unless Chris changes them.
+- **R7 Real-profile fixture (wave A Q8).** Done: `~/coding/Power-Browser-fixtures/real-profile-tabs-2026-09-25.sqlite` (SQLite backup of the live profile, schema v4, 6 tabs, 5 groups, 0 grouped), outside the repo, never committed. Checks read it through an env var (`PB_REAL_PROFILE_FIXTURE`) and skip with a printed notice when it is absent, so CI and clones without it stay honest.
+- **R8 Size gate (wave E).** `size-gate.py` guards `.planning/**` plans; the wave plans live outside `.planning` and are bound only by the 20-ID limit.
+- **R9 ai-opencode rows (wave E Q2).** They run only when the adapter is composed; otherwise the `ai-opencode-held` stand-in reports held.
+- **R10 aus5 (wave E Q4).** Accepted: bare hosts in upstream's HTTP/3 list and the Remote Settings fallback map are not update URLs; the check asserts no update URL points at aus5.
+- **R11 Downstream update URL (wave E Q5).** The generator refuses a downstream build whose `urls.update` is PowerBrowser's own host (fail closed).
+- **R12 MAR (wave E Q6).** Certificate in `powerbrowser/packaging/mar/`; one key fills both updater slots; the key store gets a password read from a file in `~/.config/powerbrowser-release/mar-key/` created in Chris's key step, not an empty one. Wave E updates BUILD.md and RELEASING.md.
+- **R13 Packaged Node (wave E Q7).** The package ships an official upstream Node release binary (pinned version, sha256-checked), not the Nix-store binary, so it runs off this machine.
+- **R14 Docs (wave E Q9).** Wave E updates the docs its changes make stale: REBRANDING.md, ai-opencode-adapter.md, BUILD.md, RELEASING.md.
+- **R15 Allowlist (wave E Q10).** open-vsx.org, the AI provider hosts and the download hosts are allowed with reason "user-initiated" and the feature named; AI hosts only when a key is configured.
+- **R16 NSIS issuer (wave E Q11).** Accepted; Windows signing is deferred with NG-075.
+- **R17 `receiveMessage` (wave B Q1, wave C Q2).** Both waves edit `PowerBrowserGroupParent.receiveMessage`; whichever merges second keeps both edits; the controller resolves at merge.
+- **R18 Settings writes (wave B Q2).** Wave B adds a `setSetting` op to the documented write path (NG-026), through the chrome writer. Wave A's `docs/TAB-STORE.md` states each settings key's valid values, and the writer validates against them.
+- **R19 Wave B's touches outside its list (wave B Q3).** Approved: the `theiaExtensions` entry in `tab-uris/package.json`, five new browser-side files in tab-uris, two seams in `verify-web-tab-live.mjs`, `EXPECTED_SCHEMA_HEAD`/`EXPECTED_GROUP_METHODS` in the roundtrip check, `docs/TAB-STORE.md` (after wave A merges), and `INTERNAL-APIS.md` rows (conflicts with wave C resolved at merge).
+- **R20 `saved_pages` (wave B Q4).** Schema v6 in wave B's Task 7, after wave A's v5 is merged.
