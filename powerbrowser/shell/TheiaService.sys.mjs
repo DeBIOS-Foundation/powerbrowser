@@ -1370,6 +1370,8 @@ export const TheiaService = {
     if (this._swapped) {
       return;
     }
+    // NG-038: the actor's sender wall admits only this port's Theia frame.
+    PowerBrowserAPI.setGroupSenderPort(this._port);
     this._browserElement.ownerDocument.defaultView.powerbrowserSwapToUrl(`http://127.0.0.1:${this._port}/`);
     this._swapped = true;
   },

@@ -147,25 +147,48 @@ function groupSenderSpecIsTheia(spec) {
   }
 }
 
+// NG-038: the actor serves one frame -- the shell's own content browser, in
+// the shell window, on the sidecar's live port. `matches` cannot carry a port
+// (MatchPattern compares hosts only), and stock tabbrowser marks its selected
+// tab's browser primary="true" too (upstream tabbrowser.js:728, 1720), so a
+// 127.0.0.1 page in a selected stock tab passed both the host check and the
+// primary wall. TheiaService._swap sets the port before it navigates the
+// frame; until then every sender is refused.
+const SHELL_DOCUMENT_URL = "chrome://powerbrowser/content/powerbrowser.xhtml";
+const SHELL_CONTENT_BROWSER_ID = "powerbrowser-content";
+let groupSenderPort = null;
+
 function groupSenderIsTheia(actorRef) {
   let spec = "";
+  let port = -1;
   let embeddedByPrimary = false;
+  let embeddedByShell = false;
   try {
-    spec = actorRef?.browsingContext?.currentWindowGlobal?.documentURI?.spec ?? "";
-    // GUI-02 (14.1-01): the embedder-is-primary wall (T-14.1-01). The host
-    // check above admits ANY loopback sender, and a user can now browse to
-    // a loopback page INSIDE a web-tab overlay: the actor child loads there
-    // too (the `matches` pin is by origin), and that page would pass the
-    // host check. Its top browsing context is embedded by the overlay
-    // element, which carries no `primary`; only the Theia frame
-    // (powerbrowser.xhtml's `<xul:browser primary="true">`) does.
-    embeddedByPrimary =
-      actorRef?.browsingContext?.top?.embedderElement?.getAttribute("primary") === "true";
+    const documentURI = actorRef?.browsingContext?.currentWindowGlobal?.documentURI;
+    spec = documentURI?.spec ?? "";
+    port = documentURI?.port ?? -1;
+    // GUI-02 (14.1-01): the embedder-is-primary wall (T-14.1-01). A loopback
+    // page inside a web-tab overlay loads the actor child too (the `matches`
+    // pin is by origin); its top browsing context is embedded by the overlay
+    // element, which carries no `primary`.
+    const embedder = actorRef?.browsingContext?.top?.embedderElement;
+    embeddedByPrimary = embedder?.getAttribute("primary") === "true";
+    // NG-038: and primary is not enough -- stock tabbrowser sets it on its
+    // selected tab. Only the shell window's own content browser qualifies.
+    embeddedByShell =
+      embedder?.id === SHELL_CONTENT_BROWSER_ID && embedder?.ownerDocument?.documentURI === SHELL_DOCUMENT_URL;
   } catch {
     spec = "";
     embeddedByPrimary = false;
+    embeddedByShell = false;
   }
-  return embeddedByPrimary && groupSenderSpecIsTheia(spec);
+  return (
+    embeddedByPrimary &&
+    embeddedByShell &&
+    groupSenderPort !== null &&
+    port === groupSenderPort &&
+    groupSenderSpecIsTheia(spec)
+  );
 }
 
 const TAB_STORE_FILE_NAME = "tabs.sqlite";
@@ -1704,6 +1727,15 @@ export const PowerBrowserAPI = Object.freeze({
       },
       matches: [`${GROUP_ACTOR_THEIA_ORIGIN}/*`],
     });
+  },
+
+  /**
+   * NG-038: records the sidecar's live port for the sender wall. Called by
+   * TheiaService._swap before the Theia frame is navigated, and only there. A
+   * non-positive or non-integer port clears it, which refuses every sender.
+   */
+  setGroupSenderPort(port) {
+    groupSenderPort = Number.isInteger(port) && port > 0 ? port : null;
   },
 
   /**
