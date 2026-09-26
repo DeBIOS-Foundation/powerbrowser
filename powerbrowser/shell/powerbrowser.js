@@ -353,7 +353,18 @@ document.addEventListener(
         window.maximize();
       }
     });
-    document.getElementById("powerbrowser-window-close").addEventListener("click", () => window.close());
+    // NG-037: the core window is the session (notes/browser-window-model.md:15-18).
+    // Closing it -- this button, or the desktop's own close, which reaches the
+    // window as its close event -- quits the whole application, stock browser
+    // windows included, and that quit stops the backend. browser.xhtml answers
+    // the same event the same way (upstream browser-main.js:41). Returning
+    // false keeps the window open while the quit closes everything in order.
+    const quitFromCoreClose = () => {
+      PowerBrowserAPI.quitApplication();
+      return false;
+    };
+    document.getElementById("powerbrowser-window-close").addEventListener("click", quitFromCoreClose);
+    window.onclose = quitFromCoreClose;
     const dragHost = document.getElementById("powerbrowser-drag-regions");
     window.powerbrowserWindowChrome = () => ({ width: controls.getBoundingClientRect().width });
     window.powerbrowserSetDragRegions = (rects, height) => {

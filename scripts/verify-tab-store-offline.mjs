@@ -179,7 +179,10 @@ try {
         const profile = newProfile();
         const api = await freshApi(profile);
         await api.ensureTabStore();
-        const theia = { browsingContext: { currentWindowGlobal: { documentURI: { spec: 'http://127.0.0.1:3000/' } }, top: { embedderElement: { getAttribute: () => 'true' } } } };
+        // NG-038: the sender wall admits only the shell's own frame on the sidecar's port, as TheiaService._swap sets it.
+        api.setGroupSenderPort(3000);
+        const shellFrame = { id: 'powerbrowser-content', ownerDocument: { documentURI: 'chrome://powerbrowser/content/powerbrowser.xhtml' }, getAttribute: () => 'true' };
+        const theia = { browsingContext: { currentWindowGlobal: { documentURI: { spec: 'http://127.0.0.1:3000/', port: 3000 } }, top: { embedderElement: shellFrame } } };
         const mutate = data => api.handleGroupMutation(data, theia);
         const conn = await api.openTabStore();
         const get = async uri => {

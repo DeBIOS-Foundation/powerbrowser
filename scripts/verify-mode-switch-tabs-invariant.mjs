@@ -99,14 +99,15 @@ const SCANNED_SRC_DIRS = Object.freeze([
  * and confining those four names to it is what keeps a second, unreviewed
  * writer of stock's snapshots from appearing. `switchPerspective` stays
  * declared where the fix deliberately keeps it -- the mode service's one
- * anchored call and the setups restore path -- so the reroute of the toggle
+ * anchored call (the setups restore goes through ModeService since NG-029)
+ * -- so the reroute of the toggle
  * (which now dispatches the mode command instead) cannot be undone without
  * this going red. Registration and the active-id read are neither destructive
  * nor layout-swapping, and are declared where they already are.
  */
 const DECLARED_LAYOUT_USES = Object.freeze({
     registerPerspective: Object.freeze([MODES_MODULE_REL, SERVICE_REL]),
-    switchPerspective: Object.freeze([SERVICE_REL, SETUPS_REL]),
+    switchPerspective: Object.freeze([SERVICE_REL]),
     getActivePerspectiveId: Object.freeze([SERVICE_REL, SETUPS_REL, WIDGET_REL]),
     getRegisteredPerspectives: Object.freeze([EXEMPTION_REL]),
     getSavedPerspectiveIds: Object.freeze([EXEMPTION_REL]),
@@ -547,7 +548,7 @@ function selfTest() {
         {
             name: 'planted switch-path close call',
             mutate: sources => {
-                const anchor = "        if (target === 'organising') {\n            openOrganisingSlot();";
+                const anchor = "        if (rules.organising) {\n            openOrganisingSlot();";
                 if (!cleanService.includes(anchor)) {
                     return sources;
                 }

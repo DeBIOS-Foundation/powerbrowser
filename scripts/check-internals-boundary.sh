@@ -26,6 +26,8 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_SCAN_DIR="$REPO_ROOT/powerbrowser/shell"
+CATALOGUE_PATH="$REPO_ROOT/powerbrowser/INTERNAL-APIS.md"
+ACTOR_CHILD_TARGET="$REPO_ROOT/powerbrowser/shell/GroupActorChild.sys.mjs"
 
 # The one file exempt from every forbidden pattern below (D-96/D-97).
 BOUNDARY_FILE_BASENAME="PowerBrowserAPI.sys.mjs"
@@ -62,6 +64,21 @@ FORBIDDEN_PATTERNS=(
   # names are enumerated here rather than left to the Services. prefix.
   'nodePrincipal'
   'fixupAndLoadURIString'
+  # NG-039 (2026-09-25 audit): Firefox internals that are neither
+  # Services/Cc/Ci-shaped nor imports, and were therefore uncatalogued -- the
+  # Xray waiver, the privileged <browser> snapshot, the chrome-only IO and
+  # session-store namespaces, the QueryInterface helper, and the actor base
+  # classes. Unconditional, like registerWindowActor above.
+  # IOUtils and gBrowser match as bare identifiers, so `?.`, destructuring and
+  # a member access split onto the next line cannot slip past them.
+  'wrappedJSObject'
+  'drawSnapshot'
+  'IOUtils'
+  'SessionStoreUtils'
+  'ChromeUtils.generateQI'
+  'JSWindowActorParent'
+  'JSWindowActorChild'
+  'gBrowser'
 )
 
 is_conditional_pattern() {
@@ -69,6 +86,42 @@ is_conditional_pattern() {
     'ChromeUtils.import'|'ChromeUtils.defineESModuleGetters') return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# NG-039: the actor child is the one other file Gecko loads on the boundary's
+# behalf (registerGroupActor names it as the child module), and it cannot
+# import PowerBrowserAPI.sys.mjs (it runs in the content process with zero
+# module imports by design). It may carry exactly these patterns, and every
+# occurrence must have its own INTERNAL-APIS.md row; any other forbidden
+# pattern in it is an offense as anywhere else.
+ACTOR_CHILD_BASENAME="GroupActorChild.sys.mjs"
+ACTOR_CHILD_PATTERNS=('wrappedJSObject' 'JSWindowActorChild')
+
+is_actor_child_pattern() {
+  local pattern
+  for pattern in "${ACTOR_CHILD_PATTERNS[@]}"; do
+    [ "$pattern" = "$1" ] && return 0
+  done
+  return 1
+}
+
+# True when <catalogue> has a table row whose File:Line cell is exactly
+# <basename>:<line>. Prose such as "Same row as `file:line` above" does not
+# count: after a --fix renumbering it can name a new, uncatalogued line.
+catalogue_has_row() {
+  grep -Eq "^\|[^|]*\| \`${2//./\\.}:${3}\` \|" "$1"
+}
+
+# The shell's gBrowser stand-in (powerbrowser.js) is a plain object that
+# WebDriver and upstream actors read; defining it reads no Firefox internal.
+# Its one definition line, in that file only, is exempt. Every other gBrowser
+# line outside the boundary file is an offense.
+SHELL_SCRIPT_TARGET="$REPO_ROOT/powerbrowser/shell/powerbrowser.js"
+
+is_gbrowser_standin_definition() {
+  local file="$1" pattern="$2" line="$3"
+  [ "$pattern" = 'gBrowser' ] && [ "$file" -ef "$SHELL_SCRIPT_TARGET" ] \
+    && [ "${line#"${line%%[![:space:]]*}"}" = 'window.gBrowser = {' ]
 }
 
 # True when the line's first non-whitespace characters are a JS line
@@ -128,6 +181,14 @@ scan_internals_boundary() {
                 *'chrome://powerbrowser/'*) offense=0 ;;
               esac
             fi
+            if [ "$offense" -eq 1 ] && [ "$f" -ef "$ACTOR_CHILD_TARGET" ] \
+              && is_actor_child_pattern "$pattern" \
+              && catalogue_has_row "$CATALOGUE_PATH" "$ACTOR_CHILD_BASENAME" "$line_no"; then
+              offense=0
+            fi
+            if [ "$offense" -eq 1 ] && is_gbrowser_standin_definition "$f" "$pattern" "$line"; then
+              offense=0
+            fi
             if [ "$offense" -eq 1 ]; then
               count=$((count + 1))
               echo "  $f:$line_no: $pattern" >&2
@@ -156,7 +217,6 @@ scan_internals_boundary() {
 # is_conditional_pattern/is_comment_line logic, so the rule is written once
 # and the catalogue is derived from the code rather than maintained beside
 # it.
-CATALOGUE_PATH="$REPO_ROOT/powerbrowser/INTERNAL-APIS.md"
 CATALOGUE_TARGET="$REPO_ROOT/powerbrowser/shell/PowerBrowserAPI.sys.mjs"
 
 # Prints one distinct line number per output line for every forbidden-
@@ -166,6 +226,7 @@ CATALOGUE_TARGET="$REPO_ROOT/powerbrowser/shell/PowerBrowserAPI.sys.mjs"
 # "one row = one touchpoint" grain.
 catalogue_occurrence_lines() {
   local file="$1"
+  local only_actor_child="${2:-}"
   local line_no line pattern offense
   local -A seen=()
   line_no=0
@@ -173,6 +234,9 @@ catalogue_occurrence_lines() {
     line_no=$((line_no + 1))
     is_comment_line "$line" && continue
     for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+      if [ -n "$only_actor_child" ] && ! is_actor_child_pattern "$pattern"; then
+        continue
+      fi
       case "$line" in
         *"$pattern"*)
           offense=1
@@ -199,9 +263,9 @@ catalogue_occurrence_lines() {
 check_catalogue_consistency() {
   local catalogue="$1"
   local target="$2"
-  local base escaped_base
+  local only_actor_child="${3:-}"
+  local base
   base="$(basename -- "$target")"
-  escaped_base="${base//./\\.}"
 
   if [ ! -f "$catalogue" ]; then
     echo "internals-catalogue: FAIL -- $catalogue does not exist" >&2
@@ -215,10 +279,10 @@ check_catalogue_consistency() {
   local -a missing=()
   local line_no
   while IFS= read -r line_no; do
-    if ! grep -Eq "${escaped_base}:${line_no}([^0-9]|\$)" "$catalogue"; then
+    if ! catalogue_has_row "$catalogue" "$base" "$line_no"; then
       missing+=("$base:$line_no")
     fi
-  done < <(catalogue_occurrence_lines "$target")
+  done < <(catalogue_occurrence_lines "$target" "$only_actor_child")
 
   if [ "${#missing[@]}" -ne 0 ]; then
     echo "internals-catalogue: FAIL -- ${#missing[@]} occurrence(s) with no catalogue row: ${missing[*]}" >&2
@@ -289,6 +353,60 @@ EOF
     overall=1
   fi
 
+  # NG-039 plants: each new pattern is rejected outside the boundary file, and
+  # an actor-child waiver with no catalogue row is rejected even in the one
+  # file that may carry it.
+  # The IOUtils plant uses destructuring and the gBrowser plant is the shell
+  # stand-in's definition line outside powerbrowser.js: neither may pass.
+  local plant_name plant_body
+  for plant_name in wrappedJSObject drawSnapshot IOUtils gBrowser; do
+    case "$plant_name" in
+      wrappedJSObject) plant_body='  return win.wrappedJSObject.JSON.parse(text);' ;;
+      drawSnapshot) plant_body='  return browser.drawSnapshot(0, 0, 1, 1, 1, "white");' ;;
+      IOUtils) plant_body='  const { remove } = IOUtils; return remove(text);' ;;
+      gBrowser) plant_body='  window.gBrowser = {' ;;
+    esac
+    printf '// planted %s fixture\nexport function planted(win, browser, text) {\n%s\n}\n' "$plant_name" "$plant_body" > "$tmp/planted-$plant_name.sys.mjs"
+    if scan_internals_boundary "$tmp" >/dev/null 2>"$tmp/self-test-$plant_name.err"; then
+      echo "check-internals-boundary: --self-test FAIL -- planted $plant_name was NOT rejected" >&2
+      overall=1
+    elif grep -q "planted-$plant_name.sys.mjs:[0-9]*: $plant_name" "$tmp/self-test-$plant_name.err"; then
+      echo "check-internals-boundary: --self-test PASS -- planted $plant_name was correctly rejected"
+    else
+      echo "check-internals-boundary: --self-test FAIL -- $plant_name rejection doesn't name the planted file and pattern" >&2
+      overall=1
+    fi
+    rm -f "$tmp/planted-$plant_name.sys.mjs"
+  done
+  # The waiver is keyed on the real actor-child path, so this plant stands in
+  # for it (ACTOR_CHILD_TARGET, for this one call only); its line 2 has no row.
+  mkdir -p "$tmp/child"
+  printf '// planted uncatalogued actor-child waiver\nexport const x = globalThis.wrappedJSObject;\n' > "$tmp/child/$ACTOR_CHILD_BASENAME"
+  if ACTOR_CHILD_TARGET="$tmp/child/$ACTOR_CHILD_BASENAME" scan_internals_boundary "$tmp/child" >/dev/null 2>"$tmp/self-test-child.err"; then
+    echo "check-internals-boundary: --self-test FAIL -- an actor-child waiver with no catalogue row was NOT rejected" >&2
+    overall=1
+  elif grep -q "$ACTOR_CHILD_BASENAME:2: wrappedJSObject" "$tmp/self-test-child.err"; then
+    echo "check-internals-boundary: --self-test PASS -- an uncatalogued actor-child waiver was correctly rejected"
+  else
+    echo "check-internals-boundary: --self-test FAIL -- the actor-child rejection doesn't name $ACTOR_CHILD_BASENAME:2: wrappedJSObject" >&2
+    cat "$tmp/self-test-child.err" >&2
+    overall=1
+  fi
+  # A byte-identical copy of the real actor child anywhere else gets no
+  # waiver, although every one of its lines has a row.
+  mkdir -p "$tmp/elsewhere"
+  cp "$ACTOR_CHILD_TARGET" "$tmp/elsewhere/"
+  if scan_internals_boundary "$tmp/elsewhere" >/dev/null 2>"$tmp/self-test-elsewhere.err"; then
+    echo "check-internals-boundary: --self-test FAIL -- a copy of $ACTOR_CHILD_BASENAME outside powerbrowser/shell was waived" >&2
+    overall=1
+  elif grep -q "elsewhere/$ACTOR_CHILD_BASENAME:[0-9]*: \(wrappedJSObject\|JSWindowActorChild\)" "$tmp/self-test-elsewhere.err"; then
+    echo "check-internals-boundary: --self-test PASS -- a copy of $ACTOR_CHILD_BASENAME outside powerbrowser/shell was correctly rejected"
+  else
+    echo "check-internals-boundary: --self-test FAIL -- the copied actor child's rejection doesn't name its waived patterns" >&2
+    cat "$tmp/self-test-elsewhere.err" >&2
+    overall=1
+  fi
+
   local mutated="$tmp/INTERNAL-APIS-mutated.md"
   if [ ! -f "$CATALOGUE_PATH" ]; then
     echo "check-internals-boundary: --self-test FAIL -- $CATALOGUE_PATH does not exist, cannot run the catalogue self-test" >&2
@@ -309,28 +427,52 @@ EOF
     fi
     victim="$(basename -- "$CATALOGUE_TARGET"):$victim_line"
 
-    grep -v "$victim" "$CATALOGUE_PATH" > "$mutated"
+    # Remove exactly the victim's row (a bare `grep -v :15` also dropped the
+    # :150/:1544/... rows, so the rejection never hinged on the victim alone).
+    grep -vF "| \`$victim\` |" "$CATALOGUE_PATH" > "$mutated"
     # The mutation must actually remove something, or the test proves nothing.
     if cmp -s "$CATALOGUE_PATH" "$mutated"; then
       echo "check-internals-boundary: --self-test FAIL -- mutation removed no row for $victim; the catalogue self-test would be vacuous" >&2
       return 1
     fi
-    local out
-    if out="$(check_catalogue_consistency "$mutated" "$CATALOGUE_TARGET" 2>&1)"; then
-      echo "check-internals-boundary: --self-test FAIL -- catalogue mutated copy with $victim's row removed was NOT rejected" >&2
-      echo "$out" >&2
-      overall=1
-    elif echo "$out" | grep -q "$victim"; then
-      echo "check-internals-boundary: --self-test PASS -- catalogue mutation (removed row for $victim) was correctly rejected"
-    else
-      echo "check-internals-boundary: --self-test FAIL -- catalogue mutation rejected, but message doesn't name the removed row" >&2
-      echo "$out" >&2
-      overall=1
-    fi
+    # T2-R1 plant: the same removal, with the removed file:line still cited in
+    # prose the way "Same ... as `file:line` above" notes are. Only a table
+    # row's File:Line cell counts, so this copy must be rejected too.
+    local prose="$tmp/INTERNAL-APIS-prose-only.md"
+    cp "$mutated" "$prose"
+    printf '\nSame touchpoint as `%s` above.\n' "$victim" >> "$prose"
+    local out copy what
+    for copy in "$mutated" "$prose"; do
+      what="removed row for $victim"
+      [ "$copy" = "$prose" ] && what="$what, cited in prose only"
+      if out="$(check_catalogue_consistency "$copy" "$CATALOGUE_TARGET" 2>&1)"; then
+        echo "check-internals-boundary: --self-test FAIL -- catalogue mutation ($what) was NOT rejected" >&2
+        echo "$out" >&2
+        overall=1
+      elif echo "$out" | grep -Eq "${victim//./\\.}([^0-9]|\$)"; then
+        echo "check-internals-boundary: --self-test PASS -- catalogue mutation ($what) was correctly rejected"
+      else
+        echo "check-internals-boundary: --self-test FAIL -- catalogue mutation ($what) rejected, but message doesn't name the removed row" >&2
+        echo "$out" >&2
+        overall=1
+      fi
+    done
   fi
 
   return "$overall"
 }
+
+# --scan <dir>: the same boundary scan over any directory. NG-039's check
+# plants fixtures in a scratch directory and needs the guard's own verdict
+# on them; the default path below stays powerbrowser/shell.
+if [ "${1:-}" = "--scan" ]; then
+  if [ -z "${2:-}" ]; then
+    echo "check-internals-boundary: FAIL -- --scan requires a directory" >&2
+    exit 1
+  fi
+  scan_internals_boundary "$2"
+  exit $?
+fi
 
 if [ "${1:-}" = "--self-test" ]; then
   run_self_test
@@ -338,8 +480,10 @@ if [ "${1:-}" = "--self-test" ]; then
 fi
 
 if [ "${1:-}" = "--catalogue" ]; then
-  check_catalogue_consistency "$CATALOGUE_PATH" "$CATALOGUE_TARGET"
-  exit $?
+  rc=0
+  check_catalogue_consistency "$CATALOGUE_PATH" "$CATALOGUE_TARGET" || rc=1
+  check_catalogue_consistency "$CATALOGUE_PATH" "$ACTOR_CHILD_TARGET" actor-child || rc=1
+  exit "$rc"
 fi
 
 scan_internals_boundary "$DEFAULT_SCAN_DIR"

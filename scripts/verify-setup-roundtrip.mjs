@@ -5,9 +5,10 @@
  *
  * It DERIVES at check time from the setups sources: the store/row/window
  * field sets from the `setups-service.ts` interface blocks, the four
- * command ids from `setups-commands.ts`, the contracted save/delete
- * labels verbatim with the restore/dependent commands asserted labelless,
- * the contracted 60-char cap, and every contracted setup string verbatim.
+ * command ids from `setups-commands.ts`, the four command labels verbatim
+ * (save and delete from 14-UI-SPEC.md, restore and dependent-open from
+ * NG-031), the contracted 60-char cap, and every contracted setup string
+ * verbatim.
  * Each is compared as SET EQUALITY against the one EXPECTED const block
  * below: a surplus field/command is unreviewed surface, a missing one is a
  * dropped contract row, a reworded string breaks the UI-SPEC copy contract
@@ -50,7 +51,7 @@ const COMMANDS_REL = 'theia/extensions/modes/src/browser/setups-commands.ts';
  */
 const EXPECTED_STORE_FIELDS = Object.freeze(['version', 'setups', 'lastSession']);
 const EXPECTED_SETUP_FIELDS = Object.freeze(['name', 'modeId', 'windows', 'savedAt']);
-const EXPECTED_WINDOW_FIELDS = Object.freeze(['x', 'y', 'width', 'height', 'tabs', 'activeTab']);
+const EXPECTED_WINDOW_FIELDS = Object.freeze(['x', 'y', 'width', 'height', 'tabs', 'activeTab', 'modeId', 'dock']);
 const EXPECTED_COMMAND_IDS = Object.freeze([
     'powerbrowser.setups.save-setup',
     'powerbrowser.setups.delete-setup',
@@ -59,6 +60,9 @@ const EXPECTED_COMMAND_IDS = Object.freeze([
 ]);
 const EXPECTED_SAVE_LABEL = 'Save Setup';
 const EXPECTED_DELETE_LABEL = 'Delete Setup';
+/** NG-031: restore and the dependent-window command are palette- and menu-reachable, so they carry labels. */
+const EXPECTED_RESTORE_LABEL = 'Restore Setup';
+const EXPECTED_DEPENDENT_LABEL = 'Open Tab in Own Window';
 const EXPECTED_NAME_CAP = 60;
 
 /** Contracted setup strings (14-UI-SPEC.md, verbatim) asserted in the service source. */
@@ -234,21 +238,14 @@ function checkRoundtrip(sources) {
     }
 
     const labels = derivedCommandLabelsOf(commandsSrc);
-    for (const expected of [EXPECTED_SAVE_LABEL, EXPECTED_DELETE_LABEL]) {
+    const expectedLabels = [EXPECTED_SAVE_LABEL, EXPECTED_DELETE_LABEL, EXPECTED_RESTORE_LABEL, EXPECTED_DEPENDENT_LABEL];
+    for (const expected of expectedLabels) {
         if (!labels.includes(expected)) {
-            failures.push(`${COMMANDS_REL}: contracted label '${expected}' missing (got [${labels.join(', ')}]) -- the UI-SPEC copy contract broke`);
+            failures.push(`${COMMANDS_REL}: contracted label '${expected}' missing (got [${labels.join(', ')}]) -- the copy contract broke`);
         }
     }
-    if (labels.length !== 2) {
-        failures.push(`${COMMANDS_REL}: the setup commands must carry exactly two labels (save and delete); restore and dependent-open stay labelless (got [${labels.join(', ')}])`);
-    }
-    for (const decl of ['SETUPS_RESTORE', 'SETUPS_OPEN_DEPENDENT']) {
-        const block = new RegExp(`export const ${decl}[^;]*;`).exec(commandsSrc);
-        if (!block) {
-            failures.push(`${COMMANDS_REL}: the ${decl} declaration was not found -- the labelless command cannot be checked`);
-        } else if (block[0].includes('label')) {
-            failures.push(`${COMMANDS_REL}: ${decl} gained a label -- restore and dependent-open stay labelless by contract`);
-        }
+    if (labels.length !== expectedLabels.length) {
+        failures.push(`${COMMANDS_REL}: the setup commands must carry exactly four labels (save, delete, restore, dependent-open; NG-031) (got [${labels.join(', ')}])`);
     }
     for (const id of ['SETUPS_SAVE', 'SETUPS_DELETE', 'SETUPS_RESTORE', 'SETUPS_OPEN_DEPENDENT']) {
         if (!commandsSrc.includes(`registerCommand(${id},`)) {

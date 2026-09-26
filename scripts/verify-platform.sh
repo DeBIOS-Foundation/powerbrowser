@@ -3670,6 +3670,17 @@ run_own_checks() {
     "internals-boundary-self-test|bash $REPO_ROOT/scripts/check-internals-boundary.sh --self-test"
     "internals-boundary|bash $REPO_ROOT/scripts/check-internals-boundary.sh"
     "internals-catalogue|bash $REPO_ROOT/scripts/check-internals-boundary.sh --catalogue"
+    # NG-039 (non-GUI wave C): the boundary guard detects the two Firefox
+    # internals the 2026-09-25 audit found uncatalogued (wrappedJSObject,
+    # drawSnapshot), and every occurrence of either has a catalogue row. It
+    # plants its own fixtures and reads text only: honestly --quick.
+    "ng-039-internals-detects-waivers|node $REPO_ROOT/scripts/verify-ng-039-internals-waivers.mjs"
+    # NG-040: every INTERNAL-APIS.md line reference matches the file, both
+    # directions (occurrence -> row through check-internals-boundary.sh
+    # --catalogue; row -> line and method here). The self-test runs on
+    # scratch fixtures only, for the reason every self-test row gives.
+    "ng-040-internals-catalogue-lines|node $REPO_ROOT/scripts/verify-ng-040-internals-catalogue-lines.mjs"
+    "ng-040-internals-catalogue-lines-self-test|node $REPO_ROOT/scripts/verify-ng-040-internals-catalogue-lines.mjs --self-test"
 
     # from verify-phase-05.sh -- registered outside the --quick guard there too,
     # for the reason its own comment gives: they need no browser, no display and
@@ -4454,6 +4465,13 @@ run_own_checks() {
     "crash-collector|node $REPO_ROOT/scripts/verify-crash-collector.mjs"
     "crash-collector-self-test|node $REPO_ROOT/scripts/verify-crash-collector.mjs --self-test"
 
+    # --- non-GUI wave E (NG-068, NG-070, NG-074): quick rows. No build, no browser,
+    # no display; ng068 binds a loopback port only and reads upstream/'s report.rs.
+    "ng068-crash-extra-part|node $REPO_ROOT/scripts/verify-ng-068-crash-extra-part.mjs"
+    "ng070-no-spaced-name|node $REPO_ROOT/scripts/verify-ng-070-no-spaced-name.mjs"
+    "ng070-no-spaced-name-self-test|node $REPO_ROOT/scripts/verify-ng-070-no-spaced-name.mjs --self-test"
+    "ng074-ci-green-on-main-self-test|node $REPO_ROOT/scripts/verify-ng-074-ci-main.mjs --self-test"
+
     # NEW (09-03): the WebExtensions declaration rows -- the manifest's
     # [[webextensions]] table reaches the policy engine as the tracked
     # ExtensionSettings key.
@@ -4515,6 +4533,14 @@ run_own_checks() {
     # reason every other self-test row in this array gives.
     "backend-env-readers|node $REPO_ROOT/scripts/verify-backend-env-readers.mjs"
     "backend-env-readers-self-test|node $REPO_ROOT/scripts/verify-backend-env-readers.mjs --self-test"
+    # NEW (non-GUI wave B, NG-027): every PowerBrowserAPI and TabQueryService
+    # reader has a caller on the runtime path. Readers and call sites are
+    # derived from the tree at check time; a reader called only by a dead
+    # reader is dead too. Honestly --quick: text reads only. The self-test runs
+    # the analyzer over a synthetic tree and requires red on a removed call
+    # site, a planted reader and an empty scan.
+    "ng-027-reader-callers|node $REPO_ROOT/scripts/verify-ng-027-reader-callers.mjs"
+    "ng-027-reader-callers-self-test|node $REPO_ROOT/scripts/verify-ng-027-reader-callers.mjs --self-test"
     # NEW (12-CODE-REVIEW.md WR-03): the tab-uris reader typecheck. Honestly
     # --quick per the function comment above: the extension's own tsc over
     # its own project, --noEmit, seconds, no build/browser/display/network.
@@ -4699,6 +4725,21 @@ run_own_checks() {
       # fork wizard artwork plus the defines rebrand are 08-05 work.
       "installer-build-proof|node $REPO_ROOT/scripts/verify-installer-build-proof.mjs"
 
+      # --- non-GUI wave E (NG-051, NG-063..NG-067, NG-069, NG-071..NG-074): each needs a
+      # Gecko build, the packaged tree, the built sidecar, a browser, or the network.
+      # Commands and live-main/live-clone markers: docs/non-gui/checks-wave-e.tsv.
+      "ng051-backend-off|node $REPO_ROOT/scripts/verify-ng-051-backend-off.mjs"
+      "ng063-packaged-launch|node $REPO_ROOT/scripts/verify-ng-063-packaged-launch.mjs"
+      "ng064-update-url-from-manifest|node $REPO_ROOT/scripts/verify-ng-064-update-url.mjs"
+      "ng065-mar-signature-enforced|node $REPO_ROOT/scripts/verify-ng-065-mar-signature.mjs"
+      "ng066-nsis-branding-no-ping|node $REPO_ROOT/scripts/verify-ng-066-nsis-branding.mjs"
+      "ng067-frontend-errors-reach-telemetry|node $REPO_ROOT/scripts/verify-ng-067-frontend-errors.mjs"
+      "ng069-sidecar-egress|node $REPO_ROOT/scripts/verify-ng-069-sidecar-egress.mjs"
+      "ng071-tarball-extensions-build|node $REPO_ROOT/scripts/verify-ng-071-tarball-extensions.mjs"
+      "ng072-policies-packaged-webextension|node $REPO_ROOT/scripts/verify-ng-072-policies-webextension.mjs"
+      "ng073-declared-extension-loads|node $REPO_ROOT/scripts/verify-ng-073-declared-extension-loads.mjs"
+      "ng074-ci-green-on-main|node $REPO_ROOT/scripts/verify-ng-074-ci-main.mjs"
+
       # from verify-phase-04.sh
       "side02-token-negative|check_side02_token_negative"
       "side02-token-positive|check_side02_token_positive"
@@ -4840,6 +4881,19 @@ run_own_checks() {
       # rides alongside for the reason every other self-test row gives.
       "gui07-mode-switch-tabs-live|node $REPO_ROOT/scripts/verify-mode-switch-tabs-live.mjs"
       "gui07-mode-switch-tabs-live-self-test|node $REPO_ROOT/scripts/verify-mode-switch-tabs-live.mjs --self-test"
+      # NEW (non-GUI wave B, NG-021..NG-026, NG-028): live checks. Each launches
+      # the built binary through firefox-bidi.mjs, serves its own pages on a
+      # second loopback port, and drives its row through a real entry point (an
+      # actor message from the Theia frame, a DI-bound service, a registered
+      # command, or the documented endpoint), plus the hostile-page wall. They
+      # need the built binary and the last Theia build, so none is --quick.
+      "ng-021-places-reads-via-actor|node $REPO_ROOT/scripts/verify-ng-021-places-reads.mjs"
+      "ng-022-sessionstore-projection-via-actor|node $REPO_ROOT/scripts/verify-ng-022-sessionstore-projection.mjs"
+      "ng-023-suggestions-history-bookmarks|node $REPO_ROOT/scripts/verify-ng-023-suggestions-places.mjs"
+      "ng-024-tabs-places-join|node $REPO_ROOT/scripts/verify-ng-024-tabs-places-join.mjs"
+      "ng-025-store-read-endpoint|node $REPO_ROOT/scripts/verify-ng-025-store-read-endpoint.mjs"
+      "ng-026-store-write-endpoint|node $REPO_ROOT/scripts/verify-ng-026-store-write-endpoint.mjs"
+      "ng-028-saved-page-copy|node $REPO_ROOT/scripts/verify-ng-028-saved-page.mjs"
 
       # NEW (14.1-03): GUI-02's behavioural half. Drives the built shell over
       # WebDriver BiDi through "+", a typed address, a second typed address,
@@ -4857,6 +4911,24 @@ run_own_checks() {
       # other self-test row gives.
       "gui02-web-tab-live|node $REPO_ROOT/scripts/verify-web-tab-live.mjs"
       "gui02-web-tab-live-self-test|node $REPO_ROOT/scripts/verify-web-tab-live.mjs --self-test"
+
+      # NG-029..NG-038 (non-GUI wave C): the built shell driven through the
+      # command registry, the actor channel, the core window's close button in
+      # the chrome document and real quit-and-relaunch cycles on one kept
+      # profile (withFirefoxPage's profileDir, via scripts/lib/pb-relaunch.mjs).
+      # Each launches and reaps its own browser, so each is a plain node row
+      # like gui07 above; none is --quick. Their demonstrated red is each row's
+      # pre-build record-fail (docs/non-gui/checks-wave-c.tsv).
+      "ng-029-setup-restore-activates-mode|node $REPO_ROOT/scripts/verify-ng-029-setup-restore-mode.mjs"
+      "ng-030-setup-restore-opens-tabs-once|node $REPO_ROOT/scripts/verify-ng-030-setup-restore-dedup.mjs"
+      "ng-031-setup-commands-reachable|node $REPO_ROOT/scripts/verify-ng-031-setup-commands-reachable.mjs"
+      "ng-032-quit-restores-session|node $REPO_ROOT/scripts/verify-ng-032-quit-restores-session.mjs"
+      "ng-033-layout-survives-relaunch|node $REPO_ROOT/scripts/verify-ng-033-layout-survives-relaunch.mjs"
+      "ng-034-web-tab-history-survives-restart|node $REPO_ROOT/scripts/verify-ng-034-web-tab-history-restart.mjs"
+      "ng-035-custom-mode-saves-layout|node $REPO_ROOT/scripts/verify-ng-035-custom-mode-layout.mjs"
+      "ng-036-setup-records-dock-layout|node $REPO_ROOT/scripts/verify-ng-036-setup-dock-layout.mjs"
+      "ng-037-core-close-quits|node $REPO_ROOT/scripts/verify-ng-037-core-close-quits.mjs"
+      "ng-038-actor-refuses-hostile-senders|node $REPO_ROOT/scripts/verify-ng-038-actor-sender-wall.mjs"
     )
   fi
 
