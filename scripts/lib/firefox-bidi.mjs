@@ -20,7 +20,7 @@
 // orphaned processes; this harness must not manufacture that failure mode.
 
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,7 +45,8 @@ export const FIREFOX_BIN = process.env.PB_FIREFOX_BIN || join(REPO_ROOT, 'objdir
 
 async function applyProfileOverrides(profileDir) {
     if (!process.env.PB_BACKEND_MAIN) return;
-    await writeFile(join(profileDir, 'user.js'),
+    // Appended, not written: a kept profile or a caller may already hold a user.js.
+    await appendFile(join(profileDir, 'user.js'),
         `user_pref("powerbrowser.sidecar.backendMain", ${JSON.stringify(process.env.PB_BACKEND_MAIN)});\n`);
 }
 
@@ -295,7 +296,7 @@ export async function captureScreenshot(url, outputPath, { windowSize = '800,600
  * settle past any debounce) before capturing -- the only way to actually
  * see the rendered app.
  */
-export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN, stdoutPath } = {}) {
+export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN, stdoutPath, profileDir: keptProfileDir } = {}) {
     if (!existsSync(binPath)) {
         throw new Error(
             `firefox-bidi: ${binPath} does not exist. Run the Phase 1 Firefox build first ` +
@@ -303,7 +304,11 @@ export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN, st
         );
     }
 
-    const profileDir = await mkdtemp(join(tmpdir(), 'powerbrowser-firefox-bidi-'));
+    // `profileDir` (non-GUI build restart checks): a caller-owned profile that
+    // survives this launch, so a second withFirefoxPage call relaunches on it.
+    // The caller creates and removes it; without it a temporary one is used.
+    if (keptProfileDir) await mkdir(keptProfileDir, { recursive: true });
+    const profileDir = keptProfileDir || await mkdtemp(join(tmpdir(), 'powerbrowser-firefox-bidi-'));
     await applyProfileOverrides(profileDir);
     const port = await freePort();
 
@@ -366,7 +371,7 @@ export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN, st
         if (stdoutSink) {
             await new Promise(resolve => stdoutSink.end(resolve));
         }
-        await rm(profileDir, { recursive: true, force: true });
+        if (!keptProfileDir) await rm(profileDir, { recursive: true, force: true });
     };
 
     // CR-03: this handler must not call process.exit() itself. A caller

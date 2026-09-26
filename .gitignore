@@ -79,3 +79,4 @@ result-*
 .gsd/
 opencode.json
 .gsd-graph/
+__pycache__/
