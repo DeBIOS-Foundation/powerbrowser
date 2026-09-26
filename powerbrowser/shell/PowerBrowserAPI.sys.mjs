@@ -2489,7 +2489,7 @@ export const PowerBrowserAPI = Object.freeze({
    */
   async sweepTabStoreFromSessionStore() {
     const live = PowerBrowserAPI.parseSessionStoreTabRows();
-    const liveUris = live.map(row => row.uri);
+    const liveUris = sessionStoreStockKeys();
     for (const row of live.slice(0, TAB_STORE_SWEEP_MAX_WRITES)) {
       await PowerBrowserAPI.writeTabRow({
         uri: row.uri,
@@ -3311,4 +3311,26 @@ async function searchPlaces(text, limit) {
     frecency: row.getResultByName("frecency"),
     bookmarked: row.getResultByName("bookmark_guid") !== null,
   }));
+}
+
+// NG-005 / NG-023: the sweep's open set -- the key of every stock tab
+// sessionstore lists, whether or not it has collected the tab's history yet.
+// parseSessionStoreTabRows skips a tab with no history entry, because such a
+// tab has no address to write. Measured live: a startup tab carried its key
+// but no entry at the first sessionstore write (3 s after launch), and its
+// entry arrived about 13 s later. The sweep closed that open tab's row until
+// the next write, so every store reader treated the tab as closed, and the
+// address bar ranked its history row below a bookmark. It sits at the end of
+// the file so no catalogued line above moves.
+function sessionStoreStockKeys() {
+  try {
+    const state = JSON.parse(lazy.SessionStore.getBrowserState());
+    return (state.windows ?? [])
+      .filter(win => !win.isPrivate)
+      .flatMap(win => (win.tabs ?? []).map(tab => tab.extData?.[STOCK_TAB_KEY_VALUE]))
+      .filter(Boolean);
+  } catch {
+    // The same answer parseSessionStoreTabRows gives on a failed read.
+    return [];
+  }
 }
