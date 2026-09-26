@@ -912,8 +912,15 @@ export function planWebTabRestore(settings: Record<string, string>, tabs: readon
     }
     const minutes = Number(settings.restore_live_minutes ?? '5');
     const days = Number(settings.restore_url_days ?? '30');
-    const liveMs = (Number.isFinite(minutes) ? minutes : 5) * 60 * 1000;
-    const urlMs = (Number.isFinite(days) ? days : 30) * 24 * 60 * 60 * 1000;
+    // A value that is not a number, or is negative, falls back to the default
+    // (docs/TAB-STORE.md reader rule). Both restore keys admit 0 (0 to 10080
+    // minutes, 0 to 3650 days), so the floor is `>= 0` for both -- the
+    // chrome-side sweep reader's shape (`Number.isFinite(x) && x >= 0`); the
+    // schedule reader's `> 0` fits integrity_check_minutes (greater than 0)
+    // but would wrongly turn restore_live_minutes=0 (URL-only, NG-011's
+    // second case) back into the 5-minute default.
+    const liveMs = (Number.isFinite(minutes) && minutes >= 0 ? minutes : 5) * 60 * 1000;
+    const urlMs = (Number.isFinite(days) && days >= 0 ? days : 30) * 24 * 60 * 60 * 1000;
     return tabs.flatMap(tab => {
         const age = tab.lastAccessed === null ? Infinity : quitAt - tab.lastAccessed;
         return age > urlMs ? [] : [{ key: tab.key, url: tab.url, withHistory: age <= liveMs }];

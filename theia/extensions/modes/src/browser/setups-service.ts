@@ -28,6 +28,7 @@ import { ProfileStorageService } from '@powerbrowser/tab-uris/lib/browser/profil
 import pDebounce from 'p-debounce';
 import { SHIPPED_MODES } from './mode-descriptors';
 import { ModeService } from './mode-service';
+import { planWebTabRestore } from './group-model';
 
 /**
  * GUI-09 (14-03): named setups as user-storage data owned entirely
@@ -1258,10 +1259,14 @@ export class SetupsService implements FrontendApplicationContribution {
                     this.webTabAccess.set(tab.rowKey, tab.lastAccessed);
                 }
             }
-            // NG-034: web tabs first, on their rows. Wave A's Task 10 replaces
-            // this loop with its restore plan (restore_behaviour, age tiers).
-            for (const tab of saved.webTabs) {
-                await this.restoreWebTab({ rowKey: tab.rowKey, url: tab.url, withHistory: true });
+            // NG-011: the launch restore reopens the last session's web tabs
+            // per restore_behaviour and the age tiers. Every reopened tab
+            // opens on its saved row (restoreWebTab's rowKey), with its
+            // history only when the plan asks.
+            const settings = await this.groupReader.getSettings().catch(() => ({} as Record<string, string>));
+            const plan = planWebTabRestore(settings, saved.webTabs.map(tab => ({ key: tab.rowKey, url: tab.url, lastAccessed: tab.lastAccessed ?? null })), saved.savedAt);
+            for (const tab of plan) {
+                await this.restoreWebTab({ rowKey: tab.key, url: tab.url, withHistory: tab.withHistory });
             }
             await this.applySnapshot(saved, false, false);
             return;
