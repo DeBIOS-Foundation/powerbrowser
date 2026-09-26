@@ -24,6 +24,8 @@ import { FrontendApplicationConfigProvider } from '@theia/core/lib/browser/front
 import { PowerBrowserTelemetrySender } from './telemetry-sender';
 import { TELEMETRY_LEVEL_PREFERENCE, bindTelemetryPreferences } from './telemetry-preferences';
 import { PowerBrowserTelemetryLogger } from './telemetry-logger';
+import { FrontendApplicationContribution } from '@theia/core/lib/browser';
+import { TelemetryErrorCapture } from './telemetry-error-capture';
 
 export interface PowerBrowserTelemetryConfig {
     level?: unknown;
@@ -61,4 +63,7 @@ export default new ContainerModule(bind => {
         });
     }).inSingletonScope();
     bind(PowerBrowserTelemetryLogger).toSelf().inSingletonScope();
+    // NG-067: the call site that makes the logger reachable from uncaught errors.
+    bind(TelemetryErrorCapture).toSelf().inSingletonScope();
+    bind(FrontendApplicationContribution).toService(TelemetryErrorCapture);
 });
