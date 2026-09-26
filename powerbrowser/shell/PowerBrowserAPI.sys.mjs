@@ -835,14 +835,26 @@ export const PowerBrowserAPI = Object.freeze({
    * ponytail: targets the most recently focused stock window, private or
    * not. Which window a given tab belongs in is the mirror/proxy bridge's
    * question (GUI-04), not this one's.
+   *
+   * NG-009: a window still starting has not loaded its window argument yet;
+   * its delayed startup loads it into the SELECTED tab
+   * (upstream/browser/base/content/browser-init.js:491), so a tab added and
+   * selected before then has its page replaced by the first window's. The
+   * tab waits for that window's delayed startup (browser-init.js:44, :791).
    */
-  openStockTab(url) {
+  async openStockTab(url) {
     const spec = typeof url === "string" && url ? url : "about:newtab";
     if (spec !== "about:newtab" && !/^https?:\/\//i.test(spec)) {
       return "refused-scheme";
     }
     const win = Services.wm.getMostRecentWindow("navigator:browser");
-    const tab = win && win.gBrowser ? win.gBrowser.addWebTab(spec) : null;
+    if (win && win.gBrowserInit && !win.gBrowserInit.delayedStartupFinished) {
+      await new Promise(resolve => {
+        win.delayedStartupPromise.then(resolve);
+        win.addEventListener("unload", resolve, { once: true });
+      });
+    }
+    const tab = win && !win.closed && win.gBrowser ? win.gBrowser.addWebTab(spec) : null;
     if (!tab) {
       PowerBrowserAPI.openBrowserWindow(spec);
       return "opened-window";
@@ -2131,7 +2143,7 @@ export const PowerBrowserAPI = Object.freeze({
         // read the ack can tell a reused tab from a fresh window from a
         // refusal.
         case "openStockTab": {
-          return { ok: true, kind, where: PowerBrowserAPI.openStockTab(data.url) };
+          return { ok: true, kind, where: await PowerBrowserAPI.openStockTab(data.url) };
         }
         // GUI-02 (14.1-01): the in-shell web-tab kinds, riding the same pair
         // for the same one-wall reason as openStockTab. The Theia frame is
