@@ -7,7 +7,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { newProfile, runCheck, withShell } from './lib/ng-a-live.mjs';
+import { newProfile, runCheck, withShellQuit } from './lib/ng-a-live.mjs';
 
 await runCheck('verify-ng-007-shell-tabs-keep-group-across-restart', async ({ expect }) => {
     const profile = newProfile('ng007');
@@ -16,7 +16,7 @@ await runCheck('verify-ng-007-shell-tabs-keep-group-across-restart', async ({ ex
     const file = join(fileDir, 'note.txt');
     writeFileSync(file, 'ng007\n');
     const fileUri = `file://${file}`;
-    const first = await withShell(profile, async ({ run }) => run(`
+    const first = await withShellQuit(profile, async ({ run }) => run(`
         const main = { widgetOptions: { area: 'main' } };
         const editor = await A.open(${JSON.stringify(fileUri)}, main);
         const grouped = await A.open('terminal:ng007a', main);
@@ -29,7 +29,7 @@ await runCheck('verify-ng-007-shell-tabs-keep-group-across-restart', async ({ ex
         await A.sleep(1500);
         return { group: group.id, port: location.port, editorKey: editor.getResourceUri().toString(true) };
     `));
-    const second = await withShell(profile, async ({ run }) => run(`
+    const second = await withShellQuit(profile, async ({ run }) => run(`
         await A.organising();
         const before = A.model().getTabs(${JSON.stringify(first.group)}).map(t => t.uri);
         const main = { widgetOptions: { area: 'main' } };

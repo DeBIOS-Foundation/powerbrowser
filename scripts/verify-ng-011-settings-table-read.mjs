@@ -6,7 +6,7 @@
 // Task 10).
 
 import { join } from 'node:path';
-import { newProfile, runCheck, sleep, withShell } from './lib/ng-a-live.mjs';
+import { newProfile, runCheck, sleep, withShell, withShellQuit } from './lib/ng-a-live.mjs';
 import { buildStore, readStore, schemaHead } from './lib/tab-store-fixtures.mjs';
 
 await runCheck('verify-ng-011-settings-table-read', async ({ pages, expect }) => {
@@ -27,7 +27,7 @@ await runCheck('verify-ng-011-settings-table-read', async ({ pages, expect }) =>
     for (const [behaviour, liveMinutes, wantOpen, wantHistory] of [['session', '5', true, true], ['session', '0', true, false], ['none', '5', false, false]]) {
         const p = newProfile(`ng011-${behaviour}-${liveMinutes}`);
         buildStore(join(p, 'tabs.sqlite'), schemaHead(), { settings: { restore_behaviour: behaviour, restore_live_minutes: liveMinutes } });
-        await withShell(p, async ({ run, topLevelContexts, evaluateIn }) => {
+        await withShellQuit(p, async ({ run, topLevelContexts, evaluateIn }) => {
             await run(`await A.open(${JSON.stringify(a)});`);
             await sleep(2000);
             const ctx = (await topLevelContexts()).find(x => x.url === a);
@@ -36,7 +36,7 @@ await runCheck('verify-ng-011-settings-table-read', async ({ pages, expect }) =>
             }
             await sleep(3000);
         });
-        const got = await withShell(p, async ({ run }) => {
+        const got = await withShellQuit(p, async ({ run }) => {
             await sleep(4000);
             return run(`
                 const tab = A.webTabs().find(w => w.url === ${JSON.stringify(b)});

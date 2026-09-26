@@ -6,12 +6,15 @@
 // and installs `window.__ngA`: helpers that reach the frontend's own DI-bound
 // services (opener, GroupModel, GroupActorClient, the group reader, the shell,
 // commands). Checks drive behaviour only through those (G6) and read
-// tabs.sqlite from outside. SIGTERM ends each launch; Gecko on GTK turns it
-// into an orderly quit (nsAppShell::TermSignalHandler).
+// tabs.sqlite from outside. A launch a relaunch follows ends through the app's
+// own quit (quitApp, withShellQuit). withFirefoxPage's SIGTERM is only the
+// last resort after a failed quit, or the end of a single-launch check: on
+// GTK it stops the event loop (nsAppShell::TermSignalHandler) and the process
+// is gone in about 0.1 s without running profile-before-change.
 
 import { createServer } from 'node:http';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -280,6 +283,90 @@ export async function withShell(profileDir, fn, { url = '', stdoutPath } = {}) {
     }, { profileDir, stdoutPath });
 }
 
+/** The same budget wave C gives a quit. */
+export const QUIT_BUDGET_MS = 30000;
+
+/** A launch that did not quit within its budget: runCheck prints it as the red line, not as `harness:`. */
+class QuitFailure extends Error {}
+
+/** /proc/<pid>/stat after the command name: [state, ppid, ...]. Throws once the process is gone. */
+function statOf(pid) {
+    const text = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    return text.slice(text.lastIndexOf(')') + 2).split(' ');
+}
+
+/**
+ * The browser running on `profile`: the process whose argv carries
+ * `--profile <profile>` (on Linux, child processes get no profile argument).
+ * A launch wrapper (NG-017's) carries the same argv, so the browser is the
+ * match that no other match is the parent of.
+ */
+function browserPid(profile) {
+    const matches = new Map();
+    for (const pid of readdirSync('/proc').filter(name => /^\d+$/.test(name))) {
+        try {
+            const argv = readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0');
+            if (argv[argv.indexOf('--profile') + 1] === profile) {
+                matches.set(Number(pid), Number(statOf(pid)[1]));
+            }
+        } catch {
+            // It exited while being read.
+        }
+    }
+    const parents = new Set(matches.values());
+    const leaves = [...matches.keys()].filter(pid => !parents.has(pid));
+    if (leaves.length !== 1) {
+        throw new Error(`found ${leaves.length} browser process(es) on ${profile}, want 1`);
+    }
+    return leaves[0];
+}
+
+/** False once the process is gone, or a zombie waiting to be reaped. */
+function running(pid) {
+    try {
+        return statOf(pid)[0] !== 'Z';
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * The app's own quit: Services.startup.quit(eAttemptQuit) in the shell's
+ * chrome window, then a wait for the browser process to exit. Resolves the ms
+ * the quit took, or null when the process was still running after `budgetMs`
+ * (withFirefoxPage's cleanup then SIGTERMs it, the last resort). Never
+ * SIGTERM as the quit itself: on GTK that stops the event loop and skips
+ * profile-before-change, and so the shutdown writes a relaunch relies on.
+ */
+export async function quitApp({ send, evaluateIn }, profile, budgetMs = QUIT_BUDGET_MS) {
+    const pid = browserPid(profile);
+    const tree = await send('browsingContext.getTree', { 'moz:scope': 'chrome' });
+    const shell = tree.contexts.find(c => c.url.startsWith('chrome://powerbrowser/'));
+    if (!shell) {
+        throw new Error(`no shell chrome window to quit from: ${JSON.stringify(tree.contexts.map(c => c.url))}`);
+    }
+    const start = Date.now();
+    // Deferred, so the evaluation answers before the quit starts.
+    await evaluateIn(shell.context, 'setTimeout(() => Services.startup.quit(Ci.nsIAppStartup.eAttemptQuit), 0); true');
+    return (await waitUntil(() => !running(pid), budgetMs, 100)) ? Date.now() - start : null;
+}
+
+/**
+ * A launch that ends the way a user ends it: withShell runs `fn`, then
+ * quitApp must finish within QUIT_BUDGET_MS. Every launch of a restart check
+ * goes through here. A launch that does not quit in time ends the scenario
+ * with "did not quit within 30 s" as its failure.
+ */
+export async function withShellQuit(profileDir, fn, options) {
+    return withShell(profileDir, async page => {
+        const out = await fn(page);
+        if (await quitApp(page, profileDir) === null) {
+            throw new QuitFailure(`the browser did not quit within ${QUIT_BUDGET_MS / 1000} s of the app's own quit (Services.startup.quit), so no relaunch can follow a real quit`);
+        }
+        return out;
+    }, options);
+}
+
 /**
  * Entry for every live check file: one scenario, receiving { pages, expect,
  * failures }; exits 1 naming every failure, 0 with a PASS line.
@@ -296,7 +383,7 @@ export async function runCheck(name, scenario) {
     try {
         await scenario({ pages, expect, failures });
     } catch (error) {
-        failures.push(`harness: ${error && error.stack ? error.stack : error}`);
+        failures.push(error instanceof QuitFailure ? error.message : `harness: ${error && error.stack ? error.stack : error}`);
     } finally {
         pages.close();
         removeProfiles();

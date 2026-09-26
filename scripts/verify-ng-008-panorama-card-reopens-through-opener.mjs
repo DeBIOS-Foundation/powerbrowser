@@ -4,12 +4,12 @@
 // open reopens that tab through the opener, on the card's own row; a card for
 // an open tab activates it and opens nothing.
 
-import { newProfile, runCheck, show, sleep, tabsOf, waitUntil, withShell } from './lib/ng-a-live.mjs';
+import { newProfile, runCheck, show, sleep, tabsOf, waitUntil, withShellQuit } from './lib/ng-a-live.mjs';
 
 await runCheck('verify-ng-008-panorama-card-reopens-through-opener', async ({ pages, expect, failures }) => {
     const profile = newProfile('ng008');
     const a = pages.url('/a');
-    const first = await withShell(profile, async ({ run }) => {
+    const first = await withShellQuit(profile, async ({ run }) => {
         const out = await run(`
             const web = await A.open(${JSON.stringify(a)});
             const term = await A.open('terminal:ng008', { widgetOptions: { area: 'main' } });
@@ -28,7 +28,7 @@ await runCheck('verify-ng-008-panorama-card-reopens-through-opener', async ({ pa
         failures.push(`setup: the web tab on ${a} never got a grouped row; rows: ${show(tabsOf(profile))}`);
         return;
     }
-    const second = await withShell(profile, async ({ run }) => run(`
+    const second = await withShellQuit(profile, async ({ run }) => run(`
         const webKey = ${JSON.stringify(webRow.uri)};
         const pageUrl = ${JSON.stringify(a)};
         const cardFor = key => document.querySelector('.pb-org-card[data-u="' + CSS.escape(key) + '"]');
