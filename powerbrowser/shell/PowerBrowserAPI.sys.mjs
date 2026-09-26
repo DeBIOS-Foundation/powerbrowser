@@ -1575,8 +1575,8 @@ export const PowerBrowserAPI = Object.freeze({
    * GUI-08 (15-01): closes exactly one group's tabs and removes the box
    * (the ONLY destructive group path). Each member tab closes through the
    * stock tab container first -- the existing TabClose triggers then do row
-   * cleanup through the one path -- with a deterministic row DELETE per
-   * member in the same transaction as the group removal, so a tab without a
+   * cleanup through the one path -- with every member row marked closed
+   * in the same transaction as the group removal, so a tab without a
    * live browser (or a failed close) still leaves no orphan row. Loud errors
    * naming method + id. Unknown ids resolve as already-closed success (WR-02:
    * the frontend Retry discipline assumes idempotency -- a close whose ack
@@ -1610,7 +1610,13 @@ export const PowerBrowserAPI = Object.freeze({
     }
     try {
       await conn.executeTransaction(async () => {
-        await conn.execute("DELETE FROM tabs WHERE group_id = :id", { id });
+        // NG-006/NG-010: the members close with their tabs and stay as
+        // closed-tab history; membership is cleared so no row names a group
+        // that no longer exists.
+        await conn.execute(
+          "UPDATE tabs SET group_id = NULL, closed_at = COALESCE(closed_at, :now) WHERE group_id = :id",
+          { id, now: Date.now() }
+        );
         await conn.execute("DELETE FROM groups WHERE id = :id", { id });
       });
     } catch (err) {

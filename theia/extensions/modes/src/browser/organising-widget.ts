@@ -402,8 +402,15 @@ export class OrganisingWidget extends Widget {
             return;
         }
         try {
+            const members = this.model.getTabs(id);
             const closed = await this.model.closeGroup(this.actor, id);
             if (closed) {
+                // NG-006: the dialog promises the group's tabs close too. Web tabs,
+                // editors and terminals are shell widgets the chrome-side close
+                // cannot reach; closing each ends its row as closed-tab history.
+                for (const tab of members) {
+                    this.widgetForTab(tab)?.close();
+                }
                 await this.flash(`Group "${closed.name}" closed.`);
             }
             this.render();
