@@ -23,6 +23,7 @@
       "backend": "lib/node/tab-query-backend-module"
     },
     {
+      "frontend": "lib/browser/tab-store-access-frontend-module",
       "backend": "lib/node/tab-store-access-backend-module"
     }
   ],

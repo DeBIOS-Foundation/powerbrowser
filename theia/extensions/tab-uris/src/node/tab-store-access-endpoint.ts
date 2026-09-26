@@ -22,12 +22,13 @@ import * as crypto from 'crypto';
 import * as http from 'http';
 import { chmodSync, renameSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { injectable } from '@theia/core/shared/inversify';
+import { inject, injectable } from '@theia/core/shared/inversify';
 import { BackendApplicationContribution } from '@theia/core/lib/node';
 import { POWERBROWSER_ENV } from '@powerbrowser/token-gate/lib/node/powerbrowser-env';
 import { TAB_QUERY_FILE_NAME } from './tab-query-service';
-import { STORE_ACCESS_FILE_NAME, STORE_ACCESS_ROUTE, TabStoreToolName } from '../browser/tab-store-access-protocol';
+import { STORE_ACCESS_FILE_NAME, STORE_ACCESS_ROUTE, StoreMessage, TabStoreToolName } from '../browser/tab-store-access-protocol';
 import { runReadOnlySql } from './tab-store-sql';
+import { TabStoreRelayHub } from './tab-store-relay';
 
 const MCP_VERSION = '2025-06-18';
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -53,7 +54,34 @@ const TOOLS: ToolDef[] = [
             required: ['sql'],
         },
     },
+    {
+        name: 'history_entry',
+        description: 'Read one page from browsing history by exact URL. Returns entry: {url, title}, or null.',
+        inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
+    },
+    {
+        name: 'bookmark_by_url',
+        description: 'Read the bookmark for an exact URL. Returns bookmark: {guid, title, url}, or null.',
+        inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
+    },
+    {
+        name: 'bookmark_folder',
+        description: 'List a bookmark folder by its 12-character GUID. Returns rows of {guid, title, url}.',
+        inputSchema: { type: 'object', properties: { guid: { type: 'string' } }, required: ['guid'] },
+    },
+    {
+        name: 'sessionstore_tabs',
+        description: 'List the open tabs as session restore records them. Returns rows of {uri, url, title, last_active}.',
+        inputSchema: { type: 'object', properties: {} },
+    },
 ];
+
+function requireString(value: unknown, name: string): string {
+    if (typeof value !== 'string' || !value) {
+        throw new Error(`${name} must be a non-empty string`);
+    }
+    return value;
+}
 
 class RpcFailure extends Error {
     constructor(readonly code: number, message: string) {
@@ -86,6 +114,9 @@ export class TabStoreAccessEndpoint implements BackendApplicationContribution {
     protected token = '';
     protected port = 0;
     protected accessFile = '';
+
+    @inject(TabStoreRelayHub)
+    protected readonly relay: TabStoreRelayHub;
 
     onStart(): void {
         if (!this.profileDir) {
@@ -218,8 +249,25 @@ export class TabStoreAccessEndpoint implements BackendApplicationContribution {
         switch (name) {
             case 'tabs_sql':
                 return runReadOnlySql(join(this.profileDir, TAB_QUERY_FILE_NAME), args.sql, args.params);
+            case 'history_entry':
+                return { entry: await this.chrome({ kind: 'readHistoryEntry', url: requireString(args.url, 'url') }, 'entry') };
+            case 'bookmark_by_url':
+                return { bookmark: await this.chrome({ kind: 'readBookmarkByUrl', url: requireString(args.url, 'url') }, 'bookmark') };
+            case 'bookmark_folder':
+                return { rows: await this.chrome({ kind: 'listBookmarkFolder', folderGuid: requireString(args.guid, 'guid') }, 'rows') };
+            case 'sessionstore_tabs':
+                return { rows: await this.chrome({ kind: 'projectSessionStoreTabs' }, 'rows') };
             default:
                 throw new Error(`unknown tool ${name}`);
         }
+    }
+
+    /** One chrome read through a connected window; the reply field, or null. */
+    protected async chrome(msg: StoreMessage, field: string): Promise<unknown> {
+        const reply = await this.relay.relay(msg);
+        if (!reply.ok) {
+            throw new Error(reply.message ?? `${msg.kind} failed (${reply.reason ?? 'store'})`);
+        }
+        return reply[field] ?? null;
     }
 }

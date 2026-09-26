@@ -35,6 +35,10 @@ The endpoint speaks MCP over HTTP with single JSON responses: `initialize`, `too
 | Tool | Arguments | Result |
 |---|---|---|
 | `tabs_sql` | `sql` (string), `params` (array, optional) | `{columns, rows, truncated}` |
+| `history_entry` | `url` (exact address) | `{entry}`: `{url, title}`, or `null` when the page is not in history |
+| `bookmark_by_url` | `url` (exact address) | `{bookmark}`: `{guid, title, url}`, or `null` |
+| `bookmark_folder` | `guid` (a folder's 12-character bookmark GUID) | `{rows}`: the folder's children, each `{guid, title, url}` |
+| `sessionstore_tabs` | none | `{rows}`: the open tabs as session restore records them, each `{uri, url, title, last_active}` |
 
 A tool that cannot run answers with `isError: true` and a message that says why.
 
@@ -47,6 +51,10 @@ Runs one read-only SQL statement against `tabs.sqlite`.
 - Put values in `params` and refer to them with `?`. Do not paste text you did not write into `sql`.
 - Each row of `tabs` is one tab, keyed by its identity in `uri` (`stock:…`, `web:…`, or a Theia address such as `terminal:build`). `url` is the page address (`''` for a tab with no page), and `closed_at` is `NULL` while the tab is open. `docs/TAB-STORE.md` describes every table and column.
 - Limits: 5 seconds per statement, 1000 rows, 8 MiB of row data, two statements at a time. `truncated` is `true` when a limit cut the rows short.
+
+### History, bookmarks and session tools
+
+`history_entry`, `bookmark_by_url`, `bookmark_folder` and `sessionstore_tabs` read Firefox's own history, bookmarks and session data. Power Browser answers them from its browser side, passing each request through an open Power Browser window. While no window is open they answer with `isError: true` and "no Power Browser window is connected". Private windows are never included.
 
 ## Example
 

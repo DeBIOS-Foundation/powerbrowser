@@ -3094,6 +3094,7 @@ export class PowerBrowserGroupParent extends GroupActorBase {
     if (!message || message.name !== "PowerBrowserGroupMutation") {
       return undefined;
     }
+    if (isStoreRequestKind(message.data?.kind)) { return handleStoreRequest(message.data, this); }
     return PowerBrowserAPI.handleGroupMutation(message.data, this);
   }
 
@@ -3101,5 +3102,92 @@ export class PowerBrowserGroupParent extends GroupActorBase {
   // opened them (see webTabDropOwnedBy).
   didDestroy() {
     PowerBrowserAPI.webTabDropOwnedBy(this);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Non-GUI wave B (NG-021..NG-028): the store request channel.
+//
+// Kinds that READ history, bookmarks, the sessionstore projection and the
+// tab/Places join, and (NG-028) capture a saved copy of a page, ride the same
+// PowerBrowserGroup actor pair as the group mutations -- one channel, one
+// boundary file -- but dispatch here, in a function of their own, so
+// handleGroupMutation stays the group writer's alone. The actor parent's
+// receiveMessage routes a kind in STORE_REQUEST_KINDS here with one line;
+// every other kind still goes to handleGroupMutation.
+//
+// This section sits at the end of the file on purpose: nothing above the
+// last catalogued internals line moves when it grows, so the line references
+// in INTERNAL-APIS.md stay valid.
+// ---------------------------------------------------------------------------
+
+const STORE_REQUEST_KINDS = new Set([
+  "readHistoryEntry",
+  "readBookmarkByUrl",
+  "listBookmarkFolder",
+  "projectSessionStoreTabs",
+]);
+
+function isStoreRequestKind(kind) {
+  return typeof kind === "string" && STORE_REQUEST_KINDS.has(kind);
+}
+
+// These kinds read the user's history and bookmarks, so they add a wall of
+// their own on top of groupSenderIsTheia: the sender's top frame must be
+// embedded in a Power Browser shell window. A page in a stock browser tab
+// lives in a navigator:browser window and is refused here, whatever the
+// shared sender check decides.
+function storeSenderInShellWindow(actorRef) {
+  try {
+    const root = actorRef.browsingContext.top.embedderElement.ownerGlobal.document.documentElement;
+    return root.getAttribute("windowtype") === "powerbrowser:main";
+  } catch {
+    return false;
+  }
+}
+
+function storeUrlArg(value) {
+  if (typeof value !== "string" || !value || value.length > 8192) {
+    throw new Error("handleStoreRequest: refusing a missing or oversized url");
+  }
+  return value;
+}
+
+async function handleStoreRequest(data, actorRef) {
+  if (!groupSenderIsTheia(actorRef) || !storeSenderInShellWindow(actorRef)) {
+    PowerBrowserAPI.log("error", "[handleStoreRequest] rejecting a sender outside the shell's Theia frame");
+    return { ok: false, reason: "validation", message: "handleStoreRequest: refusing a sender outside the shell's Theia frame" };
+  }
+  const kind = data.kind;
+  try {
+    switch (kind) {
+      // Replies cross the actor boundary by structured clone, and Places
+      // hands back URL objects, which do not clone: every url here is a string.
+      case "readHistoryEntry": {
+        const entry = await PowerBrowserAPI.readHistoryEntry(storeUrlArg(data.url));
+        return { ok: true, kind, entry: entry && { url: String(entry.url), title: entry.title } };
+      }
+      case "readBookmarkByUrl": {
+        const bookmark = await PowerBrowserAPI.readBookmarkByUrl(storeUrlArg(data.url));
+        return { ok: true, kind, bookmark: bookmark && { guid: bookmark.guid, title: bookmark.title, url: String(bookmark.url) } };
+      }
+      case "listBookmarkFolder": {
+        if (typeof data.folderGuid !== "string" || !/^[A-Za-z0-9_-]{12}$/.test(data.folderGuid)) {
+          throw new Error("handleStoreRequest: refusing a malformed folderGuid");
+        }
+        const rows = PowerBrowserAPI.listBookmarkFolder(data.folderGuid).map(row => ({ guid: row.guid, title: row.title, url: String(row.url) }));
+        return { ok: true, kind, rows };
+      }
+      case "projectSessionStoreTabs": {
+        return { ok: true, kind, rows: PowerBrowserAPI.projectSessionStoreTabs() };
+      }
+      default: {
+        return { ok: false, reason: "validation", message: `handleStoreRequest: unknown kind ${String(kind)}` };
+      }
+    }
+  } catch (err) {
+    const message = err && err.message ? err.message : String(err);
+    PowerBrowserAPI.log("warn", `[handleStoreRequest] ${String(kind)} failed: ${message}`);
+    return { ok: false, reason: /refusing|unknown/.test(message) ? "validation" : "store", message };
   }
 }
