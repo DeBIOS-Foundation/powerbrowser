@@ -589,6 +589,24 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
+   * NG-037: quits the whole application the way upstream's quit paths do:
+   * announce quit-application-requested so any observer may cancel (a page's
+   * leave prompt; the shell's own flush, NG-032/NG-033), then an attempted
+   * quit that closes every window, stock browser windows included. The
+   * backend stops on the quit-application-granted that follows
+   * (TheiaService.stop). Returns false when an observer cancelled.
+   */
+  quitApplication() {
+    const cancelQuit = Cc["@mozilla.org/supports-PRBool;1"].createInstance(Ci.nsISupportsPRBool);
+    Services.obs.notifyObservers(cancelQuit, "quit-application-requested");
+    if (cancelQuit.data) {
+      return false;
+    }
+    Services.startup.quit(Ci.nsIAppStartup.eAttemptQuit);
+    return true;
+  },
+
+  /**
    * Mirrors one line to the browser console and to stdout, so the
    * supervisor's ring buffer and the verification harness read the same
    * stream.
