@@ -72,6 +72,10 @@ export const TheiaService = {
   _browserElement: null,
   _nodePath: null,
   _backendMain: null,
+  // NG-073 (wave E T6-R1): the app's plugins directory, derived in
+  // _resolveSidecar from the resolved backend entry (<app>/plugins beside
+  // <app>/lib) and passed to the sidecar in _spawnAndGate. Null until resolved.
+  _pluginsDir: null,
   _configDir: null,
   _swapped: false,
   _shuttingDown: false,
@@ -499,6 +503,19 @@ export const TheiaService = {
       };
     }
 
+    // NG-073 (wave E T6-R1): the shipped sidecar gets no plugin directory of
+    // its own, so tell it where the app's plugins are. The backend entry
+    // resolves to <app>/lib/backend/main.js (staged <GreD>/theia or the dev
+    // app dir), and Task 6 stages the declared archives into <app>/plugins
+    // (scripts/download-plugins.mjs, powerbrowser/packaging/package-linux.sh
+    // stages the same directory); that directory is the deployer's own
+    // local-dir scheme, which its THEIA_DEFAULT_PLUGINS entry and its
+    // --plugins CLI value both accept. A user-set backendMain keeps its
+    // sibling plugins/ (a scratch app built against this layout resolves the
+    // same way); an entry not under lib/backend keeps the full path, which
+    // the deployer refuses to resolve rather than loading elsewhere.
+    this._pluginsDir = this._backendMain.replace(/\/lib\/backend\/main\.js$/, "/plugins");
+
     return { ok: true, message: null, details: null };
   },
 
@@ -707,6 +724,19 @@ export const TheiaService = {
       // POWERBROWSER_* key, and the service reads it from there once its
       // first consumer lands (still STAGED -- see the service header).
       POWERBROWSER_PROFILE_DIR: PowerBrowserAPI.getProfileDir(),
+      // NG-073 (wave E T6-R1): the app's plugins directory, derived in
+      // _resolveSidecar from the resolved backend entry. THEIA_DEFAULT_PLUGINS
+      // (not THEIA_PLUGINS): the deployer treats a DEFAULT entry as a system
+      // plugin -- the T6 comment in scripts/download-plugins.mjs records that
+      // a THEIA_PLUGINS/THEIA_DEFAULT_PLUGINS folder refuses packed files,
+      // and T6 stages each declared archive unpacked beside itself under this
+      // same directory -- while user entries come from the config-dir plugins
+      // participant, which the supervisor must not override. local-dir: is the
+      // deployer's own LocalDirectoryPluginDeployerResolver scheme, accepted
+      // both here and as --plugins=local-dir:<dir>. A directory path, not a
+      // credential, so environ visibility is irrelevant like every other
+      // non-POWERBROWSER_* key in this object.
+      ...(this._pluginsDir ? { THEIA_DEFAULT_PLUGINS: `local-dir:${this._pluginsDir}` } : {}),
     };
 
     let proc;
