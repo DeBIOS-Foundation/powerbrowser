@@ -150,10 +150,9 @@ export const SETUP_GONE_TABS_NOTICE = 'Power Browser restored this setup, but so
 export const SETUP_DEPENDENT_UNSUPPORTED = 'Power Browser can\'t open this tab in its own window. Select a terminal or editor tab first.';
 
 /**
- * Contracted unknown-mode fallback notice (14-UI-SPEC.md): stock
- * `switchPerspective` silently no-ops on unknown ids (never throws), so the
- * restore pre-validates against shipped + custom ids and falls back to
- * Browsing with this explanation instead of keeping a wrong mode silently.
+ * Contracted unknown-mode fallback notice (14-UI-SPEC.md): activateMode
+ * resolves unknown ids to Browsing itself; the restore pre-validates only to
+ * decide whether this notice is shown.
  * The stored id is never interpolated: custom ids are internal identifiers.
  */
 export const SETUP_MODE_FALLBACK_NOTICE = 'Power Browser restored this setup, but its saved mode is no longer available. Browsing is shown instead.';
@@ -561,9 +560,9 @@ export class SetupsService implements FrontendApplicationContribution {
         return [core, ...dependents];
     }
 
-    /** All core-model tabs as opaque URIs (registry first, editor resource fallback). */
-    protected tabsOfShell(): Array<{ id: string; uri: string }> {
-        const out: Array<{ id: string; uri: string }> = [];
+    /** All core-model tabs as opaque URIs (registry first, editor resource fallback), with their widgets. */
+    protected tabsOfShell(): Array<{ id: string; uri: string; widget: Widget }> {
+        const out: Array<{ id: string; uri: string; widget: Widget }> = [];
         for (const tabBar of this.shell.allTabBars) {
             for (const title of tabBar.titles) {
                 const widget = title.owner;
@@ -572,7 +571,7 @@ export class SetupsService implements FrontendApplicationContribution {
                 }
                 const uri = this.tabUriOf(widget);
                 if (uri !== undefined) {
-                    out.push({ id: widget.id, uri });
+                    out.push({ id: widget.id, uri, widget });
                 }
             }
         }
@@ -646,38 +645,60 @@ export class SetupsService implements FrontendApplicationContribution {
     }
 
     /**
-     * Place every recorded tab through the contribution open path. Returns
-     * the count of URIs that no longer resolve (dropped, never forced --
-     * T-14-03-02). Dependent rows re-host through the stock handler after
-     * their tabs resolve.
+     * NG-030: one placer per restore. A URI this restore already placed, or a
+     * tab already open in the shell when it began, resolves to that widget and
+     * is never opened again; only an unseen URI goes through the opener. Two
+     * web tabs on one page share one registry address (docs/URI-SCHEMES.md:250-254),
+     * so a setup restores that page once.
      */
-    protected async placeTabs(row: SetupSnapshot): Promise<number> {
-        let dropped = 0;
-        const opened = new Map<string, Widget>();
-        for (const tab of row.windows[0].tabs) {
-            const widget = await this.openTabUri(tab);
-            if (widget === null) {
-                dropped += 1;
-            } else if (widget instanceof Widget) {
-                opened.set(tab, widget);
+    protected tabPlacer(): (tab: string) => Promise<Widget | true | null> {
+        const placed = new Map<string, Widget>();
+        for (const entry of this.tabsOfShell()) {
+            if (!placed.has(entry.uri)) {
+                placed.set(entry.uri, entry.widget);
             }
         }
-        if (row.windows[0].activeTab && opened.has(row.windows[0].activeTab as string)) {
-            await this.openTabUri(row.windows[0].activeTab as string);
+        return async tab => {
+            const existing = placed.get(tab);
+            if (existing) {
+                return existing;
+            }
+            const opened = await this.openTabUri(tab);
+            if (opened instanceof Widget) {
+                placed.set(tab, opened);
+            }
+            return opened;
+        };
+    }
+
+    /**
+     * Place every recorded tab through the placer. Returns the count of URIs
+     * that no longer resolve (dropped, never forced -- T-14-03-02). Dependent
+     * rows re-host through the stock handler after their tabs resolve.
+     */
+    protected async placeTabs(row: Pick<SetupSnapshot, 'windows'>): Promise<number> {
+        const place = this.tabPlacer();
+        let dropped = 0;
+        const core = row.windows[0];
+        for (const tab of core.tabs) {
+            if ((await place(tab)) === null) {
+                dropped += 1;
+            }
+        }
+        // NG-030: the active tab is activated, never opened a second time.
+        if (core.activeTab) {
+            const active = await place(core.activeTab);
+            if (active instanceof Widget) {
+                await this.shell.activateWidget(active.id);
+            }
         }
         for (const dependent of row.windows.slice(1)) {
             const widgets: Widget[] = [];
             for (const tab of dependent.tabs) {
-                const existing = opened.get(tab);
-                if (existing) {
-                    widgets.push(existing);
-                    continue;
-                }
-                const widget = await this.openTabUri(tab);
+                const widget = await place(tab);
                 if (widget === null) {
                     dropped += 1;
                 } else if (widget instanceof Widget) {
-                    opened.set(tab, widget);
                     widgets.push(widget);
                 }
             }
