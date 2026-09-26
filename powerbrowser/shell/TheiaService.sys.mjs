@@ -449,7 +449,15 @@ export const TheiaService = {
    * it.
    */
   async _resolveSidecar() {
-    this._backendMain = PowerBrowserAPI.getStringPref("powerbrowser.sidecar.backendMain", "");
+    // NG-063: a packaged install carries its own Theia beside the binary
+    // (powerbrowser/packaging/package-linux.sh). Use it unless the user set a path;
+    // the build default points at the dev tree, which also exists on the build host.
+    const appDir = PowerBrowserAPI.getAppDir();
+    const stagedMain = appDir ? `${appDir}/theia/lib/backend/main.js` : "";
+    this._backendMain =
+      !PowerBrowserAPI.prefHasUserValue("powerbrowser.sidecar.backendMain") && stagedMain && (await PowerBrowserAPI.pathExists(stagedMain))
+        ? stagedMain
+        : PowerBrowserAPI.getStringPref("powerbrowser.sidecar.backendMain", "");
     if (!this._backendMain) {
       this._fatal("powerbrowser.sidecar.backendMain is unset -- cannot locate the Theia backend entry file.");
       return {
@@ -474,8 +482,11 @@ export const TheiaService = {
       };
     }
 
+    const stagedNode = appDir ? `${appDir}/node/bin/node` : "";
     const configured = PowerBrowserAPI.getStringPref("powerbrowser.sidecar.nodePath", "");
-    this._nodePath = configured || (await PowerBrowserAPI.pathSearch("node"));
+    const useStagedNode =
+      !PowerBrowserAPI.prefHasUserValue("powerbrowser.sidecar.nodePath") && stagedNode && (await PowerBrowserAPI.pathExists(stagedNode));
+    this._nodePath = (useStagedNode ? stagedNode : configured) || (await PowerBrowserAPI.pathSearch("node"));
     if (!this._nodePath) {
       this._fatal("Could not resolve a Node executable -- set powerbrowser.sidecar.nodePath or add node to PATH.");
       return {
