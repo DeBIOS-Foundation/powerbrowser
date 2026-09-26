@@ -3,12 +3,12 @@ import { Emitter, Event as TheiaEvent, WaitUntilEvent } from '@theia/core/lib/co
 import { FrontendApplication, FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { FrontendApplicationStateService } from '@theia/core/lib/browser/frontend-application-state';
 import { ShellLayoutRestorer } from '@theia/core/lib/browser/shell/shell-layout-restorer';
-import { LocalStorageService, StorageService } from '@theia/core/lib/browser/storage-service';
+import { LocalStorageService } from '@theia/core/lib/browser/storage-service';
 import { WEB_TAB_STATE_EVENT } from './web-tab';
 
 /**
- * NG-033: Theia's StorageService, kept in the browser profile instead of the
- * frontend origin's localStorage.
+ * NG-033: Theia's storage, kept in the browser profile instead of the frontend
+ * origin's localStorage.
  *
  * The sidecar's first spawn asks for port 0 (TheiaService.sys.mjs:602), so the
  * frontend origin -- and localStorage with it -- changes on nearly every
@@ -20,10 +20,15 @@ import { WEB_TAB_STATE_EVENT } from './web-tab';
  * user-storage read awaited inside layout restore deadlocks against the RPC
  * connection (customize-css-contribution.ts header).
  *
+ * It stands in for LocalStorageService, the store @theia/workspace's
+ * WorkspaceStorageService writes through, so every key keeps its workspace
+ * prefix (ruling F8): workspace-scoped state stays per workspace and only its
+ * backing store moves.
+ *
  * With no shell chrome behind the page -- the dev app on localhost:3000, or a
- * sender the actor refuses -- the first request is not taken or is refused,
- * and the service uses LocalStorageService for the rest of the session, so the
- * page never waits on a channel that is not there.
+ * sender the actor refuses -- the first request settles as no-chrome or is
+ * refused, and the service stays on localStorage (the base class) for the
+ * rest of the session.
  */
 export const SHELL_STATE_REQUEST_EVENT = 'PowerBrowserGroupRequest';
 export const SHELL_STATE_RESPONSE_EVENT = 'PowerBrowserGroupResponse';
@@ -31,6 +36,8 @@ export const SHELL_STATE_ACK_TIMEOUT_MS = 5000;
 export const SHELL_STATE_SAVE_DELAY_MS = 500;
 /** The push chrome sends to ask for a flush before a quit (PowerBrowserAPI.flushShellState). */
 export const SHELL_FLUSH_KIND = 'flushShellState';
+/** The only host the actor child loads on: its `matches` pin, GROUP_ACTOR_THEIA_ORIGIN in PowerBrowserAPI.sys.mjs. */
+export const SHELL_FRAME_HOST = '127.0.0.1';
 
 interface ShellStateReply {
     ok: boolean;
@@ -48,10 +55,7 @@ const NO_CHROME = 'no-chrome';
 type ShellStateOutcome = ShellStateReply | typeof NO_CHROME;
 
 @injectable()
-export class ProfileStorageService implements StorageService {
-
-    @inject(LocalStorageService)
-    protected readonly fallback: LocalStorageService;
+export class ProfileStorageService extends LocalStorageService {
 
     protected readonly onWillFlushEmitter = new Emitter<WaitUntilEvent>();
     /** Fired at the start of a quit flush; listeners add their last writes with waitUntil. */
@@ -64,7 +68,7 @@ export class ProfileStorageService implements StorageService {
     async setData<T>(key: string, data?: T): Promise<void> {
         const map = await this.load();
         if (!map) {
-            return this.fallback.setData(key, data);
+            return super.setData(key, data);
         }
         if (data === undefined) {
             delete map[key];
@@ -74,12 +78,10 @@ export class ProfileStorageService implements StorageService {
         this.scheduleSave();
     }
 
-    async getData<T>(key: string, defaultValue: T): Promise<T>;
-    async getData<T>(key: string): Promise<T | undefined>;
     async getData<T>(key: string, defaultValue?: T): Promise<T | undefined> {
         const map = await this.load();
         if (!map) {
-            return this.fallback.getData(key, defaultValue);
+            return super.getData(key, defaultValue);
         }
         return Object.prototype.hasOwnProperty.call(map, key) ? map[key] as T : defaultValue;
     }
@@ -143,7 +145,19 @@ export class ProfileStorageService implements StorageService {
         }, SHELL_STATE_SAVE_DELAY_MS);
     }
 
+    /**
+     * One request to chrome, settled by chrome's reply or the ack timeout --
+     * never by the dispatch's return value. The actor child's preventDefault
+     * is chrome's, and content never sees a cancel made by chrome
+     * (Event::DefaultPrevented(CallerType), upstream/dom/events/Event.cpp:812),
+     * so dispatchEvent returns true even when chrome has the request, as
+     * web-tab.ts and browser-window-command.ts measured. Off the actor's host
+     * no chrome can answer, so the request settles at once.
+     */
     protected request(msg: ShellStateMessage): Promise<ShellStateOutcome> {
+        if (location.protocol !== 'http:' || location.hostname !== SHELL_FRAME_HOST) {
+            return Promise.resolve(NO_CHROME);
+        }
         return new Promise<ShellStateOutcome>(resolve => {
             const requestId = `shell-state-${msg.kind}-${Date.now().toString(36)}-${(this.seq += 1)}`;
             const settle = (reply: ShellStateOutcome): void => {
@@ -162,17 +176,11 @@ export class ProfileStorageService implements StorageService {
             };
             const timer = window.setTimeout(() => settle({ ok: false, reason: 'timeout' }), SHELL_STATE_ACK_TIMEOUT_MS);
             window.addEventListener(SHELL_STATE_RESPONSE_EVENT, onResponse);
-            // cancelable, and the return value read: the actor child calls
-            // preventDefault synchronously once chrome has the request
-            // (GroupActorChild.handleEvent), the same signal
-            // browser-window-command.ts decides its fallback on. Not prevented
-            // means no shell chrome is behind this page.
-            const taken = !document.dispatchEvent(new CustomEvent(SHELL_STATE_REQUEST_EVENT, {
-                bubbles: true,
-                cancelable: true,
-                detail: { requestId, msg },
-            }));
-            if (!taken) {
+            try {
+                // `bubbles` and the document target reach the actor's listener
+                // on the window root (browser-window-command.ts requestStockTab).
+                document.dispatchEvent(new CustomEvent(SHELL_STATE_REQUEST_EVENT, { bubbles: true, detail: { requestId, msg } }));
+            } catch {
                 settle(NO_CHROME);
             }
         });

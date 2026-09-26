@@ -2049,6 +2049,9 @@ export const PowerBrowserAPI = Object.freeze({
           } catch {
             // Absent on a profile's first launch: the empty map.
           }
+          if (state.length > SHELL_STATE_MAX_CHARS) {
+            return { ok: false, reason: "store", message: "handleShellMessage: the stored shell state exceeds the size cap" };
+          }
           return { ok: true, kind, state };
         }
         case "shellStateSave": {
