@@ -375,7 +375,7 @@ export function startCollector({ port = DEFAULT_PORT, storeDir = DEFAULT_STORE_D
 // --- CLI --------------------------------------------------------------------
 
 function printHelp() {
-    console.log(`${NAME}: the Power Browser crash collector -- a downstream's own Antenna-protocol crash endpoint.
+    console.log(`${NAME}: the PowerBrowser crash collector -- a downstream's own Antenna-protocol crash endpoint.
 
 Usage: node scripts/crash-collector.mjs [--port <n>] [--store <dir>]
 
@@ -423,7 +423,7 @@ if (INVOKED_DIRECTLY) {
     }
     if (!existsSync(storeDir)) mkdirSync(storeDir, { recursive: true });
     startCollector({ port, storeDir }).then(({ url }) => {
-        console.log(`${NAME}: Power Browser crash collector listening at ${url} -- records land in ${storeDir}. Stop with Ctrl-C.`);
+        console.log(`${NAME}: PowerBrowser crash collector listening at ${url} -- records land in ${storeDir}. Stop with Ctrl-C.`);
     }).catch((err) => {
         console.error(`${NAME}: FAIL -- could not bind ${LOOPBACK_HOST}:${port}: ${err && err.message ? err.message : String(err)}. Next step: free the port or pass --port.`);
         process.exit(1);
