@@ -3846,6 +3846,16 @@ run_own_checks() {
     "gui08-persistence-roundtrip|node $REPO_ROOT/scripts/verify-gui08-persistence-roundtrip.mjs"
     "gui08-persistence-roundtrip-self-test|node $REPO_ROOT/scripts/verify-gui08-persistence-roundtrip.mjs --self-test"
 
+    # NEW (non-GUI wave A): the wave's quick-tier checks, one file per row
+    # (decisions.md R1). ng-016 requires the gui08 roundtrip and its self-test
+    # green at the writer's head; ng-019 derives the schema from the writer's
+    # DDL markers and compares docs/TAB-STORE.md, then plants drifts; ng-020
+    # plants a comment-only startup wiring into the absence instrument's gate.
+    # Honestly --quick: text reads, in-memory plants and a mkdtemp stage.
+    "ng-016-gui08-persistence-at-head|node $REPO_ROOT/scripts/verify-ng-016-gui08-persistence-at-head.mjs"
+    "ng-019-tab-store-doc|node $REPO_ROOT/scripts/verify-ng-019-tab-store-doc.mjs"
+    "ng-020-absence-wiring-by-call|node $REPO_ROOT/scripts/verify-ng-020-absence-wiring-by-call.mjs"
+
     # NEW (15-02): GUI-08's canvas-geometry gate. Derives canvas hooks,
     # zoom/min/tray/card consts, the thumbnail-fallback shape, and the
     # panorama command registry at check time and compares as set equality
@@ -4769,6 +4779,31 @@ run_own_checks() {
       "sql-store-roundtrip-self-test|node $REPO_ROOT/scripts/verify-sql-store-roundtrip.mjs --self-test"
       "sql-store-absence|node $REPO_ROOT/scripts/verify-sql-store-absence.mjs"
       "sql-store-absence-self-test|node $REPO_ROOT/scripts/verify-sql-store-absence.mjs --self-test"
+
+      # NEW (non-GUI wave A): the wave's live checks, one file per row
+      # (decisions.md R1). Each launches the built binary on a kept profile
+      # (scripts/lib/ng-a-live.mjs) and drives the behaviour through the Theia
+      # frontend's own services -- opener, GroupModel, GroupActorClient, the
+      # Close Group command, card double-clicks -- then reads tabs.sqlite from
+      # outside. Restart rows quit and relaunch on the same profile. Not
+      # --quick: binary, Theia build, headless browser.
+      "ng-001-one-key-rule|node $REPO_ROOT/scripts/verify-ng-001-one-key-rule.mjs"
+      "ng-002-navigation-keeps-row|node $REPO_ROOT/scripts/verify-ng-002-navigation-keeps-row.mjs"
+      "ng-003-same-url-two-rows|node $REPO_ROOT/scripts/verify-ng-003-same-url-two-rows.mjs"
+      "ng-004-new-tab-row-unknown-uri-error|node $REPO_ROOT/scripts/verify-ng-004-new-tab-row-unknown-uri-error.mjs"
+      "ng-005-prune-keeps-open-rows|node $REPO_ROOT/scripts/verify-ng-005-prune-keeps-open-rows.mjs"
+      "ng-006-close-group-closes-web-tabs|node $REPO_ROOT/scripts/verify-ng-006-close-group-closes-web-tabs.mjs"
+      "ng-007-shell-tabs-keep-group-across-restart|node $REPO_ROOT/scripts/verify-ng-007-shell-tabs-keep-group-across-restart.mjs"
+      "ng-008-panorama-card-reopens-through-opener|node $REPO_ROOT/scripts/verify-ng-008-panorama-card-reopens-through-opener.mjs"
+      "ng-009-content-age-columns|node $REPO_ROOT/scripts/verify-ng-009-content-age-columns.mjs"
+      "ng-010-closed-tab-history|node $REPO_ROOT/scripts/verify-ng-010-closed-tab-history.mjs"
+      "ng-011-settings-table-read|node $REPO_ROOT/scripts/verify-ng-011-settings-table-read.mjs"
+      "ng-012-reader-reports-schema-errors|node $REPO_ROOT/scripts/verify-ng-012-reader-reports-schema-errors.mjs"
+      "ng-013-unopenable-store-quarantined|node $REPO_ROOT/scripts/verify-ng-013-unopenable-store-quarantined.mjs"
+      "ng-014-rebuild-at-head|node $REPO_ROOT/scripts/verify-ng-014-rebuild-at-head.mjs"
+      "ng-015-real-migration-from-every-version|node $REPO_ROOT/scripts/verify-ng-015-real-migration-from-every-version.mjs"
+      "ng-017-sql05-restarts-real-browser|node $REPO_ROOT/scripts/verify-ng-017-sql05-restarts-real-browser.mjs"
+      "ng-018-scheduled-integrity-check|node $REPO_ROOT/scripts/verify-ng-018-scheduled-integrity-check.mjs"
 
       # NEW (14-04): GUI-07's tabs invariant, BEHAVIOURAL half -- the part
       # gui07-mode-switch-tabs-invariant in the --quick set structurally
