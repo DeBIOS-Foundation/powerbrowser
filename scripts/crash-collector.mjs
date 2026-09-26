@@ -55,6 +55,8 @@ const NAME = 'crash-collector';
 export const SUBMIT_PATH = '/submit';
 /** Antenna contract value: the minidump part NAME (not filename). */
 export const MINIDUMP_PART_NAME = 'upload_file_minidump';
+/** Gecko's crash reporter sends every annotation in ONE JSON part with this name (report.rs). */
+export const EXTRA_PART_NAME = 'extra';
 /** Rejection vocabulary on the wire. Statuses: malformed_* -> 400, oversized_body -> 413, throttle rules -> 200. */
 export const REASON_WRONG_CONTENT_TYPE = 'malformed_wrong_content_type';
 export const REASON_NO_MINIDUMP = 'malformed_no_minidump';
@@ -265,11 +267,29 @@ export function handleSubmit({ body, contentType, storeDir, throttle, nowMs, onD
     const crashId = randomUUID();
     const minidump = parsed.parts.find(part => part.name === MINIDUMP_PART_NAME);
     const annotations = {};
+    const take = (key, value) => {
+        if (!ANNOTATION_ALLOWLIST.includes(key)) return;
+        const text = typeof value === 'string' ? value : JSON.stringify(value);
+        if (Buffer.byteLength(text, 'utf8') > MAX_ANNOTATION_BYTES) return;
+        annotations[key] = text;
+    };
     for (const part of parsed.parts) {
         if (part.name === MINIDUMP_PART_NAME) continue;
-        if (!ANNOTATION_ALLOWLIST.includes(part.name)) continue;
+        if (part.name === EXTRA_PART_NAME) {
+            // Gecko's shape (NG-068): one JSON object carries every annotation. The same
+            // allowlist and size cap apply per key. A malformed extra part costs its
+            // annotations, never the report.
+            let extra = null;
+            try { extra = JSON.parse(part.data.toString('utf8')); } catch { extra = null; }
+            if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
+                for (const [key, value] of Object.entries(extra)) take(key, value);
+            } else {
+                diagnose(`${NAME}: the extra part is not a JSON object -- its annotations were dropped, the report was kept`);
+            }
+            continue;
+        }
         if (part.data.length > MAX_ANNOTATION_BYTES) continue;
-        annotations[part.name] = part.data.toString('utf8');
+        take(part.name, part.data.toString('utf8'));
     }
     const record = {
         id: crashId,
