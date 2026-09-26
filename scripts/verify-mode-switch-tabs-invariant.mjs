@@ -548,7 +548,7 @@ function selfTest() {
         {
             name: 'planted switch-path close call',
             mutate: sources => {
-                const anchor = "        if (target === 'organising') {\n            openOrganisingSlot();";
+                const anchor = "        if (rules.organising) {\n            openOrganisingSlot();";
                 if (!cleanService.includes(anchor)) {
                     return sources;
                 }

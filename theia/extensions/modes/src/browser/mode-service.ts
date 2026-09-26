@@ -24,9 +24,7 @@ import { publishModeAttribute } from './mode-attribute';
  * Schema (resolves 14-RESEARCH.md Open Question 2, modes half): the customs
  * file holds an object with a numeric version plus a customs array whose rows
  * carry a name and side-panel visibility flags. A row once also carried a
- * shell layout snapshot; nothing ever read it back, so the field is gone --
- * the reader already drops unknown fields, so an old file still loads and the
- * version did not move.
+ * NG-035: a row also carries `furniture` and `views` (which views sit in which side area); both are optional, so a file written before them still loads and the version did not move. Shipped modes resolve to the same shape through SHIPPED_MODE_RULES.
  * Validation is hand-rolled total parsing: unknown fields are dropped, rows
  * with an unusable name are dropped silently, rows with a readable name but
  * unreadable fields are dropped with the contracted fallback notice naming
@@ -73,11 +71,78 @@ export const MODES_STORE_VERSION = 1;
 /** Contracted name cap (14-UI-SPEC.md): pasted overflow is cut before commit. */
 export const MODE_NAME_MAX = 60;
 
+/** NG-035: what a mode does to one side area -- open it, close it, or leave it as the user left it. */
+export type PanelRule = 'open' | 'closed' | 'keep';
+
+/**
+ * NG-035: the singleton views a mode docks in each side area, in tab order.
+ * Content tabs (terminals, editors, web tabs) are never listed: tabs go with
+ * you in every mode (notes/browser-window-model.md:46-49).
+ */
+export interface ModeViews {
+    left: string[];
+    right: string[];
+    bottom: string[];
+}
+
+/**
+ * NG-035: one mode's rules, as data. The shipped defaults below and every
+ * custom row in modes.json resolve to this one shape, and activateMode reads
+ * nothing else -- it branches on no mode id.
+ */
+export interface ModeRules {
+    left: PanelRule;
+    right: PanelRule;
+    bottom: PanelRule;
+    /** The IDE furniture: the status bar and both icon rails (14-UI-SPEC per-mode furniture, amended 2026-09-08). */
+    furniture: boolean;
+    /** Whether the mode opens the Organising slot (the Panorama canvas). */
+    organising: boolean;
+    views: ModeViews;
+}
+
+/**
+ * NG-035: the shipped defaults as data (14-CONTEXT.md:33, "Modes are data
+ * with shipped defaults"). One row per shipped descriptor, one line per row:
+ * gui07-mode-toggle-commands reads this table and compares it with the
+ * descriptors' first-activation placements and collapse areas.
+ */
+export const SHIPPED_MODE_RULES: Readonly<Record<string, ModeRules>> = Object.freeze({
+    coding: { left: 'open', right: 'keep', bottom: 'open', furniture: true, organising: false, views: { left: ['explorer-view-container'], right: [], bottom: [] } },
+    browsing: { left: 'closed', right: 'closed', bottom: 'closed', furniture: false, organising: false, views: { left: [], right: [], bottom: [] } },
+    organising: { left: 'closed', right: 'closed', bottom: 'closed', furniture: false, organising: true, views: { left: [], right: [], bottom: [] } },
+});
+
 export interface CustomModeSnapshot {
     name: string;
     leftVisible: boolean;
     rightVisible: boolean;
     bottomVisible: boolean;
+    /** NG-035: whether the IDE furniture shows in this mode. */
+    furniture: boolean;
+    /** NG-035: the views docked per side area when the mode was saved. */
+    views: ModeViews;
+}
+
+function viewList(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string' && id.length > 0) : [];
+}
+
+/** NG-035: a stored views object, or undefined when absent or unreadable. */
+function parseModeViews(value: unknown): ModeViews | undefined {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return undefined;
+    }
+    const record = value as Record<string, unknown>;
+    return { left: viewList(record['left']), right: viewList(record['right']), bottom: viewList(record['bottom']) };
+}
+
+/**
+ * NG-035: a row saved before views existed keeps what it did then -- the
+ * shipped Coding views on the left whenever its left panel shows.
+ */
+function legacyModeViews(leftVisible: boolean): ModeViews {
+    return { left: leftVisible ? [...SHIPPED_MODE_RULES.coding.views.left] : [], right: [], bottom: [] };
 }
 
 const SHIPPED_IDS: ReadonlySet<string> = new Set(SHIPPED_MODES.map(descriptor => descriptor.id));
@@ -145,13 +210,16 @@ function parseModeStore(raw: string): ParsedModeStore {
             badNames.push(name);
             continue;
         }
-        // A `layout` written by an older build is an unknown field now and
-        // drops with the rest of them -- it is not a reason to reject the row.
+        // NG-035: `furniture` and `views` are optional so a row written before
+        // them still loads; a `layout` from an older build is an unknown field
+        // and drops as before.
         customs.push({
             name,
             leftVisible: row['leftVisible'] as boolean,
             rightVisible: row['rightVisible'] as boolean,
             bottomVisible: row['bottomVisible'] as boolean,
+            furniture: row['furniture'] === true,
+            views: parseModeViews(row['views']) ?? legacyModeViews(row['leftVisible'] as boolean),
         });
     }
     return { ok: true, customs, badNames };
@@ -256,32 +324,40 @@ export class ModeService implements FrontendApplicationContribution {
         // reject -- the catch could never run, and the 'browsing' retry inside
         // it was unreachable code claiming to be a safety net.
         await this.perspectives.switchPerspective(target);
-        const flags = this.visibilityFor(target);
+        const rules = this.rulesFor(target);
+        // NG-035: dock the mode's views before any panel opens or closes.
+        // ensureInArea is additive (see its note below), and stock's
+        // expand(id) finds only a view already in the dock.
+        for (const area of ['left', 'right', 'bottom'] as const) {
+            for (const viewId of rules.views[area]) {
+                await this.ensureInArea(viewId, area);
+            }
+        }
         // collapse() floats a promise (expand is sync void): attach the
         // no-op catch so a shutdown-time rejection is silence, not noise.
-        if (flags.left) {
-            await this.ensureInArea('explorer-view-container', 'left');
-            this.shell.leftPanelHandler.expand('explorer-view-container');
-        } else {
+        if (rules.left === 'open') {
+            this.shell.leftPanelHandler.expand(rules.views.left[0]);
+        } else if (rules.left === 'closed') {
             void this.shell.leftPanelHandler.collapse().catch(() => undefined);
         }
-        if (flags.right) {
-            this.shell.rightPanelHandler.expand();
-        } else {
+        if (rules.right === 'open') {
+            this.shell.rightPanelHandler.expand(rules.views.right[0]);
+        } else if (rules.right === 'closed') {
             void this.shell.rightPanelHandler.collapse().catch(() => undefined);
         }
-        if (flags.bottom) {
+        if (rules.bottom === 'open') {
             this.shell.expandPanel('bottom');
-        } else {
+        } else if (rules.bottom === 'closed') {
             await this.shell.collapsePanel('bottom');
         }
-        if (target === 'organising') {
+        if (rules.organising) {
             openOrganisingSlot();
         } else {
             closeOrganisingSlot();
         }
-        // 14-UI-SPEC per-mode furniture (amended 2026-09-08): Coding is the
-        // only mode that keeps the left icon rail and the status bar;
+        // 14-UI-SPEC per-mode furniture (amended 2026-09-08): a mode's
+        // `furniture` rule decides whether it keeps the icon rails and the
+        // status bar (Coding's shipped row does);
         // Browsing is a browser and Organising is a full-screen canvas.
         //
         // Not CSS. Lumino positions both absolutely, so `display: none` hides
@@ -303,13 +379,11 @@ export class ModeService implements FrontendApplicationContribution {
         // our URL row shares it, so hiding the menubar alone leaves the main
         // area at y=72 with 32px of dead space above it. It is solved by the
         // strip relocation, which moves the bar out of the top panel anyway.
-        const keepsFurniture = target === 'coding';
-        this.statusBarWidget.setHidden(!keepsFurniture);
-        this.shell.leftPanelHandler.container.setHidden(!keepsFurniture);
+        this.statusBarWidget.setHidden(!rules.furniture);
+        this.shell.leftPanelHandler.container.setHidden(!rules.furniture);
         // Both rails, not just the left: the right one is the same 48px of
-        // IDE dress on the other edge, and leaving it behind put a strip of
-        // icons down the side of an otherwise clean browser window.
-        this.shell.rightPanelHandler.container.setHidden(!keepsFurniture);
+        // IDE dress on the other edge.
+        this.shell.rightPanelHandler.container.setHidden(!rules.furniture);
 
         publishModeAttribute(target);
     }
@@ -332,7 +406,7 @@ export class ModeService implements FrontendApplicationContribution {
      * The whole body is guarded because a widget-manager failure is a missing
      * side view, never a reason to abandon the rest of the switch.
      */
-    protected async ensureInArea(viewId: string, area: 'left' | 'right'): Promise<void> {
+    protected async ensureInArea(viewId: string, area: 'left' | 'right' | 'bottom'): Promise<void> {
         try {
             const widget = await this.widgetManager.getOrCreateWidget(viewId);
             if (widget.isAttached && this.shell.getAreaFor(widget) === area) {
@@ -372,6 +446,10 @@ export class ModeService implements FrontendApplicationContribution {
             leftVisible: this.shell.isExpanded('left'),
             rightVisible: this.shell.isExpanded('right'),
             bottomVisible: this.shell.isExpanded('bottom'),
+            // NG-035: the layout, not only the three flags -- which views sit in
+            // which side area, and whether the IDE furniture is showing.
+            furniture: !this.statusBarWidget.isHidden,
+            views: { left: this.viewsIn('left'), right: this.viewsIn('right'), bottom: this.viewsIn('bottom') },
         };
         const customs = [...this.lastGoodCustoms, row];
         try {
@@ -400,15 +478,39 @@ export class ModeService implements FrontendApplicationContribution {
         return 'browsing';
     }
 
-    protected visibilityFor(target: string): { left: boolean; right: boolean; bottom: boolean } {
+    /** NG-035: the rules for a resolved mode id -- its shipped row, its custom row, or Browsing's. */
+    protected rulesFor(target: string): ModeRules {
+        if (SHIPPED_IDS.has(target) && Object.prototype.hasOwnProperty.call(SHIPPED_MODE_RULES, target)) {
+            return SHIPPED_MODE_RULES[target];
+        }
         const custom = this.lastGoodCustoms.find(row => customModeIdFor(row.name) === target);
         if (custom) {
-            return { left: custom.leftVisible, right: custom.rightVisible, bottom: custom.bottomVisible };
+            return {
+                left: custom.leftVisible ? 'open' : 'closed',
+                right: custom.rightVisible ? 'open' : 'closed',
+                bottom: custom.bottomVisible ? 'open' : 'closed',
+                furniture: custom.furniture,
+                organising: false,
+                views: custom.views,
+            };
         }
-        if (target === 'coding') {
-            return { left: true, right: this.shell.isExpanded('right'), bottom: true };
+        return SHIPPED_MODE_RULES.browsing;
+    }
+
+    /**
+     * NG-035: the singleton views docked in `area`, as their factory ids. A
+     * widget created with options (a terminal, an editor, a plugin view) is a
+     * tab or an instance, not layout, and is left out.
+     */
+    protected viewsIn(area: 'left' | 'right' | 'bottom'): string[] {
+        const ids: string[] = [];
+        for (const widget of this.shell.getWidgets(area)) {
+            const description = this.widgetManager.getDescription(widget);
+            if (description && description.options === undefined && !ids.includes(description.factoryId)) {
+                ids.push(description.factoryId);
+            }
         }
-        return { left: false, right: false, bottom: false };
+        return ids;
     }
 
     protected isDuplicateName(name: string): boolean {
@@ -447,11 +549,18 @@ export class ModeService implements FrontendApplicationContribution {
         if (!row.bottomVisible) {
             collapsed.push('bottom');
         }
+        // NG-035: stock applies these on the mode's first activation; activateMode docks them on every one.
+        const placements = new Map<string, 'left' | 'right' | 'bottom'>();
+        for (const area of ['left', 'right', 'bottom'] as const) {
+            for (const viewId of row.views[area]) {
+                placements.set(viewId, area);
+            }
+        }
         try {
             this.perspectives.registerPerspective({
                 id,
                 label: row.name,
-                viewPlacements: new Map(),
+                viewPlacements: placements,
                 chromeOptions: { collapseAreas: collapsed },
             });
         } catch {
