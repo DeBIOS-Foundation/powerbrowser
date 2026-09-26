@@ -1,5 +1,5 @@
 {
-  "ledger_version": 197,
+  "ledger_version": 199,
   "frozen_at": null,
   "items": [
     {
@@ -174,11 +174,11 @@
     {
       "id": "NG-014",
       "text": "The quarantine rebuild creates the head schema, not v2. Evidence: the rebuild runs the v1 and v2 migrations only (PBA:2183, 2189); TQS `getGroupTabs` then returns `[]` (TQS:265).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:29",
       "test_ref": "scripts/verify-ng-014-rebuild-at-head.mjs::ng-014-rebuild-at-head",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "6adfc19: ng-014-rebuild-at-head passes in main",
       "owner": "",
       "phase": "",
       "deferred_at": "",
