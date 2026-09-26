@@ -2,8 +2,8 @@
 // scripts/verify-ng-071-tarball-extensions.mjs -- NG-071 (wave E): npm and local-path (.tgz)
 // extension sources install through `yarn build` with no files placed by hand.
 //   1. Declares one npm entry (chart.js 4.5.1, the 09-04 drill package) and one local-path
-//      entry in a fixture manifest (a copy of configuration.toml plus two [[extensions]]
-//      tables, pins computed from the real bytes).
+//      entry in a fixture manifest (a copy of configuration.toml with its own [urls] update
+//      host (R11) plus two [[extensions]] tables, pins computed from the real bytes).
 //   2. Emits the theiaPlugins block with the generator's own emitter.
 //   3. Runs the app's declared download:plugins step with PB_CONFIG_DIR at the fixture.
 //      Both archives must land at <plugins>/<id>.tar.gz with their pinned sha256.
@@ -36,7 +36,13 @@ try {
     const pack = spawnSync('nix', ['develop', `${REPO_ROOT}#theia`, '--command', 'npm', 'pack', local, '--pack-destination', dir], { encoding: 'utf8' });
     if (pack.status !== 0) throw new Error(`npm pack failed: ${pack.stderr}`);
     const localPin = sha256(readFileSync(join(dir, 'ng071-local-0.0.1.tgz')));
-    const manifest = pin => `${readFileSync(join(REPO_ROOT, 'configuration.toml'), 'utf8')}
+    // The fixture is a downstream build (PB_CONFIG_DIR), so it states its own update host:
+    // the generator refuses a downstream that ships PowerBrowser's (R11). Any [urls] table
+    // of the copied manifest is dropped first -- TOML forbids a second [urls] header.
+    const manifest = pin => `${readFileSync(join(REPO_ROOT, 'configuration.toml'), 'utf8').replace(/^\[urls\][\s\S]*?(?=^\[|(?![\s\S]))/m, '')}
+[urls]
+update = "https://updates.example.org/update.xml"
+
 [[extensions]]
 id = "chart.js"
 source = "npm"
