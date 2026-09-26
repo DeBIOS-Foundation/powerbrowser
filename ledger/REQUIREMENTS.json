@@ -1,5 +1,5 @@
 {
-  "ledger_version": 195,
+  "ledger_version": 197,
   "frozen_at": null,
   "items": [
     {
@@ -57,11 +57,11 @@
     {
       "id": "NG-005",
       "text": "The 7-day prune never deletes the row of a tab that is open, in-shell tabs included. Evidence: the prune's live set holds only `webview:` keys (PBA:2038, 2253, 177).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:20",
       "test_ref": "scripts/verify-ng-005-prune-keeps-open-rows.mjs::ng-005-prune-keeps-open-rows",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "ded5dd5: ng-005-prune-keeps-open-rows passes in main",
       "owner": "",
       "phase": "",
       "deferred_at": "",
