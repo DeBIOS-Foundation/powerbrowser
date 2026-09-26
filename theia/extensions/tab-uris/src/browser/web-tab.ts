@@ -67,7 +67,8 @@ const GROUP_REQUEST_EVENT = 'PowerBrowserGroupRequest';
 const GROUP_RESPONSE_EVENT = 'PowerBrowserGroupResponse';
 
 /** Copywriting Contract, verbatim. Text nodes only, never markup. */
-const NEW_TAB_LABEL = 'New Tab';
+/** An empty tab's label and caption; the Organising tree reuses it for a web tab with no page. */
+export const NEW_TAB_LABEL = 'New Tab';
 const EMPTY_STATE_COPY = 'Type an address above to get started.';
 const LOST_VIEW_COPY = "Power Browser can't show this page right now. Choose Reload to try again, or close this tab.";
 

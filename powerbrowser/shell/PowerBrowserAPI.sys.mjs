@@ -92,7 +92,10 @@ const TAB_ORDER_V4_DDL = /* PB-SQL-TABORD-DDL-START */ `ALTER TABLE tabs ADD COL
 // identity instead of its page URL, plus the content-age, closed-history and
 // settings columns the rest of the store builds on (docs/TAB-STORE.md). The
 // key rewrite runs in the same transaction as the columns, in place, so every
-// row keeps its rowid, group, position, order and thumbnail.
+// row keeps its rowid, group, position, order and thumbnail. GLOB, never LIKE:
+// Sqlite.sys.mjs refuses any LIKE without a bound pattern (its
+// isInvalidBoundLikeQuery), and this block runs as plain statements. The same
+// holds for every prefix match on tabs.uri in this file.
 const TAB_STORE_V5_DDL = /* PB-SQL-V5-DDL-START */ `ALTER TABLE tabs ADD COLUMN created_at INTEGER NULL;
 ALTER TABLE tabs ADD COLUMN last_accessed INTEGER NULL;
 ALTER TABLE tabs ADD COLUMN closed_at INTEGER NULL;
@@ -106,8 +109,8 @@ INSERT OR IGNORE INTO settings (key, value) VALUES ('integrity_check_minutes', '
 INSERT OR IGNORE INTO settings (key, value) VALUES ('restore_behaviour', 'session');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('restore_live_minutes', '5');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('restore_url_days', '30');
-UPDATE tabs SET uri = 'stock:legacy-' || rowid WHERE uri LIKE 'webview:%';
-UPDATE tabs SET uri = 'web:legacy-' || rowid WHERE uri LIKE 'http://%' OR uri LIKE 'https://%'` /* PB-SQL-V5-DDL-END */;
+UPDATE tabs SET uri = 'stock:legacy-' || rowid WHERE uri GLOB 'webview:*';
+UPDATE tabs SET uri = 'web:legacy-' || rowid WHERE uri GLOB 'http://*' OR uri GLOB 'https://*'` /* PB-SQL-V5-DDL-END */;
 
 // NG-001: the sessionstore custom tab value a stock tab's row key lives in.
 // Sessionstore saves it with the tab and restores it with the tab, so a
@@ -1284,7 +1287,7 @@ export const PowerBrowserAPI = Object.freeze({
       return `:k${i}`;
     });
     await conn.execute(
-      `UPDATE tabs SET closed_at = :now WHERE closed_at IS NULL AND uri LIKE 'stock:%'${names.length ? ` AND uri NOT IN (${names.join(", ")})` : ""}`,
+      `UPDATE tabs SET closed_at = :now WHERE closed_at IS NULL AND uri GLOB 'stock:*'${names.length ? ` AND uri NOT IN (${names.join(", ")})` : ""}`,
       params
     );
   },
@@ -1297,7 +1300,7 @@ export const PowerBrowserAPI = Object.freeze({
   async closeEndedWebRows() {
     const conn = await PowerBrowserAPI.openTabStore();
     await conn.execute(
-      "UPDATE tabs SET closed_at = :now WHERE closed_at IS NULL AND uri LIKE 'web:%' AND group_id IS NULL AND x IS NULL",
+      "UPDATE tabs SET closed_at = :now WHERE closed_at IS NULL AND uri GLOB 'web:*' AND group_id IS NULL AND x IS NULL",
       { now: Date.now() }
     );
   },
