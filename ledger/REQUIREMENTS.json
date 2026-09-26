@@ -1,5 +1,5 @@
 {
-  "ledger_version": 191,
+  "ledger_version": 193,
   "frozen_at": null,
   "items": [
     {
@@ -31,11 +31,11 @@
     {
       "id": "NG-003",
       "text": "Two tabs on the same page URL have two rows. Evidence: URI-SCHEMES.md:250-254.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:18",
       "test_ref": "scripts/verify-ng-003-same-url-two-rows.mjs::ng-003-same-url-two-rows",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "23b203c: ng-003-same-url-two-rows passes in main",
       "owner": "",
       "phase": "",
       "deferred_at": "",
