@@ -82,20 +82,12 @@ export const TheiaService = {
   // early-return shape in stop().
   _started: false,
 
-  // 01-12: the unregister function PowerBrowserAPI.onQuitGranted returns,
-  // retained so the observer's lifetime matches THIS SUPERVISOR's rather than
-  // the application's. Called from exactly one place -- stop(), after the
-  // process has already been signalled and awaited -- because detaching it
-  // while a supervised backend is still live would put back the very leak the
-  // early registration above exists to prevent. In-memory and per-launch like
-  // every other field here (D-107): nothing in this block writes a file.
+  // NG-032/NG-033, final-review I1: the quit flush runs on the
+  // quit-application-granted path (see start()), never on the request path,
+  // so a restart request keeps its intent: nothing is cancelled and nothing
+  // is re-issued. These fields are gone with the old cancel-and-reissue hold
+  // (_quitRequestOff, _quitFlushStarted, _holdQuitForFlush).
   _quitObserverOff: null,
-
-  // NG-032/NG-033: the unregister function PowerBrowserAPI.onQuitRequested
-  // returns, and whether this session's quit has already been held once for
-  // the frontend's flush. Detached in stop() beside _quitObserverOff.
-  _quitRequestOff: null,
-  _quitFlushStarted: false,
 
   // D-110: this project's first persistence -- a sidecar state file inside
   // _configDir, written on every successful spawn (first and respawn
@@ -214,14 +206,21 @@ export const TheiaService = {
     // branch, `stop()` would never run on quit and a Node process with the
     // extension host's file access and terminal surface would outlive the
     // browser, still holding the token it was handed at spawn.
-    this._quitObserverOff = PowerBrowserAPI.onQuitGranted(() => this.stop());
-
-    // NG-032/NG-033: hold the first quit request long enough for the frontend
-    // to write its session and layout while the backend still runs.
-    // Best-effort like the actor registration below, so it can never stall
-    // startup.
+    //
+    // NG-032/NG-033, final-review I1: the observer runs the whole quit flush
+    // synchronously first (PowerBrowserAPI.runQuitFlushSync, bounded by
+    // powerbrowser.shell.quitFlushTimeoutMs, default 3000), then stops the
+    // backend. Granted time is final: the quit -- a plain quit, a restart, a
+    // safe-mode or silent restart -- keeps the intent its requester announced,
+    // so no request is ever cancelled and re-issued. Best-effort like the
+    // actor registration below, so it can never stall startup.
+    //
+    // The callback keeps the `() => this.stop()` shape (stop() itself runs
+    // the flush first, reading the supervisor's own fields there) so the
+    // start-path-recovery check's derivation E still locates this
+    // registration structurally.
     try {
-      this._quitRequestOff = PowerBrowserAPI.onQuitRequested(this._holdQuitForFlush.bind(this));
+      this._quitObserverOff = PowerBrowserAPI.onQuitGranted(() => this.stop());
     } catch (err) {
       this._pushLog(`Quit flush not registered: ${err && err.message ? err.message : err}`);
     }
@@ -326,24 +325,45 @@ export const TheiaService = {
   },
 
   /**
-   * Normal quit (D-105), in order: stop the health loop (no restart can
-   * begin after this), then signal and await the backend's exit via a
-   * single bounded platform call -- never a hand-rolled timer around it.
-   * Idempotent: a second call while the first is still in flight is a
-   * no-op.
+   * Granted-path quit (D-105), in order: run the whole frontend flush
+   * synchronously while the backend still runs, then stop the health loop
+   * (no restart can begin after this), then signal and await the backend's
+   * exit via a single bounded platform call -- never a hand-rolled timer
+   * around it. Idempotent: a second call while the first is still in flight
+   * is a no-op.
+   *
+   * NG-032/NG-033, final-review I1: the flush runs here, not on the request
+   * path, so a restart request keeps its intent -- nothing is cancelled and
+   * nothing is re-issued. Skipped when there is no live frontend to flush
+   * (no swap yet); with one, runQuitFlushSync spins the nested loop bounded
+   * by quitFlushTimeoutMs, so a hung frontend cannot hold the quit past it.
    */
-  async stop() {
+  stop() {
     if (this._shuttingDown) {
       return;
     }
     this._shuttingDown = true;
 
+    if (this._swapped && this._browserElement) {
+      try {
+        PowerBrowserAPI.runQuitFlushSync(
+          this._browserElement,
+          PowerBrowserAPI.getIntPref("powerbrowser.shell.quitFlushTimeoutMs", 3000)
+        );
+      } catch (err) {
+        this._pushLog(`Quit flush failed: ${err && err.message ? err.message : err}`);
+      }
+    }
+
     if (this._proc && this._proc.exitCode == null) {
       const graceMs = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.killGraceMs", 3000);
       try {
-        await PowerBrowserAPI.killProcess(this._proc, graceMs);
+        PowerBrowserAPI.killProcess(this._proc, graceMs);
       } catch {
-        // Already exited.
+        // Already exited. Fire-and-forget from a granted observer: awaiting
+        // here would run the rest of the teardown inside the nested loop the
+        // flush above is spinning, and killProcess is already bounded by
+        // graceMs on its own.
       }
     }
     this._proc = null;
@@ -362,13 +382,14 @@ export const TheiaService = {
 
     // D-110: a clean stop must leave nothing for the next startup's
     // _reapLeftover() to find -- a normal quit followed by a normal start
-    // signals nothing.
+    // signals nothing. Fire-and-forget beside the kill above: removeStateFile
+    // tolerates an absent file, and anything else is not worth blocking
+    // shutdown over.
     if (this._stateFilePath) {
       try {
-        await PowerBrowserAPI.removeStateFile(this._stateFilePath);
+        void PowerBrowserAPI.removeStateFile(this._stateFilePath).catch(() => {});
       } catch {
-        // Best-effort: removeStateFile already tolerates an absent file;
-        // anything else here is not worth blocking shutdown over.
+        // Best-effort.
       }
     }
 
@@ -379,43 +400,10 @@ export const TheiaService = {
     // from inside its own notification is safe here, and the guard is what makes
     // the second of two stop() calls (the observer's, and a direct one) a no-op
     // rather than a throw.
-    if (this._quitRequestOff) {
-      this._quitRequestOff();
-      this._quitRequestOff = null;
-    }
     if (this._quitObserverOff) {
       this._quitObserverOff();
       this._quitObserverOff = null;
     }
-  },
-
-  /**
-   * NG-032/NG-033: the quit-request hook. The first request of a session with
-   * a live frontend is cancelled, the frontend is asked to flush (bounded by
-   * powerbrowser.shell.quitFlushTimeoutMs, default 3000), and the quit is then
-   * re-issued; that second request passes. With nothing to flush (no swap yet)
-   * or a flush already under way the request passes at once. If another
-   * observer cancels the re-issued quit (a page's leave prompt), the next quit
-   * request flushes again.
-   */
-  _holdQuitForFlush() {
-    if (this._quitFlushStarted || !this._swapped || !this._browserElement) {
-      return false;
-    }
-    this._quitFlushStarted = true;
-    const timeoutMs = PowerBrowserAPI.getIntPref("powerbrowser.shell.quitFlushTimeoutMs", 3000);
-    PowerBrowserAPI.flushShellState(this._browserElement, timeoutMs)
-      .then(async acked => {
-        this._pushLog(acked ? "Frontend flushed before quit." : "Frontend did not acknowledge the quit flush in time; quitting anyway.");
-        this._pushLog(`Saved back/forward history for ${await PowerBrowserAPI.saveWebTabHistories()} web tab(s).`);
-      })
-      .catch(err => this._pushLog(`Quit flush failed: ${err && err.message ? err.message : err}`))
-      .finally(() => {
-        if (!PowerBrowserAPI.quitApplication()) {
-          this._quitFlushStarted = false;
-        }
-      });
-    return true;
   },
 
   /** D-106: the buffered lines, newest last. Phase 5's diagnostics page reads this. */

@@ -528,7 +528,11 @@ export class SetupsService implements FrontendApplicationContribution {
     protected async saveSession(): Promise<void> {
         const now = Date.now();
         const current = this.shell.mainPanel.currentTitle?.owner;
-        const webTabs: SavedSessionWebTab[] = this.shell.getWidgets('main')
+        // Final-review M5: collect from main and bottom -- the areas
+        // snapshotWindows records in the dock -- so a web tab the dock places
+        // in the bottom panel is not dropped silently at relaunch.
+        const webTabs: SavedSessionWebTab[] = (['main', 'bottom'] as const)
+            .flatMap(area => this.shell.getWidgets(area))
             .filter((widget): widget is WebTabWidget => widget instanceof WebTabWidget)
             .map(tab => ({ rowKey: tab.rowKey, url: tab.url, lastAccessed: tab === current ? now : this.webTabAccess.get(tab.rowKey) ?? null }));
         const session: SessionSnapshot = { modeId: this.currentModeId(), windows: this.snapshotWindows(), savedAt: now, webTabs };

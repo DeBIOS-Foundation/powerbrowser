@@ -34,6 +34,14 @@ export const SHELL_STATE_REQUEST_EVENT = 'PowerBrowserGroupRequest';
 export const SHELL_STATE_RESPONSE_EVENT = 'PowerBrowserGroupResponse';
 export const SHELL_STATE_ACK_TIMEOUT_MS = 5000;
 export const SHELL_STATE_SAVE_DELAY_MS = 500;
+/**
+ * Final-review M1: the frontend's share of the quit budget. Chrome waits
+ * `powerbrowser.shell.quitFlushTimeoutMs` (default 3000) for the ack, and the
+ * history-file write plus the ack trip still have to fit after the listeners
+ * return -- so the listeners get 2000, two thirds of chrome's bound, with the
+ * 1000 ms margin left for storeLayout, save()'s round trip and the ack.
+ */
+export const SHELL_STATE_WILL_FLUSH_TIMEOUT_MS = 2000;
 /** The push chrome sends to ask for a flush before a quit (PowerBrowserAPI.flushShellState). */
 export const SHELL_FLUSH_KIND = 'flushShellState';
 /** The only host the actor child loads on: its `matches` pin, GROUP_ACTOR_THEIA_ORIGIN in PowerBrowserAPI.sys.mjs. */
@@ -63,6 +71,7 @@ export class ProfileStorageService extends LocalStorageService {
     readonly onWillFlush: TheiaEvent<WaitUntilEvent> = this.onWillFlushEmitter.event;
 
     protected map: Promise<Record<string, unknown> | undefined> | undefined;
+    protected loadedMap: Record<string, unknown> | undefined;
     protected saveTimer: number | undefined;
     protected seq = 0;
 
@@ -87,9 +96,48 @@ export class ProfileStorageService extends LocalStorageService {
         return Object.prototype.hasOwnProperty.call(map, key) ? map[key] as T : defaultValue;
     }
 
-    /** Runs the onWillFlush listeners (bounded), so their writes are in the map before save(). */
+    /** Runs the onWillFlush listeners (bounded: SHELL_STATE_WILL_FLUSH_TIMEOUT_MS), so their writes are in the map before save(). */
     async fireWillFlush(): Promise<void> {
-        await WaitUntilEvent.fire(this.onWillFlushEmitter, {}, 3000);
+        await WaitUntilEvent.fire(this.onWillFlushEmitter, {}, SHELL_STATE_WILL_FLUSH_TIMEOUT_MS);
+    }
+
+    /**
+     * Final-review I2: the synchronous unload write. Called from
+     * ShellStateFlushContribution.onStop, which Theia core runs inside the
+     * unload handler, after storeLayout. The request reaches chrome through
+     * the actor child's DOM listener and its sendQuery, which dispatch
+     * synchronously -- no promise, no timer -- so the save message leaves
+     * before the document goes away. Returns nothing: there is no later tick
+     * left in which an ack could arrive, and the actor child's synchronous
+     * throw path (sendQuery failing with the message manager gone) already
+     * nacks through the normal reply channel where it can still be heard.
+     * Skips when the map never loaded (no-chrome sessions) or is empty.
+     */
+    saveSyncNow(): void {
+        const map = this.loadedMap;
+        if (!map || Object.keys(map).length === 0) {
+            return;
+        }
+        if (location.protocol !== 'http:' || location.hostname !== SHELL_FRAME_HOST) {
+            return;
+        }
+        if (this.saveTimer !== undefined) {
+            window.clearTimeout(this.saveTimer);
+            this.saveTimer = undefined;
+        }
+        const requestId = `shell-state-sync-${Date.now().toString(36)}-${(this.seq += 1)}`;
+        try {
+            // Same channel as request(): `bubbles` and the document target
+            // reach the actor's listener on the window root. Fire-and-forget:
+            // reading the reply would need an async listener that unload
+            // never lets run.
+            document.dispatchEvent(new CustomEvent(SHELL_STATE_REQUEST_EVENT, {
+                bubbles: true,
+                detail: { requestId, msg: { kind: 'shellStateSave', state: JSON.stringify(map) } },
+            }));
+        } catch {
+            // The document is going away; there is nothing useful to report.
+        }
     }
 
     /**
@@ -131,12 +179,19 @@ export class ProfileStorageService extends LocalStorageService {
                 if (reply === NO_CHROME || !reply.ok) {
                     return undefined;
                 }
+                let parsed: Record<string, unknown>;
                 try {
-                    const parsed: unknown = JSON.parse(typeof reply.state === 'string' && reply.state ? reply.state : '{}');
-                    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+                    const value: unknown = JSON.parse(typeof reply.state === 'string' && reply.state ? reply.state : '{}');
+                    parsed = typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
                 } catch {
-                    return {};
+                    parsed = {};
                 }
+                // Final-review I2: the resolved map, kept for the synchronous
+                // unload write. The in-memory map is the write authority from
+                // here on: setData mutates this same object after the first
+                // load, so saveSyncNow always serializes the latest state.
+                this.loadedMap = parsed;
+                return parsed;
             });
         }
         return this.map;
@@ -195,14 +250,20 @@ export class ProfileStorageService extends LocalStorageService {
 }
 
 /**
- * NG-032/NG-033: answers chrome's quit flush. Chrome holds the quit
- * (TheiaService._holdQuitForFlush) and pushes { kind: 'flushShellState',
- * flushId } on the web-tab state channel; this runs the onWillFlush listeners
- * (the session snapshot), stores the shell layout through the stock restorer,
- * saves the map, and acknowledges -- all while the backend still runs. A
- * flush that arrives before the frontend is ready stores nothing (a half-built
- * layout must not overwrite the saved one) and still acknowledges, so the
- * quit is never held for it.
+ * NG-032/NG-033: answers chrome's quit flush. Chrome runs the flush on the
+ * quit-application-granted path (PowerBrowserAPI.runQuitFlushSync) and pushes
+ * { kind: 'flushShellState', flushId } on the web-tab state channel; this runs
+ * the onWillFlush listeners (the session snapshot), stores the shell layout
+ * through the stock restorer, saves the map, and acknowledges -- all while the
+ * backend still runs. A flush that arrives before the frontend is ready stores
+ * nothing (a half-built layout must not overwrite the saved one) and still
+ * acknowledges, so the quit is never held for it.
+ *
+ * Final-review I2: onStop is the unload write. Theia core calls it inside the
+ * unload handler, after storeLayout -- the same synchronous store-then-write
+ * sequence the stock LocalStorageService gets for free. saveSyncNow dispatches
+ * the map synchronously, so a reload (Reset Workbench Layout's own reload, or
+ * any frame reload) keeps the layout the page had, not the last quit's.
  */
 @injectable()
 export class ShellStateFlushContribution implements FrontendApplicationContribution {
@@ -237,6 +298,21 @@ export class ShellStateFlushContribution implements FrontendApplicationContribut
             console.error('[@powerbrowser/tab-uris] shell state flush failed:', error);
         } finally {
             await this.storage.acknowledgeFlush(flushId);
+        }
+    }
+
+    /**
+     * Final-review I2: runs inside Theia core's unload handler, after
+     * storeLayout wrote the current layout into the map. Dispatches the map
+     * synchronously so the write reaches chrome before the document goes
+     * away. Ordering with saveSession: the quit-flush path already handled
+     * real quits; this covers reloads, where no flush ever runs.
+     */
+    onStop(): void {
+        try {
+            this.storage.saveSyncNow();
+        } catch {
+            // Best-effort at unload: no tick left to report through.
         }
     }
 }

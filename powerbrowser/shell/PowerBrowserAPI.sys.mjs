@@ -632,22 +632,34 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
-   * NG-032/NG-033: registers `callback` for every quit request -- upstream's
-   * quit paths (a stock window's Quit) and quitApplication above both announce
-   * one. A callback returning true cancels that request; an earlier observer's
-   * cancel is left as it is. Returns the unregister function.
+   * NG-032/NG-033, final-review I1: runs the whole quit flush synchronously on
+   * the quit-application-granted path, before TheiaService.stop() kills the
+   * backend. Never cancels: by granted time the quit -- a plain quit, a
+   * restart, a safe-mode or silent restart -- is final and carries whatever
+   * intent its requester announced, so there is nothing to re-issue and no
+   * requester left to tell it was cancelled. The async chain below (the
+   * frontend ack wait plus the history-file write) settles while the nested
+   * event loop spins, bounded by the same quitFlushTimeoutMs the old hold
+   * passed to flushShellState (the XPIProvider.sys.mjs awaitPromise shape).
+   * Never throws, so a quit is never held past the timeout.
    */
-  onQuitRequested(callback) {
-    const observer = {
-      observe: subject => {
-        const cancelQuit = subject.QueryInterface(Ci.nsISupportsPRBool);
-        if (!cancelQuit.data && callback() === true) {
-          cancelQuit.data = true;
-        }
-      },
-    };
-    Services.obs.addObserver(observer, "quit-application-requested");
-    return () => Services.obs.removeObserver(observer, "quit-application-requested");
+  runQuitFlushSync(theiaBrowser, timeoutMs) {
+    let finished = false;
+    PowerBrowserAPI.flushShellState(theiaBrowser, timeoutMs)
+      .then(async acked => {
+        PowerBrowserAPI.log("info", acked ? "Frontend flushed before quit." : "Frontend did not acknowledge the quit flush in time; quitting anyway.");
+        PowerBrowserAPI.log("info", `Saved back/forward history for ${await PowerBrowserAPI.saveWebTabHistories()} web tab(s).`);
+      })
+      .catch(err => PowerBrowserAPI.log("error", `Quit flush failed (${err && err.name ? err.name : "error"}); quitting anyway.`))
+      .finally(() => {
+        finished = true;
+      });
+    const deadline = Date.now() + timeoutMs;
+    try {
+      Services.tm.spinEventLoopUntil("PowerBrowserAPI.sys.mjs:runQuitFlushSync", () => finished || Date.now() >= deadline);
+    } catch (err) {
+      PowerBrowserAPI.log("error", `Quit flush spin failed (${err && err.name ? err.name : "error"}); quitting anyway.`);
+    }
   },
 
   /** NG-034: reads last session's web-tab histories once, before any web tab can reopen. Never throws. */
@@ -679,7 +691,9 @@ export const PowerBrowserAPI = Object.freeze({
       }
       await IOUtils.writeJSON(path, histories, { tmpPath: `${path}.tmp` });
     } catch (err) {
-      PowerBrowserAPI.log("error", `[saveWebTabHistories] ${err && err.message ? err.message : err}`);
+      // Final-review M3: IOUtils rejections name the profile path, which
+      // carries the OS user name -- log the fixed string plus err.name only.
+      PowerBrowserAPI.log("error", `[saveWebTabHistories] write failed (${err && err.name ? err.name : "error"})`);
       return 0;
     }
     return Object.keys(histories).length;
@@ -687,8 +701,12 @@ export const PowerBrowserAPI = Object.freeze({
 
   /**
    * NG-034: the saved history for `rowKey` when the frontend armed it, once.
-   * Only http(s) entries are admitted -- the scheme wall webTabOpen and
-   * webTabNavigate apply -- so a tampered file cannot load file: or chrome:.
+   * Only http(s) entries are admitted, top-level and subframes alike -- the
+   * same scheme wall webTabOpen and webTabNavigate apply -- so a tampered file
+   * cannot smuggle a file: or chrome: URL in through an entry's children.
+   * The serialized triggering principals ride the entries untouched (SessionHistory
+   * restores what it is given); the wall covers URLs, not principals, and a
+   * tampered profile is already the sessionstore-tampering position.
    */
   takeWebTabHistory(rowKey) {
     if (!armedWebTabHistories.delete(rowKey) || !Object.prototype.hasOwnProperty.call(savedWebTabHistories, rowKey)) {
@@ -700,7 +718,9 @@ export const PowerBrowserAPI = Object.freeze({
     if (entries.length === 0 || !Number.isInteger(data.index) || data.index < 1 || data.index > entries.length) {
       return null;
     }
-    if (!entries.every(item => item && typeof item.url === "string" && /^https?:\/\//i.test(item.url))) {
+    const entryUrlOk = item => item && typeof item.url === "string" && /^https?:\/\//i.test(item.url);
+    const treeOk = items => Array.isArray(items) && items.every(item => entryUrlOk(item) && (!item.children || treeOk(item.children)));
+    if (!entries.every(item => entryUrlOk(item) && (!item.children || treeOk(item.children)))) {
       return null;
     }
     return data;
@@ -719,14 +739,21 @@ export const PowerBrowserAPI = Object.freeze({
     // few ms after it is created. Restored before that commit, the about:blank
     // is appended after the restored entries and becomes the current entry,
     // so the tab reloads about:blank instead of its page. Wait for the commit
-    // (bounded); restoreFromParent then purges it.
+    // (bounded); restoreFromParent then purges it. The wait expiring is not a
+    // failure -- the restore is still attempted below, on whatever history the
+    // overlay has by then.
     for (let waited = 0; browsingContext.sessionHistory.count === 0 && waited < 3000; waited += 25) {
       await PowerBrowserAPI.sleep(25);
+    }
+    if (browsingContext.sessionHistory.count === 0) {
+      PowerBrowserAPI.log("warn", "[restoreWebTabHistory] initial history entry not yet committed; attempting restore anyway");
     }
     SessionHistory.restoreFromParent(browsingContext.sessionHistory, tabData);
     await SessionStoreUtils.restoreDocShellState(browsingContext, tabData.entries[tabData.index - 1].url, null);
     SessionStoreUtils.initializeRestore(browsingContext, SessionStoreUtils.constructSessionStoreRestoreData()).catch(err => {
-      PowerBrowserAPI.log("error", `[restoreWebTabHistory] ${err && err.message ? err.message : err}`);
+      // Final-review M3: keep IOUtils/XPCOM error text (it can carry the
+      // absolute profile path) out of the log -- fixed string plus err.name.
+      PowerBrowserAPI.log("error", `[restoreWebTabHistory] settle failed (${err && err.name ? err.name : "error"})`);
     });
   },
 
@@ -2177,7 +2204,9 @@ export const PowerBrowserAPI = Object.freeze({
           return { ok: false, reason: "validation", message: `handleShellMessage: unknown kind ${String(kind)}` };
       }
     } catch (err) {
-      return { ok: false, reason: "store", message: `handleShellMessage: ${kind} failed: ${err && err.message ? err.message : err}` };
+      // Final-review M3: the IOUtils failure names the profile file -- reply
+      // with the fixed string plus err.name, never the message text.
+      return { ok: false, reason: "store", message: `handleShellMessage: ${kind} failed (store ${err && err.name ? err.name : "error"})` };
     }
   },
 
@@ -2197,7 +2226,9 @@ export const PowerBrowserAPI = Object.freeze({
         .sendAsyncMessage("PowerBrowserWebTabState", { kind: "flushShellState", flushId });
     } catch (err) {
       pendingShellFlushes.delete(flushId);
-      PowerBrowserAPI.log("error", `[flushShellState] no frontend to flush: ${err && err.message ? err.message : err}`);
+      // Final-review M3: the actor/send failure text can carry internal paths
+      // -- fixed string plus err.name only.
+      PowerBrowserAPI.log("error", `[flushShellState] no frontend to flush (${err && err.name ? err.name : "error"})`);
       return false;
     }
     const done = await Promise.race([acked.then(() => true), PowerBrowserAPI.sleep(timeoutMs).then(() => false)]);
@@ -3062,7 +3093,9 @@ export const PowerBrowserAPI = Object.freeze({
     const history = PowerBrowserAPI.takeWebTabHistory(entry.rowKey);
     if (history) {
       PowerBrowserAPI.restoreWebTabHistory(browser, history).catch(err => {
-        PowerBrowserAPI.log("error", `[web-tab] history restore failed: ${err && err.message ? err.message : err}`);
+        // Final-review M3: the restore failure can carry XPCOM/IOUtils text
+        // with the profile path -- fixed string plus err.name only.
+        PowerBrowserAPI.log("error", `[web-tab] history restore failed (${err && err.name ? err.name : "error"})`);
         PowerBrowserAPI.webTabNavigate(tabId, spec);
       });
       return "opened";
