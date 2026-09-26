@@ -1,5 +1,5 @@
 {
-  "ledger_version": 93,
+  "ledger_version": 94,
   "frozen_at": null,
   "items": [
     {
@@ -1086,6 +1086,19 @@
       "text": "The five v1.2 human UAT sheets are signed. Evidence: 10-UAT.md:57, 73, 94.",
       "status": "open",
       "spec_ref": "docs/non-gui/GAPS.md:114",
+      "test_ref": "",
+      "code_ref": "",
+      "evidence": "",
+      "owner": "",
+      "phase": "",
+      "deferred_at": "",
+      "reason": ""
+    },
+    {
+      "id": "NG-085",
+      "text": "Quitting closes the tab store's connection before shutdown, so the app quits in seconds instead of hanging until AsyncShutdown aborts it.",
+      "status": "open",
+      "spec_ref": "docs/non-gui/GAPS.md:118",
       "test_ref": "",
       "code_ref": "",
       "evidence": "",
