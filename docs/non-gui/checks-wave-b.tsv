@@ -1,0 +1,8 @@
+NG-021	scripts/verify-ng-021-places-reads.mjs::ng-021-places-reads-via-actor	node scripts/verify-ng-021-places-reads.mjs # live-main
+NG-022	scripts/verify-ng-022-sessionstore-projection.mjs::ng-022-sessionstore-projection-via-actor	node scripts/verify-ng-022-sessionstore-projection.mjs # live-main
+NG-023	scripts/verify-ng-023-suggestions-places.mjs::ng-023-suggestions-history-bookmarks	node scripts/verify-ng-023-suggestions-places.mjs # live-main
+NG-024	scripts/verify-ng-024-tabs-places-join.mjs::ng-024-tabs-places-join	node scripts/verify-ng-024-tabs-places-join.mjs # live-main
+NG-025	scripts/verify-ng-025-store-read-endpoint.mjs::ng-025-store-read-endpoint	node scripts/verify-ng-025-store-read-endpoint.mjs # live-clone
+NG-026	scripts/verify-ng-026-store-write-endpoint.mjs::ng-026-store-write-endpoint	node scripts/verify-ng-026-store-write-endpoint.mjs # live-main
+NG-027	scripts/verify-ng-027-reader-callers.mjs::ng-027-reader-callers	node scripts/verify-ng-027-reader-callers.mjs # quick
+NG-028	scripts/verify-ng-028-saved-page.mjs::ng-028-saved-page-copy	node scripts/verify-ng-028-saved-page.mjs # live-main

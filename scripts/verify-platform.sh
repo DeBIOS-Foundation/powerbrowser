@@ -4533,6 +4533,14 @@ run_own_checks() {
     # reason every other self-test row in this array gives.
     "backend-env-readers|node $REPO_ROOT/scripts/verify-backend-env-readers.mjs"
     "backend-env-readers-self-test|node $REPO_ROOT/scripts/verify-backend-env-readers.mjs --self-test"
+    # NEW (non-GUI wave B, NG-027): every PowerBrowserAPI and TabQueryService
+    # reader has a caller on the runtime path. Readers and call sites are
+    # derived from the tree at check time; a reader called only by a dead
+    # reader is dead too. Honestly --quick: text reads only. The self-test runs
+    # the analyzer over a synthetic tree and requires red on a removed call
+    # site, a planted reader and an empty scan.
+    "ng-027-reader-callers|node $REPO_ROOT/scripts/verify-ng-027-reader-callers.mjs"
+    "ng-027-reader-callers-self-test|node $REPO_ROOT/scripts/verify-ng-027-reader-callers.mjs --self-test"
     # NEW (12-CODE-REVIEW.md WR-03): the tab-uris reader typecheck. Honestly
     # --quick per the function comment above: the extension's own tsc over
     # its own project, --noEmit, seconds, no build/browser/display/network.
@@ -4873,6 +4881,19 @@ run_own_checks() {
       # rides alongside for the reason every other self-test row gives.
       "gui07-mode-switch-tabs-live|node $REPO_ROOT/scripts/verify-mode-switch-tabs-live.mjs"
       "gui07-mode-switch-tabs-live-self-test|node $REPO_ROOT/scripts/verify-mode-switch-tabs-live.mjs --self-test"
+      # NEW (non-GUI wave B, NG-021..NG-026, NG-028): live checks. Each launches
+      # the built binary through firefox-bidi.mjs, serves its own pages on a
+      # second loopback port, and drives its row through a real entry point (an
+      # actor message from the Theia frame, a DI-bound service, a registered
+      # command, or the documented endpoint), plus the hostile-page wall. They
+      # need the built binary and the last Theia build, so none is --quick.
+      "ng-021-places-reads-via-actor|node $REPO_ROOT/scripts/verify-ng-021-places-reads.mjs"
+      "ng-022-sessionstore-projection-via-actor|node $REPO_ROOT/scripts/verify-ng-022-sessionstore-projection.mjs"
+      "ng-023-suggestions-history-bookmarks|node $REPO_ROOT/scripts/verify-ng-023-suggestions-places.mjs"
+      "ng-024-tabs-places-join|node $REPO_ROOT/scripts/verify-ng-024-tabs-places-join.mjs"
+      "ng-025-store-read-endpoint|node $REPO_ROOT/scripts/verify-ng-025-store-read-endpoint.mjs"
+      "ng-026-store-write-endpoint|node $REPO_ROOT/scripts/verify-ng-026-store-write-endpoint.mjs"
+      "ng-028-saved-page-copy|node $REPO_ROOT/scripts/verify-ng-028-saved-page.mjs"
 
       # NEW (14.1-03): GUI-02's behavioural half. Drives the built shell over
       # WebDriver BiDi through "+", a typed address, a second typed address,
