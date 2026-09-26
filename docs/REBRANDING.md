@@ -300,7 +300,7 @@ also echoed at generate time as a `generate: default applied` line.
 
 | Setting | Required? | If omitted | Reaches |
 |---|---|---|---|
-| `ai.backend` | Optional | Resolves to `off` with the standard default echo; no backend is registered | `generated/ai-backend.json` backend (one of off, opencode); the composed sidecar skips the backend binding entirely when off |
+| `ai.backend` | Optional | Resolves to `off` with the standard default echo; no backend is registered | `generated/ai-backend.json` backend (one of off, opencode); the `powerbrowserAiBackend` key of the application package.json. `opencode` also needs the `@powerbrowser/backend-opencode` dependency added there (docs/ai-opencode-adapter.md). When off, the adapter is not composed, so no opencode process and no `/mcp` endpoint start. |
 
 ### `[upstreams]` — upstream pins (both required, never inherited)
 

@@ -106,11 +106,14 @@ level = "off"
 firefox_esr_tag = "FIREFOX_153_1_0esr_RELEASE"
 theia_release = "1.74.1"
 
-# AI backend selection (16-03, SPEC R4). backend names the chat backend the
-# sidecar registers: "off" registers none, "opencode" registers @OpenCode.
-# It defaults to off: an unset backend resolves to off with the standard
-# D-08 default-echo, so a downstream omitting it inherits off rather than
-# a live backend. One manifest edit plus regenerate (then the copy-over
-# step docs/ai-opencode-adapter.md names) turns it on.
+# AI backend selection (16-03, SPEC R4; retired from the default build by
+# non-GUI decision D2(b)). backend names the chat backend the sidecar
+# registers: "off" registers none, "opencode" registers @OpenCode. It
+# defaults to off: an unset backend resolves to off with the standard D-08
+# default-echo. Turning it on takes three edits: set backend = "opencode",
+# run `node scripts/generate.mjs` and copy powerbrowserAiBackend over, and
+# add "@powerbrowser/backend-opencode": "0.1.0" to the dependencies of
+# theia/applications/browser/package.json. The ng051-backend-off check
+# requires the dependency exactly when this value is "opencode".
 [ai]
 backend = "off"

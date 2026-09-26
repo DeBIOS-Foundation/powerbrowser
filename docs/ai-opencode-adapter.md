@@ -7,7 +7,7 @@ own, and how to turn the backend on or off.
 
 ## Turning it on or off
 
-The backend is **off by default**. One manifest edit turns it on:
+The backend is **off by default**, and since non-GUI decision D2(b) the adapter is not part of the default build. Turning it on takes these steps:
 
 1. In `configuration.toml`, set the selection key:
    ```toml
@@ -23,10 +23,16 @@ The backend is **off by default**. One manifest edit turns it on:
    `theia.frontend.config`, set `"powerbrowserAiBackend"` to the same
    value (`"off"` or `"opencode"`). Never hand-edit anything under
    `generated/` -- it is rewritten on every generate run.
-4. Rebuild the sidecar, then check the gate:
+4. Compose the adapter: add `"@powerbrowser/backend-opencode": "0.1.0"` to the
+   `dependencies` of `theia/applications/browser/package.json`. The
+   `ng051-backend-off` check requires this dependency exactly when the
+   backend is `"opencode"`, and `scripts/verify-platform.sh` runs the six
+   `ai-opencode-*` rows only while it is present (otherwise
+   `ai-opencode-held` stands in).
+5. Rebuild the sidecar, then check the gate:
    `node scripts/verify-opencode-bridge.mjs`.
 
-To turn it back off, set both values to `"off"` and rebuild. The
+To turn it back off, set both values to `"off"`, remove the dependency, and rebuild. With the backend off, no opencode process starts and the sidecar has no `/mcp` endpoint. The
 `@OpenCode` picker entry and its review toggle disappear entirely when
 off -- they are skipped at composition time, not merely hidden.
 

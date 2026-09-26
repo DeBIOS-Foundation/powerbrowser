@@ -2609,6 +2609,20 @@ check_desktop_entry_quick() {
   ' "$REPO_ROOT"
 }
 
+# NG-051: exit 0 when the application package.json composes the opencode adapter.
+adapter_composed() {
+  node -e 'const p = require(process.argv[1]); process.exit(p.dependencies && p.dependencies["@powerbrowser/backend-opencode"] ? 0 : 1)' \
+    "$THEIA_DIR/applications/browser/package.json"
+}
+
+check_ai_opencode_held() {
+  if adapter_composed; then
+    echo "ai-opencode-held: FAIL -- the adapter is composed, so its six rows must run instead of this one" >&2
+    return 1
+  fi
+  echo "ai-opencode-held: PASS -- the opencode adapter is not in the default build ([ai] backend = \"off\"); held rows: ai-opencode-tracer, ai-opencode-tracer-self-test, ai-opencode-presets, ai-opencode-presets-self-test, ai-opencode-bridge, ai-opencode-bridge-self-test. To run them: set [ai] backend = \"opencode\", regenerate, copy powerbrowserAiBackend over, add the @powerbrowser/backend-opencode dependency, yarn build, then scripts/verify-platform.sh --quick."
+}
+
 # --- the allowlist schema check ---
 check_allowlist_schema() {
   node -e '
@@ -4507,78 +4521,26 @@ run_own_checks() {
     # --quick per the function comment above: the extension's own tsc over
     # its own project, --noEmit, seconds, no build/browser/display/network.
     "tab-uris-typecheck|check_tab_uris_typecheck"
-    # NEW (16-01): the @OpenCode tracer gate. Derives composition, agent
-    # id, spawn args, ACP method sets, and the staging API from the tree
-    # at check time as set equality against one EXPECTED const, then
-    # enforces the prohibitions behaviorally against the compiled
-    # extension lib -- and, mandatorily, probes the installed `opencode
-    # acp` binary live over stdio (initialize, session/new, four prompts
-    # on one session asserting a single stable sessionId, new session for
-    # a new chat, no session/load anywhere; gated-config edit asks
-    # captured-then-cancelled with disk untouched, one allow path
-    # observing the delegated write). Absent binary fails the gate; the
-    # probe authors its own config in a mkdtemp cwd and never touches
-    # user configuration.
-    #
-    # Honestly --quick with one declared exception: text reads plus a
-    # local child spawn with live model turns (typically under a minute).
-    # No build (requires the extension already built), no browser, no
-    # display. The core-diff half shells to diff-theia-core.sh --quick
-    # through nix, where yarn lives.
-    #
-    # ai-opencode-tracer-self-test rides alongside for the reason every
-    # other self-test row in this array gives: it proves the unmutated
-    # control green first, then requires red naming the drift for a
-    # missing ChatAgent bind, a permissive allow-always default, an
-    # outside-root pass, and a redaction miss.
-    "ai-opencode-tracer|node $REPO_ROOT/scripts/verify-opencode-tracer.mjs"
-    "ai-opencode-tracer-self-test|node $REPO_ROOT/scripts/verify-opencode-tracer.mjs --self-test"
-    # NEW (16-02): the @OpenCode preset-plus-history gate. Derives the
-    # toggle default, per-session scope, command ids, and history API from
-    # the tree at check time as set equality against one EXPECTED const,
-    # then proves ordering, supersede, stale-refuse, history-write-failure,
-    # redaction, emission order, fallback, and revert behaviorally against
-    # the compiled extension libs. The R3 revert-under-concurrent-edits
-    # end-to-end stays a STAGED holdout (rerun with --live-backstop) --
-    # this row never passes that edge silently.
-    #
-    # Honestly --quick: text reads plus compiled-lib behavior (requires the
-    # extension already built), no browser, no display, no live model. The
-    # core-diff half shells to diff-theia-core.sh --quick through nix.
-    #
-    # ai-opencode-presets-self-test rides alongside for the reason every
-    # other self-test row in this array gives: it proves the unmutated
-    # control green first, then requires red naming the drift for a
-    # persisted preset, a merged supersede, a silent stale accept, a
-    # history reorder, and an emission reorder (B,A).
-    "ai-opencode-presets|node $REPO_ROOT/scripts/verify-opencode-presets.mjs"
-    "ai-opencode-presets-self-test|node $REPO_ROOT/scripts/verify-opencode-presets.mjs --self-test"
-    # NEW (16-03): the @OpenCode bridge-plus-selection gate. Derives the
-    # /mcp route, read-only tool set, interpolation-only checked-in config,
-    # selection default-off, and doc coverage from the tree at check time
-    # as set equality against one EXPECTED const, with fixture proofs for
-    # live-read shape, reference-only config, missing-key-off, and
-    # variables-plus-skills resolution -- then proves bridge auth
-    # mandatorily live (token GET plus POST read live state, anonymous
-    # GET plus POST refused 403 with no cookie leak; a backend that never
-    # becomes ready fails non-zero). The R5 concurrent-read backstop stays
-    # a STAGED holdout (rerun with --live-backstop), never a silent pass.
-    #
-    # Honestly --quick with one declared exception (tracer-gate
-    # precedent): text reads plus derivation, plus one backend boot
-    # (typically one to two minutes: nix develop plus Theia backend init;
-    # requires the built app bundle). No browser, no display, no live
-    # model. The core-diff half shells to diff-theia-core.sh --quick
-    # through nix.
-    #
-    # ai-opencode-bridge-self-test rides alongside for the reason every
-    # other self-test row in this array gives: it proves the unmutated
-    # control green first (live half included), then requires red naming
-    # the drift for a writable tool, a hardcoded secret, a default-on
-    # selection, and a missing doc row.
-    "ai-opencode-bridge|node $REPO_ROOT/scripts/verify-opencode-bridge.mjs"
-    "ai-opencode-bridge-self-test|node $REPO_ROOT/scripts/verify-opencode-bridge.mjs --self-test"
   )
+
+  # NG-051 / D2(b): the opencode adapter is composed only when the application
+  # package.json depends on @powerbrowser/backend-opencode. Its six rows test the
+  # composed adapter (the bridge row boots the backend and requires /mcp; the tracer
+  # row needs a live opencode account), so they run exactly when it is composed.
+  # Otherwise ai-opencode-held runs in their place: it passes only while the
+  # adapter is truly absent, and it names the held rows on every run (non-GUI ruling R9).
+  if adapter_composed; then
+    CHECKS+=(
+      "ai-opencode-tracer|node $REPO_ROOT/scripts/verify-opencode-tracer.mjs"
+      "ai-opencode-tracer-self-test|node $REPO_ROOT/scripts/verify-opencode-tracer.mjs --self-test"
+      "ai-opencode-presets|node $REPO_ROOT/scripts/verify-opencode-presets.mjs"
+      "ai-opencode-presets-self-test|node $REPO_ROOT/scripts/verify-opencode-presets.mjs --self-test"
+      "ai-opencode-bridge|node $REPO_ROOT/scripts/verify-opencode-bridge.mjs"
+      "ai-opencode-bridge-self-test|node $REPO_ROOT/scripts/verify-opencode-bridge.mjs --self-test"
+    )
+  else
+    CHECKS+=("ai-opencode-held|check_ai_opencode_held")
+  fi
 
   if [ "$QUICK" -eq 0 ]; then
     CHECKS+=(
