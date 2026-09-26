@@ -796,7 +796,10 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
      * needs no import that would close the cycle.
      */
     protected observeMode(): void {
-        const apply = () => this.applyStripHome(document.body.getAttribute(MODE_ATTRIBUTE) ?? '');
+        const apply = () => {
+            this.applyStripHome(document.body.getAttribute(MODE_ATTRIBUTE) ?? '');
+            this.scheduleDragRegions();
+        };
         new MutationObserver(apply).observe(document.body, { attributeFilter: [MODE_ATTRIBUTE] });
         // Re-assert on every shell add and remove, not only on a mode change.
         // The dock creates its tab bars as it needs them, and a bar that
@@ -808,6 +811,11 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         // to stop depending on the order at all.
         this.shell.onDidAddWidget(() => apply());
         this.shell.onDidRemoveWidget(() => apply());
+        // And on every dock layout change. A split or an un-split is neither
+        // an add nor a remove -- the widget is the same, only its pane moved
+        // -- but it changes how many tab bars exist, which is what decides
+        // whether Browsing shows them.
+        this.shell.mainPanel.layoutModified.connect(() => apply());
         // The launch activation may have landed before this ran, in which
         // case no mutation is coming and the attribute is already correct.
         apply();
@@ -854,11 +862,60 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
                 widget.setHidden(!ideDress);
             }
         }
-        // Every generated bar, not just the first: a split editor has more
-        // than one, and leaving the others visible would show the tabs twice.
-        for (const bar of this.shell.mainPanel.tabBars()) {
-            bar.setHidden(!ideDress);
+        // The dock's own tab bars, one per pane.
+        //
+        // Unsplit, Browsing hides the single bar: the strip above the URL row
+        // shows the same tabs, and showing both is the same list twice. Split,
+        // the bars come back, because they are the only thing on screen that
+        // says which tabs are in WHICH pane -- the strip is one flat row over
+        // the whole dock and cannot. Each bar sits under the URL row, holds
+        // its pane's tabs with the current one lit, and is a drop target for
+        // the next tab, so parking one tab on the left is what makes the
+        // right side grow a place to put another. The strip stays as the
+        // master list to drag from, in either direction.
+        //
+        // The leftmost pane is the exception in both cases: the strip IS its
+        // tab bar (TabStripWidget.primaryBar), so its own bar stays hidden
+        // and a tab is listed exactly once. Every other pane shows its bar.
+        //
+        // Read fresh, in layout order, every time this runs: the dock
+        // creates and removes bars as the layout changes, and which one is
+        // first is a fact about the layout, not a flag to keep in step.
+        //
+        // Split, every pane shows its own bar with its own tabs, the leftmost
+        // included -- the user is in a tab and expects to see it in the bar
+        // under the URL row, whichever side it is on (2026-09-10, with a
+        // screenshot of a blank left bar circled). The strip above still
+        // lists the leftmost pane's tabs as the row to drag from and back to;
+        // that one pane's tabs therefore appear in both places while split,
+        // and that is the Theia arrangement the user asked for by name.
+        // The home bar shows while the window is split OR while tabs are
+        // stacked on the home side with no other pane left -- closing the
+        // last tab of the other pane must not make the stacked ones vanish
+        // (they are not in the strip either; reported 2026-09-10).
+        const bars = [...this.shell.mainPanel.tabBars()];
+        const showHome = bars.length > 1 || this.tabStrip.hasStack();
+        const home = this.tabStrip.primaryBar();
+        for (const bar of bars) {
+            bar.setHidden(!ideDress && bar === home && !showHome);
         }
+        // The two 48px icon rails, re-asserted here for the same reason the
+        // tab bars are: the mode service hides them once, on the switch, and
+        // anything that shows them afterwards wins by default.
+        //
+        // Dragging a tab is exactly such a thing. The shell reveals its side
+        // panels while a widget drag is in flight, because in an IDE they are
+        // places you might drop it -- so dragging a tab toward either edge of
+        // a Browsing window pops out a strip of IDE icons, and they stay out
+        // after the drop. Reported live 2026-09-09 with a screenshot of both
+        // rails standing in a browser window.
+        //
+        // Re-asserting rather than suppressing the reveal: the drag is stock
+        // shell behaviour reached through stock APIs, and this widget already
+        // owns "what furniture does this mode keep". A drop fires
+        // onDidAddWidget, which is what runs this.
+        this.shell.leftPanelHandler.container.setHidden(!ideDress);
+        this.shell.rightPanelHandler.container.setHidden(!ideDress);
         // Showing a tab bar changes its class; it does not, on its own, make
         // the dock re-run its layout. Without this the dock kept allocating
         // the content as if the bar were still hidden, so the page was drawn
@@ -874,7 +931,145 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         this.shell.mainPanel.update();
     }
 
+    /**
+     * Ends a Lumino drag whose release never arrived.
+     *
+     * Lumino finishes a drag on the document's `pointerup`. In the shipped
+     * shell that event has been observed not to arrive: a tab dragged out of
+     * the strip and released stayed in flight -- ghost still on screen, the
+     * strip tab still dimmed, the drop never made (2026-09-10, with a
+     * screenshot). Every variant of the same gesture completes in a stock
+     * Chromium build of the same frontend, so this is about how the release
+     * reaches a remote Gecko frame, not about the drag.
+     *
+     * The next move tells the truth regardless: a `pointermove` with no
+     * button held while a drag image is still attached means the button was
+     * released somewhere this document did not hear. Dispatching the missing
+     * `pointerup` at that point is enough -- Lumino's own handler takes it
+     * from there, hit-tests the current target and completes the drop
+     * exactly as it would have. It applies to every Lumino drag in the
+     * shell, the dock's own tab bars included, which matters because a dock
+     * whose drag never ended refuses to start another.
+     *
+     * ponytail: papers over a release the frame did not see; the real fix is
+     * finding why Gecko withheld it and belongs in the chrome layer.
+     */
+    protected armDragRelease(): void {
+        window.addEventListener('pointermove', event => {
+            // Trusted moves only. `Drag.start()` dispatches a synthetic
+            // pointermove of its own, with no buttons, the instant the drag
+            // image is attached -- reacting to that ended every drag inside
+            // its own start() call, which then returned null (2026-09-10,
+            // from the shell's console: "drag.start(...) is null").
+            if (!event.isTrusted || event.buttons !== 0 || !document.querySelector('.lm-mod-drag-image')) {
+                return;
+            }
+            console.warn('[@powerbrowser/chrome-bar] drag still in flight with no button held; ending it');
+            document.dispatchEvent(new PointerEvent('pointerup', {
+                bubbles: true,
+                cancelable: true,
+                button: 0,
+                buttons: 0,
+                clientX: event.clientX,
+                clientY: event.clientY,
+                pointerId: event.pointerId,
+                pointerType: event.pointerType,
+                isPrimary: event.isPrimary,
+            }));
+        }, true);
+    }
+
+    /**
+     * Custom title bar. The shell window draws no OS title bar, so the
+     * window moves by the empty parts of its top rows: the strip and the
+     * URL row in Browsing, the menubar and the URL row in Coding, the URL
+     * row and the toolbar in Organising -- as a Firefox toolbar does, every
+     * pixel that is not a control. Dragging is
+     * chrome-only in Gecko, so this measures the rects and chrome lays
+     * invisible handles over them. Chrome's own window buttons overlay the
+     * top-right corner; `windowChrome` answers how wide they are, and
+     * `--pb-window-controls` keeps the first row clear of them.
+     *
+     * Re-measured on every mode/layout re-assert, on resize, and on any
+     * change inside the strip (a tab's title growing moves the tail), all
+     * coalesced to one frame and sent only when different.
+     */
+    protected dragFrame: number | undefined;
+    protected lastDragRegions = '';
+
+    protected scheduleDragRegions(): void {
+        if (this.dragFrame !== undefined) {
+            return;
+        }
+        this.dragFrame = window.requestAnimationFrame(() => {
+            this.dragFrame = undefined;
+            this.publishDragRegions();
+        });
+    }
+
+    protected publishDragRegions(): void {
+        const mode = document.body.getAttribute(MODE_ATTRIBUTE);
+        const controls = parseFloat(getComputedStyle(document.body).getPropertyValue('--pb-window-controls')) || 0;
+        // Every row the mode shows at the top, first row first, with the
+        // things on it that must stay clickable. What is left of each row is
+        // where the window moves -- the same rule as a Firefox toolbar.
+        const rows: { row: Element; items: Element[] }[] = [];
+        const bar = this.barWidget.node.querySelector('.pb-chrome-bar');
+        const menubar = this.shell.topPanel.widgets.find(w => w.id === 'theia:menubar')?.node;
+        const toolbar = document.querySelector('.pb-org-toolbar');
+        if (mode === 'browsing') {
+            rows.push({ row: this.tabStrip.node, items: Array.from(this.tabStrip.node.querySelectorAll('.pb-tab')) });
+        } else if (mode === 'coding' && menubar) {
+            rows.push({ row: menubar, items: Array.from(menubar.querySelectorAll('.lm-MenuBar-item')) });
+        }
+        if (bar) {
+            rows.push({ row: bar, items: Array.from(bar.children) });
+        }
+        if (mode === 'organising' && toolbar) {
+            rows.push({ row: toolbar, items: Array.from(toolbar.children) });
+        }
+        // Chrome's window buttons overlay the first row's right end only.
+        const limit = this.shell.topPanel.node.getBoundingClientRect().right - controls;
+        const rects = rows.flatMap(({ row, items }, index) => {
+            const r = row.getBoundingClientRect();
+            if (r.height === 0) {
+                return [];
+            }
+            const right = index === 0 ? Math.min(r.right, limit) : r.right;
+            const spans = items.map(el => el.getBoundingClientRect()).filter(s => s.width > 0).sort((a, b) => a.left - b.left);
+            const out: { x: number; y: number; w: number; h: number }[] = [];
+            let x = r.left;
+            for (const s of spans) {
+                if (s.left - x > 4) {
+                    out.push({ x, y: r.top, w: s.left - x, h: r.height });
+                }
+                x = Math.max(x, s.right);
+            }
+            if (right - x > 4) {
+                out.push({ x, y: r.top, w: right - x, h: r.height });
+            }
+            return out;
+        });
+        const height = rows[0]?.row.getBoundingClientRect().height ?? 0;
+        const key = JSON.stringify([rects, height]);
+        if (key === this.lastDragRegions) {
+            return;
+        }
+        this.lastDragRegions = key;
+        this.webTabs.send({ kind: 'windowDragRegions', rects, height });
+    }
+
     async onStart(): Promise<void> {
+        this.armDragRelease();
+        window.addEventListener('resize', () => this.scheduleDragRegions());
+        new MutationObserver(() => this.scheduleDragRegions())
+            .observe(this.tabStrip.node, { childList: true, subtree: true, characterData: true, attributes: true });
+        void this.webTabs.request({ kind: 'windowChrome' }).then(reply => {
+            if (reply.ok && typeof reply.width === 'number') {
+                document.body.style.setProperty('--pb-window-controls', `${reply.width}px`);
+            }
+            this.scheduleDragRegions();
+        });
         if (!this.shell.getWidgetById(ChromeBarWidget.ID)) {
             await this.shell.addWidget(this.barWidget, { area: 'top' });
         }

@@ -19,6 +19,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
       windowtype="powerbrowser:main"
+      customtitlebar="true"
       scrolling="false"
       width="1280"
       height="800"
@@ -32,6 +33,15 @@
     <script src="chrome://powerbrowser/content/powerbrowser.js"></script>
   </head>
   <body>
+    <!-- Custom title bar (see powerbrowser.js): the window buttons the OS bar
+         used to carry, and the host for the drag handles laid over the
+         frontend's empty top-row space. -->
+    <div id="powerbrowser-window-controls">
+      <button id="powerbrowser-window-minimize" type="button" tabindex="-1" title="Minimize" aria-label="Minimize"/>
+      <button id="powerbrowser-window-maximize" type="button" tabindex="-1" title="Maximize" aria-label="Maximize"/>
+      <button id="powerbrowser-window-close" type="button" tabindex="-1" title="Close" aria-label="Close"/>
+    </div>
+    <div id="powerbrowser-drag-regions"></div>
     <div id="powerbrowser-loading">PowerBrowser</div>
     <div id="powerbrowser-error">
       <p id="powerbrowser-error-message"></p>

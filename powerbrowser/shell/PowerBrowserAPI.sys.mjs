@@ -47,7 +47,7 @@ const pendingTimers = new Set();
 // between the DDL markers at check time and fails distinctly when they are
 // absent -- the DDL lives here once, never as a copy. No private, window,
 // pinned, or credential-shaped column exists by construction.
-const TAB_STORE_SCHEMA_HEAD = 2;
+const TAB_STORE_SCHEMA_HEAD = 4;
 const TABS_STORE_V1_DDL = /* PB-SQL-TABS-DDL-START */ `CREATE TABLE tabs (
   uri         TEXT PRIMARY KEY CHECK(length(uri) > 0),
   url         TEXT NOT NULL,
@@ -77,6 +77,17 @@ ALTER TABLE tabs ADD COLUMN group_id TEXT NULL;
 CREATE INDEX idx_tabs_group ON tabs (group_id);
 ALTER TABLE tabs ADD COLUMN thumbnail TEXT NULL;` /* PB-SQL-GROUPS-DDL-END */;
 
+// GUI-08 (W-loose): where a tab sits when it is in no group. NULL means "not
+// placed" -- the canvas lays those out along the bottom itself, so an
+// existing store upgrades without inventing coordinates for every row.
+const TAB_POSITION_V3_DDL = /* PB-SQL-TABPOS-DDL-START */ `ALTER TABLE tabs ADD COLUMN x INTEGER NULL;
+ALTER TABLE tabs ADD COLUMN y INTEGER NULL;` /* PB-SQL-TABPOS-DDL-END */;
+
+// GUI-08 (W10): a tab's place within its group. NULL means "never ordered",
+// which sorts after everything that has been, so an upgraded store keeps its
+// existing URI order until the first time a group is arranged by hand.
+const TAB_ORDER_V4_DDL = /* PB-SQL-TABORD-DDL-START */ `ALTER TABLE tabs ADD COLUMN ord INTEGER NULL;` /* PB-SQL-TABORD-DDL-END */;
+
 // GUI-08 (15-01): writer-side bounds for group fields. The title cap mirrors
 // the contracted rename rule (15-UI-SPEC.md); bounds clamp to a sane max so
 // a malformed actor message can never park a box off-field; thumbnails over
@@ -92,6 +103,9 @@ const TAB_STORE_THUMBNAIL_MAX_CHARS = 200000;
 // title-plus-URI text. Captures wait for settle so rapid Ctrl-Tab never
 // janks the tab-event hot path.
 const TAB_THUMBNAIL_CAPTURE_MAX_CHARS = 102400;
+// Width a capture is scaled to. Matches the widest a card is drawn, so the
+// image is sharp at card size without carrying pixels no card can show.
+const TAB_THUMBNAIL_TARGET_WIDTH = 220;
 const TAB_THUMBNAIL_SETTLE_MS = 500;
 
 // GUI-08 (15-01): the PowerBrowserGroup actor pair identity. Registration is
@@ -811,7 +825,13 @@ export const PowerBrowserAPI = Object.freeze({
       if (schemaVersion < 1) {
         await PowerBrowserAPI.migrateTabStoreToV1(conn);
       }
-      await PowerBrowserAPI.migrateTabStoreToV2(conn);
+      if (schemaVersion < 2) {
+        await PowerBrowserAPI.migrateTabStoreToV2(conn);
+      }
+      if (schemaVersion < 3) {
+        await PowerBrowserAPI.migrateTabStoreToV3(conn);
+      }
+      await PowerBrowserAPI.migrateTabStoreToV4(conn);
     }
     tabStoreConn = conn;
     return conn;
@@ -885,7 +905,7 @@ export const PowerBrowserAPI = Object.freeze({
     const groupIndexDone = await conn.indexExists("idx_tabs_group");
     const thumbnailDone = await PowerBrowserAPI.tabStoreHasColumn(conn, "tabs", "thumbnail");
     if (groupsDone && activeIndexDone && groupIdDone && groupIndexDone && thumbnailDone) {
-      await conn.setSchemaVersion(TAB_STORE_SCHEMA_HEAD);
+      await conn.setSchemaVersion(2);
       return;
     }
     await conn.executeTransaction(async () => {
@@ -904,7 +924,129 @@ export const PowerBrowserAPI = Object.freeze({
       if (!groupIndexDone) {
         await conn.execute(tabsGroupIndex);
       }
+      // Exactly 2, never the head: under head 3 a store arriving here must
+      // still fall through to migrateTabStoreToV3, and stamping the head
+      // would skip the tab-position columns entirely. Same trap V1 records.
+      await conn.setSchemaVersion(2);
+    });
+  },
+
+  /**
+   * GUI-08 (W-loose): v2 to v3 -- where a loose tab sits on the canvas.
+   *
+   * Same shape as the v2 migration above: a column check per ADD COLUMN
+   * rather than a PRAGMA shortcut, the missing pieces plus the version bump
+   * inside exactly one executeTransaction, and a store whose work is already
+   * done is a no-op success that only stamps the version.
+   *
+   * Both columns are NULL-able with no default on purpose. NULL means "never
+   * placed", which the canvas lays out along the bottom itself, so upgrading
+   * an existing profile does not invent a position for every tab it has ever
+   * seen.
+   */
+  async migrateTabStoreToV3(conn) {
+    const statements = TAB_POSITION_V3_DDL.split(";")
+      .map(s => s.trim())
+      .filter(Boolean);
+    const findStatement = pattern => {
+      const hit = statements.find(s => pattern.test(s));
+      if (!hit) {
+        throw new Error("migrateTabStoreToV3: DDL marker content missing a required statement");
+      }
+      return hit;
+    };
+    const addX = findStatement(/^alter table tabs add column x\b/i);
+    const addY = findStatement(/^alter table tabs add column y\b/i);
+    const xDone = await PowerBrowserAPI.tabStoreHasColumn(conn, "tabs", "x");
+    const yDone = await PowerBrowserAPI.tabStoreHasColumn(conn, "tabs", "y");
+    if (xDone && yDone) {
+      await conn.setSchemaVersion(3);
+      return;
+    }
+    await conn.executeTransaction(async () => {
+      if (!xDone) {
+        await conn.execute(addX);
+      }
+      if (!yDone) {
+        await conn.execute(addY);
+      }
+      // Exactly 3, never the head: a store arriving here must still fall
+      // through to migrateTabStoreToV4.
+      await conn.setSchemaVersion(3);
+    });
+  },
+
+  /**
+   * GUI-08 (W-loose): places one tab on the canvas, or clears its placement.
+   *
+   * Bounds are clamped the way group geometry is (GROUP_BOUNDS_MAX): a
+   * malformed actor message can move a card but can never park it where no
+   * scroll will reach. Passing null for either coordinate clears BOTH, which
+   * is what "put it back in the automatic line" means -- half a position is
+   * not a position.
+   */
+  async setTabPosition(uri, x, y) {
+    if (typeof uri !== "string" || !uri) {
+      throw new Error("setTabPosition: uri must be a non-empty string");
+    }
+    const conn = await PowerBrowserAPI.openTabStore();
+    const clear = x === null || x === undefined || y === null || y === undefined;
+    const clamp = value => Math.max(0, Math.min(GROUP_BOUNDS_MAX, Math.floor(Number(value) || 0)));
+    await conn.execute(
+      "UPDATE tabs SET x = :x, y = :y WHERE uri = :uri",
+      { uri, x: clear ? null : clamp(x), y: clear ? null : clamp(y) }
+    );
+  },
+
+  /**
+   * GUI-08 (W10): v3 to v4 -- a tab's place within its group.
+   *
+   * Same shape as its siblings: a column check rather than a PRAGMA shortcut,
+   * the work plus the version bump in one transaction, already-done is a no-op
+   * that only stamps. NULL-able with no default so an existing store keeps its
+   * current URI ordering until a group is first arranged by hand.
+   */
+  async migrateTabStoreToV4(conn) {
+    const statement = TAB_ORDER_V4_DDL.split(";").map(s => s.trim()).filter(Boolean)[0];
+    if (!statement || !/^alter table tabs add column ord\b/i.test(statement)) {
+      throw new Error("migrateTabStoreToV4: DDL marker content missing the ord column");
+    }
+    if (await PowerBrowserAPI.tabStoreHasColumn(conn, "tabs", "ord")) {
       await conn.setSchemaVersion(TAB_STORE_SCHEMA_HEAD);
+      return;
+    }
+    await conn.executeTransaction(async () => {
+      await conn.execute(statement);
+      await conn.setSchemaVersion(TAB_STORE_SCHEMA_HEAD);
+    });
+  },
+
+  /**
+   * GUI-08 (W10): the order of one group's tabs, written as a whole.
+   *
+   * A list, not a tab at a time: dropping a card between two others renumbers
+   * every tab after it, and sending those one by one would be N round trips
+   * that can each fail separately and leave the group half-renumbered. One
+   * transaction is either the new order or the old one.
+   *
+   * Ordinals are the array's own indices, so they stay dense and a later read
+   * needs no interpretation. Rows not named here keep whatever they had.
+   */
+  async setGroupOrder(groupId, uris) {
+    if (typeof groupId !== "string" || !groupId) {
+      throw new Error("setGroupOrder: groupId must be a non-empty string");
+    }
+    if (!Array.isArray(uris)) {
+      throw new Error("setGroupOrder: uris must be an array");
+    }
+    const conn = await PowerBrowserAPI.openTabStore();
+    await conn.executeTransaction(async () => {
+      for (let index = 0; index < uris.length; index += 1) {
+        await conn.execute(
+          "UPDATE tabs SET ord = :ord WHERE uri = :uri AND group_id = :groupId",
+          { ord: index, uri: String(uris[index]), groupId }
+        );
+      }
     });
   },
 
@@ -1371,6 +1513,62 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
+   * GUI-08 (W-preview): a picture of one rectangle of the Theia frame.
+   *
+   * Some tabs are not pages. The Welcome view, an editor, a terminal -- these
+   * are Theia widgets drawn inside the frame, not documents in a browser
+   * element, so `captureTabThumbnail` has nothing to point at and their cards
+   * had no preview at all. The frame ITSELF is a browser element, though, and
+   * `drawSnapshot` takes a rectangle of one, so the widget's own bounds give
+   * a real image of how that tab last looked.
+   *
+   * Scaled down at capture time rather than by CSS afterwards: a card is a
+   * couple of hundred pixels wide and a full-size frame snapshot would be a
+   * megabyte of data URL for it. Over the cap it resolves null and the card
+   * keeps its text fallback, exactly as a failed page capture does.
+   *
+   * Resolves a data URL or null; never throws, because a preview is a nicety
+   * and losing one must not break a mode switch.
+   */
+  async captureShellRegion(theiaBrowser, rect) {
+    try {
+      if (!theiaBrowser || !rect) {
+        return null;
+      }
+      const w = Math.max(1, Math.round(Number(rect.w) || 0));
+      const h = Math.max(1, Math.round(Number(rect.h) || 0));
+      if (w < 8 || h < 8) {
+        return null;
+      }
+      const scale = Math.min(1, TAB_THUMBNAIL_TARGET_WIDTH / w);
+      const bitmap = await theiaBrowser.drawSnapshot(
+        Math.max(0, Math.round(Number(rect.x) || 0)),
+        Math.max(0, Math.round(Number(rect.y) || 0)),
+        w,
+        h,
+        scale,
+        "#2b2a33"
+      );
+      if (!bitmap) {
+        return null;
+      }
+      const doc = theiaBrowser.ownerDocument;
+      const canvas = doc.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
+      canvas.width = Math.max(1, Math.round(w * scale));
+      canvas.height = Math.max(1, Math.round(h * scale));
+      canvas.getContext("2d").drawImage(bitmap, 0, 0);
+      if (typeof bitmap.close === "function") {
+        bitmap.close();
+      }
+      const dataUrl = canvas.toDataURL("image/png");
+      return dataUrl && dataUrl.length <= TAB_THUMBNAIL_CAPTURE_MAX_CHARS ? dataUrl : null;
+    } catch (err) {
+      PowerBrowserAPI.log("error", `[shell-capture] ${err && err.message ? err.message : err}`);
+      return null;
+    }
+  },
+
+  /**
    * GUI-08 (15-01): best-effort stock-tab close by opaque URI key, through
    * the stock-only lookup above -- NOT findTabBrowserForUri, which can return
    * an overlay whose `tab` is null. Returns true when a live tab matched and was
@@ -1447,7 +1645,7 @@ export const PowerBrowserAPI = Object.freeze({
     try {
       const conn = await PowerBrowserAPI.openTabStore();
       const rows = await conn.execute(
-        "SELECT uri, url, title, last_active, group_id, thumbnail FROM tabs WHERE group_id = :groupId ORDER BY uri",
+        "SELECT uri, url, title, last_active, group_id, thumbnail, x, y, ord FROM tabs WHERE group_id = :groupId ORDER BY ord IS NULL, ord, uri",
         { groupId }
       );
       return rows.map(row => ({
@@ -1457,6 +1655,8 @@ export const PowerBrowserAPI = Object.freeze({
         last_active: row.getInt64(3),
         group_id: row.getString(4),
         thumbnail: row.getString(5),
+        x: row.getResultByName("x"),
+        y: row.getResultByName("y"),
       }));
     } catch {
       return [];
@@ -1542,6 +1742,19 @@ export const PowerBrowserAPI = Object.freeze({
             data.groupId === undefined ? null : data.groupId
           );
           return { ok: true, kind, uri: data.uri };
+        }
+        case "setTabPosition": {
+          await PowerBrowserAPI.setTabPosition(data.uri, data.x, data.y);
+          return { ok: true, kind, uri: data.uri };
+        }
+        case "setGroupOrder": {
+          await PowerBrowserAPI.setGroupOrder(data.groupId, data.uris);
+          return { ok: true, kind, id: data.groupId };
+        }
+        case "captureShellRegion": {
+          const theiaBrowser = actorRef.browsingContext.top.embedderElement;
+          const png = await PowerBrowserAPI.captureShellRegion(theiaBrowser, data.rect);
+          return { ok: true, kind, png };
         }
         case "moveGroup": {
           const current = await PowerBrowserAPI.readGroupRow(data.id);
@@ -1697,6 +1910,26 @@ export const PowerBrowserAPI = Object.freeze({
         case "probeChannel": {
           return { ok: true, kind };
         }
+        // Custom title bar (2026-09-10): the shell window draws no OS title
+        // bar (powerbrowser.xhtml `customtitlebar`), so the frontend asks how
+        // wide chrome's window buttons are and reports which rects of its
+        // top row are empty; powerbrowser.js lays drag handles there, since
+        // window dragging is chrome-only in Gecko. Both act on the window of
+        // the frame that sent the message, so nothing else can be moved.
+        case "windowChrome": {
+          const win = actorRef.browsingContext.top.embedderElement.ownerDocument.defaultView;
+          return { ok: true, kind, width: win.powerbrowserWindowChrome().width };
+        }
+        case "windowDragRegions": {
+          const rects = Array.isArray(data.rects) ? data.rects : null;
+          const finite = r => r && [r.x, r.y, r.w, r.h].every(Number.isFinite);
+          if (!rects || !rects.every(finite) || !Number.isFinite(data.height)) {
+            return { ok: false, reason: "validation", message: "handleGroupMutation: refusing malformed drag regions" };
+          }
+          const win = actorRef.browsingContext.top.embedderElement.ownerDocument.defaultView;
+          win.powerbrowserSetDragRegions(rects.map(({ x, y, w, h }) => ({ x, y, w, h })), data.height);
+          return { ok: true, kind };
+        }
         default: {
           return { ok: false, reason: "validation", message: `handleGroupMutation: unknown kind ${String(kind)}` };
         }
@@ -1704,6 +1937,7 @@ export const PowerBrowserAPI = Object.freeze({
     } catch (err) {
       const message = err && err.message ? err.message : String(err);
       const reason = /refusing|unknown/.test(message) ? "validation" : "store";
+      PowerBrowserAPI.log("warn", `[handleGroupMutation] ${String(kind)} failed: ${message}`);
       return { ok: false, reason, message };
     }
   },

@@ -290,6 +290,20 @@ body[data-pb-mode="browsing"] #theia-top-panel {
     min-height: calc(33px + 40px);
 }
 
+/* Custom title bar: chrome's window buttons overlay the top-right corner of
+   whichever row is first in the mode, and that row keeps clear of them by
+   the width chrome reports (`--pb-window-controls`, set on body by
+   ChromeBarContribution; unset where the desktop keeps its own title bar).
+   Coding's first row is the menubar, whose items sit at the left. */
+body[data-pb-mode="browsing"] .pb-tab-strip {
+    box-sizing: border-box;
+    padding-right: var(--pb-window-controls, 0px);
+}
+
+body[data-pb-mode="organising"] .pb-chrome-bar {
+    padding-right: calc(8px + var(--pb-window-controls, 0px));
+}
+
 #theia-top-panel > [id="powerbrowser.chrome-bar"] {
     flex: 0 0 100%;
     height: 40px;
@@ -350,8 +364,14 @@ body[data-pb-mode="browsing"] #theia-top-panel {
 
 .pb-tab.is-active {
     background: var(--color-surface, #2b2a33);
-    border-color: var(--color-border, #3f3e4a);
     color: var(--color-text, #fbfbfe);
+    /* Lit, not merely tinted. With the window split there are two panes of
+       tabs and one URL row, and this is the one thing that says which tab the
+       row is talking about -- so it has to be readable at a glance from
+       across the window, not inferred from a shade of grey. The one accent
+       colour the design keeps, as a hard line around the tab. */
+    border-color: var(--color-primary, #00a6f5);
+    box-shadow: inset 0 0 0 1px var(--color-primary, #00a6f5);
 }
 
 .pb-tab-title {
@@ -374,4 +394,91 @@ body[data-pb-mode="browsing"] #theia-top-panel {
 .pb-tab-close:focus-visible {
     outline: 2px solid var(--color-primary, #00a6f5);
     outline-offset: 2px;
+}
+
+/*-----------------------------------------------------------------------------
+| Dragging a tab out of the strip and into the dock
+|
+| Two rules the build is missing rather than two rules we invented. Lumino
+| ships them in `@lumino/dragdrop/style/index.css`, but @theia/core imports
+| only `@lumino/widgets/style/index.css`, so neither class reaches the bundle
+| and both of these nodes end up unpositioned. They are geometry the library
+| depends on, not styling: `Drag` sets `position: fixed` and a transform on
+| each of them inline and expects the origin to be the viewport corner.
+|
+| Values match Lumino 2.1.9 (BSD 3-Clause, Jupyter Development Team).
+|----------------------------------------------------------------------------*/
+
+/* Without an origin, `position: fixed` falls back to the node's static
+   position -- the end of the body flow -- and the ghost trails the pointer by
+   however far down the page that happens to be. */
+.lm-mod-drag-image {
+    top: 0;
+    left: 0;
+    will-change: transform;
+}
+
+/* The node Lumino takes the pointer capture on. Keeping it fixed and out of
+   flow is the whole point: it follows the cursor, and Lumino drops it to
+   z-index -1000 for the duration of each hit test so it never becomes the
+   element it finds under the pointer. */
+.lm-cursor-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 200px;
+    height: 200px;
+    margin-top: -100px;
+    margin-left: -100px;
+    z-index: 100;
+    will-change: transform;
+}
+
+/* The tab stays put while its clone travels; dimming says which one is in
+   flight without moving anything in the strip. */
+.pb-tab.is-dragging {
+    opacity: 0.4;
+}
+
+/* The strip is where a tab dragged out of a pane goes back. Said while the
+   drag is over it, in the same accent the lit tab uses, so the two facts read
+   as one: this is the home row, and here is where you are in it. */
+.pb-tab-strip.is-drop-target {
+    box-shadow: inset 0 0 0 2px var(--color-primary, #00a6f5);
+}
+
+/* A home-pane tab the strip lists is not listed again in the pane's own
+   bar. Browsing only: Coding shows the real bars, all tabs. */
+body[data-pb-mode="browsing"] .lm-TabBar-tab.pb-strip-only {
+    display: none;
+}
+
+/* The stack: one strip entry for the tabs dragged down into panes. Lit while
+   the stack is on screen; its items drag out of it one at a time. */
+.pb-tab.pb-tab-stack {
+    max-width: none;
+    gap: 6px;
+}
+.pb-tab-stack-glyph {
+    opacity: 0.7;
+}
+.pb-tab-stack-item {
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 6px;
+    border-radius: 3px;
+    background: var(--color-surface-raised, #35343f);
+}
+
+.pb-tab-stack-exit {
+    margin-left: 4px;
+}
+
+/* Belt to preventDefault's braces. A selection that survives from an earlier
+   click is still there to be dragged when the next press starts, so stopping
+   one forming on the press is not on its own enough. */
+.pb-tab {
+    user-select: none;
+    -moz-user-select: none;
 }

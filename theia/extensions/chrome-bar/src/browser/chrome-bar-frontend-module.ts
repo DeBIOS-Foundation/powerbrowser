@@ -13,14 +13,47 @@
 
 import { ContainerModule } from '@theia/core/shared/inversify';
 import { CommandContribution } from '@theia/core/lib/common';
-import { FrontendApplicationContribution, KeybindingContribution, WebSocketConnectionProvider } from '@theia/core/lib/browser';
+import {
+    ApplicationShellOptions,
+    FrontendApplicationContribution,
+    KeybindingContribution,
+    WebSocketConnectionProvider,
+} from '@theia/core/lib/browser';
 import { CHROME_SUGGESTION_PATH, ChromeBarSuggestionService } from './chrome-bar-suggestion-service';
 import { ChromeBarCommandContribution } from './chrome-bar-commands';
 import { ChromeBarKeybindingContribution } from './chrome-bar-keybindings';
 import { ChromeBarContribution, ChromeBarWidget } from './chrome-bar-widget';
 import { TabStripWidget } from './tab-strip-widget';
 
-export default new ContainerModule(bind => {
+export default new ContainerModule((bind, _unbind, _isBound, rebind) => {
+    // Dragging a tab must not summon the IDE.
+    //
+    // The shell watches every widget drag and expands whichever side panel
+    // the pointer comes near, so it can be dropped there -- correct in an
+    // IDE, wrong in a browser. Dragging a tab toward either edge of a
+    // Browsing window made both icon rails and the file explorer appear, and
+    // dropping there did not split the pane: it docked the tab INTO the
+    // sidebar, where a web page is not something the user can get back to.
+    // Reported live 2026-09-09, with the tab visible in the left panel.
+    //
+    // `expandThreshold` is the width of that edge band, and it is a shell
+    // option the framework already exposes for configuring exactly this. Zero
+    // means the band has no width, so no drag can ever reach it. It is read
+    // in one place -- `ApplicationShell.onDragOver` -- and nowhere else, so
+    // this removes the reveal and changes nothing else.
+    //
+    // Coding is untouched in practice: its panels are already expanded, and
+    // the shell only auto-expands a panel whose tab bar has no current title.
+    // Dropping a widget into a side panel that is open still works there.
+    //
+    // Partial by design: the shell spreads this over its own defaults per
+    // panel, so `emptySize`, `expandDuration` and `initialSizeRatio` keep
+    // their framework values.
+    rebind(ApplicationShellOptions).toConstantValue({
+        leftPanel: { expandThreshold: 0 },
+        rightPanel: { expandThreshold: 0 },
+        bottomPanel: { expandThreshold: 0 },
+    });
     bind(ChromeBarSuggestionService).toDynamicValue(ctx =>
         WebSocketConnectionProvider.createProxy<ChromeBarSuggestionService>(ctx.container, CHROME_SUGGESTION_PATH)
     ).inSingletonScope();

@@ -33,17 +33,23 @@ import { injectable, inject, postConstruct } from '@theia/core/shared/inversify'
 import {
     ApplicationShell,
     ConfirmDialog,
+    Message,
     StatusBar,
     StatusBarAlignment,
     Widget,
 } from '@theia/core/lib/browser';
+import { WebTabWidget } from '@powerbrowser/tab-uris/lib/browser/web-tab';
 import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
 import { GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-query-service';
 import pDebounce from 'p-debounce';
 import { registerOrganisingSlot } from './mode-descriptors';
+import { MODE_ATTRIBUTE } from './mode-attribute';
+import { ModeService } from './mode-service';
 import { GroupActorClient } from './group-actor-client';
-import { GroupModel, GROUP_BOX_MIN_H, GROUP_BOX_MIN_W, GROUP_TITLE_MAX_CHARS, PanoramaGroup, PanoramaTab } from './group-model';
+import { GroupModel, GROUP_BOX_MIN_H, GROUP_BOX_MIN_W, GROUP_TITLE_MAX_CHARS, LiveTab, PanoramaGroup, PanoramaTab, SESSION_TAB_PREFIX } from './group-model';
 import { buildTreeSection } from './organising-tree';
+import { fitTiles, TILE_ASPECT, TILE_GAP } from './organising-tiling';
+import { pushAway } from './organising-geometry';
 import { PANORAMA_CLOSE_GROUP_COMMAND_ID, PANORAMA_NEW_GROUP_COMMAND_ID } from './panorama-commands';
 import { PanoramaCommandHandler } from './panorama-commands';
 // Resolved through src/, not './', because the build is `tsc -b` alone: tsc
@@ -56,6 +62,38 @@ type OrganisingView = 'canvas' | 'tree';
 
 /** Pointer travel before a card press becomes a drag rather than a click. */
 const CARD_DRAG_THRESHOLD = 4;
+
+/** Rectangle below which a canvas drag was a click on the background. */
+const GROUP_DRAW_MIN = 30;
+
+/** Cards drawn in a stack before the rest are represented by the count. */
+const STACK_VISIBLE = 5;
+/** Loose tabs drawn in the end-of-row pile before the count stands in. */
+const PILE_VISIBLE = 4;
+/** Size of a loose tab on the canvas. */
+const LOOSE_W = 160;
+const LOOSE_H = Math.round(LOOSE_W * TILE_ASPECT);
+/** Margin kept between the auto-placed line and the canvas edges. */
+const LOOSE_MARGIN = 16;
+/** Marks a push-away rectangle as a loose tab rather than a group. */
+const LOOSE_BOX_PREFIX = 'tab:';
+
+/** The mode id `body[data-pb-mode]` carries while the canvas is showing. */
+const ORGANISING_MODE_ID = 'organising';
+
+/** Settle before photographing a tab, so switching quickly captures once. */
+const SHELL_CAPTURE_SETTLE_MS = 700;
+
+/**
+ * The eight resize grips, named by compass point. `n`/`w` move the box's
+ * origin as well as its size -- growing upward means the top edge travels and
+ * the bottom stays put -- which is why resize carries a base position now and
+ * not only a base size.
+ */
+const BOX_EDGES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;
+type BoxEdge = (typeof BOX_EDGES)[number];
+/** Pixels each stacked card is offset from the one in front of it. */
+const STACK_OFFSET = 4;
 
 const ZOOM_STEPS = [25, 50, 75, 100, 125, 150, 200];
 const DEFAULT_ZOOM_INDEX = 3;
@@ -76,12 +114,22 @@ export class OrganisingWidget extends Widget {
     @inject(StatusBar)
     protected readonly statusBar: StatusBar;
 
+    @inject(ApplicationShell)
+    protected readonly shell: ApplicationShell;
+
+    @inject(ModeService)
+    protected readonly modes: ModeService;
+
     protected view: OrganisingView = 'canvas';
+    /** The group whose stack is open over the canvas, if any. */
+    protected expandedGroupId: string | undefined;
+    /** The group a card is hovering over, and the slot it has opened in it. */
+    protected dropPreviewGroupId: string | undefined;
+    protected dropPreviewIndex = 0;
     protected zoomIndex = DEFAULT_ZOOM_INDEX;
     protected editingGroupId: string | undefined;
     protected suppressRender = false;
     protected moveState: { id: string; startX: number; startY: number; baseX: number; baseY: number } | undefined;
-    protected resizeState: { id: string; startX: number; startY: number; baseW: number; baseH: number } | undefined;
     protected dragCard: { uri: string; fromGroup: string | null } | undefined;
     /** Invalidates trailing debounced persists (Esc cancel, gesture end). */
     protected geometrySeq = 0;
@@ -100,7 +148,7 @@ export class OrganisingWidget extends Widget {
     protected canvasLayer!: HTMLElement;
     protected canvasRoot!: HTMLElement;
     protected treeRoot!: HTMLElement;
-    protected trayRoot!: HTMLElement;
+    protected expandRoot!: HTMLElement;
 
     constructor() {
         super();
@@ -131,17 +179,199 @@ export class OrganisingWidget extends Widget {
                 this.render();
             }
         });
+        // Esc closes an expanded stack, as it does every other gesture here.
+        this.node.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && this.expandedGroupId) {
+                event.stopPropagation();
+                this.collapseStack();
+            }
+        });
         this.render();
         void this.initialize();
     }
 
+    /**
+     * The canvas is a view of the OPEN tabs, so it follows the dock rather
+     * than being read once at construction.
+     *
+     * Subscribed HERE and not in `@postConstruct`, and that placement is
+     * load-bearing. This widget is created by the shell's own layout
+     * restorer, so at construction time `ApplicationShell` is still being
+     * built -- touching it there is a dependency cycle. It went unnoticed
+     * while Organising was not the restored view, and hung frontend startup
+     * outright once it was: layout initialisation never finished, so the
+     * workbench never appeared. By `onAfterAttach` the shell is a complete
+     * object.
+     */
+    protected override onAfterAttach(msg: Message): void {
+        super.onAfterAttach(msg);
+        if (!this.watchingShell) {
+            this.watchingShell = true;
+            this.shell.onDidAddWidget(widget => {
+                this.scheduleReload();
+                this.holdTheMainArea(widget);
+            });
+            this.shell.onDidRemoveWidget(() => this.scheduleReload());
+            this.shell.onDidChangeCurrentWidget(() => this.scheduleShellCapture());
+        }
+        this.scheduleReload();
+    }
+
+    /**
+     * Re-read on every entry to Organising: a tab opened, closed or navigated
+     * while another mode was showing lands here.
+     */
+    protected override onAfterShow(msg: Message): void {
+        super.onAfterShow(msg);
+        this.scheduleReload();
+    }
+
+    protected watchingShell = false;
+
+    /**
+     * Photographs the current tab while it is still on screen, so its card has
+     * a picture of how it last looked.
+     *
+     * Only tabs that are NOT pages. A web tab is a chrome-owned page and
+     * chrome already captures it properly; everything else -- the Welcome
+     * view, an editor, a terminal -- is a Theia widget drawn inside the shell
+     * frame, which chrome can photograph as a rectangle of that frame.
+     *
+     * It has to happen while the tab is showing, which is why it rides the
+     * current-widget change and not the switch INTO Organising: by the time
+     * the canvas is up, the tab it would photograph is behind it. Delayed a
+     * moment so a burst of tab switching does not fire a capture per tab.
+     */
+    protected scheduleShellCapture(): void {
+        window.clearTimeout(this.captureTimer);
+        this.captureTimer = window.setTimeout(() => {
+            const widget = this.shell.currentWidget;
+            if (!widget || widget === this || widget instanceof WebTabWidget) {
+                return;
+            }
+            if (![...this.shell.mainPanel.widgets()].includes(widget)) {
+                return;
+            }
+            const box = widget.node.getBoundingClientRect();
+            if (box.width < 8 || box.height < 8) {
+                return;
+            }
+            const uri = `${SESSION_TAB_PREFIX}${widget.id}`;
+            void this.actor.mutate({
+                kind: 'captureShellRegion',
+                rect: {
+                    x: Math.round(box.left),
+                    y: Math.round(box.top),
+                    w: Math.round(box.width),
+                    h: Math.round(box.height),
+                },
+            }).then(reply => {
+                const png = (reply as { png?: unknown }).png;
+                if (typeof png === 'string' && png) {
+                    this.model.rememberThumbnail(uri, png);
+                }
+            }).catch(error => {
+                // A preview is a nicety; losing one must not surface as a
+                // save error, and the card keeps its text fallback.
+                console.error('[@powerbrowser/modes] shell capture failed:', error);
+            });
+        }, SHELL_CAPTURE_SETTLE_MS);
+    }
+
+    protected captureTimer = 0;
+
+    /**
+     * Organising stays on screen when a tab is opened from inside it.
+     *
+     * Both the canvas and a web tab are main-area widgets, so Theia does the
+     * ordinary thing and activates the newcomer -- which slid the whole
+     * organising surface out from under the user the moment they pressed "+".
+     * The mode was still Organising, so the shell showed a bare tab with none
+     * of Organising's furniture and no way back to the canvas: the mode screen
+     * looked broken because the mode had lost its screen.
+     *
+     * Opening a tab from the canvas means "add this to what I am arranging",
+     * not "take me to it", so the canvas takes the main area back. Only while
+     * Organising is the active mode -- in any other mode the newcomer is
+     * exactly what the user asked to see.
+     */
+    protected holdTheMainArea(widget: Widget): void {
+        if (widget === this || document.body.getAttribute(MODE_ATTRIBUTE) !== ORGANISING_MODE_ID) {
+            return;
+        }
+        if (![...this.shell.mainPanel.widgets()].includes(widget)) {
+            return;
+        }
+        // After the shell's own activation of the new widget, not before it.
+        window.setTimeout(() => {
+            if (document.body.getAttribute(MODE_ATTRIBUTE) === ORGANISING_MODE_ID) {
+                void this.shell.activateWidget(OrganisingWidget.ID);
+            }
+        }, 0);
+    }
+
+    /**
+     * Coalesced: opening a setup adds several widgets in one turn, and each
+     * would otherwise run its own pair of round trips.
+     */
+    protected readonly scheduleReload = pDebounce(() => this.initialize(), 120);
+
+    /**
+     * The tabs the shell has open, in the shape `GroupModel.load` joins on.
+     *
+     * EVERY main-area tab, not only web tabs. Restricting this to pages with
+     * an http(s) URL was the first attempt and it was wrong twice over: four
+     * New Tabs sitting on the empty page were invisible, and so was the
+     * Welcome page, which is a Theia widget rather than a web tab. A tab is a
+     * tab -- if it has a tab in the strip it has a card on the canvas.
+     *
+     * Only a page with its own http(s) URL can be keyed by that URL, which is
+     * the key the store uses. Everything else is keyed by the shell's widget
+     * id and its group is remembered for the session (`SESSION_TAB_PREFIX`).
+     *
+     * Organising itself is excluded: it lives in the main area because that is
+     * where a full-window surface goes, but it is a mode, not something the
+     * user opened -- the same exclusion `TabStripWidget.MODE_SURFACES` makes.
+     */
+    protected liveTabs(): LiveTab[] {
+        // Guarded for the same reason the subscriptions moved to attach time:
+        // the very first load can run while the shell is still assembling, and
+        // an exception thrown out of here would take frontend startup with it.
+        // An empty answer just means "no tabs yet", and the next reload fixes
+        // it.
+        if (!this.shell?.mainPanel) {
+            return [];
+        }
+        return [...this.shell.mainPanel.widgets()].flatMap(widget => {
+            if (widget === this) {
+                return [];
+            }
+            const page = widget instanceof WebTabWidget && widget.hasPage ? widget.url : '';
+            return [{
+                uri: page || `${SESSION_TAB_PREFIX}${widget.id}`,
+                url: page,
+                title: widget.title.label || page,
+            }];
+        });
+    }
+
     // PanoramaCommandHandler surface (delegated by the contribution below).
 
-    async createNewGroup(): Promise<void> {
+    async createNewGroup(at?: { x: number; y: number; w?: number; h?: number }, capture: readonly string[] = []): Promise<void> {
         try {
-            const group = await this.model.createGroup(this.actor);
+            const group = await this.model.createGroup(this.actor, at);
+            // Tabs the drawn box enclosed come in with it. Drawing a box
+            // around loose tabs IS how you group them; making the box and
+            // then dragging each tab into it would be the same gesture twice.
+            for (const uri of capture) {
+                try {
+                    await this.model.moveCard(this.actor, uri, group.id);
+                } catch (error) {
+                    console.error('[@powerbrowser/modes] band capture failed:', error);
+                }
+            }
             this.editingGroupId = group.id;
-            this.render();
+            await this.separateGroups(group.id);
             this.focusRename(group.id);
         } catch (error) {
             console.error('[@powerbrowser/modes] new-group failed:', error);
@@ -210,7 +440,7 @@ export class OrganisingWidget extends Widget {
 
     protected async initialize(): Promise<void> {
         try {
-            await this.model.load(this.reader);
+            await this.model.load(this.reader, this.liveTabs());
         } catch (error) {
             console.error('[@powerbrowser/modes] group load failed:', error);
         }
@@ -227,7 +457,7 @@ export class OrganisingWidget extends Widget {
         this.renderBars();
         this.renderCanvas();
         this.renderTree();
-        this.renderTray();
+        this.renderExpanded();
     }
 
     protected renderToolbar(): void {
@@ -249,6 +479,10 @@ export class OrganisingWidget extends Widget {
 
     protected renderCanvas(): void {
         this.canvasLayer.style.transform = `scale(${ZOOM_STEPS[this.zoomIndex] / 100})`;
+        // The canvas is the placement surface, so it has to BE the visible
+        // area: loose tabs sit on a line near its bottom, and a canvas shorter
+        // than its host would put that line outside itself.
+        this.canvasRoot.style.minHeight = `${Math.max(320, this.canvasHost.clientHeight - 4)}px`;
         while (this.canvasRoot.firstChild) {
             this.canvasRoot.removeChild(this.canvasRoot.firstChild);
         }
@@ -273,6 +507,243 @@ export class OrganisingWidget extends Widget {
         for (const group of groups) {
             this.canvasRoot.append(this.buildBox(group));
         }
+        this.renderLoose();
+        this.tileCards();
+    }
+
+    /**
+     * Loose tabs -- the ones in no group -- drawn ON the canvas rather than in
+     * a strip below it. They are canvas objects like a group box: they have a
+     * position, they keep it, and nothing overlaps them.
+     *
+     * A tab that has never been placed has no position to keep, so the canvas
+     * gives it one: a line along the bottom, filling left to right. Past what
+     * fits on that line the rest pile up at its end under a count, so a
+     * hundred loose tabs still occupy one line's worth of canvas instead of
+     * covering it.
+     */
+    protected renderLoose(): void {
+        const tabs = this.model.listUngrouped();
+        if (!tabs.length) {
+            return;
+        }
+        const width = Math.max(LOOSE_W + LOOSE_MARGIN * 2, this.canvasHost.clientWidth);
+        const height = Math.max(LOOSE_H + LOOSE_MARGIN * 2, this.canvasHost.clientHeight);
+        const line = height - LOOSE_H - LOOSE_MARGIN;
+        const room = Math.max(1, Math.floor((width - LOOSE_MARGIN * 2 + TILE_GAP) / (LOOSE_W + TILE_GAP)));
+        const unplaced = tabs.filter(tab => tab.x === undefined || tab.y === undefined);
+        const inLine = unplaced.length <= room ? unplaced.length : Math.max(1, room - 1);
+        let slot = 0;
+
+        for (let i = 0; i < tabs.length; i += 1) {
+            const tab = tabs[i];
+            const card = this.buildCard(tab, null, i === 0);
+            card.classList.add('is-loose');
+            card.style.width = `${LOOSE_W}px`;
+            card.style.height = `${LOOSE_H}px`;
+            if (tab.x !== undefined && tab.y !== undefined) {
+                card.style.left = `${tab.x}px`;
+                card.style.top = `${tab.y}px`;
+                this.canvasRoot.append(card);
+                continue;
+            }
+            const index = slot;
+            slot += 1;
+            if (index < inLine) {
+                card.style.left = `${LOOSE_MARGIN + index * (LOOSE_W + TILE_GAP)}px`;
+                card.style.top = `${line}px`;
+            } else {
+                const depth = index - inLine;
+                card.classList.toggle('is-piled', depth > 0);
+                card.hidden = depth >= PILE_VISIBLE;
+                card.style.left = `${LOOSE_MARGIN + inLine * (LOOSE_W + TILE_GAP) + depth * STACK_OFFSET}px`;
+                card.style.top = `${line + depth * STACK_OFFSET}px`;
+                card.style.zIndex = `${PILE_VISIBLE - depth}`;
+            }
+            this.canvasRoot.append(card);
+        }
+
+        if (unplaced.length > inLine) {
+            const count = document.createElement('div');
+            count.className = 'pb-org-pile-count';
+            count.textContent = String(unplaced.length - inLine);
+            count.style.left = `${LOOSE_MARGIN + inLine * (LOOSE_W + TILE_GAP) + LOOSE_W - 30}px`;
+            count.style.top = `${line + LOOSE_H - 22}px`;
+            count.setAttribute('aria-hidden', 'true');
+            this.canvasRoot.append(count);
+        }
+    }
+
+    /**
+     * Panorama's `_gridArrange`: every card in a group is the same size, and
+     * that size is the largest one at which they ALL fit. Resizing the group
+     * re-packs them; it never produces a scrollbar.
+     *
+     * Before this the cards were a fixed 220px in a wrapping flex row, so a
+     * group narrower than two cards became a single column that scrolled --
+     * which defeats the canvas, because a scrolled group hides exactly the
+     * tabs you opened it to see.
+     *
+     * Measured from the laid-out node rather than computed from the model's
+     * w/h minus constants for padding, border, header and margin: four
+     * numbers copied out of the stylesheet is four ways to drift from it.
+     * This runs after the boxes are in the DOM, so the content box is real.
+     *
+     * The scrolling fallback survives for the one case a grid cannot serve:
+     * so many cards that even the floor size overflows. Stacking is what
+     * Panorama does there and it is W8, not this change.
+     */
+    protected tileCards(): void {
+        for (const host of Array.from(this.canvasRoot.querySelectorAll('.pb-org-box-cards')) as HTMLElement[]) {
+            const cards = Array.from(host.querySelectorAll('.pb-org-card')) as HTMLElement[];
+            // A card hovering over this group is already counted in: the grid
+            // re-packs to make room and a translucent slot shows where it
+            // lands. Showing the destination beats outlining the target --
+            // an outline says "here", a gap that opens says "here, like this".
+            const group = (host.closest('.pb-org-box') as HTMLElement | null)?.dataset.g;
+            const previewing = group !== undefined && group === this.dropPreviewGroupId;
+            let slot = host.querySelector('.pb-org-drop-slot') as HTMLElement | null;
+            if (!previewing) {
+                slot?.remove();
+                slot = null;
+            } else if (!slot) {
+                slot = document.createElement('div');
+                slot.className = 'pb-org-drop-slot';
+                slot.setAttribute('aria-hidden', 'true');
+                host.append(slot);
+            }
+            const total = cards.length + (previewing ? 1 : 0);
+            if (!total) {
+                continue;
+            }
+            const cell = fitTiles(total, host.clientWidth, host.clientHeight);
+            if (!cell) {
+                this.stackCards(host, cards);
+                continue;
+            }
+            host.classList.remove('is-stacked');
+            if (slot) {
+                const index = Math.max(0, Math.min(total - 1, this.dropPreviewIndex));
+                slot.style.left = `${(index % cell.cols) * (cell.w + TILE_GAP)}px`;
+                slot.style.top = `${Math.floor(index / cell.cols) * (cell.h + TILE_GAP)}px`;
+                slot.style.width = `${cell.w}px`;
+                slot.style.height = `${cell.h}px`;
+            }
+            // Cards step over the slot rather than through it: everything at
+            // or after the insertion point shifts one place along, which is
+            // what "the tabs move to let it in" looks like.
+            cards.forEach((card, position) => {
+                const index = previewing && position >= Math.max(0, Math.min(total - 1, this.dropPreviewIndex))
+                    ? position + 1
+                    : position;
+                const column = index % cell.cols;
+                const row = Math.floor(index / cell.cols);
+                card.classList.add('is-tiled');
+                card.classList.remove('is-stacked-card');
+                card.hidden = false;
+                card.style.transform = '';
+                card.style.zIndex = '';
+                card.style.left = `${column * (cell.w + TILE_GAP)}px`;
+                card.style.top = `${row * (cell.h + TILE_GAP)}px`;
+                card.style.width = `${cell.w}px`;
+                card.style.height = `${cell.h}px`;
+            });
+        }
+    }
+
+    /**
+     * Panorama's `_stackArrange`: a group too small to grid its cards fans
+     * them into a stack with a count and an expand control, rather than
+     * clipping or scrolling them. It is the other half of "never scroll" --
+     * without it the grid has to give up somewhere, and giving up meant a
+     * scrollbar hiding the tabs the canvas exists to show.
+     */
+    protected stackCards(host: HTMLElement, cards: HTMLElement[]): void {
+        host.classList.add('is-stacked');
+        const boxW = host.clientWidth;
+        const boxH = host.clientHeight;
+        const spread = STACK_OFFSET * (Math.min(cards.length, STACK_VISIBLE) - 1);
+        const w = Math.max(40, Math.min(boxW - spread - 16, Math.floor((boxH - spread - 26) / TILE_ASPECT), 170));
+        const h = Math.max(30, Math.round(w * TILE_ASPECT));
+        const left = Math.max(0, Math.round((boxW - w - spread) / 2));
+        const top = Math.max(0, Math.round((boxH - h - spread) / 2) - 6);
+        cards.forEach((card, index) => {
+            card.classList.add('is-tiled');
+            // Only the front card takes the pointer: the ones behind it are
+            // not reachable, and letting them answer a hit test would drop a
+            // drag onto a card the user cannot see.
+            card.classList.toggle('is-stacked-card', index > 0);
+            card.hidden = index >= STACK_VISIBLE;
+            card.style.left = `${left + index * STACK_OFFSET}px`;
+            card.style.top = `${top + index * STACK_OFFSET}px`;
+            card.style.width = `${w}px`;
+            card.style.height = `${h}px`;
+            card.style.zIndex = `${STACK_VISIBLE - index}`;
+        });
+
+        const badge = document.createElement('div');
+        badge.className = 'pb-org-stack-count';
+        badge.textContent = String(cards.length);
+        badge.setAttribute('aria-hidden', 'true');
+        host.append(badge);
+
+        const expander = document.createElement('button');
+        expander.type = 'button';
+        expander.className = 'pb-org-expander';
+        expander.textContent = 'Expand';
+        const group = host.closest('.pb-org-box') as HTMLElement | null;
+        expander.addEventListener('pointerdown', event => event.stopPropagation());
+        expander.addEventListener('click', event => {
+            event.stopPropagation();
+            this.expandedGroupId = group?.dataset.g;
+            this.render();
+        });
+        host.append(expander);
+    }
+
+    /**
+     * The expanded stack: every card in the group at a readable size, over
+     * the canvas. Rendered on the widget node rather than inside the canvas
+     * so the zoom transform does not shrink the one view whose whole purpose
+     * is being big enough to read.
+     */
+    protected renderExpanded(): void {
+        this.expandRoot.textContent = '';
+        const group = this.expandedGroupId
+            ? this.model.listGroups().find(candidate => candidate.id === this.expandedGroupId)
+            : undefined;
+        this.expandRoot.hidden = !group;
+        if (!group) {
+            return;
+        }
+        const panel = document.createElement('div');
+        panel.className = 'pb-org-expand-panel';
+        const heading = document.createElement('div');
+        heading.className = 'pb-org-expand-heading';
+        heading.textContent = group.title;
+        const done = document.createElement('button');
+        done.type = 'button';
+        done.className = 'pb-org-expand-done theia-button';
+        done.textContent = 'Done';
+        done.addEventListener('click', () => this.collapseStack());
+        const cards = document.createElement('div');
+        cards.className = 'pb-org-expand-cards';
+        const tabs = this.model.getTabs(group.id);
+        for (let i = 0; i < tabs.length; i += 1) {
+            cards.append(this.buildCard(tabs[i], group.id, i === 0));
+        }
+        panel.append(heading, done, cards);
+        this.expandRoot.append(panel);
+        this.expandRoot.onclick = event => {
+            if (event.target === this.expandRoot) {
+                this.collapseStack();
+            }
+        };
+    }
+
+    protected collapseStack(): void {
+        this.expandedGroupId = undefined;
+        this.render();
     }
 
     protected renderTree(): void {
@@ -294,29 +765,6 @@ export class OrganisingWidget extends Widget {
         for (const group of groups) {
             this.treeRoot.append(this.buildSection(group));
         }
-    }
-
-    protected renderTray(): void {
-        while (this.trayRoot.firstChild) {
-            this.trayRoot.removeChild(this.trayRoot.firstChild);
-        }
-        const label = document.createElement('span');
-        label.className = 'pb-org-tray-label';
-        label.textContent = 'Ungrouped';
-        this.trayRoot.append(label);
-        const cards = document.createElement('div');
-        cards.className = 'pb-org-tray-cards';
-        const tabs = this.model.listUngrouped();
-        if (this.model.isLoaded && tabs.length === 0) {
-            const caption = document.createElement('span');
-            caption.className = 'pb-org-tray-empty';
-            caption.textContent = 'No ungrouped tabs — drag a tab here to ungroup it.';
-            cards.append(caption);
-        }
-        for (let i = 0; i < tabs.length; i += 1) {
-            cards.append(this.buildCard(tabs[i], null, i === 0));
-        }
-        this.trayRoot.append(cards);
     }
 
     // Canvas pieces.
@@ -385,18 +833,31 @@ export class OrganisingWidget extends Widget {
         }
         box.append(cards);
 
-        const grip = document.createElement('div');
-        grip.className = 'pb-org-box-resize';
-        grip.setAttribute('aria-label', 'Resize group');
-        grip.title = 'Resize group';
-        grip.tabIndex = 0;
-        grip.setAttribute('role', 'slider');
-        grip.setAttribute('aria-valuemin', String(GROUP_BOX_MIN_W));
-        grip.setAttribute('aria-valuenow', String(group.w));
-        grip.setAttribute('aria-valuetext', `${group.w} by ${group.h} pixels`);
-        grip.addEventListener('pointerdown', event => this.beginBoxResize(event, group));
-        grip.addEventListener('keydown', event => this.stepBoxResize(event, group.id));
-        box.append(grip);
+        // Every side and every corner resizes, not just the bottom-right.
+        // Reaching for the one corner meant dragging the box into position
+        // first just to be able to grow it; a box you can take by any edge is
+        // a box you can shape where it already is. The corner keeps the
+        // visible grip, the keyboard entry point and the slider semantics --
+        // the edges are invisible hit strips, as they are in every window
+        // manager.
+        for (const edge of BOX_EDGES) {
+            const grip = document.createElement('div');
+            grip.className = `pb-org-box-grip pb-org-box-grip-${edge}`;
+            grip.dataset.edge = edge;
+            if (edge === 'se') {
+                grip.classList.add('pb-org-box-resize');
+                grip.setAttribute('aria-label', 'Resize group');
+                grip.title = 'Resize group';
+                grip.tabIndex = 0;
+                grip.setAttribute('role', 'slider');
+                grip.setAttribute('aria-valuemin', String(GROUP_BOX_MIN_W));
+                grip.setAttribute('aria-valuenow', String(group.w));
+                grip.setAttribute('aria-valuetext', `${group.w} by ${group.h} pixels`);
+                grip.addEventListener('keydown', event => this.stepBoxResize(event, group.id));
+            }
+            grip.addEventListener('pointerdown', event => this.beginBoxResize(event, group, edge));
+            box.append(grip);
+        }
 
         return box;
     }
@@ -407,26 +868,55 @@ export class OrganisingWidget extends Widget {
         card.dataset.u = tab.uri;
         // No `draggable`: see beginCardDrag for why HTML5 drag cannot work here.
         card.tabIndex = tabbable ? 0 : -1;
-        card.title = tab.title;
+        // A tiled card has no room for the address line, so the tooltip
+        // carries it. Both are real addresses; neither is an internal key.
+        card.title = tab.url ? `${tab.title}\n${tab.url}` : tab.title;
+        // The preview is the card. A page you can recognise at a glance is
+        // the whole reason the canvas beats a list, so it leads and the text
+        // follows it.
+        //
+        // Not everything CAN be previewed. A thumbnail is captured from a
+        // chrome-owned page, so a New Tab on the empty page has nothing to
+        // capture yet, and the Welcome view -- a Theia widget rendered inside
+        // the frame rather than a page in a browser element -- can never have
+        // one at all. Those cards used to be a blank hatched panel, which
+        // tells you nothing about which tab you are looking at. They now put
+        // the tab's own name in the space the preview would have filled.
         if (tab.thumbnail) {
             const shot = document.createElement('img');
             shot.className = 'pb-org-card-thumb';
             shot.alt = '';
             shot.draggable = false;
-            shot.addEventListener('error', () => shot.remove());
+            shot.addEventListener('error', () => {
+                shot.replaceWith(this.buildBlankPreview(tab));
+            });
             shot.src = tab.thumbnail;
             card.append(shot);
+        } else {
+            card.append(this.buildBlankPreview(tab));
         }
+
         const title = document.createElement('div');
         title.className = 'pb-org-card-title';
         title.textContent = tab.title;
         title.title = tab.title;
-        const uri = document.createElement('div');
-        uri.className = 'pb-org-card-uri';
-        uri.textContent = tab.url || tab.uri;
-        uri.title = tab.url || tab.uri;
-        card.append(title, uri);
-        card.addEventListener('click', () => this.dive(tab, groupId));
+        card.append(title);
+        // The address line only ever carries a real address. A tab with no
+        // page of its own is keyed by an internal id, and no internal
+        // identifier may appear in user-facing text (CLAUDE.md), so the line
+        // is absent rather than filled with the key.
+        if (tab.url) {
+            const uri = document.createElement('div');
+            uri.className = 'pb-org-card-uri';
+            uri.textContent = tab.url;
+            uri.title = tab.url;
+            card.append(uri);
+        }
+        // A single click does NOT open the tab. Cards are things you arrange,
+        // and arranging means pressing them constantly -- opening on every
+        // press made the canvas hostile to the one activity it exists for.
+        // Double click opens, which is the desktop idiom for "go to this".
+        card.addEventListener('dblclick', () => this.dive(tab, groupId));
         card.addEventListener('keydown', event => {
             if (event.key === 'Enter') {
                 this.dive(tab, groupId);
@@ -440,6 +930,17 @@ export class OrganisingWidget extends Widget {
         });
         card.addEventListener('pointerdown', event => this.beginCardDrag(event, card, tab, groupId));
         return card;
+    }
+
+    /** The preview panel for a tab that has no capture: its name, plainly. */
+    protected buildBlankPreview(tab: PanoramaTab): HTMLElement {
+        const panel = document.createElement('div');
+        panel.className = 'pb-org-card-thumb is-blank';
+        const label = document.createElement('span');
+        label.className = 'pb-org-card-blank-label';
+        label.textContent = tab.title;
+        panel.append(label);
+        return panel;
     }
 
     /**
@@ -553,10 +1054,191 @@ export class OrganisingWidget extends Widget {
 
     // Gestures.
 
-    protected beginBoxMove(event: PointerEvent, group: PanoramaGroup): void {
-        if (event.button !== 0 || this.editingGroupId !== undefined) {
+    /**
+     * A press somewhere else COMMITS a rename in flight. It is never a reason
+     * to refuse the press.
+     *
+     * Drawing a group ends by opening its name field, so `editingGroupId` is
+     * set after every single draw. All three canvas gestures used to bail
+     * while it was set, which made the press right after drawing a group a
+     * dead press -- no band, no capture, no listeners, and nothing on screen
+     * to say why.
+     *
+     * It looked like "I have to click twice" rather than "it is broken"
+     * because the dead press still un-jammed the next one, by accident: the
+     * guard returned BEFORE `preventDefault`, so Gecko went on to do its
+     * ordinary focus fixup, focus left the name field, `blur` fired `commit`,
+     * and `commit` cleared the flag. Press one paid for press two. And since
+     * press two drew a group, it re-armed the flag -- so the toll was charged
+     * again on every group, forever.
+     *
+     * Committing here rather than relying on that accident matters now that
+     * these gestures call `preventDefault`: preventing the default is exactly
+     * what suppresses the focus fixup, so removing the guard alone would have
+     * left the name field open and the typed name unsaved.
+     */
+    protected settleRename(): void {
+        if (this.editingGroupId === undefined) {
             return;
         }
+        const input = this.node.querySelector('.pb-org-rename');
+        if (input instanceof HTMLElement) {
+            // `blur` runs the field's own `commit`, which saves what was
+            // typed and clears the flag synchronously.
+            input.blur();
+        }
+        // The field was already gone -- a render dropped it -- so nothing was
+        // ever going to clear the flag and every gesture would stay jammed.
+        this.editingGroupId = undefined;
+    }
+
+    /**
+     * Draw a group by dragging out a rectangle on empty canvas
+     * (Panorama's `UI._createGroupItemOnDrag`). Until this, New Group was the
+     * only way to make one, and the button always produces the same 400x300
+     * box in the same corner -- so a canvas of hand-placed groups had to be
+     * dragged into shape one at a time after the fact.
+     *
+     * Bound on the HOST rather than the canvas node: `.pb-org-canvas` is only
+     * as tall as its `min-height`, so a press in the empty space below it
+     * lands on the host or the zoom layer and would never reach a listener on
+     * the canvas itself.
+     *
+     * What counts as background is stated by EXCLUSION -- anything that is not
+     * a box, a card, a rename field or a button -- and that direction matters.
+     * It was an allowlist of three exact nodes, which quietly meant a press
+     * had to miss every decoration on the canvas to be heard at all: the
+     * loading skeletons, the "No tab groups" panel sitting in the middle of an
+     * empty canvas, the pile's count badge. Pressing any of those did nothing
+     * whatsoever, and doing nothing is indistinguishable from a dead gesture.
+     * An exclusion list fails the safe way round: something new drawn on the
+     * canvas is background until it says otherwise.
+     *
+     * The band is appended to the canvas node so it lives in canvas
+     * coordinates and scales with the zoom transform for free, and
+     * `canvasPoint` divides the pointer back out of that scale -- the same
+     * conversion the drop paths already use.
+     */
+    protected beginGroupDraw(event: PointerEvent): void {
+        const target = event.target instanceof Element ? event.target : undefined;
+        const onEmptyCanvas = !!target
+            && this.canvasHost.contains(target)
+            && !target.closest('.pb-org-box, .pb-org-card, .pb-org-rename, button');
+        if (event.button !== 0 || !onEmptyCanvas) {
+            return;
+        }
+        this.settleRename();
+        event.preventDefault();
+        const host = this.canvasHost;
+        try {
+            host.setPointerCapture(event.pointerId);
+        } catch {
+            return;
+        }
+        // Hold the canvas still for the length of the gesture, exactly as the
+        // box move and box resize gestures do. The band is a child of
+        // `canvasRoot`, and a render empties `canvasRoot` -- so any model
+        // change arriving mid-drag (a reload finishing, a capture landing a
+        // thumbnail) deletes the rectangle out from under the pointer and the
+        // gesture dies with nothing on screen to say why.
+        this.suppressRender = true;
+        const start = this.canvasPoint(event);
+        let bounds = { x: start.x, y: start.y, w: 0, h: 0 };
+        const band = document.createElement('div');
+        band.className = 'pb-org-band';
+        band.setAttribute('aria-hidden', 'true');
+        this.canvasRoot.append(band);
+
+        const startClient = { x: event.clientX, y: event.clientY };
+        let captured: string[] = [];
+
+        const paint = (move: PointerEvent): void => {
+            const at = this.canvasPoint(move);
+            bounds = {
+                x: Math.min(start.x, at.x),
+                y: Math.min(start.y, at.y),
+                w: Math.abs(at.x - start.x),
+                h: Math.abs(at.y - start.y),
+            };
+            band.style.transform = `translate(${bounds.x}px, ${bounds.y}px)`;
+            band.style.width = `${bounds.w}px`;
+            band.style.height = `${bounds.h}px`;
+            captured = this.markBandCapture(startClient, { x: move.clientX, y: move.clientY });
+        };
+        const finish = (): void => {
+            host.removeEventListener('pointermove', paint);
+            host.removeEventListener('pointerup', onUp);
+            host.removeEventListener('pointercancel', onCancel);
+            window.removeEventListener('keydown', onKey);
+            band.remove();
+            for (const marked of Array.from(this.node.querySelectorAll('.is-band-target'))) {
+                marked.classList.remove('is-band-target');
+            }
+            // Whatever the canvas was told while it was held still, it hears
+            // now: one render catches up every change the gesture suppressed.
+            this.suppressRender = false;
+            this.render();
+        };
+        const onUp = (up: PointerEvent): void => {
+            paint(up);
+            const taking = captured;
+            finish();
+            // Too small to be a deliberate rectangle: that was a click on the
+            // background, which means nothing here.
+            if (bounds.w < GROUP_DRAW_MIN && bounds.h < GROUP_DRAW_MIN) {
+                return;
+            }
+            void this.createNewGroup(bounds, taking);
+        };
+        const onCancel = (): void => finish();
+        const onKey = (key: KeyboardEvent): void => {
+            if (key.key === 'Escape') {
+                finish();
+            }
+        };
+        host.addEventListener('pointermove', paint);
+        host.addEventListener('pointerup', onUp);
+        host.addEventListener('pointercancel', onCancel);
+        window.addEventListener('keydown', onKey);
+    }
+
+    /**
+     * Outlines every loose tab the band currently encloses, and answers which
+     * they are. Drawing a box around tabs takes them in -- the outline is what
+     * says so before you let go, rather than after.
+     *
+     * Compared in client coordinates because the band lives in the zoomed
+     * canvas and the loose row does not; screen rectangles are the one space
+     * both are already in. A tab counts as enclosed when its CENTRE is inside
+     * the band, so a box drawn over most of a card takes it, and one that
+     * merely grazes an edge does not.
+     */
+    protected markBandCapture(from: { x: number; y: number }, to: { x: number; y: number }): string[] {
+        const left = Math.min(from.x, to.x);
+        const right = Math.max(from.x, to.x);
+        const top = Math.min(from.y, to.y);
+        const bottom = Math.max(from.y, to.y);
+        const taken: string[] = [];
+        for (const card of Array.from(this.canvasRoot.querySelectorAll('.pb-org-card.is-loose')) as HTMLElement[]) {
+            const uri = card.dataset.u;
+            const box = card.getBoundingClientRect();
+            const cx = box.left + box.width / 2;
+            const cy = box.top + box.height / 2;
+            const inside = !card.hidden && uri !== undefined
+                && cx >= left && cx <= right && cy >= top && cy <= bottom;
+            card.classList.toggle('is-band-target', inside);
+            if (inside && uri) {
+                taken.push(uri);
+            }
+        }
+        return taken;
+    }
+
+    protected beginBoxMove(event: PointerEvent, group: PanoramaGroup): void {
+        if (event.button !== 0) {
+            return;
+        }
+        this.settleRename();
         const target = event.target as HTMLElement | null;
         if (target && (target.closest('button') || target.closest('input') || target.closest('.pb-org-box-resize'))) {
             return;
@@ -609,7 +1291,7 @@ export class OrganisingWidget extends Widget {
                 console.error('[@powerbrowser/modes] group move failed:', error);
             }).finally(() => {
                 this.geometrySeq += 1;
-                this.render();
+                void this.separateGroups(id);
             });
         };
         const onCancel = (): void => {
@@ -643,10 +1325,18 @@ export class OrganisingWidget extends Widget {
         window.addEventListener('keydown', onKey);
     }
 
-    protected beginBoxResize(event: PointerEvent, group: PanoramaGroup): void {
-        if (event.button !== 0 || this.editingGroupId !== undefined) {
+    /**
+     * Resize from any edge or corner. `edge` says which sides move: a west or
+     * north drag moves the box's ORIGIN as well as its size, because growing
+     * leftward means the left edge travels while the right stays where it is.
+     * The floor is applied by pinning the edge that is not moving, so a box
+     * squashed to its minimum stops rather than turning inside out.
+     */
+    protected beginBoxResize(event: PointerEvent, group: PanoramaGroup, edge: BoxEdge = 'se'): void {
+        if (event.button !== 0) {
             return;
         }
+        this.settleRename();
         event.preventDefault();
         event.stopPropagation();
         const grip = event.currentTarget as HTMLElement;
@@ -657,19 +1347,44 @@ export class OrganisingWidget extends Widget {
         }
         this.suppressRender = true;
         const seq = this.geometrySeq;
-        const base = { w: group.w, h: group.h };
-        this.resizeState = { id: group.id, startX: event.clientX, startY: event.clientY, baseW: group.w, baseH: group.h };
+        const base = { x: group.x, y: group.y, w: group.w, h: group.h };
+        const startX = event.clientX;
+        const startY = event.clientY;
         const box = grip.closest('.pb-org-box') as HTMLElement | null;
-        const apply = (clientX: number, clientY: number): { w: number; h: number } => {
-            const state = this.resizeState;
-            const w = Math.max(GROUP_BOX_MIN_W, Math.floor((state?.baseW ?? base.w) + (clientX - (state?.startX ?? clientX))));
-            const h = Math.max(GROUP_BOX_MIN_H, Math.floor((state?.baseH ?? base.h) + (clientY - (state?.startY ?? clientY))));
+        const west = edge.includes('w');
+        const north = edge.includes('n');
+        const horizontal = edge.includes('e') || west;
+        const vertical = edge.includes('s') || north;
+
+        const apply = (clientX: number, clientY: number): { x: number; y: number; w: number; h: number } => {
+            const dx = clientX - startX;
+            const dy = clientY - startY;
+            let { x, y, w, h } = base;
+            if (horizontal) {
+                w = Math.max(GROUP_BOX_MIN_W, west ? base.w - dx : base.w + dx);
+                if (west) {
+                    // The east edge is the fixed one, so the origin absorbs
+                    // whatever the floor refused.
+                    x = Math.max(0, base.x + base.w - w);
+                    w = base.x + base.w - x;
+                }
+            }
+            if (vertical) {
+                h = Math.max(GROUP_BOX_MIN_H, north ? base.h - dy : base.h + dy);
+                if (north) {
+                    y = Math.max(0, base.y + base.h - h);
+                    h = base.y + base.h - y;
+                }
+            }
             if (box) {
+                box.style.transform = `translate(${x}px, ${y}px)`;
                 box.style.width = `${w}px`;
                 box.style.height = `${h}px`;
+                this.tileCards();
             }
-            return { w, h };
+            return { x, y, w, h };
         };
+
         const finish = (): void => {
             grip.removeEventListener('pointermove', onMove);
             grip.removeEventListener('pointerup', onUp);
@@ -677,36 +1392,35 @@ export class OrganisingWidget extends Widget {
             window.removeEventListener('keydown', onKey);
         };
         const onMove = (move: PointerEvent): void => {
-            if (!this.resizeState) {
-                return;
-            }
-            const { w, h } = apply(move.clientX, move.clientY);
-            void this.debouncedResize(this.resizeState.id, w, h, seq).catch(error => {
+            const at = apply(move.clientX, move.clientY);
+            void this.debouncedResize(group.id, at.w, at.h, seq).catch(error => {
                 console.error('[@powerbrowser/modes] group resize failed:', error);
-                this.suppressRender = false;
-                this.resizeState = undefined;
-                this.render();
             });
         };
         const onUp = (up: PointerEvent): void => {
             finish();
-            if (!this.resizeState) {
-                return;
-            }
-            const { id } = this.resizeState;
-            const { w, h } = apply(up.clientX, up.clientY);
-            this.resizeState = undefined;
-            this.suppressRender = false;
-            void this.persistResize(id, w, h, seq).catch(error => {
+            const at = apply(up.clientX, up.clientY);
+            // Rendering stays suppressed until BOTH halves have landed in the
+            // model. A west or north drag changes the origin as well as the
+            // size, and the two are separate writes: unsuppressing first let
+            // the size write's optimistic paint trigger a re-render while the
+            // model still held the old origin, so the box was rebuilt at its
+            // old x with its new width -- it grew from the wrong edge.
+            void (async () => {
+                if (at.x !== base.x || at.y !== base.y) {
+                    await this.model.moveGroup(this.actor, group.id, at.x, at.y);
+                }
+                await this.persistResize(group.id, at.w, at.h, seq);
+            })().catch(error => {
                 console.error('[@powerbrowser/modes] group resize failed:', error);
             }).finally(() => {
+                this.suppressRender = false;
                 this.geometrySeq += 1;
-                this.render();
+                void this.separateGroups(group.id);
             });
         };
         const onCancel = (): void => {
             finish();
-            this.resizeState = undefined;
             this.suppressRender = false;
             this.geometrySeq += 1;
             this.render();
@@ -715,21 +1429,59 @@ export class OrganisingWidget extends Widget {
             if (key.key === 'Escape') {
                 finish();
                 this.geometrySeq += 1;
-                const id = this.resizeState?.id;
-                this.resizeState = undefined;
                 this.suppressRender = false;
                 this.render();
-                if (id) {
-                    void this.model.resizeGroup(this.actor, id, base.w, base.h).catch(error => {
+                void this.model.resizeGroup(this.actor, group.id, base.w, base.h)
+                    .then(() => this.model.moveGroup(this.actor, group.id, base.x, base.y))
+                    .catch(error => {
                         console.error('[@powerbrowser/modes] group resize cancel-restore failed:', error);
                     }).finally(() => this.render());
-                }
             }
         };
         grip.addEventListener('pointermove', onMove);
         grip.addEventListener('pointerup', onUp);
         grip.addEventListener('pointercancel', onCancel);
         window.addEventListener('keydown', onKey);
+    }
+
+    protected async separate(anchorId: string): Promise<void> {
+        const boxes = [
+            ...this.model.listGroups().map(group => ({ id: group.id, x: group.x, y: group.y, w: group.w, h: group.h })),
+            ...(Array.from(this.canvasRoot.querySelectorAll('.pb-org-card.is-loose')) as HTMLElement[])
+                .flatMap(card => {
+                    const uri = card.dataset.u;
+                    if (!uri || card.hidden) {
+                        return [];
+                    }
+                    return [{
+                        id: `${LOOSE_BOX_PREFIX}${uri}`,
+                        x: Math.max(0, Math.round(parseFloat(card.style.left) || 0)),
+                        y: Math.max(0, Math.round(parseFloat(card.style.top) || 0)),
+                        w: LOOSE_W,
+                        h: LOOSE_H,
+                    }];
+                }),
+        ];
+        for (const [id, at] of pushAway(boxes, anchorId)) {
+            try {
+                if (id.startsWith(LOOSE_BOX_PREFIX)) {
+                    await this.model.placeCard(this.actor, id.slice(LOOSE_BOX_PREFIX.length), at.x, at.y);
+                } else {
+                    await this.model.moveGroup(this.actor, id, at.x, at.y);
+                }
+            } catch (error) {
+                console.error('[@powerbrowser/modes] push-away failed:', error);
+            }
+        }
+        this.render();
+    }
+
+    protected separateGroups(anchorId: string): Promise<void> {
+        return this.separate(anchorId);
+    }
+
+    protected separateLoose(uri: string): Promise<void> {
+        return this.separate(`${LOOSE_BOX_PREFIX}${uri}`);
     }
 
     protected async persistMove(id: string, x: number, y: number, seq: number): Promise<void> {
@@ -831,10 +1583,12 @@ export class OrganisingWidget extends Widget {
         // starts a NATIVE drag of that selection, and the parent chrome
         // window treats a dropped URL as "open this" -- dragging a card
         // opened the page in a stock browser window instead of moving it.
-        // Preventing the default also drops focus, so the card takes it back
-        // explicitly and keyboard navigation is unaffected.
+        //
+        // The card is deliberately NOT focused here. Taking focus on a press
+        // painted a focus ring on the very card being dragged, which is a
+        // blue outline around the thing under the pointer for the whole
+        // gesture. Keyboard focus still rings, through :focus-visible.
         event.preventDefault();
-        card.focus();
         const startX = event.clientX;
         const startY = event.clientY;
         let dragging = false;
@@ -850,6 +1604,16 @@ export class OrganisingWidget extends Widget {
             return under;
         };
 
+        // The card being dragged stays where it is -- it is still a member of
+        // its group until the drop says otherwise, and moving the real node
+        // would reflow the group under the pointer. What follows the pointer
+        // is a copy. Without it the gesture had no visible subject: the card
+        // dimmed in place and the page only changed on release, so a drag
+        // looked like nothing was happening until something popped in.
+        let ghost: HTMLElement | undefined;
+        let grabX = 0;
+        let grabY = 0;
+
         const onMove = (ev: PointerEvent): void => {
             if (!dragging) {
                 if (Math.abs(ev.clientX - startX) < CARD_DRAG_THRESHOLD && Math.abs(ev.clientY - startY) < CARD_DRAG_THRESHOLD) {
@@ -858,19 +1622,70 @@ export class OrganisingWidget extends Widget {
                 dragging = true;
                 this.dragCard = { uri: tab.uri, fromGroup: groupId };
                 card.classList.add('is-dragging');
-                card.setPointerCapture(ev.pointerId);
+                try {
+                    // Optional now that the gesture listens on the window:
+                    // capture is released the moment a re-render detaches this
+                    // node, and it throws outright for a pointer the element
+                    // never received. Neither can be allowed to end the drag.
+                    card.setPointerCapture(ev.pointerId);
+                } catch {
+                    // Capture is a nicety; the window listeners are the truth.
+                }
+                // Sized from the rendered box, so the copy matches whatever
+                // the zoom transform is currently showing. It is appended to
+                // the body and positioned in viewport coordinates, which is
+                // why it must NOT be inside the zoomed layer.
+                const box = card.getBoundingClientRect();
+                grabX = ev.clientX - box.left;
+                grabY = ev.clientY - box.top;
+                ghost = card.cloneNode(true) as HTMLElement;
+                ghost.classList.add('pb-org-card-ghost');
+                ghost.classList.remove('is-dragging', 'is-tiled', 'is-loose', 'is-piled', 'is-stacked-card');
+                ghost.removeAttribute('data-u');
+                ghost.setAttribute('aria-hidden', 'true');
+                // The clone inherits the card's INLINE placement -- left, top
+                // and z-index written by the tiling and pile layouts. Fixed
+                // positioning then honours that left/top, and the transform
+                // below lands on top of it, so the ghost appeared a whole
+                // card-position away from the pointer. Reset the box the
+                // stylesheet owns and let the transform alone place it.
+                ghost.style.left = '0px';
+                ghost.style.top = '0px';
+                ghost.style.zIndex = '';
+                ghost.style.width = `${box.width}px`;
+                ghost.style.height = `${box.height}px`;
+                document.body.append(ghost);
             }
-            this.clearDropTargets();
-            const host = hitTest(ev)?.closest('.pb-org-card, .pb-org-box, .pb-org-tray, .pb-org-canvas') as HTMLElement | null;
-            if (host && host !== card) {
-                host.classList.add('is-drop-target');
+            if (ghost) {
+                ghost.style.transform = `translate(${ev.clientX - grabX}px, ${ev.clientY - grabY}px)`;
+            }
+            // The group under the pointer makes room for the card instead of
+            // lighting up: the grid re-packs and a translucent slot opens
+            // where it will land. An outline says "here"; a gap that opens
+            // says "here, and like this".
+            const host = hitTest(ev)?.closest('.pb-org-box') as HTMLElement | null;
+            const over = host && host !== card ? host.dataset.g : undefined;
+            const index = over && host ? this.dropIndexIn(host, ev) : 0;
+            if (over !== this.dropPreviewGroupId || index !== this.dropPreviewIndex) {
+                this.dropPreviewGroupId = over;
+                this.dropPreviewIndex = index;
+                this.tileCards();
             }
         };
 
         const detach = (): void => {
-            card.removeEventListener('pointermove', onMove);
-            card.removeEventListener('pointerup', finish);
-            card.removeEventListener('pointercancel', cancel);
+            this.dropPreviewGroupId = undefined;
+            this.tileCards();
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', finish);
+            window.removeEventListener('pointercancel', cancel);
+            ghost?.remove();
+            ghost = undefined;
+            // Belt and braces: if an earlier gesture was orphaned, its copy is
+            // still on the page and would sit over everything forever.
+            for (const orphan of Array.from(document.querySelectorAll('.pb-org-card-ghost'))) {
+                orphan.remove();
+            }
         };
 
         const finish = (ev: PointerEvent): void => {
@@ -883,22 +1698,35 @@ export class OrganisingWidget extends Widget {
             // in a stock window. Swallow exactly one click, in capture, so
             // the drop is the only thing the gesture does. A press without a
             // drag never reaches here, so plain clicks are untouched.
-            card.addEventListener('click', event => {
-                event.stopPropagation();
-                event.preventDefault();
-            }, { capture: true, once: true });
+            for (const kind of ['click', 'dblclick']) {
+                card.addEventListener(kind, event => {
+                    event.stopPropagation();
+                    event.preventDefault();
+                }, { capture: true, once: true });
+            }
             card.classList.remove('is-dragging');
             this.clearDropTargets();
             const under = hitTest(ev);
             const targetCard = under?.closest('.pb-org-card') as HTMLElement | null;
             const targetBox = under?.closest('.pb-org-box') as HTMLElement | null;
-            if (targetCard && targetCard !== card && targetCard.dataset.u) {
-                const owner = targetCard.closest('.pb-org-box') as HTMLElement | null;
-                void this.dropCardOntoCard(ev, targetCard.dataset.u, owner?.dataset.g ?? null);
-            } else if (targetBox && targetBox.dataset.g) {
-                void this.dropCard(ev, targetBox.dataset.g);
-            } else if (under?.closest('.pb-org-tray')) {
-                void this.dropCard(ev, null);
+            // Read the slot BEFORE detach clears it -- it is where the card
+            // goes, and the preview promised exactly this place.
+            const at = targetBox && targetBox.dataset.g === this.dropPreviewGroupId
+                ? this.dropPreviewIndex
+                : undefined;
+            // A GROUP is checked before a card, and this order is the whole
+            // fix: since the cards tile to fill their group, nearly every drop
+            // inside a box now lands on a card rather than on bare box. With
+            // the card checked first, dropping a tab into a group ran
+            // card-onto-card and auto-drew a NEW group around the pair -- so
+            // the group never gained the tab, and never re-packed either.
+            // Dropping into a group means joining that group, always.
+            //
+            // Card-onto-card keeps its meaning only where there is no group to
+            // join: two loose cards in the tray, which is where drawing a box
+            // around them is the useful thing to do.
+            if (targetBox && targetBox.dataset.g) {
+                void this.dropCard(ev, targetBox.dataset.g, at);
             } else if (under?.closest('.pb-org-canvas')) {
                 void this.dropCardOnField(ev);
             } else {
@@ -914,18 +1742,54 @@ export class OrganisingWidget extends Widget {
             this.dragCard = undefined;
         };
 
-        card.addEventListener('pointermove', onMove);
-        card.addEventListener('pointerup', finish);
-        card.addEventListener('pointercancel', cancel);
+        // On WINDOW, not on the card. The card is a rendered node: any reload
+        // -- a tab opening, a mutation completing, a failed write reverting --
+        // rebuilds the canvas and replaces it mid-gesture. Listeners on the
+        // old node then never see `pointerup`, so the drop never runs and the
+        // dragged copy is left on screen forever. Measured: exactly that, one
+        // orphaned copy and no drop. The window outlives every re-render.
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', finish);
+        window.addEventListener('pointercancel', cancel);
+    }
+
+    /**
+     * Which slot in a group's grid the pointer is over.
+     *
+     * Measured against the grid the group is showing WITH the preview slot in
+     * it, so the answer is stable while hovering: ask about a grid of n and
+     * you get an index that changes the grid to n+1, which would move the very
+     * cell you just measured.
+     *
+     * Half a cell to the right of a card's centre counts as after it, so
+     * moving across a row steps the slot at the boundaries between cards
+     * rather than only when the pointer is fully inside the next one.
+     */
+    protected dropIndexIn(box: HTMLElement, event: PointerEvent): number {
+        const host = box.querySelector('.pb-org-box-cards') as HTMLElement | null;
+        const group = box.dataset.g;
+        if (!host || !group) {
+            return 0;
+        }
+        const count = this.model.getTabs(group).length;
+        const cell = fitTiles(count + 1, host.clientWidth, host.clientHeight);
+        if (!cell) {
+            return count;
+        }
+        const rect = host.getBoundingClientRect();
+        const column = Math.floor((event.clientX - rect.left + (cell.w + TILE_GAP) / 2) / (cell.w + TILE_GAP));
+        const row = Math.floor((event.clientY - rect.top) / (cell.h + TILE_GAP));
+        return Math.max(0, Math.min(count, row * cell.cols + Math.max(0, Math.min(cell.cols, column))));
     }
 
     protected clearDropTargets(): void {
-        for (const marked of Array.from(this.node.querySelectorAll('.is-drop-target'))) {
-            marked.classList.remove('is-drop-target');
+        this.dropPreviewGroupId = undefined;
+        for (const marked of Array.from(this.node.querySelectorAll('.is-drop-target, .is-band-target'))) {
+            marked.classList.remove('is-drop-target', 'is-band-target');
         }
     }
 
-    protected async dropCard(event: MouseEvent, toGroup: string | null): Promise<void> {
+    protected async dropCard(event: MouseEvent, toGroup: string | null, index?: number): Promise<void> {
         event.preventDefault();
         const drag = this.dragCard;
         this.dragCard = undefined;
@@ -934,7 +1798,7 @@ export class OrganisingWidget extends Widget {
             return;
         }
         try {
-            await this.model.moveCard(this.actor, drag.uri, toGroup);
+            await this.model.moveCard(this.actor, drag.uri, toGroup, index);
             await this.dissolveEmptied(drag.fromGroup, toGroup);
         } catch (error) {
             console.error('[@powerbrowser/modes] card drop failed:', error);
@@ -973,12 +1837,16 @@ export class OrganisingWidget extends Widget {
         this.render();
     }
 
-    /** Card-onto-field: auto-draws one box around the dropped card. */
+    /**
+     * Card dropped on bare canvas: it lands THERE, loose, at the point it was
+     * dropped -- it does not draw a group around itself any more.
+     *
+     * Drawing a box around tabs is now how a group gets made, so a drop that
+     * silently made one meant you could not simply put a tab down somewhere.
+     * Loose tabs are canvas objects with positions, so "put it down here" is
+     * a thing the canvas can express.
+     */
     protected async dropCardOnField(event: MouseEvent): Promise<void> {
-        const target = event.target as HTMLElement | null;
-        if (target && target.closest('.pb-org-box, .pb-org-card')) {
-            return;
-        }
         event.preventDefault();
         const drag = this.dragCard;
         this.dragCard = undefined;
@@ -986,15 +1854,19 @@ export class OrganisingWidget extends Widget {
         if (!drag) {
             return;
         }
+        const at = this.canvasPoint(event);
+        const x = Math.max(0, at.x - Math.round(LOOSE_W / 2));
+        const y = Math.max(0, at.y - Math.round(LOOSE_H / 2));
         try {
-            const box = await this.model.autoBox(this.actor, [drag.uri], this.canvasPoint(event));
-            if (box && drag.fromGroup !== null && drag.fromGroup !== box.id) {
-                await this.dissolveEmptied(drag.fromGroup, box.id);
+            if (drag.fromGroup !== null) {
+                await this.model.moveCard(this.actor, drag.uri, null);
+                await this.dissolveEmptied(drag.fromGroup, null);
             }
+            await this.model.placeCard(this.actor, drag.uri, x, y);
         } catch (error) {
-            console.error('[@powerbrowser/modes] card auto-box failed:', error);
+            console.error('[@powerbrowser/modes] card placement failed:', error);
         }
-        this.render();
+        await this.separateLoose(drag.uri);
     }
 
     /** Last-card-out: dissolves a source box left with zero cards. */
@@ -1046,13 +1918,47 @@ export class OrganisingWidget extends Widget {
         next.focus();
     }
 
+    /**
+     * Clicking a card goes TO that tab, in this window.
+     *
+     * It used to call `window.open(url, '_blank')`, which has no
+     * `nsIBrowserDOMWindow` to divert it and therefore opens a whole stock
+     * Firefox window (CLAUDE.md hard rule 5) -- so arranging tabs and then
+     * opening one threw you out of Power Browser entirely, and the address bar
+     * still read the organising view because nothing in the shell had changed.
+     *
+     * The tab is already here: it is a widget in the main area, and this card
+     * was built from it. Activating it shows the page and the chrome bar
+     * follows the active widget, so the address bar reads the tab's own URL
+     * without being told. Leaving Organising is part of the gesture -- it is
+     * what Panorama's zoomIn does, and what "open this one" means.
+     */
     protected dive(tab: PanoramaTab, groupId: string | null): void {
         if (groupId !== null) {
             void this.activateGroup(groupId);
         }
-        // GUI-01 candidate A: the sanctioned frontend-to-chrome crossing for
-        // opening a stock window -- one-way, no ack, proven nav-only.
-        window.open(tab.url || tab.uri, '_blank');
+        const widget = this.widgetForTab(tab);
+        if (!widget) {
+            return;
+        }
+        // Browsing for a page, Coding for an editor or the Welcome view --
+        // each tab lands in the mode that is built to show it.
+        void this.modes.activateMode(tab.url ? 'browsing' : 'coding')
+            .catch(error => console.error('[@powerbrowser/modes] mode switch on dive failed:', error))
+            .finally(() => {
+                void this.shell.activateWidget(widget.id);
+            });
+    }
+
+    /** The open widget a card stands for, matched on the key `liveTabs` built. */
+    protected widgetForTab(tab: PanoramaTab): Widget | undefined {
+        return [...this.shell.mainPanel.widgets()].find(widget => {
+            if (widget === this) {
+                return false;
+            }
+            const page = widget instanceof WebTabWidget && widget.hasPage ? widget.url : '';
+            return (page || `${SESSION_TAB_PREFIX}${widget.id}`) === tab.uri;
+        });
     }
 
     protected async activateGroup(id: string): Promise<void> {
@@ -1166,6 +2072,7 @@ export class OrganisingWidget extends Widget {
 
         this.canvasHost = document.createElement('div');
         this.canvasHost.className = 'pb-org-canvas-host';
+        this.canvasHost.addEventListener('pointerdown', event => this.beginGroupDraw(event));
         this.canvasLayer = document.createElement('div');
         this.canvasLayer.className = 'pb-org-canvas-layer';
         this.canvasRoot = document.createElement('div');
@@ -1178,11 +2085,11 @@ export class OrganisingWidget extends Widget {
         this.treeRoot.className = 'pb-org-tree';
         this.treeRoot.dataset.tree = 'true';
 
-        this.trayRoot = document.createElement('div');
-        this.trayRoot.className = 'pb-org-tray';
-        this.trayRoot.dataset.tray = 'true';
+        this.expandRoot = document.createElement('div');
+        this.expandRoot.className = 'pb-org-expand';
+        this.expandRoot.hidden = true;
 
-        this.node.append(this.toolbar, this.loadBar, this.saveBar, this.canvasHost, this.treeRoot, this.trayRoot);
+        this.node.append(this.toolbar, this.loadBar, this.saveBar, this.canvasHost, this.treeRoot, this.expandRoot);
     }
 
     protected buildBar(text: string, onRetry: () => void): HTMLElement {
@@ -1233,6 +2140,9 @@ export class OrganisingContribution extends AbstractViewContribution<OrganisingW
 export class OrganisingCommandHandler implements PanoramaCommandHandler {
     @inject(ApplicationShell)
     protected readonly shell: ApplicationShell;
+
+    @inject(ModeService)
+    protected readonly modes: ModeService;
 
     protected widget(): OrganisingWidget | undefined {
         const found = this.shell.getWidgetById(OrganisingWidget.ID);

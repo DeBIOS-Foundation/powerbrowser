@@ -79,8 +79,24 @@ const LOST_VIEW_COPY = "Power Browser can't show this page right now. Choose Rel
  * page. While one of these is rendered, every visible web tab publishes
  * visible=false and shows its flat dark surface instead. `getClientRects`
  * rather than mere presence: Theia keeps some of these in the DOM hidden.
+ *
+ * `.lm-mod-drag-image` is the same policy applied to a drag, and it is what
+ * makes drag-a-tab-to-an-edge work at all. Lumino appends that node to the
+ * body for exactly the span of a drag, so listing it hides every page from
+ * pointerdown-past-threshold to drop. Two things depend on that:
+ *
+ * - The dock's drop indicator (`.lm-DockPanel-overlay`) is a div inside the
+ *   Theia document, so over a live page it would be painted underneath the
+ *   thing the user is aiming at.
+ * - Lumino hit-tests `document.elementFromPoint` on every pointermove. A
+ *   page is a chrome-level `<xul:browser>` in a different process, so while
+ *   one is on top the Theia document may stop seeing moves entirely.
+ *
+ * Hiding the pages removes both problems rather than working around either:
+ * during a drag the frame is the topmost thing again, exactly as it is while
+ * a menu is open.
  */
-const BLOCKING_LAYER_SELECTOR = '.pb-chrome-bar-dropdown, .quick-input-widget, .lm-Widget.dialogOverlay, .lm-Menu';
+const BLOCKING_LAYER_SELECTOR = '.pb-chrome-bar-dropdown, .quick-input-widget, .lm-Widget.dialogOverlay, .lm-Menu, .lm-mod-drag-image';
 
 function blockingLayerOpen(): boolean {
     return Array.from(document.querySelectorAll(BLOCKING_LAYER_SELECTOR))
@@ -143,11 +159,24 @@ export type WebTabMessage =
     | { kind: 'webTabClose'; tabId: string }
     | { kind: 'webTabFocus'; tabId: string };
 
+/**
+ * Window-frame messages the same channel carries for the custom title bar:
+ * `windowChrome` asks how wide chrome's window buttons are (reply `width`),
+ * `windowDragRegions` reports the empty rects of the frontend's top row
+ * (CSS px in the frame) and that row's height, for chrome's drag handles.
+ */
+export type WindowMessage =
+    | { kind: 'windowChrome' }
+    | { kind: 'windowDragRegions'; rects: { x: number; y: number; w: number; h: number }[]; height: number };
+
+export type ShellMessage = WebTabMessage | WindowMessage;
+
 export interface WebTabReply {
     ok: boolean;
     where?: string;
     reason?: string;
     message?: string;
+    width?: number;
 }
 
 /**
@@ -184,11 +213,11 @@ export class WebTabChannel {
         this.widgets.delete(tabId);
     }
 
-    send(msg: WebTabMessage): void {
+    send(msg: ShellMessage): void {
         this.dispatch(this.requestId(msg.kind), msg);
     }
 
-    request(msg: WebTabMessage): Promise<WebTabReply> {
+    request(msg: ShellMessage): Promise<WebTabReply> {
         return new Promise<WebTabReply>(resolve => {
             const requestId = this.requestId(msg.kind);
             const settle = (reply: WebTabReply): void => {
@@ -217,7 +246,7 @@ export class WebTabChannel {
         return `web-tab-${kind}-${Date.now().toString(36)}-${(this.seq += 1)}`;
     }
 
-    private dispatch(requestId: string, msg: WebTabMessage): void {
+    private dispatch(requestId: string, msg: ShellMessage): void {
         // `document` target + bubbles:true are both load-bearing: the actor
         // child's listener sits on the window root, which a non-bubbling
         // event dispatched on `window` never reaches (GUI-DEFECTS item 10).

@@ -45,6 +45,51 @@ export interface PanoramaTab {
     url: string;
     title: string;
     thumbnail?: string | null;
+    /**
+     * Where a loose tab sits on the canvas, or undefined for one that has
+     * never been placed. Never-placed tabs are laid out along the bottom by
+     * the canvas itself, so an existing profile upgrades without every tab
+     * it has ever seen acquiring a position.
+     */
+    x?: number;
+    y?: number;
+}
+
+/**
+ * One tab the shell actually has open, as `load` needs to see it.
+ *
+ * `tabs.sqlite` is a tab HISTORY carrying group membership, not a live tab
+ * list: `startTabStoreTriggers` writes a row for every tab in every stock
+ * browser window as well as for in-shell web tabs, the sessionstore sweep
+ * adds whatever sessionstore knows, and `pruneClosedTabRows` only removes a
+ * closed tab's row once it is older than the seven-day retention window. So
+ * the store on its own answers "which tabs has this profile seen lately",
+ * which is not the question the canvas asks.
+ *
+ * The shell answers that one. `uri` is the store key -- the page URL, the
+ * same value `writeTabRow` binds -- so the two join without a second
+ * identity scheme, and the bridge (GUI-04) can later supply chrome-owned
+ * tabs through the same shape without changing this file.
+ */
+export interface LiveTab {
+    uri: string;
+    url: string;
+    title: string;
+}
+
+/**
+ * Card key for a tab that has no page yet -- a New Tab still on the empty
+ * page. Chrome writes store rows for http(s) targets only, so such a tab has
+ * no row and no URL to be keyed by, and four of them would all key as the
+ * same empty address. The shell's own per-tab id stands in.
+ *
+ * It is a key, never a label: nothing built from it may reach the screen.
+ */
+export const SESSION_TAB_PREFIX = 'session:';
+
+/** The shell tab id inside a session key, or undefined for a real URL key. */
+function sessionTabId(uri: string): string | undefined {
+    return uri.startsWith(SESSION_TAB_PREFIX) ? uri.slice(SESSION_TAB_PREFIX.length) : undefined;
 }
 
 function toFinite(value: unknown, fallback: number): number {
@@ -71,6 +116,51 @@ export class GroupModel {
      */
     private readonly pendingWrites = new Map<string, { attempts: number; revert: () => void; write: () => Promise<unknown> }>();
     private static readonly PENDING_WRITES_MAX = 20;
+
+    /**
+     * Group membership for tabs the store cannot hold: anything without an
+     * http(s) URL of its own -- a New Tab still on the empty page, the
+     * Welcome page, an editor. Keyed by the shell's tab id and dropped when
+     * the frontend does, which is honest about what it is.
+     *
+     * ponytail: session-only. Such a tab returns to Ungrouped on restart even
+     * when the shell restores the tab itself. Persisting it needs a store key
+     * that is not the page URL, which is the same change GUI-04's chrome-owned
+     * tab model brings.
+     */
+    private readonly sessionGroups = new Map<string, string>();
+
+    /**
+     * Canvas positions for the same tabs the store cannot key -- a New Tab on
+     * the empty page, Welcome, an editor. A tab WITH a page keeps its position
+     * in the store and survives restart; these keep it for the session, which
+     * is the whole life of the tab anyway, since the shell does not restore
+     * them either.
+     */
+    private readonly sessionPlaces = new Map<string, { x: number; y: number }>();
+
+    /**
+     * Previews for tabs that are not pages -- the Welcome view, an editor, a
+     * terminal. Chrome photographs the shell frame for these rather than a
+     * document, and there is no store column for the result, so they live for
+     * the session. Bounded, because a data URL is not small.
+     */
+    private readonly sessionThumbs = new Map<string, string>();
+    private static readonly SESSION_THUMBS_MAX = 40;
+
+    /** Keeps one captured preview, evicting the oldest past the cap. */
+    rememberThumbnail(uri: string, png: string): void {
+        if (this.sessionThumbs.has(uri)) {
+            this.sessionThumbs.delete(uri);
+        } else if (this.sessionThumbs.size >= GroupModel.SESSION_THUMBS_MAX) {
+            const oldest = this.sessionThumbs.keys().next().value;
+            if (oldest !== undefined) {
+                this.sessionThumbs.delete(oldest);
+            }
+        }
+        this.sessionThumbs.set(uri, png);
+        this.changeEmitter.fire();
+    }
 
     get isLoaded(): boolean {
         return this.loaded;
@@ -104,8 +194,12 @@ export class GroupModel {
      * Loads groups, membership, and the tray from the reader. Total parse:
      * unparseable rows are dropped, a corrupt payload lands the contracted
      * empty state, and failures resolve with loadFailed set -- never throws.
+     *
+     * `live`, when given, is the set of tabs the shell actually has open, and
+     * it decides which cards exist -- see `LiveTab`. Omitting it uses the
+     * store whole, which is what every caller without a shell wants.
      */
-    async load(reader: GroupQueryService): Promise<void> {
+    async load(reader: GroupQueryService, live?: readonly LiveTab[]): Promise<void> {
         try {
             const rows = await reader.listGroups();
             const parsed = Array.isArray(rows) ? rows.flatMap(row => {
@@ -136,6 +230,61 @@ export class GroupModel {
             } catch {
                 tray = [];
             }
+            if (live) {
+                // The shell decides which cards exist and what they are
+                // called; the store decides only which group each one is in
+                // and what its last thumbnail was.
+                const liveByUri = new Map(live.map(tab => [tab.uri, tab]));
+                const thumbnails = new Map<string, string | null | undefined>();
+                const placements = new Map<string, { x?: number; y?: number }>();
+                for (const tabs of [...nextMembers.values(), tray]) {
+                    for (const tab of tabs) {
+                        thumbnails.set(tab.uri, tab.thumbnail ?? this.sessionThumbs.get(tab.uri));
+                        placements.set(tab.uri, { x: tab.x, y: tab.y });
+                    }
+                }
+                const claimed = new Set<string>();
+                for (const [id, tabs] of nextMembers) {
+                    nextMembers.set(id, tabs.flatMap(tab => {
+                        const open = liveByUri.get(tab.uri);
+                        if (!open) {
+                            return [];
+                        }
+                        claimed.add(tab.uri);
+                        return [{ ...tab, url: open.url, title: open.title || tab.title }];
+                    }));
+                }
+                // Everything else open: in a group if this session put it in
+                // one, ungrouped otherwise. That includes a tab opened seconds
+                // ago whose row does not exist yet, which the store's own
+                // listUngroupedTabs cannot know about and which was therefore
+                // invisible on the canvas until now.
+                const rest: PanoramaTab[] = [];
+                for (const tab of live) {
+                    if (claimed.has(tab.uri)) {
+                        continue;
+                    }
+                    const placed = placements.get(tab.uri) ?? this.sessionPlaces.get(tab.uri);
+                    const card: PanoramaTab = {
+                        uri: tab.uri,
+                        url: tab.url,
+                        title: tab.title,
+                        // The store first, then anything captured this
+                        // session for a tab the store cannot photograph.
+                        thumbnail: thumbnails.get(tab.uri) ?? this.sessionThumbs.get(tab.uri) ?? null,
+                        x: placed?.x,
+                        y: placed?.y,
+                    };
+                    const session = sessionTabId(tab.uri);
+                    const target = session ? this.sessionGroups.get(session) : undefined;
+                    if (target !== undefined && nextMembers.has(target)) {
+                        nextMembers.set(target, [...(nextMembers.get(target) ?? []), card]);
+                    } else {
+                        rest.push(card);
+                    }
+                }
+                tray = rest;
+            }
             this.groups = parsed;
             this.members.clear();
             for (const [id, tabs] of nextMembers) {
@@ -157,15 +306,20 @@ export class GroupModel {
         this.changeEmitter.fire();
     }
 
-    /** Creates a box titled Untitled group; the widget puts it in edit mode. */
-    async createGroup(client: GroupActorClient, at?: { x: number; y: number }): Promise<PanoramaGroup> {
+    /**
+     * Creates a box titled Untitled group; the widget puts it in edit mode.
+     * `at` may carry a size as well as a position -- a group drawn on the
+     * canvas is whatever rectangle was dragged, floored at the contracted
+     * minimum; the button passes a position only and gets the default box.
+     */
+    async createGroup(client: GroupActorClient, at?: { x: number; y: number; w?: number; h?: number }): Promise<PanoramaGroup> {
         const group: PanoramaGroup = {
             id: `group-${Date.now().toString(36)}-${Math.floor(Math.random() * 0x100000).toString(36)}`,
             title: UNTITLED_GROUP_TITLE,
             x: Math.max(0, Math.floor(at?.x ?? 24)),
             y: Math.max(0, Math.floor(at?.y ?? 24)),
-            w: 400,
-            h: 300,
+            w: Math.max(GROUP_BOX_MIN_W, Math.floor(at?.w ?? 400)),
+            h: Math.max(GROUP_BOX_MIN_H, Math.floor(at?.h ?? 300)),
             isActive: false,
         };
         const apply = (): void => {
@@ -318,7 +472,7 @@ export class GroupModel {
         await this.persist(`autobox:${group.id}`, apply, revert, async () => {
             await client.mutate({ kind: 'createGroup', id: group.id, title: group.title, x: group.x, y: group.y, w: group.w, h: group.h });
             for (const placement of placements) {
-                await client.mutate({ kind: 'setTabGroup', uri: placement.uri, groupId: group.id });
+                await this.writeMembership(client, placement.uri, group.id);
             }
         });
         return group;
@@ -329,25 +483,124 @@ export class GroupModel {
      * the source box ends up empty the caller follows with dissolveGroup --
      * the last-card-out gesture -- so nothing is orphaned.
      */
-    async moveCard(client: GroupActorClient, uri: string, toGroupId: string | null): Promise<void> {
+    /**
+     * Moves a card into a group, optionally at a chosen place in it. Dropping
+     * a card between two others is a move AND a reorder, so both are written:
+     * the membership, then the group's new order as one list.
+     *
+     * A move within the same group is a pure reorder and is allowed through --
+     * before this it early-returned, so a card could only ever be appended.
+     */
+    async moveCard(client: GroupActorClient, uri: string, toGroupId: string | null, index?: number): Promise<void> {
         const from = this.locateCard(uri);
         if (!from) {
             return;
         }
-        if (from.groupId === toGroupId) {
+        const sameGroup = from.groupId === toGroupId;
+        if (sameGroup && (index === undefined || toGroupId === null)) {
             return;
         }
         const card = from.card;
+        const before = sameGroup && toGroupId !== null
+            ? (this.members.get(toGroupId) ?? []).findIndex(tab => tab.uri === uri)
+            : undefined;
         const apply = (): void => {
             this.removeCardLocal(uri);
-            this.insertCardLocal(card, toGroupId);
+            this.insertCardLocal(card, toGroupId, index);
         };
         const revert = (): void => {
             this.removeCardLocal(uri);
-            this.insertCardLocal(card, from.groupId);
+            this.insertCardLocal(card, from.groupId, before);
         };
-        await this.persist(`card:${uri}`, apply, revert, () =>
-            client.mutate({ kind: 'setTabGroup', uri, groupId: toGroupId }));
+        await this.persist(`card:${uri}`, apply, revert, async () => {
+            if (!sameGroup) {
+                await this.writeMembership(client, uri, toGroupId);
+            }
+            if (toGroupId !== null) {
+                await this.writeOrder(client, toGroupId);
+            }
+        });
+    }
+
+    /**
+     * Writes one group's running order. Sent as the whole list because a drop
+     * between two cards renumbers everything after it -- one transaction is
+     * either the new order or the old one, where a write per tab could leave
+     * the group half-renumbered.
+     *
+     * Tabs the store cannot key are filtered out rather than sent: their rows
+     * do not exist, so an UPDATE naming them would match nothing while
+     * silently shifting the ordinals of the tabs that do exist.
+     */
+    private async writeOrder(client: GroupActorClient, groupId: string): Promise<void> {
+        const uris = (this.members.get(groupId) ?? [])
+            .map(tab => tab.uri)
+            .filter(uri => sessionTabId(uri) === undefined);
+        if (!uris.length) {
+            return;
+        }
+        await client.mutate({ kind: 'setGroupOrder', groupId, uris });
+    }
+
+    /**
+     * Places a loose tab on the canvas. Paints first, then persists, like
+     * every other mutation here; a tab that is in a group is ignored, because
+     * a grouped tab's position is decided by its group's grid.
+     */
+    async placeCard(client: GroupActorClient, uri: string, x: number, y: number): Promise<void> {
+        const at = { x: Math.max(0, Math.floor(x)), y: Math.max(0, Math.floor(y)) };
+        const index = this.ungrouped.findIndex(candidate => candidate.uri === uri);
+        if (index < 0) {
+            return;
+        }
+        const before = { x: this.ungrouped[index].x, y: this.ungrouped[index].y };
+        const apply = (): void => {
+            const at2 = this.ungrouped.findIndex(candidate => candidate.uri === uri);
+            if (at2 >= 0) {
+                this.ungrouped[at2] = { ...this.ungrouped[at2], ...at };
+            }
+        };
+        const revert = (): void => {
+            const at2 = this.ungrouped.findIndex(candidate => candidate.uri === uri);
+            if (at2 >= 0) {
+                this.ungrouped[at2] = { ...this.ungrouped[at2], ...before };
+            }
+        };
+        await this.persist(`place:${uri}`, apply, revert, () => this.writePlacement(client, uri, at.x, at.y));
+    }
+
+    /**
+     * One placement write, split the same way membership is: a tab the store
+     * cannot key by URL keeps its position for the session instead of sending
+     * an UPDATE that would match no row, report success, and lose the change
+     * on the next reload.
+     */
+    private async writePlacement(client: GroupActorClient, uri: string, x: number, y: number): Promise<void> {
+        if (sessionTabId(uri) !== undefined) {
+            this.sessionPlaces.set(uri, { x, y });
+            return;
+        }
+        await client.mutate({ kind: 'setTabPosition', uri, x, y });
+    }
+
+    /**
+     * One membership write. A tab with no store row of its own -- no http(s)
+     * URL to be keyed by -- is remembered for the session instead of being
+     * sent to a store that has nothing to update; the mutation would find no
+     * row, report success, and the card would silently return to Ungrouped on
+     * the next reload.
+     */
+    private async writeMembership(client: GroupActorClient, uri: string, groupId: string | null): Promise<void> {
+        const session = sessionTabId(uri);
+        if (session !== undefined) {
+            if (groupId === null) {
+                this.sessionGroups.delete(session);
+            } else {
+                this.sessionGroups.set(session, groupId);
+            }
+            return;
+        }
+        await client.mutate({ kind: 'setTabGroup', uri, groupId });
     }
 
     /** Removes an emptied box (last-card-out); tabs survive, ungrouped. */
@@ -518,7 +771,7 @@ export class GroupModel {
         this.ungrouped = this.ungrouped.filter(tab => tab.uri !== uri);
     }
 
-    private insertCardLocal(card: PanoramaTab, groupId: string | null): void {
+    private insertCardLocal(card: PanoramaTab, groupId: string | null, index?: number): void {
         if (groupId === null) {
             if (!this.ungrouped.some(tab => tab.uri === card.uri)) {
                 this.ungrouped = [...this.ungrouped, card];
@@ -529,7 +782,8 @@ export class GroupModel {
         if (!tabs || tabs.some(tab => tab.uri === card.uri)) {
             return;
         }
-        this.members.set(groupId, [...tabs, card]);
+        const at = index === undefined ? tabs.length : Math.max(0, Math.min(tabs.length, index));
+        this.members.set(groupId, [...tabs.slice(0, at), card, ...tabs.slice(at)]);
     }
 
     private parseGroup(raw: unknown): PanoramaGroup | undefined {
@@ -562,11 +816,17 @@ export class GroupModel {
         if (typeof row.uri !== 'string' || !row.uri) {
             return undefined;
         }
+        const placed = (value: unknown): number | undefined => {
+            const n = typeof value === 'number' ? value : Number(value);
+            return value === null || value === undefined || !Number.isFinite(n) ? undefined : Math.max(0, Math.floor(n));
+        };
         return {
             uri: row.uri,
             url: typeof row.url === 'string' ? row.url : '',
             title: typeof row.title === 'string' && row.title ? row.title : row.uri,
             thumbnail: typeof row.thumbnail === 'string' && row.thumbnail ? row.thumbnail : null,
+            x: placed(row.x),
+            y: placed(row.y),
         };
     }
 }

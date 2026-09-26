@@ -245,15 +245,11 @@
 }
 
 .pb-org-box.is-active {
-    border-color: var(--color-primary, #00a6f5);
+    border-color: var(--color-text-muted, #9a99a8);
 }
 
 .pb-org-box.is-active .pb-org-box-title {
     font-weight: 600;
-}
-
-.pb-org-box.is-drop-target {
-    border-color: var(--color-primary, #00a6f5);
 }
 
 .pb-org-box-header {
@@ -288,12 +284,135 @@
     transition: all 0.15s ease;
 }
 
+/*
+ * The tiling surface. Children are absolutely positioned by tileCards, which
+ * sizes them to fit -- so this fills whatever the box has left and never
+ * scrolls. `is-scrolling` is the one fallback: more cards than the floor tile
+ * size can fit, where Panorama would stack them instead (W8).
+ */
 .pb-org-box-cards {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-top: 12px;
+    overflow: hidden;
+}
+/*
+ * A group too small to grid its cards fans them instead, with a count and an
+ * Expand control -- Panorama's _stackArrange. This is what makes "never
+ * scroll" true rather than aspirational: the grid has to give up somewhere,
+ * and before this it gave up by scrolling, which hides the tabs the canvas
+ * exists to show.
+ */
+.pb-org-box-cards.is-stacked {
+    overflow: visible;
+}
+.pb-org-card.is-stacked-card {
+    pointer-events: none;
+}
+.pb-org-stack-count {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    min-width: 22px;
+    padding: 1px 7px;
+    border-radius: 11px;
+    background: rgba(0, 0, 0, 0.72);
+    color: var(--color-text, #fbfbfe);
+    font-size: 12px;
+    text-align: center;
+}
+.pb-org-expander {
+    position: absolute;
+    left: 50%;
+    bottom: -2px;
+    transform: translateX(-50%);
+    padding: 1px 10px;
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.72);
+    color: var(--color-accent, #8ad4ff);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+.pb-org-expander:hover {
+    background: var(--color-surface-raised, #35343f);
+}
+
+/*
+ * The expanded stack. On the widget node, not inside the canvas: the zoom
+ * transform must not shrink the one view whose entire purpose is being big
+ * enough to read.
+ */
+/*
+ * `hidden` needs saying explicitly wherever an author rule sets `display`:
+ * the UA's [hidden] { display: none } loses to any author declaration, so a
+ * class with display:flex is shown even while the element carries the
+ * attribute. `.pb-org-errorbar[hidden]` below exists for the same reason;
+ * missing it here left this overlay permanently on top of the canvas,
+ * dimming it and swallowing every click.
+ */
+.pb-org-expand[hidden],
+.pb-org-zoom[hidden] {
+    display: none;
+}
+.pb-org-expand {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+}
+.pb-org-expand-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(880px, 88%);
+    max-height: 80%;
+    padding: 14px;
+    background: var(--color-surface, #2b2a33);
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 6px;
+}
+.pb-org-expand-heading {
+    font-size: 14px;
+    font-weight: 500;
+    padding-right: 80px;
+}
+.pb-org-expand-done {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+}
+.pb-org-expand-cards {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
+    gap: 10px;
     overflow-y: auto;
+}
+.pb-org-card.is-tiled {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+}
+/* The preview takes everything the title does not. */
+.pb-org-card.is-tiled .pb-org-card-thumb {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+}
+.pb-org-card.is-tiled .pb-org-card-title {
+    flex: 0 0 auto;
+    font-size: 12px;
+    padding: 3px 5px;
+}
+/* No room beside the preview at tile sizes; the tooltip carries the address. */
+.pb-org-card.is-tiled .pb-org-card-uri {
+    display: none;
 }
 
 .pb-org-box-empty {
@@ -319,13 +438,8 @@
     transition: all 0.15s ease;
 }
 
-.pb-org-canvas.is-drop-target {
-    outline: 2px solid var(--color-primary, #00a6f5);
-    outline-offset: -2px;
-}
-
 .pb-org-card {
-    width: 160px;
+    width: 220px;
     box-sizing: border-box;
     background: var(--color-surface-raised, #35343f);
     border: 1px solid var(--color-border, #3f3e4a);
@@ -342,9 +456,38 @@
 
 .pb-org-card-thumb {
     display: block;
-    width: 160px;
-    height: 90px;
+    width: 100%;
+    height: 124px;
     object-fit: cover;
+    object-position: top center;
+    background: var(--color-bg, #1c1b22);
+}
+/*
+ * A tab with no capture keeps the same box and carries its own name instead.
+ * Hatching alone told you nothing about which tab you were looking at, and
+ * some tabs can never be captured: the Welcome view is a Theia widget, not a
+ * page in a browser element, so there is nothing to photograph.
+ */
+.pb-org-card-thumb.is-blank {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    text-align: center;
+    background:
+        repeating-linear-gradient(135deg,
+            rgba(255, 255, 255, 0.02) 0 6px,
+            transparent 6px 12px),
+        var(--color-bg, #1c1b22);
+}
+.pb-org-card-blank-label {
+    font-size: 13px;
+    line-height: 1.3;
+    color: var(--color-text-muted, #9a99a8);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
 }
 
 /* GUI-08 (15-02): drag idiom. The dragged card rides at 0.7 with no
@@ -353,10 +496,10 @@
 .pb-org-card.is-dragging {
     opacity: 0.7;
     transition: none;
+    outline: none;
 }
-
-.pb-org-card.is-drop-target {
-    border-color: var(--color-primary, #00a6f5);
+.pb-org-card:focus {
+    outline: none;
 }
 
 .pb-org-card-title {
@@ -380,30 +523,86 @@
     padding: 0 4px 4px;
 }
 
+/*
+ * Loose tabs -- the ones in no group. No bar: no panel background, no border,
+ * no label. They read as tabs lying on the canvas in a line along the bottom,
+ * because that is what they are; the surrounding chrome only made the canvas
+ * look like it stopped above them.
+ *
+ * Still a real element, and still takes the pointer, because it is the drop
+ * target meaning "take this out of its group": a drop in this strip ungroups,
+ * a drop higher on bare canvas draws a new group.
+ */
 .pb-org-tray {
     flex: none;
-    height: 144px;
+    height: 132px;
     box-sizing: border-box;
-    padding: 12px 16px;
-    background: var(--color-surface, #2b2a33);
-    border-top: 1px solid var(--color-border, #3f3e4a);
-}
-
-.pb-org-tray.is-drop-target {
-    border-top-color: var(--color-primary, #00a6f5);
+    padding: 10px 16px;
+    position: relative;
+    background: transparent;
 }
 
 .pb-org-tray-label {
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--color-text-muted, #9a99a8);
+    display: none;
 }
 
+/*
+ * Positioned, not flowed: the row is fitted to the width it actually has, so
+ * a card can never sit half off the edge. Anything past what fits goes into
+ * the pile at the end instead of off the side.
+ */
 .pb-org-tray-cards {
+    position: relative;
+    height: 100%;
+}
+.pb-org-card.is-loose {
+    position: absolute;
     display: flex;
-    gap: 8px;
-    margin-top: 8px;
-    overflow-x: auto;
+    flex-direction: column;
+}
+.pb-org-card.is-loose .pb-org-card-thumb {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+}
+.pb-org-card.is-loose .pb-org-card-title {
+    flex: 0 0 auto;
+    font-size: 12px;
+    padding: 3px 5px;
+}
+.pb-org-card.is-loose .pb-org-card-uri {
+    display: none;
+}
+/* Behind the front card of the pile: unreachable, so it takes no pointer. */
+.pb-org-card.is-piled {
+    pointer-events: none;
+}
+/*
+ * The same [hidden] trap as `.pb-org-expand` above, in the one other place an
+ * author rule sets `display` on something the code hides with the attribute:
+ * `renderLoose` marks every card past the visible few of a pile `hidden`, and
+ * `display: flex` here beat the UA rule, so a deep pile drew every one of its
+ * cards marching down and across the canvas instead of the four it promised.
+ */
+.pb-org-card.is-loose[hidden] {
+    display: none;
+}
+.pb-org-pile-count {
+    position: absolute;
+    padding: 1px 8px;
+    border-radius: 11px;
+    background: rgba(0, 0, 0, 0.72);
+    color: var(--color-text, #fbfbfe);
+    font-size: 12px;
+}
+/* A loose tab the rubber band encloses, and will take in on release. */
+/*
+ * A loose tab the rubber band encloses. It goes translucent rather than
+ * outlined -- the same language the drop slot speaks: "this one is coming
+ * with me", shown by the tab itself changing, not by a ring drawn round it.
+ */
+.pb-org-card.is-band-target {
+    opacity: 0.45;
 }
 
 .pb-org-tray-empty {
@@ -428,7 +627,7 @@
 }
 
 .pb-org-tree-section.is-active {
-    border-color: var(--color-primary, #00a6f5);
+    border-color: var(--color-text-muted, #9a99a8);
 }
 
 .pb-org-tree-header {
@@ -619,3 +818,69 @@
     color: var(--color-danger, #ff848b);
     border-color: var(--color-danger, #ff848b);
 }
+
+/*
+ * The rubber band drawn while a new group is being dragged out on empty
+ * canvas. Lives inside .pb-org-canvas, so the zoom transform scales it with
+ * the boxes it is about to become one of. Pointer-transparent: the gesture
+ * is captured on the host, and a band under the cursor would otherwise be
+ * what elementFromPoint reports.
+ */
+.pb-org-band {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+}
+
+/*
+ * Where a dragged card will land: the group's grid has already re-packed to
+ * leave this gap, so the slot only has to show the shape of the thing that
+ * is about to fill it.
+ */
+.pb-org-drop-slot {
+    position: absolute;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.10);
+    pointer-events: none;
+    transition: left .12s ease, top .12s ease, width .12s ease, height .12s ease;
+}
+
+/*
+ * The copy of a card that follows the pointer during a drag. Appended to the
+ * body, so it is in viewport coordinates and untouched by the canvas zoom
+ * transform -- its size is taken from the rendered card, which already has
+ * the zoom in it. Pointer-transparent so the drop hit test names what is
+ * underneath rather than the thing being dragged.
+ */
+.pb-org-card-ghost {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1000;
+    pointer-events: none;
+    opacity: 0.9;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
+    transition: none;
+}
+
+/*
+ * Resize grips on every side and corner. Invisible hit strips, the way a
+ * window manager does it -- the bottom-right one keeps its painted corner
+ * (.pb-org-box-resize above) and the keyboard entry point. Reaching for one
+ * corner meant dragging a box into position just to be able to grow it.
+ */
+.pb-org-box-grip {
+    position: absolute;
+    z-index: 5;
+}
+.pb-org-box-grip-n { top: -4px; left: 10px; right: 10px; height: 8px; cursor: ns-resize; }
+.pb-org-box-grip-s { bottom: -4px; left: 10px; right: 10px; height: 8px; cursor: ns-resize; }
+.pb-org-box-grip-w { left: -4px; top: 10px; bottom: 10px; width: 8px; cursor: ew-resize; }
+.pb-org-box-grip-e { right: -4px; top: 10px; bottom: 10px; width: 8px; cursor: ew-resize; }
+.pb-org-box-grip-nw { top: -4px; left: -4px; width: 14px; height: 14px; cursor: nwse-resize; }
+.pb-org-box-grip-ne { top: -4px; right: -4px; width: 14px; height: 14px; cursor: nesw-resize; }
+.pb-org-box-grip-sw { bottom: -4px; left: -4px; width: 14px; height: 14px; cursor: nesw-resize; }
+.pb-org-box-grip-se { bottom: 0; right: 0; width: 16px; height: 16px; cursor: nwse-resize; }

@@ -25,6 +25,9 @@ export const GROUP_ACTOR_ACK_TIMEOUT_MS = 5000;
 export type GroupMutation =
     | { kind: 'createGroup'; id: string; title?: string; x?: number; y?: number; w?: number; h?: number; isActive?: boolean }
     | { kind: 'setTabGroup'; uri: string; groupId: string | null }
+    | { kind: 'setTabPosition'; uri: string; x: number | null; y: number | null }
+    | { kind: 'setGroupOrder'; groupId: string; uris: string[] }
+    | { kind: 'captureShellRegion'; rect: { x: number; y: number; w: number; h: number } }
     | { kind: 'moveGroup'; id: string; x: number; y: number }
     | { kind: 'resizeGroup'; id: string; w: number; h: number }
     | { kind: 'renameGroup'; id: string; title: string }

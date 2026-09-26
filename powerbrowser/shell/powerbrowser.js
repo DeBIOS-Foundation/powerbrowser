@@ -332,6 +332,44 @@ document.addEventListener(
     diagnosticsKeyset.appendChild(focusAddressKey);
     document.documentElement.appendChild(diagnosticsKeyset);
 
+    // Custom title bar. The root's `customtitlebar` attribute
+    // (powerbrowser.xhtml) has the widget draw no OS title bar -- what
+    // browser.xhtml does when tabs live in the title bar -- so that row is
+    // Theia's. Two things the OS bar did are done here, because both are
+    // chrome-only in Gecko: the window buttons, and the drag handles
+    // (`-moz-window-dragging`), laid over whichever parts of the frontend's
+    // top row it reports as empty. Double-click and right-click on a handle
+    // are the widget's own titlebar actions and follow the desktop's
+    // settings. Where the desktop offers no client-side decoration the
+    // buttons hide themselves (CSS), the OS bar stays, and the width
+    // reported below is 0. Both globals are reached through PowerBrowserAPI's
+    // windowChrome / windowDragRegions cases, off the frame that asked.
+    const controls = document.getElementById("powerbrowser-window-controls");
+    document.getElementById("powerbrowser-window-minimize").addEventListener("click", () => window.minimize());
+    document.getElementById("powerbrowser-window-maximize").addEventListener("click", () => {
+      if (window.windowState === window.STATE_MAXIMIZED) {
+        window.restore();
+      } else {
+        window.maximize();
+      }
+    });
+    document.getElementById("powerbrowser-window-close").addEventListener("click", () => window.close());
+    const dragHost = document.getElementById("powerbrowser-drag-regions");
+    window.powerbrowserWindowChrome = () => ({ width: controls.getBoundingClientRect().width });
+    window.powerbrowserSetDragRegions = (rects, height) => {
+      if (height > 0) {
+        controls.style.height = `${height}px`;
+      }
+      dragHost.replaceChildren(
+        ...rects.map(({ x, y, w, h }) => {
+          const handle = document.createElement("div");
+          handle.className = "powerbrowser-drag";
+          Object.assign(handle.style, { left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` });
+          return handle;
+        })
+      );
+    };
+
     // GUI-01 (01-05 Task 3): NOTHING is registered here for the
     // open-browser-window command, and that is the ratified design, not an
     // omission. Task 1's env-gated POWERBROWSER_SPIKE_GUI01 block lived here

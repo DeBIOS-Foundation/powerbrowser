@@ -221,3 +221,102 @@ body {
   height: 100%;
   border: none;
 }
+
+/*
+ * Custom title bar (powerbrowser.js). Laid out after upstream
+ * browser/themes/linux/browser.css's titlebar buttons -- 24px round buttons,
+ * 6.5px spacing, 10px end spacing -- so they sit where the desktop's own
+ * would, with the GTK theme's symbolic icons recoloured to the text colour.
+ * Which buttons show, and whether any do, follows the desktop's own layout
+ * through the same media queries browser.xhtml uses: no client-side
+ * decoration available means the OS keeps its bar and this box is gone.
+ * The frontend reads the box's width over the channel and keeps its top row
+ * clear of it.
+ */
+#powerbrowser-window-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 33px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  padding-inline: 6.5px 10px;
+  color: #e8e8e8;
+  -moz-window-dragging: drag;
+}
+
+@media not (-moz-gtk-csd-available) {
+  #powerbrowser-window-controls {
+    display: none;
+  }
+}
+
+#powerbrowser-window-controls > button {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin: 0 6.5px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  color: inherit;
+  background-color: color-mix(in srgb, currentColor 10%, transparent);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  -moz-context-properties: stroke;
+  stroke: currentColor;
+  transition: background-color 0.2s ease;
+}
+
+#powerbrowser-window-controls > button:hover {
+  background-color: color-mix(in srgb, currentColor 15%, transparent);
+}
+
+#powerbrowser-window-controls > button:hover:active {
+  background-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+#powerbrowser-window-minimize {
+  background-image: -moz-symbolic-icon(window-minimize-symbolic);
+}
+
+#powerbrowser-window-maximize {
+  background-image: -moz-symbolic-icon(window-maximize-symbolic);
+}
+
+:root[sizemode="maximized"] #powerbrowser-window-maximize {
+  background-image: -moz-symbolic-icon(window-restore-symbolic);
+}
+
+#powerbrowser-window-close {
+  background-image: -moz-symbolic-icon(window-close-symbolic);
+}
+
+@media not (-moz-gtk-csd-minimize-button) {
+  #powerbrowser-window-minimize {
+    display: none;
+  }
+}
+
+@media not (-moz-gtk-csd-maximize-button) {
+  #powerbrowser-window-maximize {
+    display: none;
+  }
+}
+
+@media not (-moz-gtk-csd-close-button) {
+  #powerbrowser-window-close {
+    display: none;
+  }
+}
+
+/* One invisible handle per empty rect the frontend reports. Above the
+ * content frame (0) like the web-tab overlays, so the press reaches chrome,
+ * where window dragging is decided. */
+.powerbrowser-drag {
+  position: fixed;
+  z-index: 1;
+  -moz-window-dragging: drag;
+}

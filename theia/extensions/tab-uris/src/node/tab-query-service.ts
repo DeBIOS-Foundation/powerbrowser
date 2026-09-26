@@ -57,6 +57,19 @@ export interface GroupRow {
 export interface GroupTabRow extends TabQueryRow {
     group_id: string | null;
     thumbnail: string | null;
+    /**
+     * Where a loose tab was last placed on the canvas, or NULL for one that
+     * has never been placed -- those the canvas lays out along the bottom
+     * itself, so an upgraded profile invents no coordinates.
+     */
+    x: number | null;
+    y: number | null;
+    /**
+     * Place within the group, or NULL for a tab never arranged by hand --
+     * those sort after the arranged ones, so an existing store keeps its URI
+     * order until a group is first rearranged.
+     */
+    ord: number | null;
 }
 
 /**
@@ -249,7 +262,7 @@ export class TabQueryService {
         }
         try {
             return db.prepare(
-                'SELECT uri, url, title, last_active, group_id, thumbnail FROM tabs WHERE group_id = ? ORDER BY uri'
+                'SELECT uri, url, title, last_active, group_id, thumbnail, x, y, ord FROM tabs WHERE group_id = ? ORDER BY ord IS NULL, ord, uri'
             ).all(groupId) as GroupTabRow[];
         } catch {
             return [];
@@ -285,7 +298,7 @@ export class TabQueryService {
         }
         try {
             return db.prepare(
-                'SELECT uri, url, title, last_active, group_id, thumbnail FROM tabs WHERE group_id IS NULL ORDER BY last_active DESC'
+                'SELECT uri, url, title, last_active, group_id, thumbnail, x, y FROM tabs WHERE group_id IS NULL ORDER BY last_active DESC'
             ).all() as GroupTabRow[];
         } catch {
             return [];
