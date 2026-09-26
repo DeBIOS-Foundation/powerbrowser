@@ -245,6 +245,10 @@ const TAB_STORE_FILE_NAME = "tabs.sqlite";
 const TAB_STORE_SWEEP_MAX_WRITES = 500;
 const TAB_STORE_CLOSED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
+// NG-018: the scheduled full integrity check's interval. Used when the
+// settings row integrity_check_minutes is absent or unusable (24 hours).
+const TAB_STORE_INTEGRITY_DEFAULT_MS = 24 * 60 * 60 * 1000; // NG-018: when integrity_check_minutes is absent or unusable
+
 // SQL-01 (12-01): the single chrome-side tab-store connection. Module-level
 // (never a property on the frozen PowerBrowserAPI object -- assignment to a
 // frozen object throws), one writer only.
@@ -912,32 +916,27 @@ export const PowerBrowserAPI = Object.freeze({
     }
     closeTabStoreAtShutdown();
     const conn = await lazy.Sqlite.openConnection({ path: TAB_STORE_FILE_NAME, openNotExclusive: true });
-    const modeRows = await conn.execute("PRAGMA journal_mode=WAL;");
-    const mode = modeRows.length ? modeRows[0].getString(0) : "";
-    if (mode !== "wal") {
-      try {
-        await conn.close();
-      } catch {
-        // Close is best-effort here; the pin failure below is the error.
-      }
-      throw new Error(`openTabStore: journal_mode pin failed (got ${mode})`);
-    }
-    const schemaVersion = await conn.getSchemaVersion();
-    if (schemaVersion > TAB_STORE_SCHEMA_HEAD) {
-      try {
-        await conn.close();
-      } catch {
-        // Close is best-effort here; the refusal below is the error.
-      }
-      throw new Error(
-        `openTabStore: refusing downgrade: user_version=${schemaVersion} is newer than chain head ${TAB_STORE_SCHEMA_HEAD}`
-      );
-    }
     try {
+      const modeRows = await conn.execute("PRAGMA journal_mode=WAL;");
+      const mode = modeRows.length ? modeRows[0].getString(0) : "";
+      if (mode !== "wal") {
+        throw new Error(`openTabStore: journal_mode pin failed (got ${mode})`);
+      }
+      const schemaVersion = await conn.getSchemaVersion();
+      if (schemaVersion > TAB_STORE_SCHEMA_HEAD) {
+        throw new Error(
+          `openTabStore: refusing downgrade: user_version=${schemaVersion} is newer than chain head ${TAB_STORE_SCHEMA_HEAD}`
+        );
+      }
       await PowerBrowserAPI.migrateTabStoreToHead(conn);
     } catch (err) {
-      // NG-085: a connection nobody holds would block the shutdown barrier.
-      await conn.close().catch(() => undefined);
+      // NG-013: a connection that failed any step closes before the error
+      // leaves, so the quarantine never removes a file something still holds.
+      try {
+        await conn.close();
+      } catch {
+        // Close is best-effort; the error below is the point.
+      }
       throw err;
     }
     tabStoreConn = conn;
@@ -2450,29 +2449,72 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
+   * NG-011/NG-018: one row of the settings table, or null when it is absent
+   * or the store is unreadable. Never throws: every caller has a default.
+   */
+  async readTabStoreSetting(key) {
+    try {
+      const conn = await PowerBrowserAPI.openTabStore();
+      const rows = await conn.execute("SELECT value FROM settings WHERE key = :key", { key });
+      return rows.length ? rows[0].getString(0) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * NG-018: the full PRAGMA integrity_check SCHEMA.md:200-201 schedules beside
+   * the startup quick_check, which skips index contents. A failure quarantines
+   * and rebuilds from sessionstore, exactly as the startup tripwire does.
+   * Resolves true when the store is sound. Never throws.
+   */
+  async runScheduledIntegrityCheck() {
+    let ok = false;
+    try {
+      const conn = await PowerBrowserAPI.openTabStore();
+      const rows = await conn.execute("PRAGMA integrity_check");
+      ok = rows.length === 1 && rows[0].getString(0) === "ok";
+    } catch {
+      ok = false;
+    }
+    if (!ok) {
+      try {
+        await PowerBrowserAPI.quarantineAndRebuildTabStore(PowerBrowserAPI.parseSessionStoreTabRows());
+      } catch (err) {
+        PowerBrowserAPI.log("error", `[tab-store-integrity] rebuild failed: ${err && err.message ? err.message : err}`);
+      }
+    }
+    return ok;
+  },
+
+  /**
    * SQL-01 (12-01): startup orchestration. Opens the store (running the
    * version guard), fires the tripwire, and on any trip quarantines and
-   * rebuilds from sessionstore before continuing degraded. Resolves
-   * 'ready' | 'rebuilt' | 'degraded' -- never throws, so startup never
-   * stalls on the store.
+   * rebuilds from sessionstore before continuing degraded. An unopenable
+   * file is quarantined like a tripped one (NG-013); a store newer than
+   * this build is refused and left untouched (MIGRATIONS.md rule 4).
+   * Resolves 'ready' | 'rebuilt' | 'degraded' -- never throws, so startup
+   * never stalls on the store.
    */
   async ensureTabStore() {
+    let openError = null;
     try {
       await PowerBrowserAPI.openTabStore();
     } catch (err) {
+      openError = err;
       PowerBrowserAPI.log("error", `[ensureTabStore] open failed: ${err && err.message ? err.message : err}`);
+    }
+    // MIGRATIONS.md rule 4: a store newer than this build is refused, left
+    // untouched and reported -- never quarantined.
+    if (openError && /refusing downgrade/.test(String(openError.message))) {
       return "degraded";
     }
-    // WR-05 (12-CODE-REVIEW.md): the tripwire lives in
-    // checkTabStoreIntegrity -- call it rather than re-implementing the
-    // exact-single-ok keying here, so the two can never drift apart. It
-    // never throws (answers true/false only), so no guard is needed.
-    const ok = await PowerBrowserAPI.checkTabStoreIntegrity();
     let state = "ready";
-    if (!ok) {
+    // NG-013: an unopenable file counts as tripped (MIGRATIONS.md:53), the same
+    // as a failed quick_check.
+    if (openError || !(await PowerBrowserAPI.checkTabStoreIntegrity())) {
       try {
-        const restoreRows = PowerBrowserAPI.parseSessionStoreTabRows();
-        await PowerBrowserAPI.quarantineAndRebuildTabStore(restoreRows);
+        await PowerBrowserAPI.quarantineAndRebuildTabStore(PowerBrowserAPI.parseSessionStoreTabRows());
         state = "rebuilt";
       } catch (err) {
         PowerBrowserAPI.log("error", `[ensureTabStore] rebuild failed: ${err && err.message ? err.message : err}`);
@@ -2517,7 +2559,8 @@ export const PowerBrowserAPI = Object.freeze({
    * shell window carries no tab browser, so it never matches), each calling
    * the write or close wrapper keyed by the tab's own key (stockTabKey),
    * plus a sessionstore-state-write-complete observer running the bounded
-   * reconciliation sweep. No Theia-to-chrome channel is created and no actor
+   * reconciliation sweep, and the scheduled full integrity check (NG-018).
+   * No Theia-to-chrome channel is created and no actor
    * is registered. Returns a stop function removing every listener and
    * observer added here.
    */
@@ -2629,7 +2672,23 @@ export const PowerBrowserAPI = Object.freeze({
       },
     };
     Services.obs.addObserver(sweepObserver, "sessionstore-state-write-complete");
+    // NG-018: the scheduled full integrity check. The interval is the setting
+    // integrity_check_minutes (24 hours when absent), read before each wait so
+    // a changed setting applies from the next run. The stop function ends it.
+    let integrityOff = false;
+    (async () => {
+      while (!integrityOff) {
+        const minutes = Number(await PowerBrowserAPI.readTabStoreSetting("integrity_check_minutes"));
+        await PowerBrowserAPI.sleep(Number.isFinite(minutes) && minutes > 0 ? minutes * 60 * 1000 : TAB_STORE_INTEGRITY_DEFAULT_MS);
+        if (!integrityOff) {
+          await PowerBrowserAPI.runScheduledIntegrityCheck();
+        }
+      }
+    })().catch(err => {
+      PowerBrowserAPI.log("error", `[tab-store-integrity] ${err && err.message ? err.message : err}`);
+    });
     return () => {
+      integrityOff = true;
       for (const [container, name] of attached) {
         try {
           container.removeEventListener(name, onTabEvent);
