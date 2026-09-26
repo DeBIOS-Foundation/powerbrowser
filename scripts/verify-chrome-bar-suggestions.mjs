@@ -274,7 +274,8 @@ function seedFixture(db) {
   uri         TEXT PRIMARY KEY CHECK(length(uri) > 0),
   url         TEXT NOT NULL,
   title       TEXT NOT NULL DEFAULT '',
-  last_active INTEGER NOT NULL CHECK(last_active >= 0)
+  last_active INTEGER NOT NULL CHECK(last_active >= 0),
+  closed_at   INTEGER NULL
 )`);
     const insert = db.prepare('INSERT INTO tabs (uri, url, title, last_active) VALUES (?, ?, ?, ?)');
     const rows = [

@@ -91,11 +91,17 @@ export function buildTreeRow(
     name.className = 'pb-org-tree-row-title';
     name.textContent = tab.title;
     name.title = tab.title;
-    const uri = document.createElement('span');
-    uri.className = 'pb-org-tree-row-uri';
-    uri.textContent = tab.url || tab.uri;
-    uri.title = tab.url || tab.uri;
-    row.append(name, uri);
+    row.append(name);
+    // The caption only ever carries a page address, as on a canvas card: a
+    // row key (web:, stock:, widget:, or a Theia tab's address) is internal
+    // and never reaches the screen, so a tab with no page has no caption.
+    if (tab.url) {
+        const uri = document.createElement('span');
+        uri.className = 'pb-org-tree-row-uri';
+        uri.textContent = tab.url;
+        uri.title = tab.url;
+        row.append(uri);
+    }
     row.addEventListener('click', () => hooks.dive(tab, groupId));
     row.addEventListener('keydown', event => {
         if (event.key === 'Enter') {

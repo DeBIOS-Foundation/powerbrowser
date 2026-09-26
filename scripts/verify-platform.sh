@@ -3867,6 +3867,15 @@ run_own_checks() {
     "ng-019-tab-store-doc|node $REPO_ROOT/scripts/verify-ng-019-tab-store-doc.mjs"
     "ng-020-absence-wiring-by-call|node $REPO_ROOT/scripts/verify-ng-020-absence-wiring-by-call.mjs"
 
+    # NEW (non-GUI wave A, ruling T2-R4): the tab-store writer offline. Loads
+    # the real PowerBrowserAPI.sys.mjs in node over node:sqlite with the rules
+    # Sqlite.sys.mjs enforces (an unbound LIKE refused, bindByName on names the
+    # statement has, no nested transaction), and runs the migration from every
+    # shipped version, the key rule, the row lifecycle, the quarantine rebuild
+    # and the close at shutdown; it plants an unbound LIKE to prove its guard.
+    # Honestly --quick: a mkdtemp stage, no build, no browser, no network.
+    "tab-store-offline|node $REPO_ROOT/scripts/verify-tab-store-offline.mjs"
+
     # NEW (15-02): GUI-08's canvas-geometry gate. Derives canvas hooks,
     # zoom/min/tray/card consts, the thumbnail-fallback shape, and the
     # panorama command registry at check time and compares as set equality

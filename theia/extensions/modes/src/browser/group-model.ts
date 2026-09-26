@@ -15,10 +15,15 @@
  * painted change only if the replay fails again (15-UI-SPEC.md).
  */
 
-import { injectable } from '@theia/core/shared/inversify';
+import { inject, injectable } from '@theia/core/shared/inversify';
+import { ApplicationShell, Widget } from '@theia/core/lib/browser';
+import { NavigatableWidget } from '@theia/core/lib/browser/navigatable-types';
 import { Emitter, Event } from '@theia/core/lib/common';
 import type { GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-query-service';
-import type { GroupActorClient, GroupMutation } from './group-actor-client';
+import { TabUriRegistry } from '@powerbrowser/tab-uris/lib/browser/tab-uri-registry';
+import { WebTabWidget } from '@powerbrowser/tab-uris/lib/browser/web-tab';
+import { GroupActorClient } from './group-actor-client';
+import type { GroupMutation } from './group-actor-client';
 
 /** Contracted rename cap (15-UI-SPEC.md); duplicates allowed, empty reverts. */
 export const GROUP_TITLE_MAX_CHARS = 60;
@@ -66,10 +71,9 @@ export interface PanoramaTab {
  * the store on its own answers "which tabs has this profile seen lately",
  * which is not the question the canvas asks.
  *
- * The shell answers that one. `uri` is the store key -- the page URL, the
- * same value `writeTabRow` binds -- so the two join without a second
- * identity scheme, and the bridge (GUI-04) can later supply chrome-owned
- * tabs through the same shape without changing this file.
+ * The shell answers that one. `uri` is the tab's row key -- `tabKeyOf` --
+ * the same value the chrome-side writer binds, so the two join without a
+ * second identity scheme.
  */
 export interface LiveTab {
     uri: string;
@@ -77,24 +81,25 @@ export interface LiveTab {
     title: string;
 }
 
-/**
- * Card key for a tab that has no page yet -- a New Tab still on the empty
- * page. Chrome writes store rows for http(s) targets only, so such a tab has
- * no row and no URL to be keyed by, and four of them would all key as the
- * same empty address. The shell's own per-tab id stands in.
- *
- * It is a key, never a label: nothing built from it may reach the screen.
- */
-export const SESSION_TAB_PREFIX = 'session:';
-
-/** The shell tab id inside a session key, or undefined for a real URL key. */
-function sessionTabId(uri: string): string | undefined {
-    return uri.startsWith(SESSION_TAB_PREFIX) ? uri.slice(SESSION_TAB_PREFIX.length) : undefined;
-}
-
 function toFinite(value: unknown, fallback: number): number {
     const n = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(n) ? n : fallback;
+}
+
+/**
+ * NG-001: the one row-key rule, for every kind of tab (docs/TAB-STORE.md).
+ * A web tab is keyed by its own identity (`WebTabWidget.rowKey`), never its
+ * page; any other tab by its registry address, or its resource URI when the
+ * registry has none (an editor), or finally its widget id. Never a page URL,
+ * and never a plugin panel's `webview:` address (F5): both fall to the id.
+ */
+export function tabKeyOf(widget: Widget, registry: TabUriRegistry): string {
+    if (widget instanceof WebTabWidget) {
+        return widget.rowKey;
+    }
+    const address = registry.uriOf(widget) ?? (NavigatableWidget.is(widget) ? widget.getResourceUri() : undefined);
+    const key = address?.toString(true);
+    return key && !/^(webview|https?):/i.test(key) ? key : `widget:${widget.id}`;
 }
 
 @injectable()
@@ -117,27 +122,56 @@ export class GroupModel {
     private readonly pendingWrites = new Map<string, { attempts: number; revert: () => void; write: () => Promise<unknown> }>();
     private static readonly PENDING_WRITES_MAX = 20;
 
-    /**
-     * Group membership for tabs the store cannot hold: anything without an
-     * http(s) URL of its own -- a New Tab still on the empty page, the
-     * Welcome page, an editor. Keyed by the shell's tab id and dropped when
-     * the frontend does, which is honest about what it is.
-     *
-     * ponytail: session-only. Such a tab returns to Ungrouped on restart even
-     * when the shell restores the tab itself. Persisting it needs a store key
-     * that is not the page URL, which is the same change GUI-04's chrome-owned
-     * tab model brings.
-     */
-    private readonly sessionGroups = new Map<string, string>();
+    @inject(ApplicationShell)
+    protected readonly shell: ApplicationShell;
+
+    @inject(TabUriRegistry)
+    protected readonly registry: TabUriRegistry;
+
+    @inject(GroupActorClient)
+    protected readonly actor: GroupActorClient;
+
+    /** Theia tabs whose close already reaches the store. */
+    private readonly watched = new WeakSet<Widget>();
+
+    /** The row key of a shell tab (`tabKeyOf`). */
+    keyOf(widget: Widget): string {
+        return tabKeyOf(widget, this.registry);
+    }
 
     /**
-     * Canvas positions for the same tabs the store cannot key -- a New Tab on
-     * the empty page, Welcome, an editor. A tab WITH a page keeps its position
-     * in the store and survives restart; these keep it for the session, which
-     * is the whole life of the tab anyway, since the shell does not restore
-     * them either.
+     * NG-001: a Theia tab (editor, terminal, view) gets its row the first time
+     * it is organised; stock and web rows are written by chrome and the web tab.
      */
-    private readonly sessionPlaces = new Map<string, { x: number; y: number }>();
+    private async ensureRow(client: GroupActorClient, uri: string): Promise<void> {
+        if (/^(web|stock):/.test(uri)) {
+            return;
+        }
+        const card = this.locateCard(uri)?.card;
+        await client.mutate({ kind: 'trackTab', uri, url: card?.url ?? '', title: card?.title ?? '' });
+        this.watchClose(uri);
+    }
+
+    /**
+     * NG-005: closing a Theia tab that has a row marks the row closed. Widget
+     * disposal is the user's close; a reload or quit disposes nothing, so the
+     * row stays and the tab keeps its card.
+     * ponytail: finds the widget by scanning the main area, O(tabs); index by key if it shows up.
+     */
+    private watchClose(uri: string): void {
+        if (/^(web|stock):/.test(uri)) {
+            return;
+        }
+        const widget = [...this.shell.mainPanel.widgets()].find(candidate => this.keyOf(candidate) === uri);
+        if (!widget || this.watched.has(widget)) {
+            return;
+        }
+        this.watched.add(widget);
+        widget.disposed.connect(() => {
+            this.actor.mutate({ kind: 'closeTab', uri })
+                .catch(error => console.error('[@powerbrowser/modes] closing a tab row failed:', error));
+        });
+    }
 
     /**
      * Previews for tabs that are not pages -- the Welcome view, an editor, a
@@ -254,36 +288,29 @@ export class GroupModel {
                         return [{ ...tab, url: open.url, title: open.title || tab.title }];
                     }));
                 }
-                // Everything else open: in a group if this session put it in
-                // one, ungrouped otherwise. That includes a tab opened seconds
-                // ago whose row does not exist yet, which the store's own
-                // listUngroupedTabs cannot know about and which was therefore
-                // invisible on the canvas until now.
+                // Everything else open is in the tray, placed where the store
+                // says -- a tab seconds old whose row does not exist yet included.
                 const rest: PanoramaTab[] = [];
                 for (const tab of live) {
                     if (claimed.has(tab.uri)) {
                         continue;
                     }
-                    const placed = placements.get(tab.uri) ?? this.sessionPlaces.get(tab.uri);
-                    const card: PanoramaTab = {
+                    const placed = placements.get(tab.uri);
+                    rest.push({
                         uri: tab.uri,
                         url: tab.url,
                         title: tab.title,
-                        // The store first, then anything captured this
-                        // session for a tab the store cannot photograph.
                         thumbnail: thumbnails.get(tab.uri) ?? this.sessionThumbs.get(tab.uri) ?? null,
                         x: placed?.x,
                         y: placed?.y,
-                    };
-                    const session = sessionTabId(tab.uri);
-                    const target = session ? this.sessionGroups.get(session) : undefined;
-                    if (target !== undefined && nextMembers.has(target)) {
-                        nextMembers.set(target, [...(nextMembers.get(target) ?? []), card]);
-                    } else {
-                        rest.push(card);
-                    }
+                    });
                 }
                 tray = rest;
+                for (const tab of live) {
+                    if (claimed.has(tab.uri) || placements.has(tab.uri)) {
+                        this.watchClose(tab.uri);
+                    }
+                }
             }
             this.groups = parsed;
             this.members.clear();
@@ -526,16 +553,12 @@ export class GroupModel {
      * Writes one group's running order. Sent as the whole list because a drop
      * between two cards renumbers everything after it -- one transaction is
      * either the new order or the old one, where a write per tab could leave
-     * the group half-renumbered.
-     *
-     * Tabs the store cannot key are filtered out rather than sent: their rows
-     * do not exist, so an UPDATE naming them would match nothing while
-     * silently shifting the ordinals of the tabs that do exist.
+     * the group half-renumbered. Every tab has a row by now (NG-001: a Theia
+     * tab's is written by `ensureRow` when it joins the group), and chrome
+     * refuses a list naming a tab that is not a row in the group.
      */
     private async writeOrder(client: GroupActorClient, groupId: string): Promise<void> {
-        const uris = (this.members.get(groupId) ?? [])
-            .map(tab => tab.uri)
-            .filter(uri => sessionTabId(uri) === undefined);
+        const uris = (this.members.get(groupId) ?? []).map(tab => tab.uri);
         if (!uris.length) {
             return;
         }
@@ -570,36 +593,22 @@ export class GroupModel {
     }
 
     /**
-     * One placement write, split the same way membership is: a tab the store
-     * cannot key by URL keeps its position for the session instead of sending
-     * an UPDATE that would match no row, report success, and lose the change
-     * on the next reload.
+     * One placement write. Every tab has a key (NG-001), so every position is
+     * stored and survives a restart; a Theia tab's row is written first
+     * (`ensureRow`), and chrome refuses a key with no row rather than
+     * reporting a write that matched nothing.
      */
     private async writePlacement(client: GroupActorClient, uri: string, x: number, y: number): Promise<void> {
-        if (sessionTabId(uri) !== undefined) {
-            this.sessionPlaces.set(uri, { x, y });
-            return;
-        }
+        await this.ensureRow(client, uri);
         await client.mutate({ kind: 'setTabPosition', uri, x, y });
     }
 
     /**
-     * One membership write. A tab with no store row of its own -- no http(s)
-     * URL to be keyed by -- is remembered for the session instead of being
-     * sent to a store that has nothing to update; the mutation would find no
-     * row, report success, and the card would silently return to Ungrouped on
-     * the next reload.
+     * One membership write, the same way: the Theia tab's row first, then the
+     * group, which chrome refuses for a key with no row.
      */
     private async writeMembership(client: GroupActorClient, uri: string, groupId: string | null): Promise<void> {
-        const session = sessionTabId(uri);
-        if (session !== undefined) {
-            if (groupId === null) {
-                this.sessionGroups.delete(session);
-            } else {
-                this.sessionGroups.set(session, groupId);
-            }
-            return;
-        }
+        await this.ensureRow(client, uri);
         await client.mutate({ kind: 'setTabGroup', uri, groupId });
     }
 
@@ -823,7 +832,8 @@ export class GroupModel {
         return {
             uri: row.uri,
             url: typeof row.url === 'string' ? row.url : '',
-            title: typeof row.title === 'string' && row.title ? row.title : row.uri,
+            // Never the row key: it is internal (NG-001), and a tab with no title shows its page or nothing.
+            title: typeof row.title === 'string' && row.title ? row.title : (typeof row.url === 'string' ? row.url : ''),
             thumbnail: typeof row.thumbnail === 'string' && row.thumbnail ? row.thumbnail : null,
             x: placed(row.x),
             y: placed(row.y),
