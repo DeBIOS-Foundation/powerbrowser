@@ -174,15 +174,18 @@ export class PowerBrowserTelemetrySender {
         }
     }
 
+    /** Whether the live level admits this kind of event now. Never throws; an unreadable level is off. */
+    admits(kind: TelemetryEventKind): boolean {
+        try {
+            return levelAllowsEvent(normalizeLevel(this.getLevel()), kind);
+        } catch {
+            return false;
+        }
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     protected enqueue(kind: TelemetryEventKind, name: string, data: Record<string, any> | undefined): void {
-        let level: TelemetryLevel = 'off';
-        try {
-            level = normalizeLevel(this.getLevel());
-        } catch {
-            level = 'off';
-        }
-        if (!levelAllowsEvent(level, kind)) return;
+        if (!this.admits(kind)) return;
         if (this.endpoint === undefined || this.endpoint === '') {
             if (!this.endpointWarned) {
                 this.endpointWarned = true;
