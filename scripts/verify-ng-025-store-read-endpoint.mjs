@@ -61,8 +61,8 @@ runCheck(NAME, async () => {
             const shell = await shellContext(topLevelContexts, pages.origin);
             await waitTheiaReady(evaluateIn, shell);
             const access = await storeAccess(profileDir);
-            if (!access) {
-                failures.push('store-access.json never appeared in the profile -- the endpoint is not running');
+            if (access.missing) {
+                failures.push(access.missing);
                 return;
             }
             if (access.mode & 0o077) failures.push(`store-access.json is open to other users (mode ${access.mode.toString(8)})`);

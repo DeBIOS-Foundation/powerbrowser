@@ -9,15 +9,16 @@
 // <profile>/saved-pages/, and have one saved_pages row. A second save replaces
 // the first copy (old directory gone, still one row); a save for a tab that
 // does not exist answers, without a copy and without hanging; a 127.0.0.1 page in
-// the selected stock tab cannot trigger a save (and gets a reply, the positive
-// control that its request reached chrome). The row is read from a stage copy
+// the selected stock tab cannot trigger a save. The positive control: the same
+// savePageCopy message from the Theia frame is served, and the page's own
+// request reaches chrome's handler for the kind. The row is read from a stage copy
 // of tabs.sqlite in a mkdtemp directory, never from the profile file.
 
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { GET_BY_NAME, actorRequestExpr, diCall, runCheck, servePages, shellContext, unanswered, until, waitTheiaReady, withProfile } from './lib/ng-b-live.mjs';
+import { GET_BY_NAME, actorRequest, actorRequestExpr, diCall, runCheck, servePages, shellContext, unanswered, until, waitTheiaReady, withProfile } from './lib/ng-b-live.mjs';
 
 const NAME = 'ng-028-saved-page-copy';
 const NONCE = `ng028${Date.now().toString(36)}`;
@@ -114,7 +115,12 @@ runCheck(NAME, async () => {
             if (missing.hung || (missing.value && missing.value.dir)) {
                 failures.push(`a save for a tab that does not exist did not answer without a copy within ${SAVE_BUDGET_MS / 1000} s: ${JSON.stringify(missing)}`);
             }
-            const hostile = JSON.parse(await evaluate(actorRequestExpr({ kind: 'savePageCopy', uri: tabUri }, 4000)));
+            // The same message the hostile page sends below, from the shell frame: it
+            // must be served, so the hostile refusal is the wall and not a missing kind.
+            const saveMsg = { kind: 'savePageCopy', uri: tabUri };
+            const own = await actorRequest(evaluateIn, shell, saveMsg, 15000);
+            if (own.reply?.ok !== true || typeof own.reply.dir !== 'string') failures.push(`actor savePageCopy from the Theia frame answered ${JSON.stringify(own)}`);
+            const hostile = JSON.parse(await evaluate(actorRequestExpr(saveMsg, 4000)));
             const silent = unanswered(hostile, 'savePageCopy');
             if (silent) failures.push(silent);
             if (hostile.reply?.ok === true) failures.push(`a 127.0.0.1 page in a stock tab triggered a save: ${JSON.stringify(hostile)}`);

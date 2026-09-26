@@ -70,8 +70,8 @@ runCheck(NAME, async () => {
             const shell = await shellContext(topLevelContexts, pages.origin);
             await waitTheiaReady(evaluateIn, shell);
             const access = await storeAccess(profileDir);
-            if (!access) {
-                failures.push('store-access.json never appeared in the profile -- the endpoint is not running');
+            if (access.missing) {
+                failures.push(access.missing);
                 return;
             }
             const groups = async () => (await diCall(evaluateIn, shell, 'GroupQueryService', 'listGroups')).value || [];

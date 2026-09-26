@@ -9,7 +9,7 @@
 // the endpoint's tabs_with_places tool; the bookmarked filter must split A
 // from B; rows come ranked by frecency; a 127.0.0.1 page in the selected
 // stock tab (B, which openStockTab selects) gets no rows, but does get a
-// reply (the positive control that its request reached chrome).
+// reply from chrome's handler for the kind (the positive control).
 
 import { actorRequest, actorRequestExpr, callTool, diCall, runCheck, seedPlaces, servePages, shellContext, storeAccess, unanswered, until, waitTheiaReady, withProfile } from './lib/ng-b-live.mjs';
 
@@ -59,8 +59,8 @@ runCheck(NAME, async () => {
             const viaReader = await diCall(evaluateIn, shell, 'ChromeStoreClient', 'queryTabsWithPlaces', [{ bookmarked: true }]);
             if (!has(viaReader.value, aUrl) || has(viaReader.value, bUrl)) failures.push(`ChromeStoreClient.queryTabsWithPlaces answered ${JSON.stringify(viaReader)}`);
             const access = await storeAccess(profileDir);
-            if (!access) {
-                failures.push('store-access.json never appeared in the profile -- the endpoint is not running');
+            if (access.missing) {
+                failures.push(access.missing);
             } else {
                 const tool = await callTool(access, 'tabs_with_places', { bookmarked: false });
                 if (!tool.ok || !has(tool.value?.rows, bUrl) || has(tool.value?.rows, aUrl)) failures.push(`tool tabs_with_places answered ${JSON.stringify(tool)}`);

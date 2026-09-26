@@ -10,7 +10,7 @@
 //      relayed through the Theia frame (the runtime consumer).
 // Then the hostile-page wall: a 127.0.0.1 page on a second port, in the
 // selected stock tab, sends the same kinds and must get no data -- and must
-// get a reply, the positive control that its request reached chrome. Fixtures
+// get a reply from chrome's handler for the kind (the positive control). Fixtures
 // are seeded through the Places API from a chrome-scope evaluation (setup only).
 
 import { actorRequest, actorRequestExpr, callTool, diCall, runCheck, seedPlaces, servePages, shellContext, storeAccess, unanswered, waitTheiaReady, withProfile } from './lib/ng-b-live.mjs';
@@ -58,8 +58,8 @@ runCheck(NAME, async () => {
 
             // 3. The endpoint's tools, relayed through a Theia window to the actor.
             const access = await storeAccess(profileDir);
-            if (!access) {
-                failures.push('store-access.json never appeared in the profile -- the endpoint is not running');
+            if (access.missing) {
+                failures.push(access.missing);
             } else {
                 const th = await callTool(access, 'history_entry', { url: HISTORY.url });
                 if (!th.ok || th.value?.entry?.title !== HISTORY.title) failures.push(`tool history_entry answered ${JSON.stringify(th)}`);

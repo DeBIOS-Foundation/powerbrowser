@@ -14,15 +14,17 @@
 // that is not a comment and not inside the body of a reader already found
 // dead. That rule iterates to a fixpoint, so a reader called only by a dead
 // reader is dead too. Call shapes: `PowerBrowserAPI.name(` for object
-// methods, a bare `name(` for module functions, and `.name(` not preceded by
+// methods, a bare `name(` in PowerBrowserAPI.sys.mjs itself for module
+// functions (they are file-local, so a same-named method elsewhere is not a
+// caller), and `.name(` not preceded by
 // `PowerBrowserAPI` for TabQueryService (reached through JSON-RPC proxies,
 // e.g. `this.groups.listGroups(`). scripts/ never counts: a check calling a
 // reader is not a consumer.
 //
 // Honestly --quick: text reads only. --self-test runs the analyzer over a
 // synthetic tree: it must find exactly the planted dead readers, then go red
-// on a removed call site and on a planted reader, and fail distinctly on an
-// empty scan.
+// on a removed call site and on a planted reader, and fail distinctly when
+// either source (or both) yields zero readers.
 // ponytail: braces are counted character by character, so a brace inside a
 // string or regex literal can skew a body span; the self-test pins the
 // shapes this tree uses.
@@ -106,6 +108,9 @@ export function analyze(sources) {
         const next = readers.filter(reader => {
             const pattern = callPattern(reader);
             for (const [file, lines] of Object.entries(split)) {
+                // A module function is file-local: a same-named method elsewhere
+                // (e.g. a .ts client's `searchPlaces(text…)`) is not its caller.
+                if (reader.kind === 'function' && file !== reader.file) continue;
                 for (let i = 0; i < lines.length; i += 1) {
                     if (file === reader.file && i === reader.line) continue;
                     if (isComment(lines[i])) continue;
@@ -134,9 +139,16 @@ function trackedSources() {
     return all;
 }
 
+/**
+ * One line per source that yields no reader on its own -- a half-empty scan
+ * must not stay green behind the other half's readers -- then one per dead reader.
+ */
 function failuresOf(result) {
-    if (result.dead === null) return [`derived ZERO readers from ${PBA_REL} and ${TQS_REL} -- the derivation is broken, so a clean result would prove nothing`];
-    return result.dead.map(r => `${r.file}:${r.line + 1} ${r.name} -- no caller on the runtime path (give it a consumer or delete it)`);
+    const zero = [PBA_REL, TQS_REL]
+        .filter(file => !result.readers.some(r => r.file === file))
+        .map(file => `derived ZERO readers from ${file} -- that half of the derivation is broken, so a clean result for it would prove nothing`);
+    const dead = (result.dead ?? []).map(r => `${r.file}:${r.line + 1} ${r.name} -- no caller on the runtime path (give it a consumer or delete it)`);
+    return [...zero, ...dead];
 }
 
 const FIXTURE = {
@@ -192,13 +204,33 @@ function selfTest() {
     const planted = { ...FIXTURE, [PBA_REL]: FIXTURE[PBA_REL].replace('Object.freeze({', 'Object.freeze({\n  readPlanted() {\n    return 0;\n  },') };
     if (planted[PBA_REL] === FIXTURE[PBA_REL]) problems.push('the planted reader did not land');
     if (!(names(analyze(filterSources(planted))) ?? []).includes('readPlanted')) problems.push('a planted uncalled reader stayed green');
-    if (failuresOf(analyze({})).length !== 1 || !failuresOf(analyze({}))[0].includes('derived ZERO')) problems.push('an empty scan did not fail distinctly');
+    // A dead module function whose name a .ts method shares: the method must not keep it alive.
+    const shadowed = { ...FIXTURE, 'theia/extensions/tab-uris/src/browser/client.ts': 'export class Client {\n    searchDead(text: string): string {\n        return text;\n    }\n}' };
+    shadowed[PBA_REL] = shadowed[PBA_REL].replace('function searchUsed() {', 'function searchDead() {\n  return 4;\n}\nfunction searchUsed() {');
+    if (!shadowed[PBA_REL].includes('function searchDead()')) problems.push('the shadowed module function did not land');
+    if (!(names(analyze(filterSources(shadowed))) ?? []).includes('searchDead')) problems.push('a same-named .ts method kept a dead module function alive');
+    const empty = failuresOf(analyze({}));
+    if (empty.length !== 2 || !empty.every(line => line.startsWith('derived ZERO'))) problems.push(`an empty scan did not fail distinctly for each half: ${JSON.stringify(empty)}`);
+    // Every TabQueryService reader called, and PowerBrowserAPI yielding none:
+    // the only failure left must be PowerBrowserAPI's own zero line.
+    const noPba = {
+        ...FIXTURE,
+        [PBA_REL]: 'export const PowerBrowserAPI = Object.freeze({});',
+        'theia/extensions/modes/src/browser/caller.ts': 'export const use = (svc: { getUsed(): number; getUnused(): number }) => svc.getUsed() + svc.getUnused();',
+    };
+    const pbaZero = failuresOf(analyze(filterSources(noPba)));
+    if (pbaZero.length !== 1 || !pbaZero[0].startsWith(`derived ZERO readers from ${PBA_REL}`)) problems.push(`a PowerBrowserAPI half with no readers did not fail on its own line: ${JSON.stringify(pbaZero)}`);
+    const noTqs = { ...FIXTURE, [TQS_REL]: 'export class TabQueryService {\n}' };
+    const tqsZero = failuresOf(analyze(filterSources(noTqs)));
+    if (!tqsZero.some(line => line.startsWith(`derived ZERO readers from ${TQS_REL}`)) || tqsZero.some(line => line.startsWith(`derived ZERO readers from ${PBA_REL}`))) {
+        problems.push(`a TabQueryService half with no readers did not fail on its own line: ${JSON.stringify(tqsZero)}`);
+    }
     if (problems.length) {
         console.error(`${NAME} --self-test: FAIL`);
         for (const p of problems) console.error(`  - ${p}`);
         return 1;
     }
-    console.log(`${NAME} --self-test: PASS -- control found exactly the planted dead readers; a removed call site, a planted reader and an empty scan each went red`);
+    console.log(`${NAME} --self-test: PASS -- control found exactly the planted dead readers; a removed call site, a planted reader, a module function shadowed by a same-named .ts method, an empty scan and each half scanning zero readers each went red`);
     return 0;
 }
 

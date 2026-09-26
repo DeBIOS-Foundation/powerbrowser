@@ -152,14 +152,19 @@ export async function actorRequest(evaluateIn, ctx, msg, timeoutMs) {
 
 /**
  * The positive control of every hostile-page actor wall: the page's request
- * must get a reply, which proves it reached chrome. A timeout means the
- * message never left the page, and a missing answer would prove nothing
- * about the wall. Returns the failure line, or null.
+ * must reach chrome's handler for that kind and be refused there. A timeout
+ * means the message never left the page, and an "unknown kind" answer means
+ * no handler exists for the kind; either way the refusal would prove
+ * nothing about the wall. Returns the failure line, or null.
  */
 export function unanswered(r, kind) {
-    return r && r.timeout
-        ? `positive control: the 127.0.0.1 page's ${kind} request got no reply at all, so it never reached chrome and its refusal proves nothing`
-        : null;
+    if (r && r.timeout) {
+        return `positive control: the 127.0.0.1 page's ${kind} request got no reply at all, so it never reached chrome and its refusal proves nothing`;
+    }
+    if (/unknown kind/.test(String(r && r.reply && r.reply.message))) {
+        return `positive control: the 127.0.0.1 page's ${kind} request was refused as an unknown kind (${r.reply.message}), so no wall was tested`;
+    }
+    return null;
 }
 
 /** Calls a DI-bound Theia service in the shell frame; resolves { value } or { error }. */
@@ -203,12 +208,35 @@ export function seedPlaces(send, { history = [], bookmarks = [] } = {}) {
     })()`);
 }
 
-/** The endpoint's access file from the check's profile once the backend wrote it; null when it never appears. */
+const ACCESS_MISSING = 'store-access.json never appeared in the profile -- the endpoint is not running';
+
+/**
+ * The endpoint's access file from the check's profile once the backend wrote
+ * it. It is parsed inside the poll, so a torn write is retried. Resolves the
+ * access object, or { missing } carrying the failure line: the file never
+ * appeared, or it never held JSON with a string url and token.
+ */
 export async function storeAccess(profileDir) {
     const file = join(profileDir, 'store-access.json');
-    const text = await until(() => readFile(file, 'utf8'), 60000);
-    if (!text) return null;
-    return { ...JSON.parse(text), file, mode: (await stat(file)).mode & 0o777 };
+    let why = ACCESS_MISSING;
+    const access = await until(async () => {
+        let text;
+        try {
+            text = await readFile(file, 'utf8');
+        } catch {
+            return undefined;
+        }
+        try {
+            const parsed = JSON.parse(text);
+            if (parsed && typeof parsed.url === 'string' && typeof parsed.token === 'string') return parsed;
+            why = 'store-access.json never held a string url and token';
+        } catch (e) {
+            why = `store-access.json never held valid JSON (${e.message})`;
+        }
+        return undefined;
+    }, 60000);
+    if (!access) return { missing: why };
+    return { ...access, file, mode: (await stat(file)).mode & 0o777 };
 }
 
 /**

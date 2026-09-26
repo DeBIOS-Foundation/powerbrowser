@@ -7,7 +7,7 @@
 // the DI-bound ChromeStoreClient, and through the endpoint's sessionstore_tabs
 // tool (the runtime consumer). The same page -- a 127.0.0.1 page on a second
 // port in the selected stock tab -- asks for the projection and gets no rows,
-// but does get a reply (the positive control that its request reached chrome).
+// but does get a reply from chrome's handler for the kind (the positive control).
 
 import { actorRequest, actorRequestExpr, callTool, diCall, runCheck, servePages, shellContext, storeAccess, unanswered, until, waitTheiaReady, withProfile } from './lib/ng-b-live.mjs';
 
@@ -31,8 +31,8 @@ runCheck(NAME, async () => {
             const viaReader = await diCall(evaluateIn, shell, 'ChromeStoreClient', 'projectSessionStoreTabs');
             if (!lists(viaReader.value)) failures.push(`ChromeStoreClient.projectSessionStoreTabs answered ${JSON.stringify(viaReader)}`);
             const access = await storeAccess(profileDir);
-            if (!access) {
-                failures.push('store-access.json never appeared in the profile -- the endpoint is not running');
+            if (access.missing) {
+                failures.push(access.missing);
             } else {
                 const tool = await callTool(access, 'sessionstore_tabs', {});
                 if (!tool.ok || !lists(tool.value?.rows)) failures.push(`tool sessionstore_tabs answered ${JSON.stringify(tool)}`);

@@ -8,10 +8,11 @@
 // tab, one history-only page, one bookmark, plus a bookmarklet and a file:
 // bookmark that must never be offered as an address. Also: each address
 // once, open tabs first, at most 8 rows, a typed % matches literally, and a
-// 127.0.0.1 page in the selected stock tab cannot run the Places search
-// (and gets a reply, the positive control that its request reached chrome).
+// 127.0.0.1 page in the selected stock tab cannot run the Places search. The
+// positive control: the same searchPlaces message from the Theia frame is
+// served, and the page's own request reaches chrome's handler for the kind.
 
-import { actorRequestExpr, diCall, runCheck, seedPlaces, servePages, shellContext, unanswered, until, waitTheiaReady, withProfile } from './lib/ng-b-live.mjs';
+import { actorRequest, actorRequestExpr, diCall, runCheck, seedPlaces, servePages, shellContext, unanswered, until, waitTheiaReady, withProfile } from './lib/ng-b-live.mjs';
 
 const NAME = 'ng-023-suggestions-history-bookmarks';
 const NONCE = `ng023${Date.now().toString(36)}`;
@@ -30,9 +31,19 @@ runCheck(NAME, async () => {
             await waitTheiaReady(evaluateIn, shell);
             await seedPlaces(send, { history: [HISTORY_ONLY], bookmarks: [BOOKMARKED, BOOKMARKLET, FILE_BOOKMARK] });
             const search = prefix => diCall(evaluateIn, shell, 'ChromeBarSuggestionService', 'searchByPrefix', [prefix, 8]);
+            // The open tab's row lands on its own: poll for it with a small
+            // budget, then take one final reading. History and bookmark rows
+            // never arrive (NG-023 is unbuilt), so waiting on all three
+            // would burn the backend's ~8-query evaluation budget and hang
+            // the check instead of failing red.
+            const openRow = r => r.value && r.value.some(row => row.url === openUrl);
+            const open = (await until(async () => {
+                const r = await search(NONCE);
+                return openRow(r) ? r : undefined;
+            }, 20000)) ?? await search(NONCE);
             const want = [openUrl, HISTORY_ONLY.url, BOOKMARKED.url];
             const complete = r => r.value && want.every(u => r.value.some(row => row.url === u));
-            const final = (await until(async () => { const r = await search(NONCE); return complete(r) ? r : undefined; }, 30000)) ?? await search(NONCE);
+            const final = complete(open) ? open : await search(NONCE);
             const rows = final.value ?? [];
             const urls = rows.map(row => row.url);
             for (const u of want) {
@@ -46,8 +57,14 @@ runCheck(NAME, async () => {
                 failures.push(`an open tab ranks below a history or bookmark match: ${JSON.stringify(urls)}`);
             }
             const percent = await search('%');
+            if (percent.error) failures.push(`typing % made the suggestion service throw: ${percent.error}`);
             if ((percent.value ?? []).some(row => row.url.includes(NONCE))) failures.push('typing % listed the fixtures -- the Places search does not escape wildcards');
-            const hostile = JSON.parse(await evaluate(actorRequestExpr({ kind: 'searchPlaces', text: NONCE, limit: 8 }, 4000)));
+            // The same message the hostile page sends below, from the shell frame: it
+            // must be served, so the hostile refusal is the wall and not a missing kind.
+            const places = { kind: 'searchPlaces', text: NONCE, limit: 8 };
+            const own = await actorRequest(evaluateIn, shell, places);
+            if (own.reply?.ok !== true) failures.push(`actor searchPlaces from the Theia frame answered ${JSON.stringify(own)}`);
+            const hostile = JSON.parse(await evaluate(actorRequestExpr(places, 4000)));
             const silent = unanswered(hostile, 'searchPlaces');
             if (silent) failures.push(silent);
             if (hostile.reply?.ok === true || JSON.stringify(hostile).includes(`${NONCE}/`)) {
