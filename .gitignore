@@ -25,6 +25,9 @@ esbuild.mjs
 # Theia runtime
 plugins/
 .theia/
+# Scratch app dirs of scripts/lib/scratch-app.mjs (NG-071, NG-073 checks); removed by
+# cleanup(), ignored in case a run is killed first.
+theia/applications/.scratch-*
 
 # Firefox fork build spill (D-01 containment)
 upstream/

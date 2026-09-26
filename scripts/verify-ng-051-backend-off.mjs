@@ -22,20 +22,24 @@ const MAIN_JS = join(REPO_ROOT, 'theia/applications/browser/lib/backend/main.js'
 const ADAPTER = '@powerbrowser/backend-opencode';
 const failures = [];
 
-const { failures: rf, config } = resolveConfig(join(REPO_ROOT, 'configuration.toml'), undefined);
-if (rf.length) failures.push(`configuration.toml does not resolve: ${rf.join('; ')}`);
-const backend = JSON.parse(emitAiBackend(config, { id: 'dev' })).backend;
-const pkg = JSON.parse(readFileSync(APP_PKG, 'utf8'));
-const composed = Object.hasOwn(pkg.dependencies ?? {}, ADAPTER);
-if (composed !== (backend === 'opencode')) {
-    failures.push(`${ADAPTER} is ${composed ? '' : 'not '}a dependency of theia/applications/browser while [ai] backend is "${backend}" -- it must be composed exactly when the manifest selects "opencode"`);
-}
-const key = pkg.theia?.frontend?.config?.powerbrowserAiBackend;
-if (key !== backend) failures.push(`package.json powerbrowserAiBackend is ${JSON.stringify(key)}, the manifest resolves "${backend}"`);
+try {
+    const { failures: rf, config } = resolveConfig(join(REPO_ROOT, 'configuration.toml'), undefined);
+    if (rf.length) failures.push(`configuration.toml does not resolve: ${rf.join('; ')}`);
+    const backend = JSON.parse(emitAiBackend(config, { id: 'dev' })).backend;
+    const pkg = JSON.parse(readFileSync(APP_PKG, 'utf8'));
+    const composed = Object.hasOwn(pkg.dependencies ?? {}, ADAPTER);
+    if (composed !== (backend === 'opencode')) {
+        failures.push(`${ADAPTER} is ${composed ? '' : 'not '}a dependency of theia/applications/browser while [ai] backend is "${backend}" -- it must be composed exactly when the manifest selects "opencode"`);
+    }
+    const key = pkg.theia?.frontend?.config?.powerbrowserAiBackend;
+    if (key !== backend) failures.push(`package.json powerbrowserAiBackend is ${JSON.stringify(key)}, the manifest resolves "${backend}"`);
 
-if (backend === 'off') {
-    if (!existsSync(MAIN_JS)) failures.push(`${MAIN_JS} is absent -- run yarn build in theia/ first`);
-    else await live();
+    if (backend === 'off') {
+        if (!existsSync(MAIN_JS)) failures.push(`${MAIN_JS} is absent -- run yarn build in theia/ first`);
+        else await live();
+    }
+} catch (err) {
+    failures.push(`prerequisite: ${err.message}`);
 }
 finish();
 

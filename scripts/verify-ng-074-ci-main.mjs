@@ -34,9 +34,16 @@ if (process.argv.includes('--self-test')) {
     if (wrong.length) { console.error(`${NAME} --self-test: FAIL -- wrong verdict for: ${wrong.join(', ')}`); process.exit(1); }
     console.log(`${NAME} --self-test: PASS -- every planted run set gave the expected verdict`);
 } else {
-    const sha = execFileSync('git', ['-C', REPO_ROOT, 'rev-parse', 'main'], { encoding: 'utf8' }).trim();
-    const runs = JSON.parse(execFileSync('gh', ['run', 'list', '--workflow', 'verify.yml', '--branch', 'main', '--commit', sha,
-        '--json', 'headSha,status,conclusion', '--limit', '20'], { cwd: REPO_ROOT, encoding: 'utf8' }));
+    let sha, runs;
+    try {
+        const opts = { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] };
+        sha = execFileSync('git', ['-C', REPO_ROOT, 'rev-parse', 'main'], opts).trim();
+        runs = JSON.parse(execFileSync('gh', ['run', 'list', '--workflow', 'verify.yml', '--branch', 'main', '--commit', sha,
+            '--json', 'headSha,status,conclusion', '--limit', '20'], opts));
+    } catch (err) {
+        console.error(`${NAME}: FAIL -- prerequisite: could not read the verify.yml runs for main: ${String(err.stderr || err.message).trim().split('\n')[0]}`);
+        process.exit(1);
+    }
     const v = verdict(runs, sha);
     if (v) { console.error(`${NAME}: FAIL -- ${v}`); process.exit(1); }
     console.log(`${NAME}: PASS -- verify.yml concluded success on main at ${sha}`);

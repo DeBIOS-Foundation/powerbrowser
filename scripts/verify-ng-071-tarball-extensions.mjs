@@ -75,6 +75,7 @@ sha256 = "${pin}"
     steps.push(bad);
     if (bad.status === 0) failures.push('a wrong local-path pin did not fail the plugin step');
     if (!bad.output.includes('ng071.local')) failures.push('the pin failure does not name the entry ng071.local');
+    if (!/sha256|integrity|\bpin(s|ned)?\b/i.test(bad.output)) failures.push('the bad-pin failure names no pin mismatch (sha256, integrity or pin) -- it failed for another reason');
     if (existsSync(join(bad.pluginsDir, 'ng071.local.tar.gz'))) failures.push('the mismatched archive was installed anyway');
 } catch (err) {
     failures.push(err.message);

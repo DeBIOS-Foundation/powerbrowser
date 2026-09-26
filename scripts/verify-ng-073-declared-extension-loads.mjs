@@ -10,7 +10,7 @@
 // May pass on the current code -- see questions-wave-e.md Q8.
 // Tier: full. Marker: live-clone.
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { withFirefoxPage } from './lib/firefox-bidi.mjs';
@@ -20,6 +20,7 @@ const NAME = 'ng073-declared-extension-loads';
 const failures = [];
 const dir = mkdtempSync(join(tmpdir(), 'ng073-'));
 const marker = join(dir, 'activated');
+const browserLog = join(dir, 'browser-stdout.log');
 let step;
 let server;
 try {
@@ -36,8 +37,9 @@ try {
     server = spawn(process.execPath, ['-e', `require('http').createServer((q, s) => { s.setHeader('Content-Type', 'application/octet-stream'); s.end(require('fs').readFileSync(${JSON.stringify(join(dir, 'probe.vsix'))})); }).listen(0, '127.0.0.1', function () { console.log(this.address().port); });`],
         { stdio: ['ignore', 'pipe', 'inherit'] });
     const port = await new Promise((resolve, reject) => {
-        server.stdout.once('data', d => resolve(String(d).trim()));
-        server.once('exit', c => reject(new Error(`the .vsix server exited (${c}) before listening`)));
+        const t = setTimeout(() => reject(new Error('the .vsix server did not report its port within 15 s')), 15000);
+        server.stdout.once('data', d => { clearTimeout(t); resolve(String(d).trim()); });
+        server.once('exit', c => { clearTimeout(t); reject(new Error(`the .vsix server exited (${c}) before listening`)); });
     });
     step = runDeclaredPluginStep({ 'powerbrowser-test.ng073-probe': `http://127.0.0.1:${port}/ng073-probe-0.0.1.vsix` });
     if (step.status !== 0) throw new Error(`the declared plugin step exited ${step.status}: ${step.output.slice(-800)}`);
@@ -47,8 +49,15 @@ try {
         await waitFor('window.theia && window.theia.container ? true : false', { timeoutMs: 90000 });
         const deadline = Date.now() + 60000;
         while (!existsSync(marker) && Date.now() < deadline) await new Promise(r => setTimeout(r, 500));
-    });
-    if (!existsSync(marker)) failures.push('the declared extension never activated in the built app (no marker within 60 s of a ready workbench)');
+    }, { stdoutPath: browserLog });
+    if (!existsSync(marker)) {
+        // The sidecar's plugin deployer says whether the plugin was never deployed or deployed
+        // and never activated; its WARN/ERROR lines reach the browser's stdout.
+        const deployer = existsSync(browserLog) ? [...new Set(readFileSync(browserLog, 'utf8').split('\n')
+            .map(l => /plugin-ext:PluginDeployerImpl (?:WARN|ERROR) (.*?)"?$/.exec(l)?.[1]).filter(Boolean))] : [];
+        failures.push('the declared extension never activated in the built app (no marker within 60 s of a ready workbench)'
+            + (deployer.length ? ` -- PluginDeployerImpl: ${deployer.join(' | ')}` : ' -- PluginDeployerImpl logged no warning'));
+    }
 } catch (err) {
     failures.push(err.message);
 } finally {

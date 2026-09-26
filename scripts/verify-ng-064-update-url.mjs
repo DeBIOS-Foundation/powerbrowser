@@ -18,7 +18,7 @@
 // Tier: full (needs the Gecko build). Marker: live-main.
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,9 +43,14 @@ if (!appHost) failures.push('application.ini carries no https [AppUpdate] URL');
 else if (appHost !== host) failures.push(`application.ini [AppUpdate] URL host is ${appHost}, the manifest says ${host}`);
 
 for (const f of [`${config.identity.binary_name}-bin`, 'libxul.so']) {
-    const urls = spawnSync('grep', ['-a', '-o', '-E', 'https://[a-z0-9.-]+/update/6/', join(BIN, f)], { encoding: 'latin1', maxBuffer: 1 << 26 }).stdout.split('\n').filter(Boolean);
-    for (const u of new Set(urls)) if (!u.startsWith(`https://${host}/`)) failures.push(`${f} carries the update URL ${u}`);
-    if (spawnSync('grep', ['-a', '-q', '-F', MOZ, join(BIN, f)]).status === 0) failures.push(`${f} carries a ${MOZ} URL`);
+    const file = join(BIN, f);
+    if (!existsSync(file)) { failures.push(`objdir/dist/bin/${f} is absent -- its compiled-in update URL cannot be read`); continue; }
+    // grep exits 1 for "no match" and 2 for "could not read": only 2 is an instrument failure.
+    const found = spawnSync('grep', ['-a', '-o', '-E', 'https://[a-z0-9.-]+/update/6/', file], { encoding: 'latin1', maxBuffer: 1 << 26 });
+    const moz = spawnSync('grep', ['-a', '-q', '-F', MOZ, file], { encoding: 'utf8' });
+    if (found.status === 2 || moz.status === 2) { failures.push(`grep could not read ${f}: ${(found.stderr || moz.stderr).trim()}`); continue; }
+    for (const u of new Set(found.stdout.split('\n').filter(Boolean))) if (!u.startsWith(`https://${host}/`)) failures.push(`${f} carries the update URL ${u}`);
+    if (moz.status === 0) failures.push(`${f} carries a ${MOZ} URL`);
 }
 
 const prefDir = join(BIN, 'browser/defaults/preferences');
@@ -69,7 +74,7 @@ if (host) {
     try {
         cpSync(join(REPO_ROOT, 'brand'), join(dir, 'brand'), { recursive: true });
         const toml = readFileSync(join(REPO_ROOT, 'configuration.toml'), 'utf8')
-            .replace(/^\[urls\][\s\S]*?(?=^\[)/m, '')
+            .replace(/^\[urls\][\s\S]*?(?=^\[|(?![\s\S]))/m, '')
             .replace(/^display_name = .*$/m, 'display_name = "Ng064Downstream"');
         writeFileSync(join(dir, 'configuration.toml'), toml);
         const r = spawnSync('node', [join(REPO_ROOT, 'scripts/generate.mjs')], { env: { ...process.env, PB_CONFIG_DIR: dir }, encoding: 'utf8' });
@@ -78,6 +83,15 @@ if (host) {
         if (snapshot() !== before) failures.push('the refused downstream generate changed files under generated/');
     } finally {
         rmSync(dir, { recursive: true, force: true });
+        // generate.mjs writes REPO_ROOT/generated whatever PB_CONFIG_DIR says, so a downstream
+        // generate that was not refused leaves foreign output there. Restore the default tree
+        // the way verify-downstream-fixtures does: the default generate, PB_CONFIG_DIR unset.
+        if (snapshot() !== before) {
+            const env = { ...process.env };
+            delete env.PB_CONFIG_DIR;
+            const restore = spawnSync('node', [join(REPO_ROOT, 'scripts/generate.mjs')], { env, encoding: 'utf8' });
+            if (restore.status !== 0) failures.push(`restoring generated/ with the default generate failed (exit ${restore.status}): ${`${restore.stderr}${restore.stdout}`.slice(-400)}`);
+        }
     }
 }
 

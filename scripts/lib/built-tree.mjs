@@ -45,8 +45,13 @@ export function configStatus() {
     const file = join(OBJDIR, 'config.status');
     const python = /^#!(\S+)/.exec(readFileSync(file, 'utf8'))?.[1];
     if (!python) throw new Error(`${file} has no #! interpreter line -- rebuild (docs/BUILD.md)`);
-    const out = execFileSync(python, ['-c',
-        'import json,runpy,sys; ns=runpy.run_path(sys.argv[1], run_name="cs"); print(json.dumps(dict(ns["substs"]), default=str))',
-        file], { encoding: 'utf8' });
+    let out;
+    try {
+        out = execFileSync(python, ['-c',
+            'import json,runpy,sys; ns=runpy.run_path(sys.argv[1], run_name="cs"); print(json.dumps(dict(ns["substs"]), default=str))',
+            file], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (err) {
+        throw new Error(`${file} could not be read under ${python}: ${String(err.stderr || err.message).trim().split('\n').pop()}`);
+    }
     return JSON.parse(out);
 }

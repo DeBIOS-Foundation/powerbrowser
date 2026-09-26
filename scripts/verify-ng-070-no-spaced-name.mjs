@@ -85,7 +85,8 @@ function selfTest() {
 
 if (process.argv.includes('--self-test')) selfTest();
 else {
-    const hits = scanTree();
+    let hits;
+    try { hits = scanTree(); } catch (err) { console.error(`${NAME}: FAIL -- prerequisite: ${err.message}`); process.exit(1); }
     if (hits.length) {
         console.error(`${NAME}: FAIL -- ${hits.length} surface(s) show the spaced name:\n  ${hits.join('\n  ')}`);
         process.exit(1);
