@@ -6,9 +6,14 @@ import {
     StatusBar,
     StatusBarAlignment,
     Widget,
+    WidgetManager,
     open,
 } from '@theia/core/lib/browser';
 import { FrontendApplicationStateService } from '@theia/core/lib/browser/frontend-application-state';
+import { DockLayout, DockPanel } from '@theia/core/shared/@lumino/widgets';
+import type { Title } from '@theia/core/shared/@lumino/widgets';
+import { GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-query-service';
+import { WEB_TAB_FACTORY_ID, WEB_TAB_OPEN_HANDLER_ID, WEB_TAB_SESSION, WebTabOptions, WebTabWidget } from '@powerbrowser/tab-uris/lib/browser/web-tab';
 import { PerspectiveService } from '@theia/core/lib/browser/perspective-service';
 import { SecondaryWindowHandler, extractSecondaryWindow } from '@theia/core/lib/browser/secondary-window-handler';
 import { ExtractableWidget } from '@theia/core/lib/browser/widgets/extractable-widget';
@@ -19,9 +24,11 @@ import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { FileChangeType } from '@theia/filesystem/lib/common/files';
 import { UserStorageUri } from '@theia/userstorage/lib/browser/user-storage-uri';
 import { TabUriRegistry } from '@powerbrowser/tab-uris/lib/browser/tab-uri-registry';
+import { ProfileStorageService } from '@powerbrowser/tab-uris/lib/browser/profile-storage';
 import pDebounce from 'p-debounce';
 import { SHIPPED_MODES } from './mode-descriptors';
 import { ModeService } from './mode-service';
+import { planWebTabRestore } from './group-model';
 
 /**
  * GUI-09 (14-03): named setups as user-storage data owned entirely
@@ -53,10 +60,11 @@ import { ModeService } from './mode-service';
  * contribution's own options); gone tabs dropped with the contracted
  * variant explanation while geometry plus mode still complete; failure
  * leaving the session untouched with the contracted restore-failure error.
+ * The mode is applied through ModeService (NG-029).
  * Delete is the only destructive action (contracted confirmation, no undo):
  * it clears the current marker and changes nothing on screen. Core-close
- * carries no confirmation: the last-session pointer auto-saves on shutdown
- * and the ready-ordered applicator re-applies it after core layout restore.
+ * carries no confirmation: the quit flush saves the session and the last-session pointer (NG-032),
+ * and the ready-ordered applicator restores that session -- or, with none saved, the pointer's setup -- after core layout restore.
  */
 
 /** Accepted store versions. Newer writers are read leniently: unknown fields drop. */
@@ -68,6 +76,49 @@ export const SETUP_NAME_MAX = 60;
 /** User-storage file beside modes.json (never SQLite: single-writer rule). */
 export const SETUPS_STORE_FILENAME = 'setups.json';
 
+/**
+ * NG-032: the key of the unnamed session a quit saves and the next launch
+ * restores. It lives in the profile store (profile-storage.ts), not in
+ * setups.json: setups are app-wide user data, a session belongs to one profile.
+ */
+export const SESSION_STORAGE_KEY = 'powerbrowser.setups.session';
+
+/** NG-032: the session saved at quit -- the windows as a setup records them, plus when it was saved. */
+export interface SessionSnapshot {
+    modeId: string;
+    windows: SetupWindowSnapshot[];
+    /** Milliseconds since the epoch. */
+    savedAt: number;
+    /** NG-034: the web tabs to reopen on their own rows; empty in a snapshot saved before this field. */
+    webTabs: SavedSessionWebTab[];
+}
+
+/** NG-034: one web tab of the saved session, as wave A's restore plan reads it (planWebTabRestore). */
+export interface SavedSessionWebTab {
+    rowKey: string;
+    url: string;
+    /** Milliseconds since the epoch the tab was last the current tab; null when never recorded. */
+    lastAccessed: number | null;
+}
+
+/**
+ * NG-036: one dock area of a window as tab URIs. A tab area keeps its tab
+ * order and its current tab; a split keeps its orientation and the children's
+ * relative sizes.
+ */
+export type SetupDockNode =
+    | { type: 'tabs'; tabs: string[]; current: string | null }
+    | { type: 'split'; orientation: 'horizontal' | 'vertical'; sizes: number[]; children: SetupDockNode[] };
+
+/** NG-036: where each tab of a window is docked -- the main area's split tree and the bottom panel's. */
+export interface SetupDock {
+    main: SetupDockNode | null;
+    bottom: SetupDockNode | null;
+}
+
+/** NG-036: the deepest split nesting a stored tree is read to; a deeper subtree is dropped. */
+const SETUP_DOCK_MAX_DEPTH = 8;
+
 export interface SetupWindowSnapshot {
     x: number;
     y: number;
@@ -75,6 +126,10 @@ export interface SetupWindowSnapshot {
     height: number;
     tabs: string[];
     activeTab: string | null;
+    /** NG-036: the mode this window was in; null for a dependent, which hosts tab content only and has no mode. */
+    modeId: string | null;
+    /** NG-036: the dock layout; absent on rows written before it, which restore from `tabs`. */
+    dock?: SetupDock;
 }
 
 export interface SetupSnapshot {
@@ -140,19 +195,17 @@ export const SETUP_GONE_TABS_NOTICE = 'Power Browser restored this setup, but so
 /**
  * Contracted dependent-window refusal (14-UI-SPEC.md, verbatim): thrown when
  * the current tab hosts no extractable content, so there is nothing a
- * dependent window could show. It names no command id -- the command carries
- * no palette label and nothing invokes it, so the only real next step on
- * screen is selecting a different tab, which is what the sentence says and
- * all it says. If the command is ever given a palette label, a retry clause
- * becomes true and may be restored here and in the spec row together.
+ * dependent window could show. It names no command id. NG-031 gave the
+ * command a palette label and a menu entry, which 14-UI-SPEC.md:233 says
+ * makes a retry clause true again; the string is left as contracted until
+ * the spec row and this constant change together (questions-wave-c.md Q6).
  */
 export const SETUP_DEPENDENT_UNSUPPORTED = 'Power Browser can\'t open this tab in its own window. Select a terminal or editor tab first.';
 
 /**
- * Contracted unknown-mode fallback notice (14-UI-SPEC.md): stock
- * `switchPerspective` silently no-ops on unknown ids (never throws), so the
- * restore pre-validates against shipped + custom ids and falls back to
- * Browsing with this explanation instead of keeping a wrong mode silently.
+ * Contracted unknown-mode fallback notice (14-UI-SPEC.md): activateMode
+ * resolves unknown ids to Browsing itself; the restore pre-validates only to
+ * decide whether this notice is shown.
  * The stored id is never interpolated: custom ids are internal identifiers.
  */
 export const SETUP_MODE_FALLBACK_NOTICE = 'Power Browser restored this setup, but its saved mode is no longer available. Browsing is shown instead.';
@@ -177,6 +230,60 @@ function isFiniteNumber(value: unknown): value is number {
     return typeof value === 'number' && Number.isFinite(value);
 }
 
+function parseSetupDockNode(entry: unknown, depth: number): SetupDockNode | null {
+    if (depth > SETUP_DOCK_MAX_DEPTH || typeof entry !== 'object' || entry === null) {
+        return null;
+    }
+    const node = entry as Record<string, unknown>;
+    if (node['type'] === 'tabs' && Array.isArray(node['tabs'])) {
+        const tabs = (node['tabs'] as unknown[]).filter((tab): tab is string => typeof tab === 'string' && tab.length > 0);
+        if (tabs.length === 0) {
+            return null;
+        }
+        const current = typeof node['current'] === 'string' && tabs.includes(node['current']) ? node['current'] as string : null;
+        return { type: 'tabs', tabs, current };
+    }
+    const orientation = node['orientation'];
+    if (node['type'] === 'split' && (orientation === 'horizontal' || orientation === 'vertical')
+        && Array.isArray(node['children']) && Array.isArray(node['sizes'])) {
+        const sizesIn = node['sizes'] as unknown[];
+        const children: SetupDockNode[] = [];
+        const sizes: number[] = [];
+        (node['children'] as unknown[]).forEach((child, index) => {
+            const parsed = parseSetupDockNode(child, depth + 1);
+            if (parsed) {
+                children.push(parsed);
+                const size = sizesIn[index];
+                sizes.push(isFiniteNumber(size) && size > 0 ? size : 1);
+            }
+        });
+        if (children.length === 0) {
+            return null;
+        }
+        return children.length === 1 ? children[0] : { type: 'split', orientation, sizes, children };
+    }
+    return null;
+}
+
+function parseSetupDock(entry: unknown): SetupDock | undefined {
+    if (typeof entry !== 'object' || entry === null) {
+        return undefined;
+    }
+    const dock = entry as Record<string, unknown>;
+    return { main: parseSetupDockNode(dock['main'], 0), bottom: parseSetupDockNode(dock['bottom'], 0) };
+}
+
+function widgetsOfArea(area: DockLayout.AreaConfig | null): Widget[] {
+    if (!area) {
+        return [];
+    }
+    return area.type === 'tab-area' ? area.widgets : area.children.flatMap(widgetsOfArea);
+}
+
+function firstTabArea(area: DockLayout.AreaConfig): DockLayout.ITabAreaConfig {
+    return area.type === 'tab-area' ? area : firstTabArea(area.children[0]);
+}
+
 /**
  * Total parse of one window row: rect numbers must be finite (validated
  * before any move call, T-14-03-01); tab lists keep strings only; anything
@@ -198,7 +305,9 @@ function parseSetupWindow(entry: unknown): SetupWindowSnapshot | null {
     const activeTab = typeof row['activeTab'] === 'string' && row['activeTab'].length > 0
         ? row['activeTab'] as string
         : null;
-    return { x: row['x'], y: row['y'], width: row['width'], height: row['height'], tabs, activeTab };
+    const modeId = typeof row['modeId'] === 'string' && row['modeId'].length > 0 ? row['modeId'] as string : null;
+    const dock = parseSetupDock(row['dock']);
+    return { x: row['x'], y: row['y'], width: row['width'], height: row['height'], tabs, activeTab, modeId, ...(dock ? { dock } : {}) };
 }
 
 /** Total parse of one setup row: nameless or windowless rows drop silently. */
@@ -263,6 +372,30 @@ function parseSetupStore(raw: string): ParsedSetupStore {
     return { ok: true, setups, lastSession };
 }
 
+/** NG-032: total parse of the saved session; anything unreadable is no session. */
+function parseSessionSnapshot(entry: unknown): SessionSnapshot | undefined {
+    if (typeof entry !== 'object' || entry === null) {
+        return undefined;
+    }
+    const row = entry as Record<string, unknown>;
+    if (typeof row['modeId'] !== 'string' || !Array.isArray(row['windows'])) {
+        return undefined;
+    }
+    const windows = (row['windows'] as unknown[])
+        .map(parseSetupWindow)
+        .filter((win): win is SetupWindowSnapshot => win !== null);
+    if (windows.length === 0) {
+        return undefined;
+    }
+    const webTabs: SavedSessionWebTab[] = (Array.isArray(row['webTabs']) ? row['webTabs'] as unknown[] : []).flatMap(item => {
+        const tab = typeof item === 'object' && item !== null ? item as Record<string, unknown> : {};
+        return typeof tab['rowKey'] === 'string' && /^web:[A-Za-z0-9_-]{1,64}$/.test(tab['rowKey']) && typeof tab['url'] === 'string'
+            ? [{ rowKey: tab['rowKey'], url: tab['url'], lastAccessed: isFiniteNumber(tab['lastAccessed']) ? tab['lastAccessed'] : null }]
+            : [];
+    });
+    return { modeId: row['modeId'] as string, windows, savedAt: isFiniteNumber(row['savedAt']) ? row['savedAt'] : 0, webTabs };
+}
+
 /**
  * Reachability clamp (documented backstop, 14-RESEARCH.md Pitfall 5): the
  * contract restores verbatim, but a rect no display can contain (stored
@@ -325,6 +458,20 @@ export class SetupsService implements FrontendApplicationContribution {
     @inject(StatusBar)
     protected readonly statusBar: StatusBar;
 
+    @inject(ProfileStorageService)
+    protected readonly profileStorage: ProfileStorageService;
+
+    @inject(WidgetManager)
+    protected readonly widgets: WidgetManager;
+
+    /** NG-034: read by wave A's restore plan (GroupQueryService.getSettings, wave A Task 10). */
+    @inject(GroupQueryService)
+    protected readonly groupReader: GroupQueryService;
+
+    /** NG-034: when each web tab (by row key) was last the current main-area tab. */
+    protected webTabAccess = new Map<string, number>();
+    protected restoreSeq = 0;
+
     protected readonly setupsUri = UserStorageUri.resolve(SETUPS_STORE_FILENAME);
     protected readonly debouncedReload = pDebounce(() => this.reloadSetups(), 150);
     protected lastGoodSetups: SetupSnapshot[] = [];
@@ -343,6 +490,17 @@ export class SetupsService implements FrontendApplicationContribution {
         });
         this.secondaryWindows.onDidRemoveWidget(([widget]) => {
             this.secondaryByWidget.delete(widget.id);
+        });
+        // NG-032: the quit flush (profile-storage.ts) collects every listener's
+        // last writes while the backend still runs: the session snapshot, and
+        // the last-session pointer, which onStop could never write (the
+        // backend is stopped before the page unloads).
+        this.profileStorage.onWillFlush(event => event.waitUntil(this.saveSession()));
+        // NG-034: the last-accessed time wave A's restore plan ages tabs by.
+        this.shell.mainPanel.onDidChangeCurrent((title: Title<Widget> | undefined) => {
+            if (title?.owner instanceof WebTabWidget) {
+                this.webTabAccess.set(title.owner.rowKey, Date.now());
+            }
         });
         // Ready-ordered applicator: runs after core layout restore, so the
         // last-session pointer re-applies onto the restored shell with no
@@ -365,6 +523,47 @@ export class SetupsService implements FrontendApplicationContribution {
         // Auto-save the last-session pointer on shutdown so relaunch
         // restores automatically with no core-close confirmation.
         void this.persistLastSession(this.currentSetup);
+    }
+
+    /** NG-032: the unnamed session snapshot and the last-session pointer, written inside the quit flush. */
+    protected async saveSession(): Promise<void> {
+        const now = Date.now();
+        const current = this.shell.mainPanel.currentTitle?.owner;
+        // Final-review M5: collect from main and bottom -- the areas
+        // snapshotWindows records in the dock -- so a web tab the dock places
+        // in the bottom panel is not dropped silently at relaunch.
+        const webTabs: SavedSessionWebTab[] = (['main', 'bottom'] as const)
+            .flatMap(area => this.shell.getWidgets(area))
+            .filter((widget): widget is WebTabWidget => widget instanceof WebTabWidget)
+            .map(tab => ({ rowKey: tab.rowKey, url: tab.url, lastAccessed: tab === current ? now : this.webTabAccess.get(tab.rowKey) ?? null }));
+        const session: SessionSnapshot = { modeId: this.currentModeId(), windows: this.snapshotWindows(), savedAt: now, webTabs };
+        await this.profileStorage.setData(SESSION_STORAGE_KEY, session);
+        await this.persistLastSession(this.currentSetup);
+    }
+
+    /**
+     * NG-034: reopens one of last session's web tabs on its own tabs.sqlite row
+     * (wave A: WebTabOptions.key), so the row keeps its group, place and
+     * thumbnail. With `withHistory`, chrome first arms the tab's saved
+     * back/forward history, which webTabOpen restores instead of loading
+     * `url`. Wave A's Task 10 decides withHistory per tab (planWebTabRestore);
+     * this call shape is fixed for it.
+     */
+    async restoreWebTab(tab: { rowKey: string; url: string; withHistory: boolean }): Promise<Widget | undefined> {
+        if (tab.withHistory) {
+            await this.profileStorage.armWebTabHistory(tab.rowKey);
+        }
+        // This session's discriminator in the id, so the web-tab factory admits it.
+        const options: WebTabOptions = { id: `wt-${WEB_TAB_SESSION}-restored-${(this.restoreSeq += 1)}`, url: tab.url, key: tab.rowKey };
+        try {
+            const widget = await this.widgets.getOrCreateWidget<WebTabWidget>(WEB_TAB_FACTORY_ID, options);
+            if (!widget.isAttached) {
+                await this.shell.addWidget(widget, { area: 'main' });
+            }
+            return widget;
+        } catch {
+            return undefined;
+        }
     }
 
     /** Save the current windows, tabs, and mode under a typed name. */
@@ -416,35 +615,61 @@ export class SetupsService implements FrontendApplicationContribution {
             return;
         }
         const row = this.lastGoodSetups.find(setup => setup.name === target);
-        if (!row) {
+        // Validate before touching the session: a row that cannot restore
+        // leaves current windows and tabs untouched.
+        if (!row || row.windows.length === 0) {
             void this.flash(SETUP_RESTORE_FAILURE);
             return;
         }
-        // Validate everything before touching the session: a row that cannot
-        // restore must leave current windows and tabs untouched.
-        if (row.windows.length === 0) {
-            void this.flash(SETUP_RESTORE_FAILURE);
-            return;
-        }
-        this.applyGeometry(row.windows[0]);
-        const dropped = await this.placeTabs(row);
-        // Stock `switchPerspective` silently no-ops on unknown ids (never
-        // throws), so pre-validate against shipped + custom ids: an unknown
-        // mode falls back to Browsing with the contracted notice instead of
-        // silently keeping whatever mode was active.
-        const knownCustom = this.modes.getCustomModes().some(custom => custom.id === row.modeId);
-        const known = SHIPPED_MODES.some(descriptor => descriptor.id === row.modeId) || knownCustom;
-        try {
-            await this.perspectives.switchPerspective(known ? row.modeId : 'browsing');
-        } catch {
-            try {
-                await this.perspectives.switchPerspective('browsing');
-            } catch {
-                // Stock switch failed twice: geometry and tabs still stand.
-            }
-        }
+        await this.applySnapshot(row, true);
         this.currentSetup = row.name;
         void this.persistLastSession(row.name);
+    }
+
+    /**
+     * Geometry verbatim with reachability clamping, tabs through the placer
+     * (NG-030, NG-036), then the mode through ModeService (NG-029). `notify`
+     * shows the contracted gone-tabs and mode-fallback notices; the launch
+     * restore of the unnamed session (NG-032) passes false -- the session
+     * never shows a chosen setup's gone-tabs notice, but a mode it can no
+     * longer resolve still gets the contracted fallback notice.
+     */
+    protected async applySnapshot(row: { modeId: string; windows: SetupWindowSnapshot[] }, notify: boolean, openWebTabs = true): Promise<void> {
+        this.applyGeometry(row.windows[0]);
+        const dropped = await this.placeTabs(row, openWebTabs);
+        const modeId = row.windows[0].modeId ?? row.modeId;
+        // NG-029: the mode goes through ModeService.activateMode, the path the
+        // mode toggle takes (GUI-DEFECTS item 6), so the panel map, the Explorer
+        // dock, the Organising slot, the furniture and the mode attribute all
+        // apply. A bare switchPerspective applied the perspective and none of
+        // those. activateMode resolves an unknown id to Browsing by itself;
+        // `known` only chooses the contracted fallback notice below.
+        const shippedKnown = SHIPPED_MODES.some(descriptor => descriptor.id === modeId);
+        if (!notify && !shippedKnown) {
+            // NG-032 round 1: the launch restore waits (bounded) for the
+            // custom-mode load before resolving the session's mode, so a
+            // custom-mode session does not fall back to Browsing merely
+            // because loadCustomModes had not settled yet. The named-setup
+            // path (notify=true) keeps its synchronous check.
+            await this.waitForCustomModes();
+        }
+        const knownCustom = this.modes.getCustomModes().some(custom => custom.id === modeId);
+        const known = shippedKnown || knownCustom;
+        try {
+            await this.modes.activateMode(known ? modeId : 'browsing');
+        } catch {
+            // activateMode has no rejecting path today; geometry and tabs still stand.
+        }
+        if (!notify) {
+            // NG-032 round 1: a wait that timed out, or a mode that is
+            // genuinely gone, falls back to Browsing with the contracted
+            // notice -- never silently. Gone tabs stay silent on the
+            // session path (no setup was chosen).
+            if (!known) {
+                void this.flash(SETUP_MODE_FALLBACK_NOTICE);
+            }
+            return;
+        }
         // Both notices share one status-bar element, so two sequential
         // flashes would overwrite each other: when both fire, combine them
         // into a single flash built only from the two contracted literals
@@ -455,6 +680,23 @@ export class SetupsService implements FrontendApplicationContribution {
             void this.flash(SETUP_GONE_TABS_NOTICE);
         } else if (!known) {
             void this.flash(SETUP_MODE_FALLBACK_NOTICE);
+        }
+    }
+
+    /**
+     * NG-032 round 1: bounded wait (5 s) on the custom-mode load. Resolves
+     * once the customs settle; a slow load falls through after the bound so
+     * a launch never stalls on storage. Never throws.
+     */
+    protected async waitForCustomModes(): Promise<void> {
+        try {
+            await Promise.race([
+                this.modes.whenCustomModesLoaded(),
+                new Promise<void>(resolve => window.setTimeout(resolve, 5000)),
+            ]);
+        } catch {
+            // whenCustomModesLoaded never rejects; a timer failure still
+            // leaves the launch on the synchronous known check below.
         }
     }
 
@@ -545,6 +787,11 @@ export class SetupsService implements FrontendApplicationContribution {
             height: window.outerHeight,
             tabs: coreTabs.map(entry => entry.uri),
             activeTab: coreTabs.some(entry => entry.id === active) ? (coreTabs.find(entry => entry.id === active)?.uri ?? null) : null,
+            modeId: this.currentModeId(),
+            dock: {
+                main: this.dockNodeOf(this.shell.mainPanel.saveLayout().main),
+                bottom: this.dockNodeOf(this.shell.bottomPanel.saveLayout().main),
+            },
         };
         const dependents: SetupWindowSnapshot[] = [];
         for (const widget of this.secondaryWindows.widgets) {
@@ -557,14 +804,56 @@ export class SetupsService implements FrontendApplicationContribution {
                 height: win?.outerHeight ?? 600,
                 tabs: uri !== undefined ? [uri] : [],
                 activeTab: uri ?? null,
+                modeId: null,
             });
         }
         return [core, ...dependents];
     }
 
-    /** All core-model tabs as opaque URIs (registry first, editor resource fallback). */
-    protected tabsOfShell(): Array<{ id: string; uri: string }> {
-        const out: Array<{ id: string; uri: string }> = [];
+    /**
+     * NG-036: a Lumino area config as tab URIs. Web tabs keep the area's tab
+     * order verbatim (the NG-036 contract, asserted per tab bar); other
+     * URI-bearing tabs ride along in place (they restore with the area, never
+     * duplicated). Tabs with no URI (the Organising canvas, unowned widgets)
+     * are left out; empty areas and one-child splits collapse.
+     */
+    protected dockNodeOf(area: DockLayout.AreaConfig | null): SetupDockNode | null {
+        if (!area) {
+            return null;
+        }
+        if (area.type === 'tab-area') {
+            const tabs: string[] = [];
+            for (const widget of area.widgets) {
+                const uri = this.tabUriOf(widget);
+                if (uri !== undefined && !tabs.includes(uri)) {
+                    tabs.push(uri);
+                }
+            }
+            if (tabs.length === 0) {
+                return null;
+            }
+            const currentWidget = area.widgets[area.currentIndex];
+            const current = currentWidget ? this.tabUriOf(currentWidget) ?? null : null;
+            return { type: 'tabs', tabs, current: current !== null && tabs.includes(current) ? current : null };
+        }
+        const children: SetupDockNode[] = [];
+        const sizes: number[] = [];
+        area.children.forEach((child, index) => {
+            const node = this.dockNodeOf(child);
+            if (node) {
+                children.push(node);
+                sizes.push(area.sizes[index] ?? 1);
+            }
+        });
+        if (children.length === 0) {
+            return null;
+        }
+        return children.length === 1 ? children[0] : { type: 'split', orientation: area.orientation, sizes, children };
+    }
+
+    /** All core-model tabs as opaque URIs (registry first, editor resource fallback), with their widgets. */
+    protected tabsOfShell(): Array<{ id: string; uri: string; widget: Widget }> {
+        const out: Array<{ id: string; uri: string; widget: Widget }> = [];
         for (const tabBar of this.shell.allTabBars) {
             for (const title of tabBar.titles) {
                 const widget = title.owner;
@@ -573,7 +862,7 @@ export class SetupsService implements FrontendApplicationContribution {
                 }
                 const uri = this.tabUriOf(widget);
                 if (uri !== undefined) {
-                    out.push({ id: widget.id, uri });
+                    out.push({ id: widget.id, uri, widget });
                 }
             }
         }
@@ -647,44 +936,156 @@ export class SetupsService implements FrontendApplicationContribution {
     }
 
     /**
-     * Place every recorded tab through the contribution open path. Returns
-     * the count of URIs that no longer resolve (dropped, never forced --
-     * T-14-03-02). Dependent rows re-host through the stock handler after
-     * their tabs resolve.
+     * NG-030: one placer per restore. A URI this restore already placed, or a
+     * tab already open in the shell when it began, resolves to that widget and
+     * is never opened again; only an unseen URI goes through the opener. Two
+     * web tabs on one page share one registry address (docs/URI-SCHEMES.md:250-254),
+     * so a setup restores that page once.
      */
-    protected async placeTabs(row: SetupSnapshot): Promise<number> {
-        let dropped = 0;
-        const opened = new Map<string, Widget>();
-        for (const tab of row.windows[0].tabs) {
-            const widget = await this.openTabUri(tab);
-            if (widget === null) {
-                dropped += 1;
-            } else if (widget instanceof Widget) {
-                opened.set(tab, widget);
+    protected tabPlacer(openWebTabs = true): (tab: string) => Promise<Widget | true | null> {
+        const placed = new Map<string, Widget>();
+        for (const entry of this.tabsOfShell()) {
+            if (!placed.has(entry.uri)) {
+                placed.set(entry.uri, entry.widget);
             }
         }
-        if (row.windows[0].activeTab && opened.has(row.windows[0].activeTab as string)) {
-            await this.openTabUri(row.windows[0].activeTab as string);
+        // T6-M2: a URI open only in a dependent (secondary) window never
+        // appears in `allTabBars`, so seed the placer from the secondary
+        // handler too, first-wins as above -- otherwise a restore would
+        // reopen (duplicate) the dependent's tab instead of reusing it.
+        for (const widget of this.secondaryWindows.widgets) {
+            const uri = this.tabUriOf(widget);
+            if (uri !== undefined && !placed.has(uri)) {
+                placed.set(uri, widget);
+            }
+        }
+        return async tab => {
+            const existing = placed.get(tab);
+            if (existing) {
+                return existing;
+            }
+            // NG-034: in the session restore, web tabs come back only through
+            // restoreWebTab (on their rows, per wave A's plan); a web page the
+            // plan left closed must not come back through the opener instead.
+            if (!openWebTabs && await this.isWebTabUri(tab)) {
+                return null;
+            }
+            const opened = await this.openTabUri(tab);
+            if (opened instanceof Widget) {
+                placed.set(tab, opened);
+            }
+            return opened;
+        };
+    }
+
+    protected async isWebTabUri(tab: string): Promise<boolean> {
+        try {
+            return (await this.opener.getOpener(new URI(tab))).id === WEB_TAB_OPEN_HANDLER_ID;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Place every recorded tab through the placer. Returns the count of URIs
+     * that no longer resolve (dropped, never forced -- T-14-03-02). Dependent
+     * rows re-host through the stock handler after their tabs resolve.
+     */
+    protected async placeTabs(row: Pick<SetupSnapshot, 'windows'>, openWebTabs = true): Promise<number> {
+        const place = this.tabPlacer(openWebTabs);
+        let dropped = 0;
+        const core = row.windows[0];
+        if (core.dock) {
+            dropped += await this.restoreDock(core.dock, place);
+        } else {
+            for (const tab of core.tabs) {
+                if ((await place(tab)) === null) {
+                    dropped += 1;
+                }
+            }
+        }
+        // NG-030: the active tab is activated, never opened a second time.
+        if (core.activeTab) {
+            const active = await place(core.activeTab);
+            if (active instanceof Widget) {
+                await this.shell.activateWidget(active.id);
+            }
         }
         for (const dependent of row.windows.slice(1)) {
             const widgets: Widget[] = [];
             for (const tab of dependent.tabs) {
-                const existing = opened.get(tab);
-                if (existing) {
-                    widgets.push(existing);
-                    continue;
-                }
-                const widget = await this.openTabUri(tab);
+                const widget = await place(tab);
                 if (widget === null) {
                     dropped += 1;
                 } else if (widget instanceof Widget) {
-                    opened.set(tab, widget);
                     widgets.push(widget);
                 }
             }
             this.hostDependent(widgets, dependent);
         }
         return dropped;
+    }
+
+    /**
+     * NG-036: rebuilds the main area's split tree and the bottom panel's from a
+     * saved dock, placing every tab through `place` (so nothing already open is
+     * opened again). Lumino's restoreLayout unparents every widget of a panel
+     * the config leaves out, so each widget already in the panel and not placed
+     * by the setup rides along in the config's first tab area: a restore never
+     * closes or detaches a tab (notes/browser-window-model.md:46-49). Returns
+     * the number of saved tabs that no longer open.
+     */
+    protected async restoreDock(dock: SetupDock, place: (tab: string) => Promise<Widget | true | null>): Promise<number> {
+        let dropped = 0;
+        const build = async (node: SetupDockNode | null): Promise<DockLayout.AreaConfig | null> => {
+            if (!node) {
+                return null;
+            }
+            if (node.type === 'tabs') {
+                const widgets: Widget[] = [];
+                for (const tab of node.tabs) {
+                    const placed = await place(tab);
+                    if (placed === null) {
+                        dropped += 1;
+                    } else if (placed instanceof Widget && !widgets.includes(placed)) {
+                        widgets.push(placed);
+                    }
+                }
+                if (widgets.length === 0) {
+                    return null;
+                }
+                const current = node.current === null ? 0 : widgets.findIndex(widget => this.tabUriOf(widget) === node.current);
+                return { type: 'tab-area', widgets, currentIndex: Math.max(0, current) };
+            }
+            const children: DockLayout.AreaConfig[] = [];
+            const sizes: number[] = [];
+            for (let index = 0; index < node.children.length; index += 1) {
+                const child = await build(node.children[index]);
+                if (child) {
+                    children.push(child);
+                    sizes.push(node.sizes[index] ?? 1);
+                }
+            }
+            if (children.length === 0) {
+                return null;
+            }
+            return children.length === 1 ? children[0] : { type: 'split-area', orientation: node.orientation, children, sizes };
+        };
+        const main = await build(dock.main);
+        const bottom = await build(dock.bottom);
+        const assigned = new Set<Widget>([...widgetsOfArea(main), ...widgetsOfArea(bottom)]);
+        this.applyDockArea(this.shell.bottomPanel, bottom, assigned);
+        this.applyDockArea(this.shell.mainPanel, main, assigned);
+        return dropped;
+    }
+
+    protected applyDockArea(panel: DockPanel, area: DockLayout.AreaConfig | null, assigned: Set<Widget>): void {
+        if (!area) {
+            return;
+        }
+        const others = Array.from(panel.widgets()).filter(widget => !assigned.has(widget));
+        firstTabArea(area).widgets.push(...others);
+        panel.restoreLayout({ main: area });
     }
 
     /** One tab through the opener: unresolvable URIs drop (null), never throw out. */
@@ -822,24 +1223,57 @@ export class SetupsService implements FrontendApplicationContribution {
         }
     }
 
-    /** Ready-ordered applicator: the last-session pointer re-applies after core restore, no confirmation. */
+    /**
+     * The launch-restore entry point (ready-ordered: runs after core layout
+     * restore). NG-032: the session the last quit saved comes back first,
+     * with no saved setup needed; the last-session pointer then only marks
+     * which named setup is current. A profile with no saved session (its first
+     * launch, or a build before this one) keeps the pointer's auto-restore.
+     */
     protected async applyLastSession(): Promise<void> {
-        let raw: string;
+        let parsed: ParsedSetupStore = { ok: false, setups: [], lastSession: null };
         try {
-            raw = (await this.fileService.read(this.setupsUri)).value;
+            parsed = parseSetupStore((await this.fileService.read(this.setupsUri)).value);
         } catch {
+            // No setups.json: nothing named to restore or mark.
+        }
+        if (parsed.ok) {
+            this.lastGoodSetups = parsed.setups;
+        }
+        const pointer = parsed.ok && parsed.lastSession && parsed.setups.some(setup => setup.name === parsed.lastSession)
+            ? parsed.lastSession
+            : null;
+        let saved: SessionSnapshot | undefined;
+        try {
+            saved = parseSessionSnapshot(await this.profileStorage.getData<unknown>(SESSION_STORAGE_KEY));
+        } catch {
+            // A throwing storage backend degrades to the pointer path below
+            // (or a normal launch with none): a storage failure never skips
+            // the saved-setup restore.
+            saved = undefined;
+        }
+        if (saved) {
+            this.currentSetup = pointer;
+            for (const tab of saved.webTabs) {
+                if (tab.lastAccessed !== null) {
+                    this.webTabAccess.set(tab.rowKey, tab.lastAccessed);
+                }
+            }
+            // NG-011: the launch restore reopens the last session's web tabs
+            // per restore_behaviour and the age tiers. Every reopened tab
+            // opens on its saved row (restoreWebTab's rowKey), with its
+            // history only when the plan asks.
+            const settings = await this.groupReader.getSettings().catch(() => ({} as Record<string, string>));
+            const plan = planWebTabRestore(settings, saved.webTabs.map(tab => ({ key: tab.rowKey, url: tab.url, lastAccessed: tab.lastAccessed ?? null })), saved.savedAt);
+            for (const tab of plan) {
+                await this.restoreWebTab({ rowKey: tab.key, url: tab.url, withHistory: tab.withHistory });
+            }
+            await this.applySnapshot(saved, false, false);
             return;
         }
-        const parsed = parseSetupStore(raw);
-        if (!parsed.ok || !parsed.lastSession) {
-            return;
+        if (pointer) {
+            await this.restoreSetup(pointer);
         }
-        this.lastGoodSetups = parsed.setups;
-        const row = parsed.setups.find(setup => setup.name === parsed.lastSession);
-        if (!row) {
-            return;
-        }
-        await this.restoreSetup(row.name);
     }
 
     protected async persistLastSession(name: string | null): Promise<void> {

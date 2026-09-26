@@ -129,6 +129,15 @@ function webTabKeyIsValid(key) {
   return typeof key === "string" && /^web:[A-Za-z0-9_-]{1,64}$/.test(key);
 }
 
+// NG-010: a stable short hash for keying a closed tab the store never saw.
+function stringHash(text) {
+  let hash = 5381;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(36);
+}
+
 // NG-085: the store's connection is closed from Sqlite.sys.mjs's own shutdown
 // barrier (profile-before-change), which Sqlite lifts before it waits for its
 // open connections to close. Without it that wait never ended and every quit
@@ -216,25 +225,67 @@ function groupSenderSpecIsTheia(spec) {
   }
 }
 
+// NG-038: the actor serves one frame -- the shell's own content browser, in
+// the shell window, on the sidecar's live port. `matches` cannot carry a port
+// (MatchPattern compares hosts only), and stock tabbrowser marks its selected
+// tab's browser primary="true" too (upstream tabbrowser.js:728, 1720), so a
+// 127.0.0.1 page in a selected stock tab passed both the host check and the
+// primary wall. TheiaService._swap sets the port before it navigates the
+// frame; until then every sender is refused.
+const SHELL_DOCUMENT_URL = "chrome://powerbrowser/content/powerbrowser.xhtml";
+const SHELL_CONTENT_BROWSER_ID = "powerbrowser-content";
+let groupSenderPort = null;
+
+// NG-033: the chrome half of the frontend's profile store (profile-storage.ts):
+// one JSON document per profile, written atomically by the one chrome-side
+// writer. The frontend sends the whole map; the cap keeps a runaway frontend
+// from filling the disk through this channel.
+const SHELL_MESSAGE_KINDS = new Set(["shellStateLoad", "shellStateSave", "shellFlushed", "shellArmWebTabHistory"]);
+const SHELL_STATE_FILE_NAME = "powerbrowser-shell-state.json";
+const SHELL_STATE_MAX_CHARS = 16 * 1024 * 1024;
+// NG-032/NG-033: quit flushes chrome is waiting on, flushId -> resolve.
+const pendingShellFlushes = new Map();
+let shellFlushSeq = 0;
+
+// NG-034: saved back/forward history of in-shell web tabs, by tabs.sqlite row
+// key. Read once at startup; a key's history is restored only after the
+// frontend arms it (shellArmWebTabHistory), and only once.
+const WEB_TAB_HISTORY_FILE_NAME = "powerbrowser-web-tab-history.json";
+const WEB_TAB_ROW_KEY_RE = /^web:[A-Za-z0-9_-]{1,64}$/;
+let savedWebTabHistories = {};
+const armedWebTabHistories = new Set();
+
 function groupSenderIsTheia(actorRef) {
   let spec = "";
+  let port = -1;
   let embeddedByPrimary = false;
+  let embeddedByShell = false;
   try {
-    spec = actorRef?.browsingContext?.currentWindowGlobal?.documentURI?.spec ?? "";
-    // GUI-02 (14.1-01): the embedder-is-primary wall (T-14.1-01). The host
-    // check above admits ANY loopback sender, and a user can now browse to
-    // a loopback page INSIDE a web-tab overlay: the actor child loads there
-    // too (the `matches` pin is by origin), and that page would pass the
-    // host check. Its top browsing context is embedded by the overlay
-    // element, which carries no `primary`; only the Theia frame
-    // (powerbrowser.xhtml's `<xul:browser primary="true">`) does.
-    embeddedByPrimary =
-      actorRef?.browsingContext?.top?.embedderElement?.getAttribute("primary") === "true";
+    const documentURI = actorRef?.browsingContext?.currentWindowGlobal?.documentURI;
+    spec = documentURI?.spec ?? "";
+    port = documentURI?.port ?? -1;
+    // GUI-02 (14.1-01): the embedder-is-primary wall (T-14.1-01). A loopback
+    // page inside a web-tab overlay loads the actor child too (the `matches`
+    // pin is by origin); its top browsing context is embedded by the overlay
+    // element, which carries no `primary`.
+    const embedder = actorRef?.browsingContext?.top?.embedderElement;
+    embeddedByPrimary = embedder?.getAttribute("primary") === "true";
+    // NG-038: and primary is not enough -- stock tabbrowser sets it on its
+    // selected tab. Only the shell window's own content browser qualifies.
+    embeddedByShell =
+      embedder?.id === SHELL_CONTENT_BROWSER_ID && embedder?.ownerDocument?.documentURI === SHELL_DOCUMENT_URL;
   } catch {
     spec = "";
     embeddedByPrimary = false;
+    embeddedByShell = false;
   }
-  return embeddedByPrimary && groupSenderSpecIsTheia(spec);
+  return (
+    embeddedByPrimary &&
+    embeddedByShell &&
+    groupSenderPort !== null &&
+    port === groupSenderPort &&
+    groupSenderSpecIsTheia(spec)
+  );
 }
 
 const TAB_STORE_FILE_NAME = "tabs.sqlite";
@@ -244,6 +295,10 @@ const TAB_STORE_FILE_NAME = "tabs.sqlite";
 // prunes rows closed longer than the retention window.
 const TAB_STORE_SWEEP_MAX_WRITES = 500;
 const TAB_STORE_CLOSED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+// NG-018: the scheduled full integrity check's interval. Used when the
+// settings row integrity_check_minutes is absent or unusable (24 hours).
+const TAB_STORE_INTEGRITY_DEFAULT_MS = 24 * 60 * 60 * 1000; // NG-018: when integrity_check_minutes is absent or unusable
 
 // SQL-01 (12-01): the single chrome-side tab-store connection. Module-level
 // (never a property on the frozen PowerBrowserAPI object -- assignment to a
@@ -566,6 +621,156 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
+   * NG-037: quits the whole application the way upstream's quit paths do:
+   * announce quit-application-requested so any observer may cancel (a page's
+   * leave prompt; the shell's own flush, NG-032/NG-033), then an attempted
+   * quit that closes every window, stock browser windows included. The
+   * backend stops on the quit-application-granted that follows
+   * (TheiaService.stop). Returns false when an observer cancelled.
+   */
+  quitApplication() {
+    const cancelQuit = Cc["@mozilla.org/supports-PRBool;1"].createInstance(Ci.nsISupportsPRBool);
+    Services.obs.notifyObservers(cancelQuit, "quit-application-requested");
+    if (cancelQuit.data) {
+      return false;
+    }
+    // A full shutdown, not release Gecko's fast shutdown: stage 1 _exit()s
+    // inside XPCOM shutdown before XREMain unlocks the profile
+    // (nsAppRunner.cpp, "see bug #386739"), so the profile's `lock` symlink
+    // outlived every quit and the exit could not be observed by it. Default
+    // branch: this quit only, never written to prefs.js.
+    Services.prefs.getDefaultBranch("").setIntPref("toolkit.shutdown.fastShutdownStage", 0);
+    Services.startup.quit(Ci.nsIAppStartup.eAttemptQuit);
+    return true;
+  },
+
+  /**
+   * NG-032/NG-033, final-review I1: runs the whole quit flush synchronously on
+   * the quit-application-granted path, before TheiaService.stop() kills the
+   * backend. Never cancels: by granted time the quit -- a plain quit, a
+   * restart, a safe-mode or silent restart -- is final and carries whatever
+   * intent its requester announced, so there is nothing to re-issue and no
+   * requester left to tell it was cancelled. The async chain below (the
+   * frontend ack wait plus the history-file write) settles while the nested
+   * event loop spins, bounded by the same quitFlushTimeoutMs the old hold
+   * passed to flushShellState (the XPIProvider.sys.mjs awaitPromise shape).
+   * Never throws, so a quit is never held past the timeout.
+   */
+  runQuitFlushSync(theiaBrowser, timeoutMs) {
+    let finished = false;
+    PowerBrowserAPI.flushShellState(theiaBrowser, timeoutMs)
+      .then(async acked => {
+        PowerBrowserAPI.log("info", acked ? "Frontend flushed before quit." : "Frontend did not acknowledge the quit flush in time; quitting anyway.");
+        PowerBrowserAPI.log("info", `Saved back/forward history for ${await PowerBrowserAPI.saveWebTabHistories()} web tab(s).`);
+      })
+      .catch(err => PowerBrowserAPI.log("error", `Quit flush failed (${err && err.name ? err.name : "error"}); quitting anyway.`))
+      .finally(() => {
+        finished = true;
+      });
+    const deadline = Date.now() + timeoutMs;
+    try {
+      Services.tm.spinEventLoopUntil("PowerBrowserAPI.sys.mjs:runQuitFlushSync", () => finished || Date.now() >= deadline);
+    } catch (err) {
+      PowerBrowserAPI.log("error", `Quit flush spin failed (${err && err.name ? err.name : "error"}); quitting anyway.`);
+    }
+  },
+
+  /** NG-034: reads last session's web-tab histories once, before any web tab can reopen. Never throws. */
+  async loadWebTabHistories() {
+    try {
+      const value = await IOUtils.readJSON(`${PowerBrowserAPI.getProfileDir()}/${WEB_TAB_HISTORY_FILE_NAME}`);
+      savedWebTabHistories = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    } catch {
+      savedWebTabHistories = {};
+    }
+  },
+
+  /**
+   * NG-034: writes the back/forward history of every open in-shell web tab,
+   * by row key, for the next launch. Runs inside the quit flush. Returns the
+   * number of tabs saved; never throws.
+   */
+  async saveWebTabHistories() {
+    const histories = {};
+    const path = `${PowerBrowserAPI.getProfileDir()}/${WEB_TAB_HISTORY_FILE_NAME}`;
+    try {
+      const { SessionHistory } = ChromeUtils.importESModule("resource://gre/modules/sessionstore/SessionHistory.sys.mjs");
+      for (const entry of webTabs.values()) {
+        const sessionHistory = entry.browser.browsingContext?.sessionHistory;
+        if (!entry.rowKey || !sessionHistory || sessionHistory.count === 0) {
+          continue;
+        }
+        histories[entry.rowKey] = SessionHistory.collectFromParent(entry.browser.currentURI?.spec ?? "about:blank", true, sessionHistory);
+      }
+      await IOUtils.writeJSON(path, histories, { tmpPath: `${path}.tmp` });
+    } catch (err) {
+      // Final-review M3: IOUtils rejections name the profile path, which
+      // carries the OS user name -- log the fixed string plus err.name only.
+      PowerBrowserAPI.log("error", `[saveWebTabHistories] write failed (${err && err.name ? err.name : "error"})`);
+      return 0;
+    }
+    return Object.keys(histories).length;
+  },
+
+  /**
+   * NG-034: the saved history for `rowKey` when the frontend armed it, once.
+   * Only http(s) entries are admitted, top-level and subframes alike -- the
+   * same scheme wall webTabOpen and webTabNavigate apply -- so a tampered file
+   * cannot smuggle a file: or chrome: URL in through an entry's children.
+   * The serialized triggering principals ride the entries untouched (SessionHistory
+   * restores what it is given); the wall covers URLs, not principals, and a
+   * tampered profile is already the sessionstore-tampering position.
+   */
+  takeWebTabHistory(rowKey) {
+    if (!armedWebTabHistories.delete(rowKey) || !Object.prototype.hasOwnProperty.call(savedWebTabHistories, rowKey)) {
+      return null;
+    }
+    const data = savedWebTabHistories[rowKey];
+    delete savedWebTabHistories[rowKey];
+    const entries = data && Array.isArray(data.entries) ? data.entries : [];
+    if (entries.length === 0 || !Number.isInteger(data.index) || data.index < 1 || data.index > entries.length) {
+      return null;
+    }
+    const entryUrlOk = item => item && typeof item.url === "string" && /^https?:\/\//i.test(item.url);
+    const treeOk = items => Array.isArray(items) && items.every(item => entryUrlOk(item) && (!item.children || treeOk(item.children)));
+    if (!entries.every(item => entryUrlOk(item) && (!item.children || treeOk(item.children)))) {
+      return null;
+    }
+    return data;
+  },
+
+  /**
+   * NG-034: loads `browser` from saved history the way SessionStore restores
+   * a tab in the parent process (SessionStore.sys.mjs _restoreHistory and
+   * _restoreTabEntry): history first, then the docshell state, then a restore
+   * that reloads the current entry.
+   */
+  async restoreWebTabHistory(browser, tabData) {
+    const { SessionHistory } = ChromeUtils.importESModule("resource://gre/modules/sessionstore/SessionHistory.sys.mjs");
+    const browsingContext = browser.browsingContext;
+    // A fresh overlay commits its initial about:blank into session history a
+    // few ms after it is created. Restored before that commit, the about:blank
+    // is appended after the restored entries and becomes the current entry,
+    // so the tab reloads about:blank instead of its page. Wait for the commit
+    // (bounded); restoreFromParent then purges it. The wait expiring is not a
+    // failure -- the restore is still attempted below, on whatever history the
+    // overlay has by then.
+    for (let waited = 0; browsingContext.sessionHistory.count === 0 && waited < 3000; waited += 25) {
+      await PowerBrowserAPI.sleep(25);
+    }
+    if (browsingContext.sessionHistory.count === 0) {
+      PowerBrowserAPI.log("warn", "[restoreWebTabHistory] initial history entry not yet committed; attempting restore anyway");
+    }
+    SessionHistory.restoreFromParent(browsingContext.sessionHistory, tabData);
+    await SessionStoreUtils.restoreDocShellState(browsingContext, tabData.entries[tabData.index - 1].url, null);
+    SessionStoreUtils.initializeRestore(browsingContext, SessionStoreUtils.constructSessionStoreRestoreData()).catch(err => {
+      // Final-review M3: keep IOUtils/XPCOM error text (it can carry the
+      // absolute profile path) out of the log -- fixed string plus err.name.
+      PowerBrowserAPI.log("error", `[restoreWebTabHistory] settle failed (${err && err.name ? err.name : "error"})`);
+    });
+  },
+
+  /**
    * Mirrors one line to the browser console and to stdout, so the
    * supervisor's ring buffer and the verification harness read the same
    * stream.
@@ -822,14 +1027,26 @@ export const PowerBrowserAPI = Object.freeze({
    * ponytail: targets the most recently focused stock window, private or
    * not. Which window a given tab belongs in is the mirror/proxy bridge's
    * question (GUI-04), not this one's.
+   *
+   * NG-009: a window still starting has not loaded its window argument yet;
+   * its delayed startup loads it into the SELECTED tab
+   * (upstream/browser/base/content/browser-init.js:491), so a tab added and
+   * selected before then has its page replaced by the first window's. The
+   * tab waits for that window's delayed startup (browser-init.js:44, :791).
    */
-  openStockTab(url) {
+  async openStockTab(url) {
     const spec = typeof url === "string" && url ? url : "about:newtab";
     if (spec !== "about:newtab" && !/^https?:\/\//i.test(spec)) {
       return "refused-scheme";
     }
     const win = Services.wm.getMostRecentWindow("navigator:browser");
-    const tab = win && win.gBrowser ? win.gBrowser.addWebTab(spec) : null;
+    if (win && win.gBrowserInit && !win.gBrowserInit.delayedStartupFinished) {
+      await new Promise(resolve => {
+        win.delayedStartupPromise.then(resolve);
+        win.addEventListener("unload", resolve, { once: true });
+      });
+    }
+    const tab = win && !win.closed && win.gBrowser ? win.gBrowser.addWebTab(spec) : null;
     if (!tab) {
       PowerBrowserAPI.openBrowserWindow(spec);
       return "opened-window";
@@ -912,32 +1129,27 @@ export const PowerBrowserAPI = Object.freeze({
     }
     closeTabStoreAtShutdown();
     const conn = await lazy.Sqlite.openConnection({ path: TAB_STORE_FILE_NAME, openNotExclusive: true });
-    const modeRows = await conn.execute("PRAGMA journal_mode=WAL;");
-    const mode = modeRows.length ? modeRows[0].getString(0) : "";
-    if (mode !== "wal") {
-      try {
-        await conn.close();
-      } catch {
-        // Close is best-effort here; the pin failure below is the error.
-      }
-      throw new Error(`openTabStore: journal_mode pin failed (got ${mode})`);
-    }
-    const schemaVersion = await conn.getSchemaVersion();
-    if (schemaVersion > TAB_STORE_SCHEMA_HEAD) {
-      try {
-        await conn.close();
-      } catch {
-        // Close is best-effort here; the refusal below is the error.
-      }
-      throw new Error(
-        `openTabStore: refusing downgrade: user_version=${schemaVersion} is newer than chain head ${TAB_STORE_SCHEMA_HEAD}`
-      );
-    }
     try {
+      const modeRows = await conn.execute("PRAGMA journal_mode=WAL;");
+      const mode = modeRows.length ? modeRows[0].getString(0) : "";
+      if (mode !== "wal") {
+        throw new Error(`openTabStore: journal_mode pin failed (got ${mode})`);
+      }
+      const schemaVersion = await conn.getSchemaVersion();
+      if (schemaVersion > TAB_STORE_SCHEMA_HEAD) {
+        throw new Error(
+          `openTabStore: refusing downgrade: user_version=${schemaVersion} is newer than chain head ${TAB_STORE_SCHEMA_HEAD}`
+        );
+      }
       await PowerBrowserAPI.migrateTabStoreToHead(conn);
     } catch (err) {
-      // NG-085: a connection nobody holds would block the shutdown barrier.
-      await conn.close().catch(() => undefined);
+      // NG-013: a connection that failed any step closes before the error
+      // leaves, so the quarantine never removes a file something still holds.
+      try {
+        await conn.close();
+      } catch {
+        // Close is best-effort; the error below is the point.
+      }
       throw err;
     }
     tabStoreConn = conn;
@@ -1244,8 +1456,10 @@ export const PowerBrowserAPI = Object.freeze({
    * SQL. An upsert reopens the row (closed_at NULL): a tab being written is
    * open. created_at is set once, on insert; an empty title never blanks a
    * stored one (a reopened tab writes before its page has a title).
+   * last_active is 'last seen open'; last_accessed is 'last looked at' and
+   * only moves when given (NG-009).
    */
-  async writeTabRow({ uri, url, title, lastActive, chromeWin }) {
+  async writeTabRow({ uri, url, title, lastActive, lastAccessed, chromeWin }) {
     if (chromeWin && lazy.PrivateBrowsingUtils.isWindowPrivate(chromeWin)) {
       return "skipped-private";
     }
@@ -1253,11 +1467,12 @@ export const PowerBrowserAPI = Object.freeze({
     const now = Date.now();
     try {
       await conn.executeCached(
-        `INSERT INTO tabs (uri, url, title, last_active, created_at) VALUES (:uri, :url, :title, :last_active, :now)
+        `INSERT INTO tabs (uri, url, title, last_active, created_at, last_accessed) VALUES (:uri, :url, :title, :last_active, :now, :last_accessed)
          ON CONFLICT (uri) DO UPDATE SET url=excluded.url,
            title=CASE WHEN excluded.title = '' THEN tabs.title ELSE excluded.title END,
-           last_active=excluded.last_active, closed_at=NULL`,
-        { uri, url, title: title ?? "", last_active: lastActive ?? now, now }
+           last_active=excluded.last_active,
+           last_accessed=COALESCE(excluded.last_accessed, tabs.last_accessed), closed_at=NULL`,
+        { uri, url, title: title ?? "", last_active: lastActive ?? now, now, last_accessed: lastAccessed ?? null }
       );
     } catch (err) {
       throw new Error(`writeTabRow: upsert failed for ${uri}: ${err && err.message ? err.message : err}`);
@@ -1282,6 +1497,22 @@ export const PowerBrowserAPI = Object.freeze({
     await conn.execute("UPDATE tabs SET closed_at = :now WHERE uri = :uri AND closed_at IS NULL", { uri, now: Date.now() });
   },
 
+  /** NG-009: the user looked at this tab now (a web or Theia tab was activated). */
+  async touchTabRow(uri) {
+    const conn = await PowerBrowserAPI.openTabStore();
+    await conn.execute("UPDATE tabs SET last_accessed = :now WHERE uri = :uri", { uri, now: Date.now() });
+  },
+
+  /** NG-010: a closed tab from sessionstore; an open row it names is closed, an absent one inserted as history. */
+  async writeClosedTabRow({ uri, url, title, closedAt }) {
+    const conn = await PowerBrowserAPI.openTabStore();
+    await conn.executeCached(
+      `INSERT INTO tabs (uri, url, title, last_active, closed_at) VALUES (:uri, :url, :title, :closed_at, :closed_at)
+       ON CONFLICT (uri) DO UPDATE SET closed_at = COALESCE(tabs.closed_at, excluded.closed_at)`,
+      { uri, url, title: title ?? "", closed_at: closedAt }
+    );
+  },
+
   /**
    * NG-005: stock rows sessionstore no longer lists as open are closed -- the
    * window was closed, or the tab was restored under its saved key and the key
@@ -1304,9 +1535,14 @@ export const PowerBrowserAPI = Object.freeze({
    * NG-005: at startup no in-shell web tab can be open -- the frontend has not
    * loaded. A web row nobody grouped or placed ended with the last session and
    * becomes closed-tab history; grouped or placed ones stay as Panorama cards.
+   * T2-R3: an orphan about:blank row (url '') never had a page, so it is
+   * deleted, not kept as fake closed-tab history.
    */
   async closeEndedWebRows() {
     const conn = await PowerBrowserAPI.openTabStore();
+    await conn.execute(
+      "DELETE FROM tabs WHERE closed_at IS NULL AND uri GLOB 'web:*' AND group_id IS NULL AND x IS NULL AND url = ''"
+    );
     await conn.execute(
       "UPDATE tabs SET closed_at = :now WHERE closed_at IS NULL AND uri GLOB 'web:*' AND group_id IS NULL AND x IS NULL",
       { now: Date.now() }
@@ -1575,8 +1811,8 @@ export const PowerBrowserAPI = Object.freeze({
    * GUI-08 (15-01): closes exactly one group's tabs and removes the box
    * (the ONLY destructive group path). Each member tab closes through the
    * stock tab container first -- the existing TabClose triggers then do row
-   * cleanup through the one path -- with a deterministic row DELETE per
-   * member in the same transaction as the group removal, so a tab without a
+   * cleanup through the one path -- with every member row marked closed
+   * in the same transaction as the group removal, so a tab without a
    * live browser (or a failed close) still leaves no orphan row. Loud errors
    * naming method + id. Unknown ids resolve as already-closed success (WR-02:
    * the frontend Retry discipline assumes idempotency -- a close whose ack
@@ -1610,7 +1846,13 @@ export const PowerBrowserAPI = Object.freeze({
     }
     try {
       await conn.executeTransaction(async () => {
-        await conn.execute("DELETE FROM tabs WHERE group_id = :id", { id });
+        // NG-006/NG-010: the members close with their tabs and stay as
+        // closed-tab history; membership is cleared so no row names a group
+        // that no longer exists.
+        await conn.execute(
+          "UPDATE tabs SET group_id = NULL, closed_at = COALESCE(closed_at, :now) WHERE group_id = :id",
+          { id, now: Date.now() }
+        );
         await conn.execute("DELETE FROM groups WHERE id = :id", { id });
       });
     } catch (err) {
@@ -1659,13 +1901,25 @@ export const PowerBrowserAPI = Object.freeze({
    * data URL through writeThumbnail -- over the capture cap, or with no live
    * browser, the row clears to NULL and the card keeps its contracted text
    * fallback. Private windows skip here as well as at schedule time (v1
-   * writeTabRow precedent -- no private column exists to select on). Never
+   * writeTabRow precedent -- no private column exists to select on). A row
+   * already closed (T2-C3) is skipped before anything else: the settle timer
+   * fires after the close, the tab is gone, and the no-live-tab path would
+   * otherwise clear the kept history's snapshot to NULL. Never
    * throws: capture failures are silent by contract, never a spinner/glyph.
    */
   async captureTabThumbnail(uri) {
     try {
       if (typeof uri !== "string" || !uri) {
         return "refused-empty";
+      }
+      try {
+        const conn = await PowerBrowserAPI.openTabStore();
+        const rows = await conn.execute("SELECT closed_at FROM tabs WHERE uri = :uri", { uri });
+        if (rows.length && rows[0].getResultByName("closed_at") !== null) {
+          return "skipped-closed";
+        }
+      } catch {
+        // The closed check is best-effort; the capture below still runs.
       }
       const found = PowerBrowserAPI.findTabBrowserForUri(uri);
       if (!found) {
@@ -1943,6 +2197,108 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
+   * NG-038: records the sidecar's live port for the sender wall. Called by
+   * TheiaService._swap before the Theia frame is navigated, and only there. A
+   * non-positive or non-integer port clears it, which refuses every sender.
+   */
+  setGroupSenderPort(port) {
+    groupSenderPort = Number.isInteger(port) && port > 0 ? port : null;
+  },
+
+  /**
+   * NG-033: the parent-side dispatch for the frontend's profile store and the
+   * quit-flush acknowledgement, routed here from PowerBrowserGroupParent by
+   * kind. Same sender wall and reply shape as handleGroupMutation.
+   */
+  async handleShellMessage(data, actorRef) {
+    if (!groupSenderIsTheia(actorRef)) {
+      PowerBrowserAPI.log("error", "[handleShellMessage] rejecting non-Theia-origin sender");
+      return { ok: false, reason: "validation", message: "handleShellMessage: rejecting non-Theia-origin sender" };
+    }
+    const kind = data && data.kind;
+    const path = `${PowerBrowserAPI.getProfileDir()}/${SHELL_STATE_FILE_NAME}`;
+    try {
+      switch (kind) {
+        case "shellStateLoad": {
+          let state = "{}";
+          try {
+            state = await IOUtils.readUTF8(path);
+          } catch {
+            // Absent on a profile's first launch: the empty map.
+          }
+          if (state.length > SHELL_STATE_MAX_CHARS) {
+            return { ok: false, reason: "store", message: "handleShellMessage: the stored shell state exceeds the size cap" };
+          }
+          return { ok: true, kind, state };
+        }
+        case "shellStateSave": {
+          const state = data.state;
+          if (typeof state !== "string" || state.length > SHELL_STATE_MAX_CHARS) {
+            return { ok: false, reason: "validation", message: "handleShellMessage: refusing a shell state that is not a string within the size cap" };
+          }
+          let parsed;
+          try {
+            parsed = JSON.parse(state);
+          } catch {
+            parsed = null;
+          }
+          if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+            return { ok: false, reason: "validation", message: "handleShellMessage: refusing a shell state that is not a JSON object" };
+          }
+          await IOUtils.writeUTF8(path, state, { tmpPath: `${path}.tmp` });
+          return { ok: true, kind };
+        }
+        case "shellFlushed": {
+          const resolve = pendingShellFlushes.get(data.flushId);
+          if (resolve) {
+            resolve();
+          }
+          return { ok: true, kind };
+        }
+        case "shellArmWebTabHistory": {
+          if (typeof data.key !== "string" || !WEB_TAB_ROW_KEY_RE.test(data.key)) {
+            return { ok: false, reason: "validation", message: "handleShellMessage: refusing a malformed web-tab row key" };
+          }
+          armedWebTabHistories.add(data.key);
+          return { ok: true, kind };
+        }
+        default:
+          return { ok: false, reason: "validation", message: `handleShellMessage: unknown kind ${String(kind)}` };
+      }
+    } catch (err) {
+      // Final-review M3: the IOUtils failure names the profile file -- reply
+      // with the fixed string plus err.name, never the message text.
+      return { ok: false, reason: "store", message: `handleShellMessage: ${kind} failed (store ${err && err.name ? err.name : "error"})` };
+    }
+  },
+
+  /**
+   * NG-032/NG-033: asks the Theia frame to write its session and layout now,
+   * over the push the web-tab state rides, and waits for its shellFlushed
+   * acknowledgement or `timeoutMs`. True on the ack; false on a timeout or
+   * when there is no frontend to ask. Never throws, so a quit is never held
+   * past the timeout.
+   */
+  async flushShellState(theiaBrowser, timeoutMs) {
+    const flushId = `flush-${Date.now().toString(36)}-${(shellFlushSeq += 1)}`;
+    const acked = new Promise(resolve => pendingShellFlushes.set(flushId, resolve));
+    try {
+      theiaBrowser.browsingContext.currentWindowGlobal
+        .getActor(GROUP_ACTOR_NAME)
+        .sendAsyncMessage("PowerBrowserWebTabState", { kind: "flushShellState", flushId });
+    } catch (err) {
+      pendingShellFlushes.delete(flushId);
+      // Final-review M3: the actor/send failure text can carry internal paths
+      // -- fixed string plus err.name only.
+      PowerBrowserAPI.log("error", `[flushShellState] no frontend to flush (${err && err.name ? err.name : "error"})`);
+      return false;
+    }
+    const done = await Promise.race([acked.then(() => true), PowerBrowserAPI.sleep(timeoutMs).then(() => false)]);
+    pendingShellFlushes.delete(flushId);
+    return done;
+  },
+
+  /**
    * GUI-08 (15-01): the parent-side dispatch for PowerBrowserGroupMutation
    * queries. Returns { ok: true, ...echo } on success, { ok: false, reason }
    * otherwise -- reason 'validation' for shape/origin/kind violations,
@@ -2065,6 +2421,14 @@ export const PowerBrowserAPI = Object.freeze({
           await PowerBrowserAPI.closeTabRow(data.uri);
           return { ok: true, kind, uri: data.uri };
         }
+        // NG-009: a web or Theia tab was activated; stock selection arrives as TabSelect.
+        case "touchTab": {
+          if (typeof data.uri !== "string" || !data.uri || data.uri.startsWith("stock:")) {
+            return { ok: false, reason: "validation", message: "handleGroupMutation: refusing malformed tab key" };
+          }
+          await PowerBrowserAPI.touchTabRow(data.uri);
+          return { ok: true, kind, uri: data.uri };
+        }
         // GUI-01 (F9): the navigation kind, riding the group pair rather than
         // a second actor pair -- one channel means one origin wall
         // (groupSenderIsTheia above) and one boundary file, which is the whole
@@ -2073,7 +2437,7 @@ export const PowerBrowserAPI = Object.freeze({
         // read the ack can tell a reused tab from a fresh window from a
         // refusal.
         case "openStockTab": {
-          return { ok: true, kind, where: PowerBrowserAPI.openStockTab(data.url) };
+          return { ok: true, kind, where: await PowerBrowserAPI.openStockTab(data.url) };
         }
         // GUI-02 (14.1-01): the in-shell web-tab kinds, riding the same pair
         // for the same one-wall reason as openStockTab. The Theia frame is
@@ -2291,18 +2655,47 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
-   * SQL-01 (12-01): startup integrity tripwire. Keying is exact: the result
-   * must be a single row with the value 'ok' and nothing else. An unopenable
-   * file counts as tripped. Never throws -- answers true/false only.
+   * SQL-01 (12-01): the integrity tripwire -- PRAGMA quick_check at startup,
+   * the full PRAGMA integrity_check on the schedule (`full`, NG-018). Keying
+   * is exact: the result must be a single row with the value 'ok' and nothing
+   * else. Answers "ok", "corrupt" for any other result, or the class of the
+   * failure when the open or the check throws (tabStoreFailureClass), so an
+   * unopenable file is "corrupt" only on a real corruption signal (ruling
+   * T6-R1). Never throws.
    */
-  async checkTabStoreIntegrity() {
+  async checkTabStoreIntegrity(full = false) {
     try {
       const conn = await PowerBrowserAPI.openTabStore();
-      const rows = await conn.execute("PRAGMA quick_check");
-      return rows.length === 1 && rows[0].getString(0) === "ok";
-    } catch {
-      return false;
+      const rows = await conn.execute(full ? "PRAGMA integrity_check" : "PRAGMA quick_check");
+      return rows.length === 1 && rows[0].getString(0) === "ok" ? "ok" : "corrupt";
+    } catch (err) {
+      return PowerBrowserAPI.tabStoreFailureClass(err);
     }
+  },
+
+  /**
+   * NG-013/NG-018 (ruling T6-R1): a fixed class for a tab-store failure, safe
+   * to log -- never the raw message, which can carry the profile path.
+   * "corrupt" is SQLITE_CORRUPT or SQLITE_NOTADB: SQLite's own text for them,
+   * which a failed statement's message carries, or NS_ERROR_FILE_CORRUPTED,
+   * which Sqlite.sys.mjs reports for a failed statement and a failed open
+   * alike; only it quarantines. A store newer than this build ("newer",
+   * MIGRATIONS.md rule 4), SQLITE_BUSY or SQLITE_LOCKED ("busy"), a timeout or
+   * any other failure ("other") never does.
+   */
+  tabStoreFailureClass(err) {
+    const message = String(err && err.message);
+    if (/refusing downgrade/.test(message)) {
+      return "newer";
+    }
+    const result = err && err.result;
+    if (/database disk image is malformed|file is not a database/.test(message) || result === Cr.NS_ERROR_FILE_CORRUPTED) {
+      return "corrupt";
+    }
+    if (result === Cr.NS_ERROR_STORAGE_BUSY || result === Cr.NS_ERROR_FILE_IS_LOCKED) {
+      return "busy";
+    }
+    return "other";
   },
 
   /**
@@ -2334,7 +2727,44 @@ export const PowerBrowserAPI = Object.freeze({
           if (!entry || !entry.url || !uri) {
             continue;
           }
-          rows.push({ uri, url: entry.url, title: entry.title ?? "", last_active: now });
+          rows.push({
+            uri,
+            url: entry.url,
+            title: entry.title ?? "",
+            last_active: now,
+            last_accessed: Number.isFinite(tab.lastAccessed) ? tab.lastAccessed : null,
+          });
+        }
+      }
+      return rows;
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * NG-010: sessionstore's recently closed tabs (each non-private window's
+   * _closedTabs) as closed-history rows. A tab the store keyed keeps its key
+   * (the custom tab value travels with the closed entry); one it never saw is
+   * keyed from when it closed and its address, so the same entry projects to
+   * the same row on every sweep. Never throws.
+   */
+  parseSessionStoreClosedRows() {
+    try {
+      const state = JSON.parse(lazy.SessionStore.getBrowserState());
+      const rows = [];
+      for (const win of state.windows ?? []) {
+        if (win.isPrivate) {
+          continue;
+        }
+        for (const closed of win._closedTabs ?? []) {
+          const tab = closed.state ?? {};
+          const entry = tab.entries?.[(tab.index ?? tab.entries?.length ?? 1) - 1];
+          if (!entry || !entry.url || !Number.isFinite(closed.closedAt)) {
+            continue;
+          }
+          const uri = tab.extData?.[STOCK_TAB_KEY_VALUE] || `stock:closed-${closed.closedAt.toString(36)}-${stringHash(entry.url)}`;
+          rows.push({ uri, url: entry.url, title: entry.title ?? closed.title ?? "", last_active: closed.closedAt, closed_at: closed.closedAt });
         }
       }
       return rows;
@@ -2413,6 +2843,11 @@ export const PowerBrowserAPI = Object.freeze({
     // roundtrip proof's delete-then-rebuild procedure. Removal is
     // load-bearing, never best-effort: a failure throws into degraded.
     await IOUtils.remove(livePath);
+    // NG-085 (ruling T6-R1): like openTabStore, nothing reopens the store once
+    // its shutdown close has begun; the next launch rebuilds it.
+    if (tabStoreClosing) {
+      throw new Error("quarantineAndRebuildTabStore: the store is closed for shutdown");
+    }
     // 14.1-03 / NG-014: not exclusive, like openTabStore -- an exclusive
     // rebuilt connection served the backend reader SQLITE_BUSY until restart.
     closeTabStoreAtShutdown();
@@ -2428,9 +2863,9 @@ export const PowerBrowserAPI = Object.freeze({
       await conn.executeTransaction(async () => {
         for (const row of restoreRows) {
           await conn.execute(
-            `INSERT INTO tabs (uri, url, title, last_active, created_at) VALUES (:uri, :url, :title, :last_active, :last_active)
-             ON CONFLICT (uri) DO UPDATE SET url=excluded.url, title=excluded.title, last_active=excluded.last_active`,
-            { uri: row.uri, url: row.url, title: row.title, last_active: row.last_active }
+            `INSERT INTO tabs (uri, url, title, last_active, created_at, closed_at) VALUES (:uri, :url, :title, :last_active, :last_active, :closed_at)
+             ON CONFLICT (uri) DO UPDATE SET url=excluded.url, title=excluded.title, last_active=excluded.last_active, closed_at=excluded.closed_at`,
+            { uri: row.uri, url: row.url, title: row.title, last_active: row.last_active, closed_at: row.closed_at ?? null }
           );
         }
       });
@@ -2444,32 +2879,81 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
+   * NG-011/NG-018: one row of the settings table, or null when it is absent
+   * or the store is unreadable. Never throws: every caller has a default.
+   */
+  async readTabStoreSetting(key) {
+    try {
+      const conn = await PowerBrowserAPI.openTabStore();
+      const rows = await conn.execute("SELECT value FROM settings WHERE key = :key", { key });
+      return rows.length ? rows[0].getString(0) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * NG-018: the full PRAGMA integrity_check SCHEMA.md:200-201 schedules beside
+   * the startup quick_check, which skips index contents. Corruption
+   * quarantines and rebuilds from sessionstore, exactly as the startup
+   * tripwire does; nothing else does (ruling T6-R1). A store newer than this
+   * build stays degraded (F3, MIGRATIONS.md rule 4); a busy store, a timeout
+   * or any other failure is logged and retried at the next interval. Once the
+   * store is closing for shutdown it opens nothing (NG-085). Resolves true
+   * when the store is sound. Never throws.
+   */
+  async runScheduledIntegrityCheck() {
+    if (tabStoreClosing) {
+      return false;
+    }
+    const verdict = await PowerBrowserAPI.checkTabStoreIntegrity(true);
+    if (verdict === "ok") {
+      return true;
+    }
+    if (verdict === "newer") {
+      PowerBrowserAPI.log("warn", "[tab-store-integrity] the store is newer than this build; left degraded, not quarantined");
+    } else if (verdict !== "corrupt") {
+      PowerBrowserAPI.log("warn", `[tab-store-integrity] integrity_check not run (${verdict}); not quarantined, retried at the next interval`);
+    } else {
+      PowerBrowserAPI.log("error", "[tab-store-integrity] integrity_check reported corruption; quarantining");
+      try {
+        await PowerBrowserAPI.quarantineAndRebuildTabStore([...PowerBrowserAPI.parseSessionStoreClosedRows(), ...PowerBrowserAPI.parseSessionStoreTabRows()]);
+      } catch (err) {
+        PowerBrowserAPI.log("error", `[tab-store-integrity] rebuild failed (${PowerBrowserAPI.tabStoreFailureClass(err)})`);
+      }
+    }
+    return false;
+  },
+
+  /**
    * SQL-01 (12-01): startup orchestration. Opens the store (running the
-   * version guard), fires the tripwire, and on any trip quarantines and
-   * rebuilds from sessionstore before continuing degraded. Resolves
-   * 'ready' | 'rebuilt' | 'degraded' -- never throws, so startup never
-   * stalls on the store.
+   * version guard), fires the tripwire, and on corruption quarantines and
+   * rebuilds from sessionstore before continuing degraded. An unopenable
+   * file is quarantined like a tripped one when SQLite reports it corrupt
+   * (NG-013); a store newer than this build is refused and left untouched
+   * (MIGRATIONS.md rule 4), and a busy or otherwise failed open is never
+   * quarantined (ruling T6-R1). Resolves 'ready' | 'rebuilt' | 'degraded'
+   * -- never throws, so startup never stalls on the store.
    */
   async ensureTabStore() {
-    try {
-      await PowerBrowserAPI.openTabStore();
-    } catch (err) {
-      PowerBrowserAPI.log("error", `[ensureTabStore] open failed: ${err && err.message ? err.message : err}`);
+    // WR-05 (12-CODE-REVIEW.md): the tripwire and its failure classes live in
+    // checkTabStoreIntegrity, shared with the scheduled check.
+    const verdict = await PowerBrowserAPI.checkTabStoreIntegrity();
+    if (verdict === "newer") {
+      PowerBrowserAPI.log("warn", "[ensureTabStore] the store is newer than this build; left untouched");
       return "degraded";
     }
-    // WR-05 (12-CODE-REVIEW.md): the tripwire lives in
-    // checkTabStoreIntegrity -- call it rather than re-implementing the
-    // exact-single-ok keying here, so the two can never drift apart. It
-    // never throws (answers true/false only), so no guard is needed.
-    const ok = await PowerBrowserAPI.checkTabStoreIntegrity();
+    if (verdict !== "ok" && verdict !== "corrupt") {
+      PowerBrowserAPI.log("error", `[ensureTabStore] open failed (${verdict}); not quarantined`);
+      return "degraded";
+    }
     let state = "ready";
-    if (!ok) {
+    if (verdict === "corrupt") {
       try {
-        const restoreRows = PowerBrowserAPI.parseSessionStoreTabRows();
-        await PowerBrowserAPI.quarantineAndRebuildTabStore(restoreRows);
+        await PowerBrowserAPI.quarantineAndRebuildTabStore([...PowerBrowserAPI.parseSessionStoreClosedRows(), ...PowerBrowserAPI.parseSessionStoreTabRows()]);
         state = "rebuilt";
       } catch (err) {
-        PowerBrowserAPI.log("error", `[ensureTabStore] rebuild failed: ${err && err.message ? err.message : err}`);
+        PowerBrowserAPI.log("error", `[ensureTabStore] rebuild failed (${PowerBrowserAPI.tabStoreFailureClass(err)})`);
         return "degraded";
       }
     }
@@ -2488,7 +2972,23 @@ export const PowerBrowserAPI = Object.freeze({
    * makes the roundtrip gate deterministic. Loud errors propagate to the caller.
    */
   async sweepTabStoreFromSessionStore() {
+    // Closed first, open last: one snapshot never lists a tab as both, and
+    // the open writes win for anything reopened since.
+    // NG-010/NG-011: retention is the setting closed_retention_days; F11: a
+    // close older than the window is never inserted, so the sweep never
+    // churns insert-then-prune on the same row.
+    const days = Number(await PowerBrowserAPI.readTabStoreSetting("closed_retention_days"));
+    const retentionMs = Number.isFinite(days) && days >= 0 ? days * 24 * 60 * 60 * 1000 : TAB_STORE_CLOSED_RETENTION_MS;
+    const cutoff = Date.now() - retentionMs;
+    for (const row of PowerBrowserAPI.parseSessionStoreClosedRows().slice(0, TAB_STORE_SWEEP_MAX_WRITES)) {
+      if (row.closed_at < cutoff) {
+        continue;
+      }
+      await PowerBrowserAPI.writeClosedTabRow({ uri: row.uri, url: row.url, title: row.title, closedAt: row.closed_at });
+    }
     const live = PowerBrowserAPI.parseSessionStoreTabRows();
+    // NG-005 / NG-023 (wave B d8f270d): the open set is every keyed stock tab
+    // sessionstore lists, even before it has collected the tab's history.
     const liveUris = sessionStoreStockKeys();
     for (const row of live.slice(0, TAB_STORE_SWEEP_MAX_WRITES)) {
       await PowerBrowserAPI.writeTabRow({
@@ -2496,12 +2996,13 @@ export const PowerBrowserAPI = Object.freeze({
         url: row.url,
         title: row.title,
         lastActive: row.last_active,
+        lastAccessed: row.last_accessed ?? undefined,
       });
     }
     if (stockRestoreDone) {
       await PowerBrowserAPI.closeAbsentStockRows(liveUris);
     }
-    await PowerBrowserAPI.pruneClosedTabRows(Date.now() - TAB_STORE_CLOSED_RETENTION_MS);
+    await PowerBrowserAPI.pruneClosedTabRows(cutoff);
   },
 
   /**
@@ -2511,7 +3012,8 @@ export const PowerBrowserAPI = Object.freeze({
    * shell window carries no tab browser, so it never matches), each calling
    * the write or close wrapper keyed by the tab's own key (stockTabKey),
    * plus a sessionstore-state-write-complete observer running the bounded
-   * reconciliation sweep. No Theia-to-chrome channel is created and no actor
+   * reconciliation sweep, and the scheduled full integrity check (NG-018).
+   * No Theia-to-chrome channel is created and no actor
    * is registered. Returns a stop function removing every listener and
    * observer added here.
    */
@@ -2568,6 +3070,7 @@ export const PowerBrowserAPI = Object.freeze({
           uri,
           url: spec,
           title: (tab && tab.label) || "",
+          lastAccessed: event.type === "TabSelect" ? Date.now() : undefined,
           chromeWin,
         }).catch(err => {
           PowerBrowserAPI.log("error", `[tab-store-trigger] write failed: ${err && err.message ? err.message : err}`);
@@ -2623,7 +3126,47 @@ export const PowerBrowserAPI = Object.freeze({
       },
     };
     Services.obs.addObserver(sweepObserver, "sessionstore-state-write-complete");
+    // NG-018: the scheduled full integrity check. The interval is the setting
+    // integrity_check_minutes (24 hours when absent), read before each wait so
+    // a changed setting applies from the next run. The stop function ends it
+    // and cancels the pending wait; the store's shutdown close ends it too
+    // (NG-085, ruling T6-R1), so no timer stays armed for a store that is gone.
+    let integrityOff = false;
+    let cancelIntegrityWait = null;
+    (async () => {
+      while (!integrityOff) {
+        const minutes = Number(await PowerBrowserAPI.readTabStoreSetting("integrity_check_minutes"));
+        if (integrityOff || tabStoreClosing) {
+          break;
+        }
+        // Held in pendingTimers until it fires or is cancelled, like sleep()'s.
+        await new Promise(resolve => {
+          const timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
+          const done = () => {
+            pendingTimers.delete(timer);
+            cancelIntegrityWait = null;
+            resolve();
+          };
+          cancelIntegrityWait = () => {
+            timer.cancel();
+            done();
+          };
+          pendingTimers.add(timer);
+          const ms = Number.isFinite(minutes) && minutes > 0 ? minutes * 60 * 1000 : TAB_STORE_INTEGRITY_DEFAULT_MS;
+          timer.initWithCallback({ notify: done }, ms, Ci.nsITimer.TYPE_ONE_SHOT);
+        });
+        if (!integrityOff) {
+          await PowerBrowserAPI.runScheduledIntegrityCheck();
+        }
+      }
+    })().catch(err => {
+      PowerBrowserAPI.log("error", `[tab-store-integrity] schedule ended (${PowerBrowserAPI.tabStoreFailureClass(err)})`);
+    });
     return () => {
+      integrityOff = true;
+      if (cancelIntegrityWait) {
+        cancelIntegrityWait();
+      }
       for (const [container, name] of attached) {
         try {
           container.removeEventListener(name, onTabEvent);
@@ -2728,7 +3271,8 @@ export const PowerBrowserAPI = Object.freeze({
     win.gBrowser.tabs.push({ linkedBrowser: browser });
     // NG-001: the row key is the tab's identity -- the key the frontend sent
     // (a reopened card's row) or web:<tabId> -- never the page URL.
-    const entry = { browser, uri: key || `web:${tabId}`, listener: null, titleListener: null, owner: actorRef };
+    // NG-034: that value is also the web-tab history key (saveWebTabHistories).
+    const entry = { browser, uri: key || `web:${tabId}`, listener: null, titleListener: null, owner: actorRef, rowKey: key || `web:${tabId}` };
     // NG-004: the row exists from the moment the tab does, a New Tab on the
     // empty page included, so every Panorama mutation has a row to act on.
     PowerBrowserAPI.writeTabRow({ uri: entry.uri, url: spec === "about:blank" ? "" : spec, title: "", chromeWin: win }).catch(err => {
@@ -2792,6 +3336,19 @@ export const PowerBrowserAPI = Object.freeze({
     };
     browser.addEventListener("pagetitlechanged", entry.titleListener);
     webTabs.set(tabId, entry);
+    // NG-034: a tab the frontend reopened from last session's snapshot, with
+    // its history armed, gets its back/forward history back; any other tab
+    // loads its URL through the null-principal navigate below.
+    const history = PowerBrowserAPI.takeWebTabHistory(entry.rowKey);
+    if (history) {
+      PowerBrowserAPI.restoreWebTabHistory(browser, history).catch(err => {
+        // Final-review M3: the restore failure can carry XPCOM/IOUtils text
+        // with the profile path -- fixed string plus err.name only.
+        PowerBrowserAPI.log("error", `[web-tab] history restore failed (${err && err.name ? err.name : "error"})`);
+        PowerBrowserAPI.webTabNavigate(tabId, spec);
+      });
+      return "opened";
+    }
     const where = PowerBrowserAPI.webTabNavigate(tabId, spec);
     return where === "loading" ? "opened" : where;
   },
@@ -3093,6 +3650,12 @@ export class PowerBrowserGroupParent extends GroupActorBase {
   async receiveMessage(message) {
     if (!message || message.name !== "PowerBrowserGroupMutation") {
       return undefined;
+    }
+    // NG-033: the profile-store and quit-flush kinds have their own handler
+    // (handleShellMessage); NG-021..NG-028's store reads have theirs
+    // (handleStoreRequest); every other kind is a group or web-tab mutation.
+    if (SHELL_MESSAGE_KINDS.has(message.data && message.data.kind)) {
+      return PowerBrowserAPI.handleShellMessage(message.data, this);
     }
     if (isStoreRequestKind(message.data?.kind)) { return handleStoreRequest(message.data, this); }
     return PowerBrowserAPI.handleGroupMutation(message.data, this);

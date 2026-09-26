@@ -18,19 +18,20 @@
  *    the descriptors, so the bridge rule it relies on (a segment label
  *    lowercased IS the descriptor id) is asserted here rather than trusted.
  *
- * 2. VIEW PLACEMENTS vs `ensureInArea` on the switch path. A descriptor's
+ * 2. VIEW PLACEMENTS vs `SHIPPED_MODE_RULES` on the switch path. A descriptor's
  *    `viewPlacements` is applied by stock on a mode's FIRST activation only
  *    (perspective-service.js:151-193): every later activation reaches
  *    `expand(id)`, which is a pure find over the widgets already docked
  *    (side-panel-handler.js:282-289) and does nothing on a miss. That gap is
  *    the defect that left Coding showing no Theia view at all, and
- *    `ModeService.ensureInArea` is the every-activation half that closes it.
- *    A placement with no matching `ensureInArea` is first-visit-only by
- *    construction, so the two sets are required to be equal.
+ *    `SHIPPED_MODE_RULES`' `views` docks are the every-activation half that
+ *    closes it. A placement with no matching rules `view` is first-visit-only
+ *    by construction, so the two sets are required to be equal.
  *
- * 3. COLLAPSE AREAS vs `visibilityFor` on the switch path. Same split: the
- *    descriptor's `chromeOptions.collapseAreas` collapses on first activation,
- *    `visibilityFor` decides what every activation asserts. An area collapsed
+ * 3. COLLAPSE AREAS vs the `SHIPPED_MODE_RULES` `'closed'` rules on the
+ *    switch path. Same split: the descriptor's
+ *    `chromeOptions.collapseAreas` collapses on first activation,
+ *    the rules table decides what every activation asserts. An area collapsed
  *    by one and left open by the other makes a mode look different on its
  *    second visit than its first.
  *
@@ -189,43 +190,41 @@ function derivedModesLiteralOf(source) {
     return [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1]);
 }
 
-/** Every `ensureInArea('view', 'area')` call on the mode service's switch path. */
-function derivedEnsureInAreaOf(source) {
-    return [...source.matchAll(/\bensureInArea\(\s*'([^']+)'\s*,\s*'([^']+)'\s*\)/g)].map(m => `${m[1]}->${m[2]}`);
-}
-
 /**
- * The per-mode panel flags `visibilityFor` returns: `{ byId, fallback }`,
- * each entry mapping an area to its literal source text. Only a literal
- * `false` collapses -- an expression (Coding reads the live right panel)
- * asserts nothing about that area, which is exactly why the comparison is
- * against the descriptor's collapse list and not its complement.
+ * NG-035: the shipped rows of the mode service's SHIPPED_MODE_RULES table,
+ * one row per line: `{ byId: { <id>: { left, right, bottom, placements } } }`,
+ * each area rule the literal 'open' | 'closed' | 'keep' and each placement a
+ * `view->area` string. Undefined when the table cannot be read.
  */
-function derivedVisibilityFlags(source) {
-    const body = bodyOf(source, /visibilityFor\s*\([^)]*\)\s*:\s*\{[^}]*\}\s*\{/);
-    if (body === undefined) {
+function derivedShippedRules(source) {
+    const at = source.search(/export const SHIPPED_MODE_RULES\b/);
+    if (at < 0) {
         return undefined;
     }
-    const flagsOf = text => {
-        const out = {};
+    const end = source.indexOf('});', at);
+    const block = source.slice(at, end < 0 ? undefined : end);
+    const byId = {};
+    for (const row of block.matchAll(/^\s*(\w+):\s*\{(.*)\},?\s*$/gm)) {
+        const text = row[2];
+        const rule = { placements: [] };
         for (const area of AREAS) {
-            const m = new RegExp(`\\b${area}:\\s*([^,}]+)`).exec(text);
+            const m = new RegExp(`\\b${area}:\\s*'(open|closed|keep)'`).exec(text);
             if (m) {
-                out[area] = m[1].trim();
+                rule[area] = m[1];
             }
         }
-        return Object.keys(out).length === AREAS.length ? out : undefined;
-    };
-    const byId = {};
-    for (const m of body.matchAll(/target\s*===\s*'([^']+)'\s*\)\s*\{\s*return\s*\{([^}]*)\}/g)) {
-        const flags = flagsOf(m[2]);
-        if (flags) {
-            byId[m[1]] = flags;
+        const views = /views:\s*\{([^}]*)\}/.exec(text);
+        for (const area of views ? AREAS : []) {
+            const list = new RegExp(`\\b${area}:\\s*\\[([^\\]]*)\\]`).exec(views[1]);
+            for (const view of list ? list[1].matchAll(/'([^']+)'/g) : []) {
+                rule.placements.push(`${view[1]}->${area}`);
+            }
+        }
+        if (AREAS.every(area => rule[area])) {
+            byId[row[1]] = rule;
         }
     }
-    const returns = [...body.matchAll(/return\s*\{([^}]*)\}/g)];
-    const fallback = returns.length ? flagsOf(returns[returns.length - 1][1]) : undefined;
-    return fallback ? { byId, fallback } : undefined;
+    return Object.keys(byId).length ? { byId } : undefined;
 }
 
 /**
@@ -289,38 +288,39 @@ function checkModes(sources) {
         }
     }
 
-    // 2. First-activation placements vs the every-activation dock. Stock
-    // applies viewPlacements once; ensureInArea is what makes visit two match
-    // visit one, so the two sets are the same set or the mode is broken on
-    // one of the two paths.
+    // 2 and 3. First-activation placements and collapse areas (the
+    // descriptors) vs the every-activation rules (SHIPPED_MODE_RULES, NG-035).
+    // Stock applies viewPlacements and collapseAreas once; activateMode applies
+    // the rules on every visit, so the two must agree or a mode looks different
+    // on its second visit than its first.
     const declaredPlacements = modes.flatMap(m => m.placements);
+    const rules = derivedShippedRules(serviceSrc);
     if (declaredPlacements.length === 0) {
         failures.push(`${DESCRIPTORS_REL}: derived ZERO view placements across every shipped mode -- no descriptor places a view, so the placement comparison would pass on an empty set`);
+    }
+    if (!rules) {
+        failures.push(`${SERVICE_REL}: could not derive SHIPPED_MODE_RULES -- the every-activation half of the mode contract is unreadable, so the comparison proves nothing`);
     } else {
-        const applied = derivedEnsureInAreaOf(serviceSrc);
+        const applied = Object.values(rules.byId).flatMap(rule => rule.placements);
         const placementDiff = diff(applied, declaredPlacements);
         if (placementDiff.surplus.length) {
-            failures.push(`${SERVICE_REL}: ensureInArea docks a view no shipped descriptor places: ${placementDiff.surplus.join(', ')} -- the switch path moves a view the mode contract does not declare`);
+            failures.push(`${SERVICE_REL}: SHIPPED_MODE_RULES docks a view no shipped descriptor places: ${placementDiff.surplus.join(', ')} -- the switch path moves a view the mode contract does not declare`);
         }
         if (placementDiff.missing.length) {
-            failures.push(`${SERVICE_REL}: shipped view placement with no ensureInArea on the switch path: ${placementDiff.missing.join(', ')} -- stock applies viewPlacements on a mode's FIRST activation only, so this view would be missing on every later visit`);
+            failures.push(`${SERVICE_REL}: shipped view placement with no SHIPPED_MODE_RULES view: ${placementDiff.missing.join(', ')} -- stock applies viewPlacements on a mode's FIRST activation only, so this view would be missing on every later visit`);
         }
-    }
-
-    // 3. First-activation collapse vs the every-activation panel flags.
-    const visibility = derivedVisibilityFlags(serviceSrc);
-    if (!visibility) {
-        failures.push(`${SERVICE_REL}: could not derive the visibilityFor panel flags -- the every-activation half of the collapse contract is unreadable, so the comparison proves nothing`);
-    } else {
         for (const mode of modes) {
-            const flags = visibility.byId[mode.id] ?? visibility.fallback;
-            const collapsedByService = AREAS.filter(area => flags[area] === 'false');
-            const collapseDiff = diff(collapsedByService, mode.collapseAreas);
+            const rule = rules.byId[mode.id];
+            if (!rule) {
+                failures.push(`${SERVICE_REL}: SHIPPED_MODE_RULES has no row for shipped mode '${mode.id}'`);
+                continue;
+            }
+            const collapseDiff = diff(AREAS.filter(area => rule[area] === 'closed'), mode.collapseAreas);
             if (collapseDiff.surplus.length) {
-                failures.push(`${SERVICE_REL}: visibilityFor collapses [${collapseDiff.surplus.join(', ')}] for '${mode.id}' but its descriptor does not -- the mode would look different on its first activation than on every later one`);
+                failures.push(`${SERVICE_REL}: SHIPPED_MODE_RULES closes [${collapseDiff.surplus.join(', ')}] for '${mode.id}' but its descriptor does not -- the mode would look different on its first activation than on every later one`);
             }
             if (collapseDiff.missing.length) {
-                failures.push(`${DESCRIPTORS_REL}: descriptor '${mode.id}' collapses [${collapseDiff.missing.join(', ')}] on first activation but visibilityFor leaves it open afterwards -- the mode would not stay collapsed`);
+                failures.push(`${DESCRIPTORS_REL}: descriptor '${mode.id}' collapses [${collapseDiff.missing.join(', ')}] on first activation but SHIPPED_MODE_RULES leaves it open afterwards -- the mode would not stay collapsed`);
             }
         }
     }
@@ -423,12 +423,11 @@ function selfTest() {
         },
         {
             // The D3 shape: the descriptor still places the view, but nothing
-            // docks it on a later activation, so Coding shows no Theia view
-            // from its second visit onward.
-            name: 'planted ensureInArea removal (placement becomes first-visit-only)',
+            // docks it on a later activation.
+            name: 'planted rules view removal (placement becomes first-visit-only)',
             mutate: sources => ({ ...sources, [SERVICE_REL]: cleanService.replace(
-                "            await this.ensureInArea('explorer-view-container', 'left');\n",
-                ''
+                "views: { left: ['explorer-view-container'], right: [], bottom: [] }",
+                "views: { left: [], right: [], bottom: [] }"
             ) }),
             expect: 'explorer-view-container',
         },

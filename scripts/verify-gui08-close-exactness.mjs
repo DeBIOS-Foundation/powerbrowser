@@ -10,7 +10,7 @@
 // mutation ordering in the widget's close path, the model close wiring
 // (closeGroup actor kind plus the activity handoff), and the chrome-side
 // close surface (the closeGroup dispatch arm reaching the per-tab stock
-// close loop plus the row DELETEs). Each is compared as SET EQUALITY
+// close loop plus the member rows marked closed). Each is compared as SET EQUALITY
 // against the one EXPECTED block: a reworded dialog breaks the contracted
 // copy, a cancel that mutates breaks the only-destructive-action
 // discipline, a close that skips the per-tab loop orphans rows -- each
@@ -206,7 +206,7 @@ function checkStatic(sources) {
     }
 
     // 4. Chrome wiring: the dispatch arm reaches the per-tab stock close
-    // loop plus the row DELETEs in one surface.
+    // loop plus the member-row close in one surface.
     if (!apiSrc.includes(EXPECTED_DISPATCH_ARM)) {
         failures.push(`${API_REL}: no ${EXPECTED_DISPATCH_ARM} arm -- the close mutation reaches no chrome close`);
     }
@@ -219,8 +219,8 @@ function checkStatic(sources) {
     if (!apiSrc.includes('for (const uri of members)')) {
         failures.push(`${API_REL}: no per-member close loop -- the exact tab set is not closed one by one`);
     }
-    if (!apiSrc.includes('DELETE FROM tabs WHERE group_id')) {
-        failures.push(`${API_REL}: no member-row DELETE -- closed tabs leave orphan rows`);
+    if (!apiSrc.includes('UPDATE tabs SET group_id = NULL, closed_at = COALESCE(closed_at, :now) WHERE group_id = :id')) {
+        failures.push(`${API_REL}: no member-row close -- closed tabs leave open rows or lose their history (NG-006/NG-010)`);
     }
     if (!apiSrc.includes('DELETE FROM groups WHERE id')) {
         failures.push(`${API_REL}: no group-row DELETE -- the closed box survives in the store`);
