@@ -558,8 +558,9 @@ export class SetupsService implements FrontendApplicationContribution {
      * Geometry verbatim with reachability clamping, tabs through the placer
      * (NG-030, NG-036), then the mode through ModeService (NG-029). `notify`
      * shows the contracted gone-tabs and mode-fallback notices; the launch
-     * restore of the unnamed session (NG-032) passes false -- no setup was
-     * chosen, and "this setup" would name nothing.
+     * restore of the unnamed session (NG-032) passes false -- the session
+     * never shows a chosen setup's gone-tabs notice, but a mode it can no
+     * longer resolve still gets the contracted fallback notice.
      */
     protected async applySnapshot(row: { modeId: string; windows: SetupWindowSnapshot[] }, notify: boolean): Promise<void> {
         this.applyGeometry(row.windows[0]);
@@ -571,14 +572,30 @@ export class SetupsService implements FrontendApplicationContribution {
         // apply. A bare switchPerspective applied the perspective and none of
         // those. activateMode resolves an unknown id to Browsing by itself;
         // `known` only chooses the contracted fallback notice below.
+        const shippedKnown = SHIPPED_MODES.some(descriptor => descriptor.id === modeId);
+        if (!notify && !shippedKnown) {
+            // NG-032 round 1: the launch restore waits (bounded) for the
+            // custom-mode load before resolving the session's mode, so a
+            // custom-mode session does not fall back to Browsing merely
+            // because loadCustomModes had not settled yet. The named-setup
+            // path (notify=true) keeps its synchronous check.
+            await this.waitForCustomModes();
+        }
         const knownCustom = this.modes.getCustomModes().some(custom => custom.id === modeId);
-        const known = SHIPPED_MODES.some(descriptor => descriptor.id === modeId) || knownCustom;
+        const known = shippedKnown || knownCustom;
         try {
             await this.modes.activateMode(known ? modeId : 'browsing');
         } catch {
             // activateMode has no rejecting path today; geometry and tabs still stand.
         }
         if (!notify) {
+            // NG-032 round 1: a wait that timed out, or a mode that is
+            // genuinely gone, falls back to Browsing with the contracted
+            // notice -- never silently. Gone tabs stay silent on the
+            // session path (no setup was chosen).
+            if (!known) {
+                void this.flash(SETUP_MODE_FALLBACK_NOTICE);
+            }
             return;
         }
         // Both notices share one status-bar element, so two sequential
@@ -591,6 +608,23 @@ export class SetupsService implements FrontendApplicationContribution {
             void this.flash(SETUP_GONE_TABS_NOTICE);
         } else if (!known) {
             void this.flash(SETUP_MODE_FALLBACK_NOTICE);
+        }
+    }
+
+    /**
+     * NG-032 round 1: bounded wait (5 s) on the custom-mode load. Resolves
+     * once the customs settle; a slow load falls through after the bound so
+     * a launch never stalls on storage. Never throws.
+     */
+    protected async waitForCustomModes(): Promise<void> {
+        try {
+            await Promise.race([
+                this.modes.whenCustomModesLoaded(),
+                new Promise<void>(resolve => window.setTimeout(resolve, 5000)),
+            ]);
+        } catch {
+            // whenCustomModesLoaded never rejects; a timer failure still
+            // leaves the launch on the synchronous known check below.
         }
     }
 
@@ -1123,7 +1157,15 @@ export class SetupsService implements FrontendApplicationContribution {
         const pointer = parsed.ok && parsed.lastSession && parsed.setups.some(setup => setup.name === parsed.lastSession)
             ? parsed.lastSession
             : null;
-        const saved = parseSessionSnapshot(await this.profileStorage.getData<unknown>(SESSION_STORAGE_KEY));
+        let saved: SessionSnapshot | undefined;
+        try {
+            saved = parseSessionSnapshot(await this.profileStorage.getData<unknown>(SESSION_STORAGE_KEY));
+        } catch {
+            // A throwing storage backend degrades to the pointer path below
+            // (or a normal launch with none): a storage failure never skips
+            // the saved-setup restore.
+            saved = undefined;
+        }
         if (saved) {
             this.currentSetup = pointer;
             await this.applySnapshot(saved, false);

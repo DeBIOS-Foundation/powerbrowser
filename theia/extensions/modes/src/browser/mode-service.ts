@@ -257,12 +257,13 @@ export class ModeService implements FrontendApplicationContribution {
     protected lastGoodCustoms: CustomModeSnapshot[] = [];
     protected registeredCustomIds = new Set<string>();
     protected droppedCustomIds = new Set<string>();
+    protected customModesLoadedPromise: Promise<void> | undefined;
 
     onStart(): void {
         // Fire-and-forget: awaiting this read here re-enters the boot-chain
         // deadlock documented in the customize-css header. Shipped modes are
         // already registered synchronously by ModesContribution.
-        void this.loadCustomModes();
+        void (this.customModesLoadedPromise = this.loadCustomModes());
         this.fileService.onDidFilesChange(event => {
             // A DELETED change is a deliberate absence: reset immediately,
             // bypassing the keep-last-good guard (same shape as customize).
@@ -421,6 +422,17 @@ export class ModeService implements FrontendApplicationContribution {
     /** Customs listed beside the shipped defaults for the toggle; shipped rows untouched. */
     getCustomModes(): Array<{ id: string; name: string }> {
         return this.lastGoodCustoms.map(row => ({ id: customModeIdFor(row.name), name: row.name }));
+    }
+
+    /**
+     * NG-032: resolves when the launch-time custom-mode load settles, so the
+     * session restore can resolve a custom mode id against loaded customs
+     * instead of racing the fire-and-forget load in onStart. Never rejects:
+     * loadCustomModes has no rejecting path. Late callers (after the load
+     * settled) resolve at once.
+     */
+    whenCustomModesLoaded(): Promise<void> {
+        return this.customModesLoadedPromise ?? Promise.resolve();
     }
 
     hasCustomMode(id: string): boolean {
