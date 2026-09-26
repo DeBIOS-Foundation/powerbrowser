@@ -141,7 +141,6 @@ function closeTabStoreAtShutdown() {
   if (tabStoreShutdownHooked) {
     return;
   }
-  tabStoreShutdownHooked = true;
   // Throws once Sqlite's barrier has closed; openConnection would refuse then too.
   lazy.Sqlite.shutdown.addBlocker("PowerBrowser tab store: closing tabs.sqlite", async () => {
     tabStoreClosing = true;
@@ -151,6 +150,7 @@ function closeTabStoreAtShutdown() {
       await conn.close();
     }
   });
+  tabStoreShutdownHooked = true;
 }
 
 // F4: sessionstore lists restored tabs only once its restore has run, so the
@@ -848,8 +848,16 @@ export const PowerBrowserAPI = Object.freeze({
    * F6: Duplicate Tab copies the custom value, so a tab can arrive holding the
    * key another open tab already holds. The tab that held it first keeps it;
    * the newcomer keeps the key minted for it when it opened, or gets a fresh one.
+   *
+   * A tab moved to another window is a new tab element that adopts the old
+   * one (TabOpen detail.adoptedTab); sessionstore has already moved the custom
+   * value, and the old tab, not closing yet, still holds the key. `adoptedFrom`
+   * hands the key over, so the moved tab keeps its row.
    */
-  stockTabKey(tab) {
+  stockTabKey(tab, adoptedFrom = null) {
+    if (adoptedFrom && !stockTabKeys.has(tab) && stockTabKeys.has(adoptedFrom)) {
+      stockTabKeys.set(tab, stockTabKeys.get(adoptedFrom));
+    }
     const stored = lazy.SessionStore.getCustomTabValue(tab, STOCK_TAB_KEY_VALUE);
     const mine = stockTabKeys.get(tab);
     if (stored && stored === mine) {
@@ -1315,6 +1323,14 @@ export const PowerBrowserAPI = Object.freeze({
     if (typeof uri !== "string" || !uri || uri.length > 2048 || /^(stock|web|webview|https?):/i.test(uri)) {
       throw new Error("trackShellTab: refusing malformed tab key");
     }
+    // A Theia key is an address, so a tab reopened later reuses a closed row.
+    // It is a new tab: the old row's group and place do not come back with it
+    // (web and stock rows, whose keys are identities, revive with theirs).
+    const conn = await PowerBrowserAPI.openTabStore();
+    await conn.execute(
+      "UPDATE tabs SET group_id = NULL, x = NULL, y = NULL, ord = NULL WHERE uri = :uri AND closed_at IS NOT NULL",
+      { uri }
+    );
     return PowerBrowserAPI.writeTabRow({
       uri,
       url: typeof url === "string" ? url.slice(0, 2048) : "",
@@ -2043,7 +2059,7 @@ export const PowerBrowserAPI = Object.freeze({
         }
         // NG-005: the user closed a web or Theia tab; stock closes arrive as TabClose.
         case "closeTab": {
-          if (typeof data.uri !== "string" || !data.uri || data.uri.startsWith("stock:")) {
+          if (typeof data.uri !== "string" || !data.uri || data.uri.length > 2048 || data.uri.startsWith("stock:")) {
             return { ok: false, reason: "validation", message: "handleGroupMutation: refusing malformed tab key" };
           }
           await PowerBrowserAPI.closeTabRow(data.uri);
@@ -2401,22 +2417,28 @@ export const PowerBrowserAPI = Object.freeze({
     // rebuilt connection served the backend reader SQLITE_BUSY until restart.
     closeTabStoreAtShutdown();
     const conn = await lazy.Sqlite.openConnection({ openNotExclusive: true, path: TAB_STORE_FILE_NAME });
-    await conn.execute("PRAGMA journal_mode=WAL;");
-    // CR-02: the migration runs as its own top-level transactions, the row
-    // inserts in a second one -- sequential, never nested. NG-014: the whole
-    // chain to the head, so the rebuilt store is what every reader expects.
-    // Group rows rebuild EMPTY and restored tabs land ungrouped (15-RESEARCH A3);
-    // the corrupt copy stays the only record of lost membership.
-    await PowerBrowserAPI.migrateTabStoreToHead(conn);
-    await conn.executeTransaction(async () => {
-      for (const row of restoreRows) {
-        await conn.execute(
-          `INSERT INTO tabs (uri, url, title, last_active) VALUES (:uri, :url, :title, :last_active)
-           ON CONFLICT (uri) DO UPDATE SET url=excluded.url, title=excluded.title, last_active=excluded.last_active`,
-          { uri: row.uri, url: row.url, title: row.title, last_active: row.last_active }
-        );
-      }
-    });
+    try {
+      await conn.execute("PRAGMA journal_mode=WAL;");
+      // CR-02: the migration runs as its own top-level transactions, the row
+      // inserts in a second one -- sequential, never nested. NG-014: the whole
+      // chain to the head, so the rebuilt store is what every reader expects.
+      // Group rows rebuild EMPTY and restored tabs land ungrouped (15-RESEARCH A3);
+      // the corrupt copy stays the only record of lost membership.
+      await PowerBrowserAPI.migrateTabStoreToHead(conn);
+      await conn.executeTransaction(async () => {
+        for (const row of restoreRows) {
+          await conn.execute(
+            `INSERT INTO tabs (uri, url, title, last_active, created_at) VALUES (:uri, :url, :title, :last_active, :last_active)
+             ON CONFLICT (uri) DO UPDATE SET url=excluded.url, title=excluded.title, last_active=excluded.last_active`,
+            { uri: row.uri, url: row.url, title: row.title, last_active: row.last_active }
+          );
+        }
+      });
+    } catch (err) {
+      // NG-085: a connection nobody holds would block the shutdown barrier.
+      await conn.close().catch(() => undefined);
+      throw err;
+    }
     tabStoreConn = conn;
     return corruptPath;
   },
@@ -2500,6 +2522,8 @@ export const PowerBrowserAPI = Object.freeze({
     // to restore is absent from its state, so the sweep must not close its row.
     lazy.SessionStore.promiseAllWindowsRestored.then(() => {
       stockRestoreDone = true;
+    }).catch(err => {
+      PowerBrowserAPI.log("error", `[tab-store-trigger] restore wait failed: ${err && err.message ? err.message : err}`);
     });
     const onTabEvent = event => {
       try {
@@ -2511,7 +2535,14 @@ export const PowerBrowserAPI = Object.freeze({
         if (!spec || (chromeWin && lazy.PrivateBrowsingUtils.isWindowPrivate(chromeWin))) {
           return;
         }
-        const uri = PowerBrowserAPI.stockTabKey(tab);
+        // A tab moved between windows closes its old element (TabClose detail
+        // adoptedBy) and opens a new one (TabOpen detail adoptedTab): the row
+        // moves with the key, and neither half is a close.
+        const detail = event.detail || {};
+        const uri = PowerBrowserAPI.stockTabKey(tab, event.type === "TabOpen" ? detail.adoptedTab : null);
+        if (event.type === "TabClose" && detail.adoptedBy) {
+          return;
+        }
         if (event.type === "TabClose") {
           // Last view is final -- capture on settle, never synchronously.
           PowerBrowserAPI.scheduleSettleCapture(uri, chromeWin);

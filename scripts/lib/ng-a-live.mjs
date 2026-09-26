@@ -88,13 +88,19 @@ function removePrivateData() {
  * here would orphan the browser and leave part of the copy behind.
  */
 function onSignal(signal, code) {
-    process.exitCode = code;
     if (launches > 0) {
         if (signal === 'SIGTERM') {
-            process.emit('SIGINT', 'SIGINT');
+            try {
+                process.emit('SIGINT', 'SIGINT');
+            } catch (error) {
+                console.error(`ng-a-live: handing SIGTERM to the launch failed: ${error && error.message ? error.message : error}`);
+            }
         }
+        // After firefox-bidi's handler (which sets 130), so a SIGTERM keeps 143.
+        process.exitCode = code;
         return;
     }
+    process.exitCode = code;
     try {
         removeProfiles();
     } catch (error) {

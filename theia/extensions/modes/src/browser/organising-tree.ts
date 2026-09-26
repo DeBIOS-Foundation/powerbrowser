@@ -16,7 +16,6 @@
  */
 
 import type { PanoramaGroup, PanoramaTab } from './group-model';
-import { NEW_TAB_LABEL } from '@powerbrowser/tab-uris/lib/browser/web-tab';
 
 /**
  * Callbacks the owning widget supplies per render. The tree keeps no state:
@@ -77,22 +76,6 @@ export function buildTreeSection(
     return section;
 }
 
-/**
- * The caption under a row's title: the page address, else the tab's own
- * typeable address (`terminal:`, `file:`, `view:` ...). A row key that is only
- * an identity (`web:`, `stock:`, `widget:`, docs/TAB-STORE.md) never reaches
- * the screen: a web tab with no page reads "New Tab", as its own tab does.
- */
-function captionOf(tab: PanoramaTab): string {
-    if (tab.url) {
-        return tab.url;
-    }
-    if (tab.uri.startsWith('web:')) {
-        return NEW_TAB_LABEL;
-    }
-    return /^(stock|widget):/.test(tab.uri) ? '' : tab.uri;
-}
-
 /** One stacked tab row: title 13px plus mono URI caption 12px, text only. */
 export function buildTreeRow(
     tab: PanoramaTab,
@@ -108,11 +91,17 @@ export function buildTreeRow(
     name.className = 'pb-org-tree-row-title';
     name.textContent = tab.title;
     name.title = tab.title;
-    const uri = document.createElement('span');
-    uri.className = 'pb-org-tree-row-uri';
-    uri.textContent = captionOf(tab);
-    uri.title = uri.textContent;
-    row.append(name, uri);
+    row.append(name);
+    // The caption only ever carries a page address, as on a canvas card: a
+    // row key (web:, stock:, widget:, or a Theia tab's address) is internal
+    // and never reaches the screen, so a tab with no page has no caption.
+    if (tab.url) {
+        const uri = document.createElement('span');
+        uri.className = 'pb-org-tree-row-uri';
+        uri.textContent = tab.url;
+        uri.title = tab.url;
+        row.append(uri);
+    }
     row.addEventListener('click', () => hooks.dive(tab, groupId));
     row.addEventListener('keydown', event => {
         if (event.key === 'Enter') {

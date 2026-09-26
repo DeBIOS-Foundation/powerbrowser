@@ -832,7 +832,8 @@ export class GroupModel {
         return {
             uri: row.uri,
             url: typeof row.url === 'string' ? row.url : '',
-            title: typeof row.title === 'string' && row.title ? row.title : row.uri,
+            // Never the row key: it is internal (NG-001), and a tab with no title shows its page or nothing.
+            title: typeof row.title === 'string' && row.title ? row.title : (typeof row.url === 'string' ? row.url : ''),
             thumbnail: typeof row.thumbnail === 'string' && row.thumbnail ? row.thumbnail : null,
             x: placed(row.x),
             y: placed(row.y),
