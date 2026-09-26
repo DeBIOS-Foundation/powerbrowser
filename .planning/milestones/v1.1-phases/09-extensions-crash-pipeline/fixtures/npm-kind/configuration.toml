@@ -47,3 +47,6 @@ source = "npm"
 version = "2.4.1"
 integrity = "sha512-BKocyzdpSTplczautfv652NqIOUqwbliMII9uK4VitqjusOvY1INqgr6WQ31YMsYCLfUxRH8HB8rW2cj+xLEXg=="
 sha256 = "0b087a555ea3fee84ec5f0724795642389a43187d0a98ac7ace63f863ce7afb8"
+
+[urls]
+update = "https://updates.example.org/update.xml"

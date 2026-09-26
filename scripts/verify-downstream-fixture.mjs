@@ -584,6 +584,9 @@ const SELFTEST_MANIFEST = [
     'firefox_esr_tag = "SELFTEST_9_9_9_RELEASE"',
     'theia_release = "1.74.1"',
     '',
+    '[urls]',
+    'update = "https://updates.example.org/update.xml"',
+    '',
 ].join('\n');
 
 const SELFTEST_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><path fill="#123456" fill-rule="evenodd" d="M64 12L116 64L64 116L12 64Z M64 40L88 64L64 88L40 64Z"/></svg>\n';
