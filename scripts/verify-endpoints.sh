@@ -34,7 +34,8 @@
 #     entry begins with a literal dot -- a host that merely contains an
 #     allowlisted string does not match.
 #
-# `--layer 1|2|3` runs one layer; no flag runs all three. `--positive-control`
+# `--layer 1|2|3|4` runs one layer (4, NG-069's sidecar egress, runs only when named);
+# no flag runs layers 1-3. `--positive-control`
 # runs each selected layer's control instead of its assertion and exits 0
 # only if the control went red. Idempotent: a fresh mktemp -d log directory
 # per run, removed on exit; no layer mutates or deletes anything under the
@@ -48,13 +49,13 @@ BIN_PATH="$BIN_DIR/powerbrowser"
 ALLOWLIST="$REPO_ROOT/powerbrowser/endpoint-allowlist.json"
 BRANDING_PREF_FILE="$BIN_DIR/browser/defaults/preferences/firefox-branding.js"
 
-HELP="Usage: verify-endpoints.sh [--layer 1|2|3] [--positive-control] [--help]
+HELP="Usage: verify-endpoints.sh [--layer 1|2|3|4] [--positive-control] [--help]
        verify-endpoints.sh --interrupt-self-test
 
 Runs BRAND-04's three endpoint/telemetry proof layers against the built
 binary. No flag runs all three layers' real assertions.
 
-  --layer 1|2|3          Run only the named layer
+  --layer 1|2|3|4        Run only the named layer (4: the sidecar's egress, NG-069)
   --positive-control     Run the selected layer(s)' positive control instead
                           of their real assertion; exits 0 only if the
                           control(s) correctly went red
@@ -78,9 +79,9 @@ while [ "$i" -lt "${#args[@]}" ]; do
       i=$((i + 1))
       LAYER_ARG="${args[$i]:-}"
       case "$LAYER_ARG" in
-        1|2|3) ;;
+        1|2|3|4) ;;
         *)
-          echo "verify-endpoints: FAIL -- --layer requires 1, 2, or 3" >&2
+          echo "verify-endpoints: FAIL -- --layer requires 1, 2, 3, or 4" >&2
           exit 1
           ;;
       esac
@@ -102,6 +103,14 @@ done
 if [ "$INTERRUPT_SELF_TEST" -eq 1 ] && { [ -n "$LAYER_ARG" ] || [ "$DO_CONTROL" -eq 1 ]; }; then
   echo "verify-endpoints: FAIL -- --interrupt-self-test is mutually exclusive with --layer/--positive-control" >&2
   exit 1
+fi
+
+# Layer 4 (NG-069): the sidecar's own egress. Runs through node, not the MOZ_LOG path, and
+# carries its positive control inline (the registry host must be observed), so
+# --positive-control does not apply to it.
+if [ "$LAYER_ARG" = "4" ]; then
+  if [ "$DO_CONTROL" -eq 1 ]; then echo "verify-endpoints: FAIL -- --positive-control does not apply to layer 4 (its control is inline)" >&2; exit 1; fi
+  exec node "$REPO_ROOT/scripts/verify-ng-069-sidecar-egress.mjs"
 fi
 
 # ---------------------------------------------------------------------------
