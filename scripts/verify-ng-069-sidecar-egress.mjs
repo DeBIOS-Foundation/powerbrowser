@@ -13,7 +13,7 @@
 //     covered by a row (exact, or a leading-dot suffix row, as layer 3 matches), and the
 //     registry host must have been seen (anti-vacuity).
 // Tier: full. Marker: live-clone.
-import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,7 +22,7 @@ import { withFirefoxPage } from './lib/firefox-bidi.mjs';
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const NAME = 'ng069-sidecar-egress';
 const NM = join(REPO_ROOT, 'theia/node_modules');
-const PROBE_EXTENSION = 'vscode:extension/akamud.vscode-theme-onedark';
+const PROBE_EXTENSION = 'vscode-extension://akamud.vscode-theme-onedark'; // VSCodeExtensionUri.SCHEME in @theia/plugin-ext-vscode
 const failures = [];
 
 const vsx = /VSX_REGISTRY_URL:\s*"([^"]+)"/.exec(readFileSync(join(REPO_ROOT, 'powerbrowser/shell/TheiaService.sys.mjs'), 'utf8'))?.[1];
@@ -44,30 +44,34 @@ for (const [h, why] of derived) if (!covered(h)) failures.push(`${h} (${why}) ha
 
 if (failures.length === 0) {
     const dir = mkdtempSync(join(tmpdir(), 'ng069-'));
-    const log = join(dir, 'lookups.log');
-    const hook = join(dir, 'hook.cjs');
-    writeFileSync(hook, `const dns = require('dns'); const fs = require('fs'); const net = require('net');
+    try {
+        const log = join(dir, 'lookups.log');
+        const hook = join(dir, 'hook.cjs');
+        writeFileSync(hook, `const dns = require('dns'); const fs = require('fs'); const net = require('net');
 const rec = h => { if (typeof h === 'string' && h && !net.isIP(h)) { try { fs.appendFileSync(${JSON.stringify(log)}, h + '\\n'); } catch {} } };
 const l = dns.lookup; dns.lookup = function (h, ...a) { rec(h); return l.call(this, h, ...a); };
 const pl = dns.promises.lookup; dns.promises.lookup = function (h, ...a) { rec(h); return pl.call(this, h, ...a); };
 `);
-    process.env.NODE_OPTIONS = `${process.env.NODE_OPTIONS ?? ''} --require ${hook}`.trim();
-    process.env.XDG_CONFIG_HOME = join(dir, 'xdg');
-    await withFirefoxPage('', async ({ evaluate, waitFor }) => {
-        await waitFor('window.theia && window.theia.container ? true : false', { timeoutMs: 90000 });
-        await evaluate(`(() => {
-            let found; const c = window.theia.container;
-            c._bindingDictionary.traverse(k => { if (!found && typeof k === 'symbol' && k.toString() === 'Symbol(PluginServer)') found = k; });
-            window.__ng069 = 'pending';
-            c.get(found).install(${JSON.stringify(PROBE_EXTENSION)}).then(() => { window.__ng069 = 'done'; }, e => { window.__ng069 = 'error: ' + e.message; });
-            return 'ok'; })()`);
-        await waitFor(`window.__ng069 !== 'pending'`, { timeoutMs: 120000 });
-        const outcome = await evaluate('window.__ng069');
-        if (outcome !== 'done') failures.push(`the probe install did not complete: ${outcome}`);
-    });
-    const seen = existsSync(log) ? [...new Set(readFileSync(log, 'utf8').split('\n').filter(Boolean))].filter(h => h !== 'localhost') : [];
-    if (!seen.includes(new URL(vsx).host)) failures.push(`instrument: the sidecar never resolved ${new URL(vsx).host} during an extension install -- nothing was observed`);
-    for (const h of seen) if (!covered(h)) failures.push(`the sidecar resolved ${h}, which has no endpoint-allowlist row`);
+        process.env.NODE_OPTIONS = `${process.env.NODE_OPTIONS ?? ''} --require ${hook}`.trim();
+        process.env.XDG_CONFIG_HOME = join(dir, 'xdg');
+        await withFirefoxPage('', async ({ evaluate, waitFor }) => {
+            await waitFor('window.theia && window.theia.container ? true : false', { timeoutMs: 90000 });
+            await evaluate(`(() => {
+                let found; const c = window.theia.container;
+                c._bindingDictionary.traverse(k => { if (!found && typeof k === 'symbol' && k.toString() === 'Symbol(PluginServer)') found = k; });
+                window.__ng069 = 'pending';
+                c.get(found).install(${JSON.stringify(PROBE_EXTENSION)}).then(() => { window.__ng069 = 'done'; }, e => { window.__ng069 = 'error: ' + e.message; });
+                return 'ok'; })()`);
+            await waitFor(`window.__ng069 !== 'pending'`, { timeoutMs: 120000 });
+            const outcome = await evaluate('window.__ng069');
+            if (outcome !== 'done') failures.push(`the probe install did not complete: ${outcome}`);
+        });
+        const seen = existsSync(log) ? [...new Set(readFileSync(log, 'utf8').split('\n').filter(Boolean))].filter(h => h !== 'localhost') : [];
+        if (!seen.includes(new URL(vsx).host)) failures.push(`instrument: the sidecar never resolved ${new URL(vsx).host} during an extension install -- nothing was observed`);
+        for (const h of seen) if (!covered(h)) failures.push(`the sidecar resolved ${h}, which has no endpoint-allowlist row`);
+    } finally {
+        rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+    }
 }
 
 if (failures.length) {
