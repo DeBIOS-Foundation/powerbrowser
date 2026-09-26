@@ -53,6 +53,7 @@ import { ModeService } from './mode-service';
  * contribution's own options); gone tabs dropped with the contracted
  * variant explanation while geometry plus mode still complete; failure
  * leaving the session untouched with the contracted restore-failure error.
+ * The mode is applied through ModeService (NG-029).
  * Delete is the only destructive action (contracted confirmation, no undo):
  * it clears the current marker and changes nothing on screen. Core-close
  * carries no confirmation: the last-session pointer auto-saves on shutdown
@@ -428,20 +429,18 @@ export class SetupsService implements FrontendApplicationContribution {
         }
         this.applyGeometry(row.windows[0]);
         const dropped = await this.placeTabs(row);
-        // Stock `switchPerspective` silently no-ops on unknown ids (never
-        // throws), so pre-validate against shipped + custom ids: an unknown
-        // mode falls back to Browsing with the contracted notice instead of
-        // silently keeping whatever mode was active.
+        // NG-029: the mode goes through ModeService.activateMode, the path the
+        // mode toggle takes (GUI-DEFECTS item 6), so the panel map, the Explorer
+        // dock, the Organising slot, the furniture and the mode attribute all
+        // apply. A bare switchPerspective applied the perspective and none of
+        // those. activateMode resolves an unknown id to Browsing by itself;
+        // `known` only chooses the contracted fallback notice below.
         const knownCustom = this.modes.getCustomModes().some(custom => custom.id === row.modeId);
         const known = SHIPPED_MODES.some(descriptor => descriptor.id === row.modeId) || knownCustom;
         try {
-            await this.perspectives.switchPerspective(known ? row.modeId : 'browsing');
+            await this.modes.activateMode(known ? row.modeId : 'browsing');
         } catch {
-            try {
-                await this.perspectives.switchPerspective('browsing');
-            } catch {
-                // Stock switch failed twice: geometry and tabs still stand.
-            }
+            // activateMode has no rejecting path today; geometry and tabs still stand.
         }
         this.currentSetup = row.name;
         void this.persistLastSession(row.name);
