@@ -21,6 +21,9 @@
     },
     {
       "backend": "lib/node/tab-query-backend-module"
+    },
+    {
+      "backend": "lib/node/tab-store-access-backend-module"
     }
   ],
   "files": [

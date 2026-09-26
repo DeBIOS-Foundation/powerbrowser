@@ -1,0 +1,220 @@
+/**
+ * NG-025/NG-026 (non-GUI wave B): the documented, token-gated tab-store
+ * endpoint for users and MCP clients. docs/tab-store-access.md is the
+ * user-facing contract.
+ *
+ * It is its OWN loopback listener, not a route on the Theia backend's port:
+ * that port's cookie gate (token-gate) admits the per-launch cookie, which
+ * never leaves the supervisor, and widening that gate would widen Theia's
+ * arbitrary-execution surface with it. Nothing here comes from the retired
+ * backend-opencode /mcp route (decisions.md D2).
+ *
+ * Three walls run before any tool, in this order:
+ *   1. a request carrying an Origin header comes from a browser page -> 403.
+ *      Every browser POST carries Origin and MCP clients send none, so this
+ *      is what stops a hostile 127.0.0.1 page even when it holds the token;
+ *   2. the Host header must name this listener (DNS rebinding) -> 403;
+ *   3. the per-launch bearer token from the 0600 access file -> 401.
+ * The access file carries the URL and the token and is rewritten on every
+ * backend start, so a respawned backend's clients re-read it.
+ */
+import * as crypto from 'crypto';
+import * as http from 'http';
+import { chmodSync, renameSync, rmSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import { injectable } from '@theia/core/shared/inversify';
+import { BackendApplicationContribution } from '@theia/core/lib/node';
+import { POWERBROWSER_ENV } from '@powerbrowser/token-gate/lib/node/powerbrowser-env';
+import { TAB_QUERY_FILE_NAME } from './tab-query-service';
+import { STORE_ACCESS_FILE_NAME, STORE_ACCESS_ROUTE, TabStoreToolName } from '../browser/tab-store-access-protocol';
+import { runReadOnlySql } from './tab-store-sql';
+
+const MCP_VERSION = '2025-06-18';
+const MAX_BODY_BYTES = 1024 * 1024;
+
+type Args = Record<string, unknown>;
+
+interface ToolDef {
+    name: TabStoreToolName;
+    description: string;
+    inputSchema: object;
+}
+
+const TOOLS: ToolDef[] = [
+    {
+        name: 'tabs_sql',
+        description: 'Run one read-only SELECT (or WITH ... SELECT) against tabs.sqlite. Returns columns, rows (at most 1000) and truncated.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                sql: { type: 'string', description: 'One read-only statement. ATTACH, DETACH, VACUUM, PRAGMA and load_extension are refused.' },
+                params: { type: 'array', items: { type: ['string', 'number', 'null'] }, description: 'Values bound to ? placeholders.' },
+            },
+            required: ['sql'],
+        },
+    },
+];
+
+class RpcFailure extends Error {
+    constructor(readonly code: number, message: string) {
+        super(message);
+    }
+}
+
+function readBody(req: http.IncomingMessage, limit: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+        let size = 0;
+        const chunks: Buffer[] = [];
+        req.on('data', (chunk: Buffer) => {
+            size += chunk.length;
+            if (size > limit) {
+                reject(new Error('request body too large'));
+                req.destroy();
+                return;
+            }
+            chunks.push(chunk);
+        });
+        req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+        req.on('error', reject);
+    });
+}
+
+@injectable()
+export class TabStoreAccessEndpoint implements BackendApplicationContribution {
+    protected readonly profileDir: string = POWERBROWSER_ENV['POWERBROWSER_PROFILE_DIR'] ?? '';
+    protected server: http.Server | undefined;
+    protected token = '';
+    protected port = 0;
+    protected accessFile = '';
+
+    onStart(): void {
+        if (!this.profileDir) {
+            // A dev backend with no supervising browser has no profile to serve.
+            console.warn('tab-store-access: no profile directory, so the store endpoint stays off');
+            return;
+        }
+        this.token = crypto.randomBytes(32).toString('hex');
+        const server = http.createServer((req, res) => {
+            void this.handle(req, res);
+        });
+        server.listen(0, '127.0.0.1', () => this.announce(server));
+        this.server = server;
+    }
+
+    onStop(): void {
+        if (this.server) {
+            this.server.close();
+        }
+        if (this.accessFile) {
+            rmSync(this.accessFile, { force: true });
+        }
+    }
+
+    protected announce(server: http.Server): void {
+        const address = server.address();
+        if (!address || typeof address === 'string') {
+            server.close();
+            return;
+        }
+        this.port = address.port;
+        this.accessFile = join(this.profileDir, STORE_ACCESS_FILE_NAME);
+        const staging = `${this.accessFile}.${process.pid}.tmp`;
+        writeFileSync(staging, JSON.stringify({ url: `http://127.0.0.1:${this.port}${STORE_ACCESS_ROUTE}`, token: this.token }) + '\n', { mode: 0o600 });
+        chmodSync(staging, 0o600); // writeFileSync's mode is masked by the umask; chmod is not
+        renameSync(staging, this.accessFile);
+    }
+
+    protected async handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+        if (req.headers.origin !== undefined) {
+            return this.status(res, 403);
+        }
+        const host = req.headers.host;
+        if (host !== `127.0.0.1:${this.port}` && host !== `localhost:${this.port}`) {
+            return this.status(res, 403);
+        }
+        if (!this.tokenMatches(req.headers.authorization)) {
+            return this.status(res, 401);
+        }
+        if (req.url !== STORE_ACCESS_ROUTE) {
+            return this.status(res, 404);
+        }
+        if (req.method !== 'POST') {
+            return this.status(res, 405);
+        }
+        let body: string;
+        try {
+            body = await readBody(req, MAX_BODY_BYTES);
+        } catch {
+            return this.status(res, 413);
+        }
+        let msg: { id?: unknown; method?: unknown; params?: unknown };
+        try {
+            msg = JSON.parse(body);
+        } catch {
+            return this.json(res, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'invalid JSON' } });
+        }
+        const id = msg.id === undefined ? null : msg.id;
+        try {
+            const result = await this.dispatch(String(msg.method ?? ''), (msg.params ?? {}) as Args);
+            if (msg.id === undefined) {
+                res.writeHead(202).end(); // a notification gets no body
+                return;
+            }
+            this.json(res, { jsonrpc: '2.0', id, result });
+        } catch (err) {
+            const code = err instanceof RpcFailure ? err.code : -32603;
+            this.json(res, { jsonrpc: '2.0', id, error: { code, message: err instanceof Error ? err.message : String(err) } });
+        }
+    }
+
+    protected tokenMatches(header: string | undefined): boolean {
+        const match = /^Bearer ([0-9a-f]{64})$/.exec(header ?? '');
+        return !!match && !!this.token && crypto.timingSafeEqual(Buffer.from(match[1]), Buffer.from(this.token));
+    }
+
+    protected status(res: http.ServerResponse, code: number): void {
+        res.writeHead(code).end();
+    }
+
+    protected json(res: http.ServerResponse, value: unknown): void {
+        res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(value));
+    }
+
+    protected async dispatch(method: string, params: Args): Promise<unknown> {
+        switch (method) {
+            case 'initialize':
+                return {
+                    protocolVersion: typeof params.protocolVersion === 'string' ? params.protocolVersion : MCP_VERSION,
+                    capabilities: { tools: {} },
+                    serverInfo: { name: 'powerbrowser-tab-store', version: '1.0.0' },
+                };
+            case 'notifications/initialized':
+            case 'ping':
+                return {};
+            case 'tools/list':
+                return { tools: TOOLS };
+            case 'tools/call':
+                return this.callTool(String(params.name ?? ''), (params.arguments ?? {}) as Args);
+            default:
+                throw new RpcFailure(-32601, `unknown method ${method}`);
+        }
+    }
+
+    protected async callTool(name: string, args: Args): Promise<object> {
+        try {
+            const value = await this.runTool(name, args);
+            return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value };
+        } catch (err) {
+            return { isError: true, content: [{ type: 'text', text: err instanceof Error ? err.message : String(err) }] };
+        }
+    }
+
+    protected async runTool(name: string, args: Args): Promise<object> {
+        switch (name) {
+            case 'tabs_sql':
+                return runReadOnlySql(join(this.profileDir, TAB_QUERY_FILE_NAME), args.sql, args.params);
+            default:
+                throw new Error(`unknown tool ${name}`);
+        }
+    }
+}
