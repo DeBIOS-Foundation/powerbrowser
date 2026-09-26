@@ -20,7 +20,7 @@
 // orphaned processes; this harness must not manufacture that failure mode.
 
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,7 +36,18 @@ const REPO_ROOT = join(__dirname, '..', '..');
 // (four of the five Phase 2 checks) now routes through this renamed target;
 // callers that need a different binary (e.g. a release-branding build) pass
 // `binPath` explicitly.
-export const FIREFOX_BIN = join(REPO_ROOT, 'objdir', 'dist', 'bin', 'powerbrowser');
+// PB_FIREFOX_BIN / PB_BACKEND_MAIN (non-GUI build, 2026-09-25): a clone of this
+// repo has no objdir/, so it drives the main checkout's binary (PB_FIREFOX_BIN)
+// against its own Theia build (PB_BACKEND_MAIN, written into the temporary
+// profile's user.js). Chrome-side .sys.mjs changes still load from the main
+// checkout, because objdir/dist/bin symlinks into it.
+export const FIREFOX_BIN = process.env.PB_FIREFOX_BIN || join(REPO_ROOT, 'objdir', 'dist', 'bin', 'powerbrowser');
+
+async function applyProfileOverrides(profileDir) {
+    if (!process.env.PB_BACKEND_MAIN) return;
+    await writeFile(join(profileDir, 'user.js'),
+        `user_pref("powerbrowser.sidecar.backendMain", ${JSON.stringify(process.env.PB_BACKEND_MAIN)});\n`);
+}
 
 const BIDI_LINE_RE = /WebDriver BiDi listening on (ws:\/\/127\.0\.0\.1:\d+)/;
 
@@ -202,6 +213,7 @@ export async function captureScreenshot(url, outputPath, { windowSize = '800,600
     }
 
     const profileDir = await mkdtemp(join(tmpdir(), 'powerbrowser-firefox-bidi-'));
+    await applyProfileOverrides(profileDir);
     let sigintHandler;
 
     const child = spawn(binPath, [
@@ -292,6 +304,7 @@ export async function withFirefoxPage(url, callback, { binPath = FIREFOX_BIN, st
     }
 
     const profileDir = await mkdtemp(join(tmpdir(), 'powerbrowser-firefox-bidi-'));
+    await applyProfileOverrides(profileDir);
     const port = await freePort();
 
     // Without the flag below, script.evaluate against a parent-process
