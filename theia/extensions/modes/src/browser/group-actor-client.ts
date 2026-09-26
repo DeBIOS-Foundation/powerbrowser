@@ -21,7 +21,7 @@ export const GROUP_RESPONSE_EVENT = 'PowerBrowserGroupResponse';
 /** Ack timeout per mutation: matches the sidecar health-timeout scale. */
 export const GROUP_ACTOR_ACK_TIMEOUT_MS = 5000;
 
-/** The 8 message kinds the parent dispatch (`handleGroupMutation`) serves. */
+/** The message kinds the parent dispatch (handleGroupMutation) serves for groups and tab rows. */
 export type GroupMutation =
     | { kind: 'createGroup'; id: string; title?: string; x?: number; y?: number; w?: number; h?: number; isActive?: boolean }
     | { kind: 'setTabGroup'; uri: string; groupId: string | null }
@@ -33,7 +33,9 @@ export type GroupMutation =
     | { kind: 'renameGroup'; id: string; title: string }
     | { kind: 'dissolveGroup'; id: string }
     | { kind: 'closeGroup'; id: string }
-    | { kind: 'setActiveGroup'; id: string };
+    | { kind: 'setActiveGroup'; id: string }
+    | { kind: 'trackTab'; uri: string; url: string; title: string }
+    | { kind: 'closeTab'; uri: string };
 
 /** Parent ack shape: `{ ok: true, ...echo } | { ok: false, reason }`. */
 export interface GroupReply {

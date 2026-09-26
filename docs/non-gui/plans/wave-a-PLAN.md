@@ -4163,3 +4163,22 @@ Order: last, after wave C's catalogue edits to `powerbrowser/INTERNAL-APIS.md` h
   - Two editors split on one file share a key, because the resource URI is their identity.
   - A stock tab gets a fresh key on `TabOpen` before its session restore overwrites the key with the saved one. The orphan row is closed by the next sweep and pruned after retention.
   - Organising's scan in `watchClose` is O(tabs).
+
+---
+
+## Addendum (controller, 2026-09-25): NG-085, found during the build
+
+Wave C's Task 1 found that every quit on the current tree takes about 72 s and then aborts in
+profile-before-change, because the tabs.sqlite connection is never closed at shutdown. The store's
+open and close belong to this wave (G11), so the row is wave A's (decisions.md R29).
+
+- **Task 1 (checks-first), added:** `scripts/verify-ng-085-quit-closes-store.mjs`, registered in
+  `verify-platform.sh` with the other wave A full-tier rows and listed in `checks-wave-a.tsv`
+  (`live-main`). It launches the built browser on a kept profile with the tab store open, quits it
+  through the normal quit path, and fails unless the process exits within 15 s and its stdout log
+  carries no AsyncShutdown timeout or abort line naming the tab store. Red today: the quit takes
+  about 72 s and aborts.
+- **Task 2 (merges first), added:** the store registers its close with AsyncShutdown
+  (`profileBeforeChange` blocker, or the `Sqlite.shutdown` client the connection offers) so that
+  `tabStoreConn.close()` finishes before profile-before-change completes, and a quit with the store
+  open finishes in seconds. Refs: NG-085.

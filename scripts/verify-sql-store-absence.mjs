@@ -47,6 +47,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
+import { startupWiringPresent } from './lib/startup-wiring.mjs';
 
 const NAME = 'verify-sql-store-absence';
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -350,22 +351,6 @@ function cleanWriterSource() {
 // --- live drive ------------------------------------------------------------------
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-// Startup trigger wiring is what lets any session exercise the emitter:
-// without a startup call into ensureTabStore/startTabStoreTriggers no tab
-// event reaches the writer, so neither the private drive nor the public
-// positive control can produce rows. Derived from the tree, never assumed.
-function startupWiringPresent() {
-  for (const file of ['powerbrowser/shell/powerbrowser.js', 'powerbrowser/shell/TheiaService.sys.mjs']) {
-    try {
-      const src = readFileSync(join(REPO_ROOT, file), 'utf8');
-      if (/startTabStoreTriggers|ensureTabStore/.test(src)) return true;
-    } catch {
-      // A missing caller file is itself absent wiring.
-    }
-  }
-  return false;
-}
 
 // The two live-drive predicates, factored so the self-test below proves
 // each one discriminates before any browser ever launches: a predicate

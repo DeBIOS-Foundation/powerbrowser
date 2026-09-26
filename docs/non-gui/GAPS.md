@@ -112,3 +112,7 @@ drop or defer a row.
 - **NG-082** Theia is re-pinned to 1.75.0 (UPD-02, UPD-04). Evidence: docs/BUILD.md:258-264 "staged, not executed".
 - **NG-083** tabs.sqlite is encrypted. Evidence: plain `Sqlite.openConnection` (PBA:799); notes/tab-sql-substrate.md; research/questions.md Q1 open.
 - **NG-084** The five v1.2 human UAT sheets are signed. Evidence: 10-UAT.md:57, 73, 94.
+
+### Found during the build
+
+- **NG-085** Quitting closes the tab store's connection before shutdown, so the app quits in seconds instead of hanging until AsyncShutdown aborts it. Evidence: wave C Task 1 (2026-09-25, report ng-c task-1-report.md) — every quit on the current tree takes about 72 s and aborts in profile-before-change because the tabs.sqlite connection opened at PBA:799/2175 is never closed; wave C's NG-032, NG-033, NG-034 and NG-037 depend on it.
