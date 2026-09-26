@@ -20,6 +20,7 @@ import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { FileChangeType } from '@theia/filesystem/lib/common/files';
 import { UserStorageUri } from '@theia/userstorage/lib/browser/user-storage-uri';
 import { TabUriRegistry } from '@powerbrowser/tab-uris/lib/browser/tab-uri-registry';
+import { ProfileStorageService } from '@powerbrowser/tab-uris/lib/browser/profile-storage';
 import pDebounce from 'p-debounce';
 import { SHIPPED_MODES } from './mode-descriptors';
 import { ModeService } from './mode-service';
@@ -57,8 +58,8 @@ import { ModeService } from './mode-service';
  * The mode is applied through ModeService (NG-029).
  * Delete is the only destructive action (contracted confirmation, no undo):
  * it clears the current marker and changes nothing on screen. Core-close
- * carries no confirmation: the last-session pointer auto-saves on shutdown
- * and the ready-ordered applicator re-applies it after core layout restore.
+ * carries no confirmation: the quit flush saves the session and the last-session pointer (NG-032),
+ * and the ready-ordered applicator restores that session -- or, with none saved, the pointer's setup -- after core layout restore.
  */
 
 /** Accepted store versions. Newer writers are read leniently: unknown fields drop. */
@@ -69,6 +70,21 @@ export const SETUP_NAME_MAX = 60;
 
 /** User-storage file beside modes.json (never SQLite: single-writer rule). */
 export const SETUPS_STORE_FILENAME = 'setups.json';
+
+/**
+ * NG-032: the key of the unnamed session a quit saves and the next launch
+ * restores. It lives in the profile store (profile-storage.ts), not in
+ * setups.json: setups are app-wide user data, a session belongs to one profile.
+ */
+export const SESSION_STORAGE_KEY = 'powerbrowser.setups.session';
+
+/** NG-032: the session saved at quit -- the windows as a setup records them, plus when it was saved. */
+export interface SessionSnapshot {
+    modeId: string;
+    windows: SetupWindowSnapshot[];
+    /** Milliseconds since the epoch. */
+    savedAt: number;
+}
 
 /**
  * NG-036: one dock area of a window as tab URIs. A tab area keeps its tab
@@ -341,6 +357,24 @@ function parseSetupStore(raw: string): ParsedSetupStore {
     return { ok: true, setups, lastSession };
 }
 
+/** NG-032: total parse of the saved session; anything unreadable is no session. */
+function parseSessionSnapshot(entry: unknown): SessionSnapshot | undefined {
+    if (typeof entry !== 'object' || entry === null) {
+        return undefined;
+    }
+    const row = entry as Record<string, unknown>;
+    if (typeof row['modeId'] !== 'string' || !Array.isArray(row['windows'])) {
+        return undefined;
+    }
+    const windows = (row['windows'] as unknown[])
+        .map(parseSetupWindow)
+        .filter((win): win is SetupWindowSnapshot => win !== null);
+    if (windows.length === 0) {
+        return undefined;
+    }
+    return { modeId: row['modeId'] as string, windows, savedAt: isFiniteNumber(row['savedAt']) ? row['savedAt'] : 0 };
+}
+
 /**
  * Reachability clamp (documented backstop, 14-RESEARCH.md Pitfall 5): the
  * contract restores verbatim, but a rect no display can contain (stored
@@ -403,6 +437,9 @@ export class SetupsService implements FrontendApplicationContribution {
     @inject(StatusBar)
     protected readonly statusBar: StatusBar;
 
+    @inject(ProfileStorageService)
+    protected readonly profileStorage: ProfileStorageService;
+
     protected readonly setupsUri = UserStorageUri.resolve(SETUPS_STORE_FILENAME);
     protected readonly debouncedReload = pDebounce(() => this.reloadSetups(), 150);
     protected lastGoodSetups: SetupSnapshot[] = [];
@@ -422,6 +459,11 @@ export class SetupsService implements FrontendApplicationContribution {
         this.secondaryWindows.onDidRemoveWidget(([widget]) => {
             this.secondaryByWidget.delete(widget.id);
         });
+        // NG-032: the quit flush (profile-storage.ts) collects every listener's
+        // last writes while the backend still runs: the session snapshot, and
+        // the last-session pointer, which onStop could never write (the
+        // backend is stopped before the page unloads).
+        this.profileStorage.onWillFlush(event => event.waitUntil(this.saveSession()));
         // Ready-ordered applicator: runs after core layout restore, so the
         // last-session pointer re-applies onto the restored shell with no
         // race (14-RESEARCH.md Pattern 1 ordering).
@@ -443,6 +485,13 @@ export class SetupsService implements FrontendApplicationContribution {
         // Auto-save the last-session pointer on shutdown so relaunch
         // restores automatically with no core-close confirmation.
         void this.persistLastSession(this.currentSetup);
+    }
+
+    /** NG-032: the unnamed session snapshot and the last-session pointer, written inside the quit flush. */
+    protected async saveSession(): Promise<void> {
+        const session: SessionSnapshot = { modeId: this.currentModeId(), windows: this.snapshotWindows(), savedAt: Date.now() };
+        await this.profileStorage.setData(SESSION_STORAGE_KEY, session);
+        await this.persistLastSession(this.currentSetup);
     }
 
     /** Save the current windows, tabs, and mode under a typed name. */
@@ -494,25 +543,34 @@ export class SetupsService implements FrontendApplicationContribution {
             return;
         }
         const row = this.lastGoodSetups.find(setup => setup.name === target);
-        if (!row) {
+        // Validate before touching the session: a row that cannot restore
+        // leaves current windows and tabs untouched.
+        if (!row || row.windows.length === 0) {
             void this.flash(SETUP_RESTORE_FAILURE);
             return;
         }
-        // Validate everything before touching the session: a row that cannot
-        // restore must leave current windows and tabs untouched.
-        if (row.windows.length === 0) {
-            void this.flash(SETUP_RESTORE_FAILURE);
-            return;
-        }
+        await this.applySnapshot(row, true);
+        this.currentSetup = row.name;
+        void this.persistLastSession(row.name);
+    }
+
+    /**
+     * Geometry verbatim with reachability clamping, tabs through the placer
+     * (NG-030, NG-036), then the mode through ModeService (NG-029). `notify`
+     * shows the contracted gone-tabs and mode-fallback notices; the launch
+     * restore of the unnamed session (NG-032) passes false -- no setup was
+     * chosen, and "this setup" would name nothing.
+     */
+    protected async applySnapshot(row: { modeId: string; windows: SetupWindowSnapshot[] }, notify: boolean): Promise<void> {
         this.applyGeometry(row.windows[0]);
         const dropped = await this.placeTabs(row);
+        const modeId = row.windows[0].modeId ?? row.modeId;
         // NG-029: the mode goes through ModeService.activateMode, the path the
         // mode toggle takes (GUI-DEFECTS item 6), so the panel map, the Explorer
         // dock, the Organising slot, the furniture and the mode attribute all
         // apply. A bare switchPerspective applied the perspective and none of
         // those. activateMode resolves an unknown id to Browsing by itself;
         // `known` only chooses the contracted fallback notice below.
-        const modeId = row.windows[0].modeId ?? row.modeId;
         const knownCustom = this.modes.getCustomModes().some(custom => custom.id === modeId);
         const known = SHIPPED_MODES.some(descriptor => descriptor.id === modeId) || knownCustom;
         try {
@@ -520,8 +578,9 @@ export class SetupsService implements FrontendApplicationContribution {
         } catch {
             // activateMode has no rejecting path today; geometry and tabs still stand.
         }
-        this.currentSetup = row.name;
-        void this.persistLastSession(row.name);
+        if (!notify) {
+            return;
+        }
         // Both notices share one status-bar element, so two sequential
         // flashes would overwrite each other: when both fire, combine them
         // into a single flash built only from the two contracted literals
@@ -1044,24 +1103,35 @@ export class SetupsService implements FrontendApplicationContribution {
         }
     }
 
-    /** Ready-ordered applicator: the last-session pointer re-applies after core restore, no confirmation. */
+    /**
+     * The launch-restore entry point (ready-ordered: runs after core layout
+     * restore). NG-032: the session the last quit saved comes back first,
+     * with no saved setup needed; the last-session pointer then only marks
+     * which named setup is current. A profile with no saved session (its first
+     * launch, or a build before this one) keeps the pointer's auto-restore.
+     */
     protected async applyLastSession(): Promise<void> {
-        let raw: string;
+        let parsed: ParsedSetupStore = { ok: false, setups: [], lastSession: null };
         try {
-            raw = (await this.fileService.read(this.setupsUri)).value;
+            parsed = parseSetupStore((await this.fileService.read(this.setupsUri)).value);
         } catch {
+            // No setups.json: nothing named to restore or mark.
+        }
+        if (parsed.ok) {
+            this.lastGoodSetups = parsed.setups;
+        }
+        const pointer = parsed.ok && parsed.lastSession && parsed.setups.some(setup => setup.name === parsed.lastSession)
+            ? parsed.lastSession
+            : null;
+        const saved = parseSessionSnapshot(await this.profileStorage.getData<unknown>(SESSION_STORAGE_KEY));
+        if (saved) {
+            this.currentSetup = pointer;
+            await this.applySnapshot(saved, false);
             return;
         }
-        const parsed = parseSetupStore(raw);
-        if (!parsed.ok || !parsed.lastSession) {
-            return;
+        if (pointer) {
+            await this.restoreSetup(pointer);
         }
-        this.lastGoodSetups = parsed.setups;
-        const row = parsed.setups.find(setup => setup.name === parsed.lastSession);
-        if (!row) {
-            return;
-        }
-        await this.restoreSetup(row.name);
     }
 
     protected async persistLastSession(name: string | null): Promise<void> {
