@@ -100,7 +100,7 @@
   },
   "scripts": {
     "rebuild": "theia rebuild:browser --cacheRoot ../..",
-    "download:plugins": "theia download:plugins --packed",
+    "download:plugins": "node ../../../scripts/download-plugins.mjs",
     "build": "yarn -s rebuild && yarn -s download:plugins && theia build --app-target=browser --mode development",
     "start": "VSX_REGISTRY_URL=https://open-vsx.org THEIA_CONFIG_DIR=\"${XDG_CONFIG_HOME:-$HOME/.config}/powerbrowser\" bash -c 'mkdir -p \"$THEIA_CONFIG_DIR\" && theia start'"
   }

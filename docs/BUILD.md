@@ -131,13 +131,22 @@ post-install file swap of the resolved platform package (or the resolved
 module-level constant import, not DI-injectable or preference-driven, so
 there is no rebind seam. That is optional hardening, out of scope here.
 
-**No bundled VS Code extensions.** The app ships `@theia/plugin-ext`,
-`@theia/plugin-ext-vscode` and `@theia/vsx-registry` — the extension-host
-machinery and the runtime installer — but no `theiaPlugins` manifest block
-and no `theia download:plugins` step. A user installing extensions at
-runtime through the Open VSX connection is the only plugin-acquisition
-path this project needs; do not add a bundling step unless a future phase
-decides to ship default extensions.
+**Declared extensions only.** The app ships `@theia/plugin-ext`,
+`@theia/plugin-ext-vscode` and `@theia/vsx-registry`, the extension-host machinery
+and the runtime installer. This project declares no `[[extensions]]`, so the
+`theiaPlugins` block stays absent and the build downloads nothing. A downstream that
+declares extensions gets them from `yarn build`'s `download:plugins` step, which is
+`scripts/download-plugins.mjs`:
+- npm and local-path tarballs are fetched or packed, checked against their manifest
+  `sha256`, and written to `plugins/<id>.tar.gz`;
+- every other kind goes through the stock `theia download:plugins --packed`;
+- every packed archive is then unpacked beside itself into `plugins/<id>/`. The
+  packed file is what the pin gate hashes; the folder is what Theia loads, because
+  its plugin deployer refuses packed files in a `THEIA_PLUGINS` or
+  `THEIA_DEFAULT_PLUGINS` folder (NG-073, check `ng073-declared-extension-loads`).
+
+A pin mismatch fails the build naming the entry, and nothing is placed by hand
+(NG-071, check `ng071-tarball-extensions-build`).
 
 **Environment variables the `start` script sets.** `applications/browser`'s
 `start` script exports two variables explicitly, rather than relying on
@@ -328,14 +337,15 @@ the `.tar.gz` slots the pin gate hashes. The hop-equivalent pin re-proof
 is `node scripts/verify-extension-pins.mjs` green over the staged set
 (fragment equality plus block equality plus the npm `-<version>.tgz`
 suffix guard plus sha256 over the placed archives with the local-path
-presence leg), run at drill time before the build below.
+presence leg), run at drill time before the build below. Since NG-071 the build's own plugin step does this, so the out-of-band placement above is a historical record, not a procedure.
 
 Sidecar build over the downloaded set: `theia build --app-target=browser
 --mode development` inside the theia shell finished with 0 errors on both the browser and node targets over the five-archive vsix-plus-tarball set (incremental over the prebuilt tree, 4.9s wall; full log at (.mozbuild/0904/build-sidecar.log)). The full `yarn
 build` wrapper is not part of this cell: it re-runs the stock download
 over the whole block, which aborts on the pack references by the design
 above. A pack-aware download wrapper is follow-up work, not a drill
-failure.
+failure. That wrapper now exists: `download:plugins` is `scripts/download-plugins.mjs`
+(NG-071).
 
 Staged host cells (the 08-05 capability record re-read, not re-proven):
 
