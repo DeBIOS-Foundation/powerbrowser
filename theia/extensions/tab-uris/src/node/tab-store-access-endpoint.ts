@@ -119,8 +119,13 @@ export class TabStoreAccessEndpoint implements BackendApplicationContribution {
         this.port = address.port;
         this.accessFile = join(this.profileDir, STORE_ACCESS_FILE_NAME);
         const staging = `${this.accessFile}.${process.pid}.tmp`;
-        writeFileSync(staging, JSON.stringify({ url: `http://127.0.0.1:${this.port}${STORE_ACCESS_ROUTE}`, token: this.token }) + '\n', { mode: 0o600 });
-        chmodSync(staging, 0o600); // writeFileSync's mode is masked by the umask; chmod is not
+        // A crashed backend may leave staging behind with broader bits, and
+        // writeFileSync's mode applies only at creation -- so remove any
+        // leftover and create exclusively at 0600, never landing the fresh
+        // token in a file another user can read.
+        rmSync(staging, { force: true });
+        writeFileSync(staging, JSON.stringify({ url: `http://127.0.0.1:${this.port}${STORE_ACCESS_ROUTE}`, token: this.token }) + '\n', { mode: 0o600, flag: 'wx' });
+        chmodSync(staging, 0o600); // the mode is masked by the umask; chmod is not
         renameSync(staging, this.accessFile);
     }
 
