@@ -3126,6 +3126,7 @@ const STORE_REQUEST_KINDS = new Set([
   "readBookmarkByUrl",
   "listBookmarkFolder",
   "projectSessionStoreTabs",
+  "queryTabsWithPlaces",
 ]);
 
 function isStoreRequestKind(kind) {
@@ -3184,6 +3185,14 @@ async function handleStoreRequest(data, actorRef) {
       case "projectSessionStoreTabs": {
         return { ok: true, kind, rows: PowerBrowserAPI.projectSessionStoreTabs() };
       }
+      case "queryTabsWithPlaces": {
+        const rows = await queryTabsWithPlaces({
+          bookmarked: typeof data.bookmarked === "boolean" ? data.bookmarked : undefined,
+          open: typeof data.open === "boolean" ? data.open : undefined,
+          limit: Number.isInteger(data.limit) ? data.limit : undefined,
+        });
+        return { ok: true, kind, rows };
+      }
       default: {
         return { ok: false, reason: "validation", message: `handleStoreRequest: unknown kind ${String(kind)}` };
       }
@@ -3199,4 +3208,68 @@ async function handleStoreRequest(data, actorRef) {
     PowerBrowserAPI.log("warn", `[handleStoreRequest] ${String(kind)} failed: ${reason}`);
     return { ok: false, reason, message: reason === "validation" ? message : `handleStoreRequest: ${String(kind)} failed in the store` };
   }
+}
+
+// NG-024: the tab/Places join (FEATURES.md Area 4). tabs.sqlite rows, read on
+// the writer's own connection, joined on URL to Places -- frecency, visit
+// count, last visit, first bookmark -- through the platform's read-only
+// Places connection (bound parameters, SELECT only). Ranked by frecency,
+// highest first, tabs with no history last. The join key is tabs.url; tabs.uri
+// is identity only (docs/TAB-STORE.md), and a row is open while closed_at is
+// NULL.
+const TAB_PLACES_SCAN_CAP = 5000;
+
+async function queryTabsWithPlaces({ bookmarked, open, limit } = {}) {
+  const cap = Number.isInteger(limit) ? Math.min(Math.max(limit, 1), 1000) : 200;
+  const conn = await PowerBrowserAPI.openTabStore();
+  const tabRows = await conn.execute(
+    "SELECT uri, url, title, group_id, last_active, closed_at FROM tabs ORDER BY last_active DESC LIMIT :scan",
+    { scan: TAB_PLACES_SCAN_CAP }
+  );
+  const places = await lazy.PlacesUtils.promiseDBConnection();
+  const rows = [];
+  for (const tabRow of tabRows) {
+    const uri = tabRow.getResultByName("uri");
+    const url = tabRow.getResultByName("url");
+    let place = null;
+    if (typeof url === "string" && /^https?:\/\//.test(url)) {
+      const hits = await places.executeCached(
+        `SELECT h.frecency AS frecency, h.visit_count AS visit_count, h.last_visit_date AS last_visit_date,
+                b.guid AS bookmark_guid, b.title AS bookmark_title
+           FROM moz_places h
+           LEFT JOIN moz_bookmarks b ON b.id = (SELECT MIN(id) FROM moz_bookmarks WHERE fk = h.id)
+          WHERE h.url_hash = hash(:url) AND h.url = :url`,
+        { url }
+      );
+      place = hits.length ? hits[0] : null;
+    }
+    const bookmarkGuid = place ? place.getResultByName("bookmark_guid") : null;
+    if ((bookmarked === true && !bookmarkGuid) || (bookmarked === false && bookmarkGuid)) {
+      continue;
+    }
+    const closedAt = tabRow.getResultByName("closed_at");
+    const isOpen = closedAt === null;
+    if ((open === true && !isOpen) || (open === false && isOpen)) {
+      continue;
+    }
+    const lastVisit = place ? place.getResultByName("last_visit_date") : null;
+    rows.push({
+      uri,
+      url,
+      title: tabRow.getResultByName("title") ?? "",
+      group_id: tabRow.getResultByName("group_id"),
+      last_active: tabRow.getResultByName("last_active"),
+      closed_at: closedAt,
+      open: isOpen,
+      visited: !!place && place.getResultByName("visit_count") > 0,
+      frecency: place ? place.getResultByName("frecency") : null,
+      visit_count: place ? place.getResultByName("visit_count") : 0,
+      last_visit: lastVisit ? Math.floor(lastVisit / 1000) : null,
+      bookmark_guid: bookmarkGuid ?? null,
+      bookmark_title: place ? place.getResultByName("bookmark_title") : null,
+    });
+  }
+  const rank = row => (row.frecency === null ? -Infinity : row.frecency);
+  rows.sort((a, b) => (rank(a) === rank(b) ? 0 : rank(b) > rank(a) ? 1 : -1));
+  return rows.slice(0, cap);
 }

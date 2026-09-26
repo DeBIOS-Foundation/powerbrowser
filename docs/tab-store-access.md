@@ -39,6 +39,7 @@ The endpoint speaks MCP over HTTP with single JSON responses: `initialize`, `too
 | `bookmark_by_url` | `url` (exact address) | `{bookmark}`: `{guid, title, url}`, or `null` |
 | `bookmark_folder` | `guid` (a folder's 12-character bookmark GUID) | `{rows}`: the folder's children, each `{guid, title, url}` |
 | `sessionstore_tabs` | none | `{rows}`: the open tabs as session restore records them, each `{uri, url, title, last_active}` |
+| `tabs_with_places` | `bookmarked` (boolean, optional), `open` (boolean, optional), `limit` (1–1000, default 200) | `{rows}`: each tab row joined to its history and bookmark, highest frecency first |
 
 A tool that cannot run answers with `isError: true` and a message that says why.
 
@@ -55,6 +56,13 @@ Runs one read-only SQL statement against `tabs.sqlite`.
 ### History, bookmarks and session tools
 
 `history_entry`, `bookmark_by_url`, `bookmark_folder` and `sessionstore_tabs` read Firefox's own history, bookmarks and session data. Power Browser answers them from its browser side, passing each request through an open Power Browser window. While no window is open they answer with `isError: true` and "no Power Browser window is connected". Private windows are never included.
+
+### `tabs_with_places`
+
+Joins every tab row to Firefox's history and bookmarks on the page address (`url`). Each row carries the tab's `uri`, `url`, `title`, `group_id`, `last_active` and `closed_at`, plus `open` (true while `closed_at` is `NULL`), `visited`, `frecency` (the browser's own ranking of how often and how recently you visit the page), `visit_count`, `last_visit` (epoch milliseconds), `bookmark_guid` and `bookmark_title`. Tabs that are not web pages carry no history or bookmark data. Closed tabs stay in the store as history until the retention setting prunes them, so `"open": true` is the filter for tabs that are open now.
+
+- Open tabs you have never bookmarked: `{"bookmarked": false, "open": true}`
+- Bookmarks that are open right now: `{"bookmarked": true, "open": true}`
 
 ## Example
 

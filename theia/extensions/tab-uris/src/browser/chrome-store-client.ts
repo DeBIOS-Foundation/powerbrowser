@@ -36,6 +36,29 @@ export interface SessionTabRow {
     last_active: number;
 }
 
+/** One tab row joined to Places (NG-024). */
+export interface TabPlacesRow {
+    uri: string;
+    url: string;
+    title: string;
+    group_id: string | null;
+    last_active: number;
+    closed_at: number | null;
+    open: boolean;
+    visited: boolean;
+    frecency: number | null;
+    visit_count: number;
+    last_visit: number | null;
+    bookmark_guid: string | null;
+    bookmark_title: string | null;
+}
+
+export interface TabPlacesQuery {
+    bookmarked?: boolean;
+    open?: boolean;
+    limit?: number;
+}
+
 @injectable()
 export class ChromeStoreClient {
     private seq = 0;
@@ -79,6 +102,11 @@ export class ChromeStoreClient {
 
     projectSessionStoreTabs(): Promise<SessionTabRow[]> {
         return this.field<SessionTabRow[]>({ kind: 'projectSessionStoreTabs' }, 'rows');
+    }
+
+    /** NG-024: tab rows joined to history and bookmarks, highest frecency first. */
+    queryTabsWithPlaces(query: TabPlacesQuery = {}): Promise<TabPlacesRow[]> {
+        return this.field<TabPlacesRow[]>({ kind: 'queryTabsWithPlaces', ...query }, 'rows');
     }
 
     protected async field<T>(msg: StoreMessage, name: string, timeoutMs?: number): Promise<T> {

@@ -74,6 +74,14 @@ const TOOLS: ToolDef[] = [
         description: 'List the open tabs as session restore records them. Returns rows of {uri, url, title, last_active}.',
         inputSchema: { type: 'object', properties: {} },
     },
+    {
+        name: 'tabs_with_places',
+        description: 'Tabs joined to history and bookmarks on URL, highest frecency first. Filters: bookmarked (true/false), open (true/false); limit 1-1000, default 200.',
+        inputSchema: {
+            type: 'object',
+            properties: { bookmarked: { type: 'boolean' }, open: { type: 'boolean' }, limit: { type: 'integer', minimum: 1, maximum: 1000 } },
+        },
+    },
 ];
 
 function requireString(value: unknown, name: string): string {
@@ -266,6 +274,18 @@ export class TabStoreAccessEndpoint implements BackendApplicationContribution {
                 return { rows: await this.chrome({ kind: 'listBookmarkFolder', folderGuid: requireGuid(args.guid) }, 'rows') };
             case 'sessionstore_tabs':
                 return { rows: await this.chrome({ kind: 'projectSessionStoreTabs' }, 'rows') };
+            case 'tabs_with_places': {
+                const msg: StoreMessage = { kind: 'queryTabsWithPlaces' };
+                for (const key of ['bookmarked', 'open']) {
+                    if (typeof args[key] === 'boolean') {
+                        msg[key] = args[key];
+                    }
+                }
+                if (Number.isInteger(args.limit)) {
+                    msg.limit = args.limit;
+                }
+                return { rows: await this.chrome(msg, 'rows') };
+            }
             default:
                 throw new Error(`unknown tool ${name}`);
         }

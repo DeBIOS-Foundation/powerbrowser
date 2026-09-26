@@ -22,6 +22,7 @@ export const TAB_STORE_TOOL_NAMES = [
     'bookmark_by_url',
     'bookmark_folder',
     'sessionstore_tabs',
+    'tabs_with_places',
 ] as const;
 
 export type TabStoreToolName = typeof TAB_STORE_TOOL_NAMES[number];
@@ -35,6 +36,7 @@ export const TAB_STORE_RELAY_KINDS: readonly string[] = [
     'readBookmarkByUrl',
     'listBookmarkFolder',
     'projectSessionStoreTabs',
+    'queryTabsWithPlaces',
 ];
 
 /** One actor message: the kind plus its fields. */
