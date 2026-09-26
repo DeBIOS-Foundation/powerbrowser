@@ -6,8 +6,9 @@
 //   - a kept profile (withFirefoxPage's `profileDir`, f4818a0) and a private
 //     config home per check, so a check can quit and relaunch on the SAME
 //     profile (NG-032..NG-034) and setups.json / modes.json start empty;
-//   - the product's own quit: the core window's close button, or the core
-//     window closing without it (window.close(), as the desktop's close does),
+//   - the product's own quit: the core window's close button, or the
+//     desktop's close (a cancelable 'close' event, then window.close() unless
+//     a handler cancelled it -- AppWindow::RequestWindowClose's sequence),
 //     driven in the chrome document through BiDi's "moz:scope": "chrome" tree
 //     (withFirefoxPage launches with --remote-allow-system-access);
 //   - page-realm probes over window.theia.container, served pages, a port
@@ -145,14 +146,24 @@ export async function pollFor(fn, timeoutMs, what) {
  * between launches. Retries while the stopped backend still owns the port.
  */
 export async function holdPort(port) {
-    return pollFor(async () => {
-        const server = createNetServer();
-        await new Promise((resolve, reject) => {
-            server.once('error', reject);
-            server.listen(port, '127.0.0.1', resolve);
-        });
-        return () => new Promise(resolve => server.close(() => resolve()));
-    }, 10000, `port ${port} to be free to hold`);
+    let server;
+    try {
+        await pollFor(async () => {
+            server = createNetServer();
+            await new Promise((resolve, reject) => {
+                server.once('error', reject);
+                server.listen(port, '127.0.0.1', resolve);
+            });
+            return true;
+        }, 10000, `port ${port} to be free to hold`);
+    } catch (error) {
+        // A listen that completed after the deadline does not count; do not leak it.
+        if (server && server.listening) {
+            server.close();
+        }
+        throw error;
+    }
+    return () => new Promise(resolve => server.close(() => resolve()));
 }
 
 /**
@@ -275,12 +286,14 @@ export async function withShell(profile, fn) {
             chrome,
             port: Number(await evaluate('location.port')),
             async quit({ how = 'button', timeoutMs = 30000 } = {}) {
-                // 'window-close' closes the core window without its button, as
-                // the desktop's close does once nothing cancels it: a real
-                // close, where a synthetic 'close' Event would have no default
-                // action and close nothing.
-                const expression = how === 'window-close'
-                    ? `window.close(); true`
+                // 'desktop-close' is the desktop's close as Gecko delivers it
+                // (AppWindow::RequestWindowClose, xpfe/appshell/AppWindow.cpp):
+                // a cancelable 'close' event on the window, then the window
+                // closes unless a handler cancelled it. A bare window.close()
+                // fires no 'close' event, and the event alone has no default
+                // action, so neither half alone is the desktop's close.
+                const expression = how === 'desktop-close'
+                    ? `if (window.dispatchEvent(new Event('close', { cancelable: true }))) window.close(); true`
                     : `document.getElementById('powerbrowser-window-close').click(); true`;
                 // Not awaited: the chrome document may go away before the call returns.
                 evaluateIn(chrome, expression).catch(() => undefined);

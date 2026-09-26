@@ -8,10 +8,12 @@
  * Two launches on one profile, each with a stock browser window opened
  * through the Open Browser Window command (confirmed in the chrome-scope
  * tree, not an in-shell overlay on the same page): the first closes the core
- * window with its close button, the second closes it without the button
- * (window.close() in the chrome document, as the desktop's close does). Each
- * must end the browser and the backend process whose pid the supervisor
- * reported.
+ * window with its close button, the second ('desktop-close') with the
+ * desktop's close as Gecko delivers it -- a cancelable 'close' event on the
+ * window, then window.close() unless a handler cancelled it
+ * (AppWindow::RequestWindowClose). Each launch opens its own stock page, so
+ * a tab restored from the first cannot stand in for the second's. Each must
+ * end the browser and the backend process whose pid the supervisor reported.
  */
 import { pollFor, probe, runCheck, servePages, sourceConst, stockTabOn, withShell } from './lib/pb-relaunch.mjs';
 
@@ -29,10 +31,11 @@ function alive(pid) {
 }
 
 await runCheck(LABEL, async ({ profile, fail, defer }) => {
-    const pages = await servePages({ '/stock': { title: 'NG037 stock' } });
+    const HOWS = ['button', 'desktop-close'];
+    const pages = await servePages(Object.fromEntries(HOWS.map(how => [`/stock-${how}`, { title: `NG037 stock ${how}` }])));
     defer(pages.close);
-    const STOCK = pages.url('/stock');
-    for (const how of ['button', 'window-close']) {
+    for (const how of HOWS) {
+        const STOCK = pages.url(`/stock-${how}`);
         const outcome = await withShell(profile, async app => {
             await probe(app, `await get('CommandRegistry').executeCommand(${JSON.stringify(OPEN_BROWSER_WINDOW)}, ${JSON.stringify(STOCK)}); return {};`);
             const stock = await stockTabOn(app, STOCK).catch(() => undefined);
