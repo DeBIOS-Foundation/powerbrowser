@@ -2143,7 +2143,7 @@ export LD_LIBRARY_PATH=$PB/objdir/dist/bin
 $PB/objdir/dist/bin/certutil -N -d "sql:$D" -f "$D/password.txt"
 head -c 4096 /dev/urandom > "$D/noise"
 $PB/objdir/dist/bin/certutil -S -d "sql:$D" -f "$D/password.txt" -z "$D/noise" -n powerbrowser-mar \
-  -s "CN=PowerBrowser MAR signing,O=DeBIOS Foundation" -x -t ",," -k rsa -g 4096 -Z SHA384 -v 240
+  -s "CN=PowerBrowser MAR signing,O=$(sed -n 's/^vendor_display *= *"\(.*\)"/\1/p' configuration.toml)" -x -t ",," -k rsa -g 4096 -Z SHA384 -v 240
 shred -u "$D/noise"
 mkdir -p $HOME/coding/Power-Browser-ng-e/powerbrowser/packaging/mar
 $PB/objdir/dist/bin/certutil -L -d "sql:$D" -n powerbrowser-mar -r > $HOME/coding/Power-Browser-ng-e/powerbrowser/packaging/mar/mar-primary.der
@@ -2754,7 +2754,7 @@ git commit -m "feat(ng-e): a packaged install runs its own staged backend and No
 
 - [ ] **Step 1:** Pull main into the clone after wave C merges. Rerun the NG-070 check and save its hit list.
 - [ ] **Step 2 (waits: Chris Q3):** In each wave C file, replace the spaced name with `PowerBrowser` inside the string literals only. Leave comments untouched; the check ignores them. Make the same replacements in these wave E files:
-  - `configuration.toml:47` becomes `trademark_notice = "PowerBrowser is a trademark of DeBIOS Foundation."` This changes legal text, and it waits on Q3.
+  - `configuration.toml:47` becomes `trademark_notice = "PowerBrowser is a trademark of <product.vendor_display>."` This changes legal text, and it waits on Q3.
   - Run `nix develop .#theia --command node scripts/generate.mjs`, then copy `generated/theia-branding.json`'s `legalNotices[0]` into `theia/applications/browser/package.json` → `theia.frontend.config.powerbrowserBranding.legalNotices[0]`.
   - The string at `crash-collector.mjs:303` becomes `'PowerBrowser crash collector: only POST /submit accepts crash reports. Start here: run the collector and submit a report.\n'`.
 - [ ] **Step 3 (waits: Chris Q3, answer "yes"):** Apply the same replacement in every string the Q3-gated files list. Change `verify-shell-error-copy.mjs:318-319` to require `PowerBrowser`. Change the `CLAUDE.md` copy rule to the one-word form.

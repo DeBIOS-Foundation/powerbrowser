@@ -3857,6 +3857,25 @@ run_own_checks() {
     "gui08-persistence-roundtrip|node $REPO_ROOT/scripts/verify-gui08-persistence-roundtrip.mjs"
     "gui08-persistence-roundtrip-self-test|node $REPO_ROOT/scripts/verify-gui08-persistence-roundtrip.mjs --self-test"
 
+    # NEW (non-GUI wave A): the wave's quick-tier checks, one file per row
+    # (decisions.md R1). ng-016 requires the gui08 roundtrip and its self-test
+    # green at the writer's head; ng-019 derives the schema from the writer's
+    # DDL markers and compares docs/TAB-STORE.md, then plants drifts; ng-020
+    # plants a comment-only startup wiring into the absence instrument's gate.
+    # Honestly --quick: text reads, in-memory plants and a mkdtemp stage.
+    "ng-016-gui08-persistence-at-head|node $REPO_ROOT/scripts/verify-ng-016-gui08-persistence-at-head.mjs"
+    "ng-019-tab-store-doc|node $REPO_ROOT/scripts/verify-ng-019-tab-store-doc.mjs"
+    "ng-020-absence-wiring-by-call|node $REPO_ROOT/scripts/verify-ng-020-absence-wiring-by-call.mjs"
+
+    # NEW (non-GUI wave A, ruling T2-R4): the tab-store writer offline. Loads
+    # the real PowerBrowserAPI.sys.mjs in node over node:sqlite with the rules
+    # Sqlite.sys.mjs enforces (an unbound LIKE refused, bindByName on names the
+    # statement has, no nested transaction), and runs the migration from every
+    # shipped version, the key rule, the row lifecycle, the quarantine rebuild
+    # and the close at shutdown; it plants an unbound LIKE to prove its guard.
+    # Honestly --quick: a mkdtemp stage, no build, no browser, no network.
+    "tab-store-offline|node $REPO_ROOT/scripts/verify-tab-store-offline.mjs"
+
     # NEW (15-02): GUI-08's canvas-geometry gate. Derives canvas hooks,
     # zoom/min/tray/card consts, the thumbnail-fallback shape, and the
     # panorama command registry at check time and compares as set equality
@@ -4446,6 +4465,13 @@ run_own_checks() {
     "crash-collector|node $REPO_ROOT/scripts/verify-crash-collector.mjs"
     "crash-collector-self-test|node $REPO_ROOT/scripts/verify-crash-collector.mjs --self-test"
 
+    # --- non-GUI wave E (NG-068, NG-070, NG-074): quick rows. No build, no browser,
+    # no display; ng068 binds a loopback port only and reads upstream/'s report.rs.
+    "ng068-crash-extra-part|node $REPO_ROOT/scripts/verify-ng-068-crash-extra-part.mjs"
+    "ng070-no-spaced-name|node $REPO_ROOT/scripts/verify-ng-070-no-spaced-name.mjs"
+    "ng070-no-spaced-name-self-test|node $REPO_ROOT/scripts/verify-ng-070-no-spaced-name.mjs --self-test"
+    "ng074-ci-green-on-main-self-test|node $REPO_ROOT/scripts/verify-ng-074-ci-main.mjs --self-test"
+
     # NEW (09-03): the WebExtensions declaration rows -- the manifest's
     # [[webextensions]] table reaches the policy engine as the tracked
     # ExtensionSettings key.
@@ -4691,6 +4717,21 @@ run_own_checks() {
       # fork wizard artwork plus the defines rebrand are 08-05 work.
       "installer-build-proof|node $REPO_ROOT/scripts/verify-installer-build-proof.mjs"
 
+      # --- non-GUI wave E (NG-051, NG-063..NG-067, NG-069, NG-071..NG-074): each needs a
+      # Gecko build, the packaged tree, the built sidecar, a browser, or the network.
+      # Commands and live-main/live-clone markers: docs/non-gui/checks-wave-e.tsv.
+      "ng051-backend-off|node $REPO_ROOT/scripts/verify-ng-051-backend-off.mjs"
+      "ng063-packaged-launch|node $REPO_ROOT/scripts/verify-ng-063-packaged-launch.mjs"
+      "ng064-update-url-from-manifest|node $REPO_ROOT/scripts/verify-ng-064-update-url.mjs"
+      "ng065-mar-signature-enforced|node $REPO_ROOT/scripts/verify-ng-065-mar-signature.mjs"
+      "ng066-nsis-branding-no-ping|node $REPO_ROOT/scripts/verify-ng-066-nsis-branding.mjs"
+      "ng067-frontend-errors-reach-telemetry|node $REPO_ROOT/scripts/verify-ng-067-frontend-errors.mjs"
+      "ng069-sidecar-egress|node $REPO_ROOT/scripts/verify-ng-069-sidecar-egress.mjs"
+      "ng071-tarball-extensions-build|node $REPO_ROOT/scripts/verify-ng-071-tarball-extensions.mjs"
+      "ng072-policies-packaged-webextension|node $REPO_ROOT/scripts/verify-ng-072-policies-webextension.mjs"
+      "ng073-declared-extension-loads|node $REPO_ROOT/scripts/verify-ng-073-declared-extension-loads.mjs"
+      "ng074-ci-green-on-main|node $REPO_ROOT/scripts/verify-ng-074-ci-main.mjs"
+
       # from verify-phase-04.sh
       "side02-token-negative|check_side02_token_negative"
       "side02-token-positive|check_side02_token_positive"
@@ -4780,6 +4821,32 @@ run_own_checks() {
       "sql-store-roundtrip-self-test|node $REPO_ROOT/scripts/verify-sql-store-roundtrip.mjs --self-test"
       "sql-store-absence|node $REPO_ROOT/scripts/verify-sql-store-absence.mjs"
       "sql-store-absence-self-test|node $REPO_ROOT/scripts/verify-sql-store-absence.mjs --self-test"
+
+      # NEW (non-GUI wave A): the wave's live checks, one file per row
+      # (decisions.md R1). Each launches the built binary on a kept profile
+      # (scripts/lib/ng-a-live.mjs) and drives the behaviour through the Theia
+      # frontend's own services -- opener, GroupModel, GroupActorClient, the
+      # Close Group command, card double-clicks -- then reads tabs.sqlite from
+      # outside. Restart rows quit and relaunch on the same profile. Not
+      # --quick: binary, Theia build, headless browser.
+      "ng-001-one-key-rule|node $REPO_ROOT/scripts/verify-ng-001-one-key-rule.mjs"
+      "ng-002-navigation-keeps-row|node $REPO_ROOT/scripts/verify-ng-002-navigation-keeps-row.mjs"
+      "ng-003-same-url-two-rows|node $REPO_ROOT/scripts/verify-ng-003-same-url-two-rows.mjs"
+      "ng-004-new-tab-row-unknown-uri-error|node $REPO_ROOT/scripts/verify-ng-004-new-tab-row-unknown-uri-error.mjs"
+      "ng-005-prune-keeps-open-rows|node $REPO_ROOT/scripts/verify-ng-005-prune-keeps-open-rows.mjs"
+      "ng-006-close-group-closes-web-tabs|node $REPO_ROOT/scripts/verify-ng-006-close-group-closes-web-tabs.mjs"
+      "ng-007-shell-tabs-keep-group-across-restart|node $REPO_ROOT/scripts/verify-ng-007-shell-tabs-keep-group-across-restart.mjs"
+      "ng-008-panorama-card-reopens-through-opener|node $REPO_ROOT/scripts/verify-ng-008-panorama-card-reopens-through-opener.mjs"
+      "ng-009-content-age-columns|node $REPO_ROOT/scripts/verify-ng-009-content-age-columns.mjs"
+      "ng-010-closed-tab-history|node $REPO_ROOT/scripts/verify-ng-010-closed-tab-history.mjs"
+      "ng-011-settings-table-read|node $REPO_ROOT/scripts/verify-ng-011-settings-table-read.mjs"
+      "ng-012-reader-reports-schema-errors|node $REPO_ROOT/scripts/verify-ng-012-reader-reports-schema-errors.mjs"
+      "ng-013-unopenable-store-quarantined|node $REPO_ROOT/scripts/verify-ng-013-unopenable-store-quarantined.mjs"
+      "ng-014-rebuild-at-head|node $REPO_ROOT/scripts/verify-ng-014-rebuild-at-head.mjs"
+      "ng-015-real-migration-from-every-version|node $REPO_ROOT/scripts/verify-ng-015-real-migration-from-every-version.mjs"
+      "ng-017-sql05-restarts-real-browser|node $REPO_ROOT/scripts/verify-ng-017-sql05-restarts-real-browser.mjs"
+      "ng-018-scheduled-integrity-check|node $REPO_ROOT/scripts/verify-ng-018-scheduled-integrity-check.mjs"
+      "ng-085-quit-closes-store|node $REPO_ROOT/scripts/verify-ng-085-quit-closes-store.mjs"
 
       # NEW (14-04): GUI-07's tabs invariant, BEHAVIOURAL half -- the part
       # gui07-mode-switch-tabs-invariant in the --quick set structurally

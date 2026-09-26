@@ -150,6 +150,8 @@ const ALLOWLIST = [
   { slot: 'legal.trademark_notice', file: 'theia/extensions/branding/src/browser/powerbrowser-about-dialog.tsx', reason: 'own-trademark notice fallback owned by the generator derivation' },
   { slot: 'product.vendor_display', file: 'theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx', reason: 'comment recording why the inherited org URL was replaced' },
   { slot: 'product.vendor_display', file: 'powerbrowser/branding/release/locales/en-US/brand.ftl', reason: 'hand-written vendor short-name term owned by the manifest' },
+  { slot: 'product.vendor_display', file: 'ledger/history/log.jsonl', reason: 'append-only delivery-kit ledger log; record-fail stores failing check output verbatim, and branding checks print the configured values' },
+  { slot: 'legal.trademark_notice', file: 'ledger/history/log.jsonl', reason: 'append-only delivery-kit ledger log; record-fail stores failing check output verbatim, and branding checks print the configured values' },
 ];
 
 const args = process.argv.slice(2);

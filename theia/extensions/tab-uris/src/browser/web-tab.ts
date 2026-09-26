@@ -138,6 +138,13 @@ export interface WebTabOptions {
      */
     id: string;
     url: string;
+    /**
+     * NG-001: the store row this tab writes, `web:<id>`. Absent for a new tab
+     * (the row key is then `web:` + `id`); set when a Panorama card reopens a
+     * tab that already has a row, so the reopened tab keeps its group, place
+     * and thumbnail.
+     */
+    key?: string;
 }
 
 export interface WebTabState {
@@ -150,7 +157,7 @@ export interface WebTabState {
 
 /** The eight kinds `handleGroupMutation` serves for web tabs; one stable set for the bridge gate. */
 export type WebTabMessage =
-    | { kind: 'webTabOpen'; tabId: string; url: string }
+    | { kind: 'webTabOpen'; tabId: string; url: string; key: string }
     | { kind: 'webTabGeometry'; tabId: string; x: number; y: number; w: number; h: number; visible: boolean }
     | { kind: 'webTabNavigate'; tabId: string; url: string }
     | { kind: 'webTabBack'; tabId: string }
@@ -169,7 +176,10 @@ export type WindowMessage =
     | { kind: 'windowChrome' }
     | { kind: 'windowDragRegions'; rects: { x: number; y: number; w: number; h: number }[]; height: number };
 
-export type ShellMessage = WebTabMessage | WindowMessage;
+/** NG-001: row messages on the same channel. A user close ends the row's open life (closed-tab history). */
+export type TabRowMessage = { kind: 'closeTab'; uri: string };
+
+export type ShellMessage = WebTabMessage | WindowMessage | TabRowMessage;
 
 export interface WebTabReply {
     ok: boolean;
@@ -298,6 +308,8 @@ export class WebTabChannel {
 export class WebTabWidget extends BaseWidget {
 
     tabId: string;
+    /** NG-001: the tab-store row this tab writes (`WebTabOptions.key`, else `web:<id>`). */
+    rowKey = '';
     url: string;
     pageTitle = '';
     loading = false;
@@ -330,6 +342,7 @@ export class WebTabWidget extends BaseWidget {
         // The Theia widget id -- an internal identifier, never shown.
         this.id = `${WEB_TAB_FACTORY_ID}:${options.id}`;
         this.tabId = options.id;
+        this.rowKey = options.key ?? `web:${options.id}`;
         this.url = options.url;
         this.title.closable = true;
         this.title.iconClass = 'codicon codicon-globe';
@@ -395,7 +408,7 @@ export class WebTabWidget extends BaseWidget {
         ensureBodyObserver();
         // Lost-view detection (UI-SPEC A10/A11): the open is awaited, and a
         // refusal, a nack or silence (timeout included) marks the view lost.
-        void this.channel.request({ kind: 'webTabOpen', tabId: this.tabId, url: this.url })
+        void this.channel.request({ kind: 'webTabOpen', tabId: this.tabId, url: this.url, key: this.rowKey })
             .then(reply => this.setLostView(WebTabWidget.lostReply(reply)));
         this.publish();
         if (!this.listening) {
@@ -429,6 +442,9 @@ export class WebTabWidget extends BaseWidget {
     }
 
     protected onCloseRequest(msg: Message): void {
+        // NG-005: a close the user asked for marks the row closed; an overlay
+        // dropped by a reload or the quit does not (it never passes here).
+        this.channel.send({ kind: 'closeTab', uri: this.rowKey });
         this.channel.send({ kind: 'webTabClose', tabId: this.tabId });
         this.channel.unregister(this.tabId);
         super.onCloseRequest(msg);
@@ -541,7 +557,7 @@ export class WebTabWidget extends BaseWidget {
      * otherwise have skipped. Both Reload arms above end here.
      */
     protected async reopen(): Promise<WebTabReply> {
-        const reply = await this.channel.request({ kind: 'webTabOpen', tabId: this.tabId, url: this.url });
+        const reply = await this.channel.request({ kind: 'webTabOpen', tabId: this.tabId, url: this.url, key: this.rowKey });
         // One reading of "chrome no longer renders this tab" (G-14.1.1-48):
         // every site that folds an open-or-navigate reply -- onAfterAttach,
         // this reopen, and settle() -- reaches lost-view state through

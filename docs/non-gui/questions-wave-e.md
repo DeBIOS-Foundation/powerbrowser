@@ -79,7 +79,7 @@ strings.
 
 `CLAUDE.md`, under "User-facing copy", says every user-facing error string "names the product as
 'Power Browser'". That directly contradicts NG-070. Changing the trademark notice from "Power Browser is
-a trademark of DeBIOS Foundation." to the one-word form changes legal text.
+a trademark of <product.vendor_display>." to the one-word form changes legal text.
 
 Unblock: say "wave E may edit the NG-070 string literals, the copy-contract checks listed above, the
 trademark notice, and CLAUDE.md's copy rule". Task 14 then covers them all. Until then the
