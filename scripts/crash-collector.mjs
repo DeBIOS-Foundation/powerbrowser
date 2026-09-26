@@ -269,6 +269,10 @@ export function handleSubmit({ body, contentType, storeDir, throttle, nowMs, onD
     const annotations = {};
     const take = (key, value) => {
         if (!ANNOTATION_ALLOWLIST.includes(key)) return;
+        // Allowlisted fields are scalars. A nested value is dropped before any
+        // stringify: JSON.stringify overflows the stack on a deep nest that
+        // JSON.parse accepted, which would lose the whole report.
+        if (value === null || typeof value === 'object') return;
         const text = typeof value === 'string' ? value : JSON.stringify(value);
         if (Buffer.byteLength(text, 'utf8') > MAX_ANNOTATION_BYTES) return;
         annotations[key] = text;

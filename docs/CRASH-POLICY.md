@@ -40,6 +40,9 @@ Any other field is dropped before the write, and any allowlisted value
 larger than 4096 bytes is dropped with it. File paths, URLs, and form
 data have no allowlisted field to arrive in.
 
+Gecko sends its annotations as one JSON part named `extra`; only
+allowlisted scalar values from it are kept, each stored as text.
+
 ## Retention
 
 Crash records are kept for **30 days** and then deleted. Every accepted
