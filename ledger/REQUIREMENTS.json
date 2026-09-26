@@ -1,5 +1,5 @@
 {
-  "ledger_version": 201,
+  "ledger_version": 203,
   "frozen_at": null,
   "items": [
     {
@@ -1097,11 +1097,11 @@
     {
       "id": "NG-085",
       "text": "Quitting closes the tab store's connection before shutdown, so the app quits in seconds instead of hanging until AsyncShutdown aborts it.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:118",
       "test_ref": "scripts/verify-ng-085-quit-closes-store.mjs::ng-085-quit-closes-store",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "8ba1963: ng-085-quit-closes-store passes in main",
       "owner": "",
       "phase": "",
       "deferred_at": "",

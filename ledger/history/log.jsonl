@@ -199,3 +199,5 @@
 {"v": 199, "ts": "2026-09-26T11:02:04Z", "op": "set-status", "id": "NG-014", "changes": {"status": ["open", "done"]}}
 {"v": 200, "ts": "2026-09-26T11:03:06Z", "op": "set", "id": "NG-015", "changes": {"evidence": ["", "175b771: ng-015-real-migration-from-every-version passes in main"]}}
 {"v": 201, "ts": "2026-09-26T11:03:06Z", "op": "set-status", "id": "NG-015", "changes": {"status": ["open", "done"]}}
+{"v": 202, "ts": "2026-09-26T11:03:16Z", "op": "set", "id": "NG-085", "changes": {"evidence": ["", "8ba1963: ng-085-quit-closes-store passes in main"]}}
+{"v": 203, "ts": "2026-09-26T11:03:16Z", "op": "set-status", "id": "NG-085", "changes": {"status": ["open", "done"]}}
