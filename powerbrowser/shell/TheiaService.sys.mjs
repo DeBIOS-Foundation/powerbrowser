@@ -327,10 +327,10 @@ export const TheiaService = {
   /**
    * Granted-path quit (D-105), in order: run the whole frontend flush
    * synchronously while the backend still runs, then stop the health loop
-   * (no restart can begin after this), then signal and await the backend's
-   * exit via a single bounded platform call -- never a hand-rolled timer
-   * around it. Idempotent: a second call while the first is still in flight
-   * is a no-op.
+   * (no restart can begin after this), then signal the backend's exit via a
+   * single bounded platform call without awaiting it (a granted observer
+   * cannot await; the call bounds itself by killGraceMs) -- never a
+   * hand-rolled timer around it. Idempotent: a second call is a no-op.
    *
    * NG-032/NG-033, final-review I1: the flush runs here, not on the request
    * path, so a restart request keeps its intent -- nothing is cancelled and
@@ -358,12 +358,13 @@ export const TheiaService = {
     if (this._proc && this._proc.exitCode == null) {
       const graceMs = PowerBrowserAPI.getIntPref("powerbrowser.sidecar.killGraceMs", 3000);
       try {
-        PowerBrowserAPI.killProcess(this._proc, graceMs);
+        void PowerBrowserAPI.killProcess(this._proc, graceMs).catch(() => {});
       } catch {
         // Already exited. Fire-and-forget from a granted observer: awaiting
         // here would run the rest of the teardown inside the nested loop the
         // flush above is spinning, and killProcess is already bounded by
-        // graceMs on its own.
+        // graceMs on its own. A rejection (an already-exited race) is
+        // dropped rather than left unhandled during shutdown.
       }
     }
     this._proc = null;

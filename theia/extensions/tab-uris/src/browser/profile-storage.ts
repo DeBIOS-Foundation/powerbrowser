@@ -76,7 +76,12 @@ export class ProfileStorageService extends LocalStorageService {
     protected seq = 0;
 
     async setData<T>(key: string, data?: T): Promise<void> {
-        const map = await this.load();
+        // Final-review I2: once the map is loaded the write lands in it
+        // synchronously. `await this.load()` alone defers it by a microtask,
+        // which the unload handler never gives: storeLayout's writes landed
+        // after onStop's saveSyncNow had serialized the map, so a reload lost
+        // the layout.
+        const map = this.loadedMap ?? await this.load();
         if (!map) {
             return super.setData(key, data);
         }
