@@ -77,8 +77,17 @@ const TOOLS: ToolDef[] = [
 ];
 
 function requireString(value: unknown, name: string): string {
-    if (typeof value !== 'string' || !value) {
-        throw new Error(`${name} must be a non-empty string`);
+    // Chrome's own cap (storeUrlArg), mirrored so an oversized argument never crosses the relay.
+    if (typeof value !== 'string' || !value || value.length > 8192) {
+        throw new Error(`${name} must be a non-empty string of at most 8192 characters`);
+    }
+    return value;
+}
+
+/** Chrome's folderGuid shape (handleStoreRequest), checked before the relay. */
+function requireGuid(value: unknown): string {
+    if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{12}$/.test(value)) {
+        throw new Error('guid must be a 12-character bookmark GUID');
     }
     return value;
 }
@@ -254,7 +263,7 @@ export class TabStoreAccessEndpoint implements BackendApplicationContribution {
             case 'bookmark_by_url':
                 return { bookmark: await this.chrome({ kind: 'readBookmarkByUrl', url: requireString(args.url, 'url') }, 'bookmark') };
             case 'bookmark_folder':
-                return { rows: await this.chrome({ kind: 'listBookmarkFolder', folderGuid: requireString(args.guid, 'guid') }, 'rows') };
+                return { rows: await this.chrome({ kind: 'listBookmarkFolder', folderGuid: requireGuid(args.guid) }, 'rows') };
             case 'sessionstore_tabs':
                 return { rows: await this.chrome({ kind: 'projectSessionStoreTabs' }, 'rows') };
             default:

@@ -3136,12 +3136,15 @@ function isStoreRequestKind(kind) {
 // their own on top of groupSenderIsTheia: the sender's top frame must be
 // embedded in a Power Browser shell window. A page in a stock browser tab
 // lives in a navigator:browser window and is refused here, whatever the
-// shared sender check decides.
+// shared sender check decides. ownerDocument, not ownerGlobal: this Gecko
+// declares no ownerGlobal (no WebIDL hit), so it reads undefined and the
+// wall refused the shell's own frame (measured live, wave B Task 3 round 1).
 function storeSenderInShellWindow(actorRef) {
   try {
-    const root = actorRef.browsingContext.top.embedderElement.ownerGlobal.document.documentElement;
+    const root = actorRef.browsingContext.top.embedderElement.ownerDocument.documentElement;
     return root.getAttribute("windowtype") === "powerbrowser:main";
   } catch {
+    PowerBrowserAPI.log("warn", "[storeSenderInShellWindow] wall: shell root unreadable");
     return false;
   }
 }
@@ -3186,8 +3189,14 @@ async function handleStoreRequest(data, actorRef) {
       }
     }
   } catch (err) {
-    const message = err && err.message ? err.message : String(err);
-    PowerBrowserAPI.log("warn", `[handleStoreRequest] ${String(kind)} failed: ${message}`);
-    return { ok: false, reason: /refusing|unknown/.test(message) ? "validation" : "store", message };
+    // A refusal this channel writes itself ("<function>: refusing ..." or
+    // "<function>: unknown ...", fixed text or the caller's own argument)
+    // crosses back as it is. Any other error -- Places, SessionStore, IOUtils
+    // -- can carry a URL, a title or a path, so neither the log nor the reply
+    // repeats it.
+    const message = String(err && err.message);
+    const reason = /^\w+: (refusing|unknown)\b/.test(message) ? "validation" : "store";
+    PowerBrowserAPI.log("warn", `[handleStoreRequest] ${String(kind)} failed: ${reason}`);
+    return { ok: false, reason, message: reason === "validation" ? message : `handleStoreRequest: ${String(kind)} failed in the store` };
   }
 }

@@ -13,25 +13,29 @@ import { StoreMessage, StoreReply, TabStoreRelayClient } from '../browser/tab-st
 
 @injectable()
 export class TabStoreRelayHub {
-    protected readonly clients: RpcProxy<TabStoreRelayClient>[] = [];
+    protected readonly clients: { id: number; client: RpcProxy<TabStoreRelayClient> }[] = [];
+    protected seq = 0;
 
     add(client: RpcProxy<TabStoreRelayClient>): void {
-        this.clients.push(client);
+        const entry = { id: (this.seq += 1), client };
+        this.clients.push(entry);
         client.onDidCloseConnection(() => {
-            const index = this.clients.indexOf(client);
+            const index = this.clients.indexOf(entry);
             if (index >= 0) {
                 this.clients.splice(index, 1);
             }
         });
     }
 
-    /** Resolves chrome's reply; rejects when no window is connected. */
+    /** Resolves the first reply (a refusal included); rejects when no window is connected. */
     async relay(msg: StoreMessage): Promise<StoreReply> {
-        for (const client of [...this.clients].reverse()) {
+        for (const { id, client } of [...this.clients].reverse()) {
             try {
                 return await client.relay(msg);
             } catch {
                 // That window's connection dropped mid-call; the next one answers.
+                // The error itself is not logged: it may echo the request.
+                console.warn(`tab-store-relay: window ${id} dropped mid-call, trying the next`);
             }
         }
         throw new Error('no Power Browser window is connected; open one and retry');
