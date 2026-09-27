@@ -1,5 +1,5 @@
 {
-  "ledger_version": 258,
+  "ledger_version": 260,
   "frozen_at": null,
   "items": [
     {
@@ -460,11 +460,11 @@
     {
       "id": "NG-036",
       "text": "A setup records dock and split positions, tab order across tab bars, and the mode of each window. Evidence: one flat URI list per window plus one modeId (setups-service.ts:538-564); notes/browser-window-model.md:41-43.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:57",
       "test_ref": "scripts/verify-ng-036-setup-dock-layout.mjs::ng-036-setup-records-dock-layout",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "2d549e75e13fe4e65630b795befebabe80ede18a: scripts/verify-ng-036-setup-dock-layout.mjs::ng-036-setup-records-dock-layout passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
