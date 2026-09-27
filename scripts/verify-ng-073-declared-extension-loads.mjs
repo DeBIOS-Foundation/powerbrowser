@@ -30,6 +30,7 @@ const browserLog = join(dir, 'browser-stdout.log');
 const xdg = join(dir, 'xdg');
 let step;
 let server;
+let prevBackendMain;
 let told = null;
 try {
     const ext = join(dir, 'src', 'extension');
@@ -65,10 +66,17 @@ sha256 = "${createHash('sha256').update(readFileSync(join(dir, 'probe.vsix'))).d
 `);
     step = runDeclaredPluginStep({ 'powerbrowser-test.ng073-probe': `http://127.0.0.1:${port}/ng073-probe-0.0.1.vsix` }, { PB_CONFIG_DIR: cfg });
     if (step.status !== 0) throw new Error(`the declared plugin step exited ${step.status}: ${step.output.slice(-800)}`);
+    if (!existsSync(step.backendMain)) throw new Error(`the scratch backend is missing at ${step.backendMain}`);
     process.env.XDG_CONFIG_HOME = xdg;
     // Nothing inherited from the invoking shell may name the plugins folder for the product.
     delete process.env.THEIA_PLUGINS;
     delete process.env.THEIA_DEFAULT_PLUGINS;
+    // Option 1 (draft): launch from the scratch app. The harness writes this
+    // entry into the temporary profile's user.js
+    // (powerbrowser.sidecar.backendMain); the product derives the scratch
+    // plugins/ from it. The check still names no plugins folder itself.
+    prevBackendMain = process.env.PB_BACKEND_MAIN;
+    process.env.PB_BACKEND_MAIN = step.backendMain;
     await withFirefoxPage('', async ({ waitFor }) => {
         await waitFor('window.theia && window.theia.container ? true : false', { timeoutMs: 90000 });
         const deadline = Date.now() + 60000;
@@ -90,6 +98,8 @@ sha256 = "${createHash('sha256').update(readFileSync(join(dir, 'probe.vsix'))).d
     failures.push(err.message);
 } finally {
     server?.kill();
+    if (prevBackendMain === undefined) delete process.env.PB_BACKEND_MAIN;
+    else process.env.PB_BACKEND_MAIN = prevBackendMain;
     step?.cleanup();
     rmSync(dir, { recursive: true, force: true });
 }
