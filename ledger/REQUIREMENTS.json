@@ -1,5 +1,5 @@
 {
-  "ledger_version": 257,
+  "ledger_version": 258,
   "frozen_at": null,
   "items": [
     {
@@ -1113,7 +1113,7 @@
   "mockup_freeze": null,
   "scope_lock": null,
   "check_locks": {
-    "commit": "3ab1c3a0f92980fad1e642f782365d0b444f720e",
+    "commit": "0ae935b5b332aff51de16804eb470ca6b8c376a1",
     "files": {
       "scripts/verify-ng-001-one-key-rule.mjs": "642d3d25ab836395e0137652c047e432cfc8e31a37c76191845694bd000242c4",
       "scripts/verify-ng-002-navigation-keeps-row.mjs": "d5fc1ec38c3503606a20716ecd0b12e1696f6ea552a479f3ac12e2cf740e74b4",
@@ -1122,7 +1122,7 @@
       "scripts/verify-ng-005-prune-keeps-open-rows.mjs": "5777105757c418018793a6e24ce0de1b2df0b04ce6b2748a705c8245e098e970",
       "scripts/verify-ng-006-close-group-closes-web-tabs.mjs": "3aef2f3d4dfb1cf1083b8707cf26d5af85103cde758c6688256c6f5df317473d",
       "scripts/verify-ng-007-shell-tabs-keep-group-across-restart.mjs": "6ad758b4732b70efc6b341fd8b919eddf0aeff1b5765107215401fed8e2e5b32",
-      "scripts/verify-ng-008-panorama-card-reopens-through-opener.mjs": "41f08df2526889a3541b6eaad99ce49da6d59f1c73dcb878c447123b96538b8e",
+      "scripts/verify-ng-008-panorama-card-reopens-through-opener.mjs": "6f0311fe5669415e00a63d5c13b3f70ebaab7a51383ee2da8a66e8b9eb867160",
       "scripts/verify-ng-009-content-age-columns.mjs": "88dacb2a35c6c28f6fc40543507f55a62552346ad9c5dd82bed35b75d1d063b4",
       "scripts/verify-ng-010-closed-tab-history.mjs": "e1e24dcb8662e6fb1ea6dad636e593e0cfe201f2496dbce84cb6d40039d0f5c1",
       "scripts/verify-ng-011-settings-table-read.mjs": "df93e57513ed3ddaf2c2659215e81662b6e9024242b6c9813c6902df98c00149",
@@ -1150,7 +1150,7 @@
       "scripts/verify-ng-033-layout-survives-relaunch.mjs": "9a1772aa443c451381cf75eadb3b457847b8de8be91507c78da91ae8fa7c4d0d",
       "scripts/verify-ng-034-web-tab-history-restart.mjs": "624e5e948cc92af541cb300fba05e4696abaf968ca523e7c397b9c9cdf4735e3",
       "scripts/verify-ng-035-custom-mode-layout.mjs": "a1ca6db500d36a1573ce286e9b671725189d40203f2f33fde8c3760a38740391",
-      "scripts/verify-ng-036-setup-dock-layout.mjs": "a684f7886067687135418b806bb66039071e8a92b40d0cdcc395267d81bc603f",
+      "scripts/verify-ng-036-setup-dock-layout.mjs": "b1dacbce2dce574a401d2e74f2c066bf2c466d12370c4d29e41762fddc984c21",
       "scripts/verify-ng-037-core-close-quits.mjs": "d61b3e003e2bf1a0ad68f3e7ec88f620e8395c03d1fc93fc3d7682cf71442412",
       "scripts/verify-ng-038-actor-sender-wall.mjs": "28d3c8a4435d9785bb2b7dfe429b9bbe6915e5b7cd6e5c9cea28abfcb46b4ca8",
       "scripts/verify-ng-039-internals-waivers.mjs": "7dd82262742ea02d32dddd0c313e43e0d6e21397b44b8d1ece973aeacaa80c5d",
@@ -1166,7 +1166,7 @@
       "scripts/verify-ng-070-no-spaced-name.mjs": "8a31801637c44028ded18d4a7318f605597e1cd23702ac560439be2fd5ff0238",
       "scripts/verify-ng-071-tarball-extensions.mjs": "09e4e87a599b0568e3def7ac71671109a5545dea4e3029bf6ec40fd52d91be44",
       "scripts/verify-ng-072-policies-webextension.mjs": "f4f0b662928514eebc1052c85c951b5136b296555e36618b850112e6c160ca14",
-      "scripts/verify-ng-073-declared-extension-loads.mjs": "d383863532bd075de1c68d23b5fea3da9b54fefb6ae7398d5de310451bee34dd",
+      "scripts/verify-ng-073-declared-extension-loads.mjs": "6512fe2bb9b0b368fa0e2289d9af0507add516c6f5587997d88bdaaa724eabff",
       "scripts/verify-ng-074-ci-main.mjs": "33728a1b2329735876e1872d070d6f90121ef7cee9702c0cac28eeb079808cb4",
       "scripts/verify-ng-085-quit-closes-store.mjs": "bf16b1f1afeeea86b0f4ec8aa29f9f38837dff59d0708e6c343d0a3827d070cc"
     }
