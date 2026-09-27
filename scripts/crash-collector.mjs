@@ -324,7 +324,7 @@ export function startCollector({ port = DEFAULT_PORT, storeDir = DEFAULT_STORE_D
     const server = createServer((req, res) => {
         if (req.url !== SUBMIT_PATH || req.method !== 'POST') {
             res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-            res.end('Power Browser crash collector: only POST /submit accepts crash reports. Start here: run the collector and submit a report.\n');
+            res.end('PowerBrowser crash collector: only POST /submit accepts crash reports. Start here: run the collector and submit a report.\n');
             return;
         }
         const chunks = [];

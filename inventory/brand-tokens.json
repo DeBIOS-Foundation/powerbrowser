@@ -507,14 +507,14 @@
       "case_form": "title",
       "class": "brand-display",
       "target": "PowerBrowser",
-      "expected_count": 2,
+      "expected_count": 3,
       "expected_files": [
         "theia/applications/browser/package.json"
       ],
       "only_in": [
         "theia/applications/browser/package.json"
       ],
-      "reason": "theia/applications/browser/package.json:13 -- `\"applicationName\": \"Sourcerer\"` is the Theia frontend's window/title display name -- plus :30, the Mozilla non-association sentence now carrying `PowerBrowser Dev` (:29, the own-trademark notice, keeps the spaced legal copy frozen out of NAME-01's slice scope, so it no longer counts toward this target). NAME-01 (08-01) re-pinned applicationName and the :30 sentence; count 3->2. The rest of this file carries ordinary lowercase identifier occurrences the rename script DOES handle, so the exclusion is line-scoped in hand_write.line_contains rather than whole-file."
+      "reason": "theia/applications/browser/package.json:13 -- `\"applicationName\": \"Sourcerer\"` is the Theia frontend's window/title display name -- plus :30, the Mozilla non-association sentence now carrying `PowerBrowser Dev`, plus :29, the own-trademark notice now carrying `PowerBrowser` per Q3 (2026-09-27). NAME-01 (08-01) re-pinned applicationName and the :30 sentence; count 3->2. Q3 (2026-09-27) moved the :29 notice to the one-word form, so it counts toward this target again; count 2->3. The rest of this file carries ordinary lowercase identifier occurrences the rename script DOES handle, so the exclusion is line-scoped in hand_write.line_contains rather than whole-file."
     },
     {
       "token": "Sourcerer",

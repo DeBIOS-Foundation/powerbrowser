@@ -44,7 +44,7 @@ distribution_id = "org.debios"
 [legal]
 license = "PolyForm Noncommercial 1.0.0"
 copyright_holder = "DeBIOS Foundation"
-trademark_notice = "Power Browser is a trademark of DeBIOS Foundation."
+trademark_notice = "PowerBrowser is a trademark of DeBIOS Foundation."
 
 [theia]
 default_theme = "dark"

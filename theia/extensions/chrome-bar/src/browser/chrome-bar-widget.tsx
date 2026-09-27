@@ -605,13 +605,13 @@ export class ChromeBarWidget extends ReactWidget {
     protected dropdownBody(): React.ReactNode {
         if (this.commitFailed) {
             return <>
-                <div className='pb-chrome-bar-row'>Power Browser couldn&apos;t open that address. Press Enter to try again.</div>
+                <div className='pb-chrome-bar-row'>PowerBrowser couldn&apos;t open that address. Press Enter to try again.</div>
                 <div className='pb-chrome-bar-dropdown-footer'>Enter opens the address · Esc closes suggestions</div>
             </>;
         }
         return <>
             {this.providerFailed ? (
-                <div className='pb-chrome-bar-row'>Power Browser couldn&apos;t load suggestions. Press Enter to visit what you typed.</div>
+                <div className='pb-chrome-bar-row'>PowerBrowser couldn&apos;t load suggestions. Press Enter to visit what you typed.</div>
             ) : this.rows.length === 0 && !this.shimmer ? (
                 <div className='pb-chrome-bar-row'>
                     <div className='pb-chrome-bar-row-title'>No suggestions</div>

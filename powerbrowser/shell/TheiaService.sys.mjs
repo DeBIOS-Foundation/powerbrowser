@@ -39,9 +39,9 @@ const HEALTH_PATH = "/powerbrowser/health";
  * literal, a stale entry and a removed one all go red.
  */
 const USER_MESSAGE = {
-  interfaceFilesMissing: "Power Browser can't find its interface files. This build looks incomplete — reinstall, or open Details for the missing path.",
-  nodeMissing: "Power Browser needs Node.js and couldn't find it. Install Node.js 22 or later and open Power Browser again, or open Details for where it looked.",
-  couldNotStart: "Power Browser couldn't start its interface. Choose Retry, or open Details to see the error.",
+  interfaceFilesMissing: "PowerBrowser can't find its interface files. This build looks incomplete — reinstall, or open Details for the missing path.",
+  nodeMissing: "PowerBrowser needs Node.js and couldn't find it. Install Node.js 22 or later and open PowerBrowser again, or open Details for where it looked.",
+  couldNotStart: "PowerBrowser couldn't start its interface. Choose Retry, or open Details to see the error.",
   // 01-13: the one place a SECOND `couldNotStart` sentence is warranted, and the
   // one place 01-10 declined to mint a key. 01-10's reasoning was that a new key
   // would have to invent a distinction the user cannot act on -- still correct
@@ -51,8 +51,8 @@ const USER_MESSAGE = {
   // the stated next step and the rendered controls are one fact. Reachable only
   // from `_spawnAndGate`'s two `recoverable: false` returns -- the spawn-throw
   // D-113 site and the D-112 pinned-port-conflict site.
-  couldNotStartUnrecoverable: "Power Browser couldn't start its interface, and retrying won't change the result. Close Power Browser and open it again, or open Details to see the error.",
-  didNotFinishStarting: "Power Browser's interface didn't finish starting. Choose Retry, or open Details if this keeps happening.",
+  couldNotStartUnrecoverable: "PowerBrowser couldn't start its interface, and retrying won't change the result. Close PowerBrowser and open it again, or open Details to see the error.",
+  didNotFinishStarting: "PowerBrowser's interface didn't finish starting. Choose Retry, or open Details if this keeps happening.",
 };
 
 // Discretionary constants (plan 04-04 recorded_decisions) -- no pref exists

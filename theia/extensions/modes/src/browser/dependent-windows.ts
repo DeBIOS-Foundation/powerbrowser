@@ -49,7 +49,7 @@ export const NON_EXTRACTABLE_WIDGET_IDS: ReadonlyArray<string> = Object.freeze([
 export const DEPENDENT_TAB_CLOSED_HEADING = 'This tab is closed';
 
 /** Contracted dependent tab-closed body (14-UI-SPEC.md, verbatim). */
-export const DEPENDENT_TAB_CLOSED_BODY = 'The tab shown in this window was closed. Close this window to return to Power Browser.';
+export const DEPENDENT_TAB_CLOSED_BODY = 'The tab shown in this window was closed. Close this window to return to PowerBrowser.';
 
 /** Contracted dependent tab-closed button (14-UI-SPEC.md, verbatim): window-only close. */
 export const DEPENDENT_CLOSE_WINDOW_LABEL = 'Close Window';
