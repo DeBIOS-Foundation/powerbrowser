@@ -132,6 +132,7 @@ try {
         expect(JSON.stringify(after.groups) === JSON.stringify(before.groups), `${label}: the groups changed across the migration`);
         expect(Object.keys(after.settings).length === 5 && after.settings.closed_retention_days === '7', `${label}: the settings table is not seeded with its five rows`);
         expect(columnsOf(path, 'tabs').length === 12, `${label}: the tabs table has ${columnsOf(path, 'tabs').length} columns, want 12`);
+        expect(JSON.stringify(columnsOf(path, 'saved_pages')) === JSON.stringify(['tab_uri', 'dir', 'url', 'title', 'saved_at', 'bytes']), `${label}: the saved_pages table is not at its v6 shape: ${JSON.stringify(columnsOf(path, 'saved_pages'))}`);
         rmSync(profile, { recursive: true, force: true });
     };
     for (const version of [1, 2, 3, 4]) {
@@ -160,7 +161,7 @@ try {
         await api.openTabStore();
         await closeAll();
         const after = readStore(join(profile, 'tabs.sqlite'));
-        expect(after.version === schemaHead() && JSON.stringify(after.tabs) === JSON.stringify(before.tabs), 'a v5-shaped store stamped 4 did not re-run as a no-op that stamps 5');
+        expect(after.version === schemaHead() && JSON.stringify(after.tabs) === JSON.stringify(before.tabs), 'a v5-shaped store stamped 4 did not re-run as a no-op that stamps the head');
     });
     await section('newer than head', async () => {
         const path = join(stage, 'v99.sqlite');
@@ -350,6 +351,7 @@ try {
         const after = readStore(path);
         expect(state === 'rebuilt' && existsSync(`${path}.corrupt-1`), `NG-014: a tampered store was not quarantined (state ${state})`);
         expect(after.version === schemaHead() && columnsOf(path, 'tabs').length === 12 && Object.keys(after.settings).length === 5, 'NG-014: the rebuilt store is not at the head with every column and the settings');
+        expect(JSON.stringify(columnsOf(path, 'saved_pages')) === JSON.stringify(['tab_uri', 'dir', 'url', 'title', 'saved_at', 'bytes']), `NG-014: the rebuilt store lacks the v6 saved_pages table with its columns: ${JSON.stringify(columnsOf(path, 'saved_pages'))}`);
         const restored = after.tabs.find(r => r.uri === 'stock:q-1');
         expect(restored && restored.created_at > 0, `the rebuild's restored row has no created_at: ${JSON.stringify(restored ?? null)}`);
     });

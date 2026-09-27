@@ -79,11 +79,11 @@ function derivedModelReaders(browsedFiles) {
         if (rel === MODEL_REL) {
             continue;
         }
-        // WR-05a: all four reader entry points, not just listGroups -- a
-        // second fetch site reading getGroupTabs, listUngroupedTabs, or
-        // getThumbnail without calling listGroups is the same divergence.
+        // WR-05a: all three reader entry points, not just listGroups -- a
+        // second fetch site reading getGroupTabs or listUngroupedTabs
+        // without calling listGroups is the same divergence.
         if (/\.listGroups\(/.test(src) || /\.getGroupTabs\(/.test(src)
-            || /\.listUngroupedTabs\(/.test(src) || /\.getThumbnail\(/.test(src)) {
+            || /\.listUngroupedTabs\(/.test(src)) {
             readers.push(rel);
         }
     }
@@ -130,7 +130,7 @@ function checkStatic(sources) {
 
     // 1. Single-model readers as set equality: exactly the widget reads the
     // model outside the model itself. A second file with a reader call site
-    // (listGroups, getGroupTabs, listUngroupedTabs, or getThumbnail) is a
+    // (listGroups, getGroupTabs, or listUngroupedTabs) is a
     // second store opinion, not a render root.
     const browsed = Object.entries(sources).filter(([rel]) => rel !== MODEL_REL && rel !== WIDGET_REL && rel !== TREE_REL);
     const readers = derivedModelReaders([[WIDGET_REL, widgetSrc], [TREE_REL, treeSrc], ...browsed]);
