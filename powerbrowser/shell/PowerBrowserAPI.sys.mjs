@@ -4115,7 +4115,7 @@ async function savePageCopy(uri) {
   await IOUtils.makeDirectory(dir, { createAncestors: true });
   try {
     const doc = await persistDocument(browser);
-    await writePersistedDocument(doc, IOUtils.getFile(dir, "page.html"), IOUtils.getFile(dir, "page_files"));
+    await writePersistedDocument(doc, await IOUtils.getFile(dir, "page.html"), await IOUtils.getFile(dir, "page_files"));
   } catch (err) {
     await IOUtils.remove(dir, { recursive: true, ignoreAbsent: true });
     throw err;
