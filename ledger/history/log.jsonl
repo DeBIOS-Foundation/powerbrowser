@@ -250,3 +250,4 @@
 {"v": 250, "ts": "2026-09-26T21:48:20Z", "op": "set-status", "id": "NG-039", "changes": {"status": ["open", "done"]}}
 {"v": 251, "ts": "2026-09-26T21:48:20Z", "op": "set", "id": "NG-040", "changes": {"evidence": ["", "0d254d4e2ddfd2a59c1322c75b73cb0a0c0fb8a7: scripts/verify-ng-040-internals-catalogue-lines.mjs::ng-040-internals-catalogue-lines passes"]}}
 {"v": 252, "ts": "2026-09-26T21:48:20Z", "op": "set-status", "id": "NG-040", "changes": {"status": ["open", "done"]}}
+{"v": 253, "ts": "2026-09-27T21:31:07Z", "op": "baseline-checks", "id": "", "changes": {"check_baseline": [null, 252]}}
