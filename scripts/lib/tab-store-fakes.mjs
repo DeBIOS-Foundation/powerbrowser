@@ -157,7 +157,7 @@ globalThis.Services = {
 globalThis.Ci = { nsIFile: {}, nsITimer: { TYPE_ONE_SHOT: 0 } };
 globalThis.Cc = {
     '@mozilla.org/timer;1': {
-        createInstance: () => ({ initWithCallback: (cb, ms) => setTimeout(() => cb.notify(), ms), cancel() {} }),
+        createInstance: () => { let handle = null; return { initWithCallback: (cb, ms) => { handle = setTimeout(() => cb.notify(), ms); }, cancel() { if (handle !== null) { clearTimeout(handle); handle = null; } } }; },
     },
 };
 globalThis.IOUtils = {

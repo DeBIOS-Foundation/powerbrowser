@@ -113,6 +113,7 @@ export class GroupModel {
     private groups: PanoramaGroup[] = [];
     private readonly members = new Map<string, PanoramaTab[]>();
     private ungrouped: PanoramaTab[] = [];
+    private readonly reopening = new Set<string>();
     private activeGroupId: string | undefined;
     private loaded = false;
     private loadFailed = false;
@@ -352,7 +353,7 @@ export class GroupModel {
             this.loaded = true;
             this.loadFailed = false;
         } catch (error) {
-            console.error('[@powerbrowser/modes] loading groups failed:', error);
+            console.error('[@powerbrowser/modes] loading groups failed:', error instanceof Error ? error.name : typeof error);
             this.groups = [];
             this.members.clear();
             this.ungrouped = [];
@@ -734,10 +735,20 @@ export class GroupModel {
      */
     async reopen(tab: PanoramaTab): Promise<void> {
         const web = tab.uri.startsWith('web:');
-        const target = new URI(web ? (tab.url || EMPTY_PAGE_URL) : tab.uri);
-        const options: WebTabOpenerOptions = web ? { rowKey: tab.uri } : { widgetOptions: { area: 'main' } } as WebTabOpenerOptions;
-        const opener = await this.openers.getOpener(target, options);
-        await opener.open(target, options);
+        // M2: one tab per row -- a second reopen of the same card, while the
+        // first is in flight or once its web tab exists, opens nothing.
+        if (this.reopening.has(tab.uri) || (web && this.shell.widgets.some(widget => widget instanceof WebTabWidget && widget.rowKey === tab.uri))) {
+            return;
+        }
+        this.reopening.add(tab.uri);
+        try {
+            const target = new URI(web ? (tab.url || EMPTY_PAGE_URL) : tab.uri);
+            const options: WebTabOpenerOptions = web ? { rowKey: tab.uri } : { widgetOptions: { area: 'main' } } as WebTabOpenerOptions;
+            const opener = await this.openers.getOpener(target, options);
+            await opener.open(target, options);
+        } finally {
+            this.reopening.delete(tab.uri);
+        }
     }
 
     /**
@@ -901,17 +912,20 @@ export interface WebTabRestore {
 
 /**
  * NG-011: what the launch restore reopens, from the settings in tabs.sqlite.
- * restore_behaviour 'none' reopens nothing (the tabs stay as Panorama cards).
- * Otherwise a tab last looked at within restore_live_minutes of `quitAt`
- * reopens with its back/forward history, one within restore_url_days at its
- * URL only, and anything older is left as a card.
+ * restore_behaviour 'none' reopens nothing. Otherwise a tab last looked at
+ * within restore_live_minutes of `quitAt` reopens with its back/forward
+ * history, one within restore_url_days at its URL only, and anything older
+ * stays closed. A tab left closed keeps its card when it is grouped; an
+ * ungrouped one is closed-tab history (ruling A-F1, R6).
  */
 export function planWebTabRestore(settings: Record<string, string>, tabs: readonly SavedWebTab[], quitAt: number): WebTabRestore[] {
     if (settings.restore_behaviour === 'none') {
         return [];
     }
-    const minutes = Number(settings.restore_live_minutes ?? '5');
-    const days = Number(settings.restore_url_days ?? '30');
+    // I1: an absent or blank value is NaN, never 0 (Number('') is 0), so it falls back.
+    const read = (value: string | undefined): number => ((value ?? '').trim() === '' ? NaN : Number(value));
+    const minutes = read(settings.restore_live_minutes);
+    const days = read(settings.restore_url_days);
     // A value that is not a number, or is negative, falls back to the default
     // (docs/TAB-STORE.md reader rule). Both restore keys admit 0 (0 to 10080
     // minutes, 0 to 3650 days), so the floor is `>= 0` for both -- the
@@ -921,8 +935,10 @@ export function planWebTabRestore(settings: Record<string, string>, tabs: readon
     // second case) back into the 5-minute default.
     const liveMs = (Number.isFinite(minutes) && minutes >= 0 ? minutes : 5) * 60 * 1000;
     const urlMs = (Number.isFinite(days) && days >= 0 ? days : 30) * 24 * 60 * 60 * 1000;
+    // A-T10-m: a session saved without a usable time ages from now.
+    const at = quitAt > 0 ? quitAt : Date.now();
     return tabs.flatMap(tab => {
-        const age = tab.lastAccessed === null ? Infinity : quitAt - tab.lastAccessed;
+        const age = tab.lastAccessed === null ? Infinity : at - tab.lastAccessed;
         return age > urlMs ? [] : [{ key: tab.key, url: tab.url, withHistory: age <= liveMs }];
     });
 }

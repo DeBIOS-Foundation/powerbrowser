@@ -55,12 +55,14 @@ typing one opens nothing. Split editors share one row.
 ## Open and closed rows
 
 A row with `closed_at` NULL is open, or restorable (its tab ended with a
-session and has a group or a position, so Panorama shows it as a card that
-reopens the tab). The row is marked closed, `closed_at` set, when:
+session and has a group, so Panorama shows it as a card that reopens the
+tab). The row is marked closed, `closed_at` set, when:
 
 - the user closes the tab (a stock tab's close, a web tab's close, an organised editor or terminal closed),
 - a stock tab is gone from sessionstore's open tabs (its window closed),
-- at startup, a web tab nobody grouped or placed ended with the last session.
+- at startup, an ungrouped web tab ended with the last session, placed or
+  not. The launch restore reopens the row of each tab it brings back; an
+  ungrouped web tab it leaves stays closed-tab history, with no card.
 
 A quit or a frontend reload never closes a row. Theia rows ending with a quit
 stay open. Closed rows are closed-tab
@@ -81,9 +83,9 @@ the default.
 |---|---|---|---|---|
 | `closed_retention_days` | a number from 0 to 3650, decimals allowed | `7` | the sweep's prune | Closed-tab history older than this many days is deleted |
 | `integrity_check_minutes` | a number greater than 0 and at most 525600, decimals allowed | `1440` | the integrity schedule | Minutes between full integrity checks |
-| `restore_behaviour` | `session` or `none` | `session` | the launch restore | `session`: reopen the last session's web tabs; `none`: reopen nothing, the tabs stay as Panorama cards |
+| `restore_behaviour` | `session` or `none` | `session` | the launch restore | `session`: reopen the last session's web tabs; `none`: reopen nothing; grouped tabs stay as Panorama cards, ungrouped ones become closed-tab history |
 | `restore_live_minutes` | a number from 0 to 10080, decimals allowed | `5` | the launch restore | A tab looked at within this many minutes of the quit reopens with its back/forward history |
-| `restore_url_days` | a number from 0 to 3650, decimals allowed | `30` | the launch restore | A tab looked at within this many days reopens at its URL; older ones stay as cards |
+| `restore_url_days` | a number from 0 to 3650, decimals allowed | `30` | the launch restore | A tab looked at within this many days reopens at its URL; an older one stays a card when it is grouped and becomes closed-tab history when it is not |
 
 ## Integrity and quarantine
 
@@ -98,7 +100,8 @@ quarantined. On a trip the file is copied to the next free
 `tabs.sqlite.corrupt-<N>` (never overwritten, never deleted), the `-wal`,
 `-shm` and `-journal` files are removed, and the store is rebuilt at the head
 from sessionstore's open and recently closed tabs. Groups rebuild empty; the
-corrupt copy keeps the lost membership. A file whose `user_version` is newer
+corrupt copy keeps the lost membership. The settings rebuild at their
+defaults; a changed value survives only in the corrupt copy. A file whose `user_version` is newer
 than the build is refused and left untouched, never quarantined. The
 scheduled check reads its interval from the settings table before each wait
 and stops at shutdown; the integrity log lines carry a fixed reason, never

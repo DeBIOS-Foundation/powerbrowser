@@ -22,6 +22,7 @@
  */
 
 import { injectable } from '@theia/core/shared/inversify';
+import { statSync } from 'fs';
 import { join } from 'path';
 import Database from 'better-sqlite3';
 import { POWERBROWSER_ENV } from '@powerbrowser/token-gate/lib/node/powerbrowser-env';
@@ -100,6 +101,8 @@ function messageOf(error: unknown): string {
 @injectable()
 export class TabQueryService {
     private db: Database | null = null;
+    /** The inode of the file `db` opened; a quarantine rebuild replaces the file under it (I2). */
+    private dbInode: number | undefined;
 
     // No constructor parameter: inversify cannot resolve a bare `string`
     // serviceIdentifier, so a defaulted ctor param throws "No matching
@@ -184,6 +187,7 @@ export class TabQueryService {
             throw refuse(`tabs.sqlite is at schema version ${version}; this build reads version ${TAB_STORE_SCHEMA_HEAD}`);
         }
         this.db = db;
+        this.dbInode = this.storeInode();
         return db;
     }
 
@@ -192,12 +196,25 @@ export class TabQueryService {
      * replaced the file under it -- and rethrows naming the read.
      */
     private read<T>(what: string, query: (db: Database) => T): T {
+        // I2: a mid-session quarantine unlinks the file and rebuilds a new one;
+        // one stat per read notices and reopens on the new file.
+        if (this.db && this.storeInode() !== this.dbInode) {
+            this.setProfileDir(this.profileDir);
+        }
         const db = this.openIfNeeded();
         try {
             return query(db);
         } catch (error) {
             this.setProfileDir(this.profileDir);
             throw new Error(`TabQueryService: ${what} failed: ${messageOf(error)}`);
+        }
+    }
+
+    private storeInode(): number | undefined {
+        try {
+            return statSync(join(this.profileDir, TAB_QUERY_FILE_NAME)).ino;
+        } catch {
+            return undefined;
         }
     }
 
