@@ -45,19 +45,32 @@ await runCheck('verify-ng-008-panorama-card-reopens-through-opener', async ({ pa
         if (report.termCard) {
             await A.organising();
             dbl(cardFor('terminal:ng008'));
-            await A.sleep(2000);
-            report.termOpen = A.mainWidgets().some(w => {
+            const termUp = () => A.mainWidgets().some(w => {
                 const address = A.registry().uriOf(w);
                 return !!address && address.toString(true) === 'terminal:ng008';
             });
+            for (let i = 0; i < 40 && !termUp(); i++) await A.sleep(250);
+            report.termOpen = termUp();
         }
         if (report.webCard) {
             await A.organising();
+            const panel = A.shell().mainPanel;
+            const activated = [];
+            const onActivated = (_, w) => activated.push(w);
+            panel.widgetActivated.connect(onActivated);
             dbl(cardFor(webKey));
-            await A.sleep(1500);
-            report.webOpenAgain = A.webTabs().filter(w => w.url === pageUrl).length;
-            const current = A.shell().currentWidget;
-            report.activated = !!current && current.url === pageUrl;
+            for (let i = 0; i < 40 && !activated.some(w => w.url === pageUrl); i++) await A.sleep(250);
+            await A.sleep(1500); // settle kept on purpose: a late duplicate from a reopen-instead-of-activate bug must be counted
+            panel.widgetActivated.disconnect(onActivated);
+            const open = A.webTabs().filter(w => w.url === pageUrl);
+            report.webOpenAgain = open.length;
+            const web = open[0];
+            const bar = web ? A.shell().mainAreaTabBars.find(b => b.titles.includes(web.title)) : undefined;
+            report.activated = open.length === 1 && activated.length > 0 && activated[activated.length - 1] === web
+                && panel.currentTitle === web.title && !!bar && bar.currentTitle === web.title && web.isVisible;
+            report.activatedIds = activated.map(w => w.id);
+            const cur = A.shell().currentWidget;
+            report.shellCurrent = cur ? cur.id : null; // recorded, not asserted: WebTabWidget takes no DOM focus on activate (UI-SPEC A14)
         }
         return report;
     `));
