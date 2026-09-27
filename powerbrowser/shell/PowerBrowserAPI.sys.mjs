@@ -3691,6 +3691,7 @@ const STORE_REQUEST_KINDS = new Set([
   "projectSessionStoreTabs",
   "queryTabsWithPlaces",
   "searchPlaces",
+  "setSetting",
 ]);
 
 function isStoreRequestKind(kind) {
@@ -3759,6 +3760,10 @@ async function handleStoreRequest(data, actorRef) {
       }
       case "searchPlaces": {
         return { ok: true, kind, rows: await searchPlaces(data.text, data.limit) };
+      }
+      case "setSetting": {
+        const saved = await setStoreSetting(data.key, data.value);
+        return { ok: true, kind, key: saved.key };
       }
       default: {
         return { ok: false, reason: "validation", message: `handleStoreRequest: unknown kind ${String(kind)}` };
@@ -3896,4 +3901,34 @@ function sessionStoreStockKeys() {
     // The same answer parseSessionStoreTabRows gives on a failed read.
     return [];
   }
+}
+
+// NG-026 / decisions.md R18: settings writes through the one chrome writer.
+// Each key's valid values are the ones docs/TAB-STORE.md ("Settings") states;
+// ng-026-store-write-endpoint requires this key set to equal the doc's, so a
+// setting wave A adds without a rule here goes red. Only existing rows are
+// updated: a key the store does not hold is refused, never inserted.
+const STORE_SETTING_RULES = {
+  closed_retention_days: { valid: v => /^\d+(\.\d+)?$/.test(v) && Number(v) >= 0 && Number(v) <= 3650, says: "a number from 0 to 3650, decimals allowed" },
+  integrity_check_minutes: { valid: v => /^\d+(\.\d+)?$/.test(v) && Number(v) > 0 && Number(v) <= 525600, says: "a number greater than 0 and at most 525600, decimals allowed" },
+  restore_behaviour: { valid: v => v === "session" || v === "none", says: "session or none" },
+  restore_live_minutes: { valid: v => /^\d+(\.\d+)?$/.test(v) && Number(v) >= 0 && Number(v) <= 10080, says: "a number from 0 to 10080, decimals allowed" },
+  restore_url_days: { valid: v => /^\d+(\.\d+)?$/.test(v) && Number(v) >= 0 && Number(v) <= 3650, says: "a number from 0 to 3650, decimals allowed" },
+};
+
+async function setStoreSetting(key, value) {
+  const rule = typeof key === "string" && Object.prototype.hasOwnProperty.call(STORE_SETTING_RULES, key) ? STORE_SETTING_RULES[key] : null;
+  if (!rule) {
+    throw new Error(`setSetting: refusing unknown setting ${String(key).slice(0, 64)}`);
+  }
+  if (typeof value !== "string" || !rule.valid(value)) {
+    throw new Error(`setSetting: refusing that value for ${key}; it must be ${rule.says}`);
+  }
+  const conn = await PowerBrowserAPI.openTabStore();
+  const found = await conn.execute("SELECT 1 FROM settings WHERE key = :key", { key });
+  if (!found.length) {
+    throw new Error(`setSetting: refusing ${key}, which this store does not hold`);
+  }
+  await conn.execute("UPDATE settings SET value = :value WHERE key = :key", { key, value });
+  return { key, value };
 }

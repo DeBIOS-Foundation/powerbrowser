@@ -40,6 +40,7 @@ The endpoint speaks MCP over HTTP with single JSON responses: `initialize`, `too
 | `bookmark_folder` | `guid` (a folder's 12-character bookmark GUID) | `{rows}`: the folder's children, each `{guid, title, url}` |
 | `sessionstore_tabs` | none | `{rows}`: the open tabs as session restore records them, each `{uri, url, title, last_active}` |
 | `tabs_with_places` | `bookmarked` (boolean, optional), `open` (boolean, optional), `limit` (1–1000, default 200) | `{rows}`: each tab row joined to its history and bookmark, highest frecency first |
+| `tab_store_write` | `op` plus that op's fields (below) | the writer's reply, for example `{ok: true, kind, id}` |
 
 A tool that cannot run answers with `isError: true` and a message that says why.
 
@@ -65,6 +66,25 @@ Joins every tab row to Firefox's history and bookmarks on the page address (`url
 - Bookmarks that are open right now: `{"bookmarked": true, "open": true}`
 
 Private windows are never included: their tabs are never written to the store, and neither the join above nor the address bar's history and bookmark suggestions (NG-023) ever offer a private page.
+
+### `tab_store_write`: changing tab and group data
+
+Writes go through the same Power Browser writer that Panorama uses, one operation per call, and are passed through an open Power Browser window. A tab is named by its `uri` (read it with `tabs_sql`), and a group by its `id`.
+
+| `op` | Fields | What it changes |
+|---|---|---|
+| `createGroup` | `id`, `title`, `x`, `y`, `w`, `h` (all but `id` optional) | adds a group, or replaces the one with that `id` |
+| `renameGroup` | `id`, `title` | a group's title (at most 60 characters) |
+| `moveGroup` | `id`, `x`, `y` | a group's position on the Panorama canvas |
+| `resizeGroup` | `id`, `w`, `h` | a group's size |
+| `dissolveGroup` | `id` | removes the group; its tabs stay open and become ungrouped |
+| `setActiveGroup` | `id` | which group is active |
+| `setTabGroup` | `uri`, `groupId` (`null` to ungroup) | a tab's group |
+| `setTabPosition` | `uri`, `x`, `y` | where an ungrouped tab sits on the canvas |
+| `setGroupOrder` | `groupId`, `uris` | the order of a group's tabs |
+| `setSetting` | `key`, `value` (text) | one store setting; `docs/TAB-STORE.md` ("Settings") lists the keys and their valid values |
+
+An unknown tab, group or setting, or a malformed value, answers with `isError: true` and says what is allowed. Closing tabs is not a write operation. Panorama shows a change the next time it loads its groups. A setting takes effect the next time the part of Power Browser that reads it runs (for example, the restore settings at the next launch).
 
 ## Example
 

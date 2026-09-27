@@ -26,7 +26,7 @@ import { inject, injectable } from '@theia/core/shared/inversify';
 import { BackendApplicationContribution } from '@theia/core/lib/node';
 import { POWERBROWSER_ENV } from '@powerbrowser/token-gate/lib/node/powerbrowser-env';
 import { TAB_QUERY_FILE_NAME } from './tab-query-service';
-import { STORE_ACCESS_FILE_NAME, STORE_ACCESS_ROUTE, StoreMessage, TabStoreToolName } from '../browser/tab-store-access-protocol';
+import { STORE_ACCESS_FILE_NAME, STORE_ACCESS_ROUTE, StoreMessage, TAB_STORE_WRITE_FIELDS, TAB_STORE_WRITE_OPS, TabStoreToolName } from '../browser/tab-store-access-protocol';
 import { runReadOnlySql } from './tab-store-sql';
 import { TabStoreRelayHub } from './tab-store-relay';
 
@@ -80,6 +80,28 @@ const TOOLS: ToolDef[] = [
         inputSchema: {
             type: 'object',
             properties: { bookmarked: { type: 'boolean' }, open: { type: 'boolean' }, limit: { type: 'integer', minimum: 1, maximum: 1000 } },
+        },
+    },
+    {
+        name: 'tab_store_write',
+        description: 'Change tab and group data through Power Browser\'s own writer. op is one of the listed operations; the other arguments are that operation\'s fields (docs/tab-store-access.md).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                op: { type: 'string', enum: [...TAB_STORE_WRITE_OPS] },
+                id: { type: 'string' },
+                title: { type: 'string' },
+                x: { type: 'number' },
+                y: { type: 'number' },
+                w: { type: 'number' },
+                h: { type: 'number' },
+                uri: { type: 'string' },
+                groupId: { type: ['string', 'null'] },
+                uris: { type: 'array', items: { type: 'string' } },
+                key: { type: 'string', description: 'setSetting: a settings key from docs/TAB-STORE.md' },
+                value: { type: 'string', description: 'setSetting: the new value, as text' },
+            },
+            required: ['op'],
         },
     },
 ];
@@ -285,6 +307,24 @@ export class TabStoreAccessEndpoint implements BackendApplicationContribution {
                     msg.limit = args.limit;
                 }
                 return { rows: await this.chrome(msg, 'rows') };
+            }
+            case 'tab_store_write': {
+                const op = typeof args.op === 'string' ? args.op : '';
+                const fields = Object.prototype.hasOwnProperty.call(TAB_STORE_WRITE_FIELDS, op) ? TAB_STORE_WRITE_FIELDS[op] : undefined;
+                if (!fields) {
+                    throw new Error(`op must be one of ${TAB_STORE_WRITE_OPS.join(', ')}`);
+                }
+                const msg: StoreMessage = { kind: op };
+                for (const field of fields) {
+                    if (args[field] !== undefined) {
+                        msg[field] = args[field];
+                    }
+                }
+                const reply = await this.relay.relay(msg);
+                if (!reply.ok) {
+                    throw new Error(reply.message ?? `${op} failed (${reply.reason ?? 'store'})`);
+                }
+                return reply;
             }
             default:
                 throw new Error(`unknown tool ${name}`);

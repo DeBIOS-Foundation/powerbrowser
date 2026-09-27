@@ -23,9 +23,33 @@ export const TAB_STORE_TOOL_NAMES = [
     'bookmark_folder',
     'sessionstore_tabs',
     'tabs_with_places',
+    'tab_store_write',
 ] as const;
 
 export type TabStoreToolName = typeof TAB_STORE_TOOL_NAMES[number];
+
+/**
+ * NG-026: the write ops tab_store_write accepts, each with the fields it
+ * forwards to the chrome-side writer, whose own validation applies behind
+ * this list: handleGroupMutation for the tab and group ops, and
+ * handleStoreRequest for setSetting (decisions.md R18). closeGroup is left out
+ * on purpose: it closes the user's tabs, which is not a data change.
+ * scripts/verify-ng-026-store-write-endpoint.mjs derives the op list from here.
+ */
+export const TAB_STORE_WRITE_FIELDS: Readonly<Record<string, readonly string[]>> = {
+    createGroup: ['id', 'title', 'x', 'y', 'w', 'h'],
+    renameGroup: ['id', 'title'],
+    moveGroup: ['id', 'x', 'y'],
+    resizeGroup: ['id', 'w', 'h'],
+    dissolveGroup: ['id'],
+    setActiveGroup: ['id'],
+    setTabGroup: ['uri', 'groupId'],
+    setTabPosition: ['uri', 'x', 'y'],
+    setGroupOrder: ['groupId', 'uris'],
+    setSetting: ['key', 'value'],
+};
+
+export const TAB_STORE_WRITE_OPS: readonly string[] = Object.keys(TAB_STORE_WRITE_FIELDS);
 
 /** JSON-RPC path of the backend relay hub; every Theia window registers on it. */
 export const TAB_STORE_RELAY_PATH = '/services/powerbrowser/tab-store-relay';
@@ -37,6 +61,7 @@ export const TAB_STORE_RELAY_KINDS: readonly string[] = [
     'listBookmarkFolder',
     'projectSessionStoreTabs',
     'queryTabsWithPlaces',
+    ...TAB_STORE_WRITE_OPS,
 ];
 
 /** One actor message: the kind plus its fields. */
