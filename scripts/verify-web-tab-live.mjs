@@ -481,7 +481,16 @@ function phaseExpression(cfg, phase, arg) {
         // any more -- stripping the READ scored the thumbnail assertions without
         // touching any capture site, which is the defect 14.1.1-06 removed.
         const groups = __getByName(container, 'GroupQueryService');
-        P.thumbnailOf = uri => groups.getThumbnail(uri);
+        // NG-027 deleted the point read; the row readers carry the same column.
+        P.thumbnailOf = async uri => {
+            const loose = (await groups.listUngroupedTabs()).find(row => row.uri === uri);
+            if (loose) return loose.thumbnail ?? undefined;
+            for (const group of await groups.listGroups()) {
+                const row = (await groups.getGroupTabs(group.id)).find(r => r.uri === uri);
+                if (row) return row.thumbnail ?? undefined;
+            }
+            return undefined;
+        };
         // G-14.1.1-6: the ONE geometry message that tells chrome the overlay
         // stopped being visible, behind a named seam so a plant can remove this
         // hide alone -- the mode walk's own hides must keep working or the walk
