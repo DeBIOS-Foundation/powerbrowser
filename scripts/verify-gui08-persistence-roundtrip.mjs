@@ -68,8 +68,6 @@ const EXPECTED_GROUP_METHODS = Object.freeze([
     'captureTabThumbnail',
     'closeGroupRows',
     'readGroupRow',
-    'listGroupRows',
-    'getGroupTabs',
     'handleGroupMutation',
     'setGroupOrder',
 ]);

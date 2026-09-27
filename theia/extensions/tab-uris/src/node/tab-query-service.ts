@@ -37,7 +37,7 @@ export interface TabQueryRow {
 
 /**
  * GUI-08 (15-01): one projected group row, mirroring the chrome-side v2
- * projection (`PowerBrowserAPI.listGroupRows`). `is_active` is 0/1 at the
+ * projection (`PowerBrowserAPI.readGroupRow`). `is_active` is 0/1 at the
  * store; the frontend model folds it to boolean.
  */
 export interface GroupRow {
@@ -218,31 +218,6 @@ export class TabQueryService {
         }
     }
 
-    /** Point read by opaque URI key. Throws when the store cannot be read (NG-012). */
-    getByUri(uri: string): TabQueryRow | undefined {
-        return this.read('getByUri', db => db.prepare('SELECT uri, url, title, last_active FROM tabs WHERE uri = ?').get(uri) as TabQueryRow | undefined);
-    }
-
-    /**
-     * The open row showing `urlSpec`, most recently active first. The page
-     * address is a column to match, never a key to rebuild (NG-001).
-     * Throws when the store cannot be read (NG-012).
-     */
-    getBrowserTabByUrl(urlSpec: string): TabQueryRow | undefined {
-        return this.read('getBrowserTabByUrl', db => db.prepare('SELECT uri, url, title, last_active FROM tabs WHERE url = ? AND closed_at IS NULL ORDER BY last_active DESC LIMIT 1').get(urlSpec) as TabQueryRow | undefined);
-    }
-
-    /**
-     * Recency-ordered listing, newest first, capped at `limit` rows.
-     * Throws when the store cannot be read (NG-012). Ordering contract
-     * (IN-02, 12-CODE-REVIEW.md): recency serves UI reads; the chrome-side
-     * listTabRows orders by URI for sweep set-equality instead. One order
-     * per consumer, documented at both sites.
-     */
-    listByRecency(limit: number): TabQueryRow[] {
-        return this.read('listByRecency', db => db.prepare('SELECT uri, url, title, last_active FROM tabs ORDER BY last_active DESC LIMIT ?').all(limit) as TabQueryRow[]);
-    }
-
     /**
      * Prefix-substring search over the address and title columns, newest
      * first, capped at the caller-supplied `limit` rows. "Prefix" names the
@@ -276,23 +251,13 @@ export class TabQueryService {
 
     /**
      * GUI-08 (15-01): one group's tab rows in their arranged order, then URI
-     * order (matching the chrome-side `getGroupTabs`). Bound parameter.
+     * order. Bound parameter.
      * Throws when the store cannot be read (NG-012).
      */
     async getGroupTabs(groupId: string): Promise<GroupTabRow[]> {
         return this.read('getGroupTabs', db => db.prepare(
             'SELECT uri, url, title, last_active, group_id, thumbnail, x, y, ord FROM tabs WHERE group_id = ? AND closed_at IS NULL ORDER BY ord IS NULL, ord, uri'
         ).all(groupId) as GroupTabRow[]);
-    }
-
-    /**
-     * GUI-08 (15-01): one tab's snapshot bytes by opaque URI key. Resolves
-     * undefined when the row or its snapshot is absent -- the card paints its
-     * title + URI block alone in that case (contracted text fallback).
-     * Throws when the store cannot be read (NG-012).
-     */
-    async getThumbnail(uri: string): Promise<string | undefined> {
-        return this.read('getThumbnail', db => (db.prepare('SELECT thumbnail FROM tabs WHERE uri = ?').get(uri) as { thumbnail: string | null } | undefined)?.thumbnail ?? undefined);
     }
 
     /**

@@ -1659,54 +1659,6 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
-   * SQL-01 (12-01): point read by opaque URI key. Never-throw read
-   * convention: resolves null on any failure, matching getStringPref above.
-   */
-  async readTabRow(uri) {
-    try {
-      const conn = await PowerBrowserAPI.openTabStore();
-      const rows = await conn.execute(
-        "SELECT uri, url, title, last_active FROM tabs WHERE uri = :uri",
-        { uri }
-      );
-      if (!rows.length) {
-        return null;
-      }
-      return {
-        uri: rows[0].getString(0),
-        url: rows[0].getString(1),
-        title: rows[0].getString(2),
-        last_active: rows[0].getInt64(3),
-      };
-    } catch {
-      return null;
-    }
-  },
-
-  /**
-   * SQL-01 (12-01): lists all rows in URI order. Never-throw: resolves [] on
-   * any failure. Ordering contract (IN-02, 12-CODE-REVIEW.md): URI order
-   * serves the sweep's set-equality and the roundtrip comparator -- the
-   * canonical order for store-to-store comparison. Recency for UI reads
-   * lives on the Theia side (TabQueryService.listByRecency); the two
-   * surfaces order differently on purpose, each for its named consumer.
-   */
-  async listTabRows() {
-    try {
-      const conn = await PowerBrowserAPI.openTabStore();
-      const rows = await conn.execute("SELECT uri, url, title, last_active FROM tabs ORDER BY uri");
-      return rows.map(row => ({
-        uri: row.getString(0),
-        url: row.getString(1),
-        title: row.getString(2),
-        last_active: row.getInt64(3),
-      }));
-    } catch {
-      return [];
-    }
-  },
-
-  /**
    * GUI-08 (15-01): normalises one group row the way writeTabRow binds its
    * values -- id must be non-empty (rejected loudly naming method + id),
    * title trimmed and cut at the contracted 60-char cap (empty falls back
@@ -2160,7 +2112,7 @@ export const PowerBrowserAPI = Object.freeze({
 
   /**
    * GUI-08 (15-01): group point read by opaque id. Never-throw read
-   * convention: resolves null on any failure, matching readTabRow above.
+   * convention: resolves null on any failure, matching getStringPref above.
    * Shared by the parent actor and the Theia reader contract.
    */
   async readGroupRow(id) {
@@ -2184,56 +2136,6 @@ export const PowerBrowserAPI = Object.freeze({
       };
     } catch {
       return null;
-    }
-  },
-
-  /**
-   * GUI-08 (15-01): lists all group rows in insertion order. Never-throw:
-   * resolves [] on any failure. Shared by the parent actor and the Theia
-   * reader contract.
-   */
-  async listGroupRows() {
-    try {
-      const conn = await PowerBrowserAPI.openTabStore();
-      const rows = await conn.execute("SELECT id, title, x, y, w, h, is_active FROM groups ORDER BY rowid");
-      return rows.map(row => ({
-        id: row.getString(0),
-        title: row.getString(1),
-        x: row.getInt32(2),
-        y: row.getInt32(3),
-        w: row.getInt32(4),
-        h: row.getInt32(5),
-        is_active: row.getInt32(6),
-      }));
-    } catch {
-      return [];
-    }
-  },
-
-  /**
-   * GUI-08 (15-01): lists one group's tab rows in URI order (the sweep's
-   * set-equality order, matching listTabRows). Never-throw: resolves [] on
-   * any failure. Shared by the parent actor and the Theia reader contract.
-   */
-  async getGroupTabs(groupId) {
-    try {
-      const conn = await PowerBrowserAPI.openTabStore();
-      const rows = await conn.execute(
-        "SELECT uri, url, title, last_active, group_id, thumbnail, x, y, ord FROM tabs WHERE group_id = :groupId ORDER BY ord IS NULL, ord, uri",
-        { groupId }
-      );
-      return rows.map(row => ({
-        uri: row.getString(0),
-        url: row.getString(1),
-        title: row.getString(2),
-        last_active: row.getInt64(3),
-        group_id: row.getString(4),
-        thumbnail: row.getString(5),
-        x: row.getResultByName("x"),
-        y: row.getResultByName("y"),
-      }));
-    } catch {
-      return [];
     }
   },
 

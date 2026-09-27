@@ -120,7 +120,7 @@ version other than the head -- is an error naming the cause, never an empty
 answer; Organising shows its load-error state and the address bar its
 provider error. Panorama and suggestion reads serve open rows only
 (`closed_at` NULL). Its methods: `listGroups`, `getGroupTabs`,
-`listUngroupedTabs`, `getThumbnail` and `getSettings` over the group
+`listUngroupedTabs` and `getSettings` over the group
 channel; `searchByPrefix` for the address bar.
 
 ## v1
