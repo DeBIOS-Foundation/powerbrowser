@@ -36,6 +36,15 @@ export interface SessionTabRow {
     last_active: number;
 }
 
+/** A saved page copy (NG-028): its directory under <profile>/saved-pages/ and its size. */
+export interface SavedPageCopy {
+    dir: string;
+    bytes: number;
+}
+
+/** A page capture writes files; it gets longer than a read. */
+export const SAVE_PAGE_ACK_TIMEOUT_MS = 120000;
+
 /** One history or bookmark match for the address bar (NG-023). */
 export interface PlaceMatch {
     url: string;
@@ -110,6 +119,15 @@ export class ChromeStoreClient {
 
     projectSessionStoreTabs(): Promise<SessionTabRow[]> {
         return this.field<SessionTabRow[]>({ kind: 'projectSessionStoreTabs' }, 'rows');
+    }
+
+    /** NG-028: stores a full copy of the tab's page; rejects with chrome's reason. */
+    async savePageCopy(uri: string): Promise<SavedPageCopy> {
+        const reply = await this.request({ kind: 'savePageCopy', uri }, SAVE_PAGE_ACK_TIMEOUT_MS);
+        if (!reply.ok) {
+            throw new Error(reply.message ?? `savePageCopy failed (${reply.reason ?? 'store'})`);
+        }
+        return { dir: String(reply.dir), bytes: Number(reply.bytes) };
     }
 
     /** NG-023: http(s) history and bookmark matches for typed text, bookmarks first. */

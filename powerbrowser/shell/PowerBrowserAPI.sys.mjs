@@ -47,7 +47,7 @@ const pendingTimers = new Set();
 // between the DDL markers at check time and fails distinctly when they are
 // absent -- the DDL lives here once, never as a copy. No private, window,
 // pinned, or credential-shaped column exists by construction.
-const TAB_STORE_SCHEMA_HEAD = 5;
+const TAB_STORE_SCHEMA_HEAD = 6;
 const TABS_STORE_V1_DDL = /* PB-SQL-TABS-DDL-START */ `CREATE TABLE tabs (
   uri         TEXT PRIMARY KEY CHECK(length(uri) > 0),
   url         TEXT NOT NULL,
@@ -111,6 +111,18 @@ INSERT OR IGNORE INTO settings (key, value) VALUES ('restore_live_minutes', '5')
 INSERT OR IGNORE INTO settings (key, value) VALUES ('restore_url_days', '30');
 UPDATE tabs SET uri = 'stock:legacy-' || rowid WHERE uri GLOB 'webview:*';
 UPDATE tabs SET uri = 'web:legacy-' || rowid WHERE uri GLOB 'http://*' OR uri GLOB 'https://*'` /* PB-SQL-V5-DDL-END */;
+
+// NG-028 (non-GUI wave B): v6, one saved full-page copy per tab; the newest
+// copy replaces the older one, files included. dir is the copy's directory
+// under <profile>/saved-pages/, and savePageCopy never deletes a dir outside it.
+const TAB_STORE_V6_DDL = /* PB-SQL-V6-DDL-START */ `CREATE TABLE IF NOT EXISTS saved_pages (
+  tab_uri     TEXT PRIMARY KEY CHECK(length(tab_uri) > 0),
+  dir         TEXT NOT NULL,
+  url         TEXT NOT NULL,
+  title       TEXT NOT NULL DEFAULT '',
+  saved_at    INTEGER NOT NULL CHECK(saved_at >= 0),
+  bytes       INTEGER NOT NULL CHECK(bytes >= 0)
+)` /* PB-SQL-V6-DDL-END */;
 
 // NG-001: the sessionstore custom tab value a stock tab's row key lives in.
 // Sessionstore saves it with the tab and restores it with the tab, so a
@@ -1420,6 +1432,26 @@ export const PowerBrowserAPI = Object.freeze({
   },
 
   /**
+   * NG-028 (non-GUI wave B): v5 to v6, the saved_pages table. The same shape
+   * as the v5 step: the marker block's statements run in one transaction, the
+   * CREATE is IF NOT EXISTS, so a store whose work is already done re-runs as
+   * a no-op that stamps 6.
+   */
+  async migrateTabStoreToV6(conn) {
+    const statements = TAB_STORE_V6_DDL.split(";").map(s => s.trim()).filter(Boolean);
+    if (!statements.some(s => /^create table if not exists saved_pages\b/i.test(s))) {
+      throw new Error("migrateTabStoreToV6: DDL marker content missing the saved_pages table");
+    }
+    await conn.executeTransaction(async () => {
+      for (const statement of statements) {
+        await conn.execute(statement);
+      }
+      // Exactly 6; a later head adds its own step after this one.
+      await conn.setSchemaVersion(6);
+    });
+  },
+
+  /**
    * NG-014: the one forward chain from whatever version the file carries to
    * the head, each step its own top-level transaction (CR-02: never nested).
    * openTabStore and the quarantine rebuild both run it, so a rebuilt store
@@ -1432,6 +1464,7 @@ export const PowerBrowserAPI = Object.freeze({
       PowerBrowserAPI.migrateTabStoreToV3,
       PowerBrowserAPI.migrateTabStoreToV4,
       PowerBrowserAPI.migrateTabStoreToV5,
+      PowerBrowserAPI.migrateTabStoreToV6,
     ];
     if (steps.length !== TAB_STORE_SCHEMA_HEAD) {
       throw new Error(`migrateTabStoreToHead: ${steps.length} steps for head ${TAB_STORE_SCHEMA_HEAD}`);
@@ -3758,6 +3791,7 @@ const STORE_REQUEST_KINDS = new Set([
   "queryTabsWithPlaces",
   "searchPlaces",
   "setSetting",
+  "savePageCopy",
 ]);
 
 function isStoreRequestKind(kind) {
@@ -3830,6 +3864,10 @@ async function handleStoreRequest(data, actorRef) {
       case "setSetting": {
         const saved = await setStoreSetting(data.key, data.value);
         return { ok: true, kind, key: saved.key };
+      }
+      case "savePageCopy": {
+        const saved = await savePageCopy(data.uri);
+        return { ok: true, kind, dir: saved.dir, bytes: saved.bytes };
       }
       default: {
         return { ok: false, reason: "validation", message: `handleStoreRequest: unknown kind ${String(kind)}` };
@@ -3997,4 +4035,107 @@ async function setStoreSetting(key, value) {
   }
   await conn.execute("UPDATE settings SET value = :value WHERE key = :key", { key, value });
   return { key, value };
+}
+
+// NG-028: a full saved copy of a tab's page -- the document plus the images,
+// styles and scripts it loaded, written the way the browser's own "Save Page
+// As, Web Page, complete" writes them (upstream/toolkit/content/
+// contentAreaUtils.js internalPersist) -- into
+// <profile>/saved-pages/<id>/page.html and page_files/, with one saved_pages
+// row per tab. The directory is minted here, never taken from the caller.
+const SAVED_PAGES_DIR = "saved-pages";
+
+function persistDocument(browser) {
+  return new Promise((resolve, reject) => {
+    browser.frameLoader.startPersistence(null, {
+      onDocumentReady: resolve,
+      onError: status => reject(new Error(`savePageCopy: the page could not be read (status ${status})`)),
+    });
+  });
+}
+
+function writePersistedDocument(doc, pageFile, filesDir) {
+  const wbp = Ci.nsIWebBrowserPersist;
+  const wpl = Ci.nsIWebProgressListener;
+  return new Promise((resolve, reject) => {
+    const persist = Cc["@mozilla.org/embedding/browser/nsWebBrowserPersist;1"].createInstance(wbp);
+    persist.persistFlags = wbp.PERSIST_FLAGS_REPLACE_EXISTING_FILES | wbp.PERSIST_FLAGS_FROM_CACHE | wbp.PERSIST_FLAGS_AUTODETECT_APPLY_CONVERSION;
+    persist.progressListener = {
+      QueryInterface: ChromeUtils.generateQI(["nsIWebProgressListener"]),
+      onStateChange(_progress, _request, flags, status) {
+        if (flags & wpl.STATE_STOP && flags & wpl.STATE_IS_NETWORK) {
+          if (status === 0) {
+            resolve();
+          } else {
+            reject(new Error(`savePageCopy: writing the copy failed (status ${status})`));
+          }
+        }
+      },
+      onProgressChange() {},
+      onLocationChange() {},
+      onStatusChange() {},
+      onSecurityChange() {},
+      onContentBlockingEvent() {},
+    };
+    persist.saveDocument(doc, pageFile, filesDir, "text/html", wbp.ENCODE_FLAGS_ENCODE_BASIC_ENTITIES | wbp.ENCODE_FLAGS_DISALLOW_LINE_BREAKING, 80);
+  });
+}
+
+async function directoryBytes(path) {
+  let total = 0;
+  for (const child of await IOUtils.getChildren(path)) {
+    const info = await IOUtils.stat(child);
+    total += info.type === "directory" ? await directoryBytes(child) : info.size;
+  }
+  return total;
+}
+
+async function savePageCopy(uri) {
+  if (typeof uri !== "string" || !uri || uri.length > 8192) {
+    throw new Error("savePageCopy: refusing a missing or oversized uri");
+  }
+  const found = PowerBrowserAPI.findTabBrowserForUri(uri);
+  if (!found || !found.browser) {
+    throw new Error("savePageCopy: unknown tab");
+  }
+  const { browser } = found;
+  if (lazy.PrivateBrowsingUtils.isBrowserPrivate(browser)) {
+    throw new Error("savePageCopy: refusing a private tab");
+  }
+  const url = browser.currentURI ? browser.currentURI.spec : "";
+  if (!/^https?:\/\//.test(url)) {
+    throw new Error("savePageCopy: refusing a page that is not http or https");
+  }
+  const profile = PowerBrowserAPI.getProfileDir();
+  if (!profile) {
+    throw new Error("savePageCopy: unknown profile directory");
+  }
+  const root = PathUtils.join(profile, SAVED_PAGES_DIR);
+  const dir = PathUtils.join(root, `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`);
+  await IOUtils.makeDirectory(dir, { createAncestors: true });
+  try {
+    const doc = await persistDocument(browser);
+    await writePersistedDocument(doc, IOUtils.getFile(dir, "page.html"), IOUtils.getFile(dir, "page_files"));
+  } catch (err) {
+    await IOUtils.remove(dir, { recursive: true, ignoreAbsent: true });
+    throw err;
+  }
+  const bytes = await directoryBytes(dir);
+  const conn = await PowerBrowserAPI.openTabStore();
+  let previous = null;
+  await conn.executeTransaction(async () => {
+    const old = await conn.execute("SELECT dir FROM saved_pages WHERE tab_uri = :uri", { uri });
+    previous = old.length ? old[0].getResultByName("dir") : null;
+    await conn.execute(
+      `INSERT INTO saved_pages (tab_uri, dir, url, title, saved_at, bytes) VALUES (:uri, :dir, :url, :title, :savedAt, :bytes)
+       ON CONFLICT (tab_uri) DO UPDATE SET dir = excluded.dir, url = excluded.url, title = excluded.title,
+         saved_at = excluded.saved_at, bytes = excluded.bytes`,
+      { uri, dir, url, title: browser.contentTitle || "", savedAt: Date.now(), bytes }
+    );
+  });
+  // Only a directory this code minted under saved-pages/ is ever removed.
+  if (previous && previous !== dir && previous.startsWith(root + "/")) {
+    await IOUtils.remove(previous, { recursive: true, ignoreAbsent: true });
+  }
+  return { dir, bytes };
 }

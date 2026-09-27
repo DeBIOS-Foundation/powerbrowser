@@ -92,7 +92,7 @@ export const TAB_QUERY_FILE_NAME = 'tabs.sqlite';
  * PowerBrowserAPI.sys.mjs's TAB_STORE_SCHEMA_HEAD; gui08-persistence-roundtrip
  * compares the two, so a head move without a reader change fails --quick.
  */
-export const TAB_STORE_SCHEMA_HEAD = 5;
+export const TAB_STORE_SCHEMA_HEAD = 6;
 
 function messageOf(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
