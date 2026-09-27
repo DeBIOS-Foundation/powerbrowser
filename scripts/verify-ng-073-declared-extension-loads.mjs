@@ -53,7 +53,10 @@ try {
     // points the step at the loopback server.
     const cfg = join(dir, 'cfg');
     mkdirSync(cfg);
-    writeFileSync(join(cfg, 'configuration.toml'), `${readFileSync(join(REPO_ROOT, 'configuration.toml'), 'utf8')}
+    writeFileSync(join(cfg, 'configuration.toml'), `${readFileSync(join(REPO_ROOT, 'configuration.toml'), 'utf8').replace(/^\[urls\][\s\S]*?(?=^\[|(?![\s\S]))/m, '')}
+[urls]
+update = "https://updates.example.org/update.xml"
+
 [[extensions]]
 id = "powerbrowser-test.ng073-probe"
 source = "url"

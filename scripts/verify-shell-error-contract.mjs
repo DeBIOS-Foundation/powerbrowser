@@ -198,6 +198,11 @@ const RECOVERABLE_DRIVE = (state) => ({
 // this supervisor classifies unrecoverable before `_configDir`, `_stateFilePath`
 // or a node path exist at all.
 const UNRECOVERABLE_DRIVE = {
+  // Task 13 accessors: the real boundary never throws here, only this fake's
+  // unknown-property trap does. Without them the drive stops at `getAppDir`
+  // and never reaches the unset-backendMain branch under test.
+  getAppDir: () => "",
+  prefHasUserValue: () => false,
   getStringPref: (key, fallback) => (key.endsWith(".backendMain") ? "" : fallback ?? ""),
 };
 
@@ -275,6 +280,11 @@ function makeFakeApi(state, overrides = {}) {
   const table = {
     // _resolveSidecar: a backend entry file that resolves, and no configured
     // node path so the PATH search below is what answers.
+    // Task 13 accessors: the real boundary returns "" / false here; the
+    // Proxy trap would throw instead, so every drive through _resolveSidecar
+    // must stub them (recoverable drives reach it the same way as UNRECOVERABLE).
+    getAppDir: () => "",
+    prefHasUserValue: () => false,
     getStringPref: (key, fallback) => (key.endsWith(".backendMain") ? `${state.scratch}/backend-main.js` : fallback ?? ""),
     // The caller's own default, except the give-up budget: 1 attempt means the
     // give-up path is reached on the first spawn rather than after six.
