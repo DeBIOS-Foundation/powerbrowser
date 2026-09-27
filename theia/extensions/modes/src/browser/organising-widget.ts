@@ -1953,7 +1953,7 @@ export class OrganisingWidget extends Widget {
                     return;
                 }
                 // NG-008: the tab is not open -- reopen it through the opener.
-                this.model.reopen(tab).catch(error => console.error('[@powerbrowser/modes] reopening a tab from its card failed:', error));
+                this.model.reopen(tab).catch(error => console.error('[@powerbrowser/modes] reopening a tab from its card failed:', error instanceof Error ? error.name : typeof error));
             });
     }
 
