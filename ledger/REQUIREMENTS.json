@@ -1,5 +1,5 @@
 {
-  "ledger_version": 254,
+  "ledger_version": 255,
   "frozen_at": null,
   "items": [
     {
@@ -1109,7 +1109,7 @@
     }
   ],
   "current_phase": null,
-  "check_cmd": null,
+  "check_cmd": "scripts/verify-platform.sh --quick",
   "mockup_freeze": null,
   "scope_lock": null,
   "check_locks": {
