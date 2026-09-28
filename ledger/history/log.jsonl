@@ -267,3 +267,5 @@
 {"v": 267, "ts": "2026-09-28T00:17:18Z", "op": "set-status", "id": "NG-007", "changes": {"status": ["open", "done"]}}
 {"v": 268, "ts": "2026-09-28T00:17:46Z", "op": "set", "id": "NG-008", "changes": {"evidence": ["", "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-008-panorama-card-reopens-through-opener.mjs::ng-008-panorama-card-reopens-through-opener passes"]}}
 {"v": 269, "ts": "2026-09-28T00:17:46Z", "op": "set-status", "id": "NG-008", "changes": {"status": ["open", "done"]}}
+{"v": 270, "ts": "2026-09-28T00:18:17Z", "op": "set", "id": "NG-009", "changes": {"evidence": ["", "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-009-content-age-columns.mjs::ng-009-content-age-columns passes"]}}
+{"v": 271, "ts": "2026-09-28T00:18:17Z", "op": "set-status", "id": "NG-009", "changes": {"status": ["open", "done"]}}

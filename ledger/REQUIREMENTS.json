@@ -1,5 +1,5 @@
 {
-  "ledger_version": 269,
+  "ledger_version": 271,
   "frozen_at": null,
   "items": [
     {
@@ -109,11 +109,11 @@
     {
       "id": "NG-009",
       "text": "Each row records content age: when the tab was created and when it was last accessed (from sessionstore `lastAccessed`), separate from \"last seen open\". Evidence: only `last_active`, set to `Date.now()` for every open tab on each sweep (PBA:2101); notes/tab-sql-substrate.md \"Age is a first-class column\".",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:24",
       "test_ref": "scripts/verify-ng-009-content-age-columns.mjs::ng-009-content-age-columns",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-009-content-age-columns.mjs::ng-009-content-age-columns passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
