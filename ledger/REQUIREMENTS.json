@@ -1,5 +1,5 @@
 {
-  "ledger_version": 358,
+  "ledger_version": 360,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -850,11 +850,11 @@
     {
       "id": "NG-066",
       "text": "The NSIS installer takes its branding from the manifest and sends no Mozilla ping. Evidence: upstream nsis/defines.nsi.in:23, 56, 150; installer.nsi:848, 1803 call `SendPingIfApplicable`; no patch touches NSIS.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:93",
       "test_ref": "scripts/verify-ng-066-nsis-branding.mjs::ng066-nsis-branding-no-ping",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "177c999c902ed0cf7fb43484181eb72f3f3dc96e: scripts/verify-ng-066-nsis-branding.mjs::ng066-nsis-branding-no-ping passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",

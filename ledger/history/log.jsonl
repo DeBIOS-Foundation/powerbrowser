@@ -356,3 +356,5 @@
 {"v": 356, "ts": "2026-09-28T04:38:56Z", "op": "set-status", "id": "NG-063", "changes": {"status": ["open", "done"]}}
 {"v": 357, "ts": "2026-09-28T04:38:58Z", "op": "set", "id": "NG-064", "changes": {"evidence": ["", "177c999c902ed0cf7fb43484181eb72f3f3dc96e: scripts/verify-ng-064-update-url.mjs::ng064-update-url-from-manifest passes"]}}
 {"v": 358, "ts": "2026-09-28T04:38:58Z", "op": "set-status", "id": "NG-064", "changes": {"status": ["open", "done"]}}
+{"v": 359, "ts": "2026-09-28T04:39:03Z", "op": "set", "id": "NG-066", "changes": {"evidence": ["", "177c999c902ed0cf7fb43484181eb72f3f3dc96e: scripts/verify-ng-066-nsis-branding.mjs::ng066-nsis-branding-no-ping passes"]}}
+{"v": 360, "ts": "2026-09-28T04:39:03Z", "op": "set-status", "id": "NG-066", "changes": {"status": ["open", "done"]}}
