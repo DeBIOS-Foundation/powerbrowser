@@ -32,7 +32,7 @@ reference; the Panorama research note is the interaction authority.
 **Inherits from 14-UI-SPEC** (do not contradict): design system `none`,
 spacing ramp, typography delegation (3 sizes / 2 weights), color tokens,
 60/30/10 split, focus idiom, motion baseline, copy rules (product named
-"Power Browser", plain language, real on-screen next step, no internal
+"PowerBrowser", plain language, real on-screen next step, no internal
 identifiers), mode names **"Coding"** / **"Browsing"** / **"Organising"**,
 tabs invariant asserted by the status-bar chip. This spec states only
 what is net-new or extended; unmentioned 13/14 contracts stand unchanged.
@@ -191,7 +191,7 @@ never a spinner.
 ## Copywriting Contract
 
 Product rules inherited from 13/14-UI-SPEC and CLAUDE.md: every
-user-facing string names the product as **"Power Browser"** where a
+user-facing string names the product as **"PowerBrowser"** where a
 product name is needed, states the problem in plain language, ends with a
 next step that is a real affordance on screen, and carries **no internal
 identifier** (no pref key, sentinel, port, table name, `group_id`,
@@ -213,8 +213,8 @@ bounds, URI-scheme internals, or raw exception text). Naming is fixed:
 | Empty tray caption | **"No ungrouped tabs — drag a tab here to ungroup it."** |
 | Empty tree heading | **"No tab groups"** |
 | Empty tree body | **"There are no tab groups yet — choose New Group to start one."** |
-| Groups-load error | **"Power Browser couldn't load your tab groups. Your tabs are unchanged — choose Retry."** — button **"Retry"** re-issues the load |
-| Groups-save error | **"Power Browser couldn't save your tab groups. The canvas shows your latest arrangement — choose Retry."** — button **"Retry"** replays the failed write; the painted change is reverted if the retry fails again |
+| Groups-load error | **"PowerBrowser couldn't load your tab groups. Your tabs are unchanged — choose Retry."** — button **"Retry"** re-issues the load |
+| Groups-save error | **"PowerBrowser couldn't save your tab groups. The canvas shows your latest arrangement — choose Retry."** — button **"Retry"** replays the failed write; the painted change is reverted if the retry fails again |
 | Group close button tooltip | **"Close group"** |
 | Destructive confirmation | **Close Group**: title **"Close Group"**, body **"Close "{name}"? Its {N} tab(s) will close too. You can't undo this."** (singular/plural exact), buttons **"Close Group"** / **"Cancel"** (Close Group in destructive ink). This is the ONLY destructive action in the phase. |
 | Group closed confirmation | **"Group "{name}" closed."** (status-bar flash) |
