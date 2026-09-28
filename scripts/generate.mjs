@@ -1346,7 +1346,7 @@ function emitBrandProperties(config, variant) {
  * exported MOZ_APP_REMOTINGNAME, and -- inside the MOZ_OBJDIR shell-default
  * expansion on line 1 -- the variant's objdir.
  *
- * THE --with-branding DEFAULT IS A STRING LITERAL, NOT A FIFTH VALUE. The
+ * THE --with-branding DEFAULT IS A STRING LITERAL, NOT A SIXTH VALUE. The
  * 03-01 spike proved a branding path outside topsrcdir is rejected -- the
  * moz.build sandbox refuses files outside its allowed paths -- so the flag
  * points through the topsrcdir-internal symlink
@@ -1377,9 +1377,10 @@ function emitBrandProperties(config, variant) {
  * part of the build's interface.
  *
  * WHY SIX LINES ARE LITERAL TEXT (research assumption A3, and a recorded
- * decision rather than an oversight). Lines 3 and 6-9 are toolchain and
- * feature flags -- the wasm sandbox, the libclang path, the crash reporter,
- * the compiler cache. None of them is a
+ * decision rather than an oversight). Lines 2, 5, 6 and 9-11 are platform
+ * policy and toolchain flags -- the application selection, the wasm sandbox,
+ * the libclang path, the crash reporter, the compiler cache, and the
+ * branding default. None of them is a
  * rebrand input: changing a brand never changes whether the crash reporter is
  * built. Promoting one to a [build] key later is purely additive -- one schema
  * entry and one emitter line -- so the cheap direction is to leave them literal
