@@ -1,5 +1,5 @@
 {
-  "ledger_version": 283,
+  "ledger_version": 285,
   "frozen_at": null,
   "items": [
     {
@@ -239,11 +239,11 @@
     {
       "id": "NG-019",
       "text": "SCHEMA.md and MIGRATIONS.md document every schema version up to head, and docs/ has a tabs.sqlite page covering schema, keys and retention. Evidence: .planning/milestones/v1.2-phases/11-sql-store-design/schema/ covers v1; v3/v4 exist only as comments (PBA:83-88).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:34",
       "test_ref": "scripts/verify-ng-019-tab-store-doc.mjs::ng-019-tab-store-doc",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-019-tab-store-doc.mjs::ng-019-tab-store-doc passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
