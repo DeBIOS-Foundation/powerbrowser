@@ -1,5 +1,5 @@
 {
-  "ledger_version": 348,
+  "ledger_version": 350,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -902,11 +902,11 @@
     {
       "id": "NG-070",
       "text": "No user-visible or generated surface shows the spaced \"Power Browser\". Evidence: configuration.toml:47 \u2192 generated/theia-branding.json; TheiaService.sys.mjs:42-44; mode-service.ts:380, 514, 530.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:97",
       "test_ref": "scripts/verify-ng-070-no-spaced-name.mjs::ng070-no-spaced-name",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-070-no-spaced-name.mjs::ng070-no-spaced-name passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
