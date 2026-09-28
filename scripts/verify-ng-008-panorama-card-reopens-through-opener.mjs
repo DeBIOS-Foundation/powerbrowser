@@ -4,6 +4,8 @@
 // open reopens that tab through the opener, on the card's own row; a card for
 // an open tab activates it and opens nothing.
 
+import { existsSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { newProfile, runCheck, show, sleep, tabsOf, waitUntil, withShellQuit } from './lib/ng-a-live.mjs';
 
 await runCheck('verify-ng-008-panorama-card-reopens-through-opener', async ({ pages, expect, failures }) => {
@@ -28,6 +30,9 @@ await runCheck('verify-ng-008-panorama-card-reopens-through-opener', async ({ pa
         failures.push(`setup: the web tab on ${a} never got a grouped row; rows: ${show(tabsOf(profile))}`);
         return;
     }
+    // The relaunch starts with no saved session (a quit that saved none): the shell state and web-tab history go, tabs.sqlite stays.
+    if (!existsSync(join(profile, 'powerbrowser-shell-state.json'))) failures.push('setup: the quit wrote no powerbrowser-shell-state.json');
+    for (const file of ['powerbrowser-shell-state.json', 'powerbrowser-web-tab-history.json']) rmSync(join(profile, file), { force: true });
     const second = await withShellQuit(profile, async ({ run }) => run(`
         const webKey = ${JSON.stringify(webRow.uri)};
         const pageUrl = ${JSON.stringify(a)};
@@ -36,6 +41,7 @@ await runCheck('verify-ng-008-panorama-card-reopens-through-opener', async ({ pa
         await A.organising();
         const report = { port: location.port, webCard: !!cardFor(webKey), termCard: !!cardFor('terminal:ng008') };
         if (report.webCard) {
+            report.webOpenBefore = A.webTabs().filter(w => w.url === pageUrl).length;
             dbl(cardFor(webKey));
             await A.sleep(3000);
             const open = A.webTabs().filter(w => w.url === pageUrl);
@@ -44,6 +50,7 @@ await runCheck('verify-ng-008-panorama-card-reopens-through-opener', async ({ pa
         }
         if (report.termCard) {
             await A.organising();
+            report.termOpenBefore = A.mainWidgets().some(w => A.registry().uriOf(w)?.toString(true) === 'terminal:ng008');
             dbl(cardFor('terminal:ng008'));
             const termUp = () => A.mainWidgets().some(w => {
                 const address = A.registry().uriOf(w);
@@ -77,6 +84,8 @@ await runCheck('verify-ng-008-panorama-card-reopens-through-opener', async ({ pa
     expect(first.port !== second.port, `the backend port did not change between launches (${first.port})`);
     expect(second.webCard, `after the restart Panorama shows no card for the web tab that is not open (${webRow.uri})`);
     expect(second.termCard, 'after the restart Panorama shows no card for the terminal that is not open (terminal:ng008)');
+    expect(!second.webCard || second.webOpenBefore === 0, `the web card ${webRow.uri} is not for a tab that is not open: ${second.webOpenBefore} tab(s) on ${a} were open before the double-click`);
+    expect(!second.termCard || !second.termOpenBefore, 'the terminal card terminal:ng008 is not for a tab that is not open: terminal:ng008 was open before the double-click');
     expect(second.webOpen === 1, `double-clicking the web card opened ${second.webOpen} tab(s) on ${a}, want 1`);
     expect(second.webKey === webRow.uri, `the reopened web tab writes row ${second.webKey}, not the card's row ${webRow.uri}`);
     expect(second.termOpen, 'double-clicking the terminal card did not reopen terminal:ng008');
