@@ -1,5 +1,5 @@
 {
-  "ledger_version": 281,
+  "ledger_version": 283,
   "frozen_at": null,
   "items": [
     {
@@ -226,11 +226,11 @@
     {
       "id": "NG-018",
       "text": "The runtime runs a full `PRAGMA integrity_check` on a schedule, as SCHEMA.md:200-201 says. Evidence: only a startup `quick_check` (PBA:2064).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:33",
       "test_ref": "scripts/verify-ng-018-scheduled-integrity-check.mjs::ng-018-scheduled-integrity-check",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-018-scheduled-integrity-check.mjs::ng-018-scheduled-integrity-check passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
