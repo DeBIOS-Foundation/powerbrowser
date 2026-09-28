@@ -295,3 +295,5 @@
 {"v": 295, "ts": "2026-09-28T01:21:03Z", "op": "set-status", "id": "NG-023", "changes": {"status": ["open", "done"]}}
 {"v": 296, "ts": "2026-09-28T01:21:12Z", "op": "set", "id": "NG-024", "changes": {"evidence": ["", "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-024-tabs-places-join.mjs::ng-024-tabs-places-join passes"]}}
 {"v": 297, "ts": "2026-09-28T01:21:12Z", "op": "set-status", "id": "NG-024", "changes": {"status": ["open", "done"]}}
+{"v": 298, "ts": "2026-09-28T01:21:25Z", "op": "set", "id": "NG-025", "changes": {"evidence": ["", "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-025-store-read-endpoint.mjs::ng-025-store-read-endpoint passes"]}}
+{"v": 299, "ts": "2026-09-28T01:21:25Z", "op": "set-status", "id": "NG-025", "changes": {"status": ["open", "done"]}}

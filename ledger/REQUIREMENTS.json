@@ -1,5 +1,5 @@
 {
-  "ledger_version": 297,
+  "ledger_version": 299,
   "frozen_at": null,
   "items": [
     {
@@ -317,11 +317,11 @@
     {
       "id": "NG-025",
       "text": "Users and MCP clients run read-only SQL against tabs.sqlite through a documented, token-gated endpoint. Evidence: notes/tab-sql-substrate.md \"SQL is a user-queryable substrate\"; only an internal reader exists.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:43",
       "test_ref": "scripts/verify-ng-025-store-read-endpoint.mjs::ng-025-store-read-endpoint",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-025-store-read-endpoint.mjs::ng-025-store-read-endpoint passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
