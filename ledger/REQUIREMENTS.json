@@ -1,5 +1,5 @@
 {
-  "ledger_version": 309,
+  "ledger_version": 339,
   "frozen_at": null,
   "items": [
     {
@@ -525,7 +525,7 @@
     {
       "id": "NG-041",
       "text": "@OpenCode's model is chosen in Theia's model picker: a LanguageModel is registered and the agent declares its requirements. Evidence: `languageModelRequirements = []` (OC browser/opencode-chat-agent.ts:47); only a ChatAgent is bound (browser/backend-opencode-frontend-module.ts:30-31).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:65",
       "test_ref": "",
       "code_ref": "",
@@ -533,12 +533,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-042",
       "text": "Inline chat (Ctrl+I) works with @OpenCode. Evidence: `locations = [ChatAgentLocation.Panel]` (opencode-chat-agent.ts:51).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:66",
       "test_ref": "",
       "code_ref": "",
@@ -546,12 +546,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-043",
       "text": "A Review Changes pane lists the session's changes with accept, reject and revert. Evidence: AI-02; no such surface.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:67",
       "test_ref": "",
       "code_ref": "",
@@ -559,12 +559,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-044",
       "text": "Open Diff on a change opens a diff editor. Evidence: the element has no `openChange()` (opencode-chat-agent.ts:116-141).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:68",
       "test_ref": "",
       "code_ref": "",
@@ -572,12 +572,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-045",
       "text": "A change moves through pending, applied, rejected and stale, and the reject and revert buttons appear. Evidence: fixed `state: 'pending'` with no `onDidChange` (opencode-chat-agent.ts:122); Theia shows revert only for applied or stale.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:69",
       "test_ref": "",
       "code_ref": "",
@@ -585,12 +585,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-046",
       "text": "Deleting a change in the chat UI un-stages it in the backend. Evidence: the proposal stays staged and is re-attached every turn (node/opencode-acp-supervisor.ts:198 \u2192 opencode-changeset-emitter.ts:281-283).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:70",
       "test_ref": "",
       "code_ref": "",
@@ -598,12 +598,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-047",
       "text": "Change history is listed through the service, persists across a restart, and survives in saved chats. Evidence: emitter history is in memory (opencode-changeset-emitter.ts:180, 418); no list method (common/opencode-service.ts:46-70); no `toSerializable`.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:71",
       "test_ref": "",
       "code_ref": "",
@@ -611,12 +611,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-048",
       "text": "Gated mode holds whatever the user's opencode config says: the adapter starts opencode with edit and write set to ask and declares its file-system capabilities. Evidence: spawn uses the user's config (supervisor.ts:234-246); `initialize` has no `clientCapabilities` (:258).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:72",
       "test_ref": "",
       "code_ref": "",
@@ -624,12 +624,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-049",
       "text": "Auto-accept applies only the current turn's proposals. Evidence: `applyAllStaged` applies every staged proposal (opencode-chat-agent.ts:89-90, 154-165).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:73",
       "test_ref": "",
       "code_ref": "",
@@ -637,12 +637,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-050",
       "text": "Non-edit tool requests (bash, webfetch, task) are shown to the user to approve or deny. Evidence: auto-rejected (opencode-changeset-emitter.ts:214-216); `handlePermissionResponse` cannot answer inbound asks (supervisor.ts:129-139).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:74",
       "test_ref": "",
       "code_ref": "",
@@ -650,7 +650,7 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-051",
@@ -668,7 +668,7 @@
     {
       "id": "NG-052",
       "text": "The backend selected in configuration.toml reaches the build with no manual copy step. Evidence: docs/ai-opencode-adapter.md step 3.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:76",
       "test_ref": "",
       "code_ref": "",
@@ -676,12 +676,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-053",
       "text": "`#`-variables and chat-context attachments reach opencode resolved. Evidence: the agent sends the raw text (opencode-chat-agent.ts:63); docs/ai-opencode-adapter.md:38-41 claims otherwise.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:77",
       "test_ref": "",
       "code_ref": "",
@@ -689,12 +689,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-054",
       "text": "Skill selections apply to @OpenCode. Evidence: the agent implements ChatAgent directly and never reads them; docs/ai-opencode-adapter.md:42-43 claims they apply.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:78",
       "test_ref": "",
       "code_ref": "",
@@ -702,12 +702,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-055",
       "text": "@OpenCode replies stream as they are generated. Evidence: the `OpencodeClient` interface is never bound (common/opencode-service.ts:72).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:79",
       "test_ref": "",
       "code_ref": "",
@@ -715,12 +715,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-056",
       "text": "The port variable in opencode.mcp.json is set, and the file is used at runtime. Evidence: nothing sets `POWERBROWSER_MCP_PORT` (opencode-bridge-env.ts:27-39).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:80",
       "test_ref": "",
       "code_ref": "",
@@ -728,12 +728,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-057",
       "text": "A live @OpenCode turn is run against the built app and checked. Evidence: 16-VERIFICATION.md residual 1.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:81",
       "test_ref": "",
       "code_ref": "",
@@ -741,12 +741,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-058",
       "text": "A @Pi backend is selectable (AI-01, AI-04). Evidence: cut in 16-SPEC.md only.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:82",
       "test_ref": "",
       "code_ref": "",
@@ -754,12 +754,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-059",
       "text": "A DSH backend is selectable (AI-04). Evidence: cut in 16-SPEC.md only; notes/pba-plugin-shipping-design.md restates AI-04.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:83",
       "test_ref": "",
       "code_ref": "",
@@ -767,12 +767,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-060",
       "text": "Per-line comment-to-steer (AI-02). Evidence: cut in 16-SPEC.md only.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:84",
       "test_ref": "",
       "code_ref": "",
@@ -780,12 +780,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-061",
       "text": "`/btw` ephemeral question (AI-02). Evidence: cut in 16-SPEC.md only.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:85",
       "test_ref": "",
       "code_ref": "",
@@ -793,12 +793,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-062",
       "text": "File-wide Supercomplete Tab-accept (AI-02). Evidence: cut in 16-SPEC.md only.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:86",
       "test_ref": "",
       "code_ref": "",
@@ -806,7 +806,7 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-063",
@@ -967,7 +967,7 @@
     {
       "id": "NG-075",
       "text": "A Windows MSIX package is built. Evidence: docs/BUILD.md:966-967 staged-unexecuted; PKG-01 box checked (v1.1-REQUIREMENTS.md:31).",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:105",
       "test_ref": "",
       "code_ref": "",
@@ -980,7 +980,7 @@
     {
       "id": "NG-076",
       "text": "A macOS DMG with .icns is built. Evidence: same as NG-075.",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:106",
       "test_ref": "",
       "code_ref": "",
@@ -993,7 +993,7 @@
     {
       "id": "NG-077",
       "text": "The Windows and macOS install matrix and per-OS MAR update hop run. Evidence: docs/BUILD.md:997-998.",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:107",
       "test_ref": "",
       "code_ref": "",
@@ -1006,7 +1006,7 @@
     {
       "id": "NG-078",
       "text": "A release pipeline exists, per docs/RELEASING.md and SEED-001. Evidence: RELEASING.md:11-12; SEED-001 dormant; no release.yml.",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:108",
       "test_ref": "",
       "code_ref": "",
@@ -1019,7 +1019,7 @@
     {
       "id": "NG-079",
       "text": "updates.powerbrowser.org serves updates. Evidence: no DNS record.",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:109",
       "test_ref": "",
       "code_ref": "",
@@ -1032,7 +1032,7 @@
     {
       "id": "NG-080",
       "text": "A production crash-ingest host receives reports. Evidence: collector is loopback only (scripts/crash-collector.mjs:27, 89, 343).",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:110",
       "test_ref": "",
       "code_ref": "",
@@ -1045,7 +1045,7 @@
     {
       "id": "NG-081",
       "text": "Per-fixture Gecko builds (BLD-02) and fixture live builds (VER-03, DOC-02) run. Evidence: v1.0 07-VERIFICATION.md:18, 75 \"NOT RUN\".",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:111",
       "test_ref": "",
       "code_ref": "",
@@ -1058,7 +1058,7 @@
     {
       "id": "NG-082",
       "text": "Theia is re-pinned to 1.75.0 (UPD-02, UPD-04). Evidence: docs/BUILD.md:258-264 \"staged, not executed\".",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:112",
       "test_ref": "",
       "code_ref": "",
@@ -1071,7 +1071,7 @@
     {
       "id": "NG-083",
       "text": "tabs.sqlite is encrypted. Evidence: plain `Sqlite.openConnection` (PBA:799); notes/tab-sql-substrate.md; research/questions.md Q1 open.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:113",
       "test_ref": "",
       "code_ref": "",
@@ -1079,7 +1079,7 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D3(a) no encryption: mozStorage has no SQLCipher, full-disk encryption covers the threat, file stays queryable"
     },
     {
       "id": "NG-084",
