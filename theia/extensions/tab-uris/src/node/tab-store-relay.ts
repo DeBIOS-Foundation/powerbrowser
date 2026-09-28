@@ -38,6 +38,6 @@ export class TabStoreRelayHub {
                 console.warn(`tab-store-relay: window ${id} dropped mid-call, trying the next`);
             }
         }
-        throw new Error('no Power Browser window is connected; open one and retry');
+        throw new Error('no PowerBrowser window is connected; open one and retry');
     }
 }

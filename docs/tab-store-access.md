@@ -1,17 +1,17 @@
 # Tab store access
 
-Power Browser keeps its tab and group data in `tabs.sqlite` in your profile directory. While Power Browser runs, this endpoint is the supported way for you, your scripts and MCP clients (programs that speak the Model Context Protocol, such as AI agents) to read that data and, through Power Browser's own writer, change it. Nothing else may open `tabs.sqlite` for writing.
+PowerBrowser keeps its tab and group data in `tabs.sqlite` in your profile directory. While PowerBrowser runs, this endpoint is the supported way for you, your scripts and MCP clients (programs that speak the Model Context Protocol, such as AI agents) to read that data and, through PowerBrowser's own writer, change it. Nothing else may open `tabs.sqlite` for writing.
 
 ## Connecting
 
-At start-up Power Browser writes `store-access.json` into the profile directory:
+At start-up PowerBrowser writes `store-access.json` into the profile directory:
 
 ```json
 {"url": "http://127.0.0.1:43127/mcp", "token": "<64 hexadecimal characters>"}
 ```
 
 - Only your user account can read the file (mode 0600).
-- The port and the token are new every time Power Browser starts. Read the file again after a restart.
+- The port and the token are new every time PowerBrowser starts. Read the file again after a restart.
 - A normal quit removes the file.
 
 Send each request as an HTTP POST of one JSON-RPC 2.0 message to `url`, with these headers:
@@ -39,7 +39,7 @@ The endpoint speaks MCP over HTTP with single JSON responses: `initialize`, `too
 | `bookmark_by_url` | `url` (exact address) | `{bookmark}`: `{guid, title, url}`, or `null` |
 | `bookmark_folder` | `guid` (a folder's 12-character bookmark GUID) | `{rows}`: the folder's children, each `{guid, title, url}` |
 | `sessionstore_tabs` | none | `{rows}`: the open tabs as session restore records them, each `{uri, url, title, last_active}` |
-| `tabs_with_places` | `bookmarked` (boolean, optional), `open` (boolean, optional), `limit` (1–1000, default 200) | `{rows}`: each tab row joined to its history and bookmark, highest frecency first |
+| `tabs_with_places` | `bookmarked` (boolean, optional), `open` (boolean, optional), `limit` (1–1000, default 200) | `{rows, truncated}`: each tab row joined to its history and bookmark, highest frecency first |
 | `tab_store_write` | `op` plus that op's fields (below) | the writer's reply, for example `{ok: true, kind, id}` |
 
 A tool that cannot run answers with `isError: true` and a message that says why.
@@ -56,11 +56,11 @@ Runs one read-only SQL statement against `tabs.sqlite`.
 
 ### History, bookmarks and session tools
 
-`history_entry`, `bookmark_by_url`, `bookmark_folder` and `sessionstore_tabs` read Firefox's own history, bookmarks and session data. Power Browser answers them from its browser side, passing each request through an open Power Browser window. While no window is open they answer with `isError: true` and "no Power Browser window is connected". Private windows are never included.
+`history_entry`, `bookmark_by_url`, `bookmark_folder` and `sessionstore_tabs` read Firefox's own history, bookmarks and session data. PowerBrowser answers them from its browser side, passing each request through an open PowerBrowser window. While no window is open they answer with `isError: true` and "no PowerBrowser window is connected". Private windows are never included.
 
 ### `tabs_with_places`
 
-Joins every tab row to Firefox's history and bookmarks on the page address (`url`). Each row carries the tab's `uri`, `url`, `title`, `group_id`, `last_active` and `closed_at`, plus `open` (true while `closed_at` is `NULL`), `visited`, `frecency` (the browser's own ranking of how often and how recently you visit the page), `visit_count`, `last_visit` (epoch milliseconds), `bookmark_guid` and `bookmark_title`. Tabs that are not web pages carry no history or bookmark data. Closed tabs stay in the store as history until the retention setting prunes them, so `"open": true` is the filter for tabs that are open now.
+Joins tab rows to Firefox's history and bookmarks on the page address (`url`), highest frecency first. Only the 5000 most recently active tab rows are scanned (`TAB_PLACES_SCAN_CAP`): a store grown by a long `closed_retention_days` value holds more rows than the join looks at, and older rows drop out silently. Each row carries the tab's `uri`, `url`, `title`, `group_id`, `last_active` and `closed_at`, plus `open` (true while `closed_at` is `NULL`), `visited`, `frecency` (the browser's own ranking of how often and how recently you visit the page), `visit_count`, `last_visit` (epoch milliseconds), `bookmark_guid` and `bookmark_title`. `truncated` is `true` when rows past the cap were not joined. Tabs that are not web pages carry no history or bookmark data. Closed tabs stay in the store as history until the retention setting prunes them, so `"open": true` is the filter for tabs that are open now.
 
 - Open tabs you have never bookmarked: `{"bookmarked": false, "open": true}`
 - Bookmarks that are open right now: `{"bookmarked": true, "open": true}`
@@ -69,7 +69,7 @@ Private windows are never included: their tabs are never written to the store, a
 
 ### `tab_store_write`: changing tab and group data
 
-Writes go through the same Power Browser writer that Panorama uses, one operation per call, and are passed through an open Power Browser window. A tab is named by its `uri` (read it with `tabs_sql`), and a group by its `id`.
+Writes go through the same PowerBrowser writer that Panorama uses, one operation per call, and are passed through an open PowerBrowser window. A tab is named by its `uri` (read it with `tabs_sql`), and a group by its `id`.
 
 | `op` | Fields | What it changes |
 |---|---|---|
@@ -84,7 +84,7 @@ Writes go through the same Power Browser writer that Panorama uses, one operatio
 | `setGroupOrder` | `groupId`, `uris` | the order of a group's tabs |
 | `setSetting` | `key`, `value` (text) | one store setting; `docs/TAB-STORE.md` ("Settings") lists the keys and their valid values |
 
-An unknown tab, group or setting, or a malformed value, answers with `isError: true` and says what is allowed. Closing tabs is not a write operation. Panorama shows a change the next time it loads its groups. A setting takes effect the next time the part of Power Browser that reads it runs (for example, the restore settings at the next launch).
+An unknown tab, group or setting, or a malformed value, answers with `isError: true` and says what is allowed. Closing tabs is not a write operation. Panorama shows a change the next time it loads its groups. A setting takes effect the next time the part of PowerBrowser that reads it runs (for example, the restore settings at the next launch).
 
 ## Example
 
@@ -98,4 +98,4 @@ curl -s "$URL" -H 'Content-Type: application/json' -H "Authorization: Bearer $TO
 
 ## MCP clients
 
-Configure an HTTP MCP server with the `url` from `store-access.json` and the header `Authorization: Bearer <token>`. Both change when Power Browser restarts, so update the client's configuration after a restart.
+Configure an HTTP MCP server with the `url` from `store-access.json` and the header `Authorization: Bearer <token>`. Both change when PowerBrowser restarts, so update the client's configuration after a restart.

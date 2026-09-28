@@ -3753,12 +3753,12 @@ async function handleStoreRequest(data, actorRef) {
         return { ok: true, kind, rows: PowerBrowserAPI.projectSessionStoreTabs() };
       }
       case "queryTabsWithPlaces": {
-        const rows = await queryTabsWithPlaces({
+        const joined = await queryTabsWithPlaces({
           bookmarked: typeof data.bookmarked === "boolean" ? data.bookmarked : undefined,
           open: typeof data.open === "boolean" ? data.open : undefined,
           limit: Number.isInteger(data.limit) ? data.limit : undefined,
         });
-        return { ok: true, kind, rows };
+        return { ok: true, kind, rows: joined.rows, truncated: joined.truncated };
       }
       case "searchPlaces": {
         return { ok: true, kind, rows: await searchPlaces(data.text, data.limit) };
@@ -3800,10 +3800,15 @@ const TAB_PLACES_SCAN_CAP = 5000;
 async function queryTabsWithPlaces({ bookmarked, open, limit } = {}) {
   const cap = Number.isInteger(limit) ? Math.min(Math.max(limit, 1), 1000) : 200;
   const conn = await PowerBrowserAPI.openTabStore();
+  // TAB_PLACES_SCAN_CAP bounds the scan: only the 5000 most recently active
+  // rows are joined (docs/tab-store-access.md, "tabs_with_places"), so a
+  // store grown by a long closed_retention_days never makes this reply grow
+  // without bound. truncated is true when rows past the cap were not joined.
   const tabRows = await conn.execute(
     "SELECT uri, url, title, group_id, last_active, closed_at FROM tabs ORDER BY last_active DESC LIMIT :scan",
     { scan: TAB_PLACES_SCAN_CAP }
   );
+  const scannedAll = tabRows.length < TAB_PLACES_SCAN_CAP;
   const places = await lazy.PlacesUtils.promiseDBConnection();
   const rows = [];
   for (const tabRow of tabRows) {
@@ -3849,7 +3854,7 @@ async function queryTabsWithPlaces({ bookmarked, open, limit } = {}) {
   }
   const rank = row => (row.frecency === null ? -Infinity : row.frecency);
   rows.sort((a, b) => (rank(a) === rank(b) ? 0 : rank(b) > rank(a) ? 1 : -1));
-  return rows.slice(0, cap);
+  return { rows: rows.slice(0, cap), truncated: !scannedAll };
 }
 
 // NG-023: history and bookmark matches for the address bar
@@ -4018,26 +4023,48 @@ async function savePageCopy(uri) {
   try {
     const doc = await persistDocument(browser);
     await writePersistedDocument(doc, await IOUtils.getFile(dir, "page.html"), await IOUtils.getFile(dir, "page_files"));
+    const bytes = await directoryBytes(dir);
+    const conn = await PowerBrowserAPI.openTabStore();
+    let previous = null;
+    await conn.executeTransaction(async () => {
+      const old = await conn.execute("SELECT dir FROM saved_pages WHERE tab_uri = :uri", { uri });
+      previous = old.length ? old[0].getResultByName("dir") : null;
+      await conn.execute(
+        `INSERT INTO saved_pages (tab_uri, dir, url, title, saved_at, bytes) VALUES (:uri, :dir, :url, :title, :savedAt, :bytes)
+         ON CONFLICT (tab_uri) DO UPDATE SET dir = excluded.dir, url = excluded.url, title = excluded.title,
+           saved_at = excluded.saved_at, bytes = excluded.bytes`,
+        { uri, dir, url, title: browser.contentTitle || "", savedAt: Date.now(), bytes }
+      );
+    });
+    // Only a directory this code minted under saved-pages/ is ever removed.
+    // Structural, not textual: PathUtils normalizes both sides with native
+    // separators, so ".." segments and Windows separators cannot escape the
+    // check, and the filename shape matches the minted id above.
+    if (previous && previous !== dir && isMintedSavedPageDir(previous, root)) {
+      await IOUtils.remove(previous, { recursive: true, ignoreAbsent: true });
+    }
+    return { dir, bytes };
   } catch (err) {
     await IOUtils.remove(dir, { recursive: true, ignoreAbsent: true });
     throw err;
   }
-  const bytes = await directoryBytes(dir);
-  const conn = await PowerBrowserAPI.openTabStore();
-  let previous = null;
-  await conn.executeTransaction(async () => {
-    const old = await conn.execute("SELECT dir FROM saved_pages WHERE tab_uri = :uri", { uri });
-    previous = old.length ? old[0].getResultByName("dir") : null;
-    await conn.execute(
-      `INSERT INTO saved_pages (tab_uri, dir, url, title, saved_at, bytes) VALUES (:uri, :dir, :url, :title, :savedAt, :bytes)
-       ON CONFLICT (tab_uri) DO UPDATE SET dir = excluded.dir, url = excluded.url, title = excluded.title,
-         saved_at = excluded.saved_at, bytes = excluded.bytes`,
-      { uri, dir, url, title: browser.contentTitle || "", savedAt: Date.now(), bytes }
-    );
-  });
-  // Only a directory this code minted under saved-pages/ is ever removed.
-  if (previous && previous !== dir && previous.startsWith(root + "/")) {
-    await IOUtils.remove(previous, { recursive: true, ignoreAbsent: true });
+}
+
+// NG-028: true when `candidate` is a directory this code minted directly
+// under the saved-pages root: after normalization its parent is the root and
+// its own name has the minted "<stamp>-<random>" shape. A hand-edited or
+// tampered saved_pages.dir outside the root, or with ".." segments, fails.
+function isMintedSavedPageDir(candidate, root) {
+  let normalized;
+  let normalizedRoot;
+  try {
+    normalized = PathUtils.normalize(candidate);
+    normalizedRoot = PathUtils.normalize(root);
+  } catch {
+    return false;
   }
-  return { dir, bytes };
+  if (PathUtils.parent(normalized) !== normalizedRoot) {
+    return false;
+  }
+  return /^[0-9a-z]+-[0-9a-z]+$/.test(PathUtils.filename(normalized));
 }

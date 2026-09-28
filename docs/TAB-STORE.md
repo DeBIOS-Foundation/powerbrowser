@@ -158,7 +158,8 @@ The `saved_pages` table: one full saved copy per tab, written by Save Page
 Copy (`tab_uri`, `dir`, `url`, `title`, `saved_at`, `bytes`). The page is
 `page.html` in `dir`, and the files it loaded are in `page_files/`. Saving a
 tab again replaces its copy, files included. A copy is not pruned with its
-tab's row: to remove one, delete its directory and its row together.
+tab's row, and no write operation deletes one: with PowerBrowser closed,
+delete its directory and its row together with any SQLite client.
 
 ## Migrations
 

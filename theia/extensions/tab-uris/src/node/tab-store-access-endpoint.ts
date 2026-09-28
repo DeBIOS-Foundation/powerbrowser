@@ -76,7 +76,7 @@ const TOOLS: ToolDef[] = [
     },
     {
         name: 'tabs_with_places',
-        description: 'Tabs joined to history and bookmarks on URL, highest frecency first. Filters: bookmarked (true/false), open (true/false); limit 1-1000, default 200.',
+        description: 'Tabs joined to history and bookmarks on URL, highest frecency first. Filters: bookmarked (true/false), open (true/false); limit 1-1000, default 200. Only the 5000 most recently active tab rows are scanned; truncated is true when older rows were not joined.',
         inputSchema: {
             type: 'object',
             properties: { bookmarked: { type: 'boolean' }, open: { type: 'boolean' }, limit: { type: 'integer', minimum: 1, maximum: 1000 } },
@@ -84,7 +84,7 @@ const TOOLS: ToolDef[] = [
     },
     {
         name: 'tab_store_write',
-        description: 'Change tab and group data through Power Browser\'s own writer. op is one of the listed operations; the other arguments are that operation\'s fields (docs/tab-store-access.md).',
+        description: 'Change tab and group data through PowerBrowser\'s own writer. op is one of the listed operations; the other arguments are that operation\'s fields (docs/tab-store-access.md).',
         inputSchema: {
             type: 'object',
             properties: {
@@ -306,7 +306,8 @@ export class TabStoreAccessEndpoint implements BackendApplicationContribution {
                 if (Number.isInteger(args.limit)) {
                     msg.limit = args.limit;
                 }
-                return { rows: await this.chrome(msg, 'rows') };
+                const reply = await this.chromeReply(msg);
+                return { rows: reply['rows'] ?? null, truncated: reply['truncated'] === true };
             }
             case 'tab_store_write': {
                 const op = typeof args.op === 'string' ? args.op : '';
@@ -329,6 +330,15 @@ export class TabStoreAccessEndpoint implements BackendApplicationContribution {
             default:
                 throw new Error(`unknown tool ${name}`);
         }
+    }
+
+    /** One chrome read through a connected window; the whole reply. */
+    protected async chromeReply(msg: StoreMessage): Promise<Record<string, unknown>> {
+        const reply = await this.relay.relay(msg);
+        if (!reply.ok) {
+            throw new Error(reply.message ?? `${msg.kind} failed (${reply.reason ?? 'store'})`);
+        }
+        return reply as Record<string, unknown>;
     }
 
     /** One chrome read through a connected window; the reply field, or null. */

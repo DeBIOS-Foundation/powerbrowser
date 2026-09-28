@@ -30,13 +30,15 @@ export class SavePageCopyCommandContribution implements CommandContribution {
     protected async save(uri?: unknown): Promise<SavedPageCopy | undefined> {
         const target = typeof uri === 'string' && uri ? uri : this.currentTabUri();
         if (!target) {
-            void this.messages.warn('Power Browser can only save a web page. Select a web tab, then run Save Page Copy again.');
+            void this.messages.warn('PowerBrowser can only save a web page. Select a web tab, then run Save Page Copy again.');
             return undefined;
         }
         try {
-            return await this.store.savePageCopy(target);
+            const saved = await this.store.savePageCopy(target);
+            void this.messages.info('PowerBrowser saved a copy of this page.');
+            return saved;
         } catch {
-            void this.messages.error("Power Browser couldn't save a copy of this page. Reload the page, then run Save Page Copy again.");
+            void this.messages.error("PowerBrowser couldn't save a copy of this page. Reload the page, then run Save Page Copy again.");
             return undefined;
         }
     }

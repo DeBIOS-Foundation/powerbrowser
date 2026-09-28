@@ -70,6 +70,12 @@ export interface TabPlacesRow {
     bookmark_title: string | null;
 }
 
+/** One tab row joined to Places (NG-024), with the scan-cap flag. */
+export interface TabPlacesResult {
+    rows: TabPlacesRow[];
+    truncated: boolean;
+}
+
 export interface TabPlacesQuery {
     bookmarked?: boolean;
     open?: boolean;
@@ -135,9 +141,18 @@ export class ChromeStoreClient {
         return this.field<PlaceMatch[]>({ kind: 'searchPlaces', text, limit }, 'rows');
     }
 
-    /** NG-024: tab rows joined to history and bookmarks, highest frecency first. */
+    /** NG-024: tab rows joined to history and bookmarks, highest frecency first. Keeps the row-array shape; the cap flag rides the reply. */
     queryTabsWithPlaces(query: TabPlacesQuery = {}): Promise<TabPlacesRow[]> {
         return this.field<TabPlacesRow[]>({ kind: 'queryTabsWithPlaces', ...query }, 'rows');
+    }
+
+    /** NG-024 with the scan-cap flag: `{ rows, truncated }` from the same reply. */
+    async queryTabsWithPlacesResult(query: TabPlacesQuery = {}): Promise<TabPlacesResult> {
+        const reply = await this.request({ kind: 'queryTabsWithPlaces', ...query });
+        if (!reply.ok) {
+            throw new Error(reply.message ?? `queryTabsWithPlaces failed (${reply.reason ?? 'store'})`);
+        }
+        return { rows: reply['rows'] as TabPlacesRow[], truncated: reply['truncated'] === true };
     }
 
     protected async field<T>(msg: StoreMessage, name: string, timeoutMs?: number): Promise<T> {
