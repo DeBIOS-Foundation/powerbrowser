@@ -1,5 +1,5 @@
 {
-  "ledger_version": 289,
+  "ledger_version": 291,
   "frozen_at": null,
   "items": [
     {
@@ -265,11 +265,11 @@
     {
       "id": "NG-021",
       "text": "Theia reads history entries, bookmarks and bookmark folders through the actor. Evidence: readHistoryEntry, readBookmarkByUrl, listBookmarkFolder have no callers and no message kind (PBA:1951, 1971, 1994).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:39",
       "test_ref": "scripts/verify-ng-021-places-reads.mjs::ng-021-places-reads-via-actor",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-021-places-reads.mjs::ng-021-places-reads-via-actor passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
