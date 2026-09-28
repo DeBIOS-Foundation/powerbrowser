@@ -24,19 +24,20 @@ assertCleanTree();
 const stage = newStage('ng017');
 const log = join(stage, 'launches.log');
 const wrapper = join(stage, 'powerbrowser');
-/** The launch wrapper: logs `launch <args>`, runs `real`, then logs `end quit|signalled <args>`. */
+/** The launch wrapper: logs `launch <pid> <args>`, runs `real`, then logs `end <quit|signalled> <status|signal> <pid> <args>`, keeping the child's exit status/signal. */
 function wrapperScript(real, logPath) {
     return [
         '#!/bin/sh',
         `log=${JSON.stringify(logPath)}`,
-        'printf \'launch %s\\n\' "$*" >> "$log"',
+        'printf \'launch %s %s\\n\' "$$" "$*" >> "$log"',
         'how=quit',
+        'status=0',
         `${JSON.stringify(real)} "$@" &`,
         'child=$!',
-        'trap \'how=signalled; kill -TERM "$child" 2>/dev/null\' TERM INT',
+        'trap \'if kill -0 "$child" 2>/dev/null; then how=signalled; kill -TERM "$child" 2>/dev/null; fi\' TERM INT',
         '# A trapped signal interrupts wait; wait again until the browser is gone.',
-        'while kill -0 "$child" 2>/dev/null; do wait "$child"; done',
-        'printf \'end %s %s\\n\' "$how" "$*" >> "$log"',
+        'while kill -0 "$child" 2>/dev/null; do wait "$child"; status=$?; done',
+        'printf \'end %s %s %s %s\\n\' "$how" "$status" "$$" "$*" >> "$log"',
         '',
     ].join('\n');
 }
@@ -48,9 +49,9 @@ const run = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts/verify-sql-sto
     timeout: 600000,
 });
 const lines = existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter(Boolean) : [];
-const launches = lines.filter(line => line.startsWith('launch ')).map(line => line.slice('launch '.length));
+const launches = lines.filter(line => line.startsWith('launch ')).map(line => line.slice('launch '.length).split(' ').slice(1).join(' '));
 const ends = new Map(lines.filter(line => line.startsWith('end ')).map(line => {
-    const [, how, ...args] = line.split(' ');
+    const [, how, , , ...args] = line.split(' ');
     return [args.join(' '), how];
 }));
 const byProfile = new Map();

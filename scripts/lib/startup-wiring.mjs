@@ -25,5 +25,9 @@ export function readWiringSources() {
 }
 
 export function startupWiringPresent(sources = readWiringSources()) {
-    return Object.values(sources).some(src => /startTabStoreTriggers|ensureTabStore/.test(src));
+    // NG-020: the call itself -- a PowerBrowserAPI.<name>( call expression in
+    // source with its comments removed -- never a text pattern a comment would
+    // also satisfy. The live drive's positive control then proves it ran.
+    const stripComments = src => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    return Object.values(sources).some(src => /PowerBrowserAPI\.(ensureTabStore|startTabStoreTriggers)\s*\(/.test(stripComments(src)));
 }

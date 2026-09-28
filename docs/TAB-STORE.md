@@ -14,7 +14,7 @@ mozStorage, in WAL mode. Readers: the Theia backend's `TabQueryService`
 offline checks on copies. Sessionstore stays authoritative for restoring
 stock tabs; the store is rebuilt from it, never the reverse.
 
-## Schema at head (`user_version = 5`)
+## Schema at head (`user_version = 6`)
 
 | Table | Column | Type | Since | Meaning |
 |---|---|---|---|---|
@@ -31,6 +31,11 @@ stock tabs; the store is rebuilt from it, never the reverse.
 | `tabs` | `closed_at` | INTEGER NULL | v5 | When the user closed it; NULL = open or restorable |
 | `groups` | `id`, `title`, `x`, `y`, `w`, `h`, `is_active` | | v2 | Panorama group boxes |
 | `settings` | `key`, `value` | TEXT, TEXT | v5 | Store settings; see "Settings" |
+| `saved_pages` | `tab_uri` | TEXT PRIMARY KEY | v6 | The saved tab's row key (`tabs.uri`); one copy per tab |
+| `saved_pages` | `dir` | TEXT NOT NULL | v6 | The copy's directory under `<profile>/saved-pages/` |
+| `saved_pages` | `url`, `title` | TEXT NOT NULL | v6 | The page's address and title when it was saved |
+| `saved_pages` | `saved_at` | INTEGER NOT NULL | v6 | When it was saved (ms since epoch) |
+| `saved_pages` | `bytes` | INTEGER NOT NULL | v6 | The copy's size on disk |
 
 Indexes: `idx_tabs_last_active`, `idx_tabs_group`, `idx_tabs_closed_at`, `idx_groups_active`.
 
@@ -50,21 +55,73 @@ Rows migrated from v4 and earlier keep their data under `stock:legacy-<rowid>`
 (was `webview:<url>`) and `web:legacy-<rowid>` (was the bare page URL).
 `webview:` is the plugin-panel address scheme (docs/URI-SCHEMES.md) and is
 never a row key. The stock and web keys are identities, not addresses:
-typing one opens nothing.
+typing one opens nothing. Split editors share one row.
 
 ## Open and closed rows
 
 A row with `closed_at` NULL is open, or restorable (its tab ended with a
-session and has a group or a position, so Panorama shows it as a card that
-reopens the tab). The row is marked closed, `closed_at` set, when:
+session and has a group, so Panorama shows it as a card that reopens the
+tab). The row is marked closed, `closed_at` set, when:
 
 - the user closes the tab (a stock tab's close, a web tab's close, an organised editor or terminal closed),
 - a stock tab is gone from sessionstore's open tabs (its window closed),
-- at startup, a web tab nobody grouped or placed ended with the last session.
+- at startup, an ungrouped web tab ended with the last session, placed or
+  not. The launch restore reopens the row of each tab it brings back; an
+  ungrouped web tab it leaves stays closed-tab history, with no card.
 
-A quit or a frontend reload never closes a row. Closed rows are closed-tab
+A quit or a frontend reload never closes a row. Theia rows ending with a quit
+stay open. Closed rows are closed-tab
 history; the prune deletes a closed row once `closed_at` is older than the
 retention. A row with `closed_at` NULL is never pruned.
+
+## Settings
+
+The `settings` table holds the store's own settings, one text value per key,
+seeded at v5. A value changes through the `setSetting` op of the documented
+write path (wave B, decisions.md R18), which goes through the chrome writer
+and refuses a value outside the key's valid values below. With PowerBrowser
+closed, any SQLite client can edit a value too. A reader that finds a value
+it cannot use (not a number where one is needed, or negative) falls back to
+the default.
+
+| Key | Valid values | Default | Read by | Meaning |
+|---|---|---|---|---|
+| `closed_retention_days` | a number from 0 to 3650, decimals allowed | `7` | the sweep's prune | Closed-tab history older than this many days is deleted |
+| `integrity_check_minutes` | a number greater than 0 and at most 525600, decimals allowed | `1440` | the integrity schedule | Minutes between full integrity checks |
+| `restore_behaviour` | `session` or `none` | `session` | the launch restore | `session`: reopen the last session's web tabs; `none`: reopen nothing; grouped tabs stay as Panorama cards, ungrouped ones become closed-tab history |
+| `restore_live_minutes` | a number from 0 to 10080, decimals allowed | `5` | the launch restore | A tab looked at within this many minutes of the quit reopens with its back/forward history; 0 means URL-only, never history |
+| `restore_url_days` | a number from 0 to 3650, decimals allowed | `30` | the launch restore | A tab looked at within this many days reopens at its URL; an older one stays a card when it is grouped and becomes closed-tab history when it is not |
+
+## Integrity and quarantine
+
+At startup the writer runs `PRAGMA quick_check`; every
+`integrity_check_minutes` it runs the full `PRAGMA integrity_check`, which
+also compares index contents. A result other than a single `ok` trips the
+store. A file that cannot be opened is classified first: a corruption signal
+(`SQLITE_CORRUPT` or `SQLITE_NOTADB`) trips it like a failed check, while a
+busy store, a timeout, any other open failure, or a `user_version` newer than
+the head leaves the store degraded for a retry at the next interval, never
+quarantined. On a trip the file is copied to the next free
+`tabs.sqlite.corrupt-<N>` (never overwritten, never deleted), the `-wal`,
+`-shm` and `-journal` files are removed, and the store is rebuilt at the head
+from sessionstore's open and recently closed tabs. Groups rebuild empty; the
+corrupt copy keeps the lost membership. The settings rebuild at their
+defaults; a changed value survives only in the corrupt copy. A file whose `user_version` is newer
+than the build is refused and left untouched, never quarantined. The
+scheduled check reads its interval from the settings table before each wait
+and stops at shutdown; the integrity log lines carry a fixed reason, never
+the raw error.
+
+## Reader contract
+
+`TabQueryService` opens the file read-only and checks `user_version`. A store
+it cannot read -- no profile directory, a missing or unopenable file, a
+version other than the head -- is an error naming the cause, never an empty
+answer; Organising shows its load-error state and the address bar its
+provider error. Panorama and suggestion reads serve open rows only
+(`closed_at` NULL). Its methods: `listGroups`, `getGroupTabs`,
+`listUngroupedTabs` and `getSettings` over the group
+channel; `searchByPrefix` for the address bar.
 
 ## v1
 
@@ -94,6 +151,15 @@ The `groups` table and `idx_groups_active`; `tabs.group_id` with
 `stock:legacy-<rowid>`, a bare page URL to `web:legacy-<rowid>`) in the same
 transaction, in place, so every row keeps its group, position, order and
 thumbnail.
+
+## v6
+
+The `saved_pages` table: one full saved copy per tab, written by Save Page
+Copy (`tab_uri`, `dir`, `url`, `title`, `saved_at`, `bytes`). The page is
+`page.html` in `dir`, and the files it loaded are in `page_files/`. Saving a
+tab again replaces its copy, files included. A copy is not pruned with its
+tab's row, and no write operation deletes one: with PowerBrowser closed,
+delete its directory and its row together with any SQLite client.
 
 ## Migrations
 

@@ -226,3 +226,5 @@ row is Phase 12's decision.
 Engine exclusivity: SQLite only. No second engine surface exists in this
 design. No GUI surface: this schema authorizes no window, no strip, no
 toolbar, no address bar, no menu, and no user-facing string of any kind.
+
+> The tab store as built (schema head, settings, integrity and quarantine, reader contract) is documented in `docs/TAB-STORE.md` (non-GUI wave A; decisions.md R4).

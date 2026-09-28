@@ -10,10 +10,11 @@
  * Chrome-side `PowerBrowserAPI` remains the sole writer; this service only
  * serves rows the writer wrote.
  *
- * First-launch tolerance: the backend may start before the chrome writer
- * ever creates the file, and a readonly open of a missing file fails -- so
- * an open failure resolves to an empty answer with a lazy re-open attempt
- * on the next query instead of crashing the backend.
+ * NG-012: a store it cannot read -- no profile directory, a missing or
+ * unopenable file, a `user_version` other than the head it reads -- is an
+ * error naming the cause, never an empty answer: an empty answer reads on
+ * screen as 'no tabs', and the Organising load and the chrome-bar provider
+ * each have a contracted error state for exactly this.
  *
  * Rows are keyed by tab identity (docs/TAB-STORE.md); the page address is
  * the `url` column. Panorama and suggestion reads serve open rows only
@@ -21,6 +22,7 @@
  */
 
 import { injectable } from '@theia/core/shared/inversify';
+import { statSync } from 'fs';
 import { join } from 'path';
 import Database from 'better-sqlite3';
 import { POWERBROWSER_ENV } from '@powerbrowser/token-gate/lib/node/powerbrowser-env';
@@ -35,7 +37,7 @@ export interface TabQueryRow {
 
 /**
  * GUI-08 (15-01): one projected group row, mirroring the chrome-side v2
- * projection (`PowerBrowserAPI.listGroupRows`). `is_active` is 0/1 at the
+ * projection (`PowerBrowserAPI.readGroupRow`). `is_active` is 0/1 at the
  * store; the frontend model folds it to boolean.
  */
 export interface GroupRow {
@@ -85,9 +87,22 @@ function escapeLikePattern(raw: string): string {
 /** The dedicated store filename: fixed platform content, never configured. */
 export const TAB_QUERY_FILE_NAME = 'tabs.sqlite';
 
+/**
+ * NG-012: the schema version this reader is written against. It must equal
+ * PowerBrowserAPI.sys.mjs's TAB_STORE_SCHEMA_HEAD; gui08-persistence-roundtrip
+ * compares the two, so a head move without a reader change fails --quick.
+ */
+export const TAB_STORE_SCHEMA_HEAD = 6;
+
+function messageOf(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
 @injectable()
 export class TabQueryService {
     private db: Database | null = null;
+    /** The inode of the file `db` opened; a quarantine rebuild replaces the file under it (I2). */
+    private dbInode: number | undefined;
 
     // No constructor parameter: inversify cannot resolve a bare `string`
     // serviceIdentifier, so a defaulted ctor param throws "No matching
@@ -132,82 +147,74 @@ export class TabQueryService {
     }
 
     /**
-     * Opens the readonly handle on first use, retrying after any earlier
-     * open failure so a file created later is picked up. Resolves null when
-     * no profile directory is known or the file is not yet readable --
-     * callers serve empty answers in that case.
+     * Opens the readonly handle on first use; throws naming why it cannot.
+     * Nothing is cached on failure, so a file the writer creates or
+     * migrates later is picked up by the next read.
      */
-    private openIfNeeded(): Database | null {
+    private openIfNeeded(): Database {
         if (this.db) {
             return this.db;
         }
         if (!this.profileDir) {
-            return null;
+            throw new Error('TabQueryService: no profile directory is known, so tabs.sqlite cannot be read');
         }
+        let db: Database;
         try {
-            const db: Database = new Database(join(this.profileDir, TAB_QUERY_FILE_NAME), { readonly: true });
-            if (!db.readonly) {
-                try {
-                    db.close();
-                } catch {
-                    // Close is best-effort here; the refusal below is the error.
-                }
-                throw new Error('TabQueryService: readonly flag not honoured by the engine');
+            db = new Database(join(this.profileDir, TAB_QUERY_FILE_NAME), { readonly: true, fileMustExist: true });
+        } catch (error) {
+            throw new Error(`TabQueryService: tabs.sqlite cannot be opened: ${messageOf(error)}`);
+        }
+        const refuse = (message: string): Error => {
+            try {
+                db.close();
+            } catch {
+                // Close is best-effort; the error is the point.
             }
-            this.db = db;
-            return db;
-        } catch {
-            this.db = null;
-            return null;
+            return new Error(`TabQueryService: ${message}`);
+        };
+        if (!db.readonly) {
+            throw refuse('readonly flag not honoured by the engine');
         }
-    }
-
-    /** Point read by opaque URI key; resolves undefined when unreadable. */
-    getByUri(uri: string): TabQueryRow | undefined {
-        const db = this.openIfNeeded();
-        if (!db) {
-            return undefined;
-        }
+        let version: number;
         try {
-            const row = db.prepare('SELECT uri, url, title, last_active FROM tabs WHERE uri = ?').get(uri) as TabQueryRow | undefined;
-            return row;
-        } catch {
-            return undefined;
+            // A file that is not a database opens without complaint and fails
+            // here, at its first read (SQLITE_NOTADB).
+            version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
+        } catch (error) {
+            throw refuse(`tabs.sqlite cannot be opened: ${messageOf(error)}`);
         }
-    }
-
-    /**
-     * The open row showing `urlSpec`, most recently active first. The page
-     * address is a column to match, never a key to rebuild (NG-001).
-     */
-    getBrowserTabByUrl(urlSpec: string): TabQueryRow | undefined {
-        const db = this.openIfNeeded();
-        if (!db) {
-            return undefined;
+        if (version !== TAB_STORE_SCHEMA_HEAD) {
+            throw refuse(`tabs.sqlite is at schema version ${version}; this build reads version ${TAB_STORE_SCHEMA_HEAD}`);
         }
-        try {
-            return db.prepare('SELECT uri, url, title, last_active FROM tabs WHERE url = ? AND closed_at IS NULL ORDER BY last_active DESC LIMIT 1').get(urlSpec) as TabQueryRow | undefined;
-        } catch {
-            return undefined;
-        }
+        this.db = db;
+        this.dbInode = this.storeInode();
+        return db;
     }
 
     /**
-     * Recency-ordered listing, newest first, capped at `limit` rows.
-     * Resolves [] when the store is not yet readable. Ordering contract
-     * (IN-02, 12-CODE-REVIEW.md): recency serves UI reads; the chrome-side
-     * listTabRows orders by URI for sweep set-equality instead. One order
-     * per consumer, documented at both sites.
+     * One read. A failure drops the handle -- a quarantine rebuild may have
+     * replaced the file under it -- and rethrows naming the read.
      */
-    listByRecency(limit: number): TabQueryRow[] {
-        const db = this.openIfNeeded();
-        if (!db) {
-            return [];
+    private read<T>(what: string, query: (db: Database) => T): T {
+        // I2: a mid-session quarantine unlinks the file and rebuilds a new one;
+        // one stat per read notices and reopens on the new file.
+        if (this.db && this.storeInode() !== this.dbInode) {
+            this.setProfileDir(this.profileDir);
         }
+        const db = this.openIfNeeded();
         try {
-            return db.prepare('SELECT uri, url, title, last_active FROM tabs ORDER BY last_active DESC LIMIT ?').all(limit) as TabQueryRow[];
+            return query(db);
+        } catch (error) {
+            this.setProfileDir(this.profileDir);
+            throw new Error(`TabQueryService: ${what} failed: ${messageOf(error)}`);
+        }
+    }
+
+    private storeInode(): number | undefined {
+        try {
+            return statSync(join(this.profileDir, TAB_QUERY_FILE_NAME)).ino;
         } catch {
-            return [];
+            return undefined;
         }
     }
 
@@ -218,97 +225,56 @@ export class TabQueryService {
      * semantics, never anchored to column start). The pattern is
      * escaped (see `escapeLikePattern`) before wrapping, bound twice, and
      * read under an explicit `ESCAPE '\'` clause; the limit is bound, never
-     * interpolated. Resolves [] when the store is not yet readable or the
-     * query fails -- the same never-throw convention as the point reads and
-     * the recency listing. Follows the UI side of the ordering contract
-     * (IN-02): recency serves UI reads. Open http(s) rows only (NG-001): a
-     * closed tab is history, and an editor's or a New Tab's row has no page.
+     * interpolated. Throws when the store cannot be read (NG-012); the
+     * chrome bar shows its provider-failure row. Follows the UI side of the
+     * ordering contract (IN-02): recency serves UI reads. Open http(s) rows
+     * only (NG-001): a closed tab is history, and an editor's or a New Tab's
+     * row has no page.
      */
     searchByPrefix(prefix: string, limit: number): TabQueryRow[] {
-        const db = this.openIfNeeded();
-        if (!db) {
-            return [];
-        }
-        try {
+        return this.read('searchByPrefix', db => {
             const pattern = `%${escapeLikePattern(prefix)}%`;
             return db.prepare(
                 'SELECT uri, url, title, last_active FROM tabs WHERE (url LIKE ? ESCAPE \'\\\' OR title LIKE ? ESCAPE \'\\\') AND closed_at IS NULL AND url LIKE \'http%\' ORDER BY last_active DESC LIMIT ?'
             ).all(pattern, pattern, limit) as TabQueryRow[];
-        } catch {
-            return [];
-        }
+        });
     }
 
     /**
      * GUI-08 (15-01): group listing in insertion order over the SAME lazy
-     * readonly handle above -- never a second open. Resolves [] when the
-     * store is unreadable OR still v1 (no groups table): the never-throw
-     * convention degrades that to the contracted empty copy, never an
-     * exception in UI paths.
+     * readonly handle above -- never a second open. Throws when the store
+     * cannot be read (NG-012); the Organising load shows its load-error state.
      */
     async listGroups(): Promise<GroupRow[]> {
-        const db = this.openIfNeeded();
-        if (!db) {
-            return [];
-        }
-        try {
-            return db.prepare('SELECT id, title, x, y, w, h, is_active FROM groups ORDER BY rowid').all() as GroupRow[];
-        } catch {
-            return [];
-        }
+        return this.read('listGroups', db => db.prepare('SELECT id, title, x, y, w, h, is_active FROM groups ORDER BY rowid').all() as GroupRow[]);
     }
 
     /**
-     * GUI-08 (15-01): one group's tab rows in URI order (the sweep's
-     * set-equality order, matching the chrome-side `getGroupTabs`). Bound
-     * parameter, never throws -- resolves [] like every other read here.
+     * GUI-08 (15-01): one group's tab rows in their arranged order, then URI
+     * order. Bound parameter.
+     * Throws when the store cannot be read (NG-012).
      */
     async getGroupTabs(groupId: string): Promise<GroupTabRow[]> {
-        const db = this.openIfNeeded();
-        if (!db) {
-            return [];
-        }
-        try {
-            return db.prepare(
-                'SELECT uri, url, title, last_active, group_id, thumbnail, x, y, ord FROM tabs WHERE group_id = ? AND closed_at IS NULL ORDER BY ord IS NULL, ord, uri'
-            ).all(groupId) as GroupTabRow[];
-        } catch {
-            return [];
-        }
-    }
-
-    /**
-     * GUI-08 (15-01): one tab's snapshot bytes by opaque URI key. Resolves
-     * undefined when unreadable or absent -- the card paints its title + URI
-     * block alone in that case (contracted text fallback).
-     */    async getThumbnail(uri: string): Promise<string | undefined> {
-        const db = this.openIfNeeded();
-        if (!db) {
-            return undefined;
-        }
-        try {
-            const row = db.prepare('SELECT thumbnail FROM tabs WHERE uri = ?').get(uri) as { thumbnail: string | null } | undefined;
-            return row?.thumbnail ?? undefined;
-        } catch {
-            return undefined;
-        }
+        return this.read('getGroupTabs', db => db.prepare(
+            'SELECT uri, url, title, last_active, group_id, thumbnail, x, y, ord FROM tabs WHERE group_id = ? AND closed_at IS NULL ORDER BY ord IS NULL, ord, uri'
+        ).all(groupId) as GroupTabRow[]);
     }
 
     /**
      * GUI-08 (15-01): tray listing -- tab rows with no group, newest first.
-     * Same lazy readonly handle, bound params, never throws. Without this
-     * the always-rendered Ungrouped tray has no data source.
+     * Same lazy readonly handle, bound params. Throws when the store cannot
+     * be read (NG-012). Without this the always-rendered Ungrouped tray has
+     * no data source.
      */
     async listUngroupedTabs(): Promise<GroupTabRow[]> {
-        const db = this.openIfNeeded();
-        if (!db) {
-            return [];
-        }
-        try {
-            return db.prepare(
-                'SELECT uri, url, title, last_active, group_id, thumbnail, x, y FROM tabs WHERE group_id IS NULL AND closed_at IS NULL ORDER BY last_active DESC'
-            ).all() as GroupTabRow[];
-        } catch {
-            return [];
-        }
-    }}
+        return this.read('listUngroupedTabs', db => db.prepare(
+            'SELECT uri, url, title, last_active, group_id, thumbnail, x, y FROM tabs WHERE group_id IS NULL AND closed_at IS NULL ORDER BY last_active DESC'
+        ).all() as GroupTabRow[]);
+    }
+
+    /** NG-011: the settings table as key -> value, for the restore path and any other reader. */
+    async getSettings(): Promise<Record<string, string>> {
+        const rows = this.read('getSettings', db => db.prepare('SELECT key, value FROM settings').all()) as { key: string; value: string }[];
+        return Object.fromEntries(rows.map(row => [row.key, row.value]));
+    }
+}

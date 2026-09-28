@@ -2,7 +2,7 @@
 // scripts/verify-gui08-persistence-roundtrip.mjs
 //
 // GUI-08's persistence roundtrip gate (15-01): the single chrome-side write
-// path (v1→v2 groups migration + validated writer methods) proved over a
+// path (v1→head migration + validated writer methods) proved over a
 // stage copy.
 //
 // It DERIVES at check time from the tree: the groups DDL text between the
@@ -17,7 +17,7 @@
 // as clean.
 //
 // It then runs the DERIVED DDL through a live mkdtemp-stage roundtrip on
-// the stdlib node:sqlite engine: v1→v2 migration, group CRUD plus group_id
+// the stdlib node:sqlite engine: v1→head migration, group CRUD plus group_id
 // membership, the 60-char cap, empty-reverts-title, duplicate titles
 // allowed, exactly-one-active, quarantine rebuilds-empty, and
 // newer-than-head refusal with the file untouched.
@@ -42,6 +42,7 @@ const REPO_ROOT = join(HERE, '..');
 const API_REL = 'powerbrowser/shell/PowerBrowserAPI.sys.mjs';
 const CONTRACT_REL = 'theia/extensions/tab-uris/src/browser/group-query-service.ts';
 const BACKEND_MODULE_REL = 'theia/extensions/tab-uris/src/node/tab-query-backend-module.ts';
+const READER_REL = 'theia/extensions/tab-uris/src/node/tab-query-service.ts';
 const MODEL_REL = 'theia/extensions/modes/src/browser/group-model.ts';
 
 /**
@@ -57,7 +58,7 @@ const EXPECTED_GROUPS_STATEMENTS = Object.freeze([
     `CREATE INDEX idx_tabs_group ON tabs (group_id)`,
     `ALTER TABLE tabs ADD COLUMN thumbnail TEXT NULL`,
 ]);
-const EXPECTED_SCHEMA_HEAD = 2;
+const EXPECTED_SCHEMA_HEAD = 6;
 const EXPECTED_GROUP_METHODS = Object.freeze([
     'writeGroupRow',
     'removeGroupRow',
@@ -67,9 +68,8 @@ const EXPECTED_GROUP_METHODS = Object.freeze([
     'captureTabThumbnail',
     'closeGroupRows',
     'readGroupRow',
-    'listGroupRows',
-    'getGroupTabs',
     'handleGroupMutation',
+    'setGroupOrder',
 ]);
 const EXPECTED_GROUP_PATH = '/services/powerbrowser/groups';
 const EXPECTED_TITLE_CAP = 60;
@@ -245,6 +245,12 @@ function checkStatic(sources) {
     } else if (head !== EXPECTED_SCHEMA_HEAD) {
         failures.push(`${API_REL}: schema head is ${head}, declared ${EXPECTED_SCHEMA_HEAD} -- a head move without a migration is a downgrade trap`);
     }
+    const readerHead = /export const TAB_STORE_SCHEMA_HEAD\s*=\s*(\d+)/.exec(sources[READER_REL] ?? '');
+    if (!readerHead) {
+        failures.push(`${READER_REL}: TAB_STORE_SCHEMA_HEAD unlocatable -- the reader no longer states the version it reads`);
+    } else if (head !== undefined && Number(readerHead[1]) !== head) {
+        failures.push(`${READER_REL}: the reader reads schema ${readerHead[1]} but the writer's head is ${head} -- the reader would refuse every store (NG-012)`);
+    }
 
     const methods = derivedGroupMethods(apiSrc);
     if (!methods.length) {
@@ -375,84 +381,40 @@ function mirrorOpenGuard(db, head) {
     }
 }
 
-/** Mirrors migrateTabStoreToV1 + migrateTabStoreToV2, sequential. */
-function mirrorMigrate(db, tabsDdl, groupsDdl, head) {
-    const v1 = splitStatements(tabsDdl);
-    const createTabs = v1.find(s => /^create table tabs\b/i.test(s));
-    const tabsIndex = v1.find(s => /^create index\b/i.test(s));
-    if (!createTabs || !tabsIndex) {
-        fail('v1 DDL derivation missing CREATE TABLE tabs or CREATE INDEX -- broken instrument');
+/** Every DDL marker block in source order; block N is schema version N. */
+function derivedVersionBlocks(apiSrc) {
+    return [...apiSrc.matchAll(/PB-SQL-([A-Z0-9]+)-DDL-START \*\/ `([\s\S]*?)` \/\* PB-SQL-\1-DDL-END/g)].map(m => splitStatements(m[2]));
+}
+
+/** Mirrors migrateTabStoreToHead: per version one transaction, done work skipped, the version stamped last. */
+function mirrorMigrate(db, blocks, head) {
+    if (blocks.length !== head) {
+        fail(`${blocks.length} DDL marker blocks for schema head ${head} -- a version has no marker`);
     }
-    if (!tableExists(db, 'tabs') || !indexExists(db, 'idx_tabs_last_active')) {
+    for (let version = getUserVersion(db); version < head; version += 1) {
         db.exec('BEGIN');
         try {
-            if (!tableExists(db, 'tabs')) {
-                db.exec(createTabs);
+            for (const statement of blocks[version]) {
+                const column = /^alter table (\w+) add column (\w+)/i.exec(statement);
+                if (column && columnExists(db, column[1], column[2])) {
+                    continue;
+                }
+                const created = /^create (table|index) (\w+)/i.exec(statement);
+                if (created && (created[1].toLowerCase() === 'table' ? tableExists(db, created[2]) : indexExists(db, created[2]))) {
+                    continue;
+                }
+                db.exec(statement);
             }
-            if (!indexExists(db, 'idx_tabs_last_active')) {
-                db.exec(tabsIndex);
-            }
-            db.exec('PRAGMA user_version = 1');
+            db.exec(`PRAGMA user_version = ${version + 1}`);
             db.exec('COMMIT');
         } catch (err) {
             try {
                 db.exec('ROLLBACK');
             } catch {
-                // Rollback is best-effort in the mirror; the throw below is the signal.
+                // Best-effort in the mirror; the throw below is the signal.
             }
             throw err;
         }
-    } else if (getUserVersion(db) < 1) {
-        db.exec('PRAGMA user_version = 1');
-    }
-    const v2 = splitStatements(groupsDdl);
-    const want = (pattern) => {
-        const hit = v2.find(s => pattern.test(s));
-        if (!hit) {
-            fail('groups DDL derivation missing a required statement -- broken instrument');
-        }
-        return hit;
-    };
-    const createGroups = want(/^create table groups\b/i);
-    const groupsActiveIndex = want(/^create index idx_groups_active\b/i);
-    const addGroupId = want(/^alter table tabs add column group_id\b/i);
-    const tabsGroupIndex = want(/^create index idx_tabs_group\b/i);
-    const addThumbnail = want(/^alter table tabs add column thumbnail\b/i);
-    const done = tableExists(db, 'groups')
-        && indexExists(db, 'idx_groups_active')
-        && columnExists(db, 'tabs', 'group_id')
-        && indexExists(db, 'idx_tabs_group')
-        && columnExists(db, 'tabs', 'thumbnail');
-    if (done) {
-        db.exec(`PRAGMA user_version = ${head}`);
-        return;
-    }
-    db.exec('BEGIN');
-    try {
-        if (!tableExists(db, 'groups')) {
-            db.exec(createGroups);
-        }
-        if (!columnExists(db, 'tabs', 'group_id')) {
-            db.exec(addGroupId);
-        }
-        if (!columnExists(db, 'tabs', 'thumbnail')) {
-            db.exec(addThumbnail);
-        }
-        if (!indexExists(db, 'idx_groups_active')) {
-            db.exec(groupsActiveIndex);
-        }
-        if (!indexExists(db, 'idx_tabs_group')) {
-            db.exec(tabsGroupIndex);
-        }
-        db.exec(`PRAGMA user_version = ${head}`);
-        db.exec('COMMIT');
-    } catch (err) {
-        try {
-            db.exec('ROLLBACK');
-        } catch {
-            // Best-effort, as above.
-        }
-        throw err;
     }
 }
 
@@ -478,12 +440,13 @@ function checkLive(sources) {
         const tabsDdl = derivedTabsDdlText(apiSrc);
         const groupsDdl = derivedGroupsDdlText(apiSrc);
         const head = derivedSchemaHead(apiSrc) ?? EXPECTED_SCHEMA_HEAD;
+        const blocks = derivedVersionBlocks(apiSrc);
         const cap = derivedTitleCap(apiSrc) ?? EXPECTED_TITLE_CAP;
         if (!tabsDdl || !groupsDdl) {
             fail('DDL derivation empty at live stage -- broken instrument, not a clean tree');
         }
 
-        // 1. v1 seed then v1→v2 migration.
+        // 1. v1 seed then v1→head migration.
         const path = join(stage, 'tabs.sqlite');
         {
             const db = new DatabaseSync(path);
@@ -492,7 +455,10 @@ function checkLive(sources) {
                 db.exec(v1.find(s => /^create table tabs\b/i.test(s)));
                 db.exec(v1.find(s => /^create index\b/i.test(s)));
                 db.exec('PRAGMA user_version = 1');
-                db.prepare('INSERT INTO tabs (uri, url, title, last_active) VALUES (?, ?, ?, ?)').run('tab:a', 'https://a.example/', 'A', 10);
+                const seed = db.prepare('INSERT INTO tabs (uri, url, title, last_active) VALUES (?, ?, ?, ?)');
+                seed.run('tab:a', 'https://a.example/', 'A', 10);
+                seed.run('webview:https://w.example/', 'https://w.example/', 'W', 11);
+                seed.run('https://x.example/', 'https://x.example/', 'X', 12);
             } finally {
                 db.close();
             }
@@ -501,7 +467,7 @@ function checkLive(sources) {
             const db = new DatabaseSync(path);
             try {
                 mirrorOpenGuard(db, head);
-                mirrorMigrate(db, tabsDdl, groupsDdl, head);
+                mirrorMigrate(db, blocks, head);
                 check('migration-head', getUserVersion(db) === head, `user_version is not the head after migration`);
                 const cols = db.prepare('PRAGMA table_info(groups)').all().map(col => col.name);
                 check('migration-columns', JSON.stringify(cols) === JSON.stringify(['id', 'title', 'x', 'y', 'w', 'h', 'is_active']), `groups columns are [${cols.join(', ')}]`);
@@ -509,6 +475,9 @@ function checkLive(sources) {
                 check('migration-tab-columns', columnExists(db, 'tabs', 'group_id') && columnExists(db, 'tabs', 'thumbnail'), 'group_id/thumbnail columns missing after migration');
                 const kept = db.prepare('SELECT uri FROM tabs WHERE uri = ?').get('tab:a');
                 check('migration-keeps-rows', !!kept, 'a pre-migration tab row did not survive');
+                check('migration-key-rewrite', !db.prepare("SELECT 1 FROM tabs WHERE uri LIKE 'webview:%' OR uri LIKE 'http%'").get(), 'a v1 row kept a page-URL or webview: key after the chain');
+                const tabCols = db.prepare('PRAGMA table_info(tabs)').all().map(col => col.name);
+                check('migration-v5-columns', ['created_at', 'last_accessed', 'closed_at'].every(c => tabCols.includes(c)) && tableExists(db, 'settings'), `v5 columns/settings missing: [${tabCols.join(', ')}]`);
             } finally {
                 db.close();
             }
@@ -579,7 +548,7 @@ function checkLive(sources) {
             rmSync(path);
             const rebuilt = new DatabaseSync(path);
             try {
-                mirrorMigrate(rebuilt, tabsDdl, groupsDdl, head);
+                mirrorMigrate(rebuilt, blocks, head);
                 rebuilt.prepare('INSERT INTO tabs (uri, url, title, last_active) VALUES (?, ?, ?, ?)').run('tab:a', 'https://a.example/', 'A', 10);
                 const groups = rebuilt.prepare('SELECT COUNT(*) AS n FROM groups').get();
                 const grouped = rebuilt.prepare('SELECT COUNT(*) AS n FROM tabs WHERE group_id IS NOT NULL').get();
@@ -638,6 +607,7 @@ function readSources() {
         [CONTRACT_REL]: read(CONTRACT_REL),
         [BACKEND_MODULE_REL]: read(BACKEND_MODULE_REL),
         [MODEL_REL]: read(MODEL_REL),
+        [READER_REL]: read(READER_REL),
     };
 }
 

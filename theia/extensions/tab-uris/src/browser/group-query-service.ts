@@ -18,8 +18,8 @@ export const GROUP_PATH = '/services/powerbrowser/groups';
 export interface GroupQueryService {
     listGroups(): Promise<GroupRow[]>;
     getGroupTabs(groupId: string): Promise<GroupTabRow[]>;
-    getThumbnail(uri: string): Promise<string | undefined>;
     listUngroupedTabs(): Promise<GroupTabRow[]>;
+    getSettings(): Promise<Record<string, string>>;
 }
 
 export const GroupQueryService = Symbol('GroupQueryService');

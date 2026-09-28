@@ -27,14 +27,27 @@ await runCheck('verify-ng-011-settings-table-read', async ({ pages, expect }) =>
     for (const [behaviour, liveMinutes, wantOpen, wantHistory] of [['session', '5', true, true], ['session', '0', true, false], ['none', '5', false, false]]) {
         const p = newProfile(`ng011-${behaviour}-${liveMinutes}`);
         buildStore(join(p, 'tabs.sqlite'), schemaHead(), { settings: { restore_behaviour: behaviour, restore_live_minutes: liveMinutes } });
-        await withShellQuit(p, async ({ run, topLevelContexts, evaluateIn }) => {
+        await withShellQuit(p, async ({ run, topLevelContexts, evaluateIn, send }) => {
             await run(`await A.open(${JSON.stringify(a)});`);
             await sleep(2000);
             const ctx = (await topLevelContexts()).find(x => x.url === a);
             if (ctx) {
+                await send('input.performActions', {
+                    context: ctx.context,
+                    actions: [{
+                        type: 'pointer', id: 'ng011-mouse', parameters: { pointerType: 'mouse' },
+                        actions: [{ type: 'pointerMove', x: 20, y: 20 }, { type: 'pointerDown', button: 0 }, { type: 'pointerUp', button: 0 }],
+                    }],
+                });
+                await send('input.releaseActions', { context: ctx.context });
                 await evaluateIn(ctx.context, "document.getElementById('next').click(); true");
             }
             await sleep(3000);
+            const backBeforeQuit = await run(`
+                const tab = A.webTabs().find(w => w.url === ${JSON.stringify(b)});
+                return !!tab && tab.canGoBack === true;
+            `);
+            expect(backBeforeQuit, `before the quit the tab on ${b} cannot go back, so there is no back history for the restore to keep`);
         });
         const got = await withShellQuit(p, async ({ run }) => {
             await sleep(4000);

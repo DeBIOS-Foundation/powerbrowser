@@ -26,7 +26,7 @@
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { REPO_ROOT, buildStore, columnsOf, newStage, readStore, setUserVersion, tamperBodyPage } from './lib/tab-store-fixtures.mjs';
+import { REPO_ROOT, buildStore, columnsOf, newStage, readStore, schemaHead, setUserVersion, tamperBodyPage } from './lib/tab-store-fixtures.mjs';
 import { LIKE_SQL_REGEX, SessionStore, closeAll, env, freshApi, report } from './lib/tab-store-fakes.mjs';
 
 const NAME = 'verify-tab-store-offline';
@@ -115,7 +115,7 @@ try {
         const path = join(profile, 'tabs.sqlite');
         const after = readStore(path);
         expect(state === 'ready', `${label}: ensureTabStore answered ${state || '(threw)'}, want ready`);
-        expect(after.version === 5, `${label}: the store is at version ${after.version} after startup, want 5`);
+        expect(after.version === schemaHead(), `${label}: the store is at version ${after.version} after startup, want ${schemaHead()}`);
         let lost = 0;
         for (const old of before.tabs) {
             const now = after.tabs.find(r => r.row_id === old.row_id);
@@ -132,6 +132,7 @@ try {
         expect(JSON.stringify(after.groups) === JSON.stringify(before.groups), `${label}: the groups changed across the migration`);
         expect(Object.keys(after.settings).length === 5 && after.settings.closed_retention_days === '7', `${label}: the settings table is not seeded with its five rows`);
         expect(columnsOf(path, 'tabs').length === 12, `${label}: the tabs table has ${columnsOf(path, 'tabs').length} columns, want 12`);
+        expect(JSON.stringify(columnsOf(path, 'saved_pages')) === JSON.stringify(['tab_uri', 'dir', 'url', 'title', 'saved_at', 'bytes']), `${label}: the saved_pages table is not at its v6 shape: ${JSON.stringify(columnsOf(path, 'saved_pages'))}`);
         rmSync(profile, { recursive: true, force: true });
     };
     for (const version of [1, 2, 3, 4]) {
@@ -160,7 +161,7 @@ try {
         await api.openTabStore();
         await closeAll();
         const after = readStore(join(profile, 'tabs.sqlite'));
-        expect(after.version === 5 && JSON.stringify(after.tabs) === JSON.stringify(before.tabs), 'a v5-shaped store stamped 4 did not re-run as a no-op that stamps 5');
+        expect(after.version === schemaHead() && JSON.stringify(after.tabs) === JSON.stringify(before.tabs), 'a v5-shaped store stamped 4 did not re-run as a no-op that stamps the head');
     });
     await section('newer than head', async () => {
         const path = join(stage, 'v99.sqlite');
@@ -273,61 +274,68 @@ try {
         const t1 = makeTab(win, 'https://s.example/1');
         const pwin = makeWindow(true);
         const pt = makeTab(pwin, 'https://secret.example/');
-        env.windows = [win, pwin];
-        api.startTabStoreTriggers();
-        await sleep(30);
-        const conn = await api.openTabStore();
-        const rows = async () => (await conn.execute('SELECT uri, url, closed_at FROM tabs ORDER BY rowid')).map(r => ({ uri: r.getString(0), url: r.getString(1), closed_at: r.getString(2) }));
-        const k1 = SessionStore.getCustomTabValue(t1, KEY);
-        expect(/^stock:[a-z0-9]+-1$/.test(k1) && (await rows()).some(r => r.uri === k1), `a tab already in the window when the triggers attached was not keyed and written: ${k1}`);
-        expect(SessionStore.getCustomTabValue(pt, KEY) === '' && !(await rows()).some(r => r.url === 'https://secret.example/'), 'a private window tab got a key or a row');
-        t1.linkedBrowser.currentURI.spec = 'https://s.example/2';
-        fire(win, 'TabAttrModified', t1);
-        await sleep(20);
-        expect(api.stockTabKey(t1) === k1 && (await rows()).some(r => r.uri === k1 && r.url === 'https://s.example/2'), 'NG-002: a stock navigation changed the key or did not update its row');
-        // F6: Duplicate Tab copies the custom value into a tab keyed at TabOpen.
-        const dup = makeTab(win, 'https://s.example/2');
-        fire(win, 'TabOpen', dup, {});
-        const dupOwn = SessionStore.getCustomTabValue(dup, KEY);
-        SessionStore.setCustomTabValue(dup, KEY, k1);
-        fire(win, 'TabSelect', t1);
-        fire(win, 'TabAttrModified', dup);
-        await sleep(20);
-        expect(api.stockTabKey(t1) === k1 && api.stockTabKey(dup) === dupOwn && dupOwn !== k1, 'F6: a duplicated tab shares its original\'s key');
-        // A move to another window: sessionstore moves the value, the old tab closes adopted.
-        const win2 = makeWindow(false);
-        env.windows = [win, pwin, win2];
-        api.startTabStoreTriggers();
-        const moved = makeTab(win2, 'https://s.example/2');
-        SessionStore.moveCustomTabValue(t1, moved);
-        fire(win2, 'TabOpen', moved, { adoptedTab: t1 });
-        t1.closing = true;
-        win.gBrowser.tabs.splice(win.gBrowser.tabs.indexOf(t1), 1);
-        fire(win, 'TabClose', t1, { adoptedBy: moved });
-        await sleep(20);
-        expect(api.stockTabKey(moved) === k1 && (await rows()).find(r => r.uri === k1)?.closed_at === null, 'a stock tab moved to another window lost its key or had its row closed');
-        // Restore: a key minted at TabOpen is replaced by the saved one.
-        const rt = makeTab(win, 'https://r.example/');
-        fire(win, 'TabOpen', rt, {});
-        const orphan = SessionStore.getCustomTabValue(rt, KEY);
-        SessionStore.setCustomTabValue(rt, KEY, 'stock:saved-7');
-        fire(win, 'TabAttrModified', rt);
-        await sleep(20);
-        expect(api.stockTabKey(rt) === 'stock:saved-7', 'a restored tab did not claim its saved key');
-        const tabState = t => ({ entries: [{ url: t.linkedBrowser.currentURI.spec, title: '' }], index: 1, extData: { [KEY]: SessionStore.getCustomTabValue(t, KEY) } });
-        env.state = { windows: [{ tabs: [dup, rt].map(tabState) }, { tabs: [moved].map(tabState) }, { isPrivate: true, tabs: [tabState(pt)] }] };
-        await api.sweepTabStoreFromSessionStore();
-        expect((await rows()).find(r => r.uri === orphan)?.closed_at === null, 'F4: the sweep closed a stock row before sessionstore restored its windows');
-        env.restored.resolve();
-        await sleep(10);
-        await api.sweepTabStoreFromSessionStore();
-        const after = await rows();
-        expect(after.find(r => r.uri === orphan)?.closed_at !== null && after.find(r => r.uri === 'stock:saved-7')?.closed_at === null && after.find(r => r.uri === k1)?.closed_at === null, 'after the restore the sweep did not close exactly the orphan row');
-        fire(win, 'TabClose', dup, {});
-        await sleep(20);
-        expect((await rows()).find(r => r.uri === dupOwn)?.closed_at !== null, 'NG-005: TabClose did not keep the row as closed history');
-        expect(api.findStockTabBrowser(k1)?.tab === moved, 'findStockTabBrowser did not find the tab by its key');
-        await closeAll();
+        const stopTabStoreTriggers = [];
+        try {
+            env.windows = [win, pwin];
+            stopTabStoreTriggers.push(api.startTabStoreTriggers());
+            await sleep(30);
+            const conn = await api.openTabStore();
+            const rows = async () => (await conn.execute('SELECT uri, url, closed_at FROM tabs ORDER BY rowid')).map(r => ({ uri: r.getString(0), url: r.getString(1), closed_at: r.getString(2) }));
+            const k1 = SessionStore.getCustomTabValue(t1, KEY);
+            expect(/^stock:[a-z0-9]+-1$/.test(k1) && (await rows()).some(r => r.uri === k1), `a tab already in the window when the triggers attached was not keyed and written: ${k1}`);
+            expect(SessionStore.getCustomTabValue(pt, KEY) === '' && !(await rows()).some(r => r.url === 'https://secret.example/'), 'a private window tab got a key or a row');
+            t1.linkedBrowser.currentURI.spec = 'https://s.example/2';
+            fire(win, 'TabAttrModified', t1);
+            await sleep(20);
+            expect(api.stockTabKey(t1) === k1 && (await rows()).some(r => r.uri === k1 && r.url === 'https://s.example/2'), 'NG-002: a stock navigation changed the key or did not update its row');
+            // F6: Duplicate Tab copies the custom value into a tab keyed at TabOpen.
+            const dup = makeTab(win, 'https://s.example/2');
+            fire(win, 'TabOpen', dup, {});
+            const dupOwn = SessionStore.getCustomTabValue(dup, KEY);
+            SessionStore.setCustomTabValue(dup, KEY, k1);
+            fire(win, 'TabSelect', t1);
+            fire(win, 'TabAttrModified', dup);
+            await sleep(20);
+            expect(api.stockTabKey(t1) === k1 && api.stockTabKey(dup) === dupOwn && dupOwn !== k1, 'F6: a duplicated tab shares its original\'s key');
+            // A move to another window: sessionstore moves the value, the old tab closes adopted.
+            const win2 = makeWindow(false);
+            env.windows = [win, pwin, win2];
+            stopTabStoreTriggers.push(api.startTabStoreTriggers());
+            const moved = makeTab(win2, 'https://s.example/2');
+            SessionStore.moveCustomTabValue(t1, moved);
+            fire(win2, 'TabOpen', moved, { adoptedTab: t1 });
+            t1.closing = true;
+            win.gBrowser.tabs.splice(win.gBrowser.tabs.indexOf(t1), 1);
+            fire(win, 'TabClose', t1, { adoptedBy: moved });
+            await sleep(20);
+            expect(api.stockTabKey(moved) === k1 && (await rows()).find(r => r.uri === k1)?.closed_at === null, 'a stock tab moved to another window lost its key or had its row closed');
+            // Restore: a key minted at TabOpen is replaced by the saved one.
+            const rt = makeTab(win, 'https://r.example/');
+            fire(win, 'TabOpen', rt, {});
+            const orphan = SessionStore.getCustomTabValue(rt, KEY);
+            SessionStore.setCustomTabValue(rt, KEY, 'stock:saved-7');
+            fire(win, 'TabAttrModified', rt);
+            await sleep(20);
+            expect(api.stockTabKey(rt) === 'stock:saved-7', 'a restored tab did not claim its saved key');
+            const tabState = t => ({ entries: [{ url: t.linkedBrowser.currentURI.spec, title: '' }], index: 1, extData: { [KEY]: SessionStore.getCustomTabValue(t, KEY) } });
+            env.state = { windows: [{ tabs: [dup, rt].map(tabState) }, { tabs: [moved].map(tabState) }, { isPrivate: true, tabs: [tabState(pt)] }] };
+            await api.sweepTabStoreFromSessionStore();
+            expect((await rows()).find(r => r.uri === orphan)?.closed_at === null, 'F4: the sweep closed a stock row before sessionstore restored its windows');
+            env.restored.resolve();
+            await sleep(10);
+            await api.sweepTabStoreFromSessionStore();
+            const after = await rows();
+            expect(after.find(r => r.uri === orphan)?.closed_at !== null && after.find(r => r.uri === 'stock:saved-7')?.closed_at === null && after.find(r => r.uri === k1)?.closed_at === null, 'after the restore the sweep did not close exactly the orphan row');
+            fire(win, 'TabClose', dup, {});
+            await sleep(20);
+            expect((await rows()).find(r => r.uri === dupOwn)?.closed_at !== null, 'NG-005: TabClose did not keep the row as closed history');
+            expect(api.findStockTabBrowser(k1)?.tab === moved, 'findStockTabBrowser did not find the tab by its key');
+            await closeAll();
+        } finally {
+            for (const stop of stopTabStoreTriggers.splice(0)) {
+                try { stop(); } catch { /* stop is best-effort */ }
+            }
+        }
     });
 
     // ---- D. quarantine rebuild at head (NG-014) ---------------------------------------
@@ -342,7 +350,8 @@ try {
         await closeAll();
         const after = readStore(path);
         expect(state === 'rebuilt' && existsSync(`${path}.corrupt-1`), `NG-014: a tampered store was not quarantined (state ${state})`);
-        expect(after.version === 5 && columnsOf(path, 'tabs').length === 12 && Object.keys(after.settings).length === 5, 'NG-014: the rebuilt store is not at the head with every column and the settings');
+        expect(after.version === schemaHead() && columnsOf(path, 'tabs').length === 12 && Object.keys(after.settings).length === 5, 'NG-014: the rebuilt store is not at the head with every column and the settings');
+        expect(JSON.stringify(columnsOf(path, 'saved_pages')) === JSON.stringify(['tab_uri', 'dir', 'url', 'title', 'saved_at', 'bytes']), `NG-014: the rebuilt store lacks the v6 saved_pages table with its columns: ${JSON.stringify(columnsOf(path, 'saved_pages'))}`);
         const restored = after.tabs.find(r => r.uri === 'stock:q-1');
         expect(restored && restored.created_at > 0, `the rebuild's restored row has no created_at: ${JSON.stringify(restored ?? null)}`);
     });
