@@ -1,5 +1,5 @@
 {
-  "ledger_version": 366,
+  "ledger_version": 368,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -837,11 +837,11 @@
     {
       "id": "NG-065",
       "text": "Update MARs are signed with the fork's key and verified. Evidence: `--enable-unverified-updates` (.mozconfig:8); `ACCEPTED_MAR_CHANNEL_IDS=None` (update-settings.ini:5).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:92",
       "test_ref": "scripts/verify-ng-065-mar-signature.mjs::ng065-mar-signature-enforced",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "68c9e69ccdcf3e42e3802f6f2f8246a489efa886: scripts/verify-ng-065-mar-signature.mjs::ng065-mar-signature-enforced passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
