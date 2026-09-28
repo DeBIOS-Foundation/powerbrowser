@@ -1,5 +1,5 @@
 {
-  "ledger_version": 271,
+  "ledger_version": 273,
   "frozen_at": null,
   "items": [
     {
@@ -122,11 +122,11 @@
     {
       "id": "NG-010",
       "text": "Closing a tab keeps its row as closed-tab history (`closed_at`) under a retention setting, and sessionstore `_closedTabs` are projected into it. Evidence: TabClose deletes the row (PBA:2283); the parser reads open tabs only (PBA:2085-2104); research/FEATURES.md Area 4.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:25",
       "test_ref": "scripts/verify-ng-010-closed-tab-history.mjs::ng-010-closed-tab-history",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-010-closed-tab-history.mjs::ng-010-closed-tab-history passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
