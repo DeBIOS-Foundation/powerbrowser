@@ -1,5 +1,5 @@
 {
-  "ledger_version": 291,
+  "ledger_version": 293,
   "frozen_at": null,
   "items": [
     {
@@ -278,11 +278,11 @@
     {
       "id": "NG-022",
       "text": "The sessionstore projection is reachable from Theia. Evidence: `projectSessionStoreTabs` has no caller (PBA:2027).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:40",
       "test_ref": "scripts/verify-ng-022-sessionstore-projection.mjs::ng-022-sessionstore-projection-via-actor",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-022-sessionstore-projection.mjs::ng-022-sessionstore-projection-via-actor passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",

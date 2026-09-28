@@ -289,3 +289,5 @@
 {"v": 289, "ts": "2026-09-28T01:10:20Z", "op": "set-status", "id": "NG-020", "changes": {"status": ["open", "done"]}}
 {"v": 290, "ts": "2026-09-28T01:20:39Z", "op": "set", "id": "NG-021", "changes": {"evidence": ["", "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-021-places-reads.mjs::ng-021-places-reads-via-actor passes"]}}
 {"v": 291, "ts": "2026-09-28T01:20:39Z", "op": "set-status", "id": "NG-021", "changes": {"status": ["open", "done"]}}
+{"v": 292, "ts": "2026-09-28T01:20:55Z", "op": "set", "id": "NG-022", "changes": {"evidence": ["", "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-022-sessionstore-projection.mjs::ng-022-sessionstore-projection-via-actor passes"]}}
+{"v": 293, "ts": "2026-09-28T01:20:55Z", "op": "set-status", "id": "NG-022", "changes": {"status": ["open", "done"]}}
