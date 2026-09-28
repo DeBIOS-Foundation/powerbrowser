@@ -915,7 +915,10 @@ export interface WebTabRestore {
  * restore_behaviour 'none' reopens nothing. Otherwise a tab last looked at
  * within restore_live_minutes of `quitAt` reopens with its back/forward
  * history, one within restore_url_days at its URL only, and anything older
- * stays closed. A tab left closed keeps its card when it is grouped; an
+ * stays closed. restore_live_minutes=0 means URL-only: the live tier applies
+ * only when liveMs > 0, so a tab stamped age 0 at quit (saveSession stamps
+ * the quit-current tab with lastAccessed = savedAt) never matches it.
+ * A tab left closed keeps its card when it is grouped; an
  * ungrouped one is closed-tab history (ruling A-F1, R6).
  */
 export function planWebTabRestore(settings: Record<string, string>, tabs: readonly SavedWebTab[], quitAt: number): WebTabRestore[] {
@@ -939,7 +942,12 @@ export function planWebTabRestore(settings: Record<string, string>, tabs: readon
     const at = quitAt > 0 ? quitAt : Date.now();
     return tabs.flatMap(tab => {
         const age = tab.lastAccessed === null ? Infinity : at - tab.lastAccessed;
-        return age > urlMs ? [] : [{ key: tab.key, url: tab.url, withHistory: age <= liveMs }];
+        // NG-011: 0 live minutes means URL-only, never history (saveSession
+        // stamps the quit-current tab age 0, so `age <= liveMs` with
+        // liveMs = 0 would be true); the live tier applies only when
+        // liveMs > 0. restore_url_days behaviour is unchanged.
+        const withHistory = liveMs > 0 && age <= liveMs;
+        return age > urlMs ? [] : [{ key: tab.key, url: tab.url, withHistory }];
     });
 }
 

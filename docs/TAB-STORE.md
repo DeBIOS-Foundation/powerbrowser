@@ -89,7 +89,7 @@ the default.
 | `closed_retention_days` | a number from 0 to 3650, decimals allowed | `7` | the sweep's prune | Closed-tab history older than this many days is deleted |
 | `integrity_check_minutes` | a number greater than 0 and at most 525600, decimals allowed | `1440` | the integrity schedule | Minutes between full integrity checks |
 | `restore_behaviour` | `session` or `none` | `session` | the launch restore | `session`: reopen the last session's web tabs; `none`: reopen nothing; grouped tabs stay as Panorama cards, ungrouped ones become closed-tab history |
-| `restore_live_minutes` | a number from 0 to 10080, decimals allowed | `5` | the launch restore | A tab looked at within this many minutes of the quit reopens with its back/forward history |
+| `restore_live_minutes` | a number from 0 to 10080, decimals allowed | `5` | the launch restore | A tab looked at within this many minutes of the quit reopens with its back/forward history; 0 means URL-only, never history |
 | `restore_url_days` | a number from 0 to 3650, decimals allowed | `30` | the launch restore | A tab looked at within this many days reopens at its URL; an older one stays a card when it is grouped and becomes closed-tab history when it is not |
 
 ## Integrity and quarantine

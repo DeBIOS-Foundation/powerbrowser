@@ -56,7 +56,7 @@ shows the canvas as the strip's third home; delivering it is Phase 15.
 **Inherits from 13-UI-SPEC** (do not contradict): design system `none`,
 spacing ramp, typography delegation (3 sizes / 2 weights), color tokens,
 60/30/10 split, focus idiom, motion baseline, copy rules (product named
-"Power Browser", plain language, real on-screen next step, no internal
+"PowerBrowser", plain language, real on-screen next step, no internal
 identifiers), "chrome bar" naming, chrome-bar order (menubar → chrome bar →
 tab strip → workarea → status bar), toggle segments Coding / Browsing /
 Organising, tabs invariant asserted by the status-bar chip. This spec states
@@ -207,7 +207,7 @@ animation; no custom window animation is authored.
 ## Copywriting Contract
 
 Product rules inherited from 13-UI-SPEC and CLAUDE.md: every user-facing
-string names the product as **"Power Browser"** where a product name is
+string names the product as **"PowerBrowser"** where a product name is
 needed, states the problem in plain language, ends with a next step that is
 a real affordance on screen, and carries **no internal identifier** (no pref
 key, sentinel, port, URI-scheme internals, table name, or raw exception text).
@@ -226,20 +226,20 @@ Naming is fixed: **"chrome bar"**, mode names **"Coding"**, **"Browsing"**,
 | Empty setups heading | **"No saved setups"** |
 | Empty setups body | **"Save the current windows, tabs, and mode as a setup to restore them later — choose Save Setup."** |
 | Setup row meta | **"{Mode} · {N} window(s) · {M} tab(s)"** — counts from stored data, singular/plural exact |
-| Restore-failure error | **"Power Browser couldn't restore this setup. Your current windows and tabs are unchanged — try again, or delete the setup and save a new one."** |
-| Setup save-failure error | **"Power Browser couldn't save this setup. Your saved setups are unchanged — try again, or choose a different name."** — the write failed, so the saved setups are exactly as they were; Save Setup is on screen and re-runnable |
-| Setup delete-failure error | **"Power Browser couldn't delete this setup. It's still in your list — try again."** — the write failed, so the setup is still listed; Delete Setup is on screen and re-runnable. Never the restore-failure copy: a failed delete must not tell the user to delete the setup that just failed to delete |
-| Setup gone-tabs notice | **"Power Browser restored this setup, but some tabs no longer exist. Geometry and mode are applied."** — the restore still completes on geometry plus mode rather than leaving the row half-applied with no explanation |
-| Dependent-window unsupported-tab error | **"Power Browser can't open this tab in its own window. Select a terminal or editor tab first."** — raised when the current tab hosts no extractable content, so there is nothing a dependent window could show. It names no command id and ends without a retry clause because the command carries no palette label and nothing invokes it, so re-invoking it is not an affordance the user has; the only real next step on screen is selecting a different tab, and that is all the sentence says. A palette label would make a retry clause true again; restore it here and in `setups-service.ts` together |
-| Setup mode-fallback notice | **"Power Browser restored this setup, but its saved mode is no longer available. Browsing is shown instead."** — restoring a setup whose stored mode id matches no shipped or custom mode falls back to Browsing (stock `switchPerspective` silently no-ops on unknown ids); the stored id is never shown |
-| Corrupt-mode fallback notice | **"Power Browser couldn't load the "{name}" mode. Browsing is shown instead."** (status-bar flash; custom data falls back to the shipped Browsing default, never a blank shell) |
+| Restore-failure error | **"PowerBrowser couldn't restore this setup. Your current windows and tabs are unchanged — try again, or delete the setup and save a new one."** |
+| Setup save-failure error | **"PowerBrowser couldn't save this setup. Your saved setups are unchanged — try again, or choose a different name."** — the write failed, so the saved setups are exactly as they were; Save Setup is on screen and re-runnable |
+| Setup delete-failure error | **"PowerBrowser couldn't delete this setup. It's still in your list — try again."** — the write failed, so the setup is still listed; Delete Setup is on screen and re-runnable. Never the restore-failure copy: a failed delete must not tell the user to delete the setup that just failed to delete |
+| Setup gone-tabs notice | **"PowerBrowser restored this setup, but some tabs no longer exist. Geometry and mode are applied."** — the restore still completes on geometry plus mode rather than leaving the row half-applied with no explanation |
+| Dependent-window unsupported-tab error | **"PowerBrowser can't open this tab in its own window. Select a terminal or editor tab first."** — raised when the current tab hosts no extractable content, so there is nothing a dependent window could show. It names no command id and ends without a retry clause because the command carries no palette label and nothing invokes it, so re-invoking it is not an affordance the user has; the only real next step on screen is selecting a different tab, and that is all the sentence says. A palette label would make a retry clause true again; restore it here and in `setups-service.ts` together |
+| Setup mode-fallback notice | **"PowerBrowser restored this setup, but its saved mode is no longer available. Browsing is shown instead."** — restoring a setup whose stored mode id matches no shipped or custom mode falls back to Browsing (stock `switchPerspective` silently no-ops on unknown ids); the stored id is never shown |
+| Corrupt-mode fallback notice | **"PowerBrowser couldn't load the "{name}" mode. Browsing is shown instead."** (status-bar flash; custom data falls back to the shipped Browsing default, never a blank shell) |
 | Mode saved confirmation | **"Mode "{name}" saved."** (status-bar flash) |
 | Setup saved confirmation | **"Setup "{name}" saved."** (status-bar flash) |
 | Organising placeholder heading | **"Organising arrives next"** — **SUPERSEDED by the Phase-15 canvas.** Phase 15 replaced the placeholder with the real Panorama canvas, so this row no longer describes what ships; it stays as the Phase-14 record. See 14-UAT.md test 6 (`result: superseded`). |
 | Organising placeholder body | **"The freeform canvas for arranging tabs lands in the next update — your tabs stay exactly where they left them."** — **SUPERSEDED by the Phase-15 canvas**, same reason as the heading row above. Neither string appears in any source file; the shipping surface is `organising-widget.ts`. |
 | Organising placeholder button | **"Back to Browsing"** — selects the Browsing mode |
 | Dependent tab-closed state heading | **"This tab is closed"** |
-| Dependent tab-closed state body | **"The tab shown in this window was closed. Close this window to return to Power Browser."** |
+| Dependent tab-closed state body | **"The tab shown in this window was closed. Close this window to return to PowerBrowser."** |
 | Dependent tab-closed button | **"Close Window"** — closes only that dependent window |
 | Destructive confirmation | **Delete Setup**: title **"Delete Setup"**, body **"Delete "{name}"? You can't undo this."**, buttons **"Delete"** / **"Cancel"** (Delete in destructive ink). This is the ONLY destructive action in the phase. |
 | Core-close confirmation | **None — deliberately.** Closing the core window closes dependents with it and ends the session with no dialog; guaranteed restore on relaunch is the safety net, so a confirmation would tax every close for a recoverable event. |

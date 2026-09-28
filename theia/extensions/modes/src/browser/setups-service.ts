@@ -637,6 +637,17 @@ export class SetupsService implements FrontendApplicationContribution {
      * restore of the unnamed session (NG-032) passes false -- the session
      * never shows a chosen setup's gone-tabs notice, but a mode it can no
      * longer resolve still gets the contracted fallback notice.
+     *
+     * NG-036: the two phases stay ordered -- geometry and tabs first so the
+     * mode toggle (NG-029) still sees the live shell, then the mode, then a
+     * re-assertion of the saved dock sizes. The mode switch resizes the main
+     * area (its panels and furniture rules change the available space), and
+     * Lumino's resize takes the pixels equally from every split child, so a
+     * restore into a mode that changes the panel width would otherwise report
+     * the saved relative sizes against the wrong width. Re-applying the saved
+     * sizes last writes the recorded fractions against the settled geometry.
+     * Modes own the side panels and furniture; setups own the main and bottom
+     * dock splits, so the re-assertion cannot move a view the mode placed.
      */
     protected async applySnapshot(row: { modeId: string; windows: SetupWindowSnapshot[] }, notify: boolean, openWebTabs = true): Promise<void> {
         this.applyGeometry(row.windows[0]);
@@ -663,6 +674,17 @@ export class SetupsService implements FrontendApplicationContribution {
             await this.modes.activateMode(known ? modeId : 'browsing');
         } catch {
             // activateMode has no rejecting path today; geometry and tabs still stand.
+        }
+        // The saved splits are fractions of the settled (post-mode) main area:
+        // see the header note above. Re-assert them only when the same widgets
+        // are still bar-for-bar where restoreDock put them; anything the mode
+        // switch moved or added (a side view, a dropped tab) skips the sizes
+        // while the tabs still stand. Best-effort like the geometry above: a
+        // failed re-assertion leaves the placed tabs and the mode untouched.
+        try {
+            this.reassertDockSizes(row.windows[0].dock);
+        } catch {
+            // Geometry, tabs and mode still stand.
         }
         if (!notify) {
             // NG-032 round 1: a wait that timed out, or a mode that is
@@ -1090,6 +1112,81 @@ export class SetupsService implements FrontendApplicationContribution {
         const others = Array.from(panel.widgets()).filter(widget => !assigned.has(widget));
         firstTabArea(area).widgets.push(...others);
         panel.restoreLayout({ main: area });
+    }
+
+    /**
+     * NG-036: re-assert the saved split sizes against the settled post-mode
+     * geometry; see the applySnapshot header note. Matches only: the live
+     * layout must hold the same tab areas, in the same order, with the same
+     * widgets in the same order in each area. A partial match is still
+     * re-asserted where it lines up (a split whose children all match keeps
+     * its saved sizes; a child that drifted keeps its live size). Never moves
+     * a tab, never reorders, never changes an orientation -- sizes only. A
+     * no-op when the saved dock is absent (pre-wave rows restore from `tabs`),
+     * when the live panel holds one bar or none, or when nothing matches.
+     */
+    protected reassertDockSizes(dock: SetupDock | undefined): void {
+        if (!dock) {
+            return;
+        }
+        this.reassertPanelSizes(this.shell.mainPanel, dock.main);
+        this.reassertPanelSizes(this.shell.bottomPanel, dock.bottom);
+    }
+
+    protected reassertPanelSizes(panel: DockPanel, saved: SetupDockNode | null): void {
+        if (!saved) {
+            return;
+        }
+        const live = panel.saveLayout().main;
+        if (!live || live.type !== 'split-area') {
+            return;
+        }
+        const next = this.sizedArea(live, saved);
+        if (next) {
+            panel.restoreLayout({ main: next });
+        }
+    }
+
+    /**
+     * A copy of the live area with the saved sizes written back onto the
+     * splits whose children still line up tab-for-tab. Returns null when no
+     * saved size lines up anywhere, so the caller leaves the live layout
+     * untouched; mutates nothing, the live config included (restoreLayout
+     * normalises what it is given).
+     */
+    protected sizedArea(live: DockLayout.AreaConfig, saved: SetupDockNode): DockLayout.AreaConfig | null {
+        if (live.type === 'tab-area') {
+            return saved.type === 'tabs' && this.sameBar(live.widgets, saved.tabs) ? live : null;
+        }
+        if (saved.type !== 'split' || live.children.length !== saved.children.length
+            || saved.orientation !== live.orientation) {
+            return null;
+        }
+        let matched = false;
+        const children = live.children.map((child, index) => {
+            const sized = this.sizedArea(child, saved.children[index]);
+            if (sized) {
+                matched = true;
+                return sized;
+            }
+            return child;
+        });
+        if (!matched) {
+            return null;
+        }
+        // Lumino normalises sizes to fractions on restore (its dock sizes are
+        // relative, never pixels): write the saved fractions straight back.
+        // A child that drifted keeps its live size; a dropped saved size (a
+        // legacy or partial row) keeps the live one.
+        const liveSizes = (live as DockLayout.ISplitAreaConfig).sizes;
+        const sizes = children.map((_, index) => saved.sizes[index] ?? liveSizes[index]);
+        return { type: 'split-area', orientation: live.orientation, children, sizes };
+    }
+
+    /** True when the live tab area still holds exactly the saved URIs in saved order. */
+    protected sameBar(widgets: Widget[], tabs: string[]): boolean {
+        return widgets.length === tabs.length
+            && widgets.every((widget, index) => this.tabUriOf(widget) === tabs[index]);
     }
 
     /** One tab through the opener: unresolvable URIs drop (null), never throw out. */
