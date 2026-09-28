@@ -4,9 +4,9 @@
  *
  * Delegates straight to the reader's prefix search over the single readonly
  * handle: opens no profile database anywhere new, projects address and title
- * fields only (the reader's four-field projection), and never throws (the
- * reader resolves empty on failure, which surfaces in the UI as the
- * contracted empty-suggestions copy from 13-UI-SPEC.md).
+ * fields only (the reader's four-field projection). A store the reader
+ * cannot read rejects (NG-012), which the widget shows as its contracted
+ * provider-failure row -- never as the empty-suggestions copy.
  */
 
 import { inject, injectable } from '@theia/core/shared/inversify';
@@ -26,7 +26,7 @@ export class ChromeBarSuggestionServiceImpl implements ChromeBarSuggestionServic
             ? Math.min(Math.max(Math.floor(limit), 1), CHROME_SUGGESTION_LIMIT)
             : CHROME_SUGGESTION_LIMIT;
         // Bound the LIKE pattern length: an unbounded %...% scan is paid by
-        // the backend. Coerced, never throws (the reader resolves [] anyway).
+        // the backend. Coerced to a string, so the pattern escape cannot throw.
         return this.tabs.searchByPrefix(String(prefix ?? '').slice(0, 256), safe);
     }
 }

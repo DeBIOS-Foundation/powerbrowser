@@ -15,13 +15,14 @@
  * painted change only if the replay fails again (15-UI-SPEC.md).
  */
 
-import { inject, injectable } from '@theia/core/shared/inversify';
-import { ApplicationShell, Widget } from '@theia/core/lib/browser';
+import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
+import { ApplicationShell, OpenerService, Widget } from '@theia/core/lib/browser';
 import { NavigatableWidget } from '@theia/core/lib/browser/navigatable-types';
 import { Emitter, Event } from '@theia/core/lib/common';
+import URI from '@theia/core/lib/common/uri';
 import type { GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-query-service';
 import { TabUriRegistry } from '@powerbrowser/tab-uris/lib/browser/tab-uri-registry';
-import { WebTabWidget } from '@powerbrowser/tab-uris/lib/browser/web-tab';
+import { EMPTY_PAGE_URL, WebTabOpenerOptions, WebTabWidget } from '@powerbrowser/tab-uris/lib/browser/web-tab';
 import { GroupActorClient } from './group-actor-client';
 import type { GroupMutation } from './group-actor-client';
 
@@ -58,6 +59,8 @@ export interface PanoramaTab {
      */
     x?: number;
     y?: number;
+    /** false for a card whose tab is not open in the shell (NG-008); undefined when the model was loaded without a shell. */
+    open?: boolean;
 }
 
 /**
@@ -110,6 +113,7 @@ export class GroupModel {
     private groups: PanoramaGroup[] = [];
     private readonly members = new Map<string, PanoramaTab[]>();
     private ungrouped: PanoramaTab[] = [];
+    private readonly reopening = new Set<string>();
     private activeGroupId: string | undefined;
     private loaded = false;
     private loadFailed = false;
@@ -131,8 +135,14 @@ export class GroupModel {
     @inject(GroupActorClient)
     protected readonly actor: GroupActorClient;
 
+    @inject(OpenerService)
+    protected readonly openers: OpenerService;
+
     /** Theia tabs whose close already reaches the store. */
     private readonly watched = new WeakSet<Widget>();
+
+    /** NG-009: every key the store holds a row for, open or not. */
+    private readonly stored = new Set<string>();
 
     /** The row key of a shell tab (`tabKeyOf`). */
     keyOf(widget: Widget): string {
@@ -149,7 +159,24 @@ export class GroupModel {
         }
         const card = this.locateCard(uri)?.card;
         await client.mutate({ kind: 'trackTab', uri, url: card?.url ?? '', title: card?.title ?? '' });
+        this.stored.add(uri);
         this.watchClose(uri);
+    }
+
+    @postConstruct()
+    protected init(): void {
+        // NG-009: a Theia tab with a row records when it was last looked at;
+        // web tabs report their own activation.
+        this.shell.onDidChangeActiveWidget(({ newValue }) => {
+            if (!newValue) {
+                return;
+            }
+            const uri = this.keyOf(newValue);
+            if (this.stored.has(uri) && !/^(web|stock):/.test(uri)) {
+                this.actor.mutate({ kind: 'touchTab', uri })
+                    .catch(error => console.error('[@powerbrowser/modes] recording a tab access failed:', error));
+            }
+        });
     }
 
     /**
@@ -241,28 +268,28 @@ export class GroupModel {
                 return group ? [group] : [];
             }) : [];
             const nextMembers = new Map<string, PanoramaTab[]>();
+            // NG-012 (T3-R1): no per-read catch. A read failing mid-load fails
+            // the whole load -- an empty member list would draw an empty box,
+            // show its tabs as loose, and have Close Group confirm "0 tabs".
             for (const group of parsed) {
-                let tabs: PanoramaTab[] = [];
-                try {
-                    const memberRows = await reader.getGroupTabs(group.id);
-                    tabs = Array.isArray(memberRows) ? memberRows.flatMap(row => {
-                        const tab = this.parseTab(row);
-                        return tab ? [tab] : [];
-                    }) : [];
-                } catch {
-                    tabs = [];
-                }
-                nextMembers.set(group.id, tabs);
-            }
-            let tray: PanoramaTab[] = [];
-            try {
-                const trayRows = await reader.listUngroupedTabs();
-                tray = Array.isArray(trayRows) ? trayRows.flatMap(row => {
+                const memberRows = await reader.getGroupTabs(group.id);
+                const tabs = Array.isArray(memberRows) ? memberRows.flatMap(row => {
                     const tab = this.parseTab(row);
                     return tab ? [tab] : [];
                 }) : [];
-            } catch {
-                tray = [];
+                nextMembers.set(group.id, tabs);
+            }
+            const trayRows = await reader.listUngroupedTabs();
+            let tray: PanoramaTab[] = Array.isArray(trayRows) ? trayRows.flatMap(row => {
+                const tab = this.parseTab(row);
+                return tab ? [tab] : [];
+            }) : [];
+            // NG-009: every key the store holds a row for, open or not.
+            this.stored.clear();
+            for (const tabs of [...nextMembers.values(), tray]) {
+                for (const tab of tabs) {
+                    this.stored.add(tab.uri);
+                }
             }
             if (live) {
                 // The shell decides which cards exist and what they are
@@ -279,13 +306,16 @@ export class GroupModel {
                 }
                 const claimed = new Set<string>();
                 for (const [id, tabs] of nextMembers) {
-                    nextMembers.set(id, tabs.flatMap(tab => {
+                    nextMembers.set(id, tabs.flatMap((tab): PanoramaTab[] => {
                         const open = liveByUri.get(tab.uri);
-                        if (!open) {
-                            return [];
+                        if (open) {
+                            claimed.add(tab.uri);
+                            return [{ ...tab, url: open.url || tab.url, title: open.title || tab.title, open: true }];
                         }
-                        claimed.add(tab.uri);
-                        return [{ ...tab, url: open.url, title: open.title || tab.title }];
+                        // NG-007/NG-008: a grouped tab that is not open keeps its
+                        // card -- its row is open or restorable -- and reopens from
+                        // it. A stock tab lives in a stock window, never here.
+                        return tab.uri.startsWith('stock:') ? [] : [{ ...tab, open: false }];
                     }));
                 }
                 // Everything else open is in the tray, placed where the store
@@ -322,7 +352,8 @@ export class GroupModel {
             this.activeGroupId = active?.id;
             this.loaded = true;
             this.loadFailed = false;
-        } catch {
+        } catch (error) {
+            console.error('[@powerbrowser/modes] loading groups failed:', error instanceof Error ? error.name : typeof error);
             this.groups = [];
             this.members.clear();
             this.ungrouped = [];
@@ -697,6 +728,30 @@ export class GroupModel {
     }
 
     /**
+     * NG-008: reopens a card whose tab is not open, through the opener every
+     * other surface uses. A web card reopens on the row it already has (the
+     * opener carries its key), so its group, place and thumbnail stay with it;
+     * any other tab reopens by its own address, in the main area where cards live.
+     */
+    async reopen(tab: PanoramaTab): Promise<void> {
+        const web = tab.uri.startsWith('web:');
+        // M2: one tab per row -- a second reopen of the same card, while the
+        // first is in flight or once its web tab exists, opens nothing.
+        if (this.reopening.has(tab.uri) || (web && this.shell.widgets.some(widget => widget instanceof WebTabWidget && widget.rowKey === tab.uri))) {
+            return;
+        }
+        this.reopening.add(tab.uri);
+        try {
+            const target = new URI(web ? (tab.url || EMPTY_PAGE_URL) : tab.uri);
+            const options: WebTabOpenerOptions = web ? { rowKey: tab.uri } : { widgetOptions: { area: 'main' } } as WebTabOpenerOptions;
+            const opener = await this.openers.getOpener(target, options);
+            await opener.open(target, options);
+        } finally {
+            this.reopening.delete(tab.uri);
+        }
+    }
+
+    /**
      * Replays every pending write once (save-error Retry). Entries that fail
      * again revert their painted change and clear; entries that succeed
      * clear. Throws the first replay error so the save-error bar stays up.
@@ -839,6 +894,61 @@ export class GroupModel {
             y: placed(row.y),
         };
     }
+}
+
+/** One web tab a previous session left, as the launch restore knows it. */
+export interface SavedWebTab {
+    key: string;
+    url: string;
+    lastAccessed: number | null;
+}
+
+/** One web tab the launch restore reopens. */
+export interface WebTabRestore {
+    key: string;
+    url: string;
+    withHistory: boolean;
+}
+
+/**
+ * NG-011: what the launch restore reopens, from the settings in tabs.sqlite.
+ * restore_behaviour 'none' reopens nothing. Otherwise a tab last looked at
+ * within restore_live_minutes of `quitAt` reopens with its back/forward
+ * history, one within restore_url_days at its URL only, and anything older
+ * stays closed. restore_live_minutes=0 means URL-only: the live tier applies
+ * only when liveMs > 0, so a tab stamped age 0 at quit (saveSession stamps
+ * the quit-current tab with lastAccessed = savedAt) never matches it.
+ * A tab left closed keeps its card when it is grouped; an
+ * ungrouped one is closed-tab history (ruling A-F1, R6).
+ */
+export function planWebTabRestore(settings: Record<string, string>, tabs: readonly SavedWebTab[], quitAt: number): WebTabRestore[] {
+    if (settings.restore_behaviour === 'none') {
+        return [];
+    }
+    // I1: an absent or blank value is NaN, never 0 (Number('') is 0), so it falls back.
+    const read = (value: string | undefined): number => ((value ?? '').trim() === '' ? NaN : Number(value));
+    const minutes = read(settings.restore_live_minutes);
+    const days = read(settings.restore_url_days);
+    // A value that is not a number, or is negative, falls back to the default
+    // (docs/TAB-STORE.md reader rule). Both restore keys admit 0 (0 to 10080
+    // minutes, 0 to 3650 days), so the floor is `>= 0` for both -- the
+    // chrome-side sweep reader's shape (`Number.isFinite(x) && x >= 0`); the
+    // schedule reader's `> 0` fits integrity_check_minutes (greater than 0)
+    // but would wrongly turn restore_live_minutes=0 (URL-only, NG-011's
+    // second case) back into the 5-minute default.
+    const liveMs = (Number.isFinite(minutes) && minutes >= 0 ? minutes : 5) * 60 * 1000;
+    const urlMs = (Number.isFinite(days) && days >= 0 ? days : 30) * 24 * 60 * 60 * 1000;
+    // A-T10-m: a session saved without a usable time ages from now.
+    const at = quitAt > 0 ? quitAt : Date.now();
+    return tabs.flatMap(tab => {
+        const age = tab.lastAccessed === null ? Infinity : at - tab.lastAccessed;
+        // NG-011: 0 live minutes means URL-only, never history (saveSession
+        // stamps the quit-current tab age 0, so `age <= liveMs` with
+        // liveMs = 0 would be true); the live tier applies only when
+        // liveMs > 0. restore_url_days behaviour is unchanged.
+        const withHistory = liveMs > 0 && age <= liveMs;
+        return age > urlMs ? [] : [{ key: tab.key, url: tab.url, withHistory }];
+    });
 }
 
 export type { GroupMutation };
