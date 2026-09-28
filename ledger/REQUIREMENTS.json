@@ -1,5 +1,5 @@
 {
-  "ledger_version": 299,
+  "ledger_version": 301,
   "frozen_at": null,
   "items": [
     {
@@ -330,11 +330,11 @@
     {
       "id": "NG-026",
       "text": "Users and MCP clients change tab and group data through a documented write path that goes through the single chrome-side writer. Evidence: notes/tab-sql-substrate.md; no external write path.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:44",
       "test_ref": "scripts/verify-ng-026-store-write-endpoint.mjs::ng-026-store-write-endpoint",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-026-store-write-endpoint.mjs::ng-026-store-write-endpoint passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
