@@ -1,5 +1,5 @@
 {
-  "ledger_version": 277,
+  "ledger_version": 279,
   "frozen_at": null,
   "items": [
     {
@@ -161,11 +161,11 @@
     {
       "id": "NG-013",
       "text": "An unopenable tabs.sqlite is quarantined and rebuilt, as MIGRATIONS.md:53 says. Evidence: `ensureTabStore` returns \"degraded\" before the tripwire runs (PBA:2211-2215); quarantine needs an open connection (PBA:2146).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:28",
       "test_ref": "scripts/verify-ng-013-unopenable-store-quarantined.mjs::ng-013-unopenable-store-quarantined",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-013-unopenable-store-quarantined.mjs::ng-013-unopenable-store-quarantined passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
