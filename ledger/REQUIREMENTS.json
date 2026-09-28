@@ -1,5 +1,5 @@
 {
-  "ledger_version": 267,
+  "ledger_version": 269,
   "frozen_at": null,
   "items": [
     {
@@ -96,11 +96,11 @@
     {
       "id": "NG-008",
       "text": "A Panorama card for a tab that is not open reopens that tab through the opener; a card for an open tab activates it. Evidence: URI-SCHEMES.md:240-246; uncommitted `dive()` only activates open widgets (organising-widget.ts:1936-1950).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:23",
       "test_ref": "scripts/verify-ng-008-panorama-card-reopens-through-opener.mjs::ng-008-panorama-card-reopens-through-opener",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-008-panorama-card-reopens-through-opener.mjs::ng-008-panorama-card-reopens-through-opener passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
