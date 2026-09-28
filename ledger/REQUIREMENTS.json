@@ -1,5 +1,5 @@
 {
-  "ledger_version": 275,
+  "ledger_version": 277,
   "frozen_at": null,
   "items": [
     {
@@ -148,11 +148,11 @@
     {
       "id": "NG-012",
       "text": "The Theia reader checks `user_version` and reports errors instead of returning an empty list. Evidence: TQS:198-249.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:27",
       "test_ref": "scripts/verify-ng-012-reader-reports-schema-errors.mjs::ng-012-reader-reports-schema-errors",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-012-reader-reports-schema-errors.mjs::ng-012-reader-reports-schema-errors passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
