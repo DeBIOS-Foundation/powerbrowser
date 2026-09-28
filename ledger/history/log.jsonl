@@ -277,3 +277,5 @@
 {"v": 277, "ts": "2026-09-28T00:20:28Z", "op": "set-status", "id": "NG-012", "changes": {"status": ["open", "done"]}}
 {"v": 278, "ts": "2026-09-28T00:20:52Z", "op": "set", "id": "NG-013", "changes": {"evidence": ["", "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-013-unopenable-store-quarantined.mjs::ng-013-unopenable-store-quarantined passes"]}}
 {"v": 279, "ts": "2026-09-28T00:20:52Z", "op": "set-status", "id": "NG-013", "changes": {"status": ["open", "done"]}}
+{"v": 280, "ts": "2026-09-28T00:20:54Z", "op": "set", "id": "NG-016", "changes": {"evidence": ["", "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-016-gui08-persistence-at-head.mjs::ng-016-gui08-persistence-at-head passes"]}}
+{"v": 281, "ts": "2026-09-28T00:20:54Z", "op": "set-status", "id": "NG-016", "changes": {"status": ["open", "done"]}}

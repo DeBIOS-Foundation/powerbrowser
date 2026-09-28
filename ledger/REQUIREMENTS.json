@@ -1,5 +1,5 @@
 {
-  "ledger_version": 279,
+  "ledger_version": 281,
   "frozen_at": null,
   "items": [
     {
@@ -200,11 +200,11 @@
     {
       "id": "NG-016",
       "text": "The gui08-persistence-roundtrip quick check passes against the current schema head. Evidence: `EXPECTED_SCHEMA_HEAD = 2` (scripts/verify-gui08-persistence-roundtrip.mjs:60, 245) against head 4 (PBA:50).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:31",
       "test_ref": "scripts/verify-ng-016-gui08-persistence-at-head.mjs::ng-016-gui08-persistence-at-head",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-016-gui08-persistence-at-head.mjs::ng-016-gui08-persistence-at-head passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
