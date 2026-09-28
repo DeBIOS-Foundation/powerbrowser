@@ -1,5 +1,5 @@
 {
-  "ledger_version": 340,
+  "ledger_version": 342,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -655,11 +655,11 @@
     {
       "id": "NG-051",
       "text": "With `backend = \"off\"`, no opencode process and no `/mcp` endpoint start. Evidence: the backend module binds both unconditionally (node/backend-opencode-backend-module.ts:18-27); five crashes call `process.exit(78)` (supervisor.ts:274-281); docs/REBRANDING.md:303.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:75",
       "test_ref": "scripts/verify-ng-051-backend-off.mjs::ng051-backend-off",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-051-backend-off.mjs::ng051-backend-off passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",

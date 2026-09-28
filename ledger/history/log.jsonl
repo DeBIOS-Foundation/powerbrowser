@@ -338,3 +338,5 @@
 {"v": 338, "ts": "2026-09-28T02:33:53Z", "op": "approve", "id": "NG-081", "quote": "Chris, 2026-09-28, answering \"How do you want to do it?\" for the Task 5 paste block in docs/non-gui/proposed-lines.md: \"Run them for me\" \u2014 line: APPROVE NG-081", "source": "controller", "changes": {"status": ["deferred-requested", "deferred-approved"]}}
 {"v": 339, "ts": "2026-09-28T02:33:53Z", "op": "approve", "id": "NG-082", "quote": "Chris, 2026-09-28, answering \"How do you want to do it?\" for the Task 5 paste block in docs/non-gui/proposed-lines.md: \"Run them for me\" \u2014 line: APPROVE NG-082", "source": "controller", "changes": {"status": ["deferred-requested", "deferred-approved"]}}
 {"v": 340, "ts": "2026-09-28T03:26:08Z", "op": "freeze", "id": "", "changes": {"frozen_at": [null, "2026-09-27"]}}
+{"v": 341, "ts": "2026-09-28T03:26:23Z", "op": "set", "id": "NG-051", "changes": {"evidence": ["", "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-051-backend-off.mjs::ng051-backend-off passes"]}}
+{"v": 342, "ts": "2026-09-28T03:26:23Z", "op": "set-status", "id": "NG-051", "changes": {"status": ["open", "done"]}}
