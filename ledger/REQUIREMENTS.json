@@ -1,5 +1,5 @@
 {
-  "ledger_version": 362,
+  "ledger_version": 366,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -954,15 +954,15 @@
     {
       "id": "NG-074",
       "text": "The CI verify workflow passes on main. Evidence: no passing run since 2026-09-04; run 34911771311 fails 15 rows.",
-      "status": "open",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:101",
       "test_ref": "scripts/verify-ng-074-ci-main.mjs::ng074-ci-green-on-main",
       "code_ref": "",
       "evidence": "",
-      "owner": "",
-      "phase": "",
-      "deferred_at": "",
-      "reason": ""
+      "owner": "chris",
+      "phase": "15",
+      "deferred_at": "2026-09-28",
+      "reason": "Chris 2026-09-28: verify.yml run 36470043046 on 24a5655 has 114 PASS, 4 FAIL, all four the Phase 15 Panorama checks (gui08-canvas-geometry, gui08-panorama-copy, both self-tests), red since the canvas rework 7b7a1f7; due when Phase 15 updates them"
     },
     {
       "id": "NG-075",
@@ -1084,15 +1084,15 @@
     {
       "id": "NG-084",
       "text": "The five v1.2 human UAT sheets are signed. Evidence: 10-UAT.md:57, 73, 94.",
-      "status": "open",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:114",
       "test_ref": "",
       "code_ref": "",
       "evidence": "",
-      "owner": "",
-      "phase": "",
-      "deferred_at": "",
-      "reason": ""
+      "owner": "chris",
+      "phase": "15",
+      "deferred_at": "2026-09-28",
+      "reason": "Chris 2026-09-28: the five v1.2 human UAT sheets (10-UAT.md) move to the human UAT of Phase 15"
     },
     {
       "id": "NG-085",
