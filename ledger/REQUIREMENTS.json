@@ -1,5 +1,5 @@
 {
-  "ledger_version": 301,
+  "ledger_version": 303,
   "frozen_at": null,
   "items": [
     {
@@ -343,11 +343,11 @@
     {
       "id": "NG-027",
       "text": "Every reader method in PBA and TQS has a caller on the runtime path; a method with no consumer is deleted. Evidence: getByUri, getBrowserTabByUrl, listByRecency (TQS:167, 184, 195); readTabRow, listTabRows, listGroupRows, getGroupTabs (PBA:1108, 1137, 1621, 1644).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:45",
       "test_ref": "scripts/verify-ng-027-reader-callers.mjs::ng-027-reader-callers",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-027-reader-callers.mjs::ng-027-reader-callers passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",

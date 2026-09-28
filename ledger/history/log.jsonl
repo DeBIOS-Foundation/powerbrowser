@@ -299,3 +299,5 @@
 {"v": 299, "ts": "2026-09-28T01:21:25Z", "op": "set-status", "id": "NG-025", "changes": {"status": ["open", "done"]}}
 {"v": 300, "ts": "2026-09-28T01:21:34Z", "op": "set", "id": "NG-026", "changes": {"evidence": ["", "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-026-store-write-endpoint.mjs::ng-026-store-write-endpoint passes"]}}
 {"v": 301, "ts": "2026-09-28T01:21:34Z", "op": "set-status", "id": "NG-026", "changes": {"status": ["open", "done"]}}
+{"v": 302, "ts": "2026-09-28T01:21:34Z", "op": "set", "id": "NG-027", "changes": {"evidence": ["", "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-027-reader-callers.mjs::ng-027-reader-callers passes"]}}
+{"v": 303, "ts": "2026-09-28T01:21:34Z", "op": "set-status", "id": "NG-027", "changes": {"status": ["open", "done"]}}
