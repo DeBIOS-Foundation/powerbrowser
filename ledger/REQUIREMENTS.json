@@ -1,5 +1,5 @@
 {
-  "ledger_version": 307,
+  "ledger_version": 309,
   "frozen_at": null,
   "items": [
     {
@@ -213,11 +213,11 @@
     {
       "id": "NG-017",
       "text": "The SQL-05 round-trip check restarts the real browser and compares the restored tabs with sessionstore. Evidence: verify-sql-store-roundtrip.mjs replays over temp DBs with `CHAIN_HEAD = 1` (:33).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:32",
       "test_ref": "scripts/verify-ng-017-sql05-restarts-real-browser.mjs::ng-017-sql05-restarts-real-browser",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "3cdd02aae640dde5a1459f664801ebcf73ec6af5: scripts/verify-ng-017-sql05-restarts-real-browser.mjs::ng-017-sql05-restarts-real-browser passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
