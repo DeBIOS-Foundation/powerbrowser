@@ -1,5 +1,5 @@
 {
-  "ledger_version": 263,
+  "ledger_version": 265,
   "frozen_at": null,
   "items": [
     {
@@ -70,11 +70,11 @@
     {
       "id": "NG-006",
       "text": "Close Group closes the group's in-shell web tabs as well as its stock tabs, as its dialog says. Evidence: `closeGroupRows` matches `webview:<url>` only (PBA:1348-1378, 1470, 1578); group-model.ts:636-663 and organising-widget.ts:382-417 never close the WebTabWidget.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:21",
       "test_ref": "scripts/verify-ng-006-close-group-closes-web-tabs.mjs::ng-006-close-group-closes-web-tabs",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-006-close-group-closes-web-tabs.mjs::ng-006-close-group-closes-web-tabs passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
