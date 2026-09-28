@@ -261,6 +261,15 @@ them per a downstream's manifest is Phase 4's TEL-03.
 
 ### Phase 16: AI backend adapter - OpenCode
 
+Retired 2026-09-28 under D2 (b): NG-041..NG-050 and NG-052..NG-062 are
+dropped — the opencode adapter is retired for the PowerBrowser-Assistant
+plugin, which is planned outside this tree. The adapter cuts fall with the
+same decision (selectable `@Pi` / DSH backends, per-line comment-to-steer,
+`/btw` ephemeral question, file-wide Supercomplete Tab-accept). Chris:
+"Run them for me" (ledger/history/log.jsonl lines 310–330, one drop op per
+row, each carrying that answer as its quote). Kept and built: NG-051
+(`backend = "off"` starts no opencode process and no `/mcp` endpoint).
+
 **Goal:** Selectable `@OpenCode` backend in sidecar chat with staged accept/reject review (AI-01..AI-05)
 **Requirements**: AI-01, AI-02, AI-03, AI-04, AI-05
 **Depends on:** Phase 15
@@ -277,6 +286,16 @@ Plans:
 ## Backlog
 
 ### Phase 999.1: SQL-browser-memory (BACKLOG)
+
+Deferred here 2026-09-25 under D4 (a): NG-075..NG-082 (distribution work
+that needs hosts, accounts or long builds outside this machine: Windows
+MSIX, macOS DMG, install matrix and per-OS MAR hop, release pipeline,
+update host, production crash-ingest host, per-fixture builds, Theia re-pin
+to 1.75.0). Deferred here 2026-09-28: NG-074 (CI verify on main) and NG-084
+(the five v1.2 human UAT sheets) move to Phase 15. Chris: "Run them for me"
+for NG-075..NG-082 (ledger/history/log.jsonl lines 332–339) and "Defer all
+the checks" for NG-074 and NG-084 (ledger/history/log.jsonl lines 364 and
+366), each op carrying the quoted answer.
 
 **Goal:** [Captured for future planning]
 **Requirements:** TBD

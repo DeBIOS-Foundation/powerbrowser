@@ -31,7 +31,7 @@
 - Probe-first live drills green on the current tree where runnable, staged-with-unblock where environment-bound; one inert packaged-data delta synced byte-faithfully, no rebuild
 - Final tree gates-green on every cited row plus full-tier drill re-runs, registry alone with twinned checks, all 15 requirements dispositioned, human remainder routed as five staged sheets — VERIFIED
 - SQL store authority rules signed before schema work: six invariants with Phase 12 enforcement pointers plus a recorded approval
-- Readonly better-sqlite3 query API beside the frozen registry, chrome-side Places reads plus sessionstore projection, and an emitter-exercising absence instrument that stages honestly until startup wiring lands
+- Readonly better-sqlite3 query API beside the frozen registry, chrome-side Places reads plus sessionstore projection, and an emitter-exercising absence instrument whose startup wiring has landed (NG-020 done on main, merge 5f990e6)
 - Second-writer scan and integrity soak as proven instruments, nine SQL-05 registry rows with honest tiers, and the ESR rebase drill evidenced at the live newer tag
 
 Known gaps / tech debt carried (non-blocking, see audit):

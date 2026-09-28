@@ -109,12 +109,33 @@ the project's own planning record.
   CLI-owned tools/models are documented per adapter instead of
   forced into the shared registries.
 
+  Retired 2026-09-28 under D2 (b): NG-041..NG-050 and NG-052..NG-062 are
+  dropped — the opencode adapter is retired for the PowerBrowser-Assistant
+  plugin, which is planned outside this tree. The adapter cuts fall with the
+  same decision (selectable `@Pi` / DSH backends, per-line comment-to-steer,
+  `/btw` ephemeral question, file-wide Supercomplete Tab-accept). Chris:
+  "Run them for me" (ledger/history/log.jsonl lines 310–330, one drop op per
+  row, each carrying that answer as its quote). Kept and built: NG-051
+  (`backend = "off"` starts no opencode process and no `/mcp` endpoint).
+
 - **GUI-05**: Unified tab strip (chrome-owned tab model,
   mirror/proxy bridge). Deferred behind v1.3 chrome/mode/organising.
 - **Seeds**: deferred-browser-chrome (bookmarks strip, per-tab
   close/mute, browser menu), gui-component-dnd (drag-anywhere
   rearrange), firefox-parity-tabs (cross-window tear-off + tiles
   page) — each triggers off this milestone landing.
+
+  Deferred 2026-09-25 under D4 (a): NG-075..NG-082 move to backlog 999.2
+  (distribution work that needs hosts, accounts or long builds outside this
+  machine: Windows MSIX, macOS DMG, install matrix and per-OS MAR hop,
+  release pipeline, update host, production crash-ingest host, per-fixture
+  builds, Theia re-pin to 1.75.0). Chris: "Run them for me"
+  (ledger/history/log.jsonl lines 332–339, one approve op per row, each
+  carrying that answer as its quote). Deferred 2026-09-28: NG-074 (CI verify
+  on main; run 36470043046 on 24a5655: 114 PASS, 4 FAIL, the Phase 15
+  Panorama checks) and NG-084 (the five v1.2 human UAT sheets) move to
+  Phase 15. Chris: "Defer all the checks" (ledger/history/log.jsonl lines
+  364 and 366, each carrying that answer as its quote).
 
 ## Out of Scope
 
@@ -126,6 +147,7 @@ the project's own planning record.
 | Sessionstore-coupled group storage | Panorama's removal lesson (Bugzilla 1221050); groups live in SQL |
 | A `[features]` / `[modes]` manifest flag | Extension point, not a flag (ARCHITECTURE.md Anti-Pattern 6); modes are data with defaults |
 | Forking/patching Theia core or modifying Gecko outside the patch stack | Inherited hard rules |
+| tabs.sqlite encryption | Dropped 2026-09-28 under D3 (a), NG-083: mozStorage has no SQLCipher, full-disk encryption covers the threat, the file stays queryable. Chris: "Run them for me" (ledger/history/log.jsonl line 331, carrying that answer as its quote) |
 
 ## Traceability
 
