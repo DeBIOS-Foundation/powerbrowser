@@ -26,10 +26,10 @@
 // (this tree's harness always launches --headless; a URL on the command
 // line opens a stock window alongside the shell, which is exactly the
 // event source the drive needs), falling back to the Xvfb harness pattern
-// when headless cannot produce private-window tab events. When the binary,
-// the startup wiring, or a launch capability is unavailable, the live half
-// prints STAGED with the exact rerun command and exits cleanly rather
-// than faking a pass.
+// when headless cannot produce private-window tab events. When the binary
+// or a launch capability is unavailable, the live half prints STAGED with
+// the exact rerun command and exits cleanly rather than faking a pass;
+// absent startup wiring is a failure (NG-020), never STAGED.
 //
 // Engine: standard-library `node:sqlite` only for row reads (host node,
 // no install). Every mutation lands on copies under a mktemp stage
@@ -416,8 +416,7 @@ async function runLive() {
     return;
   }
   if (!startupWiringPresent()) {
-    staged('startup trigger wiring not landed (no startup call into ensureTabStore/startTabStoreTriggers in powerbrowser.js or TheiaService.sys.mjs) -- no session can exercise the emitter yet; lands with the plan 12-03 promotion');
-    return;
+    fail('startup trigger wiring absent: no PowerBrowserAPI.ensureTabStore( or PowerBrowserAPI.startTabStoreTriggers( call in powerbrowser.js or TheiaService.sys.mjs, so no session can exercise the emitter (NG-020: absent wiring is a failure, not a staged pass)');
   }
   const stage = mkdtempSync(join(tmpdir(), 'pb-tabs-absence-'));
   if (/\s/.test(stage)) fail(`stage path contains a space: ${stage}`);
