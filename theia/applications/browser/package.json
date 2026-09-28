@@ -27,7 +27,7 @@
           "repoUrl": "https://powerbrowser.org",
           "markSvg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 128 128\"><defs><style>.a{fill:#1a1a1a;}@media (prefers-color-scheme: dark){.a{fill:#fff;}}</style></defs><path class=\"a\" d=\"M89.24 27.96A44 44 0 1 1 38.76 27.96L45.64 37.79A32 32 0 1 0 82.36 37.79Z\"/><rect class=\"a\" x=\"58\" y=\"18\" width=\"12\" height=\"46\" rx=\"6\"/></svg>",
           "legalNotices": [
-            "Power Browser is a trademark of DeBIOS Foundation.",
+            "PowerBrowser is a trademark of DeBIOS Foundation.",
             "PowerBrowser Dev is not officially associated with Mozilla or its products.",
             "This product (powerbrowser.org) includes Eclipse Theia, a trademark of Eclipse Foundation AISBL."
           ]
@@ -36,7 +36,6 @@
     }
   },
   "dependencies": {
-    "@powerbrowser/backend-opencode": "0.1.0",
     "@powerbrowser/branding": "0.1.0",
     "@powerbrowser/chrome-bar": "0.1.0",
     "@powerbrowser/customize": "0.1.0",
@@ -101,7 +100,7 @@
   },
   "scripts": {
     "rebuild": "theia rebuild:browser --cacheRoot ../..",
-    "download:plugins": "theia download:plugins --packed",
+    "download:plugins": "node ../../../scripts/download-plugins.mjs",
     "build": "yarn -s rebuild && yarn -s download:plugins && theia build --app-target=browser --mode development",
     "start": "VSX_REGISTRY_URL=https://open-vsx.org THEIA_CONFIG_DIR=\"${XDG_CONFIG_HOME:-$HOME/.config}/powerbrowser\" bash -c 'mkdir -p \"$THEIA_CONFIG_DIR\" && theia start'"
   }

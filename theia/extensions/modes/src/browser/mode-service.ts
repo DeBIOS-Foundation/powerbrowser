@@ -467,7 +467,7 @@ export class ModeService implements FrontendApplicationContribution {
         try {
             await this.fileService.write(this.modesUri, JSON.stringify({ version: MODES_STORE_VERSION, customs }, undefined, 2));
         } catch {
-            void this.flash('Power Browser could not save this mode. Your panels are unchanged — try again.');
+            void this.flash('PowerBrowser could not save this mode. Your panels are unchanged — try again.');
             return;
         }
         this.lastGoodCustoms = customs;
@@ -632,7 +632,7 @@ export class ModeService implements FrontendApplicationContribution {
             this.registerCustom(row);
         }
         for (const bad of parsed.badNames) {
-            void this.flash(`Power Browser couldn't load the "${bad}" mode. Browsing is shown instead.`);
+            void this.flash(`PowerBrowser couldn't load the "${bad}" mode. Browsing is shown instead.`);
         }
         const active = this.safeActiveId();
         if (active !== undefined && this.droppedCustomIds.has(active)) {
@@ -648,7 +648,7 @@ export class ModeService implements FrontendApplicationContribution {
         this.droppedCustomIds = new Set(this.registeredCustomIds);
         await this.activateMode('browsing');
         if (fallbackName !== undefined) {
-            void this.flash(`Power Browser couldn't load the "${fallbackName}" mode. Browsing is shown instead.`);
+            void this.flash(`PowerBrowser couldn't load the "${fallbackName}" mode. Browsing is shown instead.`);
         }
     }
 

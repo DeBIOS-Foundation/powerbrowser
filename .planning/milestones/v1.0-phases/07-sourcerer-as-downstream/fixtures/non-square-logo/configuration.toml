@@ -35,3 +35,6 @@ endpoint = "https://telemetry.northlight.example.org/v1/events"
 [upstreams]
 firefox_esr_tag = "FIREFOX_154_0esr_RELEASE"
 theia_release = "1.74.1"
+
+[urls]
+update = "https://updates.example.org/update.xml"

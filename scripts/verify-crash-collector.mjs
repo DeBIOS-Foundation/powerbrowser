@@ -40,6 +40,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
     ANNOTATION_ALLOWLIST,
+    EXTRA_PART_NAME,
     LOOPBACK_HOST,
     MAX_ANNOTATION_BYTES,
     MAX_BODY_BYTES,
@@ -419,6 +420,52 @@ function selfTest() {
                 ok = false;
             } else {
                 console.log(`${NAME}: --self-test -- failed store writes consumed no throttle budget (retry accepted)`);
+            }
+        }
+
+        // Plant 8: a deeply nested allowlisted value in Gecko's extra part.
+        // JSON.parse accepts this depth; JSON.stringify overflows the stack on
+        // it. Allowlisted fields are scalars, so the report must be stored with
+        // the nested field dropped -- never lost as a 500. ProductName rides
+        // the same part, so a collector that ignored the extra part entirely
+        // would not pass.
+        {
+            const storeDir = storeOf('nested-extra');
+            const depth = 100_000;
+            const extra = `{"ProductName":"PowerBrowser","Version":${'['.repeat(depth)}${']'.repeat(depth)}}`;
+            let verdict;
+            try {
+                verdict = handleSubmit({
+                    body: buildMultipart([
+                        { name: MINIDUMP_PART_NAME, filename: 'n.dmp', data: Buffer.from('D') },
+                        { name: EXTRA_PART_NAME, filename: 'extra.json', contentType: 'application/json', data: Buffer.from(extra) },
+                    ]),
+                    contentType: SELFTEST_CONTENT_TYPE,
+                    storeDir,
+                    throttle: createThrottleState(),
+                    nowMs: NOW,
+                });
+            } catch (err) {
+                verdict = { status: 'threw', body: String(err && err.message ? err.message : err) };
+            }
+            const id = /^CrashID=(.+)$/.exec(verdict.body)?.[1];
+            let record = null;
+            try {
+                record = id ? JSON.parse(readFileSync(join(storeDir, `${id}.json`), 'utf8')) : null;
+            } catch {
+                record = null;
+            }
+            if (verdict.status !== 200 || !record) {
+                console.error(`${NAME}: --self-test FAIL -- a deeply nested extra value lost the report: answered ${verdict.status} ${JSON.stringify(verdict.body)}, want 200 CrashID= with a stored record`);
+                ok = false;
+            } else if (record.annotations.Version !== undefined) {
+                console.error(`${NAME}: --self-test FAIL -- a nested (non-scalar) extra value was stored as Version -- allowlisted fields are scalars`);
+                ok = false;
+            } else if (record.annotations.ProductName !== 'PowerBrowser') {
+                console.error(`${NAME}: --self-test FAIL -- the extra part's scalar ProductName was not stored alongside the dropped nested field`);
+                ok = false;
+            } else {
+                console.log(`${NAME}: --self-test -- a deeply nested extra value was dropped and the report kept (${verdict.body})`);
             }
         }
     } finally {

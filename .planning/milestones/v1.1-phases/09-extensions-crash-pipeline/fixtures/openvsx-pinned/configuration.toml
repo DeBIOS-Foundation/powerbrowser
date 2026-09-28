@@ -46,3 +46,6 @@ id = "akamud.vscode-theme-onedark"
 source = "openvsx"
 version = "2.3.0"
 sha256 = "46b7471523cc2c0fcf526ed63b87b502e4102f3c3cde68d9f2eae9c9887a2e85"
+
+[urls]
+update = "https://updates.example.org/update.xml"

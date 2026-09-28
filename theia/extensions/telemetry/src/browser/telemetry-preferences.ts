@@ -38,7 +38,7 @@ export const TelemetryPreferenceSchema: PreferenceSchema = {
                 'Send usage and error telemetry to the configured endpoint.',
             ],
             default: 'off',
-            description: 'How much usage and error telemetry Power Browser sends to the configured endpoint.',
+            description: 'How much usage and error telemetry PowerBrowser sends to the configured endpoint.',
         },
     },
 };

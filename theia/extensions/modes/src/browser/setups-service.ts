@@ -164,7 +164,7 @@ export const SETUPS_EMPTY_HEADING = 'No saved setups';
 export const SETUPS_EMPTY_BODY = 'Save the current windows, tabs, and mode as a setup to restore them later — choose Save Setup.';
 
 /** Contracted restore-failure error (14-UI-SPEC.md, verbatim): session untouched. */
-export const SETUP_RESTORE_FAILURE = 'Power Browser couldn\'t restore this setup. Your current windows and tabs are unchanged — try again, or delete the setup and save a new one.';
+export const SETUP_RESTORE_FAILURE = 'PowerBrowser couldn\'t restore this setup. Your current windows and tabs are unchanged — try again, or delete the setup and save a new one.';
 
 /**
  * Contracted save-failure error (14-UI-SPEC.md, verbatim): flashes on the
@@ -173,7 +173,7 @@ export const SETUP_RESTORE_FAILURE = 'Power Browser couldn\'t restore this setup
  * Save Setup, which is on screen and re-runnable. The caught error is
  * never interpolated: it is diagnostics, not user copy.
  */
-export const SETUP_SAVE_FAILURE = 'Power Browser couldn\'t save this setup. Your saved setups are unchanged \u2014 try again, or choose a different name.';
+export const SETUP_SAVE_FAILURE = 'PowerBrowser couldn\'t save this setup. Your saved setups are unchanged \u2014 try again, or choose a different name.';
 
 /**
  * Contracted delete-failure error (14-UI-SPEC.md, verbatim): flashes on the
@@ -182,7 +182,7 @@ export const SETUP_SAVE_FAILURE = 'Power Browser couldn\'t save this setup. Your
  * copy, which would tell the user to delete the setup that just failed to
  * delete. The caught error is never interpolated.
  */
-export const SETUP_DELETE_FAILURE = 'Power Browser couldn\'t delete this setup. It\'s still in your list \u2014 try again.';
+export const SETUP_DELETE_FAILURE = 'PowerBrowser couldn\'t delete this setup. It\'s still in your list \u2014 try again.';
 
 /**
  * Contracted gone-tabs variant (14-UI-SPEC.md): the restore still completes
@@ -190,7 +190,7 @@ export const SETUP_DELETE_FAILURE = 'Power Browser couldn\'t delete this setup. 
  * "some tabs no longer exist" -- the row is never left half-applied with no
  * explanation.
  */
-export const SETUP_GONE_TABS_NOTICE = 'Power Browser restored this setup, but some tabs no longer exist. Geometry and mode are applied.';
+export const SETUP_GONE_TABS_NOTICE = 'PowerBrowser restored this setup, but some tabs no longer exist. Geometry and mode are applied.';
 
 /**
  * Contracted dependent-window refusal (14-UI-SPEC.md, verbatim): thrown when
@@ -200,7 +200,7 @@ export const SETUP_GONE_TABS_NOTICE = 'Power Browser restored this setup, but so
  * makes a retry clause true again; the string is left as contracted until
  * the spec row and this constant change together (questions-wave-c.md Q6).
  */
-export const SETUP_DEPENDENT_UNSUPPORTED = 'Power Browser can\'t open this tab in its own window. Select a terminal or editor tab first.';
+export const SETUP_DEPENDENT_UNSUPPORTED = 'PowerBrowser can\'t open this tab in its own window. Select a terminal or editor tab first.';
 
 /**
  * Contracted unknown-mode fallback notice (14-UI-SPEC.md): activateMode
@@ -208,7 +208,7 @@ export const SETUP_DEPENDENT_UNSUPPORTED = 'Power Browser can\'t open this tab i
  * decide whether this notice is shown.
  * The stored id is never interpolated: custom ids are internal identifiers.
  */
-export const SETUP_MODE_FALLBACK_NOTICE = 'Power Browser restored this setup, but its saved mode is no longer available. Browsing is shown instead.';
+export const SETUP_MODE_FALLBACK_NOTICE = 'PowerBrowser restored this setup, but its saved mode is no longer available. Browsing is shown instead.';
 
 /** Contracted saved confirmation shape: `Setup "<name>" saved.` */
 export function setupSavedConfirmation(name: string): string {

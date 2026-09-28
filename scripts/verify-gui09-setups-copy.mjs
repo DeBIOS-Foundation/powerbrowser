@@ -589,8 +589,8 @@ function selfTest() {
     // proven capable of firing before its silence is read as evidence.
     {
         const service = real[SERVICE_REL].replace(
-            "'Power Browser can\\'t open this tab",
-            "'powerbrowser.setups.open-dependent: Power Browser can\\'t open this tab"
+            "'PowerBrowser can\\'t open this tab",
+            "'powerbrowser.setups.open-dependent: PowerBrowser can\\'t open this tab"
         );
         const mutated = { ...real, [SERVICE_REL]: service };
         plant(

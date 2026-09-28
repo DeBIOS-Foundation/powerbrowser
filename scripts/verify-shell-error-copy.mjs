@@ -315,8 +315,8 @@ function check(targetPath) {
 
   // --- (1) every declared message is clean -------------------------------
   for (const [key, value] of table.entries) {
-    if (!value.includes("Power Browser")) {
-      fail(`USER_MESSAGE.${key} does not name the product ("Power Browser"): ${JSON.stringify(value)}`);
+    if (!value.includes("PowerBrowser")) {
+      fail(`USER_MESSAGE.${key} does not name the product ("PowerBrowser"): ${JSON.stringify(value)}`);
     }
     for (const hit of value.match(ALL_CAPS_TOKEN) ?? []) {
       if (hit.length >= 4) {
@@ -534,9 +534,9 @@ const EXPECTED_MODES_COPY = new Set([
   "Mode name",
   "Give the mode a name — type a name and choose Save as Mode.",
   "A mode with this name already exists. Choose a different name.",
-  "Power Browser could not save this mode. Your panels are unchanged — try again.",
+  "PowerBrowser could not save this mode. Your panels are unchanged — try again.",
   'Mode "${name}" saved.',
-  "Power Browser couldn't load the \"${name}\" mode. Browsing is shown instead.",
+  "PowerBrowser couldn't load the \"${name}\" mode. Browsing is shown instead.",
 ]);
 
 /**
@@ -555,8 +555,8 @@ const EXPECTED_WIDGET_COPY = new Set([
   "No suggestions",
   "No matches for what you typed — press Enter to visit it as an address.",
   "Enter opens the address · Esc closes suggestions",
-  "Power Browser couldn&apos;t load suggestions. Press Enter to visit what you typed.",
-  "Power Browser couldn&apos;t open that address. Press Enter to try again.",
+  "PowerBrowser couldn&apos;t load suggestions. Press Enter to visit what you typed.",
+  "PowerBrowser couldn&apos;t open that address. Press Enter to try again.",
 ]);
 
 function normalizeInterp(value) {
@@ -765,8 +765,8 @@ const FAULTS = [
     name: "all-caps sentinel leaked into a message",
     apply: (s) =>
       s.replace(
-        "Power Browser's interface didn't finish starting.",
-        "Power Browser did not see POWERBROWSER_BACKEND_READY."
+        "PowerBrowser's interface didn't finish starting.",
+        "PowerBrowser did not see POWERBROWSER_BACKEND_READY."
       ),
     expect: "POWERBROWSER_BACKEND_READY",
   },
@@ -774,8 +774,8 @@ const FAULTS = [
     name: "pref key leaked into a message",
     apply: (s) =>
       s.replace(
-        "Power Browser needs Node.js and couldn't find it.",
-        "Power Browser could not read powerbrowser.sidecar.nodePath."
+        "PowerBrowser needs Node.js and couldn't find it.",
+        "PowerBrowser could not read powerbrowser.sidecar.nodePath."
       ),
     expect: "powerbrowser.sidecar.nodePath",
   },
@@ -789,7 +789,7 @@ const FAULTS = [
     apply: (s) =>
       s.replace(
         "const USER_MESSAGE = {\n",
-        'const USER_MESSAGE = {\n  neverUsed: "Power Browser has an unused message.",\n'
+        'const USER_MESSAGE = {\n  neverUsed: "PowerBrowser has an unused message.",\n'
       ),
     expect: "USER_MESSAGE.neverUsed is declared but never referenced",
   },
@@ -899,7 +899,7 @@ const FAULTS = [
     apply: (s) =>
       s.replace(
         "const USER_MESSAGE = {\n",
-        'const USER_MESSAGE = {\n  "quotedKey": "Power Browser has an entry with a quoted key.",\n'
+        'const USER_MESSAGE = {\n  "quotedKey": "PowerBrowser has an entry with a quoted key.",\n'
       ),
     expect: "never leak-scanned",
   },
@@ -908,7 +908,7 @@ const FAULTS = [
     apply: (s) =>
       s.replace(
         "const USER_MESSAGE = {\n",
-        "const USER_MESSAGE = {\n  unreadableEntry: `Power Browser has an entry this parser cannot read.`,\n"
+        "const USER_MESSAGE = {\n  unreadableEntry: `PowerBrowser has an entry this parser cannot read.`,\n"
       ),
     expect: "never leak-scanned",
   },

@@ -32,12 +32,10 @@ Three parts of `docs/BUILD.md` currently read as the opposite of what this docum
 states, because each records the pre-release posture and a stage rewrites it: the
 "Key-custody rung (T-08-04a)" text saying the MARs are unsigned hash-pinned blobs
 and no fork key was generated (rewritten by stage `mar-signing-and-update-integrity`);
-the "Two baked-in facts" block saying no mozconfig lever can change the update host,
-together with the "Policy install (REQUIRED post-build step)" section (both deleted
-or rewritten by stage `release-identity`); and the packaging capability record's line
+and the packaging capability record's line
 saying `virsh list --all` shows zero defined domains (corrected by stage
 `windows-unsigned`). Until each stage runs, `docs/BUILD.md` is the stale side of
-those three disagreements.
+those two disagreements.
 
 Where a value is not derivable today it is named as pending rather than guessed.
 A number written here that no stage measured is a defect, not a placeholder.
@@ -196,7 +194,7 @@ here owns.
 | `mar-signing-and-update-integrity` | Confirm `gh auth status` shows the owner and the `release` environment exists | Account |
 | `mar-signing-and-update-integrity` | The MAR key ceremony (below) | Private key custody |
 | `mar-signing-and-update-integrity` | One bounded primary-key use on `legion` to sign the N+1 MAR for the three-drive proof, then wipe and unmount | The only deliberate exception to the key never touching `legion` |
-| `packaged-product-correctness-linux` | Node provenance: read the version from `nix develop .#theia --command node --version`, import and confirm the Node release signing key fingerprints, `gpg --verify SHASUMS256.txt`, take the `linux-x64` sha256, pin it, and write the shipped-licences and provenance section of `docs/BUILD.md` | Key trust decision |
+| `packaged-product-correctness-linux` | Node provenance: read the version from `nix develop .#theia --command node --version`, fetch `SHASUMS256.txt` with its `SHASUMS256.txt.sig` from the same `nodejs.org/dist/<version>/` directory, import and confirm the Node.js release signing keys (origin: the nodejs/release-keys repository, verified out of band against the keys the installer already trusts), `gpg --verify SHASUMS256.txt`, take the `linux-x64` sha256, pin it, and write the shipped-licences and provenance section of `docs/BUILD.md` | Key trust decision |
 | `linux-release-pipeline-and-update-channel` | Create a fine-grained PAT limited to `DeBIOS-Foundation/powerbrowser` with self-hosted-runner read/write only; write it root-owned mode 0600 to `/var/lib/secrets/github-runner-pat` | Secret custody plus `pkexec` |
 | `linux-release-pipeline-and-update-channel` | Add the `services.github-runners` block to `/etc/nixos/configuration.nix` and apply it | Root on `legion` |
 | `linux-release-pipeline-and-update-channel` | Set fork pull request workflows from outside collaborators to **Require approval for all external contributors**; read back `fork-pr-approval.json` rather than re-applying | Repository settings UI |
@@ -232,7 +230,7 @@ for the `objdir-release` rebuild. Both builds are auto tasks in their plans.
 | `prerequisites-and-hardening` | Correct the two stale control claims and re-sync the pref comparands; write the nine `.github/settings/*.json` bodies and apply them; write this document's control half; register `scripts/verify-repo-controls.mjs` as the permanent drift check; rebase the ESR pin to `FIREFOX_153_2_0esr_RELEASE`, push `main` to parity and watch that run |
 | `release-identity` | Configure-level probe of the four levers; `releaseIdentity()` in the generator with tracked comparands; policy file, hop gate, branding gate and documents follow the baked host; `scripts/verify-release-identity.mjs` with self-test and two registry rows; one batched dev rebuild proving the baked identity |
 | `mar-signing-and-update-integrity` | Claims record; certificate emitters and `patches/030-powerbrowser-mar-certificates.patch`; drop `--enable-unverified-updates`; tier-3 rebuild of N and N+1; `scripts/sign-mar.sh`, `scripts/build-update-xml.mjs`, hop-verifier extension, two registry rows; three drives and the evidence contract |
-| `packaged-product-correctness-linux` | Staging and packaging probe; `scripts/stage-sidecar.sh` and `patches/040-powerbrowser-package.patch`; application-directory resolution, profile-scoped Theia state, URL argument handling; variant-free legal notice; shell-side update-ready layer; four registry row pairs and `scripts/run-install-matrix.sh` |
+| `packaged-product-correctness-linux` | Staging and packaging probe; `scripts/stage-sidecar.sh` and `patches/050-powerbrowser-package.patch`; application-directory resolution, profile-scoped Theia state, URL argument handling; variant-free legal notice; shell-side update-ready layer; four registry row pairs and `scripts/run-install-matrix.sh` |
 | `linux-release-pipeline-and-update-channel` | Derive the update-origin facts and write the procedure half of this document; `.github/workflows/release.yml` plus its static gate; the live channel gate; the release-mode hop drill and the observed allowlist rows |
 | `windows-unsigned` | Five routing verdicts; `.#firefox-win64` shell and the Windows mozconfig; the one-time `WINSYSROOT` cache population with `get_vs.py`, run from `upstream/` and written outside the repository; generated installer artwork and fork registry defines; `patches/050-powerbrowser-installer.patch` and the deny-host grep; the Windows build, sidecar staging, installer and MAR; the matrix gate, the copy gate, the WINNT descriptor row and the `build-windows` job |
 | `macos-adhoc-signed` | Toolchain probe; `.#firefox-macos` shell and two macOS mozconfigs; the five missing branding inputs; universal build, DMG, ad-hoc signature, one universal MAR and two Darwin descriptors; darwin Theia builds and the staged Node binary; five gates plus five self-tests |
@@ -865,10 +863,10 @@ sed -n 's|^URL=https://\([^/]*\)/update/6/.*|\1|p' objdir-release/dist/bin/appli
 cause is a stale objdir predating the release-identity stage. Note that
 `powerbrowser/distribution/policies.json` is **not** the mechanism:
 `upstream/browser/installer/package-manifest.in` packages `distribution/*` only
-under `BUILT_BY_MOZILLA`, so a policy file never ships. `docs/BUILD.md` still
-carries a "Policy install (REQUIRED post-build step)" section and a claim that no
-mozconfig lever can change the host; stage `release-identity` deletes both, and
-until it runs this document is the current side of that disagreement.
+under `BUILT_BY_MOZILLA`, so a policy file never ships. `docs/BUILD.md`'s
+"Policy install" section and the update-host facts beside it were rewritten by
+the non-GUI wave E (NG-064, NG-072); on that side this document is the stale one
+until stage `release-identity` runs.
 
 **Byte-identity rows go red after a flake update.** The most common cause is an
 `inkscape` version change: the tracked PNGs were rasterised with the flake-locked

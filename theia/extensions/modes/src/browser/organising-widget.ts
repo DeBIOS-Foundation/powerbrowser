@@ -2059,13 +2059,13 @@ export class OrganisingWidget extends Widget {
         this.toolbar.append(toggle, fresh, this.zoomCluster);
 
         this.loadBar = this.buildBar(
-            'Power Browser couldn\u2019t load your tab groups. Your tabs are unchanged \u2014 choose Retry.',
+            'PowerBrowser couldn\u2019t load your tab groups. Your tabs are unchanged \u2014 choose Retry.',
             () => {
                 void this.initialize();
             }
         );
         this.saveBar = this.buildBar(
-            'Power Browser couldn\u2019t save your tab groups. The canvas shows your latest arrangement \u2014 choose Retry.',
+            'PowerBrowser couldn\u2019t save your tab groups. The canvas shows your latest arrangement \u2014 choose Retry.',
             () => {
                 void this.retrySave();
             }

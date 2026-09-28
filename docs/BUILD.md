@@ -131,13 +131,33 @@ post-install file swap of the resolved platform package (or the resolved
 module-level constant import, not DI-injectable or preference-driven, so
 there is no rebind seam. That is optional hardening, out of scope here.
 
-**No bundled VS Code extensions.** The app ships `@theia/plugin-ext`,
-`@theia/plugin-ext-vscode` and `@theia/vsx-registry` — the extension-host
-machinery and the runtime installer — but no `theiaPlugins` manifest block
-and no `theia download:plugins` step. A user installing extensions at
-runtime through the Open VSX connection is the only plugin-acquisition
-path this project needs; do not add a bundling step unless a future phase
-decides to ship default extensions.
+**Declared extensions only.** The app ships `@theia/plugin-ext`,
+`@theia/plugin-ext-vscode` and `@theia/vsx-registry`, the extension-host machinery
+and the runtime installer. This project declares no `[[extensions]]`, so the
+`theiaPlugins` block stays absent and the build downloads nothing. A downstream that
+declares extensions gets them from `yarn build`'s `download:plugins` step, which is
+`scripts/download-plugins.mjs`. Every `theiaPlugins` id must have an `[[extensions]]`
+entry that pins it, and each packed archive lands in the slot the pin gate hashes:
+
+- npm, local-path and direct-URL `.tar.gz` tarballs are fetched or packed and written to
+  `plugins/<id>.tar.gz`. A local-path folder is packed with none of its package scripts
+  run (`prepare` included);
+- every other kind goes through the stock `theia download:plugins --packed`;
+- a fetched archive already at its pin is reused, and any other slot is fetched again;
+- every slot is then hashed against its manifest `sha256` before anything is unpacked;
+- each declared archive is unpacked beside itself into `plugins/<id>/` (regular files and
+  folders only, no links), and anything undeclared is removed from `plugins/`. The packed
+  file is what the pin gate hashes; the folder is what Theia loads, because its plugin
+  deployer refuses packed files in a `THEIA_PLUGINS` or `THEIA_DEFAULT_PLUGINS` folder.
+
+A pin mismatch removes the entry and fails the build naming it, and nothing is placed
+by hand (NG-071, check `ng071-tarball-extensions-build`). Every
+`extensionDependencies` and `extensionPack` member of a declared extension must
+itself be declared with its own pin: the download step refuses an entry whose
+unpacked manifest names an id no `[[extensions]]` entry declares, so no unpinned
+bytes are fetched from the registry at sidecar start. The sidecar receives
+`<app>/plugins` through `THEIA_DEFAULT_PLUGINS` (NG-073, check
+`ng073-declared-extension-loads`).
 
 **Environment variables the `start` script sets.** `applications/browser`'s
 `start` script exports two variables explicitly, rather than relying on
@@ -328,14 +348,15 @@ the `.tar.gz` slots the pin gate hashes. The hop-equivalent pin re-proof
 is `node scripts/verify-extension-pins.mjs` green over the staged set
 (fragment equality plus block equality plus the npm `-<version>.tgz`
 suffix guard plus sha256 over the placed archives with the local-path
-presence leg), run at drill time before the build below.
+presence leg), run at drill time before the build below. Since NG-071 the build's own plugin step does this, so the out-of-band placement above is a historical record, not a procedure.
 
 Sidecar build over the downloaded set: `theia build --app-target=browser
 --mode development` inside the theia shell finished with 0 errors on both the browser and node targets over the five-archive vsix-plus-tarball set (incremental over the prebuilt tree, 4.9s wall; full log at (.mozbuild/0904/build-sidecar.log)). The full `yarn
 build` wrapper is not part of this cell: it re-runs the stock download
 over the whole block, which aborts on the pack references by the design
 above. A pack-aware download wrapper is follow-up work, not a drill
-failure.
+failure. That wrapper now exists: `download:plugins` is `scripts/download-plugins.mjs`
+(NG-071).
 
 Staged host cells (the 08-05 capability record re-read, not re-proven):
 
@@ -344,17 +365,24 @@ Staged host cells (the 08-05 capability record re-read, not re-proven):
   current): no reachable Windows host exists — qemu:///system is
   unmanageable without privilege and no guest is defined. Unblock
   (operator): provision pkg-win11 per the 08-05 capability record, then
-  run the download-plus-build procedure below with the placeholder
-  resolved to win32-x64 and the win32-x64 vsix pin above.
+  stage the entries with the placeholder resolved to win32-x64 and the
+  win32-x64 vsix pin above, run `yarn build` in the theia shell (its
+  `download:plugins` step installs every kind at its pin), then
+  `node scripts/verify-extension-pins.mjs`.
 - macOS sidecar build plus install over the darwin-arm64-resolved vsix
   set: staged-unexecuted. Provisioning error (08-05 record, still
   current): no macOS image exists anywhere reachable, no Apple hardware,
   and no lawful download path for a macOS image from Linux. Unblock
   (operator): provision pkg-macos per the 08-05 capability record, then
-  run the download-plus-build procedure below with the placeholder
-  resolved to darwin-arm64 and the darwin-arm64 vsix pin above.
+  stage the entries with the placeholder resolved to darwin-arm64 and the
+  darwin-arm64 vsix pin above, run `yarn build` in the theia shell (its
+  `download:plugins` step installs every kind at its pin), then
+  `node scripts/verify-extension-pins.mjs`.
 
-Verbatim drill transcript (nix-linux; run from the repo root):
+Verbatim drill transcript (nix-linux; run from the repo root). It records the
+2026-09-05 run and is not a procedure: since NG-071 its steps 4 to 6 are the one
+`yarn build` inside the theia shell, whose `download:plugins` step downloads, packs,
+pin-checks and unpacks every kind, followed by `node scripts/verify-extension-pins.mjs`.
 
 ```
 # 0. back up the two tracked files the drill stages:
@@ -738,27 +766,17 @@ test -x objdir/dist/bin/updater && echo UPDATER_PRESENT
 `config.status` carries the flag. No `upstream/` edit and no new Gecko
 patch accompany the flip.
 
-Two baked-in facts the procedure works around rather than edits:
+Two facts about where the update URL lives:
 
-- `application.ini`'s `[AppUpdate]` URL bakes `aus5.mozilla.org`
-  (`MOZ_APPUPDATE_HOST` default in `upstream/build/moz.build:95`; no
-  `option(env=...)` binding exists upstream, so no mozconfig lever can
-  change it). It is NEVER used when the `AppUpdateURL` enterprise policy
-  is present — `getUpdateURL` prefers the policy
-  (`UpdateService.sys.mjs:5466`). A policy-less install therefore phones
-  Mozilla and fails `verify-endpoints.sh` layer 3 red on `aus5` by
-  design (fail-loud, observed live 08-04) — never silently green.
+- `application.ini`'s `[AppUpdate]` URL host comes from `configuration.toml` `[urls] update` (NG-064). `generated/identity.configure` emits `set_config("MOZ_APPUPDATE_HOST", …)`, which `upstream/build/moz.build:96` prefers over its `aus5.mozilla.org` default. It is a compiled value, so a change needs a tier-3 rebuild. The `AppUpdateURL` enterprise policy still wins when present (`UpdateService.sys.mjs:5466`), and `powerbrowser/distribution/policies.json` carries the same URL.
 - `app.update.url` as a pref does not exist (removed in Bug 1568994; the
   removal is noted in `upstream/browser/app/profile/firefox.js:156`), so
-  no pref file can carry the fork URL. The policy file is the only
-  mechanism.
+  no pref file can carry the fork URL. The policy file and the compiled
+  `application.ini` URL above are the only mechanisms.
 
-### Policy install (REQUIRED post-build step)
+### Policy install (dev runs only)
 
-`powerbrowser/distribution/policies.json` carries the fork descriptor URL
-plus the two telemetry/studies disables. `DisableAppUpdate` was removed
-in 08-04 — it contradicted a self-updating client. A full rebuild does
-not produce the installed copy, and a clobbered objdir loses it:
+The Linux package carries `distribution/policies.json` (`powerbrowser/packaging/package-linux.sh`, NG-072). A run straight out of `objdir/dist/bin` does not, and a clobbered objdir loses any copy, so a dev run still needs:
 
 ```
 mkdir -p objdir/dist/bin/distribution
@@ -943,9 +961,7 @@ Stand-ins that stay labeled, never blessed (08-05 work): the wizard
 bitmaps (`wizHeader.bmp`, `wizHeaderRTL.bmp`, `wizWatermark.bmp`),
 `firefox64.ico` and `stubinstaller/` artwork come from
 `upstream/browser/branding/unofficial/` — the fork ships no wizard
-artwork yet; and `defines.nsi` still carries upstream's own Mozilla
-literals (`AppName`, certificate names, Mozilla telemetry URL) that a
-Windows shippable must replace. The row's PASS line says the compile
+artwork yet; and `defines.nsi` now takes `AppName` from the build's `MOZ_APP_NAME` and `CERTIFICATE_NAME` from the generated `CompanyName`, and the installer sends no telemetry ping (`patches/040-powerbrowser-nsis.patch`, NG-066, row `ng066-nsis-branding-no-ping`). `CERTIFICATE_ISSUER` stays upstream's until a fork Windows signing certificate exists (deferred with the Windows packaging row). The row's PASS line says the compile
 only.
 
 ### Packaging hosts (08-05): capability record
@@ -982,6 +998,39 @@ decision per RESEARCH open question 1 and is NOT procured in this phase.
 - The per-OS install → launch → uninstall → no-residue matrix, plus the
   alongside-stock-Firefox interleaved launch, run there (matrix section
   below records the Linux cells green and the staged cells with unblocks).
+
+### Linux package (NG-063, NG-072)
+
+`nix develop .#firefox --command bash powerbrowser/packaging/package-linux.sh`
+runs `./mach package` and adds these to the staged application directory:
+- `theia/`: the built app's `lib/` without source maps, its `package.json`, and
+  `plugins/` when present;
+- `node/`: the official Node release pinned in `powerbrowser/packaging/node-runtime.json`,
+  downloaded once into `.mozbuild/node-dist/` and sha256-checked against the pin;
+- `distribution/policies.json`.
+
+The Node download happens at build time and is deliberately not in the
+runtime allowlist: that file governs browser/sidecar egress only (R15).
+
+The pin's provenance is the release-key step the owner performs, not this
+script: the sha256 in `powerbrowser/packaging/node-runtime.json` comes from
+nodejs.org's `SHASUMS256.txt` after `gpg --verify SHASUMS256.txt` against the
+Node release signing keys (RELEASING.md "Node provenance" names the step and
+the key origin). The script cannot perform that check -- it has no keyring
+here -- so it enforces the pin: a download that does not hash to it is deleted
+and the run fails naming it, and an unverified archive is never unpacked into
+the package. Bump Node by rerunning the pin step in the non-GUI wave E plan,
+Task 10 Step 2, including the signature check.
+
+It then refreshes `precomplete` and rewrites
+`objdir/dist/<app>-<Version>.en-US.linux-x86_64.tar.xz`. A packaged install runs
+its own staged backend and Node unless a user pref names another path (NG-063).
+`objdir/dist/bin` is untouched, so dev runs keep the dev tree. Bump Node by
+rerunning the pin step in the non-GUI wave E plan, Task 10 Step 2.
+The Gecko binaries are built in the Nix shell, so the package runs where those
+store paths exist.
+
+Checks: `ng063-packaged-launch`, `ng072-policies-packaged-webextension`.
 
 ### Per-OS install matrix with update hops (08-05)
 

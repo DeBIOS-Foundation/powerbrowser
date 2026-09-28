@@ -47,3 +47,6 @@ id = "acme.localtool"
 source = "local-path"
 path = "extensions/acme-local"
 sha256 = "b7dd35157e24f36e69957dc38d17c66b73b12ba55fe552bf86f64de16a994623"
+
+[urls]
+update = "https://updates.example.org/update.xml"

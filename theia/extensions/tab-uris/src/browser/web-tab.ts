@@ -69,7 +69,7 @@ const GROUP_RESPONSE_EVENT = 'PowerBrowserGroupResponse';
 /** Copywriting Contract, verbatim. Text nodes only, never markup. */
 const NEW_TAB_LABEL = 'New Tab';
 const EMPTY_STATE_COPY = 'Type an address above to get started.';
-const LOST_VIEW_COPY = "Power Browser can't show this page right now. Choose Reload to try again, or close this tab.";
+const LOST_VIEW_COPY = "PowerBrowser can't show this page right now. Choose Reload to try again, or close this tab.";
 
 /**
  * Occlusion policy (UI-SPEC A8, Research Pitfall 3). The overlay is

@@ -277,7 +277,7 @@ also echoed at generate time as a `generate: default applied` line.
 | Setting | Required? | If omitted | Reaches |
 |---|---|---|---|
 | `urls.release_notes` | Optional | Omitted from the endpoint-hosts fragment | `generated/endpoint-hosts.json` host coverage when stated |
-| `urls.update` | Optional | Omitted from the endpoint-hosts fragment | `generated/endpoint-hosts.json` host coverage when stated |
+| `urls.update` | Optional | No update host is emitted, so upstream's default stays. A downstream that states no `urls.update` inherits the platform's own host, and generate refuses it (Task 15, R11). | `application.ini` `[AppUpdate]` URL host (`MOZ_APPUPDATE_HOST`, through `generated/identity.configure`), and `generated/endpoint-hosts.json` host coverage. `powerbrowser/distribution/policies.json` `AppUpdateURL` must equal it (check `ng064-update-url-from-manifest`). |
 | `urls.crash_report` | Optional | Blank report URL default | Crash-report URL default plus `generated/endpoint-hosts.json` host coverage when stated |
 | `urls.homepage` | Optional | Omitted from the endpoint-hosts fragment | `generated/endpoint-hosts.json` host coverage when stated |
 | `urls.search` | Optional | Omitted from the endpoint-hosts fragment | `generated/endpoint-hosts.json` host coverage when stated |
@@ -300,7 +300,7 @@ also echoed at generate time as a `generate: default applied` line.
 
 | Setting | Required? | If omitted | Reaches |
 |---|---|---|---|
-| `ai.backend` | Optional | Resolves to `off` with the standard default echo; no backend is registered | `generated/ai-backend.json` backend (one of off, opencode); the composed sidecar skips the backend binding entirely when off |
+| `ai.backend` | Optional | Resolves to `off` with the standard default echo; no backend is registered | `generated/ai-backend.json` backend (one of off, opencode); the `powerbrowserAiBackend` key of the application package.json. `opencode` also needs the `@powerbrowser/backend-opencode` dependency added there (docs/ai-opencode-adapter.md). When off, the adapter is not composed, so no opencode process and no `/mcp` endpoint start. |
 
 ### `[upstreams]` — upstream pins (both required, never inherited)
 

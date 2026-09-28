@@ -35,13 +35,16 @@
 // The self-test plants three faults and requires each to go red: the
 // suite run against the always-send stub (the off assertion must fail),
 // a drifted tracked block, and a drifted fragment -- each with the
-// unmutated control green first, so a red is plant-caused.
+// unmutated control green first, so a red is plant-caused. It also drives
+// the NG-067 error reporter into the real sender: the sent payload carries
+// no message, no stack and no path beyond a base name, a hostile event
+// never throws out of the listener, and a repeated error is sent once.
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, copyFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { emitTheiaTelemetry, resolveConfig } from './generate.mjs';
 
@@ -62,6 +65,8 @@ const FRAGMENT_REL = 'generated/theia-telemetry.json';
 const APP_PKG_REL = 'theia/applications/browser/package.json';
 const BLOCK_KEY = 'powerbrowserTelemetry';
 const TEST_REL = 'theia/extensions/telemetry/test/telemetry-sender.test.mjs';
+const SENDER_REL = 'theia/extensions/telemetry/src/browser/telemetry-sender.ts';
+const REPORT_REL = 'theia/extensions/telemetry/src/browser/telemetry-error-report.ts';
 const TSC_REL = 'theia/node_modules/typescript/bin/tsc';
 const EXT_REL = 'theia/extensions/telemetry';
 const RERUN_GENERATE = 'node scripts/generate.mjs';
@@ -194,7 +199,7 @@ function copyInto(root, rel) {
     copyFileSync(join(REPO_ROOT, rel), dest);
 }
 
-function selfTest() {
+async function selfTest() {
     let failed = 0;
     const complain = (name, why) => {
         console.error(`${NAME}: --self-test FAIL -- '${name}' ${why}`);
@@ -256,13 +261,83 @@ function selfTest() {
         }
     }
 
+    // Case 4 (NG-067): the error reporter and the sender are both
+    // zero-dependency, so this drives them together under plain node. The
+    // logger stand-in is telemetry-logger.ts's error translation (that file
+    // imports Theia and cannot load here).
+    {
+        const { ErrorReporter } = await import(pathToFileURL(join(REPO_ROOT, REPORT_REL)).href);
+        const { PowerBrowserTelemetrySender } = await import(pathToFileURL(join(REPO_ROOT, SENDER_REL)).href);
+        const bodies = [];
+        const sender = new PowerBrowserTelemetrySender({
+            endpoint: 'https://self-test.invalid/collect',
+            getLevel: () => 'error',
+            fetchFn: (url, init) => { bodies.push(init.body); return Promise.resolve({ ok: true }); },
+            flushIntervalMs: 0,
+        });
+        const reporter = new ErrorReporter({ sender, logError: (name, data) => sender.sendErrorData(name, data) });
+        const secret = '/home/self-test/private/notes.txt';
+        // M-3: a runtime-assigned constructor name carrying a path. The
+        // IDENTIFIER guard in typeOf() must sanitize this to 'unknown';
+        // deleting the guard sends the path as the event type.
+        class X extends Error {}
+        Object.defineProperty(X, 'name', { value: '/home/self-test/x' });
+        const thrown = {
+            error: new TypeError(`Unable to read file '${secret}'`),
+            message: `Uncaught TypeError: Unable to read file '${secret}'`,
+            filename: 'http://127.0.0.1:3000/lib/frontend/bundle.js?v=1#top',
+            lineno: 12,
+            colno: 34,
+        };
+        const escaped = [];
+        for (const call of [
+            () => reporter.onError(thrown),
+            () => reporter.onError(thrown),
+            () => reporter.onRejection({ reason: new RangeError(secret) }),
+            () => reporter.onError({ get error() { throw new Error(secret); }, filename: `data:text/javascript,${secret}`, lineno: '12' }),
+            () => reporter.onRejection({ reason: Object.create(null) }),
+            () => reporter.onRejection(null),
+            () => reporter.onError({ error: new X('planted'), filename: 'http://127.0.0.1:3000/lib/frontend/other.js', lineno: 7, colno: 9 }),
+            // M-3: non-finite positions. The Number.isFinite guard in
+            // position() must omit them; deleting the guard sends NaN (JSON
+            // null) and trips the numeric assert below.
+            () => reporter.onError({ error: new TypeError('planted'), filename: 'http://127.0.0.1:3000/lib/frontend/nonfinite.js', lineno: NaN, colno: Infinity }),
+        ]) {
+            try { call(); } catch (e) { escaped.push(String(e)); }
+        }
+        await sender.flush();
+        const text = bodies.join('\n');
+        const events = bodies.flatMap(b => JSON.parse(b).events);
+        const repeated = events.filter(e => e.data?.source === 'bundle.js');
+        const problems = [];
+        if (escaped.length > 0) problems.push(`a hostile event threw out of the listener: ${escaped.join(' | ')}`);
+        if (repeated.length !== 1) problems.push(`the repeated error was sent ${repeated.length} time(s), not once`);
+        else if (JSON.stringify(repeated[0].data) !== JSON.stringify({ type: 'TypeError', source: 'bundle.js', line: 12, column: 34 })) problems.push(`the uncaught-error payload is ${JSON.stringify(repeated[0].data)}`);
+        if (!events.some(e => e.name === 'frontend.unhandled-rejection' && e.data?.type === 'RangeError')) problems.push('the rejection was not sent with its type');
+        if (events.length !== 7) problems.push(`expected 7 events (one per distinct error), got ${events.length}`);
+        if (/message|stack|Unable|self-test|notes|\//.test(text)) problems.push(`the sent bodies carry message text, a stack or a path: ${text}`);
+        // M-3: pin the two privacy guards. A path-carrying constructor name
+        // must arrive as 'unknown' (IDENTIFIER guard), and every sent line
+        // and column must be a number (Number.isFinite guard in position()).
+        if (events.some(e => e.data?.type === '/home/self-test/x')) problems.push(`the path-carrying constructor name was sent as a type: ${text}`);
+        if (!events.some(e => e.data?.source === 'other.js' && e.data?.type === 'unknown')) problems.push(`the path-named error was not sanitized to type 'unknown': ${text}`);
+        if (!events.some(e => e.data?.source === 'nonfinite.js' && !('line' in (e.data ?? {})) && !('column' in (e.data ?? {})))) problems.push(`the non-finite positions were not omitted: ${text}`);
+        for (const e of events) {
+            for (const key of ['line', 'column']) {
+                if (key in (e.data ?? {}) && typeof e.data[key] !== 'number') problems.push(`event '${e.name}' carries non-number ${key}: ${JSON.stringify(e.data)}`);
+            }
+        }
+        if (problems.length > 0) complain('error report', problems.join('; '));
+        else console.log(`  ok  error report -> no message, stack or path; hostile events contained; a repeat sent once`);
+    }
+
     if (failed > 0) return 1;
-    console.log(`${NAME}: --self-test PASS -- 3 planted faults all behaved as pinned`);
+    console.log(`${NAME}: --self-test PASS -- 3 planted faults and the error-report case all behaved as pinned`);
     return 0;
 }
 
 if (SELF_TEST) {
-    process.exit(selfTest());
+    process.exit(await selfTest());
 } else if (args.length === 0) {
     main();
 }

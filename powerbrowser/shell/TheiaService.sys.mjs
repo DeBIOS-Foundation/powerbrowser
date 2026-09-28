@@ -39,9 +39,9 @@ const HEALTH_PATH = "/powerbrowser/health";
  * literal, a stale entry and a removed one all go red.
  */
 const USER_MESSAGE = {
-  interfaceFilesMissing: "Power Browser can't find its interface files. This build looks incomplete — reinstall, or open Details for the missing path.",
-  nodeMissing: "Power Browser needs Node.js and couldn't find it. Install Node.js 22 or later and open Power Browser again, or open Details for where it looked.",
-  couldNotStart: "Power Browser couldn't start its interface. Choose Retry, or open Details to see the error.",
+  interfaceFilesMissing: "PowerBrowser can't find its interface files. This build looks incomplete — reinstall, or open Details for the missing path.",
+  nodeMissing: "PowerBrowser needs Node.js and couldn't find it. Install Node.js 22 or later and open PowerBrowser again, or open Details for where it looked.",
+  couldNotStart: "PowerBrowser couldn't start its interface. Choose Retry, or open Details to see the error.",
   // 01-13: the one place a SECOND `couldNotStart` sentence is warranted, and the
   // one place 01-10 declined to mint a key. 01-10's reasoning was that a new key
   // would have to invent a distinction the user cannot act on -- still correct
@@ -51,8 +51,8 @@ const USER_MESSAGE = {
   // the stated next step and the rendered controls are one fact. Reachable only
   // from `_spawnAndGate`'s two `recoverable: false` returns -- the spawn-throw
   // D-113 site and the D-112 pinned-port-conflict site.
-  couldNotStartUnrecoverable: "Power Browser couldn't start its interface, and retrying won't change the result. Close Power Browser and open it again, or open Details to see the error.",
-  didNotFinishStarting: "Power Browser's interface didn't finish starting. Choose Retry, or open Details if this keeps happening.",
+  couldNotStartUnrecoverable: "PowerBrowser couldn't start its interface, and retrying won't change the result. Close PowerBrowser and open it again, or open Details to see the error.",
+  didNotFinishStarting: "PowerBrowser's interface didn't finish starting. Choose Retry, or open Details if this keeps happening.",
 };
 
 // Discretionary constants (plan 04-04 recorded_decisions) -- no pref exists
@@ -72,6 +72,10 @@ export const TheiaService = {
   _browserElement: null,
   _nodePath: null,
   _backendMain: null,
+  // NG-073 (wave E T6-R1): the app's plugins directory, derived in
+  // _resolveSidecar from the resolved backend entry (<app>/plugins beside
+  // <app>/lib) and passed to the sidecar in _spawnAndGate. Null until resolved.
+  _pluginsDir: null,
   _configDir: null,
   _swapped: false,
   _shuttingDown: false,
@@ -449,7 +453,15 @@ export const TheiaService = {
    * it.
    */
   async _resolveSidecar() {
-    this._backendMain = PowerBrowserAPI.getStringPref("powerbrowser.sidecar.backendMain", "");
+    // NG-063: a packaged install carries its own Theia beside the binary
+    // (powerbrowser/packaging/package-linux.sh). Use it unless the user set a path;
+    // the build default points at the dev tree, which also exists on the build host.
+    const appDir = PowerBrowserAPI.getAppDir();
+    const stagedMain = appDir ? `${appDir}/theia/lib/backend/main.js` : "";
+    this._backendMain =
+      !PowerBrowserAPI.prefHasUserValue("powerbrowser.sidecar.backendMain") && stagedMain && (await PowerBrowserAPI.pathExists(stagedMain))
+        ? stagedMain
+        : PowerBrowserAPI.getStringPref("powerbrowser.sidecar.backendMain", "");
     if (!this._backendMain) {
       this._fatal("powerbrowser.sidecar.backendMain is unset -- cannot locate the Theia backend entry file.");
       return {
@@ -474,8 +486,11 @@ export const TheiaService = {
       };
     }
 
+    const stagedNode = appDir ? `${appDir}/node/bin/node` : "";
     const configured = PowerBrowserAPI.getStringPref("powerbrowser.sidecar.nodePath", "");
-    this._nodePath = configured || (await PowerBrowserAPI.pathSearch("node"));
+    const useStagedNode =
+      !PowerBrowserAPI.prefHasUserValue("powerbrowser.sidecar.nodePath") && stagedNode && (await PowerBrowserAPI.pathExists(stagedNode));
+    this._nodePath = (useStagedNode ? stagedNode : configured) || (await PowerBrowserAPI.pathSearch("node"));
     if (!this._nodePath) {
       this._fatal("Could not resolve a Node executable -- set powerbrowser.sidecar.nodePath or add node to PATH.");
       return {
@@ -487,6 +502,19 @@ export const TheiaService = {
         ],
       };
     }
+
+    // NG-073 (wave E T6-R1): the shipped sidecar gets no plugin directory of
+    // its own, so tell it where the app's plugins are. The backend entry
+    // resolves to <app>/lib/backend/main.js (staged <GreD>/theia or the dev
+    // app dir), and Task 6 stages the declared archives into <app>/plugins
+    // (scripts/download-plugins.mjs, powerbrowser/packaging/package-linux.sh
+    // stages the same directory); that directory is the deployer's own
+    // local-dir scheme, which its THEIA_DEFAULT_PLUGINS entry and its
+    // --plugins CLI value both accept. A user-set backendMain keeps its
+    // sibling plugins/ (a scratch app built against this layout resolves the
+    // same way); an entry not under lib/backend keeps the full path, which
+    // the deployer refuses to resolve rather than loading elsewhere.
+    this._pluginsDir = this._backendMain.replace(/\/lib\/backend\/main\.js$/, "/plugins");
 
     return { ok: true, message: null, details: null };
   },
@@ -696,6 +724,19 @@ export const TheiaService = {
       // POWERBROWSER_* key, and the service reads it from there once its
       // first consumer lands (still STAGED -- see the service header).
       POWERBROWSER_PROFILE_DIR: PowerBrowserAPI.getProfileDir(),
+      // NG-073 (wave E T6-R1): the app's plugins directory, derived in
+      // _resolveSidecar from the resolved backend entry. THEIA_DEFAULT_PLUGINS
+      // (not THEIA_PLUGINS): the deployer treats a DEFAULT entry as a system
+      // plugin -- the T6 comment in scripts/download-plugins.mjs records that
+      // a THEIA_PLUGINS/THEIA_DEFAULT_PLUGINS folder refuses packed files,
+      // and T6 stages each declared archive unpacked beside itself under this
+      // same directory -- while user entries come from the config-dir plugins
+      // participant, which the supervisor must not override. local-dir: is the
+      // deployer's own LocalDirectoryPluginDeployerResolver scheme, accepted
+      // both here and as --plugins=local-dir:<dir>. A directory path, not a
+      // credential, so environ visibility is irrelevant like every other
+      // non-POWERBROWSER_* key in this object.
+      ...(this._pluginsDir ? { THEIA_DEFAULT_PLUGINS: `local-dir:${this._pluginsDir}` } : {}),
     };
 
     let proc;

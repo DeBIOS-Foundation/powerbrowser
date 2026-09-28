@@ -93,7 +93,7 @@ const EXPECTED_NON_EXTRACTABLE = Object.freeze([
 /** Contracted closed-state strings (14-UI-SPEC.md, verbatim). */
 const EXPECTED_CLOSED_STRINGS = Object.freeze([
     'This tab is closed',
-    'The tab shown in this window was closed. Close this window to return to Power Browser.',
+    'The tab shown in this window was closed. Close this window to return to PowerBrowser.',
     'Close Window',
 ]);
 

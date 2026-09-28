@@ -1516,6 +1516,30 @@ function emitIdentityConfigure(config, variant) {
         'imply_option("MOZ_SERVICES_HEALTHREPORT", False)',
         'imply_option("MOZ_NORMANDY", False)',
     ];
+    // NG-064: the update host comes from the manifest. upstream/build/moz.build:96 uses
+    // CONFIG["MOZ_APPUPDATE_HOST"] instead of its aus5 default when it is set. Unset
+    // means no line. A downstream that inherits the platform's own host is refused
+    // before any emission (non-GUI ruling R11; resolveConfig, Task 15).
+    const update = config.urls?.update;
+    if (!isUnset(update)) {
+        // M-2: a downstream that mistypes the update address gets the named
+        // failure, not a TypeError. The schema regex already refuses non-https
+        // values in validate(); this guards a bypassed validate (same split as
+        // manifestEndpointSources and emitLegalNotices).
+        let host;
+        try {
+            host = new URL(assertEmittable('urls.update', update)).host;
+        } catch {
+            host = '';
+        }
+        if (host === '') {
+            report([
+                `urls.update is ${JSON.stringify(update)}, which is not an https URL. `
+                + `Write your own https update address as [urls] update in ${MANIFEST_NAME}, then run: ${RERUN}`,
+            ]);
+        }
+        lines.push(`set_config("MOZ_APPUPDATE_HOST", ${JSON.stringify(host)})`);
+    }
     return lines.join('\n') + '\n';
 }
 
@@ -3996,7 +4020,32 @@ export function resolveConfig(defaultsPath = MANIFEST_PATH, downstreamPath) {
 
     const mergedLeaves = [];
     collectLeaves(config, '', mergedLeaves, []);
-    return { failures: validate(config, mergedLeaves), config, defaulted };
+    const failures = validate(config, mergedLeaves);
+
+    // R11 (NG-064): a downstream build (PB_CONFIG_DIR) must state its own update address.
+    // Otherwise it inherits the platform's host and its users are offered the platform's
+    // updates. The platform host is derived from the platform manifest, never typed here.
+    if (downstreamPath !== undefined) {
+        const platformUpdate = resolveConfig(defaultsPath, undefined).config?.urls?.update;
+        const update = config?.urls?.update;
+        // M-2: parse inside try so a mistyped address returns the named R11
+        // failure instead of throwing TypeError: Invalid URL.
+        let sameHost = false;
+        try {
+            sameHost = !isUnset(update) && !isUnset(platformUpdate)
+                && new URL(update).host === new URL(platformUpdate).host;
+        } catch {
+            sameHost = false;
+        }
+        if (sameHost) {
+            failures.push(
+                `urls.update is ${JSON.stringify(update)}, the platform's own update address, and a downstream build must not ship it. `
+                + `Write your own https update address as [urls] update in ${MANIFEST_NAME}, then run: ${RERUN}`,
+            );
+        }
+    }
+
+    return { failures, config, defaulted };
 }
 
 /**
@@ -4079,6 +4128,31 @@ const FIXTURE_VARIANT = [
     'objdir = "objdir"',
     '',
 ].join('\n');
+
+/**
+ * The downstream's own update address, stated once because every downstream
+ * (PB_CONFIG_DIR) fixture below must carry it: R11 (NG-064) refuses a
+ * downstream whose resolved update host is the platform's own, so a fixture
+ * stating none inherits the platform host and goes red. Stated separately
+ * from FIXTURE_BASE because endpointHostsControl's second checkOne appends
+ * its own [urls] table (TOML forbids two [urls] headers in one document).
+ */
+const FIXTURE_URLS = [
+    '[urls]',
+    'update = "https://updates.example.org/update.xml"',
+    '',
+].join('\n');
+
+/**
+ * The downstream base plus variant plus the downstream's own update address,
+ * for the --self-test fixtures that pass a PB_CONFIG_DIR manifest: R11
+ * (NG-064) refuses a downstream whose resolved update host is the platform's
+ * own, so a fixture stating none inherits the platform host and goes red.
+ * Kept out of FIXTURE_BASE itself because endpointHostsControl's second
+ * checkOne appends its own [urls] table, and TOML forbids two [urls]
+ * headers in one document.
+ */
+const FIXTURE_DOWNSTREAM = `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_URLS}`;
 
 /**
  * FOUR complete [[extensions]] entries, stated once because several cases
@@ -4375,7 +4449,7 @@ function probeHostileSupportUrl() {
         const fixturePath = join(dir, 'case-nsis.toml');
         writeFileSync(
             fixturePath,
-            `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[installer]\nsupport_url = "https://example.org/\${HOME}/support"\n`,
+            `${FIXTURE_DOWNSTREAM}\n[installer]\nsupport_url = "https://example.org/\${HOME}/support"\n`,
             'utf8',
         );
         const child = spawnSync(process.execPath, [
@@ -4410,7 +4484,7 @@ function probeHostileBareDollarUrl() {
         const fixturePath = join(dir, 'case-nsis-bare.toml');
         writeFileSync(
             fixturePath,
-            `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[installer]\nsupport_url = "https://example.org/$INSTDIR/x"\n`,
+            `${FIXTURE_DOWNSTREAM}\n[installer]\nsupport_url = "https://example.org/$INSTDIR/x"\n`,
             'utf8',
         );
         const child = spawnSync(process.execPath, [
@@ -4446,7 +4520,7 @@ function probeEscapedDollarUrl() {
         const fixturePath = join(dir, 'case-nsis-escape.toml');
         writeFileSync(
             fixturePath,
-            `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[installer]\nsupport_url = "https://example.org/$$PRICE/x"\n`,
+            `${FIXTURE_DOWNSTREAM}\n[installer]\nsupport_url = "https://example.org/$$PRICE/x"\n`,
             'utf8',
         );
         const child = spawnSync(process.execPath, [
@@ -4487,7 +4561,7 @@ function probeHostileTripleDollarUrl() {
         const fixturePath = join(dir, 'case-nsis-triple.toml');
         writeFileSync(
             fixturePath,
-            `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[installer]\nsupport_url = "https://example.org/$$$INSTDIR/x"\n`,
+            `${FIXTURE_DOWNSTREAM}\n[installer]\nsupport_url = "https://example.org/$$$INSTDIR/x"\n`,
             'utf8',
         );
         const child = spawnSync(process.execPath, [
@@ -4521,7 +4595,7 @@ function probeQuadrupleDollarUrl() {
         const fixturePath = join(dir, 'case-nsis-quad.toml');
         writeFileSync(
             fixturePath,
-            `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[installer]\nsupport_url = "https://example.org/$$$$PRICE/x"\n`,
+            `${FIXTURE_DOWNSTREAM}\n[installer]\nsupport_url = "https://example.org/$$$$PRICE/x"\n`,
             'utf8',
         );
         const child = spawnSync(process.execPath, [
@@ -4756,7 +4830,7 @@ function selfTest() {
         const fixtureDir = mkdtempSync(join(tmpdir(), 'generate-selftest-extensions-'));
         try {
             const fixturePath = join(fixtureDir, 'extensions.toml');
-            writeFileSync(fixturePath, `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS}`, 'utf8');
+            writeFileSync(fixturePath, `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS}`, 'utf8');
             const resolved = resolveConfig(MANIFEST_PATH, fixturePath);
             if (resolved.failures.length > 0) {
                 return [`the extensions fixture failed validation: ${resolved.failures.join(' | ')}`];
@@ -4798,7 +4872,7 @@ function selfTest() {
         const fixtureDir = mkdtempSync(join(tmpdir(), 'generate-selftest-webextensions-'));
         try {
             const fixturePath = join(fixtureDir, 'webextensions.toml');
-            writeFileSync(fixturePath, `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_WEBEXTENSIONS}`, 'utf8');
+            writeFileSync(fixturePath, `${FIXTURE_DOWNSTREAM}\n${FIXTURE_WEBEXTENSIONS}`, 'utf8');
             const resolved = resolveConfig(MANIFEST_PATH, fixturePath);
             if (resolved.failures.length > 0) {
                 return [`the webextensions fixture failed validation: ${resolved.failures.join(' | ')}`];
@@ -4866,7 +4940,7 @@ function selfTest() {
             const fixturePath = join(fixtureDir, 'placeholder.toml');
             writeFileSync(
                 fixturePath,
-                `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n`
+                `${FIXTURE_DOWNSTREAM}\n`
                 + '[[extensions]]\n'
                 + 'id = "acme.targeted"\n'
                 + 'source = "url"\n'
@@ -4936,10 +5010,10 @@ function selfTest() {
             };
             return [
                 ...checkOne(
-                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "error"\nendpoint = "https://example.org/telemetry/v1/events"\n`,
+                    `${FIXTURE_DOWNSTREAM}\n[telemetry]\nlevel = "error"\nendpoint = "https://example.org/telemetry/v1/events"\n`,
                     'error', 'https://example.org/telemetry/v1/events',
                 ),
-                ...checkOne(`${FIXTURE_BASE}\n${FIXTURE_VARIANT}`, 'off', null),
+                ...checkOne(`${FIXTURE_DOWNSTREAM}`, 'off', null),
             ];
         } finally {
             rmSync(fixtureDir, { recursive: true, force: true });
@@ -4963,7 +5037,7 @@ function selfTest() {
             const fixturePath = join(fixtureDir, 'branding.toml');
             writeFileSync(
                 fixturePath,
-                `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[theia]\ndefault_theme = "light"\nwelcome_text = "Acme welcomes you."\nabout_text = "Acme Browser is a test product."\n[installer]\nsupport_url = "https://example.org/support"\n`,
+                `${FIXTURE_DOWNSTREAM}\n[theia]\ndefault_theme = "light"\nwelcome_text = "Acme welcomes you."\nabout_text = "Acme Browser is a test product."\n[installer]\nsupport_url = "https://example.org/support"\n`,
                 'utf8',
             );
             const resolved = resolveConfig(MANIFEST_PATH, fixturePath);
@@ -5010,7 +5084,7 @@ function selfTest() {
                 return ['the emitted branding fragment does not carry the brand/mark.svg single-line element verbatim'];
             }
             const barePath = join(fixtureDir, 'branding-bare.toml');
-            writeFileSync(barePath, `${FIXTURE_BASE}\n${FIXTURE_VARIANT}`, 'utf8');
+            writeFileSync(barePath, `${FIXTURE_DOWNSTREAM}`, 'utf8');
             const bare = resolveConfig(MANIFEST_PATH, barePath);
             if (bare.failures.length > 0) {
                 return [`the textless branding fixture failed validation: ${bare.failures.join(' | ')}`];
@@ -5040,13 +5114,18 @@ function selfTest() {
 
     // TEL-03's green control, computed once: a fixture with a telemetry
     // endpoint, a crash-report URL and a support URL resolves to exactly
-    // those three hosts sorted, with the endpoint prefs repointed to the
-    // stated URLs -- and a fixture with none of them resolves to the lone
-    // inherited support host with both prefs blanked. Without this, a red
-    // result from the coverage gate could be the derivation broken on a
-    // clean manifest rather than on a drift. The expected hosts and prefs
-    // are literals: deriving them through the derivation would make the
-    // control agree with it no matter how wrong both were.
+    // those three hosts sorted plus the inherited urls.update host, with
+    // the endpoint prefs repointed to the stated URLs -- and a fixture
+    // with none of them resolves to the lone inherited support host plus
+    // the inherited urls.update host, with both prefs blanked. The
+    // update host is inherited from this project's own manifest (an
+    // optional key, so the mask never strips it): the derivation is over
+    // the MERGED config, so any default-layer contactable host reaches
+    // every fixture. Without this, a red result from the coverage gate
+    // could be the derivation broken on a clean manifest rather than on
+    // a drift. The expected hosts and prefs are literals: deriving them
+    // through the derivation would make the control agree with it no
+    // matter how wrong both were.
     const endpointHostsControl = (() => {
         const fixtureDir = mkdtempSync(join(tmpdir(), 'generate-selftest-endpoints-'));
         try {
@@ -5083,14 +5162,14 @@ function selfTest() {
             };
             return [
                 ...checkOne(
-                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "all"\nendpoint = "https://collector.example.org/v1/events"\n[urls]\ncrash_report = "https://crash.example.org/report"\n[installer]\nsupport_url = "https://example.org/support"\n`,
-                    ['collector.example.org', 'crash.example.org', 'example.org'],
+                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "all"\nendpoint = "https://collector.example.org/v1/events"\n[urls]\ncrash_report = "https://crash.example.org/report"\nupdate = "https://updates.example.org/update.xml"\n[installer]\nsupport_url = "https://example.org/support"\n`,
+                    ['collector.example.org', 'crash.example.org', 'example.org', 'updates.example.org'],
                     'https://collector.example.org/v1/events',
                     'https://crash.example.org/report',
                 ),
                 ...checkOne(
-                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}`,
-                    ['powerbrowser.org'],
+                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[urls]\nupdate = "https://updates.example.org/update.xml"\n`,
+                    ['powerbrowser.org', 'updates.example.org'],
                     '',
                     '',
                 ),
@@ -5111,7 +5190,7 @@ function selfTest() {
     const externalConfigControl = (() => {
         const dir = mkdtempSync(join(tmpdir(), 'generate-selftest-extdir-'));
         try {
-            writeFileSync(join(dir, MANIFEST_NAME), `${FIXTURE_BASE}\n${FIXTURE_VARIANT}`, 'utf8');
+            writeFileSync(join(dir, MANIFEST_NAME), `${FIXTURE_DOWNSTREAM}`, 'utf8');
             const saved = process.env.PB_CONFIG_DIR;
             process.env.PB_CONFIG_DIR = dir;
             try {
@@ -5138,7 +5217,7 @@ function selfTest() {
         {
             // D-10. A whitespace-only value is not a value.
             name: 'whitespace identity value',
-            toml: FIXTURE_BASE.replace('remoting_name = "acme-browser"', 'remoting_name = "   "'),
+            toml: (FIXTURE_BASE + FIXTURE_URLS).replace('remoting_name = "acme-browser"', 'remoting_name = "   "'),
             expect: 'identity.remoting_name',
         },
         {
@@ -5148,7 +5227,7 @@ function selfTest() {
             // A self-test whose only identity fault is a wholly missing table
             // cannot catch that.
             name: 'partial identity table',
-            toml: FIXTURE_BASE.replace('binary_name = "acme-browser"\n', ''),
+            toml: (FIXTURE_BASE + FIXTURE_URLS).replace('binary_name = "acme-browser"\n', ''),
             expect: 'identity.binary_name',
         },
         {
@@ -5164,7 +5243,7 @@ function selfTest() {
             // and then throw. Replacement is what this case exists to prove;
             // the case below is what proves incompleteness is refused.
             name: 'downstream array shorter than default',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}`,
+            toml: `${FIXTURE_DOWNSTREAM}`,
             holds: 'one variant, not three',
             resolved: c => Array.isArray(c.variants) && c.variants.length === 1,
         },
@@ -5175,7 +5254,7 @@ function selfTest() {
             // fixture resolved with zero failures and the emitters carried the
             // missing value straight through as `undefined`.
             name: 'variant missing a required setting',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT.replace('objdir = "objdir"\n', '')}`,
+            toml: `${FIXTURE_DOWNSTREAM.replace('objdir = "objdir"\n', '')}`,
             expect: 'objdir',
         },
         {
@@ -5183,7 +5262,7 @@ function selfTest() {
             // sharing an id was silently unreachable -- a downstream editing it
             // got no effect and no message.
             name: 'two variants sharing one id',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_VARIANT}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_VARIANT}`,
             expect: 'both use the id "dev"',
         },
         {
@@ -5191,7 +5270,7 @@ function selfTest() {
             // error for the id it was meant to be, sending the reader to ADD a
             // section rather than fix a letter.
             name: 'variant with an id nothing builds',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT.replace('id = "dev"', 'id = "relase"')}`,
+            toml: `${FIXTURE_DOWNSTREAM.replace('id = "dev"', 'id = "relase"')}`,
             expect: 'is never used',
         },
         {
@@ -5199,7 +5278,7 @@ function selfTest() {
             // for itself; omitting it is a hard failure, never a quiet
             // fallback to this project's identity under someone else's name.
             name: 'missing required key',
-            toml: FIXTURE_BASE.replace('display_name = "Acme Browser"\n', ''),
+            toml: (FIXTURE_BASE + FIXTURE_URLS).replace('display_name = "Acme Browser"\n', ''),
             expect: 'identity.display_name',
         },
         {
@@ -5208,7 +5287,7 @@ function selfTest() {
             // because the pattern's quantifier is not self-explanatory to a
             // stranger, and the run has to leave generated/ untouched.
             name: 'invalid basename',
-            toml: FIXTURE_BASE.replace('binary_name = "acme-browser"', 'binary_name = "two words"'),
+            toml: (FIXTURE_BASE + FIXTURE_URLS).replace('binary_name = "acme-browser"', 'binary_name = "two words"'),
             expect: 'identity.binary_name',
             also: [SCHEMA_KEYS['identity.binary_name'].regex_help],
             extra: () => (snapshotOutputRoot() === outputRootBefore
@@ -5223,7 +5302,7 @@ function selfTest() {
             // the misspelling has to be named and the missing-key phrase has to
             // be absent. That phrase is read from the emitter, not copied.
             name: 'unknown key',
-            toml: FIXTURE_BASE.replace('[identity]', '[identiy]'),
+            toml: (FIXTURE_BASE + FIXTURE_URLS).replace('[identity]', '[identiy]'),
             expect: 'identiy',
             notExpect: [UNSET_MARK],
         },
@@ -5337,7 +5416,7 @@ function selfTest() {
             // naming the key -- it would close the quoted NSIS !define value
             // the name is interpolated into.
             name: 'hostile double quote in display name',
-            toml: FIXTURE_BASE.replace('display_name = "Acme Browser"', 'display_name = "Acme \\"Browser"'),
+            toml: (FIXTURE_BASE + FIXTURE_URLS).replace('display_name = "Acme Browser"', 'display_name = "Acme \\"Browser"'),
             expect: 'identity.display_name',
         },
         {
@@ -5392,7 +5471,7 @@ function selfTest() {
             // naming the key -- it would open an entity in the MSIX, plist
             // and tile documents the name is interpolated into.
             name: 'hostile ampersand in display name',
-            toml: FIXTURE_BASE.replace('display_name = "Acme Browser"', 'display_name = "Acme & Sons"'),
+            toml: (FIXTURE_BASE + FIXTURE_URLS).replace('display_name = "Acme Browser"', 'display_name = "Acme & Sons"'),
             expect: 'identity.display_name',
             also: ['&'],
         },
@@ -5424,7 +5503,7 @@ function selfTest() {
             // whatever is latest, which is the unpinned behavior this
             // setting forbids.
             name: 'extension entry without its version pin',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "1.2.3"\n', '')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace('version = "1.2.3"\n', '')}`,
             expect: 'acme.gadget',
         },
         {
@@ -5432,7 +5511,7 @@ function selfTest() {
             // NAMING the entry, with the implemented set stated -- not a
             // generic schema complaint.
             name: 'extension entry with an unimplemented source',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('source = "openvsx"', 'source = "pluggy"')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace('source = "openvsx"', 'source = "pluggy"')}`,
             expect: 'acme.gadget',
             also: ['"openvsx"'],
         },
@@ -5442,7 +5521,7 @@ function selfTest() {
             // alphanumeric), so without this branch the float would resolve
             // to whatever is newest at download time.
             name: 'npm extension entry with a floating latest version',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "latest"\n')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "latest"\n')}`,
             expect: 'acme.npmpack',
         },
         {
@@ -5450,7 +5529,7 @@ function selfTest() {
             // entry -- here via the exact-version rule (and the version
             // schema shape, which admits exact pins only).
             name: 'npm extension entry with a ranged version',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "^2.4.1"\n')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "^2.4.1"\n')}`,
             expect: 'acme.npmpack',
         },
         {
@@ -5458,7 +5537,7 @@ function selfTest() {
             // the entry -- the schema shape admits it (dots and letters),
             // and only the exact-version rule catches it.
             name: 'npm extension entry with an x-wildcard version',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "1.2.x"\n')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "1.2.x"\n')}`,
             expect: 'acme.npmpack',
         },
         {
@@ -5467,14 +5546,14 @@ function selfTest() {
             // and the schema shape admits it, so only the exact-version
             // rule catches it.
             name: 'npm extension entry with a partial version',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "1.2"\n')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "1.2"\n')}`,
             expect: 'acme.npmpack',
         },
         {
             // EXT-02. An npm entry without its version pin must fail NAMING
             // the entry -- the tarball URL cannot be built without it.
             name: 'npm extension entry without its version pin',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', '')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', '')}`,
             expect: 'acme.npmpack',
         },
         {
@@ -5482,7 +5561,7 @@ function selfTest() {
             // NAMING the entry -- the digest guards a republication under
             // the pinned version, so version alone is not a pin.
             name: 'npm extension entry without its integrity digest',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace(`integrity = "${FIXTURE_EXTENSION_INTEGRITY}"\n`, '')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace(`integrity = "${FIXTURE_EXTENSION_INTEGRITY}"\n`, '')}`,
             expect: 'acme.npmpack',
         },
         {
@@ -5491,7 +5570,7 @@ function selfTest() {
             // several entries, `extensions[].integrity` does not say which
             // one is malformed.
             name: 'npm extension entry with a malformed integrity digest',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace(FIXTURE_EXTENSION_INTEGRITY, 'not-an-sri-digest')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace(FIXTURE_EXTENSION_INTEGRITY, 'not-an-sri-digest')}`,
             expect: 'acme.npmpack',
         },
         {
@@ -5499,21 +5578,21 @@ function selfTest() {
             // entry -- the resolver never reads it, so without this branch
             // an operator's believed pin passes silent and dead.
             name: 'extension entry with a source-irrelevant version pin',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('url = "https://example.org/acme-widget-2.0.0.vsix"\n', 'url = "https://example.org/acme-widget-2.0.0.vsix"\nversion = "9.9.9"\n')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace('url = "https://example.org/acme-widget-2.0.0.vsix"\n', 'url = "https://example.org/acme-widget-2.0.0.vsix"\nversion = "9.9.9"\n')}`,
             expect: 'acme.widget',
         },
         {
             // An npm entry carrying a `path` must fail NAMING the entry --
             // the pack step never reads it on an npm source.
             name: 'extension entry with a source-irrelevant path',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "2.4.1"\npath = "extensions/acme-sneaky"\n')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace('version = "2.4.1"\n', 'version = "2.4.1"\npath = "extensions/acme-sneaky"\n')}`,
             expect: 'acme.npmpack',
         },
         {
             // EXT-02. A local-path entry without its path must fail NAMING
             // the entry -- there is nothing to pack without it.
             name: 'local-path extension entry without its path',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('path = "extensions/acme-local"\n', '')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace('path = "extensions/acme-local"\n', '')}`,
             expect: 'acme.localtool',
         },
         {
@@ -5522,7 +5601,7 @@ function selfTest() {
             // shape, so an absolute one escapes the project it must pack
             // from.
             name: 'local-path extension entry with an absolute path',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace('path = "extensions/acme-local"\n', 'path = "/abs/acme-local"\n')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace('path = "extensions/acme-local"\n', 'path = "/abs/acme-local"\n')}`,
             expect: 'acme.localtool',
         },
         {
@@ -5530,7 +5609,7 @@ function selfTest() {
             // not just the dotted path -- with several entries,
             // `extensions[].sha256` does not say which one is malformed.
             name: 'extension entry with a malformed sha256 pin',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_EXTENSIONS.replace(FIXTURE_EXTENSION_PIN_A, 'xyz')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_EXTENSIONS.replace(FIXTURE_EXTENSION_PIN_A, 'xyz')}`,
             expect: 'acme.gadget',
         },
         {
@@ -5564,7 +5643,7 @@ function selfTest() {
             // without this branch the unknown mode would emit an entry the
             // policy engine cannot honour.
             name: 'webextension entry with an unknown installation mode',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_WEBEXTENSIONS.replace('installation_mode = "force_installed"', 'installation_mode = "auto_installed"')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_WEBEXTENSIONS.replace('installation_mode = "force_installed"', 'installation_mode = "auto_installed"')}`,
             expect: 'acme-tool@example.org',
             also: ['"force_installed"'],
         },
@@ -5573,7 +5652,7 @@ function selfTest() {
             // fail NAMING the add-on id, via the schema pattern -- a plain
             // http URL names no origin the allowlist leg could cover.
             name: 'webextension entry with an install URL outside https and file',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_WEBEXTENSIONS.replace('install_url = "https://example.org/acme-tool-1.2.3.xpi"', 'install_url = "http://example.org/acme-tool-1.2.3.xpi"')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_WEBEXTENSIONS.replace('install_url = "https://example.org/acme-tool-1.2.3.xpi"', 'install_url = "http://example.org/acme-tool-1.2.3.xpi"')}`,
             expect: 'acme-tool@example.org',
         },
         {
@@ -5581,7 +5660,7 @@ function selfTest() {
             // must fail NAMING the add-on id -- there is deliberately no
             // silent default, so an unstated mode is a hard failure.
             name: 'webextension entry without its installation mode',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n${FIXTURE_WEBEXTENSIONS.replace('installation_mode = "force_installed"\n', '')}`,
+            toml: `${FIXTURE_DOWNSTREAM}\n${FIXTURE_WEBEXTENSIONS.replace('installation_mode = "force_installed"\n', '')}`,
             expect: 'acme-tool@example.org',
         },
         {
@@ -5613,7 +5692,7 @@ function selfTest() {
             // keys after a [table] header belong to that table, so placing
             // it after [legal] or [[variants]] would test a nested path.)
             name: 'downstream empty extensions array resolves to no entries',
-            toml: `extensions = []\n${FIXTURE_BASE}\n${FIXTURE_VARIANT}`,
+            toml: `extensions = []\n${FIXTURE_DOWNSTREAM}`,
             holds: 'zero entries, not an unknown-setting failure',
             resolved: c => Array.isArray(c.extensions) && c.extensions.length === 0,
         },
@@ -5622,7 +5701,7 @@ function selfTest() {
             // the missing key -- a sender that can never deliver must
             // never build.
             name: 'telemetry level enabled without an endpoint',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "all"\n`,
+            toml: `${FIXTURE_DOWNSTREAM}\n[telemetry]\nlevel = "all"\n`,
             expect: 'telemetry.endpoint',
         },
         {
@@ -5630,7 +5709,7 @@ function selfTest() {
             // the key -- the sender gates on exactly these four, and the
             // schema carries no pattern for them by design.
             name: 'telemetry level outside the four-value enum',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "verbose"\nendpoint = "https://example.org/telemetry/v1/events"\n`,
+            toml: `${FIXTURE_DOWNSTREAM}\n[telemetry]\nlevel = "verbose"\nendpoint = "https://example.org/telemetry/v1/events"\n`,
             expect: 'telemetry.level',
         },
         {
@@ -5638,7 +5717,7 @@ function selfTest() {
             // the schema pattern in the established installer.support_url
             // style.
             name: 'telemetry endpoint outside https',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "error"\nendpoint = "http://example.org/telemetry"\n`,
+            toml: `${FIXTURE_DOWNSTREAM}\n[telemetry]\nlevel = "error"\nendpoint = "http://example.org/telemetry"\n`,
             expect: 'telemetry.endpoint',
         },
         {
@@ -5658,7 +5737,7 @@ function selfTest() {
             // the failure, and the schema carries no pattern for ids by
             // design.
             name: 'theia theme outside the builtin theme ids',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[theia]\ndefault_theme = "midnight"\n`,
+            toml: `${FIXTURE_DOWNSTREAM}\n[theia]\ndefault_theme = "midnight"\n`,
             expect: 'theia.default_theme',
         },
         {
@@ -5667,7 +5746,7 @@ function selfTest() {
             // is an injection character at the schema layer, refused with
             // the whole list reported at once.
             name: 'markup-bearing theia welcome text',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[theia]\nwelcome_text = "Acme <b>welcomes</b> you."\n`,
+            toml: `${FIXTURE_DOWNSTREAM}\n[theia]\nwelcome_text = "Acme <b>welcomes</b> you."\n`,
             expect: 'theia.welcome_text',
         },
         {
@@ -5677,7 +5756,7 @@ function selfTest() {
             // allowlist coverage, so a value that is not an https URL is a
             // manifest bug, not a coverage gap.
             name: 'crash-report URL outside https',
-            toml: `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[urls]\ncrash_report = "http://example.org/crash"\n`,
+            toml: `${FIXTURE_DOWNSTREAM}\ncrash_report = "http://example.org/crash"\n`,
             expect: 'urls.crash_report',
         },
         {
@@ -5693,11 +5772,12 @@ function selfTest() {
             resolved: () => brandingControl.length === 0,
         },
         {
-            // TEL-03's control: the stated endpoint and crash-report URLs
-            // derive to exactly their hosts plus the support host, with
-            // both endpoint prefs repointed -- and a fixture stating none
-            // of them derives the lone inherited support host with both
-            // prefs blanked. Without this, a red result from the coverage
+            // TEL-03's control: the stated endpoint, crash-report and
+            // update URLs derive to exactly their hosts plus the support
+            // host, with both endpoint prefs repointed -- and a fixture
+            // stating only an update URL derives the lone inherited
+            // support host plus the stated update host with both prefs
+            // blanked. Without this, a red result from the coverage
             // gate could be the derivation broken on a clean manifest
             // rather than on a drift.
             name: 'manifest endpoint hosts derive the stated hosts and repoint the prefs',

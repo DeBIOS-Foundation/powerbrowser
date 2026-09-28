@@ -432,6 +432,24 @@ export const PowerBrowserAPI = Object.freeze({
     }
   },
 
+  /** The running application's directory (GreD): the install prefix of a packaged tree. "" on error. */
+  getAppDir() {
+    try {
+      return Services.dirsvc.get("GreD", Ci.nsIFile).path;
+    } catch {
+      return "";
+    }
+  },
+
+  /** True when the user (user.js or prefs.js) set this pref, as opposed to a build default. Never throws. */
+  prefHasUserValue(name) {
+    try {
+      return Services.prefs.prefHasUserValue(name);
+    } catch {
+      return false;
+    }
+  },
+
   /** Creates `path` and its parents if absent; a no-op if it already exists. */
   ensureDirectory(path) {
     return IOUtils.makeDirectory(path);
