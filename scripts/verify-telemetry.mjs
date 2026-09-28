@@ -277,6 +277,11 @@ async function selfTest() {
         });
         const reporter = new ErrorReporter({ sender, logError: (name, data) => sender.sendErrorData(name, data) });
         const secret = '/home/self-test/private/notes.txt';
+        // M-3: a runtime-assigned constructor name carrying a path. The
+        // IDENTIFIER guard in typeOf() must sanitize this to 'unknown';
+        // deleting the guard sends the path as the event type.
+        class X extends Error {}
+        Object.defineProperty(X, 'name', { value: '/home/self-test/x' });
         const thrown = {
             error: new TypeError(`Unable to read file '${secret}'`),
             message: `Uncaught TypeError: Unable to read file '${secret}'`,
@@ -292,6 +297,11 @@ async function selfTest() {
             () => reporter.onError({ get error() { throw new Error(secret); }, filename: `data:text/javascript,${secret}`, lineno: '12' }),
             () => reporter.onRejection({ reason: Object.create(null) }),
             () => reporter.onRejection(null),
+            () => reporter.onError({ error: new X('planted'), filename: 'http://127.0.0.1:3000/lib/frontend/other.js', lineno: 7, colno: 9 }),
+            // M-3: non-finite positions. The Number.isFinite guard in
+            // position() must omit them; deleting the guard sends NaN (JSON
+            // null) and trips the numeric assert below.
+            () => reporter.onError({ error: new TypeError('planted'), filename: 'http://127.0.0.1:3000/lib/frontend/nonfinite.js', lineno: NaN, colno: Infinity }),
         ]) {
             try { call(); } catch (e) { escaped.push(String(e)); }
         }
@@ -304,8 +314,19 @@ async function selfTest() {
         if (repeated.length !== 1) problems.push(`the repeated error was sent ${repeated.length} time(s), not once`);
         else if (JSON.stringify(repeated[0].data) !== JSON.stringify({ type: 'TypeError', source: 'bundle.js', line: 12, column: 34 })) problems.push(`the uncaught-error payload is ${JSON.stringify(repeated[0].data)}`);
         if (!events.some(e => e.name === 'frontend.unhandled-rejection' && e.data?.type === 'RangeError')) problems.push('the rejection was not sent with its type');
-        if (events.length !== 5) problems.push(`expected 5 events (one per distinct error), got ${events.length}`);
+        if (events.length !== 7) problems.push(`expected 7 events (one per distinct error), got ${events.length}`);
         if (/message|stack|Unable|self-test|notes|\//.test(text)) problems.push(`the sent bodies carry message text, a stack or a path: ${text}`);
+        // M-3: pin the two privacy guards. A path-carrying constructor name
+        // must arrive as 'unknown' (IDENTIFIER guard), and every sent line
+        // and column must be a number (Number.isFinite guard in position()).
+        if (events.some(e => e.data?.type === '/home/self-test/x')) problems.push(`the path-carrying constructor name was sent as a type: ${text}`);
+        if (!events.some(e => e.data?.source === 'other.js' && e.data?.type === 'unknown')) problems.push(`the path-named error was not sanitized to type 'unknown': ${text}`);
+        if (!events.some(e => e.data?.source === 'nonfinite.js' && !('line' in (e.data ?? {})) && !('column' in (e.data ?? {})))) problems.push(`the non-finite positions were not omitted: ${text}`);
+        for (const e of events) {
+            for (const key of ['line', 'column']) {
+                if (key in (e.data ?? {}) && typeof e.data[key] !== 'number') problems.push(`event '${e.name}' carries non-number ${key}: ${JSON.stringify(e.data)}`);
+            }
+        }
         if (problems.length > 0) complain('error report', problems.join('; '));
         else console.log(`  ok  error report -> no message, stack or path; hostile events contained; a repeat sent once`);
     }

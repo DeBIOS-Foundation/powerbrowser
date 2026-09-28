@@ -1624,7 +1624,7 @@ EOF
   # is now reading names the product in its display form.
   local reason
   reason="$(error_sentinel_reason "$BROWSER_LOG")"
-  if ! grep -Fq 'Power Browser' <<<"$reason"; then
+  if ! grep -Fq 'PowerBrowser' <<<"$reason"; then
     echo "start-failure-shows-error: FAIL -- MIG-04 -- the painted sentence does not name the product: '$reason'" >&2
     result=1
   fi
