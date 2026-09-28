@@ -74,7 +74,7 @@ Control horizontal padding is `1.25em` (20px) — a multiple of 4, kept as-is.
 
 ## Typography
 
-Power Browser owns only the shell scale. Theia-side type is delegated — do **not** redeclare it.
+PowerBrowser owns only the shell scale. Theia-side type is delegated — do **not** redeclare it.
 
 ### Gecko shell (owned)
 
@@ -126,7 +126,7 @@ Nothing else. `#e8e8e8` must never be used as a fill or a surface.
 
 The tree today contains **zero invented brand colours**, and the reason is recorded in
 `theia/extensions/branding/src/browser/*-mark.ts`: *"`#1a1a1a` is a neutral dark, not a chosen
-brand colour."* Phase 1 keeps that property. A Power Browser brand hue introduced now would be
+brand colour."* Phase 1 keeps that property. A PowerBrowser brand hue introduced now would be
 a hardcoded literal that Phase 3's emitter must generate, Phase 6's VER-01 static scan must
 police, and Phase 7's fixtures must vary. It belongs with the real logo (D-11 defers it) or
 with a `[colors]` block in `configuration.toml`. **The executor must not invent one.**
@@ -140,10 +140,10 @@ background-color: #130829;                      /* Mozilla's dark purple */
 background-color: hsla(235, 43%, 10%, 0.5);     /* the same hue, translucent */
 ```
 
-These are **Mozilla brand values**, not neutrals, sitting inside Power Browser's branding
+These are **Mozilla brand values**, not neutrals, sitting inside PowerBrowser's branding
 directory. They are invisible to the D-16 residual scan because the scan matches brand
 *tokens* (`sourcerer`, `Deocracy`), not hexes. Replace with the shell's neutral pair so the
-about dialog matches the shell and no upstream brand hue ships under the Power Browser mark:
+about dialog matches the shell and no upstream brand hue ships under the PowerBrowser mark:
 
 ```css
 background-color: #1a1a1a;
@@ -199,17 +199,17 @@ leak forward with a new prefix. Required rewrites:
 
 | Current (`TheiaService.sys.mjs`) | Required user-facing copy |
 |---|---|
-| `sourcerer.sidecar.backendMain is unset -- cannot locate the Theia backend entry file.` | **"Power Browser can't find its interface files. This build looks incomplete — reinstall, or open Details for the missing path."** |
+| `sourcerer.sidecar.backendMain is unset -- cannot locate the Theia backend entry file.` | **"PowerBrowser can't find its interface files. This build looks incomplete — reinstall, or open Details for the missing path."** |
 | `sourcerer.sidecar.backendMain (${path}) does not exist -- ...` | same string as above (the path goes to Details) |
-| `Could not resolve a Node executable -- set sourcerer.sidecar.nodePath or add node to PATH.` | **"Power Browser needs Node.js and couldn't find it. Install Node.js 22 or later and open Power Browser again, or open Details for where it looked."** (01-13: reworded. Reachable only from `_resolveSidecar`, which is always classified unrecoverable, so the screen it paints has no Retry control on it.) |
-| `Failed to spawn the backend: ${err.message}` | **"Power Browser couldn't start its interface, and retrying won't change the result. Close Power Browser and open it again, or open Details to see the error."** (01-13: `USER_MESSAGE.couldNotStartUnrecoverable`, minted for the two `recoverable: false` sites in `_spawnAndGate` — the D-113 spawn-throw and the D-112 pinned-port conflict.) |
-| `Failed to hand the backend its token over stdin: ${err.message}` | **"Power Browser couldn't start its interface. Choose Retry, or open Details to see the error."** (`USER_MESSAGE.couldNotStart` — this site is classified recoverable, so Retry is on the screen and naming it is correct.) |
+| `Could not resolve a Node executable -- set sourcerer.sidecar.nodePath or add node to PATH.` | **"PowerBrowser needs Node.js and couldn't find it. Install Node.js 22 or later and open PowerBrowser again, or open Details for where it looked."** (01-13: reworded. Reachable only from `_resolveSidecar`, which is always classified unrecoverable, so the screen it paints has no Retry control on it.) |
+| `Failed to spawn the backend: ${err.message}` | **"PowerBrowser couldn't start its interface, and retrying won't change the result. Close PowerBrowser and open it again, or open Details to see the error."** (01-13: `USER_MESSAGE.couldNotStartUnrecoverable`, minted for the two `recoverable: false` sites in `_spawnAndGate` — the D-113 spawn-throw and the D-112 pinned-port conflict.) |
+| `Failed to hand the backend its token over stdin: ${err.message}` | **"PowerBrowser couldn't start its interface. Choose Retry, or open Details to see the error."** (`USER_MESSAGE.couldNotStart` — this site is classified recoverable, so Retry is on the screen and naming it is correct.) |
 | `Backend output stream ended before announcing readiness: ${err.message}` | same string as the stdin row above, except D-112's pinned-port conflict, which is classified unrecoverable and takes `couldNotStartUnrecoverable` |
-| `Backend did not announce SOURCERER_BACKEND_READY within ${ms}ms.` | **"Power Browser's interface didn't finish starting. Choose Retry, or open Details if this keeps happening."** |
+| `Backend did not announce SOURCERER_BACKEND_READY within ${ms}ms.` | **"PowerBrowser's interface didn't finish starting. Choose Retry, or open Details if this keeps happening."** |
 | `Health probe on port ${port} never returned 200 within ${ms}ms.` | same string as above |
 | `Shutting down.` | keep verbatim — not an error surface |
 
-Rules the executor applies: every user-facing string names the product as **"Power Browser"**,
+Rules the executor applies: every user-facing string names the product as **"PowerBrowser"**,
 states the problem in plain language, and ends with a next step that is a real affordance on
 screen (Retry or Details). Every dropped identifier — pref key, sentinel, port, timeout,
 `err.message` — is added to the diagnostics field rows so nothing is lost.
@@ -269,7 +269,7 @@ this phase** — no tab strip, no toolbar, no address bar. That is Milestone 2.
 
 | Contract | Requirement |
 |---|---|
-| Browser presentation | A **stock** `chrome://browser/content/browser.xhtml` window. Zero Power Browser styling, zero overrides. The whole point of restoring `BROWSER_CHROME_URL` to its upstream value (01-RESEARCH.md *Finding 1*) is that address bar, tabs, and modal dialogs behave natively. |
+| Browser presentation | A **stock** `chrome://browser/content/browser.xhtml` window. Zero PowerBrowser styling, zero overrides. The whole point of restoring `BROWSER_CHROME_URL` to its upstream value (01-RESEARCH.md *Finding 1*) is that address bar, tabs, and modal dialogs behave natively. |
 | Entry affordance | One Theia command, palette-reachable, labelled **"Open Browser Window"**. |
 | Return affordance | Closing the browser window returns focus to the shell window. No second command. |
 | ⚠ Last-window hazard | Closing the browser window **must never quit the application.** Gecko quits on last-window-close; if window ordering ever leaves the browser window last, "and back" silently becomes "and gone", losing Theia state. 01-RESEARCH.md flags this as unverified. Must be exercised in the D-20 spike alongside the `BROWSER_CHROME_URL` call-site check. |
@@ -324,7 +324,7 @@ E6 GUI-02 web tabs (`nav`+`media`+`list-collection`), E7 welcome/about branding 
 | populated | E4 content browser | ✅ covered | Remote `<browser>` at `inset: 0`, `z-index: 0`; deck layers hide via CSSOM writes, never by navigating or hiding the content browser |
 | empty | E5 window count | ✅ covered | Zero browser windows is the default state: the shell window alone, with the "Open Browser Window" command available from the palette |
 | loading | E5 window open | ✅ covered | Brief startup flicker from closing the early `navigator:blank` window is accepted and documented, not fixed in Phase 1 |
-| populated | E5 windows | ✅ covered | 1 shell window plus N stock `browser.xhtml` windows with zero Power Browser styling; native address bar, tabs, and dialogs |
+| populated | E5 windows | ✅ covered | 1 shell window plus N stock `browser.xhtml` windows with zero PowerBrowser styling; native address bar, tabs, and dialogs |
 | zero-one-many | E5 window count | 🧪 backstop | Held-out check: closing the last browser window returns focus to the shell window and never quits the application (Gecko quits on last-window-close). Pairs with the D-20 spike |
 | empty | E6 web tab, no URL | 🧪 backstop | Held-out visual check: a URL-less web tab renders `@theia/mini-browser`'s stock empty state, not a blank panel — this delegated state is unexercised in this tree |
 | loading | E6 web tab | ✅ covered | Stock `@theia/mini-browser` loading state; replacements must not be authored |

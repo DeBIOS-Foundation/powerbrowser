@@ -34,7 +34,7 @@ function wrapperScript(real, logPath) {
         'status=0',
         `${JSON.stringify(real)} "$@" &`,
         'child=$!',
-        'trap \'if kill -0 "$child" 2>/dev/null; then how=signalled; kill -TERM "$child" 2>/dev/null; fi\' TERM INT',
+        'trap \'st=; { read -r st < "/proc/$child/stat"; } 2>/dev/null; case "${st##*) }" in ""|Z*) ;; *) how=signalled; kill -TERM "$child" 2>/dev/null;; esac\' TERM INT',
         '# A trapped signal interrupts wait; wait again until the browser is gone.',
         'while kill -0 "$child" 2>/dev/null; do wait "$child"; status=$?; done',
         'printf \'end %s %s %s %s\\n\' "$how" "$status" "$$" "$*" >> "$log"',

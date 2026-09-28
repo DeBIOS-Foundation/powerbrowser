@@ -146,7 +146,7 @@ a provider exceeds 150ms.
 ## Copywriting Contract
 
 Product rules inherited from 01-UI-SPEC and CLAUDE.md: every user-facing
-string names the product as **"Power Browser"** where a product name is
+string names the product as **"PowerBrowser"** where a product name is
 needed, states the problem in plain language, ends with a next step that is
 a real affordance on screen, and carries **no internal identifier** (no pref
 key, sentinel, port, URI-scheme internals, or raw exception text). Naming is
@@ -161,9 +161,9 @@ fixed: **"chrome bar"** everywhere, never "browser toolbar".
 | Suggestion footer hint | **"Enter opens the address · Esc closes suggestions"** |
 | Empty suggestions heading | **"No suggestions"** |
 | Empty suggestions body | **"No matches for what you typed — press Enter to visit it as an address."** |
-| Suggestions-unavailable error | **"Power Browser couldn't load suggestions. Press Enter to visit what you typed."** (provider failure degrades to a plain address commit; no Retry — there is nothing to retry that Enter does not already do) |
+| Suggestions-unavailable error | **"PowerBrowser couldn't load suggestions. Press Enter to visit what you typed."** (provider failure degrades to a plain address commit; no Retry — there is nothing to retry that Enter does not already do) |
 | Destructive confirmation | **None in this phase.** Back/forward/reload/new-tab/mode-switch are all non-destructive, and the tabs invariant (no tab closed, moved windows, or detached by a mode change) means no switch ever needs a confirmation. |
-| Commit failure | **"Power Browser couldn't open that address. Press Enter to try again."** (a commit throw surfaces in-bar as a single dropdown row; Enter re-commits the typed text as the retry affordance, so the copy gate in 13-04 owns the identical string rather than standing alone) |
+| Commit failure | **"PowerBrowser couldn't open that address. Press Enter to try again."** (a commit throw surfaces in-bar as a single dropdown row; Enter re-commits the typed text as the retry affordance, so the copy gate in 13-04 owns the identical string rather than standing alone) |
 
 ---
 

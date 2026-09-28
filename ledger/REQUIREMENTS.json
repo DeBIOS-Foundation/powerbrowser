@@ -1,6 +1,6 @@
 {
-  "ledger_version": 305,
-  "frozen_at": null,
+  "ledger_version": 354,
+  "frozen_at": "2026-09-27",
   "items": [
     {
       "id": "NG-001",
@@ -213,11 +213,11 @@
     {
       "id": "NG-017",
       "text": "The SQL-05 round-trip check restarts the real browser and compares the restored tabs with sessionstore. Evidence: verify-sql-store-roundtrip.mjs replays over temp DBs with `CHAIN_HEAD = 1` (:33).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:32",
       "test_ref": "scripts/verify-ng-017-sql05-restarts-real-browser.mjs::ng-017-sql05-restarts-real-browser",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "3cdd02aae640dde5a1459f664801ebcf73ec6af5: scripts/verify-ng-017-sql05-restarts-real-browser.mjs::ng-017-sql05-restarts-real-browser passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
@@ -525,7 +525,7 @@
     {
       "id": "NG-041",
       "text": "@OpenCode's model is chosen in Theia's model picker: a LanguageModel is registered and the agent declares its requirements. Evidence: `languageModelRequirements = []` (OC browser/opencode-chat-agent.ts:47); only a ChatAgent is bound (browser/backend-opencode-frontend-module.ts:30-31).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:65",
       "test_ref": "",
       "code_ref": "",
@@ -533,12 +533,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-042",
       "text": "Inline chat (Ctrl+I) works with @OpenCode. Evidence: `locations = [ChatAgentLocation.Panel]` (opencode-chat-agent.ts:51).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:66",
       "test_ref": "",
       "code_ref": "",
@@ -546,12 +546,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-043",
       "text": "A Review Changes pane lists the session's changes with accept, reject and revert. Evidence: AI-02; no such surface.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:67",
       "test_ref": "",
       "code_ref": "",
@@ -559,12 +559,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-044",
       "text": "Open Diff on a change opens a diff editor. Evidence: the element has no `openChange()` (opencode-chat-agent.ts:116-141).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:68",
       "test_ref": "",
       "code_ref": "",
@@ -572,12 +572,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-045",
       "text": "A change moves through pending, applied, rejected and stale, and the reject and revert buttons appear. Evidence: fixed `state: 'pending'` with no `onDidChange` (opencode-chat-agent.ts:122); Theia shows revert only for applied or stale.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:69",
       "test_ref": "",
       "code_ref": "",
@@ -585,12 +585,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-046",
       "text": "Deleting a change in the chat UI un-stages it in the backend. Evidence: the proposal stays staged and is re-attached every turn (node/opencode-acp-supervisor.ts:198 \u2192 opencode-changeset-emitter.ts:281-283).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:70",
       "test_ref": "",
       "code_ref": "",
@@ -598,12 +598,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-047",
       "text": "Change history is listed through the service, persists across a restart, and survives in saved chats. Evidence: emitter history is in memory (opencode-changeset-emitter.ts:180, 418); no list method (common/opencode-service.ts:46-70); no `toSerializable`.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:71",
       "test_ref": "",
       "code_ref": "",
@@ -611,12 +611,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-048",
       "text": "Gated mode holds whatever the user's opencode config says: the adapter starts opencode with edit and write set to ask and declares its file-system capabilities. Evidence: spawn uses the user's config (supervisor.ts:234-246); `initialize` has no `clientCapabilities` (:258).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:72",
       "test_ref": "",
       "code_ref": "",
@@ -624,12 +624,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-049",
       "text": "Auto-accept applies only the current turn's proposals. Evidence: `applyAllStaged` applies every staged proposal (opencode-chat-agent.ts:89-90, 154-165).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:73",
       "test_ref": "",
       "code_ref": "",
@@ -637,12 +637,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-050",
       "text": "Non-edit tool requests (bash, webfetch, task) are shown to the user to approve or deny. Evidence: auto-rejected (opencode-changeset-emitter.ts:214-216); `handlePermissionResponse` cannot answer inbound asks (supervisor.ts:129-139).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:74",
       "test_ref": "",
       "code_ref": "",
@@ -650,16 +650,16 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-051",
       "text": "With `backend = \"off\"`, no opencode process and no `/mcp` endpoint start. Evidence: the backend module binds both unconditionally (node/backend-opencode-backend-module.ts:18-27); five crashes call `process.exit(78)` (supervisor.ts:274-281); docs/REBRANDING.md:303.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:75",
       "test_ref": "scripts/verify-ng-051-backend-off.mjs::ng051-backend-off",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-051-backend-off.mjs::ng051-backend-off passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
@@ -668,7 +668,7 @@
     {
       "id": "NG-052",
       "text": "The backend selected in configuration.toml reaches the build with no manual copy step. Evidence: docs/ai-opencode-adapter.md step 3.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:76",
       "test_ref": "",
       "code_ref": "",
@@ -676,12 +676,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-053",
       "text": "`#`-variables and chat-context attachments reach opencode resolved. Evidence: the agent sends the raw text (opencode-chat-agent.ts:63); docs/ai-opencode-adapter.md:38-41 claims otherwise.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:77",
       "test_ref": "",
       "code_ref": "",
@@ -689,12 +689,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-054",
       "text": "Skill selections apply to @OpenCode. Evidence: the agent implements ChatAgent directly and never reads them; docs/ai-opencode-adapter.md:42-43 claims they apply.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:78",
       "test_ref": "",
       "code_ref": "",
@@ -702,12 +702,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-055",
       "text": "@OpenCode replies stream as they are generated. Evidence: the `OpencodeClient` interface is never bound (common/opencode-service.ts:72).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:79",
       "test_ref": "",
       "code_ref": "",
@@ -715,12 +715,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-056",
       "text": "The port variable in opencode.mcp.json is set, and the file is used at runtime. Evidence: nothing sets `POWERBROWSER_MCP_PORT` (opencode-bridge-env.ts:27-39).",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:80",
       "test_ref": "",
       "code_ref": "",
@@ -728,12 +728,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-057",
       "text": "A live @OpenCode turn is run against the built app and checked. Evidence: 16-VERIFICATION.md residual 1.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:81",
       "test_ref": "",
       "code_ref": "",
@@ -741,12 +741,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-058",
       "text": "A @Pi backend is selectable (AI-01, AI-04). Evidence: cut in 16-SPEC.md only.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:82",
       "test_ref": "",
       "code_ref": "",
@@ -754,12 +754,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-059",
       "text": "A DSH backend is selectable (AI-04). Evidence: cut in 16-SPEC.md only; notes/pba-plugin-shipping-design.md restates AI-04.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:83",
       "test_ref": "",
       "code_ref": "",
@@ -767,12 +767,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-060",
       "text": "Per-line comment-to-steer (AI-02). Evidence: cut in 16-SPEC.md only.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:84",
       "test_ref": "",
       "code_ref": "",
@@ -780,12 +780,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-061",
       "text": "`/btw` ephemeral question (AI-02). Evidence: cut in 16-SPEC.md only.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:85",
       "test_ref": "",
       "code_ref": "",
@@ -793,12 +793,12 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-062",
       "text": "File-wide Supercomplete Tab-accept (AI-02). Evidence: cut in 16-SPEC.md only.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:86",
       "test_ref": "",
       "code_ref": "",
@@ -806,7 +806,7 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D2(b) opencode adapter retired for the PowerBrowser-Assistant plugin"
     },
     {
       "id": "NG-063",
@@ -863,11 +863,11 @@
     {
       "id": "NG-067",
       "text": "Uncaught frontend errors and unhandled rejections reach the telemetry logger, subject to the level setting. Evidence: the logger is bound but nothing injects it (theia/extensions/telemetry/src/browser/telemetry-frontend-module.ts:63).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:94",
       "test_ref": "scripts/verify-ng-067-frontend-errors.mjs::ng067-frontend-errors-reach-telemetry",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-067-frontend-errors.mjs::ng067-frontend-errors-reach-telemetry passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
@@ -876,11 +876,11 @@
     {
       "id": "NG-068",
       "text": "The crash collector accepts Gecko's single `extra` annotation part. Evidence: scripts/crash-collector.mjs:77-85.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:95",
       "test_ref": "scripts/verify-ng-068-crash-extra-part.mjs::ng068-crash-extra-part",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-068-crash-extra-part.mjs::ng068-crash-extra-part passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
@@ -889,11 +889,11 @@
     {
       "id": "NG-069",
       "text": "open-vsx.org and the AI provider hosts have allowlist rows, and the egress check covers the sidecar's traffic. Evidence: scripts/verify-endpoints.sh:23, 385 read Gecko's MOZ_LOG only; TheiaService.sys.mjs:624; theia/applications/browser/package.json:47, 57.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:96",
       "test_ref": "scripts/verify-ng-069-sidecar-egress.mjs::ng069-sidecar-egress",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-069-sidecar-egress.mjs::ng069-sidecar-egress passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
@@ -902,11 +902,11 @@
     {
       "id": "NG-070",
       "text": "No user-visible or generated surface shows the spaced \"Power Browser\". Evidence: configuration.toml:47 \u2192 generated/theia-branding.json; TheiaService.sys.mjs:42-44; mode-service.ts:380, 514, 530.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:97",
       "test_ref": "scripts/verify-ng-070-no-spaced-name.mjs::ng070-no-spaced-name",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-070-no-spaced-name.mjs::ng070-no-spaced-name passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
@@ -915,11 +915,11 @@
     {
       "id": "NG-071",
       "text": "npm and local-path (.tgz) extension sources install through `yarn build`, with no files placed by hand. Evidence: 09-04-SUMMARY.md:36-38, 152-154.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:98",
       "test_ref": "scripts/verify-ng-071-tarball-extensions.mjs::ng071-tarball-extensions-build",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-071-tarball-extensions.mjs::ng071-tarball-extensions-build passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
@@ -941,11 +941,11 @@
     {
       "id": "NG-073",
       "text": "A declared Theia extension loads in the built app (EXT-01). Evidence: the pin gate passes because nothing is declared (10-02-SUMMARY.md:192).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:100",
       "test_ref": "scripts/verify-ng-073-declared-extension-loads.mjs::ng073-declared-extension-loads",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-073-declared-extension-loads.mjs::ng073-declared-extension-loads passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
@@ -967,7 +967,7 @@
     {
       "id": "NG-075",
       "text": "A Windows MSIX package is built. Evidence: docs/BUILD.md:966-967 staged-unexecuted; PKG-01 box checked (v1.1-REQUIREMENTS.md:31).",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:105",
       "test_ref": "",
       "code_ref": "",
@@ -980,7 +980,7 @@
     {
       "id": "NG-076",
       "text": "A macOS DMG with .icns is built. Evidence: same as NG-075.",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:106",
       "test_ref": "",
       "code_ref": "",
@@ -993,7 +993,7 @@
     {
       "id": "NG-077",
       "text": "The Windows and macOS install matrix and per-OS MAR update hop run. Evidence: docs/BUILD.md:997-998.",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:107",
       "test_ref": "",
       "code_ref": "",
@@ -1006,7 +1006,7 @@
     {
       "id": "NG-078",
       "text": "A release pipeline exists, per docs/RELEASING.md and SEED-001. Evidence: RELEASING.md:11-12; SEED-001 dormant; no release.yml.",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:108",
       "test_ref": "",
       "code_ref": "",
@@ -1019,7 +1019,7 @@
     {
       "id": "NG-079",
       "text": "updates.powerbrowser.org serves updates. Evidence: no DNS record.",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:109",
       "test_ref": "",
       "code_ref": "",
@@ -1032,7 +1032,7 @@
     {
       "id": "NG-080",
       "text": "A production crash-ingest host receives reports. Evidence: collector is loopback only (scripts/crash-collector.mjs:27, 89, 343).",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:110",
       "test_ref": "",
       "code_ref": "",
@@ -1045,7 +1045,7 @@
     {
       "id": "NG-081",
       "text": "Per-fixture Gecko builds (BLD-02) and fixture live builds (VER-03, DOC-02) run. Evidence: v1.0 07-VERIFICATION.md:18, 75 \"NOT RUN\".",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:111",
       "test_ref": "",
       "code_ref": "",
@@ -1058,7 +1058,7 @@
     {
       "id": "NG-082",
       "text": "Theia is re-pinned to 1.75.0 (UPD-02, UPD-04). Evidence: docs/BUILD.md:258-264 \"staged, not executed\".",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": "docs/non-gui/GAPS.md:112",
       "test_ref": "",
       "code_ref": "",
@@ -1071,7 +1071,7 @@
     {
       "id": "NG-083",
       "text": "tabs.sqlite is encrypted. Evidence: plain `Sqlite.openConnection` (PBA:799); notes/tab-sql-substrate.md; research/questions.md Q1 open.",
-      "status": "open",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:113",
       "test_ref": "",
       "code_ref": "",
@@ -1079,7 +1079,7 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "D3(a) no encryption: mozStorage has no SQLCipher, full-disk encryption covers the threat, file stays queryable"
     },
     {
       "id": "NG-084",
@@ -1113,7 +1113,7 @@
   "mockup_freeze": null,
   "scope_lock": null,
   "check_locks": {
-    "commit": "1acf92df49168f5fdafd9131b1227bb735785612",
+    "commit": "a29306059e35551b4315c86c011ce06887b25b9d",
     "files": {
       "scripts/verify-ng-001-one-key-rule.mjs": "642d3d25ab836395e0137652c047e432cfc8e31a37c76191845694bd000242c4",
       "scripts/verify-ng-002-navigation-keeps-row.mjs": "d5fc1ec38c3503606a20716ecd0b12e1696f6ea552a479f3ac12e2cf740e74b4",
@@ -1131,7 +1131,7 @@
       "scripts/verify-ng-014-rebuild-at-head.mjs": "fd42477cda577047e9aa3fe49a3e7b327149ac7c9276649ce9a7066b1e7cd2ee",
       "scripts/verify-ng-015-real-migration-from-every-version.mjs": "0737ca48a5238f3167178c447a77744acdfc9ab45c83d5cc6ee828cda7b6538e",
       "scripts/verify-ng-016-gui08-persistence-at-head.mjs": "93f8da67ebb6037b332921031cec9595a64d5773a58b004c6548101906a37200",
-      "scripts/verify-ng-017-sql05-restarts-real-browser.mjs": "a1aa7be61f8d2bc988df63edc7db56c626ad217af75a6026c525ec9937b210b1",
+      "scripts/verify-ng-017-sql05-restarts-real-browser.mjs": "3a4b3c21cb3f391303e6c0663ee07999a5b781b2b0369db967c09fc7cb03967d",
       "scripts/verify-ng-018-scheduled-integrity-check.mjs": "5e1e4b9eb0acea25b0f3765d27b070a488327c0ae72ebf6cf45d03365d3d851f",
       "scripts/verify-ng-019-tab-store-doc.mjs": "aea3fbdd5a3addd20bdd14e44d793e2d00e9d10b37504ae6ad96d9504ebfb960",
       "scripts/verify-ng-020-absence-wiring-by-call.mjs": "16b5a8d1b630aa41fcd989648f5b168fa6ab5b30118a2bfe9ce77c7d08445ab7",

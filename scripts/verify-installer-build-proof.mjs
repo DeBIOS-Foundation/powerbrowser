@@ -186,7 +186,7 @@ function buildId(r, root) {
 function manifestIdentity(r, root) {
     let resolved;
     try {
-        resolved = resolveConfig(undefined, join(root, 'configuration.toml'));
+        resolved = resolveConfig(join(root, 'configuration.toml'), undefined);
     } catch (e) {
         r.fail(`configuration.toml failed to resolve: ${String(e).split('\n')[0]}. Next step: fix the manifest, then run: node scripts/generate.mjs`);
         return null;
