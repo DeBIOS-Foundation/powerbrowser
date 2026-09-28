@@ -1522,7 +1522,22 @@ function emitIdentityConfigure(config, variant) {
     // before any emission (non-GUI ruling R11; resolveConfig, Task 15).
     const update = config.urls?.update;
     if (!isUnset(update)) {
-        const host = new URL(assertEmittable('urls.update', update)).host;
+        // M-2: a downstream that mistypes the update address gets the named
+        // failure, not a TypeError. The schema regex already refuses non-https
+        // values in validate(); this guards a bypassed validate (same split as
+        // manifestEndpointSources and emitLegalNotices).
+        let host;
+        try {
+            host = new URL(assertEmittable('urls.update', update)).host;
+        } catch {
+            host = '';
+        }
+        if (host === '') {
+            report([
+                `urls.update is ${JSON.stringify(update)}, which is not an https URL. `
+                + `Write your own https update address as [urls] update in ${MANIFEST_NAME}, then run: ${RERUN}`,
+            ]);
+        }
         lines.push(`set_config("MOZ_APPUPDATE_HOST", ${JSON.stringify(host)})`);
     }
     return lines.join('\n') + '\n';
@@ -4013,7 +4028,16 @@ export function resolveConfig(defaultsPath = MANIFEST_PATH, downstreamPath) {
     if (downstreamPath !== undefined) {
         const platformUpdate = resolveConfig(defaultsPath, undefined).config?.urls?.update;
         const update = config?.urls?.update;
-        if (!isUnset(update) && !isUnset(platformUpdate) && new URL(update).host === new URL(platformUpdate).host) {
+        // M-2: parse inside try so a mistyped address returns the named R11
+        // failure instead of throwing TypeError: Invalid URL.
+        let sameHost = false;
+        try {
+            sameHost = !isUnset(update) && !isUnset(platformUpdate)
+                && new URL(update).host === new URL(platformUpdate).host;
+        } catch {
+            sameHost = false;
+        }
+        if (sameHost) {
             failures.push(
                 `urls.update is ${JSON.stringify(update)}, the platform's own update address, and a downstream build must not ship it. `
                 + `Write your own https update address as [urls] update in ${MANIFEST_NAME}, then run: ${RERUN}`,

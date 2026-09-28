@@ -17,13 +17,24 @@ fail() { echo "package-linux: FAIL -- $*" >&2; exit 1; }
 test -f "$APP/lib/backend/main.js" || fail "$APP/lib/backend/main.js is absent; run yarn build in theia/ first"
 
 # The pinned official Node release (R13), downloaded once into the git-ignored .mozbuild/.
+# Its release-key provenance: the sha256 pin in powerbrowser/packaging/node-runtime.json
+# comes from nodejs.org's SHASUMS256.txt, verified by the operator against the Node
+# release signing keys (`gpg --verify SHASUMS256.txt`; RELEASING.md "Node provenance"
+# names the step as key trust the owner performs). The script below cannot perform
+# that check -- it has no keyring here -- so it enforces what it can: the pin.
+# A download that does not hash to the pin is deleted and the run fails naming it,
+# so an unverified archive is never unpacked into the package.
 read -r NODE_VERSION NODE_URL NODE_SHA < <(python3 -c 'import json,sys; p=json.load(open(sys.argv[1]))["linux-x64"]; print(p["version"], p["url"], p["sha256"])' "$ROOT/powerbrowser/packaging/node-runtime.json")
 CACHE="$ROOT/.mozbuild/node-dist"; mkdir -p "$CACHE"
 ARCHIVE="$CACHE/$(basename "$NODE_URL")"
 # M3: never leave a partial download or a partial tarball behind on failure.
 TARBALL=""
 trap 'rm -f "$ARCHIVE.part" ${TARBALL:+$TARBALL.tmp}' ERR
-if [ ! -f "$ARCHIVE" ]; then curl -fsSL -o "$ARCHIVE.part" "$NODE_URL" && mv "$ARCHIVE.part" "$ARCHIVE"; fi
+if [ ! -f "$ARCHIVE" ]; then
+    curl -fsSL -o "$ARCHIVE.part" "$NODE_URL" \
+        || { rm -f "$ARCHIVE.part"; fail "downloading $NODE_URL failed"; }
+    mv "$ARCHIVE.part" "$ARCHIVE"
+fi
 echo "$NODE_SHA  $ARCHIVE" | sha256sum -c --quiet - || { rm -f "$ARCHIVE"; fail "$ARCHIVE does not hash to the pin in powerbrowser/packaging/node-runtime.json"; }
 
 ( cd "$ROOT/upstream" && MOZCONFIG=../.mozconfig ./mach package )
@@ -50,6 +61,29 @@ cp "$ROOT/theia/node_modules/better-sqlite3/prebuilds/linux-x64.node" "$STAGE/th
 tar -xJf "$ARCHIVE" -C "$STAGE/node" --strip-components=1 "node-$NODE_VERSION-linux-x64/bin/node" "node-$NODE_VERSION-linux-x64/LICENSE"
 test "$("$STAGE/node/bin/node" --version)" = "$NODE_VERSION" || fail "the staged node does not report $NODE_VERSION"
 cp "$ROOT/powerbrowser/distribution/policies.json" "$STAGE/distribution/policies.json"
+# M-6: no checkout path ships in the sidecar. Two sources, both build-host-only:
+# native .node files carry a RUNPATH naming the checkout's build dir, and the
+# backend bundles carry esbuild `node-file:` module keys and comments naming
+# node_modules source paths. Neither is a load path (the modules load
+# ./native/*.node), but the RUNPATH makes the loader search a user-writable
+# checkout dir first on any host where that path exists, and both expose the
+# builder's checkout path. The keys are bundle map keys the runtime reads by
+# exact string, so the whole key is rewritten -- never a partial prefix that
+# could collide -- and the comments are inert.
+# patchelf is in the firefox dev shell this script runs in.
+for native in "$STAGE/theia/lib/backend/native"/*.node; do
+    patchelf --remove-rpath "$native" 2>/dev/null || true
+done
+perl -pi -e 's{//\s*node-file:\S+}{// node-file:<buildhost>}; s{"node-file:[^"]+"}{"node-file:<buildhost>"}g' \
+    "$STAGE/theia/lib/backend/main.js" "$STAGE/theia/lib/backend/parcel-watcher.js"
+# ng063-style assertion: no staged file under theia/ or node/ may still carry
+# the checkout path (here: the running checkout at package time). A missed file
+# fails the run naming it, before precomplete is refreshed. The pattern is the
+# checkout prefix, not bare /home/: third-party sources legitimately contain
+# strings like "/home/" + user or "/home/.theia" that name no builder path.
+while IFS= read -r hit; do
+    fail "the staged sidecar still carries a checkout path: $hit"
+done < <(grep -rlF "$ROOT/" "$STAGE/theia" "$STAGE/node" 2>/dev/null || true)
 ( cd "$STAGE" && python3 "$ROOT/upstream/config/createprecomplete.py" )
 
 shopt -s nullglob

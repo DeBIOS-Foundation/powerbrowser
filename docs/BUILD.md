@@ -151,9 +151,13 @@ entry that pins it, and each packed archive lands in the slot the pin gate hashe
   deployer refuses packed files in a `THEIA_PLUGINS` or `THEIA_DEFAULT_PLUGINS` folder.
 
 A pin mismatch removes the entry and fails the build naming it, and nothing is placed
-by hand (NG-071, check `ng071-tarball-extensions-build`). The shipped sidecar is not yet
-told where `plugins/` is: NG-073 (check `ng073-declared-extension-loads`) stays open until
-the product passes that folder to it.
+by hand (NG-071, check `ng071-tarball-extensions-build`). Every
+`extensionDependencies` and `extensionPack` member of a declared extension must
+itself be declared with its own pin: the download step refuses an entry whose
+unpacked manifest names an id no `[[extensions]]` entry declares, so no unpinned
+bytes are fetched from the registry at sidecar start. The sidecar receives
+`<app>/plugins` through `THEIA_DEFAULT_PLUGINS` (NG-073, check
+`ng073-declared-extension-loads`).
 
 **Environment variables the `start` script sets.** `applications/browser`'s
 `start` script exports two variables explicitly, rather than relying on
@@ -1007,6 +1011,16 @@ runs `./mach package` and adds these to the staged application directory:
 
 The Node download happens at build time and is deliberately not in the
 runtime allowlist: that file governs browser/sidecar egress only (R15).
+
+The pin's provenance is the release-key step the owner performs, not this
+script: the sha256 in `powerbrowser/packaging/node-runtime.json` comes from
+nodejs.org's `SHASUMS256.txt` after `gpg --verify SHASUMS256.txt` against the
+Node release signing keys (RELEASING.md "Node provenance" names the step and
+the key origin). The script cannot perform that check -- it has no keyring
+here -- so it enforces the pin: a download that does not hash to it is deleted
+and the run fails naming it, and an unverified archive is never unpacked into
+the package. Bump Node by rerunning the pin step in the non-GUI wave E plan,
+Task 10 Step 2, including the signature check.
 
 It then refreshes `precomplete` and rewrites
 `objdir/dist/<app>-<Version>.en-US.linux-x86_64.tar.xz`. A packaged install runs

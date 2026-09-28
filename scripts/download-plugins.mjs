@@ -89,11 +89,48 @@ for (const name of readdirSync(pluginsDir)) {
 // match, so `..` segments are refused here too.
 const decompress = createRequire(join(REPO_ROOT, 'theia', 'package.json'))('decompress');
 const regular = f => (f.type === 'file' || f.type === 'directory') && !f.path.split(/[\\/]/).includes('..');
+const declaredIds = new Set(declared.map(d => d.id.toLowerCase()));
 for (const d of declared) {
     rmSync(d.dir, { recursive: true, force: true });
-    await decompress(d.slot, d.dir, { filter: regular });
+    try {
+        await decompress(d.slot, d.dir, { filter: regular });
+    } catch (err) {
+        rmSync(d.dir, { recursive: true, force: true });
+        die(`${d.id}: unpacking its ${d.entry.source} archive failed -- ${err.message}`);
+    }
     console.log(`${NAME}: ${d.id} (${d.entry.source}) installed, bytes match the manifest`);
 }
+
+// I-2: a declared extension's undeclared dependencies would be fetched unpinned from
+// Open VSX at sidecar start (Theia's plugin deployer resolves extensionDependencies and
+// extensionPack members by id through the registry). Refuse them here instead: every
+// dependency or pack id (compared case-insensitively as publisher.name) must itself be
+// declared with its own pin. <dir>/extension/package.json is the vsix layout,
+// <dir>/package/package.json the npm/local-tarball layout.
+for (const d of declared) {
+    const manifest = readManifestOf(d);
+    if (!manifest) continue;
+    const missing = [];
+    for (const dep of [...(manifest.extensionDependencies ?? []), ...(manifest.extensionPack ?? [])]) {
+        if (typeof dep !== 'string') continue;
+        if (!declaredIds.has(dep.toLowerCase())) missing.push(dep);
+    }
+    if (missing.length > 0) {
+        const ids = missing.length === 1 ? 'id' : 'ids';
+        die(`${d.id} names undeclared ${ids} ${missing.join(', ')} in extensionDependencies or extensionPack -- `
+            + `declare each with its own pin as an [[extensions]] entry in ${MANIFEST_NAME_HINT}`);
+    }
+}
+
+function readManifestOf(d) {
+    for (const rel of ['extension/package.json', 'package/package.json']) {
+        try {
+            return JSON.parse(readFileSync(join(d.dir, rel), 'utf8'));
+        } catch { /* not this layout */ }
+    }
+    return null;
+}
+const MANIFEST_NAME_HINT = 'configuration.toml';
 
 function sha256Of(path) {
     try {
