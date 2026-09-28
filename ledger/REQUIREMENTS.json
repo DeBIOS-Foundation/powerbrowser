@@ -1,5 +1,5 @@
 {
-  "ledger_version": 346,
+  "ledger_version": 348,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -889,11 +889,11 @@
     {
       "id": "NG-069",
       "text": "open-vsx.org and the AI provider hosts have allowlist rows, and the egress check covers the sidecar's traffic. Evidence: scripts/verify-endpoints.sh:23, 385 read Gecko's MOZ_LOG only; TheiaService.sys.mjs:624; theia/applications/browser/package.json:47, 57.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:96",
       "test_ref": "scripts/verify-ng-069-sidecar-egress.mjs::ng069-sidecar-egress",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-069-sidecar-egress.mjs::ng069-sidecar-egress passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",

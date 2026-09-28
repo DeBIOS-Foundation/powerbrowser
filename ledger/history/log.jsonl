@@ -344,3 +344,5 @@
 {"v": 344, "ts": "2026-09-28T03:26:33Z", "op": "set-status", "id": "NG-067", "changes": {"status": ["open", "done"]}}
 {"v": 345, "ts": "2026-09-28T03:26:33Z", "op": "set", "id": "NG-068", "changes": {"evidence": ["", "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-068-crash-extra-part.mjs::ng068-crash-extra-part passes"]}}
 {"v": 346, "ts": "2026-09-28T03:26:33Z", "op": "set-status", "id": "NG-068", "changes": {"status": ["open", "done"]}}
+{"v": 347, "ts": "2026-09-28T03:26:42Z", "op": "set", "id": "NG-069", "changes": {"evidence": ["", "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-069-sidecar-egress.mjs::ng069-sidecar-egress passes"]}}
+{"v": 348, "ts": "2026-09-28T03:26:42Z", "op": "set-status", "id": "NG-069", "changes": {"status": ["open", "done"]}}
