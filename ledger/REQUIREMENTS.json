@@ -1,5 +1,5 @@
 {
-  "ledger_version": 352,
+  "ledger_version": 354,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -941,11 +941,11 @@
     {
       "id": "NG-073",
       "text": "A declared Theia extension loads in the built app (EXT-01). Evidence: the pin gate passes because nothing is declared (10-02-SUMMARY.md:192).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:100",
       "test_ref": "scripts/verify-ng-073-declared-extension-loads.mjs::ng073-declared-extension-loads",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-073-declared-extension-loads.mjs::ng073-declared-extension-loads passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",

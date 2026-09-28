@@ -350,3 +350,5 @@
 {"v": 350, "ts": "2026-09-28T03:26:42Z", "op": "set-status", "id": "NG-070", "changes": {"status": ["open", "done"]}}
 {"v": 351, "ts": "2026-09-28T03:26:51Z", "op": "set", "id": "NG-071", "changes": {"evidence": ["", "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-071-tarball-extensions.mjs::ng071-tarball-extensions-build passes"]}}
 {"v": 352, "ts": "2026-09-28T03:26:51Z", "op": "set-status", "id": "NG-071", "changes": {"status": ["open", "done"]}}
+{"v": 353, "ts": "2026-09-28T03:27:05Z", "op": "set", "id": "NG-073", "changes": {"evidence": ["", "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-073-declared-extension-loads.mjs::ng073-declared-extension-loads passes"]}}
+{"v": 354, "ts": "2026-09-28T03:27:05Z", "op": "set-status", "id": "NG-073", "changes": {"status": ["open", "done"]}}
