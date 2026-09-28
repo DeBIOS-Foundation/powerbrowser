@@ -271,3 +271,5 @@
 {"v": 271, "ts": "2026-09-28T00:18:17Z", "op": "set-status", "id": "NG-009", "changes": {"status": ["open", "done"]}}
 {"v": 272, "ts": "2026-09-28T00:18:53Z", "op": "set", "id": "NG-010", "changes": {"evidence": ["", "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-010-closed-tab-history.mjs::ng-010-closed-tab-history passes"]}}
 {"v": 273, "ts": "2026-09-28T00:18:53Z", "op": "set-status", "id": "NG-010", "changes": {"status": ["open", "done"]}}
+{"v": 274, "ts": "2026-09-28T00:20:18Z", "op": "set", "id": "NG-011", "changes": {"evidence": ["", "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-011-settings-table-read.mjs::ng-011-settings-table-read passes"]}}
+{"v": 275, "ts": "2026-09-28T00:20:18Z", "op": "set-status", "id": "NG-011", "changes": {"status": ["open", "done"]}}

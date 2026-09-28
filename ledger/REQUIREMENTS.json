@@ -1,5 +1,5 @@
 {
-  "ledger_version": 273,
+  "ledger_version": 275,
   "frozen_at": null,
   "items": [
     {
@@ -135,11 +135,11 @@
     {
       "id": "NG-011",
       "text": "A settings table in tabs.sqlite holds restore behaviour and age tiers, and the restore path reads them. Evidence: only `tabs` and `groups` DDL exist (PBA:51, 66); notes/tab-sql-substrate.md.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:26",
       "test_ref": "scripts/verify-ng-011-settings-table-read.mjs::ng-011-settings-table-read",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-011-settings-table-read.mjs::ng-011-settings-table-read passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
