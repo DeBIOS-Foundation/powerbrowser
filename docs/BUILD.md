@@ -734,7 +734,26 @@ MARs are signed with the fork's own key (NG-065). The key pair was generated loc
 
 `patches/030-powerbrowser-mar-certificates.patch` makes the updater embed that certificate in both of its slots on every update channel. One key: a compromised key needs a client rebuild.
 
-Sign with the signing command in wave E's plan (Task 8 "Produces"): signmar, nickname `powerbrowser-mar`, the password on stdin. `scripts/verify-ng-065-mar-signature.mjs` (row `ng065-mar-signature-enforced`) drives the packaged `updater` and requires four outcomes:
+Sign (one command; run at the repository root):
+
+```
+printf '%s\n' "$(cat ~/.config/powerbrowser-release/mar-key/password.txt)" | objdir/dist/bin/signmar -d ~/.config/powerbrowser-release/mar-key -n powerbrowser-mar -s <in.mar> <out.mar>
+```
+
+signmar reads the password from stdin when stdin is not a terminal.
+
+Verify a MAR against the tracked certificate (Linux signmar is built with
+`MAR_NSS`, so `-D` is not parsed; import the certificate into a scratch NSS
+database and verify with `-d`/`-n`):
+
+```
+V=$(mktemp -d); export LD_LIBRARY_PATH=objdir/dist/bin
+objdir/dist/bin/certutil -N -d "sql:$V" --empty-password
+objdir/dist/bin/certutil -A -d "sql:$V" -n powerbrowser-mar -t ",," -i powerbrowser/packaging/mar/mar-primary.der
+objdir/dist/bin/signmar -d "$V" -n powerbrowser-mar -v <mar> && echo VERIFIED; rm -rf "$V"
+```
+
+`scripts/verify-ng-065-mar-signature.mjs` (row `ng065-mar-signature-enforced`) drives the packaged `updater` and requires four outcomes:
 - a fork-signed MAR applies;
 - an unsigned MAR is refused with `CERT_VERIFY_ERROR`;
 - a MAR signed with a foreign key is refused with `CERT_VERIFY_ERROR`;
@@ -823,10 +842,10 @@ the version string). All commands below run inside `nix develop
 
    ```
    MAR="<objdir-nplus1>/dist/host/bin/mar" MOZ_PRODUCT_VERSION=153.1.1 MAR_CHANNEL_ID=powerbrowser-default \
-     bash tools/update-packaging/make_full_update.sh <out>/nplus1.mar "<objdir-nplus1>/dist/powerbrowser"
+     bash tools/update-packaging/make_full_update.sh <out>/nplus1.unsigned.mar "<objdir-nplus1>/dist/powerbrowser"
    ```
 
-   `MAR_CHANNEL_ID` must equal the build's `ACCEPTED_MAR_CHANNEL_IDS` (`objdir/config.status`). Then sign the MAR with the signing command in wave E's plan (Task 8 "Produces"). The updater refuses an unsigned MAR (`CERT_VERIFY_ERROR`) and a MAR for another channel (`MAR_CHANNEL_MISMATCH_ERROR`). `MOZ_PRODUCT_VERSION`
+   `MAR_CHANNEL_ID` must equal the build's `ACCEPTED_MAR_CHANNEL_IDS` (`objdir/config.status`). Emit `<out>/nplus1.unsigned.mar` above, then sign it into `<out>/nplus1.mar` with the signing command in "Key-custody rung" above. The updater refuses an unsigned MAR (`CERT_VERIFY_ERROR`) and a MAR for another channel (`MAR_CHANNEL_MISMATCH_ERROR`). `MOZ_PRODUCT_VERSION`
    must equal the N-plus-1 payload version the previous step baked
    (the updater stamps it into the MAR product-info block).
 

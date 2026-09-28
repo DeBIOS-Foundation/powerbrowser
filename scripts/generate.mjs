@@ -1392,9 +1392,8 @@ function emitBrandProperties(config, variant) {
   * MOZ_VERIFY_MAR_SIGNATURE, updater.cpp:3063, 3329); removing it turns
   * verification on, and MAR_CHANNEL_ID plus ACCEPTED_MAR_CHANNEL_IDS bake
   * one fixed channel, `<app_basename>-default`, into the build and into
-  * update-settings.ini. Still no [build] table: the value is platform
-  * policy, identical for every downstream, so it stays literal like the
-  * other five.
+  * update-settings.ini. The `-default` suffix is fork policy and stays
+  * literal, so no [build] table; the prefix is the manifest's app_basename.
  *
  * Built by concatenation rather than by template interpolation on the two
  * expansion lines: `${...}` inside a JS template literal is JS interpolation,

@@ -30,7 +30,7 @@ prose, and each of those sections says so where it stands:
 
 Three parts of `docs/BUILD.md` read as the opposite of what this document
 states until the non-GUI wave E rewrote them: the key-custody text
-(rewritten by NG-065), the "Two baked-in facts" block and the "Policy install"
+(rewritten by NG-065), the "Two facts about where the update URL lives" block and the "Policy install"
 section beside it (rewritten by NG-064, NG-065, NG-072). Only the packaging
 capability record's line saying `virsh list --all` shows zero defined domains
 remains for stage `windows-unsigned`.
@@ -51,10 +51,11 @@ update URL, version, build ID, `OS_TARGET`, `TARGET_XPCOM_ABI`,
 Its `sign-upload` job runs on `ubuntu-latest` under `environment: release` behind
 a required reviewer, and is the only job carrying `contents: write`,
 `id-token: write` and `attestations: write`; it decodes the MAR signing key from
-two environment secrets, signs every MAR with the signing command in wave E's plan
-(Task 8 "Produces"), verifies each one against the tracked
-`powerbrowser/packaging/mar/mar-primary.der` **before** any upload
-(`signmar -D powerbrowser/packaging/mar/mar-primary.der -v <mar>`), writes
+two environment secrets, imports the decoded `.p12` into a scratch NSS database
+with `pk12util -i`, signs every MAR with `signmar -d <db> -n powerbrowser-mar -s`,
+verifies each one against the tracked certificate imported into a scratch NSS
+database (`signmar -d <db> -n powerbrowser-mar -v`, see the verify form in
+`docs/BUILD.md` "Key-custody rung") **before** any upload, writes
 `SHA256SUMS`, creates the GitHub Release as a **draft** carrying every asset,
 attests build provenance, emits one `update.xml` per BUILD_TARGET with
 `scripts/build-update-xml.mjs --emit`, commits the descriptor tree to
@@ -193,7 +194,7 @@ here owns.
 | `prerequisites-and-hardening` | Push an unsigned `v0.0.0-0` tag and confirm the remote **rejects** it. If it is accepted, delete it remotely, stop and report; never widen a rule to get past it. Delete the local tag either way | Proves the bypass-free signature ruleset binds the owner too |
 | `mar-signing-and-update-integrity` | Confirm `gh auth status` shows the owner and the `release` environment exists | Account |
 | `mar-signing-and-update-integrity` | The MAR key ceremony (below) | Private key custody |
-| `mar-signing-and-update-integrity` | One bounded primary-key use on `legion` to sign the N+1 MAR for the three-drive proof, then wipe and unmount | The only deliberate exception to the key never touching `legion` |
+| `mar-signing-and-update-integrity` | The MAR key ceremony (key store lives on `legion` at `~/.config/powerbrowser-release/mar-key/`; optional `.p12` backup to the offline medium) and one MAR signed with that store's key for the loopback proof | Private key custody |
 | `packaged-product-correctness-linux` | Node provenance: read the version from `nix develop .#theia --command node --version`, fetch `SHASUMS256.txt` with its `SHASUMS256.txt.sig` from the same `nodejs.org/dist/<version>/` directory, import and confirm the Node.js release signing keys (origin: the nodejs/release-keys repository, verified out of band against the keys the installer already trusts), `gpg --verify SHASUMS256.txt`, take the `linux-x64` sha256, pin it, and write the shipped-licences and provenance section of `docs/BUILD.md` | Key trust decision |
 | `linux-release-pipeline-and-update-channel` | Create a fine-grained PAT limited to `DeBIOS-Foundation/powerbrowser` with self-hosted-runner read/write only; write it root-owned mode 0600 to `/var/lib/secrets/github-runner-pat` | Secret custody plus `pkexec` |
 | `linux-release-pipeline-and-update-channel` | Add the `services.github-runners` block to `/etc/nixos/configuration.nix` and apply it | Root on `legion` |
@@ -323,11 +324,11 @@ stage is archived.
 ### The MAR key ceremony and custody
 
 Run the ceremony once, on `legion`, at the repository root, with nobody else at the
-console and an offline medium mounted. Full steps are in the stage plan; the shape
-is:
+console and an offline medium mounted. The shape is:
 
 ```
 PB=$HOME/coding/Power-Browser; D=$HOME/.config/powerbrowser-release/mar-key
+[ -e "$D/key4.db" ] && { echo "a key store already exists at $D; rotate into a new directory"; exit 1; }
 mkdir -p "$D" && chmod 700 "$D"
 ( umask 077 && head -c 32 /dev/urandom | base64 > "$D/password.txt" )    # R12: the key store's password, never empty
 export LD_LIBRARY_PATH=$PB/objdir/dist/bin
@@ -336,17 +337,19 @@ head -c 4096 /dev/urandom > "$D/noise"
 $PB/objdir/dist/bin/certutil -S -d "sql:$D" -f "$D/password.txt" -z "$D/noise" -n powerbrowser-mar \
   -s "CN=PowerBrowser MAR signing,O=$(sed -n 's/^vendor_display *= *"\(.*\)"/\1/p' configuration.toml)" -x -t ",," -k rsa -g 4096 -Z SHA384 -v 240
 shred -u "$D/noise"
-mkdir -p $HOME/coding/Power-Browser-ng-e/powerbrowser/packaging/mar
-$PB/objdir/dist/bin/certutil -L -d "sql:$D" -n powerbrowser-mar -r > $HOME/coding/Power-Browser-ng-e/powerbrowser/packaging/mar/mar-primary.der
+$PB/objdir/dist/bin/certutil -L -d "sql:$D" -n powerbrowser-mar -r > powerbrowser/packaging/mar/mar-primary.der
+# Optional, the owner's call: a .p12 backup of the key to the offline medium.
+$PB/objdir/dist/bin/pk12util -o <medium>/powerbrowser-mar.p12 -d "sql:$D" -n powerbrowser-mar
 ls -l "$D"    # cert9.db key4.db pkcs11.txt password.txt -- nothing from this directory ever enters the repo
 ```
 
-The key store and `password.txt` live at `~/.config/powerbrowser-release/mar-key/`,
-outside the repo. One key fills both updater slots (R12): a compromised key needs
-a client rebuild. Only the public certificate,
-`powerbrowser/packaging/mar/mar-primary.der`, is tracked. Loading the key into
-the `release` environment secrets is part of the deferred release pipeline row.
-The pipeline exports it from that store with `pk12util`.
+The key store and `password.txt` live on `legion` at
+`~/.config/powerbrowser-release/mar-key/`, outside the repo. One key fills both
+updater slots (R12): a compromised key needs a client rebuild. Only the public
+certificate, `powerbrowser/packaging/mar/mar-primary.der`, is tracked. The
+`.p12` backup on the offline medium comes from the optional `pk12util` line in
+the ceremony block above. Loading the key into the `release` environment secrets
+is part of the deferred release pipeline row.
 
 ### Cloudflare Pages
 
@@ -473,7 +476,7 @@ to `all`.
 | `release` environment | descriptor-repository PAT (Contents write on `powerbrowser-updates` only) | `linux-release-pipeline-and-update-channel` | as above |
 | `release` environment | `WINGET_TOKEN`, fork-scoped, only under an ADMIT verdict | `listings-and-cadence` | as above |
 | Host filesystem on `legion` | `/var/lib/secrets/github-runner-pat`, root-owned mode 0600 | `linux-release-pipeline-and-update-channel` | the operator; on the unit's `InaccessiblePaths` |
-| Offline medium | the MAR `.p12` export and its passphrase | `mar-signing-and-update-integrity` | the operator, in a safe |
+| Offline medium | `powerbrowser-mar.p12` (from the ceremony block's optional `pk12util` line) and the key-store password | `mar-signing-and-update-integrity` | the operator, in a safe |
 
 No secret reaches `legion` through Actions. The build job holds `contents: read`,
 no `environment:` and no `secrets.` reference; the static release-workflow gate
@@ -710,13 +713,15 @@ reverses D-77 and both `rebase-upstream.yml` and this section change together.
 ### Key rotation
 
 One key fills both updater slots (R12), so a rotation needs a client rebuild:
-generate a new key in a fresh ceremony, ship one release whose updater embeds the
-new certificate `powerbrowser/packaging/mar/mar-primary.der`, then retire the old
-key. The row that proves signing is `ng065-mar-signature-enforced` (a fork-signed
-MAR applies; unsigned and foreign-key MARs are refused with `CERT_VERIFY_ERROR`;
-a wrong-channel MAR is refused with `MAR_CHANNEL_MISMATCH_ERROR`). There is no
-rotation runbook beyond this paragraph today; writing one is open
-work.
+create the new store in a new directory (never reuse the live directory; the
+ceremony block refuses to run over an existing store), ship the transition release
+signed with the **old** key whose updater embeds the new certificate
+`powerbrowser/packaging/mar/mar-primary.der`, and only then switch signing to the
+new store. The row that proves signing is `ng065-mar-signature-enforced` (a
+fork-signed MAR applies; unsigned and foreign-key MARs are refused with
+`CERT_VERIFY_ERROR`; a wrong-channel MAR is refused with
+`MAR_CHANNEL_MISMATCH_ERROR`). There is no rotation runbook beyond this paragraph
+today; writing one is open work.
 
 ### Runner upkeep
 
@@ -776,7 +781,7 @@ on the absence of a log line.
 |---|---|---|---|
 | `repo-controls` | 1 | Live GitHub state matches every tracked body under `.github/settings/` by derivation | Network-free self-test over fixture bodies |
 | `release-identity` | 2 | Tag, version files and any committed descriptor cannot disagree | Display version off by one revision; a different ESR in `version.txt`; HEAD tagged one revision above the derivation; a prior release tag equal to the derivation on an older commit; a tracked `update.xml` with a differing appVersion; plus an untagged-HEAD case that must stay green and print its skip line by name |
-| `mar-sign-self-test` | 3 | MARs are signed with the signing command in wave E's plan (Task 8 "Produces") and verified with the tree's own `signmar` (`signmar -D powerbrowser/packaging/mar/mar-primary.der -v <mar>`), and each planted fault goes red naming the file. The live signing evidence rides on the existing `mar-update-hop` row rather than on a second full row | Verify the unsigned MAR; verify a foreign-key MAR against the fork certificate; sign an already-signed MAR; sign with a nickname absent from the database |
+| `mar-sign-self-test` | 3 | MARs are signed with the signing command in `docs/BUILD.md` "Key-custody rung" and verified with the tree's own `signmar` against the tracked certificate imported into a scratch NSS database (`signmar -d <db> -n powerbrowser-mar -v`), and each planted fault goes red naming the file. The live signing evidence rides on the existing `mar-update-hop` row rather than on a second full row | Verify the unsigned MAR; verify a foreign-key MAR against the fork certificate; sign an already-signed MAR; sign with a nickname absent from the database |
 | `build-update-xml-self-test` | 3 | One descriptor per BUILD_TARGET emitted from `application.ini` and the MAR bytes, byte-identical on re-emission, carrying `detailsURL`, over synthetic fixtures | An unknown target token; an `application.ini` with no BuildID; a `TARGET_XPCOM_ABI` disagreeing with the table; `--channel` given the MAR channel id while the fixture `config.status` carries the update channel |
 | `packaged-launch` | 4 | An extracted package launches on a fresh profile and reaches the Theia shell with both product markers, resolving in-prefix | Remove the staged backend |
 | `packaged-identity` | 4 | `application.ini` and the staged Theia `package.json` carry release-variant identity | A dev suffix in the staged notice |
@@ -866,15 +871,18 @@ regenerate; do not hand-edit `powerbrowser/packaging/version/version_display.txt
 which is a generated comparand.
 
 **`update.status` reads `failed: 22`.** The MAR's channel is absent from the
-client's `ACCEPTED_MAR_CHANNEL_IDS`. The update channel (`release`, the
-`%CHANNEL%` path segment, `--enable-update-channel`) and the MAR channel id
-(`powerbrowser-release`, `MAR_CHANNEL_ID` and `ACCEPTED_MAR_CHANNEL_IDS`) are two
-different values and are the most common thing to conflate. The emitter takes the
-side that cannot be guessed: `scripts/build-update-xml.mjs --channel` is the update
-channel, it is cross-checked against `MOZ_UPDATE_CHANNEL` in the given
-`config.status`, and a disagreement fails naming both values, so no descriptor can
-be emitted under the MAR channel id. Check the built `update-settings.ini` in the
-install directory and the `--mar-channel-id` the MAR was stamped with.
+client's `ACCEPTED_MAR_CHANNEL_IDS`. The update channel (`default`, the
+`%CHANNEL%` path segment) and the MAR channel id (`powerbrowser-default`,
+`<app_basename>-default` emitted by `emitMozconfig` as `MAR_CHANNEL_ID` and
+`ACCEPTED_MAR_CHANNEL_IDS`) are two different values and are the most common
+thing to conflate. A future `--enable-update-channel=release` switch must also
+change `emitMozconfig`'s `-default` suffix if the pipeline wants the id to follow
+the update channel. The emitter takes the side that cannot be guessed:
+`scripts/build-update-xml.mjs --channel` is the update channel, it is
+cross-checked against `MOZ_UPDATE_CHANNEL` in the given `config.status`, and a
+disagreement fails naming both values, so no descriptor can be emitted under the
+MAR channel id. Check the built `update-settings.ini` in the install directory
+and the `--mar-channel-id` the MAR was stamped with.
 
 **`update.status` reads `failed: 19`.** The MAR carries no signature the client
 accepts. Either the MAR was never signed, or it was signed with a key whose
@@ -882,7 +890,10 @@ certificate is not embedded. Confirm with the tree's own tools:
 
 ```
 LD_LIBRARY_PATH=objdir/dist/bin objdir/dist/bin/signmar -T <mar>
-signmar -D powerbrowser/packaging/mar/mar-primary.der -v <mar>
+V=$(mktemp -d); export LD_LIBRARY_PATH=objdir/dist/bin
+objdir/dist/bin/certutil -N -d "sql:$V" --empty-password
+objdir/dist/bin/certutil -A -d "sql:$V" -n powerbrowser-mar -t ",," -i powerbrowser/packaging/mar/mar-primary.der
+objdir/dist/bin/signmar -d "$V" -n powerbrowser-mar -v <mar> && echo VERIFIED; rm -rf "$V"
 ```
 
 A correctly signed MAR reports exactly `Signature block found with 1 signature`.
