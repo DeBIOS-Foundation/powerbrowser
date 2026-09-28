@@ -1,5 +1,5 @@
 {
-  "ledger_version": 344,
+  "ledger_version": 346,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -876,11 +876,11 @@
     {
       "id": "NG-068",
       "text": "The crash collector accepts Gecko's single `extra` annotation part. Evidence: scripts/crash-collector.mjs:77-85.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:95",
       "test_ref": "scripts/verify-ng-068-crash-extra-part.mjs::ng068-crash-extra-part",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-068-crash-extra-part.mjs::ng068-crash-extra-part passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
