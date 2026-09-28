@@ -301,3 +301,5 @@
 {"v": 301, "ts": "2026-09-28T01:21:34Z", "op": "set-status", "id": "NG-026", "changes": {"status": ["open", "done"]}}
 {"v": 302, "ts": "2026-09-28T01:21:34Z", "op": "set", "id": "NG-027", "changes": {"evidence": ["", "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-027-reader-callers.mjs::ng-027-reader-callers passes"]}}
 {"v": 303, "ts": "2026-09-28T01:21:34Z", "op": "set-status", "id": "NG-027", "changes": {"status": ["open", "done"]}}
+{"v": 304, "ts": "2026-09-28T01:21:42Z", "op": "set", "id": "NG-028", "changes": {"evidence": ["", "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-028-saved-page.mjs::ng-028-saved-page-copy passes"]}}
+{"v": 305, "ts": "2026-09-28T01:21:42Z", "op": "set-status", "id": "NG-028", "changes": {"status": ["open", "done"]}}

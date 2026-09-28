@@ -1,5 +1,5 @@
 {
-  "ledger_version": 303,
+  "ledger_version": 305,
   "frozen_at": null,
   "items": [
     {
@@ -356,11 +356,11 @@
     {
       "id": "NG-028",
       "text": "A tab can store a full saved copy of its page. Evidence: notes/tab-sql-substrate.md \"optional full saved-page capture\"; no capture code.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:46",
       "test_ref": "scripts/verify-ng-028-saved-page.mjs::ng-028-saved-page-copy",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-028-saved-page.mjs::ng-028-saved-page-copy passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
