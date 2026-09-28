@@ -28,14 +28,12 @@ prose, and each of those sections says so where it stands:
 - stage `listings-and-cadence` writes the maintenance section behind a gate that
   derives its expectations from the workflows, the manifest and the tracked keys.
 
-Three parts of `docs/BUILD.md` currently read as the opposite of what this document
-states, because each records the pre-release posture and a stage rewrites it: the
-"Key-custody rung (T-08-04a)" text saying the MARs are unsigned hash-pinned blobs
-and no fork key was generated (rewritten by stage `mar-signing-and-update-integrity`);
-and the packaging capability record's line
-saying `virsh list --all` shows zero defined domains (corrected by stage
-`windows-unsigned`). Until each stage runs, `docs/BUILD.md` is the stale side of
-those two disagreements.
+Three parts of `docs/BUILD.md` read as the opposite of what this document
+states until the non-GUI wave E rewrote them: the key-custody text
+(rewritten by NG-065), the "Two baked-in facts" block and the "Policy install"
+section beside it (rewritten by NG-064, NG-065, NG-072). Only the packaging
+capability record's line saying `virsh list --all` shows zero defined domains
+remains for stage `windows-unsigned`.
 
 Where a value is not derivable today it is named as pending rather than guessed.
 A number written here that no stage measured is a defect, not a placeholder.
@@ -53,8 +51,10 @@ update URL, version, build ID, `OS_TARGET`, `TARGET_XPCOM_ABI`,
 Its `sign-upload` job runs on `ubuntu-latest` under `environment: release` behind
 a required reviewer, and is the only job carrying `contents: write`,
 `id-token: write` and `attestations: write`; it decodes the MAR signing key from
-two environment secrets, signs every MAR with `scripts/sign-mar.sh sign`, verifies
-each one against the tracked `brand/mar-primary.der` **before** any upload, writes
+two environment secrets, signs every MAR with the signing command in wave E's plan
+(Task 8 "Produces"), verifies each one against the tracked
+`powerbrowser/packaging/mar/mar-primary.der` **before** any upload
+(`signmar -D powerbrowser/packaging/mar/mar-primary.der -v <mar>`), writes
 `SHA256SUMS`, creates the GitHub Release as a **draft** carrying every asset,
 attests build provenance, emits one `update.xml` per BUILD_TARGET with
 `scripts/build-update-xml.mjs --emit`, commits the descriptor tree to
@@ -229,7 +229,7 @@ for the `objdir-release` rebuild. Both builds are auto tasks in their plans.
 |---|---|
 | `prerequisites-and-hardening` | Correct the two stale control claims and re-sync the pref comparands; write the nine `.github/settings/*.json` bodies and apply them; write this document's control half; register `scripts/verify-repo-controls.mjs` as the permanent drift check; rebase the ESR pin to `FIREFOX_153_2_0esr_RELEASE`, push `main` to parity and watch that run |
 | `release-identity` | Configure-level probe of the four levers; `releaseIdentity()` in the generator with tracked comparands; policy file, hop gate, branding gate and documents follow the baked host; `scripts/verify-release-identity.mjs` with self-test and two registry rows; one batched dev rebuild proving the baked identity |
-| `mar-signing-and-update-integrity` | Claims record; certificate emitters and `patches/030-powerbrowser-mar-certificates.patch`; drop `--enable-unverified-updates`; tier-3 rebuild of N and N+1; `scripts/sign-mar.sh`, `scripts/build-update-xml.mjs`, hop-verifier extension, two registry rows; three drives and the evidence contract |
+| `mar-signing-and-update-integrity` | Carried out by non-GUI wave E Task 8 (NG-065): `patches/030-powerbrowser-mar-certificates.patch`; drop `--enable-unverified-updates`; tier-3 rebuild of N and N+1; fork-key signing per wave E plan Task 8 Produces, descriptor emission, updater-driven four-outcome proof (`ng065-mar-signature-enforced`) |
 | `packaged-product-correctness-linux` | Staging and packaging probe; `scripts/stage-sidecar.sh` and `patches/050-powerbrowser-package.patch`; application-directory resolution, profile-scoped Theia state, URL argument handling; variant-free legal notice; shell-side update-ready layer; four registry row pairs and `scripts/run-install-matrix.sh` |
 | `linux-release-pipeline-and-update-channel` | Derive the update-origin facts and write the procedure half of this document; `.github/workflows/release.yml` plus its static gate; the live channel gate; the release-mode hop drill and the observed allowlist rows |
 | `windows-unsigned` | Five routing verdicts; `.#firefox-win64` shell and the Windows mozconfig; the one-time `WINSYSROOT` cache population with `get_vs.py`, run from `upstream/` and written outside the repository; generated installer artwork and fork registry defines; `patches/050-powerbrowser-installer.patch` and the deny-host grep; the Windows build, sidecar staging, installer and MAR; the matrix gate, the copy gate, the WINNT descriptor row and the `build-windows` job |
@@ -327,39 +327,26 @@ console and an offline medium mounted. Full steps are in the stage plan; the sha
 is:
 
 ```
-export LD_LIBRARY_PATH="$PWD/objdir/dist/bin"
-T="$PWD/objdir/dist/bin"
-D="$(mktemp -d -p /dev/shm mar-ceremony.XXXXXX)"
+PB=$HOME/coding/Power-Browser; D=$HOME/.config/powerbrowser-release/mar-key
+mkdir -p "$D" && chmod 700 "$D"
+( umask 077 && head -c 32 /dev/urandom | base64 > "$D/password.txt" )    # R12: the key store's password, never empty
+export LD_LIBRARY_PATH=$PB/objdir/dist/bin
+$PB/objdir/dist/bin/certutil -N -d "sql:$D" -f "$D/password.txt"
 head -c 4096 /dev/urandom > "$D/noise"
-"$T/certutil" -N -d "sql:$D" --empty-password
-"$T/certutil" -S -d "sql:$D" -z "$D/noise" -n mar-primary   -s "CN=...,O=..." -x -t ",," -k rsa -g 4096 -Z SHA256 -v 240
-"$T/certutil" -S -d "sql:$D" -z "$D/noise" -n mar-secondary -s "CN=...,O=..." -x -t ",," -k rsa -g 4096 -Z SHA256 -v 240
-"$T/certutil" -L -d "sql:$D" -n mar-primary   -r > brand/mar-primary.der
-"$T/certutil" -L -d "sql:$D" -n mar-secondary -r > brand/mar-secondary.der
+$PB/objdir/dist/bin/certutil -S -d "sql:$D" -f "$D/password.txt" -z "$D/noise" -n powerbrowser-mar \
+  -s "CN=PowerBrowser MAR signing,O=$(sed -n 's/^vendor_display *= *"\(.*\)"/\1/p' configuration.toml)" -x -t ",," -k rsa -g 4096 -Z SHA384 -v 240
+shred -u "$D/noise"
+mkdir -p $HOME/coding/Power-Browser-ng-e/powerbrowser/packaging/mar
+$PB/objdir/dist/bin/certutil -L -d "sql:$D" -n powerbrowser-mar -r > $HOME/coding/Power-Browser-ng-e/powerbrowser/packaging/mar/mar-primary.der
+ls -l "$D"    # cert9.db key4.db pkcs11.txt password.txt -- nothing from this directory ever enters the repo
 ```
 
-Both private keys are exported as `.p12` under freshly generated passphrases. The
-**primary** key and its passphrase become the `release` environment secrets
-`MAR_SIGNING_P12_B64` and `MAR_SIGNING_P12_PASSWORD`. Both `.p12` files and a README
-naming the date, nicknames, subjects, passphrases and which key is primary go to the
-offline medium, which is then unmounted and stored. The working directory under
-`/dev/shm` is removed and shell history cleared. Nothing from the ceremony remains
-on `legion` except the two DER certificates, which are tracked as branding inputs
-and listed in `brand/HUMAN-REVIEW.md` with a dated sign-off.
-
-The nicknames `mar-primary` and `mar-secondary` are load-bearing: `mar` and
-`signmar` take `-n certname` in both sign and verify modes, and `scripts/sign-mar.sh`
-requires `--nick` in both of its paths. A MAR carries exactly one signature: the
-updater tries the primary certificate and then the secondary, one key per attempt,
-and libmar requires every signature on the MAR to verify. The secondary certificate
-is embedded now precisely so a rotation to the offline secondary key needs no client
-rebuild.
-
-There is exactly one deliberate exception to the primary key never touching
-`legion`: the local three-drive proof in stage `mar-signing-and-update-integrity`
-needs one MAR signed with the key the rebuilt client embeds, and no hosted signing
-job exists until the release pipeline lands. That session is bounded to one file,
-runs from a RAM-backed directory, and ends with a wipe.
+The key store and `password.txt` live at `~/.config/powerbrowser-release/mar-key/`,
+outside the repo. One key fills both updater slots (R12): a compromised key needs
+a client rebuild. Only the public certificate,
+`powerbrowser/packaging/mar/mar-primary.der`, is tracked. Loading the key into
+the `release` environment secrets is part of the deferred release pipeline row.
+The pipeline exports it from that store with `pk12util`.
 
 ### Cloudflare Pages
 
@@ -486,7 +473,7 @@ to `all`.
 | `release` environment | descriptor-repository PAT (Contents write on `powerbrowser-updates` only) | `linux-release-pipeline-and-update-channel` | as above |
 | `release` environment | `WINGET_TOKEN`, fork-scoped, only under an ADMIT verdict | `listings-and-cadence` | as above |
 | Host filesystem on `legion` | `/var/lib/secrets/github-runner-pat`, root-owned mode 0600 | `linux-release-pipeline-and-update-channel` | the operator; on the unit's `InaccessiblePaths` |
-| Offline medium | both MAR `.p12` files and their passphrases | `mar-signing-and-update-integrity` | the operator, in a safe |
+| Offline medium | the MAR `.p12` export and its passphrase | `mar-signing-and-update-integrity` | the operator, in a safe |
 
 No secret reaches `legion` through Actions. The build job holds `contents: read`,
 no `environment:` and no `secrets.` reference; the static release-workflow gate
@@ -722,16 +709,13 @@ reverses D-77 and both `rebase-upstream.yml` and this section change together.
 
 ### Key rotation
 
-The secondary certificate is already embedded in every shipped updater, so a
-rotation needs no client rebuild. The sequence: promote the secondary signing key
-to primary, generate a new secondary in a fresh ceremony, ship one release carrying
-both DERs so an install on either key can verify, then retire the old primary by
-removing its DER and its environment secret. The tracked files are
-`brand/mar-primary.der` and `brand/mar-secondary.der`, and the rows that prove the
-rotation are `mar-update-hop` (a signed MAR verifies against the shipped
-certificate, and its drives B and C plant `failed: 19` and `failed: 22`) and
-`mar-sign-self-test` (a wrong-certificate verify and a double-sign each go red).
-There is no rotation runbook beyond this paragraph today; writing one is open
+One key fills both updater slots (R12), so a rotation needs a client rebuild:
+generate a new key in a fresh ceremony, ship one release whose updater embeds the
+new certificate `powerbrowser/packaging/mar/mar-primary.der`, then retire the old
+key. The row that proves signing is `ng065-mar-signature-enforced` (a fork-signed
+MAR applies; unsigned and foreign-key MARs are refused with `CERT_VERIFY_ERROR`;
+a wrong-channel MAR is refused with `MAR_CHANNEL_MISMATCH_ERROR`). There is no
+rotation runbook beyond this paragraph today; writing one is open
 work.
 
 ### Runner upkeep
@@ -898,7 +882,7 @@ certificate is not embedded. Confirm with the tree's own tools:
 
 ```
 LD_LIBRARY_PATH=objdir/dist/bin objdir/dist/bin/signmar -T <mar>
-bash scripts/sign-mar.sh verify --cert brand/mar-primary.der <mar>
+signmar -D powerbrowser/packaging/mar/mar-primary.der -v <mar>
 ```
 
 A correctly signed MAR reports exactly `Signature block found with 1 signature`.
