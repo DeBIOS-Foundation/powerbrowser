@@ -1,5 +1,5 @@
 {
-  "ledger_version": 360,
+  "ledger_version": 362,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -928,11 +928,11 @@
     {
       "id": "NG-072",
       "text": "A WebExtension declared in policies.json installs and loads, and policies.json is packaged. Evidence: `ExtensionSettings: {}` (powerbrowser/distribution/policies.json:6).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:99",
       "test_ref": "scripts/verify-ng-072-policies-webextension.mjs::ng072-policies-packaged-webextension",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "177c999c902ed0cf7fb43484181eb72f3f3dc96e: scripts/verify-ng-072-policies-webextension.mjs::ng072-policies-packaged-webextension passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
