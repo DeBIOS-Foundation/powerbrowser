@@ -1,5 +1,5 @@
 {
-  "ledger_version": 350,
+  "ledger_version": 352,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -915,11 +915,11 @@
     {
       "id": "NG-071",
       "text": "npm and local-path (.tgz) extension sources install through `yarn build`, with no files placed by hand. Evidence: 09-04-SUMMARY.md:36-38, 152-154.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:98",
       "test_ref": "scripts/verify-ng-071-tarball-extensions.mjs::ng071-tarball-extensions-build",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-071-tarball-extensions.mjs::ng071-tarball-extensions-build passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
