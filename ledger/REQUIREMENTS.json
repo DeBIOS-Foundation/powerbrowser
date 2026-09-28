@@ -1,5 +1,5 @@
 {
-  "ledger_version": 354,
+  "ledger_version": 356,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -811,11 +811,11 @@
     {
       "id": "NG-063",
       "text": "The Linux package contains the Theia app, the sidecar, the Node runtime and distribution/, the sidecar finds its backend relative to the install, and a check launches the packaged tree to a ready workbench. Evidence: the tarball has 0 theia/sidecar/Node/distribution entries; `backendMain` is `@POWERBROWSER_DEV_TREE@` (powerbrowser/shell/powerbrowser-sidecar.js:18).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:90",
       "test_ref": "scripts/verify-ng-063-packaged-launch.mjs::ng063-packaged-launch",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "177c999c902ed0cf7fb43484181eb72f3f3dc96e: scripts/verify-ng-063-packaged-launch.mjs::ng063-packaged-launch passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",

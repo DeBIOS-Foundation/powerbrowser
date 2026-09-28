@@ -352,3 +352,5 @@
 {"v": 352, "ts": "2026-09-28T03:26:51Z", "op": "set-status", "id": "NG-071", "changes": {"status": ["open", "done"]}}
 {"v": 353, "ts": "2026-09-28T03:27:05Z", "op": "set", "id": "NG-073", "changes": {"evidence": ["", "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-073-declared-extension-loads.mjs::ng073-declared-extension-loads passes"]}}
 {"v": 354, "ts": "2026-09-28T03:27:05Z", "op": "set-status", "id": "NG-073", "changes": {"status": ["open", "done"]}}
+{"v": 355, "ts": "2026-09-28T04:38:56Z", "op": "set", "id": "NG-063", "changes": {"evidence": ["", "177c999c902ed0cf7fb43484181eb72f3f3dc96e: scripts/verify-ng-063-packaged-launch.mjs::ng063-packaged-launch passes"]}}
+{"v": 356, "ts": "2026-09-28T04:38:56Z", "op": "set-status", "id": "NG-063", "changes": {"status": ["open", "done"]}}
