@@ -1,5 +1,5 @@
 {
-  "ledger_version": 295,
+  "ledger_version": 297,
   "frozen_at": null,
   "items": [
     {
@@ -304,11 +304,11 @@
     {
       "id": "NG-024",
       "text": "A query API joins tabs with history and bookmarks. Evidence: research/FEATURES.md Area 4; no such API.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:42",
       "test_ref": "scripts/verify-ng-024-tabs-places-join.mjs::ng-024-tabs-places-join",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-024-tabs-places-join.mjs::ng-024-tabs-places-join passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
