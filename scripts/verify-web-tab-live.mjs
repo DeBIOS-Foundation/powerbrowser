@@ -467,7 +467,9 @@ function phaseExpression(cfg, phase, arg) {
         P.registry = __getByName(container, 'TabUriRegistry');
         P.channel = __getByName(container, cfg.channelClass);
         const handler = __getByName(container, cfg.handlerClass);
-        const suggestions = __getByName(container, 'ChromeBarSuggestionService');
+        // Tab rows only (NG-023): the address bar's own service also suggests
+        // history, which outlives a closed tab, and this check reads the store.
+        const suggestions = __getByName(container, 'ChromeBarTabSuggestions');
         // The store reader the check polls. Wrapped here so the store-unread
         // plant can replace the reader through one seam.
         P.search = (prefix, limit) => suggestions.searchByPrefix(prefix, limit);
@@ -479,7 +481,16 @@ function phaseExpression(cfg, phase, arg) {
         // any more -- stripping the READ scored the thumbnail assertions without
         // touching any capture site, which is the defect 14.1.1-06 removed.
         const groups = __getByName(container, 'GroupQueryService');
-        P.thumbnailOf = uri => groups.getThumbnail(uri);
+        // NG-027 deleted the point read; the row readers carry the same column.
+        P.thumbnailOf = async uri => {
+            const loose = (await groups.listUngroupedTabs()).find(row => row.uri === uri);
+            if (loose) return loose.thumbnail ?? undefined;
+            for (const group of await groups.listGroups()) {
+                const row = (await groups.getGroupTabs(group.id)).find(r => r.uri === uri);
+                if (row) return row.thumbnail ?? undefined;
+            }
+            return undefined;
+        };
         // G-14.1.1-6: the ONE geometry message that tells chrome the overlay
         // stopped being visible, behind a named seam so a plant can remove this
         // hide alone -- the mode walk's own hides must keep working or the walk

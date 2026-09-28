@@ -58,7 +58,7 @@ const EXPECTED_GROUPS_STATEMENTS = Object.freeze([
     `CREATE INDEX idx_tabs_group ON tabs (group_id)`,
     `ALTER TABLE tabs ADD COLUMN thumbnail TEXT NULL`,
 ]);
-const EXPECTED_SCHEMA_HEAD = 5;
+const EXPECTED_SCHEMA_HEAD = 6;
 const EXPECTED_GROUP_METHODS = Object.freeze([
     'writeGroupRow',
     'removeGroupRow',
@@ -68,8 +68,6 @@ const EXPECTED_GROUP_METHODS = Object.freeze([
     'captureTabThumbnail',
     'closeGroupRows',
     'readGroupRow',
-    'listGroupRows',
-    'getGroupTabs',
     'handleGroupMutation',
     'setGroupOrder',
 ]);

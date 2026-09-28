@@ -14,7 +14,7 @@ mozStorage, in WAL mode. Readers: the Theia backend's `TabQueryService`
 offline checks on copies. Sessionstore stays authoritative for restoring
 stock tabs; the store is rebuilt from it, never the reverse.
 
-## Schema at head (`user_version = 5`)
+## Schema at head (`user_version = 6`)
 
 | Table | Column | Type | Since | Meaning |
 |---|---|---|---|---|
@@ -31,6 +31,11 @@ stock tabs; the store is rebuilt from it, never the reverse.
 | `tabs` | `closed_at` | INTEGER NULL | v5 | When the user closed it; NULL = open or restorable |
 | `groups` | `id`, `title`, `x`, `y`, `w`, `h`, `is_active` | | v2 | Panorama group boxes |
 | `settings` | `key`, `value` | TEXT, TEXT | v5 | Store settings; see "Settings" |
+| `saved_pages` | `tab_uri` | TEXT PRIMARY KEY | v6 | The saved tab's row key (`tabs.uri`); one copy per tab |
+| `saved_pages` | `dir` | TEXT NOT NULL | v6 | The copy's directory under `<profile>/saved-pages/` |
+| `saved_pages` | `url`, `title` | TEXT NOT NULL | v6 | The page's address and title when it was saved |
+| `saved_pages` | `saved_at` | INTEGER NOT NULL | v6 | When it was saved (ms since epoch) |
+| `saved_pages` | `bytes` | INTEGER NOT NULL | v6 | The copy's size on disk |
 
 Indexes: `idx_tabs_last_active`, `idx_tabs_group`, `idx_tabs_closed_at`, `idx_groups_active`.
 
@@ -115,7 +120,7 @@ version other than the head -- is an error naming the cause, never an empty
 answer; Organising shows its load-error state and the address bar its
 provider error. Panorama and suggestion reads serve open rows only
 (`closed_at` NULL). Its methods: `listGroups`, `getGroupTabs`,
-`listUngroupedTabs`, `getThumbnail` and `getSettings` over the group
+`listUngroupedTabs` and `getSettings` over the group
 channel; `searchByPrefix` for the address bar.
 
 ## v1
@@ -146,6 +151,15 @@ The `groups` table and `idx_groups_active`; `tabs.group_id` with
 `stock:legacy-<rowid>`, a bare page URL to `web:legacy-<rowid>`) in the same
 transaction, in place, so every row keeps its group, position, order and
 thumbnail.
+
+## v6
+
+The `saved_pages` table: one full saved copy per tab, written by Save Page
+Copy (`tab_uri`, `dir`, `url`, `title`, `saved_at`, `bytes`). The page is
+`page.html` in `dir`, and the files it loaded are in `page_files/`. Saving a
+tab again replaces its copy, files included. A copy is not pruned with its
+tab's row, and no write operation deletes one: with PowerBrowser closed,
+delete its directory and its row together with any SQLite client.
 
 ## Migrations
 

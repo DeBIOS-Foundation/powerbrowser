@@ -23,3 +23,10 @@ export interface ChromeBarSuggestionService {
 }
 
 export const ChromeBarSuggestionService = Symbol('ChromeBarSuggestionService');
+
+/**
+ * NG-023: the backend proxy that serves open-tab rows only. The widget
+ * injects ChromeBarSuggestionService, which merges these rows with history
+ * and bookmark matches from chrome (chrome-bar-places-suggestions.ts).
+ */
+export const ChromeBarTabSuggestions = Symbol('ChromeBarTabSuggestions');

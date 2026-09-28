@@ -508,9 +508,9 @@ function selfTest() {
     }
 
     // Plants operate on the searchByPrefix method body where the assertion
-    // reads: an unscoped `LIMIT ?` plant would hit listByRecency's identical
-    // clause first and leave the asserted statement green (caught live --
-    // the plant must change what the check derives, not just the file).
+    // reads: the plant is scoped to that body (the only search statement
+    // the check derives), so it changes what the check derives, not just
+    // the file.
     const searchBody = methodBodyOf(clean[QUERY_SERVICE_REL]);
     if (!searchBody) {
         console.error(`${NAME} --self-test: FAIL -- searchByPrefix body did not derive on the clean tree; the plants below would be meaningless`);
