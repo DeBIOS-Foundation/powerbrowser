@@ -23,6 +23,11 @@
     {
       devShells.${system} = {
         theia = pkgs.mkShell {
+          # stdenv's setup adds `-rpath $out/lib` to every link, and in a dev
+          # shell $out is <checkout>/outputs/out, so the drivelist rebuild below
+          # would bake the builder's checkout path into drivelist.node (the
+          # packaged sidecar ships it; package-linux.sh refuses it, M-6).
+          NIX_NO_SELF_RPATH = "1";
           nativeBuildInputs = [
             nodejs
             yarn
