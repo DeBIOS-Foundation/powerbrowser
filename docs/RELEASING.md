@@ -339,7 +339,7 @@ $PB/objdir/dist/bin/certutil -S -d "sql:$D" -f "$D/password.txt" -z "$D/noise" -
 shred -u "$D/noise"
 $PB/objdir/dist/bin/certutil -L -d "sql:$D" -n powerbrowser-mar -r > powerbrowser/packaging/mar/mar-primary.der
 # Optional, the owner's call: a .p12 backup of the key to the offline medium.
-$PB/objdir/dist/bin/pk12util -o <medium>/powerbrowser-mar.p12 -d "sql:$D" -n powerbrowser-mar
+$PB/objdir/dist/bin/pk12util -o <medium>/powerbrowser-mar.p12 -d "sql:$D" -n powerbrowser-mar -k "$D/password.txt" -w "$D/password.txt"
 ls -l "$D"    # cert9.db key4.db pkcs11.txt password.txt -- nothing from this directory ever enters the repo
 ```
 
@@ -476,7 +476,7 @@ to `all`.
 | `release` environment | descriptor-repository PAT (Contents write on `powerbrowser-updates` only) | `linux-release-pipeline-and-update-channel` | as above |
 | `release` environment | `WINGET_TOKEN`, fork-scoped, only under an ADMIT verdict | `listings-and-cadence` | as above |
 | Host filesystem on `legion` | `/var/lib/secrets/github-runner-pat`, root-owned mode 0600 | `linux-release-pipeline-and-update-channel` | the operator; on the unit's `InaccessiblePaths` |
-| Offline medium | `powerbrowser-mar.p12` (from the ceremony block's optional `pk12util` line) and the key-store password | `mar-signing-and-update-integrity` | the operator, in a safe |
+| Offline medium | `powerbrowser-mar.p12` (from the ceremony block's optional `pk12util` line, protected with the key store's password from `password.txt`) and the key-store password | `mar-signing-and-update-integrity` | the operator, in a safe |
 
 No secret reaches `legion` through Actions. The build job holds `contents: read`,
 no `environment:` and no `secrets.` reference; the static release-workflow gate
@@ -936,7 +936,7 @@ placeholders; the dependency order below is what matters. Waves: 1, 2, 3, 3, 4, 
 |---|---|---|---|
 | 1 `prerequisites-and-hardening` | DIST-01, SEC-01 | Push main and milestone tags; 2FA, signing identity and the unsigned-tag plant; the ESR rebase push | The `pull_request` rule on `main`; the seven unsigned-posture consequences; `signing-probe` deletion after the first release |
 | 2 `release-identity` | REL-01, UPD-01, UPD-02, UPD-03 | none (autonomous) | none |
-| 3 `mar-signing-and-update-integrity` | SEC-02, UPD-04 | The key ceremony; the one bounded primary-key use on `legion` | The key-rotation runbook |
+| 3 `mar-signing-and-update-integrity` | SEC-02, UPD-04 | The key ceremony (key store on `legion`); one MAR signed for the loopback proof | The key-rotation runbook |
 | 4 `packaged-product-correctness-linux` | PKG-04 to PKG-09, UPD-08 | Node provenance and the licence position | The update-ready rows are gated on the probe verdict about whether the stock prompt can render |
 | 5 `linux-release-pipeline-and-update-channel` | DIST-02, DIST-03, UPD-05, UPD-06, UPD-07 | Runner registration; the update origin and download page; cutting the first release | Windows and macOS descriptor directories and asset pairs, until real builds observe their BUILD_TARGET strings |
 | 6 `windows-unsigned` | PKG-10 to PKG-13, SEC-03 | The `pkg-win11` guest; the five-cell matrix | Authenticode, the maintenance service, MSIX |
