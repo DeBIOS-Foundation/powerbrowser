@@ -38,11 +38,11 @@ function assertQuarantineRemovalPinned() {
         fail('quarantine removal unlocatable in writer source (want `async quarantineAndRebuildTabStore(`)');
     }
     const body = src.slice(start, src.indexOf('async ensureTabStore(', start));
-    const backup = body.indexOf('backupToFile');
+    const backup = body.indexOf('.backup(');
     const removal = body.indexOf('await IOUtils.remove(livePath);');
     const reopen = body.indexOf('TAB_STORE_FILE_NAME });');
     if (backup === -1 || removal === -1 || reopen === -1 || !(backup < removal && removal < reopen)) {
-        fail('quarantine delete-then-rebuild order unlocatable in writer source (want backupToFile, then await IOUtils.remove(livePath);, then the TAB_STORE_FILE_NAME reopen)');
+        fail('quarantine delete-then-rebuild order unlocatable in writer source (want .backup(, then await IOUtils.remove(livePath);, then the TAB_STORE_FILE_NAME reopen)');
     }
 }
 
