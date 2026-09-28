@@ -10,7 +10,7 @@ requires:
     provides: [six-row authority table with Phase 12 enforcement pointers, recorded reviewer approval]
 provides:
   - Tabs schema document on URI TEXT primary key with version 1 from day one
-  - Forward-only migration plan with quarantine path and 23-drive exercise log
+  - Forward-only migration plan with quarantine path and 15-drive exercise log at execution (later synced to 23 drives by the review-fix series)
   - Committed v1 fixture database plus throwaway exercise script
   - Recorded reviewer approval for the schema and migration plan
 affects: [11-03 review-sign gate, phase-12 store build]
@@ -18,7 +18,7 @@ affects: [11-03 review-sign gate, phase-12 store build]
 # Actuals (#2632) — pairs with the plan's `estimate` to calibrate future estimates.
 # Commit SHAs below are taken from `git log --oneline --grep="11-02"`.
 actuals:
-  tokens: 2964
+  tokens: not established
   tasks: 3
   commits: 3
 
@@ -28,8 +28,9 @@ tech-stack:
   patterns: [forward-only numbered migrations with pre-checks, quarantine-not-delete with N=max+1 allocator, fixture exercise with firing non-vacuity controls]
 
 key-files:
-  created: [.planning/phases/11-sql-store-design/schema/SCHEMA.md, .planning/phases/11-sql-store-design/schema/MIGRATIONS.md, .planning/phases/11-sql-store-design/fixtures/tabs-v1.sqlite, .planning/phases/11-sql-store-design/fixtures/exercise-migrations.mjs, .planning/phases/11-sql-store-design/schema/SIGN-OFF.md]
+  created: [.planning/milestones/v1.2-phases/11-sql-store-design/schema/SCHEMA.md, .planning/milestones/v1.2-phases/11-sql-store-design/schema/MIGRATIONS.md, .planning/milestones/v1.2-phases/11-sql-store-design/fixtures/tabs-v1.sqlite, .planning/milestones/v1.2-phases/11-sql-store-design/fixtures/exercise-migrations.mjs, .planning/milestones/v1.2-phases/11-sql-store-design/schema/SIGN-OFF.md]
   modified: []
+  # Paths above are the current archive locations; at execution the commits added the same files under .planning/phases/ (verified: c1a004d added .planning/phases/11-sql-store-design/schema/SCHEMA.md); archive b7b3b33 moved them.
 
 key-decisions:
   - "Four-column YAGNI set (uri, url, title, last_active) with last_active index; window, pinned and private columns excluded"
@@ -57,7 +58,7 @@ coverage:
     requirement: "SQL-03"
     verification:
       - kind: other
-        ref: "node .planning/phases/11-sql-store-design/fixtures/exercise-migrations.mjs (23 drives, 23 assertions)"
+        ref: "node .planning/phases/11-sql-store-design/fixtures/exercise-migrations.mjs (15 drives, 15 assertions at execution; later synced to 23 drives, 23 assertions by the review-fix series ending 4bbdf7f)"
         status: pass
     human_judgment: false
   - id: D3
@@ -68,18 +69,18 @@ coverage:
     rationale: "A review signature is a human judgment by definition — the record exists on disk but a person must trust the named reviewer's verdict"
 
 # Metrics
-duration: 9min
+duration: 4min
 completed: 2026-09-05
 status: complete
 ---
 
 # Phase 11 Plan 02: Schema and Migration Plan Summary
 
-**SQL-03 schema plus migration plan written, exercised against fixture copies with a 23-drive log, and signed with a recorded approval**
+**SQL-03 schema plus migration plan written, exercised against fixture copies with a 15-drive log at execution (later synced to 23 drives by the review-fix series), and signed with a recorded approval**
 
 ## Performance
 
-- **Duration:** ~9 min (first to last plan commit, 11:43 to 11:52 -0700 on 2026-09-05)
+- **Duration:** ~4 min (first to last plan commit, 11:43 to 11:48 -0700 on 2026-09-05)
 - **Started:** 2026-09-05
 - **Completed:** 2026-09-05
 - **Tasks:** 3
@@ -87,8 +88,8 @@ status: complete
 
 ## Accomplishments
 - SCHEMA.md: opaque-form URI TEXT PRIMARY KEY, four columns (uri, url, title, last_active) with the last_active index, version 1 set at creation through the user-version pragma, fixed `tabs.sqlite` filename as platform content, total private exclusion with a pinned detection symbol
-- MIGRATIONS.md: forward-only numbered-migration procedure with one transaction per migration plus pre-checks and never downgrades, quarantine-not-delete corruption path with the N=max+1 allocator, fixture inventory, and the full exercise log (23 drives, 23 assertions, fixture sha256 `9daab2d5b09a5b843d1fdecba0410346b0b5969a6d16cd2a35ff67f4f2e7e73f`)
-- Fixtures: committed `tabs-v1.sqlite` (version 1, WAL mode, 3 public-tab rows, no private rows) plus the throwaway `exercise-migrations.mjs` scaffold (standard-library `node:sqlite` only, mktemp stage copies only)
+- MIGRATIONS.md: forward-only numbered-migration procedure with one transaction per migration plus pre-checks and never downgrades, quarantine-not-delete corruption path with the N=max+1 allocator, fixture inventory, and the exercise log at execution (15 drives, 15 assertions; verified at 8864270; the review-fix series ending 4bbdf7f later synced the log to 23 drives, 23 assertions; fixture sha256 `9daab2d5b09a5b843d1fdecba0410346b0b5969a6d16cd2a35ff67f4f2e7e73f` unchanged across ffff801, 8864270 and the current tree)
+- Fixtures: committed `tabs-v1.sqlite` (version 1, WAL mode, 3 public-tab rows, no private rows) plus the throwaway `exercise-migrations.mjs` scaffold (standard-library `node:sqlite` with a stage-confined ephemeral-install fallback when standard-library support is absent, mktemp stage copies only)
 - SIGN-OFF.md: recorded approval (Chris, 2026-09-05) with a 9-item checklist, all PASS, plus reviewed-files rows and assumed-item dispositions
 
 ## Task Commits

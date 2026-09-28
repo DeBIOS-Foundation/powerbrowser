@@ -18,7 +18,7 @@ affects: [phase-12 store build]
 # Actuals (#2632) — pairs with the plan's `estimate` to calibrate future estimates.
 # Commit SHAs below are taken from `git log --oneline --grep="11-03"`.
 actuals:
-  tokens: 2964
+  tokens: not established
   tasks: 2
   commits: 2
 
@@ -28,8 +28,9 @@ tech-stack:
   patterns: [gate record with observed results, refined absence proof beside the raw grep, requirements trace table, specified-not-implemented handoff]
 
 key-files:
-  created: [.planning/phases/11-sql-store-design/11-REVIEW.md]
+  created: [.planning/milestones/v1.2-phases/11-sql-store-design/11-REVIEW.md]
   modified: []
+  # Path above is the current archive location; at execution the commits added the same file under .planning/phases/ (verified: 97edb59 added .planning/phases/11-sql-store-design/11-REVIEW.md); archive b7b3b33 moved it.
 
 key-decisions:
   - "Gate records observed check results, never recollected claims"

@@ -18,7 +18,7 @@ affects: [12-02 read paths and absence gate, 12-03 registry-row promotion]
 # Actuals (#2632) — pairs with the plan's `estimate` to calibrate future estimates.
 # Commit SHAs below are taken from `git log --oneline --grep="12-01"`.
 actuals:
-  tokens: 9000
+  tokens: not established
   tasks: 2
   commits: 2
 
@@ -83,7 +83,7 @@ status: complete
 - Writer slice in `PowerBrowserAPI.sys.mjs`: Sqlite, PrivateBrowsingUtils and SessionStore lazy imports; verbatim v1 DDL in marker-delimited constant; WAL pin outside the transaction with read-back assert; version guard (zero creates, head migrates, newer refuses); bound parameters on every statement; private-window check before every upsert; exact single-ok tripwire; quarantine with N=max+1 allocator, sidecar cleanup, and one-transaction rebuild from sessionstore
 - Triggers in the same boundary file: per-stock-window tab listeners plus a sessionstore-state-write-complete bounded sweep, with no new Theia-to-chrome channel and no actor registration
 - Beside-registry key module (`browser-tab-uri.ts`, 28 lines at its commit): pure one-line rule with zero imports from the registry file and zero new public members on TabUriRegistry; the frozen files stayed byte-identical
-- Roundtrip proof (`verify-sql-store-roundtrip.mjs`, 465 lines at its commit): DDL derived from writer markers, 23 drives on a temp DB outside the repo, static downgrade pin, both-directions self-test; all seven Phase 11 fixes implemented and catalogued
+- Roundtrip proof (`verify-sql-store-roundtrip.mjs`, 465 lines at its commit): DDL derived from writer markers, 23 drives on a temp DB outside the repo, static downgrade pin, both-directions self-test; the seven Phase 11 fixes from the fix range `caea0de..4bbdf7f` (marked clean in `23ca996`) as stated in the plan
 
 ## Task Commits
 
@@ -98,7 +98,7 @@ Each task was committed atomically:
 - `powerbrowser/shell/PowerBrowserAPI.sys.mjs` - Three new lazy imports plus open, write, remove, read, and prune wrappers; writer triggers; verbatim v1 DDL constant inside marker comments (+361 lines in the writer commit, +104 in the trigger commit)
 - `powerbrowser/INTERNAL-APIS.md` - One catalogue row per new touchpoint with exact file:line plus the SessionStore amendment (writer commit) and trigger touchpoint rows (trigger commit)
 - `theia/extensions/tab-uris/src/browser/browser-tab-uri.ts` - Beside-registry browser-tab key emission (new, 28 lines). The file is absent from the current tree; when and why it was removed cannot be established from the plan file or the commit record alone and is not stated here.
-- `scripts/verify-sql-store-roundtrip.mjs` - Temp-DB roundtrip proof with self-test (new, 465 lines). The current file is 171 lines; the later wave-A/B/C/E development changed it, and the per-change history is not traced in this summary.
+- `scripts/verify-sql-store-roundtrip.mjs` - Temp-DB roundtrip proof with self-test (new, 465 lines). The current file is 171 lines; later development changed it, and the per-change history is not traced in this summary.
 - `inventory/brand-tokens.json` - Residue census 28->31 with named reconciliation (writer commit) and 31->34 (trigger commit)
 
 ## Decisions Made
