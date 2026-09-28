@@ -1,5 +1,5 @@
 {
-  "ledger_version": 287,
+  "ledger_version": 289,
   "frozen_at": null,
   "items": [
     {
@@ -252,11 +252,11 @@
     {
       "id": "NG-020",
       "text": "The absence instrument confirms the startup wiring by the call itself, not by a text pattern a comment would also satisfy. Evidence: scripts/verify-sql-store-absence.mjs:362.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:35",
       "test_ref": "scripts/verify-ng-020-absence-wiring-by-call.mjs::ng-020-absence-wiring-by-call",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "5f990e65fd9cea773d88561a342979767c839549: scripts/verify-ng-020-absence-wiring-by-call.mjs::ng-020-absence-wiring-by-call passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
