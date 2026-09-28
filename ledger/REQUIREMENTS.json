@@ -1,5 +1,5 @@
 {
-  "ledger_version": 262,
+  "ledger_version": 263,
   "frozen_at": null,
   "items": [
     {
@@ -1113,7 +1113,7 @@
   "mockup_freeze": null,
   "scope_lock": null,
   "check_locks": {
-    "commit": "0ae935b5b332aff51de16804eb470ca6b8c376a1",
+    "commit": "0dfba2f3b2272282d2a762bab00216b6c31e8d82",
     "files": {
       "scripts/verify-ng-001-one-key-rule.mjs": "642d3d25ab836395e0137652c047e432cfc8e31a37c76191845694bd000242c4",
       "scripts/verify-ng-002-navigation-keeps-row.mjs": "d5fc1ec38c3503606a20716ecd0b12e1696f6ea552a479f3ac12e2cf740e74b4",
@@ -1122,10 +1122,10 @@
       "scripts/verify-ng-005-prune-keeps-open-rows.mjs": "5777105757c418018793a6e24ce0de1b2df0b04ce6b2748a705c8245e098e970",
       "scripts/verify-ng-006-close-group-closes-web-tabs.mjs": "3aef2f3d4dfb1cf1083b8707cf26d5af85103cde758c6688256c6f5df317473d",
       "scripts/verify-ng-007-shell-tabs-keep-group-across-restart.mjs": "6ad758b4732b70efc6b341fd8b919eddf0aeff1b5765107215401fed8e2e5b32",
-      "scripts/verify-ng-008-panorama-card-reopens-through-opener.mjs": "6f0311fe5669415e00a63d5c13b3f70ebaab7a51383ee2da8a66e8b9eb867160",
+      "scripts/verify-ng-008-panorama-card-reopens-through-opener.mjs": "319afc02150ec8d47bb226f44a98a5392918e45f77fa11080a97b9527163f043",
       "scripts/verify-ng-009-content-age-columns.mjs": "88dacb2a35c6c28f6fc40543507f55a62552346ad9c5dd82bed35b75d1d063b4",
       "scripts/verify-ng-010-closed-tab-history.mjs": "e1e24dcb8662e6fb1ea6dad636e593e0cfe201f2496dbce84cb6d40039d0f5c1",
-      "scripts/verify-ng-011-settings-table-read.mjs": "df93e57513ed3ddaf2c2659215e81662b6e9024242b6c9813c6902df98c00149",
+      "scripts/verify-ng-011-settings-table-read.mjs": "5568d51937c8bccd6d3f82b6d41ea12ef8fee7f6eb2c81d8c4bfb333175bf131",
       "scripts/verify-ng-012-reader-reports-schema-errors.mjs": "43e24ffadcf24dcbff54770cac0218f18632e61f5edd30d9e61ca88f44074905",
       "scripts/verify-ng-013-unopenable-store-quarantined.mjs": "0977a1bea8d0c9e010a7ef1a6cd80785b41c2f99944816181a3dc669116749c9",
       "scripts/verify-ng-014-rebuild-at-head.mjs": "fd42477cda577047e9aa3fe49a3e7b327149ac7c9276649ce9a7066b1e7cd2ee",
