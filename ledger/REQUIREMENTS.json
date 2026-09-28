@@ -1,5 +1,5 @@
 {
-  "ledger_version": 342,
+  "ledger_version": 344,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -863,11 +863,11 @@
     {
       "id": "NG-067",
       "text": "Uncaught frontend errors and unhandled rejections reach the telemetry logger, subject to the level setting. Evidence: the logger is bound but nothing injects it (theia/extensions/telemetry/src/browser/telemetry-frontend-module.ts:63).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:94",
       "test_ref": "scripts/verify-ng-067-frontend-errors.mjs::ng067-frontend-errors-reach-telemetry",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-067-frontend-errors.mjs::ng067-frontend-errors-reach-telemetry passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",

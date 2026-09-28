@@ -340,3 +340,5 @@
 {"v": 340, "ts": "2026-09-28T03:26:08Z", "op": "freeze", "id": "", "changes": {"frozen_at": [null, "2026-09-27"]}}
 {"v": 341, "ts": "2026-09-28T03:26:23Z", "op": "set", "id": "NG-051", "changes": {"evidence": ["", "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-051-backend-off.mjs::ng051-backend-off passes"]}}
 {"v": 342, "ts": "2026-09-28T03:26:23Z", "op": "set-status", "id": "NG-051", "changes": {"status": ["open", "done"]}}
+{"v": 343, "ts": "2026-09-28T03:26:33Z", "op": "set", "id": "NG-067", "changes": {"evidence": ["", "34f04e68f787f60d4cd5d53788bfede90fe1a143: scripts/verify-ng-067-frontend-errors.mjs::ng067-frontend-errors-reach-telemetry passes"]}}
+{"v": 344, "ts": "2026-09-28T03:26:33Z", "op": "set-status", "id": "NG-067", "changes": {"status": ["open", "done"]}}
