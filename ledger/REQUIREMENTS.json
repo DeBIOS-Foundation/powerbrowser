@@ -1,5 +1,5 @@
 {
-  "ledger_version": 293,
+  "ledger_version": 295,
   "frozen_at": null,
   "items": [
     {
@@ -291,11 +291,11 @@
     {
       "id": "NG-023",
       "text": "Address-bar suggestions include history and bookmark matches, not only open tabs. Evidence: 13-UI-SPEC.md:141, 192; TQS:219-227 queries `tabs` only.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:41",
       "test_ref": "scripts/verify-ng-023-suggestions-places.mjs::ng-023-suggestions-history-bookmarks",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "c1bfcbc48ac0628a630a776a06218666d1cb02ef: scripts/verify-ng-023-suggestions-places.mjs::ng-023-suggestions-history-bookmarks passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
