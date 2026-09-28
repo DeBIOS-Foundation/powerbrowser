@@ -1,5 +1,5 @@
 {
-  "ledger_version": 286,
+  "ledger_version": 287,
   "frozen_at": null,
   "items": [
     {
@@ -1113,7 +1113,7 @@
   "mockup_freeze": null,
   "scope_lock": null,
   "check_locks": {
-    "commit": "0dfba2f3b2272282d2a762bab00216b6c31e8d82",
+    "commit": "1acf92df49168f5fdafd9131b1227bb735785612",
     "files": {
       "scripts/verify-ng-001-one-key-rule.mjs": "642d3d25ab836395e0137652c047e432cfc8e31a37c76191845694bd000242c4",
       "scripts/verify-ng-002-navigation-keeps-row.mjs": "d5fc1ec38c3503606a20716ecd0b12e1696f6ea552a479f3ac12e2cf740e74b4",
@@ -1131,7 +1131,7 @@
       "scripts/verify-ng-014-rebuild-at-head.mjs": "fd42477cda577047e9aa3fe49a3e7b327149ac7c9276649ce9a7066b1e7cd2ee",
       "scripts/verify-ng-015-real-migration-from-every-version.mjs": "0737ca48a5238f3167178c447a77744acdfc9ab45c83d5cc6ee828cda7b6538e",
       "scripts/verify-ng-016-gui08-persistence-at-head.mjs": "93f8da67ebb6037b332921031cec9595a64d5773a58b004c6548101906a37200",
-      "scripts/verify-ng-017-sql05-restarts-real-browser.mjs": "e3028d082abae60d2095bccdbf81ddfd9f37c0bdec2e67831d6a50f821c91243",
+      "scripts/verify-ng-017-sql05-restarts-real-browser.mjs": "a1aa7be61f8d2bc988df63edc7db56c626ad217af75a6026c525ec9937b210b1",
       "scripts/verify-ng-018-scheduled-integrity-check.mjs": "5e1e4b9eb0acea25b0f3765d27b070a488327c0ae72ebf6cf45d03365d3d851f",
       "scripts/verify-ng-019-tab-store-doc.mjs": "aea3fbdd5a3addd20bdd14e44d793e2d00e9d10b37504ae6ad96d9504ebfb960",
       "scripts/verify-ng-020-absence-wiring-by-call.mjs": "16b5a8d1b630aa41fcd989648f5b168fa6ab5b30118a2bfe9ce77c7d08445ab7",
