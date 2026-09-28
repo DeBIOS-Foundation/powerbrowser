@@ -1,5 +1,5 @@
 {
-  "ledger_version": 356,
+  "ledger_version": 358,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -824,11 +824,11 @@
     {
       "id": "NG-064",
       "text": "The update URL comes from configuration.toml, and aus5.mozilla.org is absent from the build. Evidence: objdir/dist/bin/application.ini:22; scripts/generate.mjs:1901-1902; docs/REBRANDING.md:280.",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:91",
       "test_ref": "scripts/verify-ng-064-update-url.mjs::ng064-update-url-from-manifest",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "177c999c902ed0cf7fb43484181eb72f3f3dc96e: scripts/verify-ng-064-update-url.mjs::ng064-update-url-from-manifest passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",

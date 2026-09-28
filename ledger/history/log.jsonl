@@ -354,3 +354,5 @@
 {"v": 354, "ts": "2026-09-28T03:27:05Z", "op": "set-status", "id": "NG-073", "changes": {"status": ["open", "done"]}}
 {"v": 355, "ts": "2026-09-28T04:38:56Z", "op": "set", "id": "NG-063", "changes": {"evidence": ["", "177c999c902ed0cf7fb43484181eb72f3f3dc96e: scripts/verify-ng-063-packaged-launch.mjs::ng063-packaged-launch passes"]}}
 {"v": 356, "ts": "2026-09-28T04:38:56Z", "op": "set-status", "id": "NG-063", "changes": {"status": ["open", "done"]}}
+{"v": 357, "ts": "2026-09-28T04:38:58Z", "op": "set", "id": "NG-064", "changes": {"evidence": ["", "177c999c902ed0cf7fb43484181eb72f3f3dc96e: scripts/verify-ng-064-update-url.mjs::ng064-update-url-from-manifest passes"]}}
+{"v": 358, "ts": "2026-09-28T04:38:58Z", "op": "set-status", "id": "NG-064", "changes": {"status": ["open", "done"]}}
