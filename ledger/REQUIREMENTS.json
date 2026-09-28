@@ -1,5 +1,5 @@
 {
-  "ledger_version": 265,
+  "ledger_version": 267,
   "frozen_at": null,
   "items": [
     {
@@ -83,11 +83,11 @@
     {
       "id": "NG-007",
       "text": "Editors, terminals and other non-web tabs keep their group and canvas position across a restart. Evidence: keyed `session:<widget.id>` and held in memory only (group-model.ts:80-93, 575-600; organising-widget.ts:345-354; uncommitted).",
-      "status": "open",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:22",
       "test_ref": "scripts/verify-ng-007-shell-tabs-keep-group-across-restart.mjs::ng-007-shell-tabs-keep-group-across-restart",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "9c1be2eca6738ca807a9765c9f793cc2cf330a7f: scripts/verify-ng-007-shell-tabs-keep-group-across-restart.mjs::ng-007-shell-tabs-keep-group-across-restart passes",
       "owner": "",
       "phase": "",
       "deferred_at": "",
