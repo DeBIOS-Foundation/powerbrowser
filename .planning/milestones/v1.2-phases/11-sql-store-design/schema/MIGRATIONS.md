@@ -186,3 +186,5 @@ SCHEMA.md specifies those four rows without implementing them.
   the byte-identity check above.
 - Bound parameters (threat T-11-07): the quote-plus-unicode title row
   proves binding in the exercise.
+
+> The tab store as built (schema head, settings, integrity and quarantine, reader contract) is documented in `docs/TAB-STORE.md` (non-GUI wave A; decisions.md R4).
