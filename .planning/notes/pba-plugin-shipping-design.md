@@ -4,6 +4,9 @@ date: 2026-09-10
 context: gsd-explore on shipping Deep Sea Harness (DSH), the engine of the Power Browser Assistant (PBA), as an independently versioned .vsix wired into Theia's native chat
 ---
 
+> **Superseded 2026-10-16.** DSH is a separate project and is out of Power Browser's scope.
+> Nothing in this note is planned here. Kept as history only.
+
 # Decisions (2026-09-10)
 
 - **PBA is a brand name over DSH.** DSH is the engine; PBA is the agent id and display
