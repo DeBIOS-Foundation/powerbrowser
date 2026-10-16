@@ -5,14 +5,11 @@
 - ✅ **v1.0 PowerBrowser** — Phases 1–7 (shipped 2026-09-04, override closeout — see `.planning/milestones/v1.0-ROADMAP.md`)
 - ✅ **v1.1 Hardening and SQL Tabs** — Phases 08–09 (shipped 2026-09-05, hardening-only — see `.planning/milestones/v1.1-ROADMAP.md`)
 - ✅ **v1.2 Sign-off Closeout and SQL Store** — Phases 10–12 (shipped 2026-09-05, override closeout — see `.planning/milestones/v1.2-ROADMAP.md`)
-- 🔄 **v1.3 Browser GUI** — Phases 13–15 (active: Theia-hosted chrome bar, mode-driven tabs, Panorama organising on the v1.2 SQL store)
-- 📋 **Future** — GUI-05 unified tab strip, deferred seeds (bookmarks strip, per-tab close/mute, browser menu, gui-component-dnd, firefox-parity-tabs) (v1.4+)
+- ✅ **v1.3 Browser GUI** — Phases 13–15, inserted 14.1 and 14.1.1, retired 16 (shipped 2026-09-06, verifications deferred — see `.planning/milestones/v1.3-ROADMAP.md`)
+- 🔄 **v1.4 Platform Updates and GUI Close-out** — Phases 17–25 (active: OpenCode removal, Firefox 153.5.0esr, Theia 1.76.0 with React 19 on Node 24, non-GUI gaps, then the v1.3 GUI leftovers one step at a time until the commit gate and CI are green)
+- 📋 **Future** — GUI-05 unified tab strip, W6 canvas search, release and distribution (backlog 999.2), deferred seeds (bookmarks strip, per-tab close/mute, browser menu, gui-component-dnd, firefox-parity-tabs) (v1.5+)
 
 ## Phases
-
-- [x] **Phase 13: Chrome Bar + Strip-Relocation Spike** - Top chrome bar navigation shell; spike proves a live tab strip moves shell areas (GUI-06; enables GUI-07)
-- [x] **Phase 14: Modes + Windows & Setups** - Mode-driven shell with relocating strip; core/dependent windows with named setups (GUI-07, GUI-09)
-- [x] **Phase 15: Panorama Organising** - Freeform canvas + tree toggle over SQL-persisted groups (GUI-08)
 
 <details>
 <summary>✅ v1.0 PowerBrowser (Phases 1–7) — SHIPPED 2026-09-04</summary>
@@ -50,193 +47,212 @@ Archive: `.planning/milestones/v1.2-ROADMAP.md` · Requirements: `.planning/mile
 
 </details>
 
-## Phase Details
+<details>
+<summary>✅ v1.3 Browser GUI (Phases 13–16) — SHIPPED 2026-09-06</summary>
 
-### Phase 13: Chrome Bar + Strip-Relocation Spike
-
-**Goal**: The user navigates with a top chrome bar, and strip-relocation feasibility is proven with the fallback decided
-**Depends on**: Phase 12 (v1.2 SQL store shipped — tab rows and registry URIs are the identity substrate)
-**Requirements**: GUI-06
-**Enables**: GUI-07 strip-relocation spike entry criterion (mapped to Phase 14 — the spike verdict is this phase's exit gate)
-**Success Criteria** (what must be TRUE):
-
-  1. User sees a top chrome bar — back, forward, reload, address input, new tab, mode toggle — as a toolbar-like `@powerbrowser/*` contribution above or below the Theia toolbar (sketch 001 winner: Variant A), styled as a native Theia citizen per the sketch-findings theme
-  2. User can go back/forward, reload the current tab, and open a new tab from the bar (new-tab opens via the stock-window escape until GUI-02; tab feel + navigation only — no bookmarks strip, no per-tab close/mute, no browser menu)
-  3. User gets address-input suggestions while typing and activating one navigates
-  4. Strip-relocation spike verdict is recorded: a live tab strip moves Theia shell areas without forking Theia core (green → Variant B strip work proceeds in Phase 14; red → Variant-A fallback, strip stays top, modes still ship)
-
-**Plans**: 5/5 plans executed + 2 gap-closure plans (G-13-3)
-
-Plans:
-
-- [x] 13-01-PLAN.md — Strip-relocation spike with GREEN/RED verdict record
-- [x] 13-02-PLAN.md — Chrome-bar skeleton, prefix search over RPC, suggestions plus verdict gates
-- [x] 13-03-PLAN.md — Chrome-bar widget, styling, and commands gate
-- [x] 13-04-PLAN.md — Gap closure: row-URL commit routing, honest nav controls, live chip, rewritten activation gate
-- [x] 13-05-PLAN.md — Gap closure: bar-above-strip ratification plus DOM-order placement gate
-
-**UI hint**: yes
-
-### Phase 14: Modes + Windows & Setups
-
-**Goal**: The user switches modes that reshape the shell around invariant tabs, and works across core/dependent windows with named setups
-**Depends on**: Phase 13 (chrome bar hosts the mode toggle; spike verdict fixes Variant B vs Variant-A fallback)
-**Requirements**: GUI-07, GUI-09
-**Success Criteria** (what must be TRUE):
-
-  1. User can switch coding / browsing / organising modes from shipped defaults, customise them, and save layouts as modes — modes are data with defaults, never a `[features]`/`[modes]` manifest flag
-  2. Tab strip relocates per mode (top in browsing, IDE-docked in coding per sketch 002 winner Variant B — or stays top under the Variant-A fallback) with sliding side panels, and every tab persists across switches
-  3. User can open dependent windows hosting tab content, never a second IDE frame; closing the core window kills the session and the next launch restores the setup
-  4. User can save, name, and restore setups remembering geometry, tab placement, and mode
-
-**Plans**: 3/3 plans executed + 2 gap-closure plans (G-14-1 … G-14-8)
-
-Plans:
-
-- [x] 14-01-PLAN.md — Window-routing probe with GREEN/RED record, modes tracer with shipped descriptors, bridged toggle, defaults gate
-- [x] 14-02-PLAN.md — Modes full: customs with fallback, organising placeholder, toggle rows, style layer, invariant gate
-- [x] 14-03-PLAN.md — Dependents per probe verdict plus named setups with relaunch restore, roundtrip and content gates
-- [x] 14-04-PLAN.md — Gap closure: main-area exemption at the deactivate seam, toggle routed through the mode command, Explorer dock, launch order, behavioural second-visit gate
-- [ ] 14-05-PLAN.md — Gap closure: backend reads the captured environment, group channel delivers, one stock window for new tab, two class gates, catalogue green (code landed in d5b8dc1; its two checks `verify-backend-env-capture` and `verify-group-request-channel` are not written — gap G-14.1.1-10)
-
-**UI hint**: yes
-
-### Phase 14.1: In-Theia Web Tabs (GUI-02) (INSERTED)
-
-**Goal**: The chrome-bar "+" opens a web page tab inside the Theia shell's own tab strip. The page is rendered by a chrome-owned `<xul:browser>` overlay kept aligned with a Theia placeholder widget through a two-way bridge (Theia sends geometry, visibility, close; chrome sends URL, title, loading state, back/forward availability); the tab follows every mode switch; the address pill shows and navigates the active tab's URL. Chris reversed the 2026-08-30 GUI-02 deferral on 2026-09-06; step 1 (an overlay rendering a page inside the shell window over the live frontend) was confirmed live the same day.
-**Depends on**: Phase 14 (main-area exemption keeps content tabs alive across mode switches; the group channel delivers). Phase 15's Organising surface needs this phase for real tab data.
-**Requirements**: GUI-02
-**Success Criteria** (what must be TRUE):
-
-  1. Clicking "+" adds a tab to the shell's main-area tab strip and a web page renders inside that tab's bounds — no separate OS window opens for "+", typed addresses, or suggestion activation
-  2. The web tab survives every mode switch (Coding, Browsing, Organising, and a mode's second visit) and follows the layout each mode gives it; the overlay tracks the placeholder on resize, tab switch, panel slide, hide, and close
-  3. Every tab has a URI via `TabUriRegistry` (web tabs use their page URL); the address pill shows the active tab's address, a typed address navigates the active web tab (or opens one when the active tab is not a web tab), and page navigations report URL, title, loading state, and back/forward availability back to the pill and nav buttons
-  4. Each web tab writes its uri/url/title row to the chrome-side tab store on open, navigate, and close, so Organising and named setups see real tabs
-  5. Firefox internals stay behind `PowerBrowserAPI.sys.mjs`, Theia core is untouched, and a `--quick` gate plus a live-frontend check go red on each of the above when a fault is planted
-
-**Plans**: 3/3 plans executed
-
-Plans:
-**Wave 1**
-
-- [x] 14.1-01-PLAN.md — Overlay bridge tracer (open handler → placeholder → geometry → chrome-owned overlay) plus chrome host expansion (progress listener, pushes, store rows, nav kinds, embedder wall, orphan cleanup, reserved Ctrl+L) and widget states/occlusion/keyboard
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 14.1-02-PLAN.md — Chrome bar and registry rewiring: uriOf page-URL branch, navigable-tab predicate flipped, New Tab/commit/suggestion routed to the in-shell web tab, pill bound to the active tab and state pushes, suggestions gate retargeted, URI-SCHEMES section
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 14.1-03-PLAN.md — gui02-web-tab-bridge --quick gate and gui02-web-tab-live BiDi check (New Tab, typed commit, ≤1px alignment, five-hop mode walk, pill/uriOf/Back, store row, close) with self-tests and registry rows; ends on Chris's blocking confirmation in his window
-
-**UI hint**: yes
-
-### Phase 14.1.1: GUI Conformance Sweep (INSERTED)
-
-**Goal:** Every `fixable: yes` gap in `14.1.1-UAT.md` is closed, each proved by a check that goes red without its fix; `needs-chris` and `decision` gaps gain evidence only and are never marked fixed by an executor
-**Requirements**: none mapped — this phase closes GUI conformance gaps, not requirement IDs
-**Depends on:** Phase 14.1
-**Plans:** 16/16 plans executed — pass 1 (01–05) executed; pass 2 (06–10) executed; pass 3 (11–16) executed
-**Protocol:** `.planning/GUI-SWEEP.md` (Step 2 — automated fix pass)
-
-Pass 1 planned the eleven in-scope `fixable: yes` gaps (G-14.1.1-4, 5, 6, 7, 19, 20, 21, 22, 24,
-25, 26). Verification found half 1 of the goal held for all eleven and half 2 — *proved by a check
-that goes red without its fix* — failed for two of them, with a third failure in the record itself.
-
-Pass 2 (plans 06–10) closes those three, plus G-14.1.1-9 and the `14-UI-SPEC` half of
-G-14.1.1-27, plus the four anti-pattern findings the verification recorded in unreserved files.
-**Held for pass 3:** G-14.1.1-8 (needs `tab-query-service.ts`), G-14.1.1-10 (needs
-`group-actor-client.ts`), G-14.1.1-23 (needs `mode-service.ts`) and G-14.1.1-27's `14-UAT.md`
-half — each held by a file the concurrently running session has uncommitted.
-
-Plans:
-**Wave 1**
-
-- [x] 14.1.1-01-PLAN.md — wave 1: web-tab lost-view (G-4), no restored tabs / no id collision (G-5), honest live instrument (G-20)
-- [x] 14.1.1-03-PLAN.md — wave 1: setups save/delete failure copy (G-21), Delete Setup destructive ink (G-22)
-- [x] 14.1.1-05-PLAN.md — wave 1: internals-catalogue record (G-25), Phase 15 write-channel corrections (G-26)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 14.1.1-02-PLAN.md — wave 2: overlay thumbnails for Panorama (G-6), dropdown never re-opens after Enter (G-7)
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 14.1.1-04-PLAN.md — wave 2: gBrowser stand-in member set (G-19), backend env-reader gate (G-24)
-
-*Pass 2 — gap closure against `14.1.1-VERIFICATION.md`*
-
-**Wave 1** *(the registry writer runs alone: 08 appends two rows to `scripts/verify-platform.sh`, which 06, 07 and 09 all execute as `--quick`)*
-
-- [x] 14.1.1-08-PLAN.md — clean-checkout build order (G-9): token-gate before tab-uris, the edge declared, and a derive-and-compare `--quick` gate
-
-**Wave 2** *(blocked on 08)*
-
-- [x] 14.1.1-06-PLAN.md — tracer: make the G-6 thumbnail proof attributable — a served page whose only capture opportunity is the hide, plus a plant that removes it
-- [x] 14.1.1-09-PLAN.md — anti-pattern findings in unreserved files: internal command id in user-facing copy (CR-03), a comment claiming an assertion a gate cannot make (WR-02), one reply read two ways in `web-tab.ts`
-
-**Wave 3** *(blocked on 06)*
-
-- [x] 14.1.1-07-PLAN.md — G-20's red-ness proof: fifteen anchored message prefixes, pairwise-unique plant expects, and one decorative assertion deleted (WR-13)
-
-**Wave 4** *(blocked on 06, 07, 08, 09)*
-
-- [x] 14.1.1-10-PLAN.md — the record: ten UAT statuses flipped with commit pointers, five new gap entries, GUI-DEFECTS 12/15/23/24/25 moved, catalogue line corrected (WR-10), Phase-14 placeholder rows superseded
-
-*Pass 3 — gap closure against `14.1.1-VERIFICATION.md` (pass 2, `status: gaps_found`, 5/13)*
-
-Pass 2 closed two of pass 1's three gaps at the design level and failed the third — record
-truth — inside the plan written to fix it. Pass 3 closes the four remaining gaps, the six
-actionable advisories and the two informational review findings. **Still held for a later pass:**
-G-14.1.1-8, -10, -23 and the `14-UAT.md` half of -27, each blocked by a file the concurrently
-running session has uncommitted; G-14.1.1-9's clean-checkout `yarn build:extensions`, which
-needs a quiet tree; and the `verify-web-tab-live.mjs` plant reds, which need a display.
-
-**Wave 1** *(tracer, alone — the thinnest path through source, gate, registry and record)*
-
-- [x] 14.1.1-11-PLAN.md — G-48 end to end: the attach-time reply routed through `lostReply()`, `refused-scheme` folded in, two derived assertions and two plants inside `gui02-web-tab-bridge`, and the record re-closed on the commits that earn it
-
-**Wave 2** *(blocked on 11)*
-
-- [x] 14.1.1-12-PLAN.md — the gui09 setups-copy gate derives per dialog, not by position and count (gap 2), plus the `modes.css` and header claims that become true only after it (gap 3a, 3c)
-- [x] 14.1.1-13-PLAN.md — the build-order gate sees side-effect imports (advisory 1), its two comments corrected (gap 3d), and GUI-DEFECTS item 11's stale note fixed (advisory 6)
-- [x] 14.1.1-14-PLAN.md — `verify-web-tab-live.mjs` instrument honesty: no plant scored on a broken instrument (advisory 4), a plant for the three `close:` absence assertions (advisory 3), one red set per plant (advisory 2), IN-02 and IN-03
-
-**Wave 3** *(blocked on 12 — the gate and the file it derives from must not move in one wave)*
-
-- [x] 14.1.1-15-PLAN.md — the dependent-window refusal ends on the affordance that exists, in `setups-service.ts` and `14-UI-SPEC.md` together (advisory 5)
-
-**Wave 4** *(blocked on 11, 12, 13, 14, 15)*
-
-- [x] 14.1.1-16-PLAN.md — the record, written from the tree: G-45 re-closed with a guard named per site, G-44 annotated, every carry-forward recorded with a reason and a next step
-
-### Phase 15: Panorama Organising
-
-**Goal**: The user organises tabs spatially on a freeform canvas and hierarchically in a tree, over SQL-persisted groups
-**Depends on**: Phase 14 (organising mode hosts the canvas/tree surface)
-**Requirements**: GUI-08
-**Success Criteria** (what must be TRUE):
-
-  1. User can drag tabs freely on the Panorama canvas, resize groups by corner, drop canvas items to auto-box, zoom, and see the ungrouped tray
-  2. User can flip between canvas and tree over the identical group data
-  3. Groups persist across restart in a SQL groups table (id, title, bounds, activeGroupId) + `group_id` on the URI-keyed tab rows, written only by the single chrome-side writer; the canvas reads/writes only SQL and sessionstore stays restore-authoritative (never sessionstore-coupled — Bugzilla 1221050)
-  4. Tab thumbnails render as PNG last-view snapshots
-
-**Plans**: TBD
-
-- [x] 15-01-PLAN.md
-- [x] 15-02-PLAN.md
-- [x] 15-03-PLAN.md
-
-**UI hint**: yes
-
-## Progress
+- [x] Phase 13: Chrome Bar + Strip-Relocation Spike (5/5 plans, 13-04 and 13-05 gap closure) — completed 2026-09-06
+- [x] Phase 14: Modes + Windows & Setups (4/5 plans; 14-05's code landed in d5b8dc1, its two checks were never written — gap G-14.1.1-10, closed by Phase 20 PLAT-02) — completed 2026-09-06
+- [x] Phase 14.1: In-Theia Web Tabs (GUI-02) (INSERTED) (3/3 plans) — "+" opens a web tab inside the Theia shell's own tab strip
+- [x] Phase 14.1.1: GUI Conformance Sweep (INSERTED) (16/16 plans, three passes) — every `fixable: yes` gap in `14.1.1-UAT.md` closed with a check that goes red without its fix
+- [x] Phase 15: Panorama Organising (3/3 plans) — completed 2026-09-06
+- [x] Phase 16: AI backend adapter - OpenCode (3/3 plans) — Retired 2026-09-28; code removed in Phase 17 (RM-01)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 13. Chrome Bar + Strip-Relocation Spike | 5/5 | Complete | 2026-09-06 |
 | 14. Modes + Windows & Setups | 3/3 | Complete | 2026-09-06 |
 | 15. Panorama Organising | 3/3 | Complete | 2026-09-06 |
+
+Phase 16 record: Retired 2026-09-28 under D2 (b): NG-041..NG-050 and NG-052..NG-062 are
+dropped — the opencode adapter is retired for the PowerBrowser-Assistant
+plugin, which is planned outside this tree. The adapter cuts fall with the
+same decision (selectable `@Pi` / DSH backends, per-line comment-to-steer,
+`/btw` ephemeral question, file-wide Supercomplete Tab-accept). Chris:
+"Run them for me" (ledger/history/log.jsonl lines 310–330, one drop op per
+row, each carrying that answer as its quote). Kept and built: NG-051
+(`backend = "off"` starts no opencode process and no `/mcp` endpoint).
+Goal (was): selectable `@OpenCode` backend in sidecar chat with staged
+accept/reject review. Requirements (was): AI-01..AI-05, removed in v1.4.
+Plans 16-01, 16-02, 16-03 executed.
+
+Archive: `.planning/milestones/v1.3-ROADMAP.md` · Requirements: `.planning/milestones/v1.3-REQUIREMENTS.md` · Audit: `.planning/milestones/v1.3-MILESTONE-AUDIT.md` · Phase directories: `.planning/milestones/v1.3-phases/` · Tag: `v1.3`. The v1.3 archive predates Phases 14.1 and 14.1.1; their full detail sections are in their phase directories and in `git show 41caf8f:.planning/ROADMAP.md`.
+
+</details>
+
+### 🔄 v1.4 Platform Updates and GUI Close-out
+
+Non-GUI first (17–20), then GUI one step at a
+time (21–25) (Chris, 2026-10-15). One upstream per phase, each followed by a verify run.
+Research needed at planning: Phases 19 and 22. Phases that wait on Chris's decisions or
+ledger approvals: 17 (NG-051), 19 (NG-082, telemetry), 20 (schema v3/v4 rows), 22 (Panorama
+decisions 1 and 2), 23 (G-23, G-32, sketch 005, G-11 live confirmation), 24 (NG-084 text, the
+live UAT itself).
+
+- [ ] **Phase 17: OpenCode Removal** - The OpenCode adapter, its `[ai]` manifest path, its checks and its docs leave the tree; NG-051 amended
+- [ ] **Phase 18: Firefox 153.5.0esr** - Gecko re-pinned to `FIREFOX_153_5_0esr_BUILD1`; dev and release builds and the full verification run pass
+- [ ] **Phase 19: Node 24, React 19, Theia 1.76.0** - Three commits, each checked live; Theia's AI framework runs stock; NG-082 amended
+- [ ] **Phase 20: Non-GUI Gaps** - Clean-checkout build, group-channel check, schema ledger rows, `generate-check`, archived phase paths
+- [ ] **Phase 21: Panorama Spec and gui08 Checks** - 15-UI-SPEC re-pinned to the shipped Panorama; the commit gate is green
+- [ ] **Phase 22: Panorama Worklist** - Strip filtered by the active group, Undo Close Group, per-card close, last group kept
+- [ ] **Phase 23: Modes Leftovers and Sketch 005 Verdict** - Variant B records, name cap, panel slide, 14-VERIFICATION, sketch 005 decided
+- [ ] **Phase 24: Live UAT Pass** - Every open UAT sheet run live with no pending result, React 19 line included (NG-084)
+- [ ] **Phase 25: CI Green on Main** - CI passes on the pushed `main` (NG-074)
+
+## Phase Details
+
+### Phase 17: OpenCode Removal
+
+**Goal**: The tree carries no OpenCode adapter, so every later install, re-pin and clean build runs on the final workspace member set
+**Depends on**: Nothing in v1.4 (first phase; v1.3 shipped, Phase 16 retired)
+**Requirements**: RM-01
+**Needs Chris**: the NG-051 ledger amend (drop or supersede, re-lock without `verify-ng-051-backend-off.mjs`), approved before the removal commit
+**Success Criteria** (what must be TRUE):
+
+  1. `git ls-files` lists no `theia/extensions/backend-opencode`, no `[ai]` key in `configuration.toml`, no `ai.backend` schema entry, no `emitAiBackend`, none of the four OpenCode/NG-051 verify scripts and none of their registry rows; `docs/REBRANDING.md` has no `[ai]` section
+  2. `node scripts/generate.mjs --check` reports 53 targets
+  3. On a working tree with the ignored leftovers removed (`lib/`, the workspace symlink, `generated/ai-backend.json`), `yarn install --frozen-lockfile` passes on the committed lockfile, which no longer contains `@agentclientprotocol/sdk`, and `scripts/verify-platform.sh --quick` shows no FAIL row beyond the four `gui08` rows; `quick-baseline.txt` is refreshed
+  4. The NG-051 amend is in the ledger with Chris's approval, recorded before the removal commit; no live planning record lists AI-01..05 as a requirement; the 12 `@theia/ai-*` packages are still composed
+
+**Plans**: TBD (split by removal set to stay under `size-gate.py`)
+
+### Phase 18: Firefox 153.5.0esr
+
+**Goal**: PowerBrowser builds on Gecko 153.5.0esr and passes the full verification run on both build variants
+**Depends on**: Phase 17 (independent of Theia; runs before Phase 19 so the live sidecar check uses the final Gecko)
+**Requirements**: UPD-05, UPD-06
+**Success Criteria** (what must be TRUE):
+
+  1. `configuration.toml` pins `FIREFOX_153_5_0esr_BUILD1`; `docs/BUILD.md` records commit `223014c6b9299ac9b035b4c50ea481e5c6de282c`; `.github/workflows/rebase-upstream.yml` mirrors the pin; the `fetch-upstream.sh` tag comment no longer claims `_BUILD1` and `_RELEASE` always share a commit; the run-together line at `configuration.toml:104` is split
+  2. The four patches replay through `rebase-upstream.sh` with `patches/` byte-unchanged, and `smoke-firefox.sh` reports a version read from the tree rather than a hard-coded `153.1.0esr`
+  3. The dev objdir and `objdir-release` both build at 153.5, and both binaries report 153.5.0esr
+  4. A full `scripts/verify-platform.sh` run passes, with the `mar-update-hop` evidence labelled pre-153.5
+
+**Plans**: TBD (budget two Gecko builds, about 50 and 55 minutes; `rebase-upstream.yml` has never run and has no Nix, so it is either wrapped in Nix or recorded as unexercised, never cited as proof)
+
+### Phase 19: Node 24, React 19, Theia 1.76.0
+
+**Goal**: The sidecar runs Theia 1.76.0 with React 19 on Node 24, with Theia's AI framework as upstream ships it, and each step is checked live before the next
+**Depends on**: Phase 18 (the live sidecar check runs against the final Gecko)
+**Requirements**: RM-02, UPD-07, UPD-08, UPD-09, UPD-10
+**Needs Chris**: the NG-082 ledger amend (1.75.0 → 1.76.0, plus React 19 and Node 24, moved out of 999.2); the `telemetry.telemetryLevel` collision decision, taken at the live check
+**Research**: yes — runtime behaviour at 1.76 / React 19 is unverified (which telemetry schema wins, `view:` factory ids, `pagehide` persistence, dependent-window theme)
+**Success Criteria** (what must be TRUE):
+
+  1. Three commits land in order, each followed by `--quick` and a live sidecar start: Node 24 (only `flake.nix` changed, `flake.lock` byte-unchanged, `nix develop .#theia` reports Node 24); React 19.2.8 at Theia 1.74.1; Theia 1.76.0
+  2. Every `@theia/*` package except `@theia/monaco-editor-core` is 1.76.0 and `diff-theia-core.sh` passes; a new `--quick` row finds exactly one installed copy each of react, react-dom, `@types/react`, `@types/react-dom` and inversify, and its self-test goes red naming the package when a duplicate is planted
+  3. A live sidecar on a fresh config dir and on a carried-over one opens only the PowerBrowser welcome (no Theia Welcome page), opens `view:` URIs, and passes the `side02-token-*` rows live
+  4. `@powerbrowser/branding` contains neither D-22 override, and the 12 `@theia/ai-*` packages are composed at 1.76.0 and unmodified
+  5. The NG-082 amend and Chris's telemetry decision are recorded, and `quick-baseline.txt` is refreshed
+
+**Plans**: TBD
+
+### Phase 20: Non-GUI Gaps
+
+**Goal**: The remaining non-GUI gaps are closed on the final dependency set, each by a check that can go red or by a recorded result
+**Depends on**: Phase 19 (the clean-checkout build must run on the final dependency set)
+**Requirements**: PLAT-01, PLAT-02, PLAT-03, PLAT-04, PLAT-05
+**Needs Chris**: the schema v3/v4 ledger rows (PLAT-03), approved through `ledger-amend.py`
+**Success Criteria** (what must be TRUE):
+
+  1. A build from a clean checkout (a fresh clone or a quiet tree) passes, including `yarn build:extensions` (G-14.1.1-9)
+  2. A `--quick` group-channel row exists, and its self-test goes red on each planted fault (G-14.1.1-10)
+  3. The schema v3/v4 work has ledger rows carrying Chris's approval, and the ledger checksums pass
+  4. `generate-check` is closed as not reproducible with the passing runs recorded (host shell and `.#theia`), or it is reproduced and fixed
+  5. Every verify-script path into `.planning/phases/` resolves to its archived location, or the check fails naming the missing path
+
+**Plans**: TBD (also adds the `-purgecaches` line to `docs/BUILD.md`)
+
+### Phase 21: Panorama Spec and gui08 Checks
+
+**Goal**: The Panorama spec describes the design that shipped, the checks derived from it pass, and the commit gate is green
+**Depends on**: Phase 20 (GUI work starts after the non-GUI half, so Theia selectors are re-verified at 1.76 only once)
+**Requirements**: PAN-01, PAN-07
+**Success Criteria** (what must be TRUE):
+
+  1. 15-UI-SPEC describes the shipped Panorama redesign (commit `7b7a1f7`): its canvas geometry and the reviewed "Expand" / "Done" copy
+  2. `verify-gui08-canvas-geometry` and `verify-gui08-panorama-copy` derive their expectations from 15-UI-SPEC, pass, and go red when a fault is planted
+  3. `scripts/verify-platform.sh --quick` reports no FAIL row, and `quick-baseline.txt` is empty
+  4. No stale tray code, comments or CSS remain, and the canvas still shows ungrouped tabs as loose cards
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 22: Panorama Worklist
+
+**Goal**: The user organises tabs by group from both the strip and the canvas: the strip follows the active group, a closed group can be restored, a card closes in place, and one group always remains
+**Depends on**: Phase 21 (W4 edits the copy contract that Phase 21 re-pins)
+**Requirements**: PAN-02, PAN-03, PAN-04, PAN-05, PAN-06
+**Needs Chris**: Panorama decision 1 (every tab in a group, or unassigned tabs allowed) and decision 2 (strip filter in Browsing only, or in every mode), recorded before planning
+**Research**: yes — W1 needs a shared frontend group-membership reader; W4 touches the chrome-side writer `closeGroupRows`
+**Success Criteria** (what must be TRUE):
+
+  1. Chris's Panorama decisions 1 and 2 are recorded before any worklist code is written
+  2. The tab strip shows only the active group's tabs in the modes that decision 2 names, and a tab opened with "+" appears in the strip as a member of the active group (W1 and W2 ship in one change)
+  3. User can close a group and restore it with Undo Close Group; the spec copy and both `gui08` checks change in the same commit and pass (W4)
+  4. User can close a card from the card itself (W5)
+  5. User cannot close the last remaining group (W11, first part)
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 23: Modes Leftovers and Sketch 005 Verdict
+
+**Goal**: The Phase 14 / 14.1.1 leftovers are closed with records that match the shipped behaviour, and the sketch 005 verdict fixes the layout that UAT will test
+**Depends on**: Phase 22
+**Requirements**: MODE-01, MODE-02, MODE-03, MODE-04, SK-01
+**Needs Chris**: the G-23 name-cap reading (MODE-02); slide or instant panels for G-32 (MODE-03); the sketch 005 verdict (SK-01); live confirmation of the strip relocation (MODE-01, may be taken in the Phase 24 session)
+**Success Criteria** (what must be TRUE):
+
+  1. The Variant B records are current (UAT entry, GUI-DEFECTS item 2, GUI-07 box, `mode-descriptors.ts` comment, 14-UAT test 3), and Chris has confirmed the strip relocation live (G-11)
+  2. A group name longer than 60 characters behaves as Chris decided (refused at the input, or cut at the cap), and 14-UI-SPEC states that rule (G-23)
+  3. Side panels slide (200 ms or less, with a reduced-motion fallback) or switch instantly, as Chris decided, and 14-UI-SPEC describes what the user sees (G-32)
+  4. `14-VERIFICATION.md` exists
+  5. Sketch 005 is committed with a MANIFEST row, and Chris's verdict (adopt into a named later milestone, or reject) is recorded before Phase 24 starts
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 24: Live UAT Pass
+
+**Goal**: Chris has tested every shipped GUI surface live on the final stack, and no UAT result is left pending (NG-084)
+**Depends on**: Phase 23 (runs after every GUI change and after React 19, so it runs once)
+**Requirements**: UAT-01
+**Needs Chris**: runs the UAT live; approves the widened NG-084 text through `ledger-amend.py`
+**Success Criteria** (what must be TRUE):
+
+  1. A Phase 15 UAT sheet exists and has been run
+  2. The 10, 13, 14, 14.1, 14.1.1 and 15 UAT sheets have no `pending` result
+  3. The sheets carry a React 19 runtime line with a recorded result
+  4. The widened NG-084 text is approved and recorded in the ledger
+
+**Plans**: TBD
+
+### Phase 25: CI Green on Main
+
+**Goal**: CI passes on the pushed `main`, which is the milestone's exit gate (NG-074)
+**Depends on**: Phase 24
+**Requirements**: CI-01
+**Success Criteria** (what must be TRUE):
+
+  1. `main` is pushed, with no local commit ahead of `origin/main`
+  2. The CI verify workflow run on the pushed head commit concludes `success`, with no check excluded by name
+  3. NG-074 is marked done in the ledger with that run's URL
+
+**Plans**: TBD (CI is expected to go green once Phase 21 lands and `main` is pushed; this phase confirms it)
+
+## Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 17. OpenCode Removal | 0/TBD | Not started | - |
+| 18. Firefox 153.5.0esr | 0/TBD | Not started | - |
+| 19. Node 24, React 19, Theia 1.76.0 | 0/TBD | Not started | - |
+| 20. Non-GUI Gaps | 0/TBD | Not started | - |
+| 21. Panorama Spec and gui08 Checks | 0/TBD | Not started | - |
+| 22. Panorama Worklist | 0/TBD | Not started | - |
+| 23. Modes Leftovers and Sketch 005 Verdict | 0/TBD | Not started | - |
+| 24. Live UAT Pass | 0/TBD | Not started | - |
+| 25. CI Green on Main | 0/TBD | Not started | - |
 
 ## Hard constraints (every phase)
 
@@ -258,28 +274,6 @@ check requires every allow-dispositioned Mozilla host to be documented in this
 project's own planning record rather than only inside the allowlist file — an
 allow entry nobody had to write down is one nobody has to defend. Repointing
 them per a downstream's manifest is Phase 4's TEL-03.
-
-### Phase 16: AI backend adapter - OpenCode
-
-Retired 2026-09-28 under D2 (b): NG-041..NG-050 and NG-052..NG-062 are
-dropped — the opencode adapter is retired for the PowerBrowser-Assistant
-plugin, which is planned outside this tree. The adapter cuts fall with the
-same decision (selectable `@Pi` / DSH backends, per-line comment-to-steer,
-`/btw` ephemeral question, file-wide Supercomplete Tab-accept). Chris:
-"Run them for me" (ledger/history/log.jsonl lines 310–330, one drop op per
-row, each carrying that answer as its quote). Kept and built: NG-051
-(`backend = "off"` starts no opencode process and no `/mcp` endpoint).
-
-**Goal:** Selectable `@OpenCode` backend in sidecar chat with staged accept/reject review (AI-01..AI-05)
-**Requirements**: AI-01, AI-02, AI-03, AI-04, AI-05
-**Depends on:** Phase 15
-**Plans:** 3/3 plans executed
-
-Plans:
-
-- [x] 16-01-PLAN.md
-- [x] 16-02-PLAN.md
-- [x] 16-03-PLAN.md
 
 ---
 

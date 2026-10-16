@@ -127,12 +127,41 @@ the project's own planning record.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| RM-01 | Phase 17 | Pending |
+| RM-02 | Phase 19 | Pending |
+| UPD-05 | Phase 18 | Pending |
+| UPD-06 | Phase 18 | Pending |
+| UPD-07 | Phase 19 | Pending |
+| UPD-08 | Phase 19 | Pending |
+| UPD-09 | Phase 19 | Pending |
+| UPD-10 | Phase 19 | Pending |
+| PLAT-01 | Phase 20 | Pending |
+| PLAT-02 | Phase 20 | Pending |
+| PLAT-03 | Phase 20 | Pending |
+| PLAT-04 | Phase 20 | Pending |
+| PLAT-05 | Phase 20 | Pending |
+| PAN-01 | Phase 21 | Pending |
+| PAN-02 | Phase 22 | Pending |
+| PAN-03 | Phase 22 | Pending |
+| PAN-04 | Phase 22 | Pending |
+| PAN-05 | Phase 22 | Pending |
+| PAN-06 | Phase 22 | Pending |
+| PAN-07 | Phase 21 | Pending |
+| MODE-01 | Phase 23 | Pending |
+| MODE-02 | Phase 23 | Pending |
+| MODE-03 | Phase 23 | Pending |
+| MODE-04 | Phase 23 | Pending |
+| SK-01 | Phase 23 | Pending |
+| UAT-01 | Phase 24 | Pending |
+| CI-01 | Phase 25 | Pending |
 
 **Coverage:**
 
-- v1.4 requirements: 29 total
-- Mapped to phases: 0 (filled by the roadmap)
+- v1.4 requirements: 27 total
+- Mapped to phases: 27
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-10-16*
+*Traceability filled: 2026-10-16 (v1.4 roadmap, Phases 17–25)*
 *Sources: .planning/HANDOFF-plan-reorg.md, .planning/research/SUMMARY.md*

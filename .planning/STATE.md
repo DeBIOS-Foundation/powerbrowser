@@ -2,11 +2,15 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Platform Updates and GUI Close-out
+current_phase: 17
+current_phase_name: OpenCode Removal
 status: planning
-last_updated: "2026-10-16T20:34:32.570Z"
+stopped_at: v1.4 roadmap created (Phases 17–25)
+last_updated: "2026-10-16T21:35:51.082Z"
 last_activity: 2026-10-16
+state_head: 41caf8fb9cd41dd9248265789d731b12e6202287
 progress:
-  total_phases: 0
+  total_phases: 9
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +21,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-06)
+See: .planning/PROJECT.md (updated 2026-10-16)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 14.1.1 — GUI Conformance Sweep (INSERTED)
+**Current focus:** Phase 17 — OpenCode Removal (v1.4 Platform Updates and GUI Close-out, Phases 17–25)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 17 (OpenCode Removal)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-10-16 — Milestone v1.4 started
+Status: Ready to plan
+Last activity: 2026-10-16
 
 ## Performance Metrics
 
@@ -351,12 +355,14 @@ Recent decisions affecting current work:
 - ~~[Spelling]~~ Resolved 2026-08-29: user confirmed "Sourcerer"; REQUIREMENTS.md and PROJECT.md normalized.
 - MIG-04 is NOT complete: nothing has been built (objdir/ absent). 01-03 delivered its prerequisites only; plan 01-04 owns the build. Nine verify-platform.sh checks become runnable at that point.
 - Phase 1's two manual verifications (GUI-01 browser-window toggle, 5 steps; GUI-03 visible runtime restyle, 3 steps) are UNPERFORMED -- 01-07 ran autonomously with no human. Recorded as open WINDOWS.md ledger entries.
+- [v1.4] Waiting on Chris: NG-051 amend before the Phase 17 commit; NG-082 amend and the telemetry decision in Phase 19; schema v3/v4 ledger rows (Phase 20); Panorama decisions 1 and 2 before Phase 22; G-23, G-32, sketch 005 verdict and G-11 live confirmation (Phase 23); NG-084 text and the live UAT (Phase 24). Research at planning: Phases 19 and 22.
 - WINDOWS.md 18's named residual: no registered check drives a rejection out of either long-lived supervisor loop, so those two terminal handlers rest on the source-derived coverage rule rather than on a runtime red
 
 ### Roadmap Evolution
 
 - Phase 14.1 inserted after Phase 14: In-Theia Web Tabs (GUI-02) — Chris reversed the 2026-08-30 deferral on 2026-09-06; + opens a web tab inside the shell (URGENT)
 - Phase 14.1.1 inserted after Phase 14.1: GUI Conformance Sweep — living GUI defect list, automated fix pass, then one-at-a-time confirmation with Chris (URGENT)
+- v1.4 roadmap created 2026-10-16: Phases 17–25, non-GUI (17–20) then GUI one step at a time (21–25); Phase 16 moved into the v1.3 record as retired (code removed in Phase 17, RM-01)
 
 ## Deferred Items
 
@@ -434,10 +440,10 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-08T10:11:51.306Z
-Stopped at: Completed 14.1.1-16-PLAN.md
+Last session: 2026-10-16
+Stopped at: v1.4 roadmap created (Phases 17–25)
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 17 with /gsd-plan-phase 17 (Chris approves the NG-051 amend before the removal commit)
