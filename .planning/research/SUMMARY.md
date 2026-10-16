@@ -1,164 +1,198 @@
 # Project Research Summary
 
-**Project:** Power Browser — v1.1 Hardening and SQL Tabs
-**Domain:** Rebrandable browser platform (Firefox-ESR patch-stack fork + Eclipse Theia sidecar)
-**Researched:** 2026-09-04
-**Confidence:** HIGH overall (tree-derived claims + canonical upstream docs; gaps enumerated below)
+**Project:** Power Browser, milestone v1.4 Platform Updates and GUI Close-out
+**Domain:** Version updates and close-out work on a rebrandable Gecko (patch-set) + Eclipse Theia sidecar browser platform. No new product features.
+**Researched:** 2026-10-16, against `main` at `e9e29c1`
+**Confidence:** HIGH for tree state, versions, tag/blob facts and the removal surface. MEDIUM for runtime behaviour at Theia 1.76 / React 19 / Node 24 (no sidecar started) and at Firefox 153.5 (no Gecko build run).
 
 ## Executive Summary
 
-Power Browser v1.1 hardens distribution (real Windows/macOS installer builds, npm/local-path extension sources, a crash-report pipeline) and promotes SQL-backed tabs ahead of all GUI work. Experts build each of these by reusing upstream machinery rather than inventing parallel systems: Mozilla's `mach package`/`mach repackage` for installers, Theia's existing `theiaPlugins` fragment pipeline for new extension source kinds, a Breakpad-protocol-compatible minimal collector instead of full Socorro, and Mozilla's own `Sqlite.sys.mjs` plus one new `tabs.sqlite` file for tab storage.
+v1.4 is a maintenance-and-close-out milestone with two halves, ordered by Chris's rule: non-GUI first, then GUI one step at a time. The non-GUI half removes the retired OpenCode adapter, moves Gecko from 153.1.0esr to 153.5.0esr, and moves the sidecar from Theia 1.74.1 / React 18 / Node 22 to Theia 1.76.0 / React 19 / Node 24. The GUI half re-pins the Panorama spec to the shipped design (which turns the commit gate green), finishes the Panorama worklist and the Phase 14 / 14.1.1 leftovers, runs one live UAT pass, and closes on CI green on `main` (NG-074).
 
-The recommended approach is three phases in dependency order: Phase 08 installer hardening with the NAME-01 canonical-`PowerBrowser` rename slice folded in (every installer surface embeds the name, so renaming after packaging proofs would invalidate them), Phase 09 extensions + crash pipeline (both reuse the hardened generator/verification loop and both touch the endpoint allowlist, so they land under one review), Phase 10 SQL tabs last with zero presentation changes. Every v1 carry-over drill rides inside the phase that needs it — release build with installers, per-fixture tier-3 with extensions, live ESR rebase over the new SQL touchpoints — because a terminal "drills phase" is the first thing cut under schedule pressure.
+The upgrades are smaller than they look. All four Gecko patches apply unchanged: the five files they touch have identical blob SHAs at 153.1 and 153.5, so the patch files must not be edited. Node 24.19.0 is already in the locked nixpkgs, so only `flake.nix:20` changes and `nix flake update` must not be run. Every native module is N-API. No first-party extension uses a React 18-only API. The Theia 1.76 move has exactly one compile break (the D-22 AI-layout override in `@powerbrowser/branding`, which is deleted, not ported) and two runtime regressions that compile cleanly: Theia's own Welcome page returns through `@theia/ai-ide -> @theia/getting-started` (fix: default `workbench.startupEditor: "none"`), and `@theia/telemetry` now also registers `telemetry.telemetryLevel`.
 
-The key risks are all second-machine failures: an updater that phones Mozilla or dies silently, profile/remoting collisions exposed only alongside stock Firefox, floating extension pins that resolve differently next month, and a second SQLite writer that corrupts the profile. Each is mitigated by a decision-first gate (update story and crash rung are questioning outputs that precede any mechanism), an authority/invariant table written before schema or code (single chrome-side writer, sessionstore authoritative for restore, registry URIs as join keys), and verification biased toward second-machine, second-profile, second-month checks.
+The main risks are verification risks, not code risks. A green build hides a duplicate or mismatched React (yarn only warns on unmet peers). One Gecko build does not cover a full `verify-platform.sh` run, because the release objdir and stored MAR evidence are separate artefacts. OpenCode removal leaves ignored local state (`lib/`, a workspace symlink, `generated/ai-backend.json`) that turns local gates red while CI stays green. The commit gate stays red on the four `gui08` rows through the whole non-GUI half, so new reds can go unnoticed. Mitigations: one upstream per phase with a verify after each, live sidecar checks on a fresh config dir, a new single-copy React check, and a `quick-baseline.txt` refresh after phases 17 and 19.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Two new npm dependencies total (`better-sqlite3@13.0.3`, `@sentry/node@10.73.0`) and zero new build-system dependencies. Everything else is host tooling on packaging machines or machinery already in the tree. ESR stays on the 153 line (one-minor re-pin via existing uptake tooling, not a stack decision); Theia stays at 1.74.1 (no framework bump inside a hardening milestone).
+Pin what upstream's CI ran, change one upstream at a time, and leave the Nix lock alone.
 
 **Core technologies:**
-- `Sqlite.sys.mjs` (in-tree, ESR 153) — Gecko chrome-side SQLite writer for the new `tabs.sqlite`; the promise wrapper every first-party consumer already sits on — zero new deps, profile-dir-aware, WAL-capable
-- `better-sqlite3@13.0.3` — Theia Node-backend SQLite **readonly** reader; exact pin, prebuilds cover Node 22, call shape mirrors `node:sqlite` so a future stdlib swap is mechanical (see reconciliation below)
-- `@sentry/node@10.73.0` + self-hosted Sentry 26.8.0 (or SaaS) — sidecar crash/error capture behind the existing `[telemetry]` level gate; platform carries only the DSN, never collector infra
-- NSIS 3.12 + Windows SDK (`MAKEAPPX`/`SIGNTOOL`) + macOS `hdiutil`/`iconutil` — packaging-host tools only; nothing enters the repo or flake
-- Generator-owned `ExtensionSettings` policy emission + npm-exact/`file:` extension resolution through the existing `theiaPlugins` fragment pipeline — no new tooling, no second packaging system
+- Firefox ESR `153.5.0esr` at commit `223014c6b9299ac9b035b4c50ea481e5c6de282c`: current ESR per product-details; patches replay unchanged.
+- Eclipse Theia `1.76.0` (all `@theia/*` except `@theia/monaco-editor-core`, which stays `1.108.201`): npm `latest`; replaces NG-082's stale 1.75.0 target.
+- React / ReactDOM `19.2.8`, `@types/react` `19.2.18`, `@types/react-dom` `19.2.7`: what Theia v1.76.0's own lockfile resolves. Not npm latest (19.3.1); the trial's 19.1.10 set is a proven fallback.
+- Node.js `24.19.0` (`pkgs.nodejs_24` in the already-locked nixpkgs `ffb3c9b7`): Theia 1.75+ declares `node >=24` at the repo root. Published packages carry no `engines`, so this supersedes D-16 by choice.
+- Unchanged: TypeScript `~5.9.3`, yarn classic `1.22.22`, inkscape `1.4.4` and rustc `1.97.1` from the locked nixpkgs.
 
-**Stack reconciliation — `better-sqlite3` vs `node:sqlite` (decided):** the architecture researcher preferred the Node 22 built-in `node:sqlite` (no native addon, no `yarn.lock` delta); the stack researcher pinned `better-sqlite3@13.0.3` and rejected `node:sqlite`. **Recommendation: `better-sqlite3@13.0.3`, readonly, for v1.1.** Rationale: `node:sqlite` is Stability 1.2 / Release Candidate on the pinned Node 22 line with API shifts across 22.x minors (`column()`/session/`location()` landed mid-line) — a platform that pins exact versions cannot build on a moving stdlib surface. The native-addon objection is already answered in-tree: prebuilds cover `NODE_MODULE_VERSION` 127 and the `theia` dev shell carries the node-gyp fallback toolchain (the `drivelist` precedent). The call shapes are deliberately similar, so revisit `node:sqlite` at the next Node re-pin as a mechanical swap. One line in the backend reader carries a `ponytail:` comment marking that ceiling.
-
-**SQLite access reconciliation (STACK readonly-backend vs PITFALLS never-open):** Pitfall 8's strict rule is preserved in substance — *no Theia-side process ever opens `places.sqlite` or `sessionstore` files, read or write* (WAL `-shm` coordination makes even readers hazardous, and profile-lock defeat is a corruption story). The sanctioned design is: all tab writes go through `PowerBrowserAPI.sys.mjs` → chrome-side `Sqlite.sys.mjs` (single writer); tab data lives in its **own `tabs.sqlite`** (own WAL, decoupled checkpoint/vacuum, a tab bug can never take bookmarks down); the backend's `better-sqlite3` handle on that dedicated file is `readonly: true`; verification keeps the static no-`sqlite`-open scan (forgiving only the dedicated-file readonly reader) plus an interleaved-write soak asserting `PRAGMA integrity_check` stays clean. Details in STACK.md and PITFALLS.md Pitfall 8.
+**Change sites the trial missed:** `scripts/smoke-firefox.sh:41-42` hard-codes `153.1.0esr` (derive from `version_display.txt`); `workbench.startupEditor: "none"` in `theia/applications/browser/package.json`; `.github/workflows/rebase-upstream.yml:33` mirrors the pin.
 
 ### Expected Features
 
-v1.1 covers exactly four areas — PKG-01 installers, EXT-02 extension sources + WebExtensions declaration, TEL-04 crash pipeline, SQL-01 SQL tabs. GUI-02/GUI-05 are explicitly deferred until after SQL tabs (2026-09-04 scoping). See FEATURES.md for the full landscape, dependency graph, and prioritization matrix.
+Here, "feature" means a v1.4 work item. Tree state was re-verified this session: `--quick` is 114 PASS / 4 FAIL (only the `gui08` rows), and the ledger has 85 rows (53 done, 10 deferred-approved, 22 dropped).
 
 **Must have (table stakes):**
-- Full branding-dir file set emitted + real `mach package` builds on Windows/macOS packaging hosts + `docs/BUILD.md` installer procedure, with WR-04 (reject bare `$VAR` in NSIS defines) and WR-07 (fixture root through installer verifier) as pre-fixes before the first real-host build
-- NAME-01 rename slice (`PowerBrowser` canonical) folded into installer work with every display-form gate re-pinned — not a late standalone slice
-- EXT-02 `npm` source kind (generate-time resolve to pinned tarball URL + hash into the existing `theiaPlugins` chain) and `local-path` kind (repo- or `PB_CONFIG_DIR`-relative, hashed, fail-loud on absence)
-- WebExtensions declaration sibling: one mechanism — **default hypothesis `distribution/policies.json` `ExtensionSettings`** (the policy Mozilla is actively improving; confirm against the pinned ESR surface in phase research) — schema + emitter + verifier, no curated list in tree (REQUIREMENTS.md bar)
-- TEL-04 rung for v1.1: **Gecko reporter stays compiled out; ship the server side** — minimal Antenna-protocol collector (multipart POST with `upload_file_minidump` → `CrashID=`), `about:crashes` acceptance, crash-ping/report separation kept, PII/retention/throttle policy written before go-live
-- SQL-01 live-tab table keyed on `TabUriRegistry` URIs (registry → SQL write-through only) + places read exposure + sessionstore read projection + private-browsing exclusion with absence test + query API home on `@powerbrowser/tab-uris` (extension point, never a `[features]` flag)
-- Update-story decision recorded as the installer phase's first output (fork-hosted updates / no in-place updates / OS-package updates — no fourth option by omission), with zero Mozilla hosts in packaged config
+- OpenCode removal plus the NG-051 ledger amend
+- Firefox 153.5 with full builds and a full `verify-platform.sh` run
+- Theia 1.76.0 / React 19 / Node 24 plus the NG-082 amend, checked live
+- G-9 clean-checkout build: the fix is in the tree; run it after the final install
+- G-10 group-channel `--quick` row with a five-fault self-test
+- Schema v3/v4 ledger rows, `quick-baseline.txt` refresh, close `generate-check` (not reproduced: it passes in the host shell and in `.#theia`)
+- 15-UI-SPEC re-pinned to the shipped Panorama, with `gui08` checks derived from it (this unblocks NG-074)
+- W1 strip filtered by the active group, which must ship with W2 (a "+" tab joins the active group); otherwise new tabs disappear from the strip
+- W4 Undo Close Group (rewrites a copy contract and two checks), W5 per-card close
+- G-11 ratify Variant B (the code shipped in `539ba36`; only the records are stale), G-23 name cap, G-32 decision, 14-VERIFICATION
+- NG-084 live UAT (about 70 pending or issue results across six sheets; Phase 15 needs a UAT sheet first)
+- Sketch 005 verdict recorded
+- NG-074 CI green on pushed `main` (`main` is 4 commits ahead of `origin`)
 
-**Should have (competitive):**
-- Single-manifest propagation into NSIS + DMG + MSIX surfaces (nearly free once the generator owns the emitters — the installer half of the single-file claim)
-- Per-fixture installer verification staged for packaging hosts (build script + assert script a human runs; full CI with Windows/macOS runners is the later form)
-- Minimal collector shipped as downstream-runnable platform tooling (same status as `scripts/`)
-- Cross-surface joins (tabs ⋈ history ⋈ bookmarks on URL) and queryable closed-tab retention with a bounded retention policy from day one
-- Unified `[[extensions]]` with explicit `side = "theia" | "gecko"` key — design alongside EXT-02, land after
+**Should have (optional in v1.4):**
+- W11 last-group unclosable (cheap; becomes required if Panorama decision 1 is "every tab in a group"); group-cycling keys
+- G-32 option (a), an authored 200 ms panel slide
 
-**Defer (v2+):**
-- Stub installer, Maintenance Service, MSIX build/sign — trigger: real users downloading at volume (generate `msix/` branding slots as inert files only if cheap)
-- Symbol upload wiring, processor-side crash analysis — trigger: crash volume or the reporter-client re-enable decision (itself a later milestone of privacy surface)
-- SQL → registry write-back (restore/reopen from SQL) — trigger: GUI-02 landing as the consumer
-- Full Socorro deployment — never at v1.1 scale; revisit on crash-volume evidence
-- Replacing sessionstore or `places.sqlite` write paths — never without a dual-write + restore-parity proof
+**Defer (v1.5+):**
+- W6 type-anywhere search (PROJECT.md:271 lists it as v1.5+; the handoff lists it in v1.4; this needs Chris's call)
+- Sketch 005 implementation (a milestone of its own), W12 polish
+- DSH and any AI assistant work (separate project); release work NG-075..081 (backlog 999.2)
 
 ### Architecture Approach
 
-v1.1 adds surfaces, not layers: `configuration.toml` gains additive keys only, `generate.mjs` gains emitters + `TARGETS` rows, verification gains registry rows, and three of four features land as `@powerbrowser/*` extensions plus generated fragments. The Gecko patch stack stays at two hook-only patches, `PowerBrowserAPI.sys.mjs` stays the sole internals touchpoint, and the SQL store lives *beside* `TabUriRegistry` as a new `tab-store` extension consuming URI strings as opaque keys — never inside the registry, never behind a `[features]` flag, never touching presentation. See ARCHITECTURE.md §§1–8.
+Nothing in v1.4 changes the platform's shape. Removing OpenCode deletes the `[ai]` manifest path (`configuration.toml [ai]` -> `config-schema.json ai.backend` -> `generate.mjs emitAiBackend` -> `generated/ai-backend.json` -> `powerbrowserAiBackend`) and the registry's only manifest-dependent branch (`adapter_composed`). The removal falls into four atomic sets, and each set is green only as a whole. The 12 upstream `@theia/ai-*` packages are a separate surface, independent of OpenCode, and stay unless Chris decides otherwise.
 
-**Major components:**
-1. Generator fan-out (`generate.mjs` + frozen `TARGETS`) — all derivation; every new emitter adds a row so `--check` and derive-and-compare gates cover it with no further edits
-2. `@powerbrowser/tab-store` (new extension) — backend SQLite service + frontend URI-keyed API; DB filename and schema version are fixed platform content, not manifest keys
-3. Extended `theiaPlugins` fragment pipeline — EXT-02 npm/local-path kinds resolve *into* the v1 URL/hash chain; `verify-extension-pins.mjs` grows per-kind archive handling
-4. Theia-side crash events via the existing `PowerBrowserTelemetrySender` (`sendErrorData`, level-`crash` admission) — no second sender; Gecko repoint derivation stays honest
-5. `verify-platform.sh` (one driver, one `CHECKS` registry) — new gates append rows only: SQL roundtrip, installer build-proof (full-mode only), WebExtensions agreement, crash-pipeline agreement; every gate derives expectations from the generator and self-tests in both directions
+**Major components touched:**
+1. Manifest set: `configuration.toml [ai]`, schema key, emitter and TARGETS row, REBRANDING.md section. Generated targets go from 54 to 53; byte-identity comparands stay at 33.
+2. Workspace set: `git rm -r` **and** `rm -rf` the extension directory, the `build:extensions` clause, `yarn install` (the lock loses `@agentclientprotocol/sdk`), the hand-kept `EXPECTED_ENV_TOUCHERS` entry, and the `powerbrowserAiBackend` key.
+3. Registry set: four `verify-*opencode*` and `ng-051` scripts, `adapter_composed`, `check_ai_opencode_held`, the `ng051-backend-off` row.
+4. Ledger set: NG-051 drop and re-lock. Only Chris can approve it, and it must happen before the commit.
+5. Theia 1.76 branding: delete D-22 rebind 2 (`AIConfigurationViewContribution` has no `initializeLayout`) and keep rebind 1 (the AI-first perspective).
 
 ### Critical Pitfalls
 
-Full analysis (10 critical, 6 moderate, debt patterns, "looks done" checklist) is in PITFALLS.md. The five that shape the roadmap:
+1. **The pinned tag is not the commit the trial tested.** The 10-15 trial resolved `_RELEASE` to `f617beaded` (153.6-era). Today both tags resolve to `223014c6b9`. Record the SHA in `docs/BUILD.md` and re-run the replay and `mach configure` on that commit. Do not cite the trial as evidence for it.
+2. **"Full verify green" after the ESR move needs two builds.** Rebuild both the dev objdir and `objdir-release` (about 50 + 55 min). `mar-update-hop` stays green on 153.1 evidence, so label it pre-153.5. Derive the `smoke-firefox` version from the tree.
+3. **React 18 left in place, or a duplicate React, builds green.** Move all four React pins in the same commit as the Theia pins, add `resolutions`, and add a derived `--quick` single-copy row (react, react-dom, both `@types`, inversify) with a planted-duplicate self-test.
+4. **Static gates cannot see 1.76 runtime regressions.** Run the live sidecar twice, on a fresh `THEIA_CONFIG_DIR` and on a carried-over one. Assert one PowerBrowser welcome, no Theia Welcome, and no AI Configuration tab. Open a `view:` URI. Run the `side02-token-*` rows live, not just `tsc`.
+5. **OpenCode removal is red locally and green in CI.** Leftover `lib/`, the symlink, the stale `generated/ai-backend.json` and an uncommitted `yarn.lock` cause it. Run `rm -rf`, `yarn install --ignore-scripts`, delete the generated file, expect 53 from `--check`, commit the lock and re-run with `--frozen-lockfile`. Delete `ng051-backend-off`: once the adapter is gone it cannot go red.
 
-1. **Updater with no update story (P1)** — installer that installs but phones Mozilla for updates or dies silently; MAR verification assumed away; maintenance-service cert pin goes stale. Avoid: record one of three decisions (fork-hosted / none / OS-package) before mechanism; prove one real N→N+1 hop per OS.
-2. **Profile/remoting collision + rename-triggered migration (P2)** — NAME-01 must change display strings only; `basename`/`binary_name`/remoting frozen. Avoid: identity-field freeze assertion + alongside-Firefox interleaved launch test as installer-phase exit criteria.
-3. **Second SQLite writer (P8)** — Theia backend opening profile SQLite corrupts it (WAL/`-shm` + profile-lock precedent). Avoid: single chrome-side writer invariant before schema; own `tabs.sqlite`; static no-open scan + soak test. This is the milestone's one absolute "never."
-4. **Two truths for open tabs (P9)** — SQL mirror vs sessionstore split-brain after abnormal shutdown (skeleton-session Bug 1906808 class). Avoid: authority table in writing before building — sessionstore restores, SQL reconciles toward it, registry URIs are the join key; prove with a kill -9 restart test.
-5. **Drills staged forever (P12)** — release build, per-fixture tier-3, live rebase, re-pin all carried; a terminal drills phase gets cut. Avoid: each phase carries its own drill; the carry-over bucket holds only WINDOWS #13/#14.
+Also: never edit `.patch` files; run the brand scan after `git add` and reconcile the `-PLAN.md` count; purge the chrome JS startup cache before every chrome-side live result; check for concurrent sessions before any `yarn install`; split the OpenCode plan by removal set to stay under `size-gate.py`.
 
 ## Implications for Roadmap
 
-### Phase 08: Installer hardening + NAME-01
+Phase numbering continues from 16. The suggested structure has 9 phases: four non-GUI, five GUI.
 
-**Rationale:** Every installer surface embeds the display/identity names — verifying installers under the old spaced form then re-pinning doubles the packaging-host work, so the rename rides here, first. Gates must discriminate before binaries exist, so WR-04/WR-07 pre-fixes come before the first real-host run.
-**Delivers:** WR-04 + WR-07 pre-fixes; NAME-01 propagation with all display-form gates re-pinned; full branding-dir file set; real `mach package` builds on named Windows + macOS hosts; per-OS install→launch→uninstall→no-residue matrix; update-story decision recorded; `docs/BUILD.md` installer procedure with attributed timings; `objdir-release` carry-over build.
-**Addresses:** PKG-01, NAME-01, WR-04/WR-07, signing decision, release-build drill.
-**Avoids:** Pitfalls 1 (updater), 2 (profile collision), 3 (done-from-Linux), 4 (strings outside generator), 13 (half re-pin).
+### Phase 17: OpenCode removal
+**Rationale:** Every later `yarn install`, re-pin and clean build then runs on the final workspace member set. Needs no build; `--quick` proves it.
+**Delivers:** Removal sets 1-3 in one commit, the NG-051 amend, planning-record edits (REQUIREMENTS AI-01..05, ROADMAP Phase 16), `quick-baseline.txt` refresh.
+**Avoids:** Pitfalls 7, 8, 9, 10. Get Chris's NG-051 approval before the commit. Leave the `@theia/ai-*` framework alone unless Chris decides otherwise.
 
-### Phase 09: Extensions + crash pipeline
+### Phase 18: Firefox 153.5.0esr
+**Rationale:** Independent of Theia (separate tree and dev shell). Comes before the Theia move so that phase 19's live check runs on the final Gecko.
+**Delivers:** Pin plus SHA record, workflow default mirror, derived `smoke-firefox` version, `fetch-upstream.sh` comment and the `configuration.toml:104` newline fix, replay through `rebase-upstream.sh`, dev and release builds, full `verify-platform.sh`.
+**Avoids:** Pitfalls 1, 2, 3, 14 (`rebase-upstream.yml` has never run and has no Nix; do not cite it as proof).
 
-**Rationale:** Builds directly on 08's hardened generator/verification loop — new source kinds reuse the exact emitter→fragment→block→hash pipeline EXT-01 proved. Crash work is mostly agreement plumbing (prefs + allowlist + sender call sites), so it pairs cheaply with the resolver work; both touch `endpoint-allowlist.json` and land under one allowlist review.
-**Delivers:** EXT-02 npm + local-path kinds (pinned, fail-loud, per-kind self-tests); WebExtensions declaration via `ExtensionSettings` (mechanism confirmed against pinned ESR in phase research); vendored/mirrored artifacts with offline-from-vendor packaging proof; per-target `${targetPlatform}` arch assertions; TEL-04 minimal Antenna-protocol collector + `about:crashes` acceptance + ping/report separation + PII/retention/throttle policy; Theia re-pin proof + per-fixture tier-3 over the new source kinds as the riding drills.
-**Uses:** `better-sqlite3`/`@sentry/node` pins resolved (stack), `theiaPlugins` chain (architecture), pin/registry-host mechanics (pitfalls 5–6).
-**Implements:** Extended extension pipeline, crash agreement gate, allowlist rows for collector/crash/registry hosts.
-**Avoids:** Pitfalls 5 (floating pins), 6 (wrong-arch/offline plugins), 7 (Socorro-scope + PII), 16 (two runtimes, one entry).
+### Phase 19: Node 24, React 19, Theia 1.76.0
+**Rationale:** Isolates the native-ABI, React-runtime and Theia-API questions from one another.
+**Delivers:** Commits each followed by `--quick` and a live sidecar start (see the commit-split disagreement below). Also: the D-22 rebind 2 deletion, the `startupEditor` default, the React single-copy row, the telemetry schema outcome, a re-verified Theia selector list, the UPD-04 record re-run with live token rows, the NG-082 amend, and a baseline refresh.
+**Avoids:** Pitfalls 4, 5, 6, 12, 13.
 
-### Phase 10: SQL tabs (no GUI)
+### Phase 20: Non-GUI gaps
+**Rationale:** G-9 must run on the final dependency set, from a quiet tree or a fresh clone.
+**Delivers:** G-9 run, G-10 group-channel row with self-test, schema v3/v4 ledger rows, `generate-check` closed as not reproducible (or reproduced and fixed inside the dev shell), the `-purgecaches` line in `docs/BUILD.md`.
+**Avoids:** Pitfalls 15, 16.
 
-**Rationale:** Depends on a stable registry (untouched by 08/09 by construction) and on the verification discipline 08/09 exercise — its gate is the most behaviorally novel. Landing persistence before any presentation is the PROJECT.md ordering: GUI-02/GUI-05 then build on rows, not wishes.
-**Delivers:** `tab-store` extension (chrome-side `Sqlite.sys.mjs` writer, `better-sqlite3` readonly backend reader, own `tabs.sqlite` with `schema_version` from day one); registry→SQL write-through; places read exposure; sessionstore read projection; private-browsing exclusion + absence test; query API on `@powerbrowser/tab-uris`; authority table + single-writer invariant recorded before schema; kill -9 reconciliation test; `user_version` migrations + quarantine-not-delete corruption path; **live ESR rebase drill over the new touchpoints as the phase's closing task**; registry-shape gate green untouched as proof the bridge stayed landable.
-**Addresses:** SQL-01 (backlog 999.1), rebase-drill carry-over.
-**Avoids:** Pitfalls 8 (second writer), 9 (split-brain), 10 (rebase debt), 11 (one schema for four histories), 14 (layout conflated), 15 (unversioned schema).
+### Phase 21: Panorama spec re-pin and gui08 checks
+**Rationale:** The first GUI step, because these are the only red gate rows. W4 later edits the same copy contract, so the spec must be re-pinned first. The commit gate is green after this phase.
+**Delivers:** 15-UI-SPEC describing the shipped geometry and reviewed "Expand"/"Done" copy, both checks derived from it and passing, dead tray CSS removed, empty quick baseline (file and R33 references deleted).
+**Avoids:** Q1 option (b), a named exclusion.
+
+### Phase 22: Panorama worklist
+**Rationale:** Needs Panorama decisions 1 and 2 first.
+**Delivers:** W1 + W2 together, W4 Undo Close Group (spec copy and both checks updated in the same change), W5, and optionally the W11 last-group half.
+
+### Phase 23: Phase 14 / 14.1.1 leftovers and sketch 005 verdict
+**Delivers:** G-23 (code or spec ratification), G-32 (slide or spec amendment), the G-11 records update, 14-VERIFICATION, and sketch 005 committed with a MANIFEST row and a verdict.
+**Rationale:** The sketch 005 verdict must come before UAT; adopting it changes the layout that UAT tests. G-11 still needs Chris to confirm it live, which can happen inside phase 24.
+
+### Phase 24: Live UAT pass (NG-084)
+**Rationale:** Comes after every GUI change and after React 19; otherwise it has to be repeated.
+**Delivers:** A Phase 15 UAT sheet written and run, no `pending` result on the 10, 13, 14, 14.1, 14.1.1 and 15 sheets, the React 19 runtime line, the NG-084 text amend.
+
+### Phase 25: CI green on main (NG-074)
+**Rationale:** The exit gate. In practice CI goes green once phase 21 lands and `main` is pushed. Expect confirmation, not new work.
 
 ### Phase Ordering Rationale
 
-- **Rename-with-installers:** installer artifacts multiply display-form assertions; renaming after verification means re-verifying all of them (FEATURES dependency notes, Pitfall 13).
-- **Extensions-after-generator-hardening:** EXT-02 reuses the EXT-01 fragment chain — it needs the hardened emitter/verifier loop from 08, not a parallel greenfield pipeline.
-- **SQL-last-before-GUI:** the bridge join key (registry URI) and the authority table must exist before any chrome reads them, or GUI-02 bakes in the split-brain (Pitfall 9, ordering constraint 5).
-- **Drills ride inside phases:** installer phase runs the release build it needs; extensions phase runs per-fixture tier-3 over the new source kinds; SQL phase closes with the live rebase over its touchpoints. WINDOWS #13 (boundary hole) + #14 (BiDi double-window) ride alongside 08–09 — the boundary must be airtight before a persistence layer keys user data off chrome-adjacent identity.
-- **Decisions precede mechanisms:** update-scope (P1) and crash-scope (P7) rungs are questioning outputs; SQL invariants (P8/P9) are design inputs, not review findings.
+- OpenCode before the Theia move shrinks the re-pin set (7 extensions instead of 8; the ACP SDK leaves the lock) and the `build:extensions` chain that G-9 tests. It does not shrink the React surface; backend-opencode has no React code.
+- One upstream per phase, because each Gecko build costs 47-54 min and the user's rule is one fix at a time, confirmed.
+- GUI work goes after Theia 1.76, so Theia DOM selectors are re-verified once.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning (`/gsd-plan-phase --research-phase <N>`):
-- **Phase 10 (SQL tabs) — HIGH.** Storage-API choice (which Gecko storage interface hosts tab rows), Places API evolution at the pinned ESR, and Theia-side observation plumbing are version-sensitive and unverified in this tree. Also re-confirm sessionstore load order, Places WAL behavior, and updater/maintenance-service defines against the **pinned ESR tag**, not upstream main.
-- **Phase 08 (installers) — MEDIUM.** NSIS/DMG mechanics are documented, but per-OS signing/notarization requirements and the maintenance-service cert story need confirmation against pinned ESR source.
-- **Phase 09 (extensions + crash) — MEDIUM.** Open VSX resolution semantics and Firefox-side add-on signing enforcement for the pinned versions need phase-level confirmation; TEL-04's rung needs scoping (questioning decision), not research.
+Need `/gsd-plan-phase --research-phase`: **19** (runtime behaviour at 1.76 / React 19 is unverified: telemetry schema winner, `view:` factory ids, `pagehide` persistence, dependent-window theme) and **22** (W1 needs a shared frontend group-membership reader; W4 touches the chrome-side writer `closeGroupRows`).
+Standard patterns, skip research: **17**, **18**, **20**, **21**, **23**, **24**, **25**. Their surfaces are already mapped to file:line.
 
-Phases with standard patterns (skip research-phase):
-- **Carry-over drills (release build, Theia re-pin, WINDOWS #13/#14 fixes)** — known work with known shapes; risk is scheduling, not discovery.
+## Disagreements Between the Research Files
+
+| Topic | Positions | Recommendation |
+|---|---|---|
+| Firefox tag `_BUILD1` vs `_RELEASE` | STACK and PROJECT.md: `FIREFOX_153_5_0esr_BUILD1`. The tree convention and `fetch-upstream.sh` use `_RELEASE`. PITFALLS: either works today | Both resolve to `223014c6b9` today, but 153.4 shows they can differ (RELEASE = BUILD3). Pin `_BUILD1` as PROJECT.md states, record the SHA, and correct the comment that says the two tags always share a commit. |
+| Phase 19 commit split | ARCHITECTURE: 2 commits (Node 24; then Theia + React). PITFALLS: 3 commits (Node; React 19 at 1.74.1; Theia 1.76). Theia 1.74.1 accepts React `^18.3.1 \|\| ^19` | 3 commits. The extra install is cheap, and it separates React 19 runtime failures from 1.76 API failures. |
+| Phase 19 transitive changes | STACK covers the getting-started and telemetry collisions. ARCHITECTURE's build order omits them | Put them in phase 19 scope explicitly. |
+| Phase 18 builds | STACK runbook: one `./mach build`. PITFALLS: dev **and** release builds | Budget two builds; otherwise the release-variant rows fail at the end of the phase. |
+| Panorama spec and worklist | ARCHITECTURE: one phase. FEATURES: the spec first, the worklist as separate items | Two phases (21, 22), per "GUI one step at a time" and because the commit gate turns green at 21. |
+| Sketch 005 placement | ARCHITECTURE: its own phase 23 before UAT. FEATURES: a decision only | Fold it into phase 23 with the 14.x leftovers. It has no build and still lands before UAT. |
+| W6 search scope | Handoff: v1.4. PROJECT.md:271 and 15-UI-SPEC: v1.5+ or "only if cheap" | Defer, unless Chris confirms the handoff. |
+| `generate-check` failing locally | Handoff: fails (inkscape). FEATURES and PITFALLS: passes in the host shell and `.#theia` | Close it as not reproducible, with the passing runs recorded. Reopen only with a failing log. |
+| G-23 reading | 14-UI-SPEC:360 "cut at the cap before commit" (current code satisfies it). Gap text: refuse at the input | Chris picks. The stricter reading costs a `validateInput` per input. |
+
+## Decisions Needed From Chris
+
+1. **NG-051 ledger amend.** Drop or supersede it ("adapter removed, v1.4") and re-lock without `verify-ng-051-backend-off.mjs`. Must be approved before the phase 17 commit; the ledger hook prevents the agent from recording it.
+2. **NG-082 ledger amend.** Retarget it from 1.75.0 to 1.76.0 (plus React 19 and Node 24) and move it out of 999.2.
+3. **Keep or remove the 12 `@theia/ai-*` packages.** Keeping them preserves Theia's chat and the D-22 rebind 1, tab-uris and `view:ai-configuration` surfaces. Removing them drops the getting-started transitive and 12 pins. Recommendation: keep for v1.4 and decide before phase 19.
+4. **Telemetry preference collision.** Keep the PowerBrowser `telemetry.telemetryLevel` schema and accept the duplicate warning, or consume Theia's. Recommendation: decide at the phase 19 live check, based on which schema wins and what the Settings text says.
+5. **G-32 side panel slide.** (a) Author a slide of 200 ms or less with a reduced-motion fallback, or (b) amend 14-UI-SPEC to "instant".
+6. **G-23 name cap reading.** Refuse at the input, or ratify the "cut at the cap" text.
+7. **Sketch 005 (VS Code layout).** Adopt it into a named later milestone, or reject it. The verdict is needed before UAT.
+8. **Panorama decision 1: the Ungrouped tray.** Every tab in a group, or tabs may be unassigned. The shipped code already uses loose cards on the canvas instead of the 144px tray, so the answer also settles W2's landing rule and whether W11's last-group rule is required.
+9. **Panorama decision 2: strip filter scope.** Filter in Browsing only, or in every mode (Coding's dock bar also holds editors and terminals).
+10. **W6 scope.** v1.4 (handoff) or v1.5+ (PROJECT.md:271).
+11. **New ledger rows.** Schema v3/v4 rows and the widened NG-084 text both need approval through `ledger-amend.py`.
+12. **Optional hook change.** Stop running the `--quick` check on session `resume`, so resumes fit inside the VSCode 60 s spawn limit.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Versions verified against npm registry, Mozilla source docs, and release feeds this session; integration points read from the live tree. `node:sqlite`-vs-`better-sqlite3` conflict resolved above with a revisit trigger. Collector-operability MEDIUM — needs the TEL-04 live drill. |
-| Features | MEDIUM-HIGH | Canonical upstream docs read verbatim (installer, DMG, crash protocol, `theiaPlugins`, places, sessionstore, policies) + local tree reads; effort estimates and DS_Store-maintenance burden are judgment. |
-| Architecture | HIGH (as-is) / MEDIUM (to-be) | Every as-is claim derived from first-party tree reads at pinned paths; to-be layout is design inference against those constraints, not executed work. |
-| Pitfalls | HIGH (tree-derived) / MEDIUM (web, cross-checked) | Pinned-ESR confirmation outstanding for updater flags, sessionstore load order, Places WAL, and extension-signing enforcement — each flagged to its phase. |
+| Stack | HIGH (versions), MEDIUM (runtime) | Registry, tarballs, Mozilla remote and locked nixpkgs were queried directly. No sidecar has run at 1.76, and no Gecko build has run at 153.5. |
+| Features | HIGH | Every current state was re-read or re-run on `e9e29c1`. G-32, G-23, sketch 005 and W6 depend on Chris. |
+| Architecture | HIGH | The removal surface was confirmed by `git grep` and reads, including negatives. The 1.76 API facts come from published tarballs. |
+| Pitfalls | HIGH | Tag and blob SHAs, hook mechanics and gate derivations were re-verified. The runtime items are inferred. |
 
-**Overall confidence:** HIGH for direction and phase structure; MEDIUM for per-OS installer mechanics and crash-collector operability until real hosts and a live collector drill exist.
+**Overall confidence:** HIGH for planning. MEDIUM for how much work phase 19's live check will uncover.
 
 ### Gaps to Address
 
-- **No packaging host exists yet.** Every per-OS installer claim is unverified until Phase 08 names hosts and runs the matrix — handle by making the matrix the phase exit gate, never a follow-up.
-- **Pinned-ESR drift.** Updater flags, maintenance-service issuer defines, sessionstore load order, Places WAL behavior verified against upstream main/recent sources — Phase 08/10 must re-confirm against the actual pinned tag.
-- **Firefox-side extension signing enforcement** for the pinned ESR is unresolved — Phase 09 confirms before schema freezes.
-- **Tab-store storage API unchosen** (which Gecko interface hosts tab rows) — Phase 10's HIGH-priority research question, deliberately not pre-decided here.
-- **TEL-04 rung and update story are scoping decisions**, not researchable facts — questioning picks the rung; the decision gates its phase.
+- No live sidecar at 1.76 / React 19 / Node 24: first-boot tabs, telemetry schema, `view:` factory ids, `pagehide` persistence, dependent-window theme, React render-error capture. Close these in phase 19.
+- No Gecko build at `223014c6b9`. The `drivelist` compile under Node 24 headers is unverified (use `--nodedir`).
+- About 25 `view-factory-table.ts` rows have not been checked against 1.76. Planting a fault proves the drift check fires; a stronger fix is to derive the ids from `node_modules`.
+- The cause of the original local `generate-check` failure is unknown (likely host inkscape or the sandbox; LOW confidence).
+- The `rebase-upstream.yml` workflow has never run and has no Nix. Decide in phase 18: wrap it in Nix, or record it as unexercised.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-
-- Local tree reads: `scripts/generate.mjs`, `scripts/verify-{installer-schema,extension-pins,theia-endpoints,registry-shape}.mjs`, `scripts/verify-platform.sh`, `powerbrowser/shell/PowerBrowserAPI.sys.mjs`, `powerbrowser/INTERNAL-APIS.md`, `powerbrowser/endpoint-allowlist.json`, `powerbrowser/distribution/policies.json`, `theia/extensions/tab-uris`, `theia/extensions/telemetry`, `configuration.toml` — via STACK.md / ARCHITECTURE.md
-- npm registry metadata: `better-sqlite3` 13.0.3, `@sentry/node` 10.73.0, `smol-toml` 1.8.0, `sharp` 0.35.4; Node.js docs (`node:sqlite` Stability 1.2 RC) — via STACK.md
-- Firefox Source Docs: MSIX packaging, Windows installer kinds, macOS DMG + `UpdatingMacIcons`, Places architecture, sessionstore, crash reporter; `toolkit/modules/Sqlite.sys.mjs` header; ESR 153.0/153.2 release notes; Theia v1.74.1 releases; Firefox enterprise `ExtensionSettings`/`policies.json` docs — via STACK.md / FEATURES.md
-- Socorro README (declines external users) + `mini-breakpad-server` archived status; getsentry/self-hosted 26.8.0 — via STACK.md
-- Firefox installer/DMB/crash/`theiaPlugins`/places/sessionstore/policy sources read verbatim (full URL list in FEATURES.md Source Confidence + Sources)
+- npm registry and `npm pack` tarballs of `@theia/{core,cli,ai-ide,ai-core,ai-chat-ui,monaco,telemetry,getting-started,plugin-ext}@1.76.0`; Theia `v1.76.0` tag (CHANGELOG 1.75/1.76, root `package.json`, `package-lock.json`)
+- `git ls-remote` and the GitHub API on `mozilla-firefox/firefox` (153 tags, blob SHAs of the patched files at 153.1 and 153.5); product-details `firefox_versions.json`
+- Locked nixpkgs `ffb3c9b7` via `nix eval --inputs-from .`
+- Tree reads and runs on `e9e29c1`: `verify-platform.sh --quick` (114/4), the gui08 scripts, `generate.mjs --check`, `ledger-report.py`, `gh run list/view` for verify.yml and rebase-upstream.yml, native-module load test under Node 24
 
 ### Secondary (MEDIUM confidence)
-
-- MDN-archive update-server doc, `update-programs.configure`, maintenance-service Bugs 1205843/1079858; SQLite-forum WAL corruption report + Bugs 627936/1090961/1359887/2040253; sessionstore Bugs 1906808/1983990; Theia PRs #8864/#12410/#13825/#16774; Mozilla distribution-policy/trademark text — all cross-checked across official docs + Bugzilla + source (PITFALLS.md)
-- libicns 0.8.1 (Linux icns smoke-check fallback only); self-hosted Sentry operability — MEDIUM, flagged to live drills
-
-### Tertiary (LOW confidence)
-
-- Firefox-side add-on signing enforcement for the pinned ESR (version-dependent, needs Phase 09 confirmation); per-OS signing/Gatekeeper host specifics before packaging hosts exist — both recorded as phase research items, not assumed.
+- 2026-10-15 trial report (session a38939de) and its verifier; not re-run
+- `.planning/HANDOFF-plan-reorg.md`; PROJECT.md (2026-10-16) supersedes it on DSH and AI-01..05
+- Project memory: chrome JS startup cache, live GUI debug loop, concurrent sessions, one fix at a time
 
 ---
-
-*Research completed: 2026-09-04*
+*Research completed: 2026-10-16*
 *Ready for roadmap: yes*

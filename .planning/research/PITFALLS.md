@@ -1,504 +1,467 @@
-# Pitfalls Research: v1.1 Hardening and SQL Tabs
+# Pitfalls Research
 
-**Domain:** Adding installer builds, extension/crash pipelines, and SQL tab stores to a Firefox-ESR patch-stack fork + Theia sidecar (Power Browser, post-v1.0)
-**Researched:** 2026-09-04
-**Confidence:** HIGH for tree-derived claims (verified against `/home/chris/coding/Power-Browser` live tree and `upstream/` Gecko source); MEDIUM for web findings cross-checked across official docs + Bugzilla + source (seam-classified `websearch --verified` = MEDIUM); LOW where single-sourced (marked inline).
-**Replaces:** the v1 research file (debranding/rename pitfalls). Standing v1 invariants that remain in force are carried forward in §Standing Invariants rather than re-argued.
+**Domain:** v1.4 Platform Updates and GUI Close-out: OpenCode removal, Firefox 153.1 → 153.5.0esr, Theia 1.74.1 → 1.76.0 with React 19 and Node 24, non-GUI gaps, GUI leftovers, live UAT, CI green
+**Researched:** 2026-10-16
+**Confidence:** HIGH for tree facts, tag and blob facts, and the hook/gate mechanics (each re-read or re-run in this session). MEDIUM for runtime behaviour at Theia 1.76 / React 19, because no sidecar has been started at 1.76 and no Gecko build exists at 153.5.
 
-> **Framing.** v1's dangerous failure mode was *"the build succeeds and is silently wrong."* v1.1's is one level up: **"it installs, launches, and demos fine — and is wrong on the second machine, the second downstream, or the second month."** Every pitfall below is something that passes a developer's single-host smoke test and fails in distribution, at update time, at rebase time, or at restore-after-crash time. The verification half of each pitfall is therefore biased toward *second-machine, second-profile, and second-month* checks.
+Phase names below follow the build order in `.planning/research/ARCHITECTURE.md` ("Build Order for v1.4"): **17** OpenCode removal, **18** Firefox 153.5, **19** Node 24 then Theia 1.76 + React 19, **20** non-GUI gaps, **21** Panorama spec + `gui08` checks, **22** Phase 14 / 14.1.1 leftovers, **23** sketch 005 decision, **24** live UAT, **25** CI green. If the roadmap renumbers, map by name.
+
+Evidence labels: **[verified]** re-checked in this session; **[tree]** read from a tracked file; **[inferred]** reasoned from tree facts, not run.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: The updater ships with no update story — and phones Mozilla or dies silently
+### Pitfall 1: The ESR tag you pin is not the commit the trial tested, and tags can move
 
 **What goes wrong:**
-A fork that builds installers but never decides its update story gets the worst of all worlds. Three sub-failures, all observed in the wild for Firefox derivatives:
-
-- **Update URL still points at Mozilla.** The build pulls `app.update.url` / AUS endpoints configured for official Firefox. At best updates fail signature checks; at worst a "successful" update path pulls Mozilla-signed bits over the fork's branding, or the fork's users never get security updates at all. Mozilla's own update-server setup doc shows the update URL is repointable per-install via `distribution/policies.json` (`AppUpdateURL`) — which means *someone must repoint it*, and that someone is this milestone.
-- **MAR signature verification assumed away.** MARs are signed by Mozilla; a fork cannot produce Mozilla-signed MARs. Building MAR-capable updates requires either `--disable-verify-mar` in mozconfig (`--enable-unverified-updates`, plus `DISABLE_UPDATER_AUTHENTICODE_CHECK` uncommented in `toolkit/components/maintenanceservice/moz.build` and `toolkit/mozapps/update/tests/moz.build`) or a fork-owned MAR signing certificate compiled into the updater. Neither happens by default. An updater built with default verification and fed fork MARs fails every update with signature errors.
-- **The Windows maintenance service cert pin goes stale.** The service verifies `updater.exe`'s signature against an issuer stored in the registry, rewritten on every update by `helper.exe`'s `PostUpdate` NSIS macro from strings compiled into the binary (`defines.nsi`). Change signing certificates without updating those defines and background updates break permanently after the first hop (Bug 1205843 / Bug 1079858 — Mozilla itself nearly broke all background updates on a cert rotation).
+The 2026-10-15 trial reported "all 4 patches applied cleanly, `mach configure` passed" for 153.5. STACK.md records that the trial resolved `FIREFOX_153_5_0esr_RELEASE` to `f617beaded` (a later esr153 commit, version 153.6.0esr, 183 commits ahead), not to `223014c6b9`. Today both `FIREFOX_153_5_0esr_BUILD1` and `_RELEASE` resolve to `223014c6b9299ac9b035b4c50ea481e5c6de282c` [verified, `git ls-remote`]. The previous point release shows the tags do not always agree: `FIREFOX_153_4_0esr_BUILD1` = `f92008fc60`, while `_RELEASE` = `_BUILD3` = `508788b6f8` [verified]. A pin by tag name alone therefore admits two failure modes: (a) treating trial evidence as evidence for the pinned commit, and (b) a fresh CI clone getting a different commit from the local `upstream/` if a tag is re-pointed later.
 
 **Why it happens:**
-`./mach package` produces an installer that *installs*. Nothing in the packaging path forces the packager to answer "who signs updates, where are they hosted, who verifies them." The update subsystem is a second product hiding inside the installer, and PKG-01 scoped as "build the installer" never looks at it.
+`scripts/fetch-upstream.sh:276-299` compares HEAD to the tag *inside the local clone*. A local `upstream/` cloned before a tag move keeps the old commit and still passes. CI's `verify.yml` clones fresh, so it gets the new target. The comment at `fetch-upstream.sh:276-282` also states that RELEASE and BUILD1 share a commit, which is false for 153.4.
 
 **How to avoid:**
-Make the update story an explicit, recorded decision in the installer phase — one of exactly three, no fourth option by omission:
 
-1. **Fork-hosted updates**: own MAR signing key, own AUS-compatible update XML endpoint, `AppUpdateURL` policy pointing at it, verification left on. (Most work; only honest "Firefox-style updater" option.)
-2. **No in-place updates**: updater/maintenance-service disabled at build time; updates = download the new installer. (Legitimate; must then *remove* the update UI promises, not just break the mechanism.)
-3. **OS-package updates**: installer registers with the system package manager; Gecko updater off.
-
-Whichever is chosen: assert in verification that no Mozilla update host remains in the packaged artifact's effective configuration, and run one real update hop (install N, update to N+1) on each OS before calling PKG-01 done.
+- Before the pin edit, run `git ls-remote --tags https://github.com/mozilla-firefox/firefox.git 'refs/tags/FIREFOX_153_5_0esr_*'`. Confirm BUILD1 and RELEASE are the same SHA, and record that SHA in the `docs/BUILD.md` rebase record next to the tag.
+- STACK.md recommends `_BUILD1`. The existing convention is `_RELEASE`. Either is the same commit today. Pick one, record the SHA, and do not cite the 10-15 trial as evidence for that commit. Re-run the replay and configure on `223014c6b9`.
+- Fix the comment at `fetch-upstream.sh:276-282` (the handoff already lists this). Keep the hash comparison, which is correct.
 
 **Warning signs:**
-- A PKG-01 plan that never mentions MAR, AUS, `AppUpdateURL`, or the maintenance service.
-- `distribution/policies.json` untouched by the generator while everything else is generated.
-- "We'll figure out updates after we can install" said out loud.
+`git -C upstream rev-parse HEAD` differs from the SHA in the rebase record. `upstream/browser/config/version_display.txt` reads anything other than `153.5.0esr`. CI and local disagree on an upstream-reading row (`about-dialog-suppression`, `shell-gbrowser-standin`, `installer-schema`).
 
-**Phase to address:** Installer phase (PKG-01), as a *decision first, mechanism second*. The decision gates the phase; the mechanism is sized by the decision.
+**Phase to address:** 18
 
 ---
 
-### Pitfall 2: Profile / remoting collision — tested alone, broken alongside Firefox
+### Pitfall 2: "Full verify-platform green" after the ESR bump needs more than one build, and one row stays green on stale evidence
 
 **What goes wrong:**
-`MOZ_APP_BASENAME` controls the profile directory; `MOZ_APP_REMOTINGNAME` controls single-instance routing. Get either wrong and:
+After the rebase, `upstream/` says 153.5 but three objdirs on disk are 153.1 [verified]: `objdir/` (BuildID 20260928142802), `objdir-release/` (BuildID 20260904213953, built in 08-05, mach wall 54:40), and `objdir-nplus1/`. Rows that derive the version from the tree go red correctly:
 
-- Power Browser shares a profile directory with stock Firefox (or with Sourcerer, or with another downstream). Two different products write to one `places.sqlite`, one `sessionstore`, one extension registry — slow corruption, mystery settings migration, "my bookmarks doubled."
-- The single-instance handler routes to the wrong product: launching Power Browser focuses Firefox, or vice versa. The `a-powerbrowser` category-entry sort-key mechanism (v1 Pitfall 2) only works if the remoting identity is actually distinct.
-- The NAME-01 rename slice turns this from latent to active: display-name changes are safe, but if anyone "tidies" `basename`/`binary_name`/`remoting name` during the rename, **every existing user suffers a profile-migration event** — a silent fresh profile that looks exactly like data loss (v1 Pitfall 22, now with real users).
+- `verify-branding-identity-release` derives the expected `--version` from `upstream/browser/config/version_display.txt` (`scripts/verify-branding-identity.mjs:75-78, :267, :545-547`), so it fails against the 153.1 release objdir.
+- `installer-build-proof` reads `upstream/config/milestone.txt` (`scripts/verify-installer-build-proof.mjs:229`) against `objdir/`.
+- `smoke-firefox` carries a hard-coded `153.1.0esr` (`scripts/smoke-firefox.sh:41-42`, found by STACK.md). This is a hand-kept expectation and breaks verification rule 2.
+
+One row stays green when it should not: `mar-update-hop` (`verify-platform.sh` full set) re-verifies stored evidence under `.mozbuild/mar-hop/` (`hop.json`, `nplus1.mar`, logs). It does not tie that evidence to the current tag. A full green run after the bump would therefore certify a 153.1 → 153.1.x hop as if it were current.
 
 **Why it happens:**
-Every installer test happens on a clean VM or a dev machine's throwaway profile. Nobody installs the fork *next to Firefox* and *next to the previous fork build* and launches them interleaved — which is the only test that exercises this. And the fields look cosmetic, so the rename slice touches them.
+"Full build" is read as one `./mach build`. The registry's full set reads the dev objdir, the release objdir, and stored MAR evidence. These are three different artefacts with three different ages.
 
 **How to avoid:**
-- NAME-01 changes **display strings only**. `basename`, `binary_name`, and remoting name are frozen for the milestone; the generator asserts they equal their v1 values (or, if the milestone deliberately changes them, a migration path ships in the same phase).
-- Verification installs Power Browser alongside stock Firefox (or alongside the pre-rename build), launches both interleaved, and asserts: distinct profile directories, `WM_CLASS`/remoting separation, launch-twice-get-one-window *per product*.
-- Document the old→new profile path mapping in `docs/BUILD.md` / `REBRANDING.md` the moment any identity field changes, with a copy command.
+
+- Budget two tier-3 builds for phase 18: dev (about 47-54 min) and release (about 55 min). `objdir-nplus1` and the MAR hop belong to release work (backlog 999.2). Record `mar-update-hop` as "evidence predates 153.5" in the phase verification. Do not report it as a 153.5 proof.
+- Change `smoke-firefox.sh:41-42` to derive the version from `version_display.txt`, the same way `verify-branding-identity.mjs` does, in the same commit as the pin move.
+- Run `scripts/verify-platform.sh` (full), not `--gate`. WINDOWS #10 is fixed, so the release-variant exclusions no longer apply.
 
 **Warning signs:**
-- A rename plan whose diff touches `[identity]` in `configuration.toml`.
-- Installer verification that never mentions a second browser on the same machine.
-- `MOZ_APP_REMOTINGNAME` left to its channel-derived default (release channel derives from `MOZ_APP_NAME`; any other channel appends `-<channel>` — v1 Pitfall 12, now biting real installs).
+A full run where `verify-branding-identity-release` passes while `objdir-release/dist/bin/application.ini` still reads `Version=153.1.0`. A phase summary that says "full verify green" with only one build in its log.
 
-**Phase to address:** Installer phase (PKG-01 + NAME-01 slice). The alongside-Firefox test is a phase exit criterion.
+**Phase to address:** 18
 
 ---
 
-### Pitfall 3: "Installer builds" declared done from a Linux build log
+### Pitfall 3: "Refreshing" the patch stack by hand for the new tag
 
 **What goes wrong:**
-PKG-01's acceptance is *verified on real packaging hosts* — and v1 explicitly scoped that as schema-only. The failure modes that only exist on the real host:
-
-- **Windows:** unsigned binaries → SmartScreen warnings and enterprise blocks; the maintenance service refuses to install without a trusted signature; NSIS `branding.nsi` defines (`BrandFullName`, `BrandFullNameInternal`, `Channel`) compile into registry keys, Add/Remove-Programs entries, and install paths — a wrong define is a wrong uninstall that orphans registry keys. Bare `$VAR` in NSIS defines (WR-04) expands to empty at compile time and produces paths that install "successfully" into nonsense locations.
-- **macOS:** unsigned/notarized DMG → Gatekeeper blocks; `icns`/`Assets.car` handling; the `identifier` used for `--enable-mac-elevated-updates-with-generic-certs` vs production signing anchors.
-- **Cross-build trap:** building the Windows/macOS installer from the Linux host with platform-specific Theia plugins bundled (see Pitfall 6) — the installer assembles fine and ships the wrong-architecture native plugin.
+The 4 patches touch 5 files: `browser/moz.build`, `browser/moz.configure`, `browser/installer/windows/nsis/{defines.nsi.in,installer.nsi}` and `toolkit/mozapps/update/updater/moz.build`. All 5 have the same blob SHA at 153.1 (`468445e58d`) and 153.5 (`223014c6b9`). For example, `browser/moz.build` is `5a03cfc6d3` in both, which is the `index 5a03cfc6d3..` line of `patches/020-powerbrowser-shell.patch` [verified, GitHub contents API]. The patches therefore need **no change**. The trap is "tidying" them for 153.5 by editing hunk headers, the `index` lines, or comment text inside a hunk. Per CLAUDE.md, a hand-edited hunk whose blob hashes no longer match turns `git apply --3way` into a silent no-op (`scripts/apply-patches.sh:6-10`).
 
 **Why it happens:**
-`mach package` succeeding is such a satisfying green that it gets mistaken for the whole job. The remaining half (install → launch → uninstall → no residue) needs a Windows machine and a Mac, which are never in the room.
+A version bump invites cosmetic edits. Patch files look like text, and nothing in the commit gate re-applies them. `apply-patches-self-test` and `about-dialog-suppression` are full-set rows, re-tiered out of `--quick` because they need `upstream/` (`verify-platform.sh:4636-4660`).
 
 **How to avoid:**
-Define PKG-01 done per-OS as: installs on a clean host, launches, uninstalls, leaves no registry keys / `~/Library` residue / `.desktop` residue, and the installed binary reports the right `--version` two-token string. Signing is a decision with the same three-option shape as Pitfall 1 (own cert + timestamping; unsigned with documented SmartScreen/Gatekeeper friction; OS-store distribution) — recorded, not drifted into. WR-04 (reject bare `$VAR`) and WR-07 (fixture `root` through the installer verifier) land as pre-fix *before* the first real-host build, not after it embarrasses someone.
+
+- Replay with `scripts/rebase-upstream.sh --tag <tag>` exactly as-is. It composes `fetch-upstream.sh`, `apply-patches.sh` (D-75 non-vacuity assertion), `check-patch-surface.sh`, and the residual-brand scan with `--extra-root upstream`.
+- If any patch ever needs a change, edit the patched tree under `upstream/` and regenerate the patch from it. Never edit a `.patch` file in an editor. `docs/BUILD.md` has no regeneration command today, only CLAUDE.md's rule. Add one to the rebase section if a regeneration ever happens.
+- Run `bash scripts/apply-patches.sh --self-test` and `--only about-dialog-suppression` after the replay.
+- `deferred-items.md` (phase 01, row 11 a-ii) says "re-derive the self-test fixture at the first ESR bump". This is that bump. `browser/base/content/aboutDialog.xhtml` is unchanged (`3ffd464b96` at both tags) [verified], so the authored fixture is still accurate. Record that check as done rather than leaving the item open.
 
 **Warning signs:**
-- A PKG-01 plan with no named human and no named host per OS.
-- `docs/BUILD.md` procedure written from a Linux shell transcript.
-- Signing mentioned as "follow-up."
+`git diff patches/` is non-empty in the ESR commit. The classifier in `fetch-upstream.sh` reports "pristine" after `apply-patches.sh` ran. `git -C upstream diff --stat` lists a path the patches do not name.
 
-**Phase to address:** Installer phase (PKG-01). The per-OS install/uninstall matrix *is* the phase's exit gate.
+**Phase to address:** 18
 
 ---
 
-### Pitfall 4: Installer strings live outside the generator
+### Pitfall 4: React 18 left in place builds green, and nothing gates a duplicate React
 
 **What goes wrong:**
-`branding.nsi` defines, `setup.ini` overrides, `.desktop` files, macOS plist strings, and the endpoint-allowlist-adjacent update URLs get hand-edited "just for the installer phase" and never folded into `tools/generate.mjs` emitters. From that moment there are two sources of truth for product identity, and the single-file-rebrand contract — the project's core value — is broken for exactly the artifacts users see first (Add/Remove Programs, the dock, the installer banner). The NAME-01 rename then has to be applied in two systems, and the second one gets missed.
+`@theia/core@1.76.0` declares `react`, `react-dom`, `@types/react` and `@types/react-dom` as `^19.0.0` **peer** dependencies [verified, `npm view`]. Yarn classic only warns on an unmet peer. With `theia/applications/browser/package.json:95-96` left at `react`/`react-dom` `18.3.1` and `theia/package.json` devDependencies left at `@types/react 18.3.31` / `@types/react-dom 18.3.7`, `yarn install` and `yarn build` both succeed. Theia's 1.76 code then runs on React 18 at runtime. Its lib is compiled with the automatic JSX runtime through `@theia/core/shared/react/jsx-runtime` (CHANGELOG 1.75.0, #17932). The failure shows up in widgets, not in the build. A second failure mode is the 18 types at the root combined with a nested 19 copy: TypeScript then sees two `@types/react`, or the typecheck passes against 18 types while 19 runs.
 
 **Why it happens:**
-Installer inputs feel like packaging trivia beneath the generator's dignity. They are not: `BrandFullName` in Add/Remove Programs *is* the product name to most users.
+The Theia re-pin runbook (`docs/BUILD.md:211-253`) moves only `@theia/*` pins. `verify-upstream-pins.mjs` steps 6-7 check only `@theia/*` entries and stanzas. No row asserts how many copies of `react`, `react-dom`, `@types/react` or `inversify` are installed. Today there is exactly one copy of each (react 18.3.1, inversify 6.2.2) [verified]. That is luck, not a gate.
 
 **How to avoid:**
-Every installer-consumed string is emitted from `configuration.toml` by a named emitter (extend the `desktop.mjs` pattern to `nsis.mjs` / `dmg.mjs`), covered by `generate --check` byte-identity, and the residual-brand scan covers the installer inputs with the same rigor as source. WR-04's bare-`$VAR` rejection is a generator-time assertion, not a review guideline.
+
+- Move all four React packages in the same commit as the Theia pins, to the set STACK.md names (react/react-dom 19.2.8, @types/react 19.2.18, @types/react-dom 19.2.7: what Theia v1.76.0's own lockfile resolves).
+- Add a `resolutions` entry for each of the four, so a transitive range cannot introduce a second copy.
+- Add one `--quick` row, derived not hand-kept: walk `theia/node_modules` for every `react`, `react-dom`, `@types/react`, `@types/react-dom` and `inversify` `package.json`, then require exactly one copy each, with the React version matching `@theia/core`'s peer range. Give it a `--self-test` that plants a nested second copy. Append the row to `verify-platform.sh`; do not create a sibling driver.
+- Extensions already import only `@theia/core/shared/react` and `@theia/core/shared/inversify` (all 4 React files and every DI import) [verified]. Keep it that way. A bare `from 'react'` in an extension resolves past core and can create a second instance.
 
 **Warning signs:**
-- A `branding.nsi` / `setup.ini` / plist checked in with literal product strings.
-- "We'll generate these later" in an installer plan.
-- The rename slice's file list doesn't include installer inputs.
+`yarn install` prints `has unmet peer dependency "react@^19.0.0"` or `incorrect peer dependency`. The browser console shows "Invalid hook call" or "A React Element from an older version of React was rendered". A widget renders an empty node while every gate is green.
 
-**Phase to address:** Installer phase, first task (emitters before first real-host build).
+**Phase to address:** 19 (step b, the Theia + React commit)
 
 ---
 
-### Pitfall 5: Extension pins float — `@latest` today, someone else's code tomorrow
+### Pitfall 5: Changing Node, React and Theia in one step makes every failure ambiguous
 
 **What goes wrong:**
-`[extensions]` entries resolved at build time against live registries without exact pins produce installers that differ day to day with zero tree changes. Concretely:
-
-- **Open VSX has no lockfile.** Theia's own `theia-plugins.lock` proposal (integrity-pinned `publisher/ext@version` → resolved URL + sha512) was discussed and **closed unimplemented** (PR #8864) — upstream decided complex download verification belongs in adopter-side scripts. `yarn download:plugins` resolves `latest` fresh each run. There is no upstream mechanism to inherit; the platform must build its own.
-- **Registries move under you.** Open VSX namespace-ownership changes broke Theia's own `vscode`-namespace publishing; Theia master switched built-in extensions to a self-packaged tarball (PR #16774). A `[extensions]` entry pointing at a namespace whose ownership changes, or a version yanked upstream, breaks the build — or worse, resolves to attacker-controlled content under a familiar name.
-- **npm/local-path kinds (EXT-02) widen the hole.** `file:` dependencies carry no integrity hash; a local path that exists on the packager's machine and not in CI (or in the downstream's checkout) fails builds non-locally. npm semver ranges re-resolve transitives on every fresh install unless a committed lockfile pins them.
+The trial moved Theia and React together and never started the sidecar. If Node 24, React 19 and Theia 1.76 land as one change, a blank widget, a native-module load error or a DI resolution failure cannot be attributed to any one of them.
 
 **Why it happens:**
-During development, `@latest` and unpinned paths are convenient and always green *today*. The failure arrives months later as an unreproducible build or a supply-chain incident, far from the commit that allowed it.
+The three changes look coupled. They are coupled only one way. `@theia/core@1.74.1` peers accept `react ^18.3.1 || ^19.0.0` [verified], so React 19 can be proven at 1.74.1. Theia ≥ 1.75 requires React 19. The published 1.76 packages declare no `engines`, so Node 24 is a choice (it supersedes D-16), not a requirement of the package metadata.
 
 **How to avoid:**
-- Every `[extensions]` entry carries **id + source + exact version pin + integrity hash**, enforced by schema validation (fail-loud on pin miss — PROJECT.md already says "pinned and fail-loud"; this is the mechanism). The generator resolves pins to a committed lock artifact (adopter-side equivalent of the rejected `theia-plugins.lock`) *before* invoking `download:plugins`, and CI verifies the downloaded bytes against it.
-- `VSX_REGISTRY_URL` is set explicitly in the start/build path (v1 02-LEARNINGS precedent), never defaulted — so a mirror/proxy cutover is a config change, not a code change.
-- npm kinds install via a committed lockfile (`--frozen-lockfile`); local-path kinds resolve against paths inside the repo or `PB_CONFIG_DIR` and fail with the expected path printed when absent.
+Use three commits, each followed by `--quick` and a live sidecar start:
+
+1. Node 24 at Theia 1.74.1 and React 18. Edit only `flake.nix:20`. Keep the `yarn.override` and rewrite the D-16 comment. Rebuild `drivelist`. Run `smoke-theia.sh`.
+2. React 19 at Theia 1.74.1. Pins and resolutions only.
+3. Theia 1.76.0. Pins and lockfile, delete D-22 rebind 2, set the `workbench.startupEditor` default.
+ARCHITECTURE.md proposes splitting 1 from 2+3. Splitting 2 from 3 costs one more install and isolates the React 19 runtime question from the 1.76 API question. This matches the "one fix at a time, confirmed" rule.
 
 **Warning signs:**
-- Any `latest` in `configuration.toml`, generated manifests, or docs.
-- A build that requires network access to succeed with no vendored/mirrored fallback documented.
-- `yarn install` (not frozen) or bare `download:plugins` in the build path.
+A plan task that edits `flake.nix`, `theia/package.json` resolutions and React pins in one commit. A verification line that says "builds" with no live start.
 
-**Phase to address:** Extensions phase (EXT-02). Pin schema + lock artifact land *with* the new source kinds, not after.
+**Phase to address:** 19
 
 ---
 
-### Pitfall 6: The bundled extensions target the wrong machine or no network
+### Pitfall 6: A green typecheck and build at 1.76 hide first-boot and runtime regressions
 
 **What goes wrong:**
-Two independent ways to ship an installer whose extensions don't run:
+Several 1.76 changes compile cleanly and change what the user sees:
 
-- **Wrong architecture.** Platform-specific VSIX (native binaries — the `rust-analyzer` precedent) must be fetched per target platform via the `${targetPlatform}` placeholder (Theia PR #12410 CLI-side, #13825 runtime-side). PKG-01 cross-builds Windows/macOS artifacts; a naive `download:plugins` on the Linux packaging host bundles Linux-native plugins into the Windows installer. It installs, the plugin crashes on activation, and nothing in the packaging log is red.
-- **Offline/air-gapped builds.** `download:plugins` hitting the live Open VSX registry at build time means release builds depend on a third-party service being up, fast, and serving identical bytes. A registry outage, a yanked version, or a slow mirror turns release day into debugging day.
+- **`@theia/getting-started` comes back.** `@theia/ai-ide@1.76.0` lists `@theia/getting-started: 1.76.0` as a dependency [verified], and that package declares `theiaExtensions` [verified]. Theia collects extensions transitively, so Theia's own Welcome page opens on start. That undoes D-24/D-33, recorded at `theia/extensions/branding/src/browser/powerbrowser-welcome-contribution.ts:28-33` and `powerbrowser-welcome-widget.tsx:11`. STACK.md has the fix: `workbench.startupEditor: "none"` as a default preference.
+- **Telemetry schema collision.** `@theia/plugin-ext` now pulls in `@theia/telemetry`, which also registers `telemetry.telemetryLevel` (STACK.md). The Settings text may become Theia's, not the PowerBrowser copy in `theia/extensions/telemetry/src/browser/telemetry-preferences.ts`.
+- **`view:` targets fail only when used.** `theia/extensions/tab-uris/src/browser/view-factory-table.ts` is a hand-kept table of Theia widget factory ids, each cited to a 1.74.1 source line. Its drift check in `tab-uri-registry.ts:59-72` runs lazily, on first use of the `index` getter. It reports by `console.error`, not at startup. A renamed id at 1.76 surfaces only when someone opens a `view:` URI. (The ai-configuration id is unchanged at 1.76 [verified], but about 25 rows were not checked.)
+- **Render errors no longer throw.** Under React 19, an uncaught render error goes to `window.reportError`, and the widget root goes blank. Telemetry capture listens on the window `error` event, so it should still see it (STACK.md). That is UNVERIFIED.
 
 **Why it happens:**
-The dev loop (`download:plugins` on the dev machine, for the dev machine, with good wifi) never exercises either axis. Both only exist in the release/packaging path that v1 never ran.
+The static gates compare strings in the tree. They cannot see DI wiring, transitive extension composition, or DOM geometry. That is the 2026-09-06 lesson in memory (`live-gui-debug-loop`): a phase verified 10/10 while the chrome bar rendered at 37% width. First-boot behaviour (`initializeLayout`, `startupEditor`) also runs only when no persisted layout exists. A live check on a reused `THEIA_CONFIG_DIR` (`~/.config/powerbrowser`) skips it entirely.
 
 **How to avoid:**
-- Per-target plugin resolution: the generator emits the plugin set per packaging target with `${targetPlatform}` expanded for *that target*, and verification asserts the bundled native binaries match the target arch (even a `file(1)`-level check beats nothing).
-- Vendored or mirrored extension artifacts for release builds: resolve-then-vendor during the extensions phase so the installer build consumes local bytes + integrity hashes, with the live registry as the refresh path, not the build path.
-- A plugin-activation smoke check per target (the extension host reports the plugin loaded), not just "file present in `plugins/`".
+
+- Run the live check twice: with a fresh empty `THEIA_CONFIG_DIR`, and with a carried-over 1.74 config dir (to check that layout, modes and named setups survive the `unload` → `pagehide` change).
+- On the fresh run, assert: one PowerBrowser welcome tab, no Theia Welcome, no AI Configuration tab, no AI-first perspective.
+- Open at least one `view:` URI and read the console for `[@powerbrowser/tab-uris] view-factory-table.ts names`. Then plant one bogus row in a scratch copy to prove the message fires (see Pitfall 8). Better: re-derive the table's ids from `theia/node_modules/@theia/*/lib` at check time instead of re-citing line numbers by hand.
+- Drive the sidecar standalone on `:4000` with `POWERBROWSER_TOKEN_DISABLE=1` and `gsd-browser` (memory `live-gui-debug-loop`). Measure rectangles; do not trust screenshots alone.
 
 **Warning signs:**
-- One plugin set for all installer targets.
-- No `${targetPlatform}` anywhere in the extension pipeline.
-- "File present" asserted where "plugin activated" was possible.
+Two welcome tabs on a fresh profile. A Help menu "Open Walkthrough" item. `Property with id 'telemetry.telemetryLevel' already exists` in the console. A `view:` link that opens nothing.
 
-**Phase to address:** Extensions phase (EXT-02), jointly with the installer phase's per-target matrix (Pitfall 3). The cross-target plugin check belongs in the installer exit gate.
+**Phase to address:** 19 (live sidecar check), re-checked in 24 (UAT)
 
 ---
 
-### Pitfall 7: TEL-04 scoped as "stand up Socorro" — plus PII you didn't plan to hold
+### Pitfall 7: OpenCode removal that is green in CI and red locally (or the reverse)
 
 **What goes wrong:**
-Two complementary disasters:
+ARCHITECTURE.md lists the four atomic removal sets. The local-versus-CI traps inside them:
 
-- **Scope blowup.** Socorro is a multi-service AWS pipeline (Antenna collector → S3 + SQS → processor → S3 + Elasticsearch → crash-stats webapp + BigQuery export), and its maintainers state explicitly they **do not support external users** ("Mozilla-specific product… consider mini-breakpad-server, sentry_breakpad, Backtrace, BugSplat"). Scoping TEL-04 as a Socorro deployment turns a milestone phase into a multi-month infrastructure project that still won't match upstream's operational maturity (throttling rules, signature generation, symbolication pipeline).
-- **PII liability by accident.** Crash reports contain URLs, user email addresses, user comments, register contents, and heap excerpts — Mozilla gates all of it behind protected-data access groups, with only a scrubbed subset public. The moment Power Browser's crash endpoint receives a real minidump, the project holds PII with retention, access-control, and disclosure obligations. Pointing the Crash Reporter at a logging endpoint "temporarily" with no scrubbing/retention policy is how a sidecar becomes a liability.
-- **Volume.** Every crash in the wild reports in. Without collector-side throttling/sampling (Antenna's throttle rules exist precisely because Mozilla drowns otherwise), a crash loop in one bad build fills whatever disk the receiver has.
+- `git rm -r theia/extensions/backend-opencode` leaves the ignored `lib/` and `tsconfig.tsbuildinfo` on disk, plus the workspace symlink `theia/node_modules/@powerbrowser/backend-opencode -> ../../extensions/backend-opencode` [verified]. `theia-build-order` (`scripts/verify-theia-build-order.mjs:261-264`) compares the `build:extensions` chain with `readdirSync`. It goes red locally and stays green in CI's fresh clone.
+- A stale `generated/ai-backend.json` makes `generate-check` red on every checkout that ever generated it, including `~/gsd-workspaces/pba/Power-Browser`. The writer never removes extra files.
+- Removing a workspace member changes yarn's top-level patterns. Until `yarn install` runs, `yarn check --integrity` reports `Top level patterns don't match`: the symptom `deferred-items.md` (14.1.1) logged for weeks. If `yarn.lock` is not re-committed, CI's `--frozen-lockfile` install (`.github/workflows/verify.yml:83`) fails, because `@agentclientprotocol/sdk@1.4.0` leaves the lock.
+- `scripts/verify-backend-env-readers.mjs:96-105` holds a hand-kept `EXPECTED_ENV_TOUCHERS` entry for `opencode-bridge-env.ts`. It must be deleted in the same commit.
 
 **Why it happens:**
-TEL-04 is written as "crash-report pipeline beyond endpoint repointing," which reads like "build the server half." And crash reporting feels like telemetry's boring sibling — it isn't; telemetry crash *pings* are PII-free aggregates over Mozilla's telemetry infra, while Socorro-style *reports* are full minidumps with memory contents.
+CI always starts from a fresh clone (no ignored files, no `generated/`, no `.yarn-integrity`). Developer checkouts carry months of ignored state.
 
 **How to avoid:**
-Decide TEL-04's scope in questioning from an explicit ladder, and pick the lowest rung that answers the milestone's actual question:
-
-1. **Off + documented**: Crash Reporter disabled by policy, crash *pings* via the project's own telemetry endpoint if TEL-01..03 need volume data. Zero PII held.
-2. **Minimal receiver**: Breakpad-protocol-compatible POST endpoint (e.g. mini-breakpad-server class) that records product/version/signature-class + counts, discards or never stores minidumps, with retention stated in days. Throttle at the edge.
-3. **Full pipeline**: only with named ownership, symbol upload automation, access groups, and a retention/deletion policy written before the first report arrives.
-
-Whatever the rung: the crash-report URL and the update URL and the telemetry endpoint all flow from `[urls]`/`[telemetry]` through the generator into the allowlist (v1 ARCHITECTURE.md data-flow couplings), or `verify-endpoints.sh` fails the build the moment TEL-04 lands.
+`git rm -r`, then `rm -rf theia/extensions/backend-opencode`, then `yarn install --ignore-scripts` inside `nix develop .#theia` (not frozen; the lock moves on purpose), then `rm generated/ai-backend.json`, then `node scripts/generate.mjs --check` (expect 53 files). Commit `yarn.lock`. Re-run with `--frozen-lockfile` to prove CI's step passes. Do not run `yarn install` while another session serves a sidecar from `theia/**/lib` (14.1.1 deferred item 1).
 
 **Warning signs:**
-- A TEL-04 plan that starts with infrastructure and has no PII/retention section.
-- Minidumps stored "for now, we'll figure out access later."
-- No throttle/sampling design.
-- The crash endpoint live before the allowlist + policy entries exist.
+`theia-build-order` names `"backend-opencode"` as present but not in the chain. `generate-check` reports an extra file. `yarn check --integrity` fails with `Top level patterns don't match`.
 
-**Phase to address:** Extensions + crash phase (TEL-04). The scope decision is a questioning output; the PII/retention policy gates any receiver going live.
+**Phase to address:** 17
 
 ---
 
-### Pitfall 8: A second writer opens `places.sqlite` — corruption, not contention
+### Pitfall 8: Absence assertions that go vacuously green after the change
 
 **What goes wrong:**
-The SQL-tabs work needs tab/bookmark/session data visible to both the Gecko side and the Theia sidecar. The catastrophic implementation is the obvious one: the Theia backend (a separate Node process) opens `places.sqlite` directly with its own SQLite library while Gecko holds it. Precedent is unambiguous — two processes writing one profile's `*.sqlite` files without shared lock coordination corrupt them (SQLite forum, 2026-05: bwrap-sandboxed Firefox+Thunderbird sharing `$HOME` produced repeatable `places.sqlite` corruption; WAL/`-shm` shared-memory coordination and Firefox's own profile lock both defeated). Symptoms match the project's nightmare class: silent at first (a stuck `-wal` that never checkpoints, bookmark writes silently failing — Bug 2040253), then `database disk image is malformed` and the bookmarks/history system goes dark with "one of Firefox's files is in use by another application."
+CLAUDE.md verification rule 1 says: never assert on the absence of a log line unless the code under test is proven to emit it. v1.4 creates several new chances to break that rule:
 
-Gecko-internal precedent agrees from the other direction: even *within* one process, concurrent `Sqlite.jsm` transactions throw (Bug 1090961 — needed a transaction queue), exclusive locking was rejected for WAL databases because WAL fundamentally needs multiple coordinated connections (Bug 627936), and forced WAL checkpoints deadlock across Gecko's own sync/async split (Bug 1359887).
+- `ng051-backend-off` asserts the backend never spawns `opencode` and that `GET /mcp` is 404 (`scripts/verify-ng-051-backend-off.mjs:1-8`). Once the adapter is deleted, both are true by construction. Keeping the row "because it still passes" keeps a check that cannot go red. Delete the row with the adapter (the registry set in ARCHITECTURE.md).
+- The `view-factory-table` drift message (Pitfall 6) is emitted lazily. A live check that greps for its absence without first touching `index` proves nothing.
+- Theia's DOM can drift. `verify-platform.sh:3440-3447` waits for `#theia-app-shell .lm-MenuBar` and `#theia-statusBar`, "verified against the pinned Theia v1.74.1 DOM". Those presence waits fail loudly, which is correct. Any check written as "no element matches X" goes green if Theia renames X. The chrome-bar and modes stylesheets carry 12 selectors on Theia internals (`chrome-bar.css`: 9, `modes.css`: 3) [verified]. When Theia renames one, the rule stops applying and nothing errors.
+- New Theia log text at 1.76 (for example the `telemetry.telemetryLevel already exists` warning, or the removed `Child node ... does not belong to this tree` line) must not be asserted absent without a positive control that makes Theia emit it in the same run.
 
 **Why it happens:**
-`places.sqlite` is *right there* in the profile directory, SQLite is trivially openable from Node, and "read-only queries can't hurt" is folk wisdom that is false under WAL (even readers participate in checkpoint coordination via the `-shm` file).
+An absence check is green by default. Upstream renames turn a live check into a decorative one, and a deletion makes it vacuous.
 
 **How to avoid:**
-- **One writer, on the chrome side.** All SQL access — including the new tab store — goes through Gecko-owned connections behind `PowerBrowserAPI.sys.mjs` (the single anti-corruption layer; `check-internals-boundary.sh` already enforces one-file access). The Theia side never opens profile SQLite files; it calls the API over the existing supervised channel. This is non-negotiable and stated as a design invariant before any schema is drawn.
-- New tab storage lives in its **own SQLite file** (own WAL, own `-shm`), never as extra tables in `places.sqlite` — so a bug in tab writes cannot take bookmarks/history down with it, and checkpoint/vacuum behavior stays decoupled.
-- Verification includes a "second writer" negative test: assert from the packaged artifact that no Theia-side code path opens `*.sqlite` under the profile (static scan for `sqlite` opens outside `powerbrowser/shell/`), plus a soak test with interleaved tab writes and bookmark writes asserting `PRAGMA integrity_check` stays clean.
+Every absence assertion added or kept in phases 19-24 gets a same-run positive control: plant the condition in a scratch copy and require the message, then require its absence on the real tree. This is the `--self-test` convention the registry already uses (for example `verify-shell-error-copy.mjs` and `verify-web-tab-live.mjs`'s `BROKEN_INSTRUMENT_MARKER` scorer). After the Theia move, re-verify `verify-platform.sh:3440` and every Theia selector in the two CSS files against the 1.76 DOM once, by measuring in `gsd-browser`.
 
 **Warning signs:**
-- `sqlite3`, `better-sqlite3`, or `node-sqlite` appearing in any `theia/extensions/*/package.json`.
-- A file path under the Gecko profile constructed anywhere in TypeScript.
-- "Read-only, so it's safe" in a plan or review.
+A check that passed identically before and after its subject was deleted. A CSS rule in `chrome-bar.css` whose selector matches zero elements in the live DOM.
 
-**Phase to address:** SQL-tabs phase, as design invariant #1 — before schema, before code. The negative test lands with the first storage commit.
+**Phase to address:** 17 (ng051), 19 (selectors, table, logs), 21 and 24 (GUI checks)
 
 ---
 
-### Pitfall 9: Two sources of truth for "which tabs are open"
+### Pitfall 9: The commit gate and the Stop hook are red for a known GUI reason through the whole non-GUI half
 
 **What goes wrong:**
-`sessionstore` keeps its own ledger of open windows/tabs (compressed JSON: `sessionstore.jsonlz4` + `sessionstore-backups/` with a version-gated load order `clean → recovery → recoveryBackup → cleanBackup → upgradeBackup`), and the new SQL tab store keeps another. After any abnormal shutdown they disagree — that is precisely when both are consulted. Known sessionstore behaviors that will ambush a naive SQL mirror:
+The ledger `check_cmd` is `scripts/verify-platform.sh --quick` [verified]. `.claude/hooks/ledger-stop-gate.py` runs it on every Stop (`check-ledger.py --complete --run-check`), and `--quick` is red on the four `gui08` rows until phase 21 (CI run 36495714210, 2026-09-28: `verify-gui08-canvas-geometry` and `verify-gui08-panorama-copy` plus their self-tests) [verified]. Each session's Stop is therefore blocked once (`block_once`) through phases 17-20. Three wrong responses follow from that:
 
-- A corrupt or empty `recovery.jsonlz4` causes a skeleton (empty) session restore while a valid `previous.jsonlz4` sits one directory away (Bug 1906808 — users routinely hand-repair by swapping files). An SQL store that blindly mirrors "current state" mirrors the skeleton and destroys the good data.
-- Upgrade backups, `formatVersion` gating (unreadable files are skipped, not errors), and the clean-shutdown removal of `recovery*` files mean "the session files present" varies by shutdown path. Logic that assumes one canonical file is wrong on every path but the happy one.
+- Fixing the `gui08` checks early. Chris decided the Panorama spec stays in the GUI half (handoff decision 1).
+- Loosening a check to get green.
+- Learning to ignore the red, so a new red in phase 17 or 19 goes unnoticed.
+
+Other hook traps:
+
+- SessionStart on `resume`/`compact` runs the check with a 120 s timeout (`ledger-session-check.py:186-200`). That exceeds the VSCode extension's 60 s spawn timeout, which is why the 2026-10-15 session could not be resumed. A session holding a 50-minute Gecko build cannot be resumed either.
+- The PreToolUse ledger hook blocks any Bash command where a path-like token resolves into `ledger/` and a shell operator (`|`, `;`, `&&`, `>`) appears. This blocked three read-only `jq`/`grep` pipes in this research session. A tree-wide `sed -i`/`grep -l | xargs` sweep for "opencode" reaches `ledger/REQUIREMENTS.json` and `ledger/history/log.jsonl` and is blocked. Done-row NG-051 and the AI-01..05 rewrite need Chris (`APPROVE`/`DROP` lines, `scripts/ledger-amend.py`). The agent cannot record them.
+- `scripts/size-gate.py` rejects a `*-plan.md` with more than 20 items, 20 cited ledger IDs, or 500 lines. The OpenCode removal (about 4.2k deleted lines, more than 25 file-level edits) will hit it if planned as one plan.
 
 **Why it happens:**
-The SQL-tabs pitch ("every tab a SQL row") sounds like the SQL store *replaces* session knowledge. It doesn't — sessionstore owns window/tab restoration on startup, and duplicating that ownership creates a split-brain that only manifests after crashes, i.e. exactly when users can least afford confusion.
+The gate is a single pass/fail over the whole registry. A known red removes its signal for everything else.
 
 **How to avoid:**
-Declare authority per question, in writing, before building:
 
-- **Window/tab restoration at startup:** sessionstore remains authoritative. The SQL store never overrides what sessionstore restores.
-- **Tab identity across time:** `TabUriRegistry` URIs are the join key (the GUI-04 asserted shape). SQL rows key on registry identity; sessionstore entries get *annotated*, never rewritten, from the outside.
-- **Crash path:** on startup after abnormal shutdown, the SQL layer reconciles *toward* the restored session (adopt restored tabs, mark the rest closed-by-crash) — it never "restores" tabs sessionstore dropped.
-- Never write `sessionstore.jsonlz4` or anything under `sessionstore-backups/` from outside Gecko's sessionstore code. That format's load-order and version-gating are its corruption handling; bypassing them bypasses the handling.
+- Use the subtraction rule already ratified in `docs/non-gui/decisions.md` (R33): the gate passes when `--quick` failures, minus `docs/non-gui/quick-baseline.txt`, are empty. Refresh the baseline after phase 17 (it still lists `ai-opencode-tracer`) and after phase 19. Do not wait for phase 20. A stale baseline either hides a new red or reports a removed row as missing.
+- Decide whether `ledger-session-check.py` should stop running the check on `resume` (handoff "optional fix"). It is a hook change, so it needs Chris's decision.
+- Ask Chris for the NG-051 drop **before** the phase 17 commit. ARCHITECTURE.md notes that the phase gate goes red otherwise.
+- Split the OpenCode plan by removal set (manifest, workspace, registry) so that each plan stays under the size gate. The sets still land in one commit if the plans share a wave.
+- Run Bash reads of `ledger/` as single commands with no operators, or use `python3 scripts/ledger-report.py`.
 
 **Warning signs:**
-- A design doc where the SQL store "restores" tabs.
-- Writes to sessionstore files from the Theia side or the generator.
-- A happy-path-only demo (clean shutdown, restore works) with no crash-path test.
-- The words "single source of truth" applied to open-tab state without naming sessionstore.
+"completion gate fails" in a Stop where the only failures are `gui08-*`. A plan rejected by `size-gate`. `LEDGER FROZEN` on a command that also edits non-ledger files.
 
-**Phase to address:** SQL-tabs phase, design task (authority table), verified by a crash-path test: kill -9 mid-session, restart, assert restored set == sessionstore's answer and SQL reconciles without resurrecting or duplicating tabs.
+**Phase to address:** 17 (baseline refresh, NG-051 approval, plan split), 19 (baseline refresh), 21 (gate green)
 
 ---
 
-### Pitfall 10: Every new Gecko touchpoint is future rebase debt — and SQL tabs invite several
+### Pitfall 10: The residual-brand scan misses new files and goes red on deleted citations
 
 **What goes wrong:**
-SQL tabs need Gecko-side storage, session observation, and (eventually) `<xul:browser>`-backed web tabs. Each need is a temptation to add a new patch hunk, a new file importing Firefox internals, or a new `moz.build`/`jar.mn` coupling — and each one widens the ESR-rebase conflict surface that v1 deliberately narrowed to hook-only patches. The WINDOWS #13 precedent (`registerWindowActor` hole in the boundary guard) shows exactly how this happens: a real capability need, a direct internal import that works, a guard with a gap. The carry-over live-rebase drill exists to catch this class — but only if the new touchpoints exist *before* the drill runs. New code landing after the drill gets a free pass until the next ESR, when it detonates.
+
+- The scan builds its file set from `git ls-files` (`scripts/scan-brand-residue.mjs:329`). An unstaged new file is invisible to it. v1.4 adds new files: the React single-copy check, any new `verify-*.mjs`, and new `docs/BUILD.md` sections. A green scan before `git add` proves nothing about them.
+- The frozen `-PLAN.md` row in `inventory/brand-tokens.json` counts **49** occurrences across 10 files, including `scripts/verify-platform.sh`, `powerbrowser/INTERNAL-APIS.md` and `token-gate/src/node/parent-watchdog-backend-contribution.ts` [verified]. Removing registry blocks or comments that cite a plan file, or adding new citations, moves the observed count and turns `scan-brand-residue` red. This happened during phase 16: 36 expected, 37 then 39 observed.
+- `inventory/brand-tokens.json` is the only file that may name the originating product. Writing that name in a new doc or check fails the scan.
 
 **Why it happens:**
-The boundary (`PowerBrowserAPI.sys.mjs` + `INTERNAL-APIS.md` catalogue + `check-internals-boundary.sh`) feels like ceremony when you're trying to ship a feature. The cost it prevents (rebase conflicts, silent behavior drift across ESR) arrives a year later, charged to someone else.
+The scan reconciles exact counts so that it can go red. Every deletion-heavy commit, which describes phase 17, interacts with it.
 
 **How to avoid:**
-- New Gecko touchpoints go through `PowerBrowserAPI.sys.mjs`, catalogued in `INTERNAL-APIS.md`, in the same commit — no second importer (the `TheiaService.sys.mjs` consumer-not-boundary precedent holds). Extend `check-patch-surface.sh` / the boundary guard to cover the new surface (storage, session observation) as part of the feature commit.
-- Patches stay hook-only: if tab storage needs build-system wiring, the patch adds `DIRS`/`include()` lines pointing at platform-tree files; schema, SQL, and defaults live outside `upstream/`.
-- The live ESR-rebase drill runs *after* the SQL-tabs touchpoints land, over the new surface — schedule it as the SQL phase's closing task, not as a standalone later phase (see Pitfall 12).
+Stage first, then run `node scripts/scan-brand-residue.mjs`. If the `-PLAN.md` count moves, bump the row's `expected_count` and add one "COUNT MOVED a -> b" reason line in the same commit (precedent 12-02; the row's own reason text shows the format). Do not exclude the files instead.
 
 **Warning signs:**
-- A second `.sys.mjs` importing Gecko internals.
-- An `INTERNAL-APIS.md` untouched by a phase that clearly touches internals.
-- A patch hunk containing SQL, schema, or product logic rather than a hook line.
-- "We'll catalogue it during cleanup."
+The scan is green on a tree whose `git status` shows `??` entries under `scripts/` or `docs/`. A red on the `-PLAN.md` row in a commit that only deleted code.
 
-**Phase to address:** SQL-tabs phase (boundary extension in-feature) + carry-over drill scheduled inside it. Installer/extensions phases are lower-risk here (mostly generator/Theia-side) but get the same rule if they touch `upstream/`.
+**Phase to address:** 17, and every phase that adds a file
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 11: Designing one schema for four different histories
+### Pitfall 11: The chrome JS startup cache makes chrome-side GUI fixes look broken
 
-ROADMAP.md already records this ("three migrations, not one") — the pitfall is *implementing* as one anyway. Bookmarks/history are already SQL upstream (`places.sqlite`: expose via the Places API, don't rebuild); sessions are versioned compressed JSON with corruption fallbacks (mirror, don't reimplement); Theia workbench layout is a third serialization with its own versioning; only tabs are net-new schema. A unified `items` table with a `kind` column couples the new code to three upstream formats' evolution and makes every ESR's Places/sessionstore changes a migration event for tab data too. **Prevention:** one store, separate domains; tabs own their table, everything else is referenced by stable key (Places GUIDs, registry URIs). **Phase:** SQL-tabs design. (MEDIUM — documented in-repo + sessionstore source; the risk is execution drift, not unknown unknowns.)
+**What goes wrong:**
+Edits to `powerbrowser/shell/*.js` take effect in the tree immediately, through the objdir symlinks. Gecko's startup cache keeps running the old compiled script with no error. This invalidated the F9 live test (memory `chrome-js-startup-cache`). The phase 21 and 22 worklists (group channel, Panorama close/undo, per-card close) and the phase 24 UAT all exercise chrome-side code. `-purgecaches` has zero occurrences in `scripts/` or `docs/` (`.planning/codebase/CONCERNS.md`); it lives only in CLAUDE-adjacent memory.
 
-### Pitfall 12: Carry-over drills stage forever while the surface they must cover grows
+**How to avoid:**
+After any chrome-JS edit: `rm -rf objdir/tmp/profile-default/startupCache` and `MOZ_PURGE_CACHES=1 ./objdir/dist/bin/powerbrowser -purgecaches`. Add these two lines to the tier-1 section of `docs/BUILD.md` (`:470`) in phase 20, so that UAT testers find them. Never record "the fix did not work" from a run that did not purge. The full rebuild in phase 18 changes the build ID, so the first launch after it is safe. Later edits are not.
 
-Release `objdir-release` build, tier-3 per-fixture builds, live ESR rebase, Theia re-pin, WINDOWS #13/#14 — all staged in v1, all still staged. v1.1 adds installers (which need release builds to be meaningful), new extension kinds (which need per-fixture builds), and new Gecko touchpoints (which need the rebase drill) — every phase widens the gap between "verified" and "true." A terminal "drills phase" at the end of the milestone will be the first thing cut under schedule pressure. **Prevention:** each phase carries its own drill (installer phase runs the release build it needs; extensions phase runs per-fixture tier-3 over the new source kinds; SQL phase closes with the live rebase over its touchpoints). The "carry-over" bucket holds only WINDOWS #13/#14 fixes. (HIGH confidence as process risk — v1 closeout was an override with 16 unchecked requirements; MEDIUM as prediction.)
+Also on the Gecko side: after phase 18 the dev objdir is 153.5 while `objdir-release` stays 153.1 until it is rebuilt. Launching the older binary on a profile the newer one touched triggers Firefox's downgrade protection, and the window waits on a dialog. Rebuild the release objdir in the same phase, or use a throwaway profile for any 153.1 launch.
 
-### Pitfall 13: NAME-01 re-pin done halfway
+**Phase to address:** 18 (downgrade), 20 (doc line), 21, 22, 24 (purge discipline)
 
-The rename slice touches `identity.display_name`, `generate --self-test` byte-identity comparands, `brand_display_expectations` in `inventory/brand-tokens.json`, the trademark-surface scan, and downstream fixtures — plus the single-edit propagation proof re-run and a tier-3 Linux rebuild. A partial re-pin fails loudly in the best case (gate red on old spaced form) and silently in the worst (fixtures regenerated to the new form while a gate still asserts the old one, then "fixed" by updating the gate to match the fixture — assertion laundering). **Prevention:** the slice is one plan with a checklist of every gate asserting display form; each gate is proven red against the *other* form before green is accepted. **Phase:** Installer phase (folded slice). (HIGH — tree-derived; the gates exist and are enumerable today.)
+---
 
-### Pitfall 14: Theia layout conflated with tab state
+### Pitfall 12: The Theia re-pin runbook's "token gate intact" step does not exercise the gate
 
-Persisting Theia widget layout (positions, splits, sizes) into the same rows/transactions as tab identity means a Theia upgrade that changes layout serialization breaks tab restore, and a tab-store migration risks scrambling layout. **Prevention:** `TabUriRegistry` URI as the join key; layout stored opaquely (blob + version tag) in a separate table/store, restored best-effort after tabs resolve. Tab restore must succeed with layout missing; layout restore must fail soft with tabs present. **Phase:** SQL-tabs design. (MEDIUM — tree-derived contract shape + Theia layout versioning is upstream-controlled.)
+**What goes wrong:**
+`docs/BUILD.md:249-256` (UPD-04 step 6) proves the gate with `tsc -b theia/extensions/token-gate` plus the telemetry suite. That shows the code compiles. It does not show the gate rejects anything. The gate depends on Theia's backend lifecycle order: `configure()` runs before `start()` binds the socket (`token-gate-backend-contribution.ts:52-59, :76-87`). Theia 1.75/1.76 changed connection-token re-issue (#17762) and many backend classes.
 
-### Pitfall 15: Unversioned schema, no corruption path
+**How to avoid:**
+Run the live rows `--only side02-token-negative` and `--only side02-token-positive` (`verify-platform.sh:4723-4724`) and `--only side04-token-not-in-environment` at 1.76. Re-record the UPD-04 proof in `docs/BUILD.md:268-286` with those results, not with the compile alone.
 
-A fresh SQLite file with no `user_version`, no migration harness, and no plan for "this file is corrupt" repeats Places' hardest-learned lessons (`places.sqlite.corrupt` rename-and-rebuild, backup rotation). Beta users *will* carry corrupt or half-migrated tab stores across builds. **Prevention:** `PRAGMA user_version` + forward-only migrations exercised against fixture databases from each prior version; startup `integrity_check` with a defined degraded mode (rebuild from sessionstore + registry, never block startup); never delete-and-recreate silently — quarantine (`tabs.sqlite.corrupt`) so data is recoverable. **Phase:** SQL-tabs implementation, first schema commit. (MEDIUM — Places precedent is direct and public.)
+**Phase to address:** 19
 
-### Pitfall 16: Two extension systems, one declaration, zero reconciliation
+---
 
-`[extensions]` feeds Theia's `theiaPlugins` — but EXT-02's WebExtensions declaration sibling feeds Firefox's extension machinery (distribution/policies, signing requirements for `.xpi`, `MOZ_APP_ID` compatibility kept deliberately per v1 Pitfall 1). A TOML entry that installs into Theia but not Firefox (or installs unsigned into a build that enforces signing) is a feature that demos on one side. **Prevention:** the declaration schema distinguishes the target runtime per entry; verification asserts presence-and-loaded on *both* runtimes where declared; a Firefox-side entry without a signing story fails at generate time. **Phase:** Extensions phase. (LOW-MEDIUM — the sibling was a STATE.md todo; Firefox add-on signing enforcement for forks is version-dependent and needs phase-level confirmation.)
+### Pitfall 13: Node 24's native rebuild in a sandbox or offline shell
+
+**What goes wrong:**
+Every native module is N-API (`drivelist` 12.0.2 builds from source with `NAPI_VERSION`; `better-sqlite3` 13.0.3 ships `prebuilds/linux-x64.node`; node-pty, @parcel/watcher and msgpackr-extract ship prebuilds) [verified]. The ABI therefore does not change, and an old `drivelist.node` still loads on 24 (STACK.md). The real risks are environmental:
+
+- `node-gyp rebuild` downloads headers for the exact running Node version into `~/.cache/node-gyp/24.19.0` unless it is given `--nodedir`. A sandboxed or offline session fails there, while CI (with network) passes.
+- The `flake.nix` shellHook prepends `${nodejs}/lib/node_modules/npm/bin/node-gyp-bin`. If that path ever moves, the prepend is a silent no-op and `node-gyp` resolves to whatever else is on `PATH`.
+- CLAUDE.md hard rule 4 still applies: `pkgs.mkShell` adds an rpath to the space-separated `NIX_LDFLAGS`, so a checkout path containing a space breaks every link. `NIX_NO_SELF_RPATH = "1"` (`flake.nix:27`) keeps the checkout path out of `drivelist.node`. Keep both when editing the shell.
+- Until the flake flips, scripts run outside the dev shell use host Node v24.19.0 [verified], while the sidecar runs on Node 22. A plain-node check that passes on the host does not prove the sidecar's runtime.
+
+**How to avoid:**
+Inside `nix develop .#theia`, run `(cd theia/node_modules/drivelist && node-gyp rebuild --nodedir="$(dirname "$(dirname "$(command -v node)")")")`, then `node -e "require('./theia/node_modules/drivelist')"`, then `bash scripts/smoke-theia.sh`. Edit only `flake.nix:20`. Never run `nix flake update` (it would move inkscape off 1.4.4 and break `generated-byte-identity`, and move rustc off 1.97.1).
+
+**Phase to address:** 19 (step a)
+
+---
+
+### Pitfall 14: `rebase-upstream.yml` has never run, and it runs without Nix
+
+**What goes wrong:**
+`gh run list --workflow rebase-upstream.yml` returns no runs [verified]. Its steps run `node scripts/generate.mjs` directly on the runner, with no `nix develop` and therefore no inkscape. `verify.yml`'s own header records that a job without inkscape "failed at the 16-pixel icon". Dispatching it for 153.5 is likely to fail at the generate step, before any replay [inferred]. Separately, its `default:` tag is a literal mirror of the pin that `verify-upstream-pins.mjs` step 2 checks. Forgetting to move it turns `verify-upstream-pins` red.
+
+**How to avoid:**
+Do the 153.5 rebase locally through `scripts/rebase-upstream.sh`, which is the proven path (08-05 drill against 153.2). In the same commit, move the workflow default to the pinned tag. Either wrap the workflow's generate steps in `nix develop .#theia` (the same fix `verify.yml` received) or record that the workflow is unexercised. Do not cite it as a CI rebase proof.
+
+**Phase to address:** 18 (default and record), 25 (if CI green is meant to include it)
+
+---
+
+### Pitfall 15: "generate-check fails locally" may be stale, or caused by the host inkscape
+
+**What goes wrong:**
+The handoff lists "find out why `generate-check` fails locally (inkscape)". In this session, `node scripts/generate.mjs --check` from the host shell printed `--check PASS -- all 54 generated file(s) match` with host `/run/current-system/sw/bin/inkscape` 1.4.4 [verified]. The likely mechanism of the earlier failure: outside the dev shell, the generator uses whatever inkscape the NixOS system profile provides. A system update that moves inkscape off 1.4.4 makes the local run fail byte identity while CI, which pins inkscape through the flake, passes. A sandboxed inkscape that cannot write its config dir is a second candidate [inferred].
+
+**How to avoid:**
+Reproduce the failure before fixing anything. Run generator checks inside `nix develop .#theia`, which pins inkscape 1.4.4 (`flake.nix:33-41`). If the root cause is the host profile, the fix is documentation plus running the check in the shell. Do not edit the PNGs and do not relax the byte comparison.
+
+**Phase to address:** 20
+
+---
+
+### Pitfall 16: Clean-checkout and `yarn install` runs while another session serves the sidecar
+
+**What goes wrong:**
+G-14.1.1-9 (clean-checkout `yarn build:extensions`) was deferred three times because `rm -rf theia/extensions/*/lib` would delete the `lib` trees a concurrent session's running sidecar is served from (14.1.1 `deferred-items.md`). Phases 17 and 19 both need `yarn install`, which has the same effect. `theia build` also rewrites `lib/backend` under a running backend and kills it. The symptom is the shell chrome disappearing (memory `live-gui-debug-loop`), which is easy to misread as a CSS defect.
+
+**How to avoid:**
+Before any install or clean build, check `git status --porcelain` for foreign entries, check for a running `theia start`, and check `.worktree-lock` (`worktree-session-guard.py`, 2 h stale window). Commit with explicit paths only (memory `concurrent-sessions-on-main`). Run G-14.1.1-9 in phase 20 only after phase 19's final install, from a quiet tree, or in a separate clone (`scripts/fresh-clone-verify.py`).
+
+**Phase to address:** 17, 19, 20
+
+---
+
+## Minor Pitfalls
+
+### Pitfall 17: Comments and prose that name the old versions
+
+`scripts/lib/firefox-bidi.mjs:5,11`, `scripts/smoke-theia.sh:57`, `scripts/verify-platform.sh:3000, :3440`, `scripts/verify-branding-identity.mjs:31`, `theia/extensions/chrome-bar/src/browser/chrome-bar-commands.ts:142`, `tab-uris/src/browser/view-open-handler.ts:90`, `telemetry/src/browser/telemetry-preferences.ts:3`, `README.md:87`, and the D-16 comment at `flake.nix:14-19`. Only `smoke-firefox.sh:41-42` is functional. The rest are text, but a comment that says "verified against 1.74.1" after a move to 1.76 is a false claim. Update the ones whose claim was re-verified, and mark the others "as of 1.74.1".
+
+### Pitfall 18: Fixture manifests still pin 1.74.1 and a future ESR tag
+
+The tier-3 fixtures under `.planning/milestones/v1.1-phases/09-extensions-crash-pipeline/fixtures/*/configuration.toml` carry `theia_release = "1.74.1"` and `firefox_esr_tag = "FIREFOX_154_0esr_RELEASE"`, and `scripts/verify-downstream-fixture.mjs:585` builds a scratch manifest with `1.74.1`. `verify-upstream-pins.mjs` excludes `.planning/` as history, so nothing goes red. They are historical record; leave them. If a per-fixture tier-3 build (BLD-02) is re-run at 1.76, its manifest pin is not what gets installed. The workspace `package.json` decides.
+
+### Pitfall 19: User-facing copy reaching the screen unreviewed
+
+The redesigned Panorama's "Expand"/"Done" copy is unreviewed (handoff, Q1 in `docs/non-gui/questions-wave-e.md`). At 1.76, Theia's own strings (Getting Started, telemetry setting description) can reach the screen through new transitive extensions. The UI-SPEC rule (no internal identifier in user-facing text, product named "PowerBrowser", a next step that exists on screen) applies to every string the user sees, including upstream strings this tree chooses to expose.
 
 ---
 
 ## Technical Debt Patterns
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|---|---|---|---|
-| Leave update URL / crash URL at Mozilla defaults "until the pipeline exists" | Installer phase ships faster | Users' crashes and update checks go to Mozilla under a fork identity; established behavior nobody revisits | **Never** — decide Pitfalls 1/7 first; "off" is a valid decision, "default" is not |
-| `@latest` / unpinned extension entries | Green build today | Unreproducible builds; supply-chain exposure with no audit trail (Pitfall 5) | **Never** in committed config; fine in a local scratch config never used for packaging |
-| `file:` / local-path extension pointing outside the repo | Uses the code at hand | Breaks hermetic builds, per-fixture tier-3, and every downstream checkout (Pitfall 5) | Only with the path inside the repo or `PB_CONFIG_DIR` + absence fails loudly |
-| Theia backend opens profile SQLite directly | Fastest path to "tabs in SQL" | Profile corruption class failure (Pitfall 8) | **Never** — this is the one "never" in the milestone |
-| SQL store "restores" tabs at startup | Demo restores tabs without touching sessionstore | Split-brain after every crash (Pitfall 9) | **Never** as authority; reconciliation toward sessionstore only |
-| New `.sys.mjs` importing internals directly | Feature ships without boundary ceremony | Rebase debt + second boundary to guard (Pitfall 10) | **Never** — extend `PowerBrowserAPI`, catalogue it |
-| Terminal "drills phase" for all carry-overs | Clean-looking roadmap | Drills get cut; surface grows uncovered (Pitfall 12) | **Never** — drills ride inside the phases that need them |
-| Defer signing/notarization to "release hardening" | Avoids cert procurement now | PKG-01's exit gate can't pass without it; late discovery of identifier/issuer constraints (Pitfalls 1, 3) | Acceptable only if the unsigned-friction decision is recorded and the per-OS matrix still runs |
-
----
+|----------|-------------------|----------------|-----------------|
+| Keep `ng051-backend-off` "because it still passes" after deleting the adapter | No registry edit | A check that cannot go red; violates verification rule 1 | Never. Delete it with the adapter |
+| Rename D-22 rebind 2 to `AIConfigurationViewContribution` instead of deleting it | Looks like a port | Overrides nothing (no `initializeLayout` at 1.76 [verified in tarball]), so it is dead code that implies a guarantee | Never |
+| Leave `smoke-firefox.sh:41-42` as a literal and edit it to `153.5.0esr` | One-line edit | Red again at every ESR bump; hand-kept expectation | Never. Derive it from `version_display.txt` |
+| Re-cite `view-factory-table.ts` line numbers by hand at 1.76 | Matches the existing style | Drifts at every Theia bump; the drift check is lazy and console-only | Acceptable for this milestone if one live `view:` open plus a planted-row control is recorded; otherwise derive the ids from `node_modules` |
+| Accept the duplicate `telemetry.telemetryLevel` registration warning | No code change | Settings text depends on module load order | Acceptable only if the live check records which schema won and the text is acceptable; otherwise consume Theia's schema |
+| Pin the tag by name only, no SHA recorded | Matches the existing convention | Local and CI can diverge silently if a tag moves (Pitfall 1) | Never for an adoption. Record the SHA |
+| Report `mar-update-hop` green after the ESR move | Full run reads green | Certifies a 153.1 hop as current | Only with a written note that the evidence predates 153.5 |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
-|---|---|---|
-| AUS / update server | Serving Mozilla's `update.xml` shape from memory; hash/size mismatches | Generate `update.xml` from the actual MAR bytes (hash + size of the shipped file); one real N→N+1 hop per OS |
-| MAR signing | Assuming `mach package` output is updatable | Own signing key compiled into updater, or updater built with `--enable-unverified-updates` + `DISABLE_UPDATER_AUTHENTICODE_CHECK`; recorded decision (Pitfall 1) |
-| Windows maintenance service | Changing certs without updating `defines.nsi` issuer strings | Update issuer pins with the cert rotation; verify a background (non-admin) update hop, not just admin install |
-| Open VSX at build time | `download:plugins` against live registry in the release path | Resolve-then-vendor; build consumes local bytes + hashes; `VSX_REGISTRY_URL` explicit (Pitfalls 5, 6) |
-| `${targetPlatform}` plugins | One plugin set for all installer targets | Per-target resolution; assert bundled native arch == target arch (Pitfall 6) |
-| Crash receiver | Accepting minidumps into an ungoverned bucket | Throttle at edge; scrub/retention policy before go-live; access groups for anything PII-bearing (Pitfall 7) |
-| Endpoint allowlist | New update/crash/registry hosts not added to generated allowlist | Hosts flow from `[urls]`/`[telemetry]` through the generator; `verify-endpoints.sh` green before merge |
-| Places API (bookmarks/history) | Raw SQL against `places.sqlite` from new code | Places API (`Bookmarks.jsm`/`History.jsm`) through the chrome-side boundary; respect the transaction queue (Bugs 1090961) |
-| Session files | Reading/parsing `sessionstore*.jsonlz4` outside sessionstore | Treat as opaque; reconcile via restored session, never parse or write (Pitfall 9) |
-
----
+|-------------|----------------|------------------|
+| mozilla-firefox/firefox tags | Assuming `_RELEASE` == `_BUILD1` | Check `git ls-remote` for both; 153.4 differed [verified] |
+| Yarn classic peers | Treating an install without errors as compatible | `unmet peer dependency` is a warning; gate React copies explicitly (Pitfall 4) |
+| Yarn workspaces | Removing a member without `yarn install` | `.yarn-integrity` keeps the old top-level patterns; CI `--frozen-lockfile` fails on an uncommitted lock |
+| Theia extension collection | Assuming only declared `dependencies` compose | Theia collects `theiaExtensions` transitively; `@theia/getting-started` arrives through `@theia/ai-ide@1.76.0` [verified] |
+| Theia `isBound ? rebind : bind` idiom (`powerbrowser-frontend-module.ts:24-44`) | Expecting a missing base binding to fail | The `else bind` branch silently binds an orphan if upstream moved the service; compile catches a removed class, not a moved binding |
+| node-gyp under Nix | Relying on header download | `--nodedir` from the shell's Node; no network needed |
+| GitHub Actions `rebase-upstream.yml` | Treating it as a working CI rebase | Never run; no Nix, so no inkscape (Pitfall 14) |
 
 ## Performance Traps
 
-*(v1 repurposed this section to build-time traps; v1.1 keeps that and adds runtime-data traps — the milestone's scaling axis is still build minutes + profile data growth, not users.)*
-
 | Trap | Symptoms | Prevention | When It Breaks |
-|---|---|---|---|
-| Per-target installers multiply tier-3 builds | PKG-01 needs Linux + Windows + macOS artifacts; each is a full build + packaging-host run | Tier every installer check; cheap static gates (defines lint, manifest diff) in `--quick`, real-host matrix as the scheduled heavy run | At 3 targets × N fixtures — plan the matrix before promising dates |
-| Tab-write volume hits the main thread | Session-store-style per-keystroke persistence ported naively to SQL; UI jank on tab switch | Batch + throttle writes (sessionstore's `TabStateFlusher` exists for this reason); write-behind with crash-safe reconciliation, never synchronous per-event commits | At browser-session scale (100+ tabs, rapid switching) — test with a tab-hoarder fixture profile |
-| Unbounded tab/history row growth | Store grows forever; startup reconciliation scans balloon | Retention policy (closed-tab window, not infinite history); indexes on the join keys (registry URI); measure startup cost with a 10k-row fixture | Months of daily use, not days |
-| Crash-receiver volume | One bad build's crash loop fills the disk / bill | Edge throttling + sampling rules from day one (Antenna's throttler is the model); alerts on rate spikes | First widely-distributed crash bug — i.e. the moment the pipeline is most needed |
-| Extension download in the critical build path | Release build waits on registry latency or fails on outage | Vendored artifacts (Pitfall 6); registry fetch is refresh, not build | Release day |
-
----
+|------|----------|------------|----------------|
+| Two upstream moves before one verify | A red full run needs bisection across two trees | One upstream per phase (ARCHITECTURE.md Pattern 2) | Any time; each Gecko build is 47-54 min |
+| One tier-3 build budgeted for "full verify" | Release-variant rows red at the end of the phase | Budget dev plus release builds in phase 18 (Pitfall 2) | Phase 18 |
+| `--quick` inside session hooks | Resume fails under VSCode's 60 s spawn limit (hook timeout 120 s) | Decide the `resume` hook change; keep `--quick` hermetic and fast | Every resume after an edit |
+| `--extra-root upstream/` scan in the rebase | About 55 s over about 460k files (01-15 and 08-05 measurements) | Expected; not a defect | Each rebase |
+| sccache across a large `moz.configure` change | Cold cache after the version bump | Expected first-build cost (D-71) | Phase 18 first build |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
-|---|---|---|
-| Crash/minidump store without access control | URLs, emails, memory contents readable beyond the team; data-protection liability | Protected-data groups modeled on Socorro's (PII visible only to named roles); default-deny; retention + deletion policy (Pitfall 7) |
-| Unpinned extension sources | Supply-chain injection into every downstream build | Exact pin + integrity hash per entry; lock artifact verified in CI; fail-loud on mismatch (Pitfall 5) |
-| Updater verifying against Mozilla trust | Updates fail — or worse, a Mozilla-signed bit path is trusted by the fork | Own MAR key or explicit unverified-updates build config; no Mozilla update/crash hosts in packaged config (Pitfall 1) |
-| Second SQLite writer on the profile | Corruption of bookmarks/history/session (data-loss class) | Single chrome-side writer invariant; static scan + soak test (Pitfall 8) |
-| Token-gate bypass for new "local read" APIs | New tab/query endpoints added outside the credential gate | Every new backend endpoint inherits the `token-gate` fail-closed posture (SEC-01); no unauthenticated localhost APIs |
-
----
+|---------|------|------------|
+| Proving the token gate by compile only (Pitfall 12) | A 1.76 lifecycle change opens the backend unauthenticated | Live `side02-token-negative`/`-positive` rows at 1.76 |
+| Script-enabled `yarn install` to "fix" a native module | Runs unaudited postinstalls (puppeteer downloads Chromium); `@theia/ffmpeg/build` leftovers fail `diff-theia-core.sh` (STACK.md) | `--ignore-scripts` plus the one explicit `drivelist` rebuild (`docs/BUILD.md:59-98`) |
+| New transitive extensions adding egress | Getting Started links (theia-ide.org), new AI provider defaults (1.76 adds model discovery) | Re-run `ng069-sidecar-egress` and `theia-endpoints` at 1.76; any new host goes through the endpoint allowlist, never silently |
+| Removing the Theia AI framework along with OpenCode | Changes D-22, the `view:ai-configuration` row and tab-uris hooks without a decision | Separate question for Chris (ARCHITECTURE.md Anti-Pattern 3) |
+| Editing under `theia/node_modules/@theia` to silence a 1.76 break | Hard rule 1 violation; `diff-theia-core.sh` red | DI rebind or default preference in `@powerbrowser/*` |
 
 ## UX Pitfalls
 
-*(Users here: the person installing the browser, the person seeing the crash dialog, and the downstream rebrander. The UI-SPEC rule holds — no internal identifiers in user-facing text; every omitted identifier appears in diagnostics.)*
-
 | Pitfall | User Impact | Better Approach |
-|---|---|---|
-| Unsigned installer warnings with no explanation | SmartScreen/Gatekeeper fear screens; users abandon install | If shipping unsigned, the download page says so plainly with what to click; if signed, verify the publisher name reads as the product on each OS |
-| Uninstaller leaves residue | Registry keys, profile associations, `.desktop` files point at a removed product; reinstall misbehaves | Per-OS uninstall-residue check in the installer exit gate (Pitfall 3) |
-| Crash dialog promises a report pipeline that doesn't exist | "Send report" button that discards (or leaks) data; erodes trust | Dialog copy matches the TEL-04 rung actually shipped; if off, no send affordance — say what's collected, where it goes, retention, in one line + diagnostics link |
-| Profile "lost" after rename/reinstall | User's data looks gone; support load; perceived data loss | Identity-field freeze (Pitfall 2) + first-run migration copy with plain-language progress and a diagnostics row mapping old→new paths |
-| Tab restore silently drops tabs after crash | Research sessions vanish; the SQL feature gets blamed for sessionstore behavior | Reconciliation report: after abnormal shutdown, state what was restored / marked closed-by-crash; never silently discard (Pitfall 9) |
-
----
+|---------|-------------|-----------------|
+| Theia Welcome opens alongside the PowerBrowser welcome at 1.76 | Two welcome tabs, links to theia-ide.org | `workbench.startupEditor: "none"` default; check on a fresh profile |
+| Telemetry setting description becomes Theia's text | Settings copy no longer matches the PowerBrowser contract | Record which schema wins at the live check |
+| Testing first-boot only on a reused config dir | Regressions ship that only new users see | Fresh `THEIA_CONFIG_DIR` run in phases 19 and 24 |
+| Chrome-side fix "not working" in UAT | A real fix is reported failed | Purge the startup cache before every chrome-side UAT step |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Update hop, not just install:** N installed from the packaged installer, updated to N+1 through the shipped mechanism, on each OS. Install-only is half the feature (Pitfall 1).
-- [ ] **No Mozilla network in the artifact:** packaged build's effective update/crash/telemetry endpoints enumerated; zero Mozilla hosts unless deliberately retained and documented (Pitfall 1, 7).
-- [ ] **Alongside-Firefox install:** fork + stock Firefox installed together, launched interleaved; distinct profiles, correct single-instance routing per product (Pitfall 2).
-- [ ] **Uninstall residue:** per-OS check after uninstall — no keys, no associations, no `.desktop`/plist residue (Pitfall 3).
-- [ ] **Installer strings generated:** `branding.nsi` defines, plists, `.desktop` all byte-traceable to `configuration.toml` via `generate --check` (Pitfall 4).
-- [ ] **Pins resolve offline:** packaging-host build with registry access cut succeeds from vendored bytes + hashes (Pitfalls 5, 6).
-- [ ] **No `latest`, no floating ranges:** in committed config, lock artifacts, and docs (Pitfall 5).
-- [ ] **Right-arch natives:** bundled platform-specific plugin binaries match each installer target's arch (Pitfall 6).
-- [ ] **Crash path end-to-end:** forced crash → dialog copy correct → receiver stores per policy → PII access restricted → retention enforced (Pitfall 7).
-- [ ] **No second SQLite writer:** static scan (no profile-DB opens outside `powerbrowser/shell/`) + soak test with `integrity_check` clean (Pitfall 8).
-- [ ] **Crash-restart reconciliation:** kill -9 mid-session → restored set equals sessionstore's answer; SQL reconciles, nothing resurrected or duplicated (Pitfall 9).
-- [ ] **Boundary intact:** `INTERNAL-APIS.md` diff covers every new Gecko touchpoint; boundary guard green with a red-proven control for the new surface (Pitfall 10).
-- [ ] **Drills rode along:** release build, per-fixture tier-3, rebase-over-new-surface each tied to their phase — no orphan "drills phase" (Pitfall 12).
-- [ ] **Rename fully re-pinned:** every display-form gate enumerated, each proven red against the other form, propagation proof re-run live (Pitfall 13).
-
----
+- [ ] **ESR pin moved:** `configuration.toml:114`, `generated/upstream-pins.env` regenerated, `rebase-upstream.yml` default, `smoke-firefox.sh` derived, `fetch-upstream.sh` comment, and SHA recorded in `docs/BUILD.md`. Verify with `node scripts/verify-upstream-pins.mjs` and `git -C upstream rev-parse HEAD`.
+- [ ] **Full verify at 153.5:** both `objdir/` and `objdir-release/` read `Version=153.5.0` in `dist/bin/application.ini`. `mar-update-hop` is labelled as pre-153.5 evidence.
+- [ ] **Patches untouched:** `git diff --stat patches/` is empty; `apply-patches.sh --self-test` and `about-dialog-suppression` pass after the replay.
+- [ ] **React 19:** exactly one installed copy each of react, react-dom, @types/react, @types/react-dom and inversify; no `unmet peer` lines in the install log.
+- [ ] **Theia 1.76 live:** fresh-profile run shows one PowerBrowser welcome, no Theia Welcome, no AI Configuration tab; a `view:` URI opens; the factory-table console line is absent and was shown to fire when planted.
+- [ ] **Token gate at 1.76:** `side02-token-negative` and `side02-token-positive` run live, not just compiled.
+- [ ] **OpenCode gone locally:** no `theia/extensions/backend-opencode/` directory, no `node_modules/@powerbrowser/backend-opencode` symlink, no `generated/ai-backend.json`; `generate-check` reports 53 files; `yarn install --frozen-lockfile` passes on the committed lock.
+- [ ] **Brand scan:** run after `git add`; the `-PLAN.md` row count is reconciled in the same commit.
+- [ ] **Baseline:** `docs/non-gui/quick-baseline.txt` matches the actual `--quick` reds after phases 17 and 19.
+- [ ] **Chrome-side GUI fixes:** each live result names a `-purgecaches` launch.
+- [ ] **CI:** the latest `Verify static layers` run on `main` is green, read with `gh run list` (not inferred from local `--quick`).
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
-|---|---|---|
-| Updater phones Mozilla / dead updater shipped (P1) | **HIGH — external** | Ship a fixed build via full-installer channel; users on the broken updater may never self-heal — plan an out-of-band update notice. Prevention is the only real control. |
-| Profile collision shipped (P2) | **HIGH — user data** | Migration tool old→new profile paths + plain-language first-run copy; cannot un-corrupt interleaved writes, only separate futures. |
-| Unsigned installer distributed (P3) | MEDIUM | Sign and re-release; reputation warnings decay once signed builds propagate. Registry/plist residue needs the fixed uninstaller. |
-| Hand-edited installer strings (P4) | LOW | Fold into emitters; `generate --check` proves convergence; re-run rename slice over the unified surface. |
-| Floating pins resolved badly (P5) | MEDIUM-HIGH | Pin to last-known-good + hash; audit what shipped in the window; rotate if compromise suspected. The lock artifact makes "last known good" answerable. |
-| Wrong-arch plugins shipped (P6) | MEDIUM | Per-target re-release; add the arch assertion so it can't recur. |
-| PII held without policy (P7) | **HIGH — legal** | Freeze access, write the retention/deletion policy late (with counsel), purge out-of-policy data, disclose if required. Nothing technical substitutes. |
-| Profile DB corrupted by second writer (P8) | **HIGH — user data** | Remove the second writer; affected users restore from `*.corrupt` quarantine / backups; Places rebuilds history from scratch (bookmarks may be lost). |
-| Split-brain tab state (P9) | MEDIUM | Declare authority retroactively; reconcile toward sessionstore; users re-close phantom tabs once. |
-| Boundary bypassed (P10) | MEDIUM (grows with time) | Move the touchpoint behind `PowerBrowserAPI` + catalogue; cost compounds every ESR until done. |
-
----
+|---------|---------------|----------------|
+| Wrong ESR commit pinned (1) | MEDIUM | Move the pin, `rebase-upstream.sh --tag <right tag>`, rebuild both objdirs (about 2 h) |
+| Hand-edited patch (3) | LOW | `git checkout -- patches/`, `rebase-upstream.sh` again; if a change is needed, edit `upstream/` and regenerate |
+| React mismatch or duplicate (4) | LOW | Move the four pins, add resolutions, `yarn install --ignore-scripts`, rebuild, re-run the live check |
+| Bundled Node/React/Theia change (5) | MEDIUM | Revert to the last green commit and re-apply as three commits |
+| Theia Welcome or telemetry text regression (6) | LOW | Default preference or a guarded rebind in `@powerbrowser/branding`; never a core edit |
+| Local-only reds after OpenCode removal (7) | LOW | `rm -rf` the leftover directory and symlink, delete `generated/ai-backend.json`, `yarn install` |
+| Vacuous absence check shipped (8) | LOW | Add a planted-fault self-test row; the next run tells whether the check was ever real |
+| Brand-scan count drift (10) | LOW | Bump `expected_count` with a COUNT MOVED reason line in the same commit |
+| Stale chrome JS in a UAT result (11) | LOW | Purge the cache, re-run the step, and correct the UAT record |
+| Concurrent session's sidecar killed by an install (16) | LOW | Restart that sidecar; next time coordinate through `git status` and `.worktree-lock` first |
 
 ## Pitfall-to-Phase Mapping
 
-Descriptive phase names — the roadmap may number them differently. The ordering constraints below the table are the load-bearing part.
-
-| # | Pitfall | Prevention Phase | Verification |
-|---|---|---|---|
-| 1 | Updater with no update story | Installer (decision gates phase) | Real N→N+1 hop per OS; zero Mozilla hosts in packaged config |
-| 2 | Profile/remoting collision | Installer (+ NAME-01 slice) | Alongside-Firefox interleaved test; identity-field freeze assertion |
-| 3 | Done-from-Linux installer | Installer | Per-OS install→launch→uninstall→no-residue matrix on real hosts |
-| 4 | Installer strings outside generator | Installer (emitters first) | `generate --check` covers installer inputs; residual scan covers them |
-| 5 | Floating extension pins | Extensions + crash | Offline-from-vendor packaging build; no `latest` anywhere committed |
-| 6 | Wrong-arch / offline plugins | Extensions + installer matrix | Per-target arch assertion; plugin-activation smoke per target |
-| 7 | Socorro-scope + PII | Extensions + crash (scope in questioning) | Rung decision recorded; PII/retention policy gates go-live; throttle present |
-| 8 | Second SQLite writer | SQL tabs (invariant before schema) | Static no-open scan + interleaved soak with `integrity_check` clean |
-| 9 | Two truths for open tabs | SQL tabs (authority table in design) | kill -9 restart reconciliation test |
-| 10 | New Gecko touchpoints | SQL tabs (in-feature) + rebase drill inside the phase | `INTERNAL-APIS.md` covers all; guard red-proven on new surface |
-| 11 | One schema for four histories | SQL tabs design | Separate domains; tabs own one table; others referenced by stable key |
-| 12 | Drills staged forever | All phases (no terminal drills phase) | Each phase's exit gate names its drill; WINDOWS #13/#14 only in carry-over |
-| 13 | Half re-pin | Installer (one-plan slice) | Every display-form gate red-proven against the other form |
-| 14 | Layout conflated with tabs | SQL tabs design | Tabs restore with layout missing; layout fails soft with tabs present |
-| 15 | Unversioned schema | SQL tabs implementation | `user_version` migrations vs fixtures; quarantine-not-delete corruption path |
-| 16 | Two extension runtimes, one entry | Extensions | Per-entry runtime target; presence-and-loaded asserted on both runtimes |
-
-**Ordering constraints:**
-
-1. **Update-scope (P1) and crash-scope (P7) decisions precede their mechanisms.** Both are questioning outputs. A phase that starts building the pipeline before the rung is chosen builds the wrong rung.
-2. **Installer emitters (P4) and pin schema (P5) precede first real-host / first vendored builds.** Generating after packaging means re-verifying everything twice.
-3. **SQL-tabs invariants (P8 single-writer, P9 authority table) precede schema.** They are design inputs, not review findings.
-4. **The rebase drill follows the SQL-tabs touchpoints (P10), inside that phase.** A drill run before the touchpoints land covers the old surface and certifies nothing.
-5. **SQL tabs land before any GUI work.** PROJECT.md already orders this (GUI-02/05 deferred); the reason is now concrete — the bridge's join key (registry URI) and the authority table must exist before any chrome reads them, or the GUI bakes in the split-brain (P9).
-6. **NAME-01 (P13) lands with the installer phase, not as its own late slice.** Installer artifacts are where display-form assertions multiply; renaming after installers are verified means re-verifying all of them.
-
-**Phases likely to need their own deeper research:**
-
-- **SQL-tabs phase — HIGH.** Storage-API choice (which Gecko storage interface the tab store builds on), Places API evolution at the pinned ESR, and Theia-side observation plumbing are all version-sensitive and unverified in this tree.
-- **Installer phase — MEDIUM.** NSIS/DMG mechanics are documented, but per-OS signing/notarization requirements and the maintenance-service cert story need confirmation against the pinned ESR source, not (mostly older) web docs.
-- **Extensions + crash phase — MEDIUM.** Open VSX resolution semantics and Firefox-side signing enforcement for the pinned versions need phase-level confirmation; TEL-04's rung decision needs real scoping, not research.
-- **Carry-over drills — LOW.** Known work with known shapes; the risk is scheduling (P12), not discovery.
-
----
-
-## Standing Invariants (v1, still in force)
-
-Kept short — the full analysis was the v1 file. Violating any of these re-opens a v1 pitfall on top of the v1.1 work:
-
-1. **Hook-only patches; never template a `.patch`** (v1 P4). SQL tabs and installer wiring both tempt build-logic patches — hook lines only, config lives outside `upstream/`.
-2. **Silent patch no-op guard travels with the stack** — `apply-patches.sh` non-vacuity assertion + `--self-test`, red-proven, on every new patchsurface (v1 P4).
-3. **Verify artifacts, not the manifest** (v1 P6/P7) — installer and plugin checks observe installed bytes, running processes, and live registries; descriptor-per-target + coverage guard for the per-OS matrix.
-4. **Fail-closed identity; echo defaults** (v1 P5) — `[identity]`/`[legal]` required keys stay required through NAME-01; every defaulted cosmetic key echoed at generate time.
-5. **Residual-brand + trademark gates stay green and human** (v1 P8/P14) — installer inputs join the scan scope; the human ritual re-runs over new brand surfaces (installer banners, DMG background, crash dialog).
-6. **Token-gate fail-closed extends to new endpoints** (SEC-01) — tab-query/crash-status APIs inherit it; `verify-dev-flag-off` stays red-provable.
-7. **No second GUI chrome** — v1.1 does no GUI work; nothing in SQL tabs may assume or smuggle presentation (GUI-04 bridge stays landable).
-
----
-
-## Confidence by Area
-
-| Area | Confidence | Basis |
-|---|---|---|
-| Updater/MAR/maintenance-service mechanics (P1) | **MEDIUM** | Official MDN-archive update-server doc + `update-programs.configure` source + Bugs 1079858/1205843 cross-check; not verified against the pinned ESR tree — installer phase must confirm |
-| Profile/remoting/rename hazards (P2, P13) | **HIGH** | Live tree (`components.conf` sort-key comment, `[identity]` schema decision) + v1 Pitfalls 2/3/12/22 verified against `upstream/` Gecko source |
-| Real-host installer requirements (P3, P4) | **MEDIUM** | NSIS/branding sources + WR-04/WR-07 repo precedent; signing/Gatekeeper specifics are stable industry knowledge but host-dependent |
-| Extension pinning/lockfile gap (P5, P6) | **MEDIUM** | Theia PR #8864 (closed unimplemented) + PRs #12410/#13825/#16774 + npm lockfile docs; all primary sources, mutually consistent |
-| Crash pipeline scope/PII (P7) | **MEDIUM** | Socorro docs + repo statement declining external users + Breakpad POST spec + crash-pings-vs-reports distinction (Mozilla-authored); alternatives list is maintainer-sourced |
-| SQLite second-writer corruption (P8) | **MEDIUM-HIGH** | 2026 SQLite-forum corruption report + Bugs 627936/1090961/1359887 + Bug 2040253 WAL-checkpoint failure; mechanism consistent across all; not reproduced in this tree (must not be) |
-| Sessionstore authority/divergence (P9, P11) | **MEDIUM** | `SessionFile.sys.mjs` source (load order, version gating) + Bugs 1906808/1983990 + session-restore source docs; ROADMAP 999.1 three-migrations framing is in-repo |
-| Rebase-boundary fragility (P10) | **HIGH** | Repo-enforced boundary (`check-internals-boundary.sh`, `INTERNAL-APIS.md`, WINDOWS #13) + hook-only patch precedent; prediction about SQL-tab temptation is inference (marked) |
-| Trademark for distributed installers | **MEDIUM** | Current `mozilla.org` distribution-policy + trademark-policy primary text (stronger than v1's LOW — now read directly, not archived); not legal advice |
-
----
-
-## Gaps
-
-- **Pinned-ESR confirmation outstanding.** Updater flags, maintenance-service issuer defines, sessionstore load order, and Places WAL behavior were verified against upstream *main*/recent sources, not the pinned ESR tag in `upstream/`. The installer and SQL phases must re-confirm each against the actual tag — behavior drifts across ESRs.
-- **Firefox-side extension signing enforcement** for the pinned ESR is unresolved (P16) — needs a phase-level check, since enforcement policy is version-dependent.
-- **TEL-04's rung is a scoping decision, not a researchable fact.** This file argues the ladder; questioning must pick the rung.
-- **No packaging host exists yet.** Every per-OS claim above is unverified until PKG-01 names hosts and runs the matrix.
-- **Tab-store storage API unchosen.** Which Gecko storage interface (Sqlite.jsm, Storage service, IndexedDB-backed, plain file) hosts tab rows is the SQL phase's HIGH-priority research question — deliberately not pre-decided here.
-
----
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| 1 Tag and commit identity | 18 | `git ls-remote` record plus `git -C upstream rev-parse HEAD` equal to the recorded SHA |
+| 2 Multi-build full verify, stale MAR evidence | 18 | Both `application.ini` files at 153.5; full `verify-platform.sh` log; MAR note in the verification |
+| 3 Patch hand-edits | 18 | Empty `git diff patches/`; `apply-patches.sh --self-test` |
+| 4 React mismatch or duplicates | 19 | New single-copy `--quick` row and its self-test |
+| 5 One-step multi-upgrade | 19 | Three commits, each with a `--quick` log and a live start |
+| 6 First-boot and runtime regressions | 19, 24 | Fresh-profile live check record; UAT sheet lines |
+| 7 Local versus CI removal leftovers | 17 | `theia-build-order`, `generate-check`, frozen-lockfile install all green locally |
+| 8 Vacuous absence assertions | 17, 19, 21, 24 | Each absence check has a planted control row |
+| 9 Red gate and hooks | 17, 19, 21 | Baseline refreshed; NG-051 approved by Chris; plans under the size gate |
+| 10 Brand scan | 17 and every phase | Scan run after `git add`; row counts reconciled |
+| 11 Startup cache and profile downgrade | 18, 20, 21-24 | `docs/BUILD.md` tier-1 line; UAT entries name the purge |
+| 12 Token gate proof | 19 | Live `side02-*` rows in the UPD-04 record |
+| 13 Node 24 native rebuild | 19 | `drivelist` rebuild with `--nodedir`; `smoke-theia.sh` on 24 |
+| 14 Rebase workflow | 18, 25 | Workflow default equals the pin; workflow either wrapped in Nix or recorded as unexercised |
+| 15 generate-check locally | 20 | Reproduced failure or a recorded "no longer reproduces" with the inkscape path |
+| 16 Concurrent sessions | 17, 19, 20 | Quiet-tree evidence in the plan summary |
 
 ## Sources
 
-**Primary — read directly (HIGH):**
-- `/home/chris/coding/Power-Browser` live tree: `patches/`, `powerbrowser/shell/{components.conf,jar.mn,moz.build}`, `theia/extensions/tab-uris/src/browser/tab-uri-registry.ts`, `scripts/verify-registry-shape.mjs`, `configuration.toml`, `.planning/{PROJECT,ROADMAP,REQUIREMENTS,NEXT-MILESTONE-INPUTS}.md`
-- Gecko `upstream/` (via v1 research, re-cited): `js/moz.configure` (`MOZ_APP_NAME` derivation), `toolkit/moz.configure` (remoting default), `browser/branding/branding-common.mozbuild` (five-PNG contract)
-
-**Official docs + source (MEDIUM, cross-checked):**
-- [Setting up an update server (MDN archive)](http://udn.realityripple.com/docs/Mozilla/Setting_up_an_update_server) · [`build/moz.configure/update-programs.configure`](https://github.com/spsforks/mozilla-firefox-firefox/blob/main/build/moz.configure/update-programs.configure) · [Session Restore source docs](https://firefox-source-docs.mozilla.org/browser/components/sessionstore/docs/index.html) · [`SessionFile.sys.mjs`](https://raw.githubusercontent.com/mozilla-firefox/firefox/main/browser/components/sessionstore/SessionFile.sys.mjs) · [Firefox Crash Reporting source docs](https://firefox-source-docs.mozilla.org/crash-reporting/index.html) · [Socorro overview](https://socorro.readthedocs.io/en/latest/overview.html) · [Breakpad crash-report spec](https://github.com/mozilla-services/socorro/blob/210b2d65/docs/spec_crashreport.rst) · [Crash pings vs crash reports (Will Kahn-Greene)](https://bluesock.org/~willkg/blog/mozilla/crash_pings_crash_reports.html) · [Socorro repo (external-use statement + alternatives)](https://github.com/mozilla-services/socorro)
-- [Distribution Policy for Mozilla Software](https://www.mozilla.org/en-US/foundation/trademarks/distribution-policy/) · [Mozilla Trademark Guidelines](https://www.mozilla.org/en-US/foundation/trademarks/policy/) · [Partnering/Open Source Distributions (MozillaWiki)](https://wiki.mozilla.org/Partnering/Open_Source_Distributions)
-- [Theia extensions docs](https://theia-ide.org/docs/extensions/) · [Installing VS Code extensions in Theia](https://theia-ide.org/docs/user_install_vscode_extensions/) · [Theia PR #8864 (plugins.lock — closed)](https://github.com/eclipse-theia/theia/pull/8864) · [Theia PR #12410 (`${targetPlatform}` CLI)](https://github.com/eclipse-theia/theia/pull/12410) · [Theia PR #13825 (`targetPlatform` resolver)](https://github.com/eclipse-theia/theia/pull/13825) · [Theia PR #16774 (built-ins leave Open VSX)](https://github.com/eclipse-theia/theia/pull/16774)
-- [Bug 1205843 (maintenance-service SHA-2 pin)](https://bugzilla.mozilla.org/show_bug.cgi?id=1205843) · [Bug 1079858 (SHA-1 deprecation)](https://bugzilla.mozilla.org/show_bug.cgi?id=1079858) · [Bug 1090961 (concurrent Sqlite transactions)](https://bugzilla.mozilla.org/show_bug.cgi?id=1090961) · [Bug 627936 (exclusive locking rejected)](https://bugzilla.mozilla.org/show_bug.cgi?id=627936) · [Bug 1359887 (WAL checkpoint deadlock)](https://bugzilla.mozilla.org/show_bug.cgi?id=1359887) · [Bug 1906808 (skeleton session vs `previous.jsonlz4`)](https://bugzilla.mozilla.org/show_bug.cgi?id=1906808) · [Bug 2040253 (WAL never checkpoints, bookmark writes silently fail)](https://bugzilla.mozilla.org/show_bug.cgi?id=2040253) · [Bug 573492 (WAL journaling for places)](https://bugzilla.mozilla.org/show_bug.cgi?id=573492)
-- [SQLite forum: concurrent-access corruption across sandboxed processes sharing a profile](https://sqlite.org/forum/info/a9ee12e5f36adc13da1f59b1912753ba08d87c596eb6cb2f1d3882270) · [npm package-lock.json docs](https://docs.npmjs.com/cli/v12/configuring-npm/package-lock-json/) · [Version pinning, lockfiles, reproducible builds (sscsecurity.dev)](https://sscsecurity.dev/book2/chapter-13/ch-13.2/)
-- [NSIS `branding.nsi` (official)](https://searchfox.org/mozilla-central/source/browser/branding/official/branding.nsi) · [NSIS `installer.nsi`](https://searchfox.org/firefox-main/source/browser/installer/windows/nsis/installer.nsi)
+- In-tree, read 2026-10-16 (HIGH): `CLAUDE.md`; `.planning/PROJECT.md`; `.planning/HANDOFF-plan-reorg.md`; `flake.nix`; `configuration.toml:113-127`; `theia/package.json`; `theia/applications/browser/package.json`; `theia/extensions/*` (branding, tab-uris, token-gate, chrome-bar, modes); `scripts/fetch-upstream.sh`, `rebase-upstream.sh`, `apply-patches.sh`, `check-patch-surface.sh`, `diff-theia-core.sh`, `verify-upstream-pins.mjs`, `verify-branding-identity.mjs`, `verify-installer-build-proof.mjs`, `verify-mar-update-hop.mjs`, `verify-theia-build-order.mjs`, `verify-ng-051-backend-off.mjs`, `verify-platform.sh`, `size-gate.py`, `check-ledger.py`; `.claude/settings.json` and `.claude/hooks/*.py`; `.github/workflows/verify.yml`, `rebase-upstream.yml`; `docs/BUILD.md` (Theia half, UPD-04 record, rebase procedure, toolchain baseline); `docs/non-gui/decisions.md` R33; `inventory/brand-tokens.json`; `.planning/codebase/CONCERNS.md`.
+- Past evidence (HIGH): `.planning/milestones/v1.0-phases/01-*/deferred-items.md` rows 4, 9-11; `.planning/milestones/v1.3-phases/14.1.1-gui-conformance-sweep/deferred-items.md`; `.planning/milestones/v1.3-phases/16-ai-backend-adapter-opencode/deferred-items.md`; 08-05 UPD-03 live drill and 09-04 UPD-04 proof records in `docs/BUILD.md`.
+- Live checks in this session (HIGH): `git ls-remote` of FIREFOX_153 ESR tags; GitHub contents API blob SHAs for the 5 patched files plus `aboutDialog.xhtml` and `milestone.txt` at 153.1 and 153.5; `npm view` of `@theia/core@1.74.1/1.76.0` peers, `@theia/ai-ide@1.76.0` deps, `@theia/getting-started@1.76.0` `theiaExtensions`; `npm pack @theia/ai-ide@1.76.0` (no `initializeLayout`, `AIConfigurationViewContribution`); Theia `CHANGELOG.md` 1.75.0/1.76.0 breaking changes; `gh run view 36495714210 --log-failed`; `gh run list --workflow rebase-upstream.yml` (empty); `node scripts/generate.mjs --check` (PASS, 54 files); installed copy counts of react/inversify in `theia/node_modules`.
+- Memory (MEDIUM, project-recorded experience): `chrome-js-startup-cache`, `live-gui-debug-loop`, `concurrent-sessions-on-main`, `one-fix-at-a-time-confirmed`.
+- Sibling v1.4 research (cross-referenced, not re-derived): `.planning/research/STACK.md`, `.planning/research/ARCHITECTURE.md`, `.planning/research/FEATURES.md`.
 
 ---
-*Pitfalls research for: v1.1 Hardening and SQL Tabs (installers, extensions/crash pipelines, SQL tab stores on a Firefox-ESR + Theia platform)*
-*Researched: 2026-09-04*
+*Pitfalls research for: PowerBrowser v1.4 Platform Updates and GUI Close-out*
+*Researched: 2026-10-16*

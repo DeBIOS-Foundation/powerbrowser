@@ -1,98 +1,177 @@
-# Stack Research: v1.1 Hardening and SQL Tabs
+# Stack Research: v1.4 Platform Updates (Theia 1.76.0 + React 19 + Node 24, Firefox 153.5.0esr)
 
-**Domain:** Stack additions for Power Browser v1.1 — Windows/macOS installer builds, npm/local-path/WebExtension extension sources, crash-report pipeline, SQL-backed tabs
-**Researched:** 2026-09-04
-**Confidence:** HIGH (versions verified against npm registry, Mozilla source docs, and release feeds this session; integration points read from the live tree)
+**Domain:** Version updates for the PowerBrowser platform: the Theia sidecar and its dev shell, and the Gecko upstream pin
+**Researched:** 2026-10-16
+**Confidence:** HIGH for versions, the patch surface, and compile-level impact. MEDIUM for runtime behaviour, because no sidecar has been started at 1.76.0 and no full Gecko build has been run at 153.5.
 
----
+Scope: this file covers only what the two updates need. Capabilities already validated in `.planning/PROJECT.md` are not re-researched.
 
-## Verdict
-
-v1.1 needs **two new npm dependencies total** (`better-sqlite3`, `@sentry/node`) and **zero new build-system dependencies**. Everything else is host tooling on the packaging machines (NSIS, Windows SDK, `hdiutil`/`iconutil`) or machinery already in the tree (`mach repackage`, `Sqlite.sys.mjs`, `policies.json`, `theia download:plugins --packed`).
-
-The shape of every addition follows the existing seams: the generator emits, `verify-platform.sh` asserts, the `PowerBrowserAPI.sys.mjs` boundary stays the single internals touchpoint. Anything that would add a second boundary, a second SQLite writer, or a second packaging system is rejected below.
+Evidence labels used below:
+- **[verified 2026-10-16]**: re-checked in this session against the registry, the Mozilla remote, the locked nixpkgs, or the tree.
+- **[trial 2026-10-15]**: reported by the 2026-10-15 trial (session a38939de) and checked by its verifier. Not re-run here.
+- **UNVERIFIED**: no evidence yet. Needs the live check named next to it.
 
 ---
 
 ## Recommended Stack
 
-### Core Technologies (inherited — carry over, do not re-decide)
+### Core Technologies
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| Firefox ESR | `153.2.0` (re-pin tag `FIREFOX_153_2_0esr_RELEASE` via UPD-01/02 drill) | Browser substrate + all packaging machinery | 153 is the current ESR branch (153.0esr 2026-07-21, 153.2.0 2026-09-01, Mozilla official). The tree pins `FIREFOX_153_1_0esr_RELEASE`; the one-minor re-pin rides the existing uptake tooling, it is not a stack decision. **Confidence: HIGH** |
-| Eclipse Theia | stay on **`1.74.1`** | Sidecar | Still the latest stable tag on GitHub (v1.74.1, 2026-08-06; 1.74.x is the 2026-08 community release). 1.75.0 has a release-plan date of 2026-08-27 but is not marked latest; a Theia bump inside a hardening milestone makes every failure ambiguous. The Theia re-pin proof rides along as a carried drill, not a version change. **Confidence: HIGH** |
-| Node.js 22 + yarn 1.22 classic + TS ~5.9.3 + React 18.3.1 | unchanged | Sidecar toolchain | Per v1 research; `node:sqlite`'s status (below) is the reason Node stays at 22 rather than chasing 24. **Confidence: HIGH** |
-| `smol-toml` | **`1.8.0`** (latest; Snyk confirms 1.8.0 current) | Manifest parsing | Carry over. Note: upstream now advertises TOML 1.1.0 compliance — the manifest must stay on the TOML **1.0.0 subset** (`builtins.fromTOML` is 1.0-only and errors on dates), so never write 1.1-only syntax into `configuration.toml`. Also: 1.6.1+ fixes Snyk uncontrolled-recursion advisories, another reason to take 1.8.0. **Confidence: HIGH** |
-| `sharp` | **`0.35.4`** (2026-08-26, latest) | Icon rasterization | Carry over. Now also feeds the macOS `.iconset` PNG set (16→1024 incl. `@2x`) that `iconutil`/`png2icns` assembles into `.icns`. **Confidence: HIGH** |
+| Firefox ESR | `FIREFOX_153_5_0esr_BUILD1` = commit `223014c6b9299ac9b035b4c50ea481e5c6de282c` | Gecko substrate (`upstream/`) | It is the current ESR: `product-details.mozilla.org/1.0/firefox_versions.json` reports `FIREFOX_ESR: "153.5.0esr"`, and `browser/config/version_display.txt` at that commit reads `153.5.0esr` [verified 2026-10-16]. There is no newer ESR major. The remote has esr115/128/140/153 branches only. |
+| Eclipse Theia | `1.76.0` (all `@theia/*` except monaco-editor-core) | Sidecar GUI framework | npm `latest` = 1.76.0, published 2026-09-24. `next` is 1.77.0-next.57 and `patch` is 1.74.2 [verified 2026-10-16]. It replaces NG-082's stale 1.75.0 target. |
+| `@theia/monaco-editor-core` | `1.108.201` (unchanged) | Monaco build used by Theia | `@theia/monaco@1.76.0` still depends on exactly `1.108.201` [verified 2026-10-16]. The exception in `verify-upstream-pins.mjs` stays as it is. |
+| React / ReactDOM | `19.2.8` / `19.2.8` (exact) | Theia widget layer | Theia 1.75.0 dropped React 18 (#17932). `@theia/core@1.76.0` peerDependencies are `react`, `react-dom`, `@types/react` and `@types/react-dom` at `^19.0.0` [verified 2026-10-16]. Theia's own `package-lock.json` at tag v1.76.0 resolves react/react-dom **19.2.8** [verified 2026-10-16]. Pin what upstream's CI ran, not npm `latest` (19.3.1) and not the trial's 19.1.10. |
+| `@types/react` / `@types/react-dom` | `19.2.18` / `19.2.7` (exact) | Type definitions | These are the versions Theia v1.76.0's lockfile resolves [verified 2026-10-16]. `@types/react-dom@19.2.7` peers on `@types/react ^19.2.0`. |
+| TypeScript | `~5.9.3` (unchanged) | Extension compile | Theia v1.76.0 root `package.json:78` is `~5.9.3`, the same pin as the tree (`theia/package.json:64`). |
+| Node.js | `24.19.0` (`pkgs.nodejs_24` in the **already-locked** nixpkgs `ffb3c9b7…`) | Sidecar runtime, yarn, node-gyp | Theia 1.75.0 set `engines.node >=24` and dropped Node 22 (#17936). Theia v1.76.0 root `package.json:5-6` is `"node": ">=24"`, and "Node 24 stays the recommended default". `nix eval --inputs-from . nixpkgs#nodejs_24.version` returns `24.19.0` at the current `flake.lock` rev, so no lock bump is needed [verified 2026-10-16]. Published `@theia/core`/`@theia/cli@1.76.0` declare no `engines`, so Node 22 is not blocked, only unsupported [trial 2026-10-15]. |
+| yarn classic | `1.22.22` (unchanged) | Workspace installs | Same nixpkgs attr. `flake.nix:21` overrides it onto the chosen `nodejs`. |
 
-### NEW (1): SQL-backed tabs — two access paths, one writer
+### Supporting Libraries (native modules: Node 24 impact)
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| **`Sqlite.sys.mjs`** (`resource://gre/modules/Sqlite.sys.mjs`) | ships in ESR 153 (in-tree, ~70 KB) | Gecko chrome-side SQLite: the new tabs store + exposing places | This is Mozilla's own promise-based wrapper over mozStorage — `Sqlite.openConnection()` / `openDatabaseWithFileURL`, prepared statements, transactions. It is what `Bookmarks.sys.mjs`, `History.sys.mjs`, and every first-party consumer already sits on. Zero new dependencies, profile-dir-aware, WAL-capable, and it keeps crash-report filenames controllable via the explicit `TelemetryFilename` parameter (the module header carries a privacy warning: pass a fixed name like `tabs.sqlite`, never a per-origin filename). New-tab schema is a **new `tabs.sqlite`** in the profile dir — never new tables inside `places.sqlite` (upstream-owned schema; a rebase that migrates places would collide with us). Bookmarks/history are **exposed via the async `Bookmarks.sys.mjs` / `History.sys.mjs` APIs**, not raw SQL against places internals. **Confidence: HIGH** (module confirmed present on mozilla-central/main; Places-on-SQLite architecture per Firefox Source Docs) |
-| **`better-sqlite3`** | **`13.0.3`** (2026-08-05, latest stable; MIT) | Theia Node-backend SQLite reads | The fastest synchronous SQLite driver for Node (~9,800 dependents, weekly releases, actively maintained). Synchronous API matches the backend's low-concurrency tab-query path and mirrors `node:sqlite`'s shape, so a future stdlib migration is mechanical. Prebuilds cover Node 22 (`NODE_MODULE_VERSION` 127); if a prebuild is ever missing, the `theia` dev shell already carries the fallback toolchain (`python3`, `gnumake`, `pkg-config`, node-gyp-bin on PATH — the `drivelist` precedent). Open the DB **`readonly: true`** from the backend. **Confidence: HIGH** |
+Every native module in `theia/node_modules` exports `napi_register_module_v1`, which makes it ABI-stable across Node majors. Each one loaded under Node 24.19.0 in this session [verified 2026-10-16].
 
-**Single-writer rule (load-bearing): Gecko owns `tabs.sqlite`; the Theia backend never writes.** SQLite locking plus Firefox's own profile lock make two writers a corruption story. The backend opens read-only for queries (search, diagnostics) and all mutations go through `PowerBrowserAPI.sys.mjs` → chrome-side `Sqlite.sys.mjs` connection. Tab identity keys are `TabUriRegistry` URIs (the GUI-04 stable-identity seam) — the URI is the primary key, so the later mirror/proxy bridge joins on identity rather than rowids. Schema carries a `schema_version` table from day one; migrations live in the chrome-side module, catalogued as new `INTERNAL-APIS.md` rows (every `Services.dirsvc`/`Sqlite` touch enters through the boundary file, per `check-internals-boundary.sh`).
+| Library | Version | How it gets a binary | Node 24 action |
+|---------|---------|----------------------|----------------|
+| `drivelist` | 12.0.2 | Built from source: `node-gyp rebuild`, N-API 8, no prebuild. CI step at `.github/workflows/verify.yml:83` | Rebuild inside the new shell for reproducibility. Node 24's bundled node-gyp is **12.4.0** at `${nodejs_24}/lib/node_modules/npm/bin/node-gyp-bin`, the path `flake.nix:58` already uses [verified]. A Node 22-built `drivelist.node` also loads on 24 [verified], but the compile under 24 headers is UNVERIFIED. |
+| `better-sqlite3` | 13.0.3 | In-package N-API prebuild (`prebuilds/linux-x64.node`). `engines >=22` | None. Loads on 24 and reports SQLite 3.53.4 [verified]. |
+| `node-pty` | 1.2.0-beta.12 (pinned by `@theia/terminal@1.76.0`) | In-package N-API prebuilds | None for loading [verified]. `scripts/smoke-theia.sh` spawn proof must be re-run (UNVERIFIED on 24). |
+| `@parcel/watcher` | 2.6.0 | N-API optional package `watcher-linux-x64-glibc` | None [verified]. |
+| `msgpackr-extract` | 3.0.4 | `node.napi.glibc.node` prebuild | None [verified]. |
+| `keytar` | 7.9.0 | No binary present, because `--ignore-scripts` skips its prebuild | Already broken under Node 22, so the Node 24 move changes nothing. The runtime impact (Theia credential storage) is UNVERIFIED and outside this milestone. |
+| `@theia/ffmpeg` | 1.76.0 | Optional `binding.gyp` | Do not build it. A script-enabled install leaves `node_modules/@theia/ffmpeg/build`, and `diff-theia-core.sh` then fails [trial 2026-10-15]. |
 
-### NEW (2): Installer builds — host tools, no new tree deps
+### Development Tools
 
-| Tool | Version | Purpose | Why Recommended |
-|------|---------|---------|-----------------|
-| **NSIS** (Windows packaging host) | **`3.12`** (2026-04-19; floor 3.11) | Stub + full Windows installers | Firefox builds its own installers from in-tree `browser/installer/windows/nsis/` via `mach build installer` / `mach package` — the generator's job is only correct `branding.nsi` defines (the six `!define` names `verify-installer-schema.mjs` already asserts). 3.11 fixed CVE-2025-43715 (privilege escalation when installers run as SYSTEM); 3.12 fixes a second SYSTEM priv-esc plus macOS-cross build fixes. v1's WR-04 (reject bare `$VAR` in NSIS defines) is exactly the hardening this needs. NSIS installs on the Windows host only; nothing enters the repo or flake. **Confidence: HIGH** |
-| **Windows SDK `MAKEAPPX`/`SIGNTOOL`** (Windows packaging host) **or** Mozilla `msix-packaging` fork toolchain (Linux cross path) | Windows SDK 10+ / `mach artifact toolchain --from-build linux64-msix-packaging` | MSIX repackaging | `mach repackage msix [--unsigned] [--sign]` is the entire MSIX pipeline (per Firefox Source Docs): it repackages the `mach package` ZIP, is branding-aware (channel-specific paths — which is why the generator's identity keys feed it), and handles self-signed test certs itself. Unsigned packages install on Win11 with the OID path (`Add-AppxPackage -AllowUnsigned`, admin). No npm/MSIX-SDK dependency — the MSIX format's proprietary bits (`resources.pri` via `makepri.exe`) are why you use Mozilla's tooling, not a third-party packager. **Confidence: HIGH** |
-| **`hdiutil` + `iconutil`** (macOS packaging host) | preinstalled on macOS | DMG creation + `.icns` assembly | Mozilla's own note: DMGs are built with `hdiutil` on macOS hosts (Linux automation uses `libdmg-hfsplus`; lzma compression since FF136 needs macOS ≥10.15 semantics). `iconutil -c icns firefox.iconset` is Mozilla's documented icon path (`UpdatingMacIcons` source doc). sharp emits the PNG set (16→1024 + `@2x`); the mac host assembles. Nothing enters the repo. **Confidence: HIGH** |
-| **`libicns` `png2icns`** (nixpkgs, Linux-side fallback) | **`0.8.1`** (1024px support; LGPL) | `.icns` assembly without a Mac host | Only if v1.1 wants a Linux-generated icns for smoke/verify purposes — real DMGs still build on the Mac host. `pkgs.libicns` provides it; it is a one-line flake addition, not an npm dep. Prefer host `iconutil` for shippable artifacts. **Confidence: MEDIUM** (format support verified; pin the "host iconutil is canonical" rule so Linux icns never ships) |
-
-### NEW (3): Extension sources — manifest kinds, no new tooling
-
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| **npm-source Theia extensions** = exact-pinned `dependencies` + `resolutions` in `theia/applications/browser/package.json` | yarn 1.22 (existing) | EXT-02 npm kind | A Theia extension *is* an npm package exposing `ContainerModule`s, consumed as a compile-time dependency — there is no plugin-runtime install step to build. So "npm source" needs no new tooling: the generator maps `[[extensions]] source="npm"` entries to exact-pinned deps, the existing `resolutions` table forces the `@theia/*` pairing, `yarn.lock` freezes transitive closure, and `verify-extension-pins.mjs` grows a step-2 rule (every npm entry's installed version equals its pin — a floated range goes red the same way a floated Open VSX URL does today). **Confidence: HIGH** |
-| **local-path extensions** = `file:` deps or `theia/extensions/*` workspace members | yarn 1.22 workspaces (existing) | EXT-02 local-path kind | Same mechanism as the five `@powerbrowser/*` extensions already in the tree. Fail-loud = the generator resolves the path at generate time (missing dir = hard fail, same class as WR-07's fixture-root threading) and the verifier asserts the workspace member builds. **Confidence: HIGH** |
-| **`ExtensionSettings` in `powerbrowser/distribution/policies.json`** | ESR 153 policy schema | WebExtensions declaration sibling | The tree already ships `powerbrowser/distribution/policies.json` — the documented enterprise path (`distribution/` + `distribution/extensions/<id>.xpi` bundling, or `force_installed`/`normal_installed` + `install_url`). ESR 153 even makes `install_url` optional for AMO-hosted extensions and adds `runtime_blocked_hosts`/`blocked_permissions`. The generator emits this block from `[[extensions]]` webext entries, so the "sibling" is one manifest section rendered twice (Theia `theiaPlugins` + Firefox `ExtensionSettings`), pinned and fail-loud through the same verifier. **Confidence: HIGH** |
-
-### NEW (4): Crash-report pipeline — Sentry, not Socorro
-
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| **`@sentry/node`** | **`10.73.0`** (latest, 2026-09-03; MIT; Node ≥18) | Theia-backend crash + error capture (TEL-04 client side) | The sidecar is a Node backend — its crashes are JS exceptions and native aborts, both of which the Sentry Node SDK captures with breadcrumbs, release/channel annotations, and offline-queued retry upload. Wire it behind the existing `[telemetry]` level gate: level `off` (default) = `Sentry.init` never runs (fail-closed, consistent with the token-gate posture); `crash`/`error`/`all` map to `tracesSampleRate`/`beforeSend` filtering; the `[telemetry] endpoint` becomes the DSN. Theia 1.74's own `@theia/telemetry` (`TelemetrySink`) is the in-extension seam — contribute a Sentry sink rather than inventing a reporting module. **Confidence: HIGH** |
-| **Self-hosted Sentry** | **`26.8.0`** (2026-08-17; docker-compose) | Downstream-operated collector (TEL-04 server side) | Socorro is explicitly out: its README states it is Mozilla-centric with **no capacity for external users**, and it drags Postgres/Kafka/Elasticsearch-class infrastructure. `electron/mini-breakpad-server` is archived (Dec 2022, CoffeeScript, unmaintained) — do not adopt. Self-hosted Sentry is the maintained single-`install.sh` collector a downstream can actually operate; SaaS Sentry is the zero-ops alternative. Either way the platform only ever carries the DSN key, never collector infra. **Confidence: MEDIUM-HIGH** (SDK/client choice HIGH; collector-operability MEDIUM — needs the TEL-04 live drill against a real collector) |
-| Gecko minidumps | no change in v1.1 (reporter stays compiled out) | deliberate deferral | `breakpad.reportURL` repointing (TEL-03, already manifest-driven) is the only Gecko-side crash key in v1.1. Re-enabling `--enable-crashreporter` + a minidump upload/consent UI is a separate milestone's worth of privacy surface (consent prompt, `about:crashes`, symbolication pipeline) — TEL-04's "beyond endpoint repointing" is satisfied by the Sentry sidecar pipeline + the documented minidump follow-up, not by half-enabling Breakpad. **Confidence: HIGH** |
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| `nix develop .#theia` | Node 24 shell | Edit only `flake.nix:20`. Do not run `nix flake update`: the lock pins inkscape **1.4.4** (verified), which the `generated-byte-identity` row depends on (`flake.nix:37-46`), and rustc **1.97.1** (verified) for the Gecko shell. |
+| `nix develop .#firefox` | Gecko toolchain | No change. `python/mozboot/mozboot/util.py` (`MINIMUM_RUST_VERSION`), `toolchain.configure`, `bindgen.configure` and `node.configure` have the same blob SHA at 153.1 and 153.5 BUILD1 [verified]. The `rust.configure` diff only handles target triples from rustc ≥ 1.98, and the lock has 1.97.1. |
+| `scripts/rebase-upstream.sh --tag FIREFOX_153_5_0esr_BUILD1` | ESR move | It composes `fetch-upstream.sh` (which recreates the overlay symlinks through `ensure_branding_overlay`) and `apply-patches.sh`. |
+| `node scripts/verify-upstream-pins.mjs` | One-pin agreement for Theia and the ESR | It also checks that `.github/workflows/rebase-upstream.yml:33` mirrors the ESR pin. |
+| `scripts/diff-theia-core.sh` | Hard rule 1 gate | Run it after an `--ignore-scripts --frozen-lockfile` install only. |
 
 ---
 
-## Installation
+## Exact Change Sites
+
+### A. Do OpenCode removal first (it changes what the Theia bump touches)
+
+Removing `theia/extensions/backend-opencode` before the bump means the re-pin edits 7 extensions instead of 8, and `@agentclientprotocol/sdk@1.4.0` leaves the regenerated lockfile. The sites that intersect the bump:
+- `theia/package.json:69`: drop `&& yarn --cwd extensions/backend-opencode build` from `build:extensions`.
+- `theia/applications/browser/package.json:15`: the `powerbrowserAiBackend` key.
+- `configuration.toml:117-127`: the `[ai]` table and its comment.
+
+### B. Theia 1.74.1 → 1.76.0 with React 19
+
+| File:line | Change |
+|-----------|--------|
+| `configuration.toml:115` | `theia_release = "1.76.0"`, then `node scripts/generate.mjs` |
+| `theia/package.json:8-57` | 49 of the 50 `@theia/*` resolutions → `1.76.0`. `:35` `@theia/monaco-editor-core` stays `1.108.201` |
+| `theia/package.json:61` | `"node": ">=22"` → `">=24"` (matches Theia root `package.json:5-6`) |
+| `theia/package.json:65-66` | `@types/react` `18.3.31` → `19.2.18`. `@types/react-dom` `18.3.7` → `19.2.7` |
+| `theia/applications/browser/package.json:4` | `"version": "1.74.1"` → `"1.76.0"` (the trial's sed changed it too) |
+| `theia/applications/browser/package.json` deps, `:99` | every `@theia/*` → `1.76.0`, and `@theia/cli` → `1.76.0` |
+| `theia/applications/browser/package.json:95-96` | `react`/`react-dom` `18.3.1` → `19.2.8` |
+| `theia/extensions/{branding,chrome-bar,customize,modes,tab-uris,telemetry,token-gate}/package.json` | every `@theia/*` → `1.76.0` |
+| `theia/extensions/branding/src/browser/powerbrowser-ai-layout-contribution.ts:11, :28-43` | **Delete** `PowerBrowserAIConfigurationViewContribution` and its import. The 1.75.0 rework (#17820) renamed the base class to `AIConfigurationViewContribution` (`ai-configuration-view-contribution.ts:45` in the 1.76.0 tarball) and removed `initializeLayout`. `openView` now runs only from the command (`:96`) [verified]. With no forced open left, a rename would leave the subclass with nothing to override. Update the file header (`:1-5`), which says "These two rebinds". |
+| `theia/extensions/branding/src/browser/powerbrowser-frontend-module.ts:5, :10, :40-44` | Delete the import at `:5`, drop the second name from `:10`, and delete the guarded rebind at `:40-44`. **Keep** D-22 rebind 1 (`:35-39`): `AIFirstPerspectiveContribution.registerPerspectives` still exists at 1.76.0 (`ai-first-perspective-contribution.ts:29-31`) [verified]. |
+| `theia/yarn.lock` | Regenerate. The trial measured about +700/−2550 lines [trial 2026-10-15]. |
+| `theia/applications/browser/package.json:20-22` | **New finding: add `"workbench.startupEditor": "none"`** to `frontend.config.preferences`. See "New transitive extensions" below. |
+| `docs/BUILD.md:268-286`, `README.md:87` | Re-record the UPD-04 proof at 1.76.0 and close the 1.75.0 deferral. |
+
+The tree has no React 18-only API to remove (see the audit below), and no extension `tsconfig.json` change is needed.
+
+### C. Node 22 → 24
+
+| File:line | Change |
+|-----------|--------|
+| `flake.nix:20` | `nodejs = pkgs.nodejs_22;` → `pkgs.nodejs_24;` |
+| `flake.nix:14-19` | Rewrite the D-16 comment, which this change supersedes. **Keep** the `yarn.override` at `:21`. It is now a no-op, because nixpkgs' default `nodejs` is also 24.19.0 [verified], but it keeps yarn and node-gyp on the shell's Node when nixpkgs moves its default to 26. |
+| `flake.nix:53-57` | Comment only. The node-gyp PATH line at `:58` is already Node-agnostic. |
+| `scripts/lib/firefox-bidi.mjs:5`, `scripts/smoke-theia.sh:57`, `scripts/verify-platform.sh:3000` | Comments naming "Node 22"/`nodejs_22`. Text only. Global `WebSocket` and `node:sqlite` are present on 24. |
+
+CI needs no separate edit. `.github/workflows/verify.yml:67-93` runs every step through `nix develop .#theia`, so it inherits the flake change.
+
+### D. Firefox 153.1.0esr → 153.5.0esr BUILD1
+
+| File:line | Change |
+|-----------|--------|
+| `configuration.toml:114` | `firefox_esr_tag = "FIREFOX_153_5_0esr_BUILD1"`, then `node scripts/generate.mjs` (rewrites `generated/upstream-pins.env`) |
+| `.github/workflows/rebase-upstream.yml:33` | Mirror the default to the same tag. `verify-upstream-pins.mjs` fails on drift. |
+| `scripts/smoke-firefox.sh:41-42` | **Hard-coded `'153.1.0esr'`**: the `smoke-firefox` row (`verify-platform.sh:4682`) goes red after the rebase. Derive the expected value from `upstream/browser/config/version_display.txt`, as `verify-branding-identity.mjs:75-78` already does. That follows the "derive from the tree" rule. |
+| `scripts/fetch-upstream.sh:276-282` | Correct the comment. "RELEASE and BUILD1 share a commit" is not a general rule: for 153.4, RELEASE = BUILD3 (`508788b6f8`) and BUILD1 = `f92008fc60` [verified]. The hash comparison itself is correct, so only the comment changes. |
+| `configuration.toml:104` | Cosmetic: two comment lines are joined ("…this# project builds against…"). |
+| `README.md:87`, `docs/BUILD.md` (near `:446`, `:1088`), `scripts/lib/firefox-bidi.mjs:11`, `scripts/verify-branding-identity.mjs:31` | Version mentions in prose and comments only. |
+| `patches/*.patch` | **No change.** The 4 patches touch 5 files (`browser/moz.build`, `browser/moz.configure`, `browser/installer/windows/nsis/{defines.nsi.in,installer.nsi}`, `toolkit/mozapps/update/updater/moz.build`). Each of the 5 has the same blob SHA at `468445e58d` (153.1) and `223014c6b9` (153.5 BUILD1) [verified via the GitHub contents API]. The patches' blob index lines therefore still match, and the 3-way apply cannot degrade into a silent no-op. |
+
+---
+
+## React 18-only API audit (per `@powerbrowser/*` extension)
+
+Search run over `theia/extensions/*/src` and `*/test` (`.ts`, `.tsx`) for `ReactDOM.render`, `hydrate`, `unmountComponentAtNode`, `findDOMNode`, `.defaultProps`, `propTypes`/`PropTypes`, `contextTypes`/`childContextTypes`/`getChildContext`, string refs (`ref="…"`, `this.refs`), `react-dom/test-utils`, `react-test-renderer`, `act(`, `createFactory`, `UNSAFE_*`/legacy lifecycles, `useRef()` without an argument, bare global `JSX.`, and `element.ref` access. **Zero matches in every extension** [verified 2026-10-16].
+
+| Extension | React files | APIs in use | React 19 status |
+|-----------|-------------|-------------|-----------------|
+| branding | `powerbrowser-welcome-widget.tsx:1,3,38,72,114`, `powerbrowser-about-dialog.tsx:1,47,93,106` | `ReactWidget`/`AboutDialog` subclasses, `React.ReactNode`, `React.SyntheticEvent`, keyed `map` | Compatible. Its only 1.76 break is the AI override (section B). |
+| chrome-bar | `chrome-bar-widget.tsx:1-2,97,254,361,578-603,677`, `tab-strip-widget.tsx:1,3,71,425,446,541,583` | `ReactWidget`, `createPortal` (from `@theia/core/shared/react-dom`, still exported in 19), event types, a block-bodied callback ref `ref={el => { this.pillRef = el; }}` (`:677`) | Compatible. The ref callback returns `undefined`, so React 19's ref-cleanup typing does not reject it. |
+| modes | `organising-widget.ts:4` is a plain Lumino `Widget` ("NOT React") | none | Not affected. |
+| customize, tab-uris, telemetry, token-gate | none | none | Not affected. |
+| backend-opencode | none | none | Deleted in section A. |
+
+Type pins: only `theia/package.json:65-66` (`@types/react` 18.3.31, `@types/react-dom` 18.3.7). The lockfile holds a single copy of each (`yarn.lock:2782`, `:2787`, `:7539`, `:7585`). Every `tsconfig.json` uses `"jsx": "react"` with `import * as React from '@theia/core/shared/react'`. Theia 1.75 moved its own packages to `react-jsx`, but "Adopters are not required to switch" (CHANGELOG 1.75.0), so leave the tsconfigs alone.
+
+Compile evidence: React 19.1.10 with `@types` 19.3.0 built with 0 TS errors and `diff-theia-core.sh` PASS [trial 2026-10-15]. The 19.2.8 / 19.2.18 / 19.2.7 set recommended here sits between those versions and has not itself been compiled (UNVERIFIED, low risk).
+
+React 19 runtime behaviour to confirm live (UNVERIFIED):
+- Errors thrown during render that no boundary catches now go to `window.reportError` rather than being rethrown. `telemetry-error-capture.ts:20` listens on `window` `'error'`, which `reportError` dispatches, so capture should still work. Confirm with one forced render error.
+- The chrome-bar dropdown portal and its `getBoundingClientRect` positioning (`chrome-bar-widget.tsx:590-603`) after React 19's commit-phase changes.
+
+---
+
+## Theia 1.75/1.76 breaking changes against packages this tree consumes
+
+The sites come from the deep imports the extensions make (51 distinct `@theia/*` module paths).
+
+| Change (PR) | Tree site | Impact |
+|-------------|-----------|--------|
+| React 18 dropped, `^19` peers (#17932) | section B | Required. Yarn only **warns** on the unmet peer, so with React 18 left in place the build passes and the mismatch surfaces only at runtime [trial]. |
+| AI Configuration master-detail rework; `AIAgentConfigurationViewContribution` gone (#17820) | `branding/.../powerbrowser-ai-layout-contribution.ts:11,38`, `powerbrowser-frontend-module.ts:5,40-44` | TS2724 compile failure. Fix: delete (section B). |
+| Node 22 dropped, `engines >=24` (#17936) | `flake.nix:20`, `theia/package.json:61` | Section C. |
+| `@theia/ai-ide` now depends on `@theia/getting-started` (#17969) | none today. `@theia/getting-started` is **absent** from `theia/node_modules` at 1.74.1 | **New behaviour.** Theia collects extensions transitively (`application-package/lib/extension-package-collector.js:72`). At 1.76.0, `GettingStartedContribution.onStart` therefore opens Theia's own "Welcome" widget (`getting.started.widget`, with links to theia-ide.org) whenever `editorManager.all.length === 0`, and the preference default is `workbench.startupEditor: 'welcomePage'` (`getting-started-preferences.ts:29-42`) [verified from the tarball]. Web tabs and the PowerBrowser welcome are not editors, so it would open on every start. That conflicts with D-24/D-33. Fix: one line, the default preference in section B. The trial did not catch this because it never started the sidecar. |
+| `@theia/plugin-ext` now depends on `@theia/telemetry` (#17963) | `telemetry/src/browser/telemetry-preferences.ts:27-45,64` | `@theia/telemetry@1.76.0` also registers `telemetry.telemetryLevel`, with the same enum `off/crash/error/all` and default `off`. `PreferenceSchemaService.addSchema` keeps whichever registers **first** and logs `Property with id 'telemetry.telemetryLevel' already exists` for the second [verified from the tarball]. Values and behaviour match, but the Settings description may become Theia's text instead of the PowerBrowser copy. Which one wins depends on module load order (UNVERIFIED). Theia's backend binds no default `TelemetrySink`, so nothing leaves the machine [verified]. Decide at the live check: keep it and accept the warning, or drop our schema and consume Theia's (`TELEMETRY_LEVEL` from `@theia/telemetry`). |
+| `TabBarToolbarItem.isVisible` contextMatcher mandatory (#17978) | `chrome-bar-commands.ts:120,128,138` | Not affected. These are `CommandHandler.isVisible`, not toolbar items. |
+| `SecondaryWindowService.onWindowLoaded` added; Monaco theme injected into secondary windows (#17874) | `modes/src/browser/dependent-windows.ts:4,69-70` (consumer only) | No compile impact, because the tree injects the service rather than implementing it. The behaviour change (theme in dependent windows) needs a live look (UNVERIFIED). |
+| `unload` → `pagehide` for layout save (#17870) | `modes` uses `shell-layout-restorer` | Should improve save-on-close. Confirm that named setups and modes survive a restart (UNVERIFIED). |
+| Connection-token re-issue drops `If-None-Match` (#17762) | `token-gate` (separate from Theia's token) | Expected none. `EnvVariablesServerImpl` still snapshots `process.env` in its constructor at 1.76.0, which keeps the `powerbrowser-env.ts:43` scrub ordering valid [trial verifier]. |
+| Webpack bundling removed (#17935) | `theia/applications/browser/` already ships `esbuild.mjs` + `gen-esbuild.*.mjs` | Not affected. `theia build --mode development` (`package.json:104`) passed [trial]. |
+| `ILogger` injected into many classes (#17763) | `extensions/telemetry/test/telemetry-sender.test.mjs` (plain node, no container) | Not affected. 9/9 PASS [trial]. |
+| `PreferencesContribution.scopeTracker` removed, `VSXExtensionsWidget.resolveCount` sync, `PluginPaths` moved, `ScmCommitWidget` rebound, Copilot/model-list prefs removed, `DecorationsProvider.onDidChange` widened, Electron `CHANNEL_WC_METADATA` | tab-uris imports `preference-open-handler`, `vsx-extension-editor`, `plugin-view-registry`, `webview`. None of the changed members is used | Not affected. The tree compiled at 1.76.0 apart from branding [trial]. |
+
+---
+
+## Installation (runbook order)
 
 ```bash
-# Theia workspace additions (exact pins; resolutions table keeps @theia/* paired)
-# In theia/applications/browser/package.json or the workspace root:
-yarn add --exact better-sqlite3@13.0.3
-yarn add --exact @sentry/node@10.73.0
-
-# No new root/generator dependencies.
-# smol-toml stays 1.8.0 (do NOT downgrade: <1.6.1 has Snyk recursion advisories).
-# sharp stays 0.35.4.
-
-# Windows packaging host (PKG-01 procedure for docs/BUILD.md)
-#   - NSIS 3.12  (https://nsis.sourceforge.io/Download)
-#   - Windows SDK 10+ (MAKEAPPX, SIGNTOOL, makepri.exe) — MSIX path only
-#   - then: mach package  →  mach repackage msix --unsigned  (test)
-#     or:   mach build installer  (NSIS stub+full)
-
-# macOS packaging host
-#   - Xcode CLT only (hdiutil + iconutil are preinstalled)
-#   - sharp PNG set → *.iconset/ → iconutil -c icns → mach package (DMG)
-
-# Crash collector (downstream-operated, never in this repo)
-#   - Self-hosted Sentry 26.8.0 install.sh, or SaaS Sentry DSN
-#   - DSN lands in [telemetry] endpoint only
+# 0. OpenCode removed first (separate commit).
+# 1. Node 24: edit flake.nix:20, then
+nix develop .#theia --command node -v        # expect v24.19.0
+# 2. Theia + React: edit pins (section B), then
+node scripts/generate.mjs
+nix develop .#theia --command bash -c 'cd theia && yarn install --ignore-scripts && \
+  (cd node_modules/drivelist && node-gyp rebuild) && yarn build'
+#    (re-run with --frozen-lockfile after committing the regenerated lock)
+node scripts/verify-upstream-pins.mjs && scripts/diff-theia-core.sh
+nix develop .#theia --command bash -c 'node theia/node_modules/typescript/bin/tsc -b theia/extensions/token-gate'
+node theia/extensions/telemetry/test/telemetry-sender.test.mjs
+bash scripts/smoke-theia.sh                   # node-pty spawn under Node 24
+# 3. Firefox: edit configuration.toml:114 + rebase-upstream.yml:33 + smoke-firefox.sh:41-42, then
+node scripts/generate.mjs
+scripts/rebase-upstream.sh --tag FIREFOX_153_5_0esr_BUILD1   # ~6 min clone
+nix develop .#firefox --command bash -c 'cd upstream && MOZCONFIG=../.mozconfig ./mach build'  # ~47-54 min
+scripts/verify-platform.sh
 ```
-
-### Flake notes
-
-- `theia` shell: no new inputs required for `better-sqlite3` prebuilds on x86_64-linux; the existing `python3` + `gnumake` + `pkg-config` + node-gyp-bin PATH already covers a source fallback rebuild (same path `drivelist` uses). If aarch64 packaging hosts appear, re-verify prebuild availability there.
-- Optional: `pkgs.libicns` only if a Linux-side `png2icns` smoke check is wanted. Never required for shippable DMGs.
 
 ---
 
@@ -100,88 +179,58 @@ yarn add --exact @sentry/node@10.73.0
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
-| `Sqlite.sys.mjs` (chrome JS) | Raw `mozIStorageConnection` / `Services.storage` | Never in new code — `Sqlite.sys.mjs` *is* the mozStorage wrapper with the promise API, telemetry-filename hygiene, and shutdown blocking. Raw connections bypass all three. |
-| `Sqlite.sys.mjs` + new `tabs.sqlite` | New tables in `places.sqlite` | Never — places is upstream-owned; every ESR rebase may migrate it. Our schema lives in our file. |
-| `better-sqlite3@13.0.3` | `node:sqlite` (stdlib) | When it graduates stable on the pinned Node line. Today it is **Stability 1.2 / Release Candidate** (Node 25.7+; still flagged experimental on Node 22, unflagged only since 22.13 but API still shifting — `column()`, session tracking, and `location()` all landed mid-22.x). A platform surface cannot pin a moving API. Revisit at the next Node re-pin; the call shapes are deliberately similar so the swap is small. |
-| `better-sqlite3@13.0.3` | `node-sqlite3` / `sqlite3` npm | Never — async-callback API, slower, heavier native surface, no advantage for a single-reader backend. |
-| `better-sqlite3@13.0.3` | `sql.js` (WASM SQLite) | Only if the backend ever had to run where native modules cannot load. It can (the shell already builds `drivelist` native) — WASM would add a ~MB blob and synchronous-fs quirks for zero benefit. |
-| `@sentry/node` + self-hosted Sentry | Self-hosted **Socorro** | Never — upstream explicitly declines external support; the stack (Antenna collector + processor + Postgres + ES + S3) is an ops team, not a downstream affordance. |
-| `@sentry/node` | `electron/mini-breakpad-server` | Never — archived by Electron Dec 2022, CoffeeScript, no symbolication pipeline. Listed here only because Socorro's own README still names it. |
-| `@sentry/node` | `wk8/sentry_breakpad` bridge | If v1.1 later re-enables the Gecko reporter and needs minidumps forwarded into Sentry — that is the documented escape hatch, not the starting point. |
-| `mach repackage msix` + Windows SDK | Third-party MSIX packagers / Electron builders | Never — they cannot reproduce Mozilla's branding-aware `resources.pri`/manifest handling; `electron-builder` in particular would be a second packaging system alongside `mach`. |
-| Host `iconutil` (macOS) | `libicns png2icns` for shippable icns | Only as a Linux smoke-check fallback. Shippable `.icns` comes from Apple's own tool on the Mac host (Mozilla's documented path). |
-| Hand-rolled manifest validation (existing key table) | `zod`/`ajv` for new `[[extensions]]` kinds | If `configuration.toml` grows past ~50 keys. The new source kinds are three enum values + existing pin/sha fields — the key table covers them with better error messages to non-developers. |
-| No ORM anywhere | Drizzle / TypeORM / Prisma / Sequelize | Never for this schema — one `tabs` table plus a version row, accessed from *two different runtimes* (Gecko JS, Node) no ORM spans. An ORM would be a third schema description disagreeing with the other two. Hand-written SQL in `PowerBrowserAPI` + one backend reader module, both asserting `schema_version`. |
-
----
+| `FIREFOX_153_5_0esr_BUILD1` | `FIREFOX_153_5_0esr_RELEASE` (the existing convention) | Today both tags resolve to `223014c6b9` [verified]. The 2026-10-15 trial, however, recorded RELEASE at `f617beaded` (2026-10-13, "make esr153 not next-esr", version 153.6.0esr), which is 183 commits **after** BUILD1 (`compare 223014c6b9...f617beaded` = ahead 183, behind 0) [verified]. Either the tag moved or the trial misread it. A BUILD tag names the build Mozilla shipped, so pin BUILD1 and record the commit hash in `docs/BUILD.md`. Return to RELEASE only after it has been seen stable across several point releases. |
+| React 19.2.8 | React 19.3.1 (npm latest) | Only after a Theia release whose lockfile resolves 19.3.x. |
+| React 19.2.8 | 19.1.10 (the trial's set) | Acceptable fallback. It is already proven to compile. |
+| Theia 1.76.0 | 1.74.2 (`patch` dist-tag) | Only if React 19 or Node 24 had to be deferred. It contains none of the upstream fixes after 1.74. |
+| Default preference `workbench.startupEditor: none` | Rebind `GettingStartedContribution` in `@powerbrowser/branding` to a no-op `onStart` | Use the rebind only if users must not be able to turn the Theia welcome back on. The preference is one line and leaves the walkthrough command reachable. |
+| Keep `@theia/ai-*` composed | Drop `@theia/ai-ide` (which removes getting-started from the closure) | This is a product decision tied to DSH (last phase), not a version-update fix. Do not make it here. |
 
 ## What NOT to Use
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `node:sqlite` on Node 22 | Still experimental/RC on the pinned line; API shifted across 22.x minors (session API in .12, TypedArray bindings in .14, `columns()`/timeout in .16). A platform that pins exact versions cannot build on a moving stdlib surface | `better-sqlite3@13.0.3`; revisit at next Node re-pin |
-| Socorro self-host | Explicitly unsupported for non-Mozilla use; multi-service ops burden no downstream will run | Self-hosted Sentry 26.8.0 or SaaS Sentry; DSN-only in tree |
-| `mini-breakpad-server` | Archived, unmaintained since 2022 | Same as above |
-| Any ORM | Cannot span Gecko/Node runtimes; triples schema descriptions for a single-table store | Hand SQL + `schema_version` assertion both sides |
-| Second SQLite writer (backend writes to `tabs.sqlite`) | Lock contention + Firefox profile-lock corruption story | Backend opens `readonly: true`; all writes via `PowerBrowserAPI` |
-| New tables in `places.sqlite` | Upstream-owned schema; rebase migrations collide | Own `tabs.sqlite` in profile dir |
-| `sql.js` | WASM weight + sync-fs quirks with no payoff where native modules already build | `better-sqlite3` |
-| Electron packagers / third-party MSIX tools | Second packaging system; cannot do Mozilla's branding-aware MSIX bits | `mach build installer` / `mach repackage msix` on packaging hosts |
-| Re-enabling `--enable-crashreporter` in v1.1 | Opens consent/UI/symbolication surface (prompt, `about:crashes`, minidump retention) that dwarfs the milestone | Sentry sidecar pipeline now; Gecko reporter as a later milestone |
-| New GUI frameworks / tab-strip UI libs | Explicitly out of scope — no GUI work until after SQL tabs (GUI-02/GUI-05 deferred) | `TabUriRegistry` URI identity as the data seam; UI later |
-| `typescript@7.x`, Theia bump, yarn Berry/pnpm | Per v1 research — unrelated risk inside a hardening milestone | Current pins (TS ~5.9.3, Theia 1.74.1, yarn 1.22) |
-| TOML 1.1-only syntax in `configuration.toml` | `builtins.fromTOML` is 1.0.0 and hard-fails on dates/new syntax; smol-toml 1.8 accepts 1.1, so the two readers would disagree | TOML 1.0 subset only; quote all dates as strings |
-
----
-
-## Integration Points (existing tree)
-
-| New capability | Manifest key | Generator emitter | Verifier row | Boundary note |
-|----------------|--------------|-------------------|--------------|---------------|
-| NSIS hardening (WR-04) | `[installer]` (+ quoting rules) | `branding.nsi` define quoting — reject bare `$VAR` | extend `verify-installer-schema.mjs` (self-test plants a bare `$VAR`) | none (build-time text) |
-| Fixture root threading (WR-07) | — | installer verifier takes fixture `root` | extend `verify-installer-schema.mjs` | none |
-| DMG/icns inputs | `[installer]` support_url + sharp PNG set | `.iconset/` file set under `generated/` | extend icon-output checker sizes → 16…1024+`@2x` | none |
-| npm extension kind | `[[extensions]] source="npm"` | exact dep + `resolutions` entry in browser `package.json` | extend `verify-extension-pins.mjs` step 2 (installed version == pin) | none |
-| local-path kind | `[[extensions]] source="path"` | `file:` dep / workspace member | generate-time existence hard-fail + build assertion | none |
-| WebExtensions sibling | `[[extensions]]` webext entries | `powerbrowser/distribution/policies.json` `ExtensionSettings` | new policy-shape row (set equality from manifest, like tile manifest) | none |
-| Sidecar crash pipeline | `[telemetry]` level + endpoint (DSN) | Sentry DSN into backend config; `Sentry.init` gated on level ≠ off | extend `verify-telemetry.mjs` (off ⇒ no init call reachable; endpoint ⇒ DSN agreement) | DSN is config, not an internal |
-| SQL tabs store | (no new manifest keys — fixed `tabs.sqlite` name) | none (runtime file, not generated) | **new** `verify-sql-tabs-shape.mjs`: schema set-equality (`tabs` cols, `schema_version`) + URI-PK assertion | new `INTERNAL-APIS.md` rows: `Sqlite.sys.mjs` import + `Services.dirsvc` profile path, both inside `PowerBrowserAPI.sys.mjs` only |
-| NAME-01 rename slice | `[identity] display_name → PowerBrowser` | re-run single-edit propagation; re-pin byte-identity comparands | re-pin `generated-byte-identity`, `brand_display_expectations`, trademark-surface scan | none |
-
----
+| Renaming the override to `AIConfigurationViewContribution` | The base class has no `initializeLayout` at 1.76.0, so the subclass would override nothing and become dead code | Delete it (section B) |
+| Editing anything under `theia/node_modules/@theia` or vendoring Theia | Hard rule 1; `diff-theia-core.sh` | DI rebinds or default preferences in `@powerbrowser/*` |
+| Script-enabled `yarn install` | The puppeteer@25.1.0 postinstall fails (environmental), and the `@theia/ffmpeg/build` it leaves behind makes `diff-theia-core.sh` red [trial] | `--ignore-scripts` plus the explicit `drivelist` rebuild |
+| `nix flake update` / a newer nixpkgs | It would change inkscape (byte-identity row), rustc (Gecko shell) and every toolchain at once. Node 24 is already available at the locked rev | Edit `flake.nix:20` only |
+| `yarn upgrade --latest` | Resolves to whatever is newest instead of the declared pin (`docs/BUILD.md:263-266`) | The one-pin runbook |
+| Switching extension tsconfigs to `jsx: react-jsx` | Optional upstream change. It adds churn to 7 tsconfigs with no benefit to the bump | Keep `"jsx": "react"` |
+| Regenerating `patches/*.patch` for 153.5 | All target blobs are unchanged, so regeneration produces identical patches | Replay through `rebase-upstream.sh` as-is |
+| Dropping the `yarn.override` in `flake.nix:21` | It would let yarn and node-gyp drift to nixpkgs' default Node when that moves to 26 | Keep it, with an updated comment |
 
 ## Version Compatibility
 
 | Package A | Compatible With | Notes |
 |-----------|-----------------|-------|
-| `better-sqlite3@13.0.3` | Node 22 (`NODE_MODULE_VERSION` 127) | v13 line supports 22.x/24.x; prebuilds cover x64. Source fallback uses the existing theia-shell node-gyp path |
-| `better-sqlite3` (backend, readonly) | Gecko `Sqlite.sys.mjs` (writer) + WAL | Reader never blocks the writer; never open read-write outside the chrome module |
-| `@sentry/node@10.73.0` | Node ≥18; Theia backend on Node 22 | Init once, before other imports (`--import` / first-line), DSN from `[telemetry] endpoint` only |
-| `@theia/telemetry` (1.74.1, in-tree) | `@sentry/node` sink | Contribute `TelemetrySink`; do not fork telemetry |
-| NSIS 3.12 output | Win10/11 installer hosts | Floor 3.11 (CVE-2025-43715); 3.12 also fixes SYSTEM priv-esc follow-up |
-| `mach repackage msix --unsigned` | Win11 (OID path, admin install) | Signed MSIX needs the downstream's own cert + `--publisher` match; platform never ships a cert |
-| `smol-toml@1.8.0` | `builtins.fromTOML` (Nix) | Agreement holds **only** on the TOML 1.0 subset — no dates, no 1.1-only syntax |
-| `sharp@0.35.4` | Node ≥20.9 (Node-API v9) | Generator floor stays Node 20.9+, unchanged |
-| ESR 153 `ExtensionSettings` | `policies.json` (UTF-8, `distribution/`) | `install_url` optional for AMO-hosted (new in 153); `runtime_blocked_hosts`, `blocked_permissions` available |
+| `@theia/*@1.76.0` | `react@^19`, `react-dom@^19`, `@types/react@^19`, `@types/react-dom@^19` | Peer ranges. Upstream lock: 19.2.8 / 19.2.8 / 19.2.18 / 19.2.7 |
+| `react-virtuoso@2.19.1`, `react-tooltip@4.5.1` (deps of `@theia/core@1.76.0`) | React 19 | Peer ranges `>=16 \|\| >=17 \|\| >= 18` and `>=16.0.0` [verified] |
+| `@theia/*@1.76.0` | Node 24 (recommended), Node 26 | Theia CI matrix. Node 22 is unsupported, not blocked |
+| `better-sqlite3@13.0.3` | Node `>=22` | N-API prebuild |
+| `@theia/monaco@1.76.0` | `@theia/monaco-editor-core@1.108.201` | Unchanged exception |
+| Firefox 153.5 BUILD1 | locked nixpkgs (rustc 1.97.1, `firefox-esr-153-unwrapped` toolchain at 153.1.0esr) | `MINIMUM_RUST_VERSION` source unchanged. `mach configure` passed on a later esr153 commit with this shell [trial]. A full build at BUILD1 is UNVERIFIED |
+| New transitive packages at 1.76.0 | `@theia/getting-started`, `@theia/telemetry`, `@theia/plugin-utils` (exact 1.76.0) | `verify-upstream-pins.mjs` passed with them in the lock [trial] |
 
----
+## Open items the live check must close (all UNVERIFIED)
+
+1. Fresh profile at 1.76.0: no AI Configuration tab opens, no Theia "Welcome" opens (after the `startupEditor` default), and the PowerBrowser welcome opens once.
+2. `telemetry.telemetryLevel`: which schema wins, whether the warning appears, and what the Settings text says.
+3. React 19 rendering of the welcome, about, chrome bar, dropdown portal and tab strip, plus one forced render error reaching telemetry capture.
+4. Dependent windows (Monaco theme) and setup/mode persistence across restart (`pagehide`).
+5. `drivelist` compiles under Node 24 headers. `smoke-theia.sh` passes on Node 24.
+6. Full `./mach build` at `223014c6b9`, then `scripts/verify-platform.sh` (including `smoke-firefox` after the `:41-42` fix).
 
 ## Sources
 
-- npm registry metadata: `better-sqlite3` 13.0.3 (2026-08-05), `@sentry/node` 10.73.0 (2026-09-03), `smol-toml` 1.8.0, `sharp` 0.35.4 — **HIGH**
-- Node.js docs (`nodejs.org/api/sqlite`): `node:sqlite` added v22.5.0, unflagged v22.13.0 but Stability 1.2 Release Candidate — **HIGH** (why: not stable on pinned line)
-- Firefox Source Docs: MSIX packaging (`mach repackage msix`, MAKEAPPX/SIGNTOOL/`WINDOWSSDKDIR` lookup, `linux64-msix-packaging` toolchain), Windows installer kinds (stub/full/MSI/MSIX), macOS DMG lzma + `libdmg-hfsplus`, `UpdatingMacIcons` (`iconutil -c icns`) — **HIGH**
-- NSIS 3.12 release notes (SourceForge, 2026-04-19) + CVE-2025-43715 fix in 3.11 — **HIGH**
-- Firefox ESR release notes: 153.0esr (2026-07-21), 153.2.0 (2026-09-01); whattrainisitnow ESR schedule — **HIGH**
-- Theia GitHub releases (v1.74.1 latest, 2026-08-06) + theia-ide `package.json` (`@theia/cli` 1.73.1, `theiaPlugins`/`theiaPluginsDir` mechanism) + `@theia/cli` README (plugin download properties) — **HIGH**
-- Firefox Source Docs Places architecture (places.sqlite via mozStorage; `Bookmarks.sys.mjs`/`History.sys.mjs` async APIs) + searchfox `toolkit/modules/Sqlite.sys.mjs` header (TelemetryFilename privacy warning) — **HIGH**
-- Socorro README ("Mozilla-specific… no capacity to support external users"; alternatives list) + `electron/mini-breakpad-server` archived Dec 2022 — **HIGH** (why: not Socorro/mini-breakpad)
-- getsentry/self-hosted 26.8.0 (2026-08-17) — **MEDIUM-HIGH**
-- Firefox enterprise docs: `ExtensionSettings` reference (ESR 153 fields), `policies.json` locations, `distribution/extensions/<id>.xpi` bundling — **HIGH**
-- libicns 0.8.1 (`png2icns`, 1024px support; man page + MacPorts) — **MEDIUM** (fallback role only)
-- Local tree: `scripts/verify-installer-schema.mjs` (schema-complete-only contract, PKG-01 handoff comment), `scripts/verify-extension-pins.mjs` (`--packed` archive-hash design), `powerbrowser/distribution/policies.json`, `powerbrowser/INTERNAL-APIS.md` (D-107/D-108: session store deliberately untouched, ground kept clean for the SQL store), `powerbrowser/endpoint-allowlist.json` (`breakpad.reportURL` TEL-03 wiring) — **HIGH**
+- npm registry, `npm view` on 2026-10-16: `@theia/{core,cli,ai-ide,monaco,telemetry,plugin-ext}` dist-tags, deps and peers; `react`/`react-dom`/`@types/*` versions; `react-virtuoso`, `react-tooltip`, `better-sqlite3` peers and engines. HIGH
+- `npm pack` tarballs of `@theia/{core,ai-ide,getting-started,telemetry}@1.76.0`, read in the session scratchpad: class names, `onStart`, preference schema, `addSchema` collision rule. HIGH
+- Theia `v1.76.0` tag (`12f62a6b`): `CHANGELOG.md` (1.75.0 and 1.76.0 breaking changes), root `package.json` (engines, TypeScript), `packages/core/package.json` (peer and dev React), `package-lock.json` (resolved React and types). HIGH
+- `git ls-remote https://github.com/mozilla-firefox/firefox.git` (153 tags, esr branches); GitHub API commits, compare and contents for `223014c6b9`, `f617beaded`, `468445e58d` (version file, patched-file blob SHAs, toolchain files). HIGH
+- `https://product-details.mozilla.org/1.0/firefox_versions.json`: `FIREFOX_ESR = 153.5.0esr`. HIGH
+- Locked nixpkgs `ffb3c9b700e7…` via `nix eval --inputs-from .`: nodejs_24 24.19.0, nodejs_22 22.23.2, yarn 1.22.22, rustc 1.97.1, inkscape 1.4.4, firefox-esr-153-unwrapped 153.1.0esr; nodejs_24's bundled node-gyp 12.4.0. HIGH. The `nixos` MCP tool was not exposed to this agent, so the locked rev was queried directly. That is the authoritative source for this tree anyway.
+- Native-module load test under Node 24.19.0 in `theia/node_modules`. HIGH
+- Trial report, session a38939de (2026-10-15), with its verifier: compile results, the React 19.1.10 build, lockfile size, `diff-theia-core` and ffmpeg note, and patch replay on the later esr153 commit. MEDIUM (not re-run)
 
 ---
-
-*Stack research for: v1.1 Hardening and SQL Tabs (PKG-01, EXT-02, TEL-04, SQL-01)*
-*Researched: 2026-09-04*
+*Stack research for: PowerBrowser v1.4 version updates*
+*Researched: 2026-10-16*
