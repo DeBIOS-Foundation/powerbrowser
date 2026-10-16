@@ -1,74 +1,91 @@
-# Requirements — Power Browser v1.3 Browser GUI
+# Requirements — Power Browser v1.4 Platform Updates and GUI Close-out
 
-**Defined:** 2026-09-06
+**Defined:** 2026-10-16
 **Core Value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
 
-(v1.3 builds the Theia-hosted browser GUI: chrome bar, mode-driven tabs, Panorama organising, and — since 2026-09-06 — in-Theia web tabs (GUI-02) over a chrome-owned overlay bridge. The chrome-owned tab model / unified strip (GUI-05) stays deferred.)
+(v1.4 removes OpenCode, moves Firefox and Theia to current upstream, closes the
+remaining non-GUI gaps, then finishes the v1.3 GUI leftovers one step at a time.
+Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
+`.planning/milestones/v1.3-REQUIREMENTS.md`. Research: `.planning/research/SUMMARY.md`.)
 
-## v1.3 Requirements
+## v1.4 Requirements
 
-### Chrome bar — Phase 13+
+### Removal
 
-- [x] **GUI-06**: The user can navigate with a top chrome bar —
-      back, forward, reload, address input with suggestions, new
-      tab, mode toggle — living as a toolbar-like `@powerbrowser/*`
-      contribution above or below the Theia toolbar (sketch 001
-      winner: Variant A). Tab feel + navigation only: no bookmarks
-      strip, no per-tab close/mute, no browser menu.
+- [ ] **RM-01**: OpenCode is gone from the tree: `theia/extensions/backend-opencode`,
+      the `[ai]` manifest key, its schema entry and generator emitter, the four
+      OpenCode/NG-051 verify scripts, their registry rows, and the docs.
+      `generate --check` reports 53 targets. AI-01..05 are removed from the
+      requirements. The NG-051 ledger amend is approved by Chris before the commit.
+- [ ] **RM-02**: Theia's AI framework runs as upstream ships it: both D-22
+      overrides are removed from `@powerbrowser/branding`; the 12 `@theia/ai-*`
+      packages stay composed and unmodified (Chris, 2026-10-16: "Theia AI should
+      remain as stock, and we will work with it later").
 
-### Web tabs — Phase 14.1
+### Upstream updates
 
-- [x] **GUI-02**: The user gets web page tabs inside the Theia shell:
-      the chrome-bar "+" opens a new tab in the shell's own tab
-      strip, rendered by a chrome-owned `<xul:browser>` overlay kept
-      aligned with a Theia placeholder widget through a two-way
-      bridge (Theia sends geometry, visibility, close; chrome sends
-      URL, title, loading state, back/forward availability). The tab
-      survives and follows every mode switch. Every tab has a URI
-      via `TabUriRegistry` (web tabs use their page URL); the
-      address pill shows the active tab's address and navigates the
-      active web tab; back/forward/reload act on it; each web tab
-      writes its uri/url/title row to the chrome-side tab store.
-      Replaces the stock-window escape for "+", address commits, and
-      suggestion activation. (Chris reversed the 2026-08-30 deferral
-      on 2026-09-06.)
+- [ ] **UPD-05**: Gecko is pinned to `FIREFOX_153_5_0esr_BUILD1` with its commit
+      SHA recorded; the four patches replay unchanged; `smoke-firefox.sh` derives
+      the version from the tree; the `fetch-upstream.sh` tag comment is corrected;
+      the run-together line at `configuration.toml:104` is fixed.
+- [ ] **UPD-06**: Dev and release builds at 153.5 both succeed and the full
+      `verify-platform.sh` run passes; MAR-hop evidence is labelled pre-153.5.
+- [ ] **UPD-07**: The `.#theia` dev shell runs Node 24, with only `flake.nix`
+      changed and `flake.lock` untouched (supersedes D-16).
+- [ ] **UPD-08**: React is 19.2.8 with exactly one installed copy each of react,
+      react-dom, `@types/react`, `@types/react-dom` and inversify, enforced by a
+      new `--quick` check with a planted-duplicate self-test.
+- [ ] **UPD-09**: Every `@theia/*` package (except `@theia/monaco-editor-core`) is
+      1.76.0 and `diff-theia-core.sh` passes. The NG-082 ledger amend (1.75.0 →
+      1.76.0) is approved by Chris.
+- [ ] **UPD-10**: A live sidecar check at 1.76 passes on a fresh and on a
+      carried-over config dir: only the PowerBrowser welcome opens (no Theia
+      Welcome page), `view:` URIs open, and the token-gate rows pass live. The
+      `telemetry.telemetryLevel` collision is decided by Chris and recorded.
 
-### Modes — Phase 13+
+### Platform gaps
 
-- [ ] **GUI-07**: The user can switch coding / browsing / organising
-      modes (customizable, shipped defaults); the tab strip
-      relocates per mode (sketch 002 winner: Variant B — top in
-      browsing, IDE-docked in coding), side panels slide, and every
-      tab persists across switches. **Entry criterion:
-      strip-relocation spike goes green first** — prove a live tab
-      strip moves shell areas without forking Theia core; if red,
-      the strip stays top per Variant A and the modes still ship.
+- [ ] **PLAT-01**: A build from a clean checkout passes (G-14.1.1-9).
+- [ ] **PLAT-02**: The group channel has a `--quick` check with a planted-fault
+      self-test (G-14.1.1-10; the checks 14-05 planned and never wrote).
+- [ ] **PLAT-03**: The schema v3/v4 work has ledger rows, approved by Chris.
+- [ ] **PLAT-04**: `generate-check` is closed as not reproducible with the
+      passing runs recorded, or reproduced and fixed.
+- [ ] **PLAT-05**: Every verify-script path into `.planning/phases/` resolves to
+      its archived location, or the check fails loudly.
 
-### Organising — Phase 13+
+### Panorama (finishes GUI-08)
 
-- [ ] **GUI-08**: The user can organise tabs on a freeform Panorama
-      canvas — free drag, corner resize, auto-box on canvas drop,
-      zoom, ungrouped tray — and flip to a tree over the identical
-      group data. Groups persist in a SQL groups table
-      (id, title, bounds, activeGroupId) + `group_id` on the
-      URI-keyed tab rows; thumbnails are PNG last-view snapshots.
-      Canvas reads/writes only SQL; sessionstore stays
-      restore-authoritative (never repeat Panorama's extData
-      coupling — Bugzilla 1221050).
+- [ ] **PAN-01**: 15-UI-SPEC describes the shipped Panorama redesign (commit
+      `7b7a1f7`); `verify-gui08-canvas-geometry` and `verify-gui08-panorama-copy`
+      derive from it and pass; the commit gate is green and `quick-baseline.txt`
+      is empty.
+- [ ] **PAN-02**: Panorama decisions 1 (ungrouped tabs) and 2 (strip filter
+      scope) are made by Chris and recorded.
+- [ ] **PAN-03**: The tab strip shows only the active group's tabs (W1), and a
+      tab opened with "+" joins the active group (W2).
+- [ ] **PAN-04**: The user can restore a closed group with Undo Close Group (W4).
+- [ ] **PAN-05**: The user can close a card from the card itself (W5).
+- [ ] **PAN-06**: The last remaining group cannot be closed (W11, first part).
+- [ ] **PAN-07**: The stale tray code, comments and CSS are removed.
 
-### Windows & setups — Phase 13+
+### Modes and windows (finishes GUI-07)
 
-- [x] **GUI-09**: The user gets core + dependent windows with named
-      setups remembering geometry, tab placement, and mode; closing
-      the core window kills the session and the next launch restores
-      the setup. Sub-windows host tab content, never a second IDE
-      frame.
+- [ ] **MODE-01**: The Variant B records are current (UAT entry, GUI-DEFECTS
+      item 2, GUI-07 box, `mode-descriptors.ts` comment, 14-UAT test 3), and
+      Chris confirms the strip relocation live (G-11).
+- [ ] **MODE-02**: The 60-character group-name cap behaviour is decided by Chris
+      and applied (G-23).
+- [ ] **MODE-03**: Side panels slide or switch instantly as Chris decides, and
+      14-UI-SPEC matches (G-32).
+- [ ] **MODE-04**: 14-VERIFICATION is written.
 
-### Carried (no new IDs — ride along, not build work)
+### Verification
 
-- v1.2 doc-sync flips (SQL-01/SQL-03/SQL-04 boxes + traceability)
-  and deferred verifications (`/gsd-verify-work 10/11/12`, 5 human
-  UAT signatures staged)
+- [ ] **SK-01**: The sketch 005 (VS Code layout) verdict is recorded before UAT.
+- [ ] **UAT-01**: A Phase 15 UAT sheet exists; the 10, 13, 14, 14.1, 14.1.1 and
+      15 sheets have no pending result, including a React 19 runtime line (NG-084).
+- [ ] **CI-01**: CI is green on the pushed `main` (NG-074).
 
 ### Inherited network egress (carried, not decided here)
 
@@ -82,89 +99,40 @@ ROADMAP.md because `verify-platform.sh`'s `allowlist-doc-consistency`
 check requires every allow-dispositioned Mozilla host to be documented in
 the project's own planning record.
 
-## Future Requirements (v1.4+)
+## Future Requirements (v1.5+)
 
-### AI backends (candidates — goal noted in .planning/notes/ai-backends-goal.md)
-
-- **AI-01**: The user can chat with a selectable coding backend
-  (`@OpenCode` / `@Pi` / native agents) reusing the built-in
-  `@agent`/model picker. GUI stays backend-agnostic; switching
-  backends never changes the review UX.
-- **AI-02**: The user gets Antigravity-style review — inline chat
-  (Ctrl+I) scoped to cursor/selection, per-file accept/reject with
-  diff view, Review Changes pane, history + revert. Gaps to close
-  vs Theia 1.74.1 baseline: per-line comment-to-steer loop, `/btw`
-  ephemeral question, file-wide Supercomplete Tab-accept.
-- **AI-03**: The user gets permission presets per session — gated
-  (ask before writes) vs auto-accept (write immediately). Change
-  Set history with diffs + revert is mandatory under both presets,
-  so post-approval review always works.
-- **AI-04**: A backend snaps in as Theia extensions only
-  (`LanguageModel` + `ChatAgent`, emitting Change Sets; packaging
-  follows `theia/extensions/tab-uris`), never a Theia core fork.
-  Rebrand selects backends via `configuration.toml`. Opencode
-  first (`opencode acp` wrapper); Pi transport unverified, DSH third.
-- **AI-05**: Sessions, context variables, skills pool, and change
-  history are shared where Theia provides them; per-backend
-  CLI-owned tools/models are documented per adapter instead of
-  forced into the shared registries.
-
-  Retired 2026-09-28 under D2 (b): NG-041..NG-050 and NG-052..NG-062 are
-  dropped — the opencode adapter is retired for the PowerBrowser-Assistant
-  plugin, which is planned outside this tree. The adapter cuts fall with the
-  same decision (selectable `@Pi` / DSH backends, per-line comment-to-steer,
-  `/btw` ephemeral question, file-wide Supercomplete Tab-accept). Chris:
-  "Run them for me" (ledger/history/log.jsonl lines 310–330, one drop op per
-  row, each carrying that answer as its quote). Kept and built: NG-051
-  (`backend = "off"` starts no opencode process and no `/mcp` endpoint).
-
-- **GUI-05**: Unified tab strip (chrome-owned tab model,
-  mirror/proxy bridge). Deferred behind v1.3 chrome/mode/organising.
-- **Seeds**: deferred-browser-chrome (bookmarks strip, per-tab
-  close/mute, browser menu), gui-component-dnd (drag-anywhere
-  rearrange), firefox-parity-tabs (cross-window tear-off + tiles
-  page) — each triggers off this milestone landing.
-
-  Deferred 2026-09-25 under D4 (a): NG-075..NG-082 move to backlog 999.2
-  (distribution work that needs hosts, accounts or long builds outside this
-  machine: Windows MSIX, macOS DMG, install matrix and per-OS MAR hop,
-  release pipeline, update host, production crash-ingest host, per-fixture
-  builds, Theia re-pin to 1.75.0). Chris: "Run them for me"
-  (ledger/history/log.jsonl lines 332–339, one approve op per row, each
-  carrying that answer as its quote). Deferred 2026-09-28: NG-074 (CI verify
-  on main; run 36470043046 on 24a5655: 114 PASS, 4 FAIL, the Phase 15
-  Panorama checks) and NG-084 (the five v1.2 human UAT sheets) move to
-  Phase 15. Chris: "Defer all the checks" (ledger/history/log.jsonl lines
-  364 and 366, each carrying that answer as its quote).
+- **W6**: Type-anywhere search on the Panorama canvas (Chris, 2026-10-16).
+- **W11 keys**: Keys to cycle between groups.
+- **Sketch 005**: Building the VS Code layout, if the verdict adopts it.
+- **GUI-05**: Unified tab strip (chrome-owned tab model, mirror/proxy bridge).
+- **Seeds**: deferred-browser-chrome, gui-component-dnd, firefox-parity-tabs.
+- **Release and distribution**: backlog 999.2 (NG-075..NG-081), SEED-001.
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Chrome-owned tab model / unified tab strip | GUI-05 stays a later milestone; Phase 14.1's overlay bridge keeps Theia as the tab-model owner |
+| DSH and any AI-assistant integration | DSH is a separate project (Chris, 2026-10-16) |
+| OpenCode or any other AI backend adapter | Retired 2026-09-28; removed in v1.4 (RM-01) |
+| Customising Theia's AI framework | Stays stock until a later milestone takes it up (RM-02) |
+| Chrome-owned tab model / unified tab strip | GUI-05 stays a later milestone |
 | Second SQLite writer in any process | Corruption class; single chrome-side writer is invariant |
 | New tables inside `places.sqlite` | Upstream-owned schema; every ESR rebase may migrate it |
 | Sessionstore-coupled group storage | Panorama's removal lesson (Bugzilla 1221050); groups live in SQL |
-| A `[features]` / `[modes]` manifest flag | Extension point, not a flag (ARCHITECTURE.md Anti-Pattern 6); modes are data with defaults |
+| A `[features]` / `[modes]` manifest flag | Extension point, not a flag (ARCHITECTURE.md Anti-Pattern 6) |
 | Forking/patching Theia core or modifying Gecko outside the patch stack | Inherited hard rules |
-| tabs.sqlite encryption | Dropped 2026-09-28 under D3 (a), NG-083: mozStorage has no SQLCipher, full-disk encryption covers the threat, the file stays queryable. Chris: "Run them for me" (ledger/history/log.jsonl line 331, carrying that answer as its quote) |
+| `nix flake update` during the Node 24 move | Would also move inkscape and break the byte-identity check |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GUI-06 | Phase 13 | Complete |
-| GUI-07 | Phase 14 (strip-relocation spike entry criterion runs as Phase 13 exit gate) | Pending |
-| GUI-08 | Phase 15 | Pending |
-| GUI-09 | Phase 14 | Complete |
-| GUI-02 | Phase 14.1 (inserted 2026-09-06; deferral reversed) | Complete |
 
 **Coverage:**
 
-- v1.3 requirements: 5 total (+ carried items)
-- Mapped to phases: 5 (GUI-06→13, GUI-07→14, GUI-08→15, GUI-09→14, GUI-02→14.1)
-- Unmapped: 0
+- v1.4 requirements: 29 total
+- Mapped to phases: 0 (filled by the roadmap)
 
 ---
-*Requirements defined: 2026-09-06*
-*Sources: sketch-findings-Power-Browser skill, browser-window-model.md, browser-organising-panorama.md, tab-sql-substrate.md*
+*Requirements defined: 2026-10-16*
+*Sources: .planning/HANDOFF-plan-reorg.md, .planning/research/SUMMARY.md*
