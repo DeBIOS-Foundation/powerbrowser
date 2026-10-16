@@ -1,0 +1,30 @@
+diff-theia-core	unowned-pre-existing: theia_app_up: FAIL -- something is still listening on http://localhost:3000 30s later (stale run?). Kill it and re-run.
+gui01-command-registered	unowned-pre-existing: theia_app_up: FAIL -- something is still listening on http://localhost:3000 30s later (stale run?). Kill it and re-run.
+gui08-canvas-geometry	Phase 21
+gui08-canvas-geometry-self-test	Phase 21
+gui08-panorama-copy	Phase 21
+gui08-panorama-copy-self-test	Phase 21
+ng-001-one-key-rule	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-002-navigation-keeps-row	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-003-same-url-two-rows	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-004-new-tab-row-unknown-uri-error	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-005-prune-keeps-open-rows	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-006-close-group-closes-web-tabs	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-007-shell-tabs-keep-group-across-restart	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-008-panorama-card-reopens-through-opener	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-009-content-age-columns	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-010-closed-tab-history	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-011-settings-table-read	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-012-reader-reports-schema-errors	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-013-unopenable-store-quarantined	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-014-rebuild-at-head	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-015-real-migration-from-every-version	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-017-sql05-restarts-real-browser	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-018-scheduled-integrity-check	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng-085-quit-closes-store	flaky-at-153.1: passed on --only rerun (full run blocked by the ng-a-live clean-tree guard on uncommitted .planning/STATE.md and .planning/state.json; rerun with PB_NG_ALLOW_DIRTY=1)
+ng074-ci-green-on-main	NG-074 (Phase 25)
+smoke-theia	unowned-pre-existing: smoke-theia: FAIL -- something is already listening on :3000 (stale run?). Kill it and re-run.
+verify-branding	unowned-pre-existing: theia_app_up: FAIL -- something is still listening on http://localhost:3000 30s later (stale run?). Kill it and re-run.
+verify-customize-inert	unowned-pre-existing: theia_app_up: FAIL -- something is still listening on http://localhost:3000 30s later (stale run?). Kill it and re-run.
+verify-dev-flag-off	unowned-pre-existing: theia_app_up: FAIL -- something is still listening on http://localhost:3000 30s later (stale run?). Kill it and re-run.
+verify-uri-roundtrip	unowned-pre-existing: theia_app_up: FAIL -- something is still listening on http://localhost:3000 30s later (stale run?). Kill it and re-run.
