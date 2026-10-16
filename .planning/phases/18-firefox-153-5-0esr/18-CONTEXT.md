@@ -34,6 +34,20 @@ fetch-upstream.sh, docs/BUILD.md, configuration.toml line 104 and the
 - `rebase-upstream.yml` has never run and has no Nix: record it as unexercised
   (do not wrap it in Nix in this phase).
 - Do not run `nix flake update`.
+- **Criterion 4 reading (autonomous run, research recommendation, 2026-10-16):**
+  "full `verify-platform.sh` passes" means: a full baseline run at 153.1 is
+  taken before the rebase; at 153.5 no row is newly red; every version-sensitive
+  row is green; each remaining red row is named against its owning phase or
+  ledger ID (the four `gui08` rows → Phase 21; `ng074-ci-green-on-main` →
+  Phase 25). No human checkpoint for this reading (Chris: stop only when no
+  recommendation exists); it is reported in the phase summary.
+- Plans cite ledger IDs NG-074 and NG-084 (required by `plan-gate.py --phase 18`).
+- Build traps from 18-RESEARCH.md are mandatory: `./mach clobber` on each
+  objdir before its build; release build sets both
+  `POWERBROWSER_OBJDIR=objdir-release` and
+  `POWERBROWSER_BRANDING=powerbrowser/branding/release`; run
+  `package-linux.sh` after the dev build. Builds and full runs go to the
+  background with a tee'd log, one at a time, never in parallel.
 
 ### Claude's Discretion
 Everything else, guided by ROADMAP success criteria, `.planning/research/STACK.md`,
