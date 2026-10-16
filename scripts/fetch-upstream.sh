@@ -274,12 +274,12 @@ fi
 
 if [ -d "$UPSTREAM_DIR" ]; then
   # Compare commit hashes rather than `git describe --tags --exact-match`:
-  # the mozilla-firefox/firefox mirror tags each ESR point release with both
-  # a human-facing "_RELEASE" tag and a build-numbered "_BUILD1" tag pointing
-  # at the identical commit, and `describe` breaks that tie non-deterministically
-  # (observed picking BUILD1 over RELEASE on this exact commit). Resolving the
-  # pinned tag's own ref and diffing commit hashes is unambiguous regardless of
-  # how many other tags share that commit.
+  # the mirror tags each ESR point release with a "_RELEASE" tag and one or
+  # more build-numbered "_BUILD<n>" tags. They usually share a commit, but not
+  # always -- at the 153.4 point release RELEASE sat on BUILD3's commit, not
+  # BUILD1's -- and `describe` breaks a shared-commit tie non-deterministically.
+  # Resolving the pinned tag's own ref and diffing commit hashes is correct in
+  # both cases, however many other tags share that commit.
   if ! git -C "$UPSTREAM_DIR" rev-parse --git-dir >/dev/null 2>&1; then
     echo "fetch-upstream: FAIL -- $UPSTREAM_DIR exists but is not a git checkout." >&2
     echo "  Most likely an interrupted clone. Remove it and re-run:" >&2
