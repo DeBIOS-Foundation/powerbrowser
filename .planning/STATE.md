@@ -5,16 +5,16 @@ milestone_name: Platform Updates and GUI Close-out
 current_phase: 18
 current_phase_name: Firefox 153.5.0esr
 status: executing
-stopped_at: v1.4 roadmap created (Phases 17–25)
-last_updated: "2026-10-16T22:34:36.246Z"
+stopped_at: Completed 18-01-PLAN.md
+last_updated: "2026-10-16T23:28:03.520Z"
 last_activity: 2026-10-16
-last_activity_desc: Phase 18 planning complete
-state_head: a79a9cba4b2c1b202a87c7e99ee868ab5cdad0ca
+last_activity_desc: Phase 18 execution started
+state_head: d36e3d31f2ac2560d2c469d934dd169901a5335c
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -25,14 +25,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-16)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 17 — OpenCode Removal (v1.4 Platform Updates and GUI Close-out, Phases 17–25)
+**Current focus:** Phase 18 — Firefox 153.5.0esr
 
 ## Current Position
 
-Phase: 18 (Firefox 153.5.0esr) — READY TO EXECUTE
-Plan: —
+Phase: 18 (Firefox 153.5.0esr) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-10-16 — Phase 18 planning complete
+Last activity: 2026-10-16 — Phase 18 execution started
 
 ## Performance Metrics
 
@@ -132,6 +132,7 @@ Last activity: 2026-10-16 — Phase 18 planning complete
 | Phase 14.1.1 P14 | 7 min | 3 tasks | 1 files |
 | Phase 14.1.1 P15 | 2 min | 1 tasks | 2 files |
 | Phase 14.1.1 P16 | 10 min | 2 tasks | 3 files |
+| Phase 18 P01 | 50 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -342,6 +343,8 @@ Recent decisions affecting current work:
 - [Phase 14.1.1]: 14.1.1-16: the general G-45 invariant is recorded as NOT machine-checkable in its own field; the record claims only the four sites whose --self-test plants go red
 - [Phase 14.1.1]: 14.1.1-16: pass-3 roadmap boxes 11-15 were already ticked by each plan's metadata commit; the tree derivation confirmed all five, so no box changed and no not-done note was written
 - [Phase 14.1.1]: 14.1.1-16: G-14.1.1-8's in_tree status left as found (criterion said open); the protected fact is its deferred_to line and the held file, both intact
+- [Phase 18]: 153.1 baseline B has 30 FAIL rows: 4 gui08 (Phase 21), ng074 (NG-074), 18 ng rows blocked by the clean-tree guard (pass on rerun), 7 theia-app rows blocked by port 3000 held by mem0-dashboard (unowned)
+- [Phase 18]: Plan 03 must free port 3000 and run with a clean tree or PB_NG_ALLOW_DIRTY=1 before the 153.5 full run, else 25 rows go unmeasured
 
 ### Pending Todos
 
@@ -441,8 +444,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-16
-Stopped at: v1.4 roadmap created (Phases 17–25)
+Last session: 2026-10-16T23:28:03.493Z
+Stopped at: Completed 18-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

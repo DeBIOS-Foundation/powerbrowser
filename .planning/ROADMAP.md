@@ -127,11 +127,11 @@ live UAT itself).
   3. The dev objdir and `objdir-release` both build at 153.5, and both binaries report 153.5.0esr
   4. A full `scripts/verify-platform.sh` run passes, with the `mar-update-hop` evidence labelled pre-153.5
 
-**Plans**: 3 plans (two Gecko builds, about 50 and 55 minutes; `rebase-upstream.yml` is recorded as unexercised, never cited as proof)
+**Plans**: 1/3 plans executed (two Gecko builds, about 50 and 55 minutes; `rebase-upstream.yml` is recorded as unexercised, never cited as proof)
 
 Plans:
 **Wave 1**
-- [ ] 18-01-PLAN.md — 153.1 full-run FAIL baseline before any change; fetch-upstream tag comment and `configuration.toml:104` corrected
+- [x] 18-01-PLAN.md — 153.1 full-run FAIL baseline before any change; fetch-upstream tag comment and `configuration.toml:104` corrected
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 18-02-PLAN.md — tracer: pin `FIREFOX_153_5_0esr_BUILD1`, replay, clobbered dev build, tree-derived smoke version; package, docs and README
@@ -255,7 +255,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 17. OpenCode Removal | 0/TBD | Not started | - |
-| 18. Firefox 153.5.0esr | 0/TBD | Not started | - |
+| 18. Firefox 153.5.0esr | 1/3 | In Progress | - |
 | 19. Node 24, React 19, Theia 1.76.0 | 0/TBD | Not started | - |
 | 20. Non-GUI Gaps | 0/TBD | Not started | - |
 | 21. Panorama Spec and gui08 Checks | 0/TBD | Not started | - |
