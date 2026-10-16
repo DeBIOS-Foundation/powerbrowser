@@ -153,19 +153,25 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - [x] Window model: core + dependents, named setups, core-close-full-kill
       — shipped Phase 14
 
-### Active (v1.4+ planning)
+### Active (v1.4 Platform Updates and GUI Close-out)
 
-- [ ] GUI-02 in-Theia web tabs; GUI-05 unified tab strip (order and
-      scope defined by a later milestone intake)
-- [ ] Seeds: deferred-browser-chrome, gui-component-dnd,
-      firefox-parity-tabs — trigger off v1.3 landing (done)
-- [ ] Re-probe runway: realign node_modules per docs/BUILD.md flags,
-      re-run core-diff check + recorded strip probe to reopen Variant B
-- [ ] Piles + type-anywhere search for the canvas (deferred as costly)
-- [ ] Doc-sync flips: GUI-07/GUI-08 boxes + traceability rows once reviewed
-- [ ] Deferred verifications: `/gsd-verify-work 13`, `/gsd-verify-work 14`, `/gsd-verify-work 15`
-- [ ] Doc-sync pass: 11-02/11-03 and 12-01 summaries from landed commits; flip SQL-01/SQL-03/SQL-04 boxes + traceability rows once reviewed
-- [ ] Deferred verifications: `/gsd-verify-work 10`, `/gsd-verify-work 11`, `/gsd-verify-work 12` (5 human UAT signatures in 10-UAT.md runbooks)
+Non-GUI first, then GUI one step at a time (Chris, 2026-10-15).
+
+- [ ] OpenCode removed from the tree (extension, `[ai]` key, scripts,
+      registry rows, docs, Phase 16); AI-01..05 removed
+- [ ] Firefox on 153.5.0esr `BUILD1`, full build and full `verify-platform` green
+- [ ] Theia on 1.76.0 with React 19; dev shell on Node 24; sidecar checked live
+- [ ] Non-GUI gaps closed: group-channel checks (G-14.1.1-10), clean-checkout
+      build (G-14.1.1-9), schema v3/v4 ledger rows, `quick-baseline.txt`,
+      local `generate-check` (inkscape)
+- [ ] Panorama redesign in 15-UI-SPEC and the two `gui08` checks (commit gate green),
+      then the remaining Panorama worklist
+- [ ] Phase 14 / 14.1.1 leftovers: name cap (G-23), Variant B (G-11),
+      panel slide (G-32), 14-VERIFICATION
+- [ ] One live UAT pass over 13, 14, 14.1, 15 and the v1.2 sheets (NG-084),
+      including the React 19 runtime check
+- [ ] Decision on sketch 005 (VS Code layout)
+- [ ] CI green on main (NG-074)
 
 ### Validated (v1.2 — shipped 2026-09-05, override closeout, verifications deferred)
 
@@ -178,9 +184,12 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - Bookmarks strip, per-tab close/mute, browser menu, drag-anywhere
       GUI rearrange, cross-window tab tear-off — seeded for later
       milestones (v1.3 is tab feel + navigation + organising only)
-- GUI-02 in-Theia web tabs and GUI-05 unified tab strip stay
-      deferred behind this milestone's chrome/mode/organising work;
-      the mirror/proxy bridge stays a later milestone
+- GUI-05 unified tab strip stays deferred; the mirror/proxy bridge
+      stays a later milestone (GUI-02 in-Theia web tabs shipped in Phase 14.1)
+- DSH (DeepSeek Harness) and any AI assistant integration — DSH is a
+      separate project (Chris, 2026-10-16); OpenCode was retired 2026-09-28
+- Release and distribution (MSIX, DMG, update host, release pipeline) —
+      held in backlog 999.2 until a milestone scopes a first public release
 - Unified tab strip where web pages and editors are peers — the mirror/proxy
   bridge stays a later milestone, as in the upstream plan; current browser
   access is the toggle + browsing inside Theia
@@ -188,6 +197,20 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
   platform tree
 - Moving every conceivable setting into `configuration.toml` in milestone 1 —
   the file grows toward "everything configurable" incrementally
+
+## Current Milestone: v1.4 Platform Updates and GUI Close-out
+
+**Goal:** Remove OpenCode, move Firefox and Theia to current upstream, close the
+remaining non-GUI gaps, then finish the v1.3 GUI leftovers one step at a time
+until the commit gate and CI are green.
+
+**Target features:**
+- OpenCode removal (AI-01..05 removed; DSH is a separate project)
+- Firefox 153.5.0esr `BUILD1` with a full build
+- Theia 1.76.0 with React 19, dev shell on Node 24
+- Remaining non-GUI gaps closed
+- GUI, one step at a time: Panorama spec and checks, Phase 14 / 14.1.1
+  leftovers, one live UAT pass, sketch 005 decision, CI green
 
 ## Current State (v1.3 shipped 2026-09-06)
 
@@ -238,10 +261,11 @@ requirements still staged (human/tier-3 halves).
 
 </details>
 
-## Next Milestone Goals (v1.4+ candidates)
+## Next Milestone Goals (v1.5+ candidates)
 
-- GUI-02 in-Theia web tabs; GUI-05 unified tab strip (order and scope
-  defined by a later milestone intake, behind v1.3 chrome/mode/organising)
+- GUI-05 unified tab strip (order and scope defined by a later
+  milestone intake)
+- Release and distribution (backlog 999.2, SEED-001)
 - Seeds whose triggers are now met: deferred-browser-chrome,
   gui-component-dnd, firefox-parity-tabs (scope per seed trigger review)
 - Piles + type-anywhere search for the canvas; Variant-B re-probe;
@@ -294,4 +318,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-06 at v1.3 closeout (Browser GUI shipped, tech_debt accepted)*
+*Last updated: 2026-10-16 at v1.4 start (Platform Updates and GUI Close-out)*
