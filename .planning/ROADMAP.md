@@ -6,7 +6,7 @@
 - ✅ **v1.1 Hardening and SQL Tabs** — Phases 08–09 (shipped 2026-09-05, hardening-only — see `.planning/milestones/v1.1-ROADMAP.md`)
 - ✅ **v1.2 Sign-off Closeout and SQL Store** — Phases 10–12 (shipped 2026-09-05, override closeout — see `.planning/milestones/v1.2-ROADMAP.md`)
 - 🔄 **v1.3 Browser GUI** — Phases 13–15 (active: Theia-hosted chrome bar, mode-driven tabs, Panorama organising on the v1.2 SQL store)
-- 📋 **Future** — GUI-02 in-Theia web tabs, GUI-05 unified tab strip, deferred seeds (bookmarks strip, per-tab close/mute, browser menu, gui-component-dnd, firefox-parity-tabs) (v1.4+)
+- 📋 **Future** — GUI-05 unified tab strip, deferred seeds (bookmarks strip, per-tab close/mute, browser menu, gui-component-dnd, firefox-parity-tabs) (v1.4+)
 
 ## Phases
 
@@ -96,8 +96,8 @@ Plans:
 - [x] 14-01-PLAN.md — Window-routing probe with GREEN/RED record, modes tracer with shipped descriptors, bridged toggle, defaults gate
 - [x] 14-02-PLAN.md — Modes full: customs with fallback, organising placeholder, toggle rows, style layer, invariant gate
 - [x] 14-03-PLAN.md — Dependents per probe verdict plus named setups with relaunch restore, roundtrip and content gates
-- [ ] 14-04-PLAN.md — Gap closure: main-area exemption at the deactivate seam, toggle routed through the mode command, Explorer dock, launch order, behavioural second-visit gate
-- [ ] 14-05-PLAN.md — Gap closure: backend reads the captured environment, group channel delivers, one stock window for new tab, two class gates, catalogue green
+- [x] 14-04-PLAN.md — Gap closure: main-area exemption at the deactivate seam, toggle routed through the mode command, Explorer dock, launch order, behavioural second-visit gate
+- [ ] 14-05-PLAN.md — Gap closure: backend reads the captured environment, group channel delivers, one stock window for new tab, two class gates, catalogue green (code landed in d5b8dc1; its two checks `verify-backend-env-capture` and `verify-group-request-channel` are not written — gap G-14.1.1-10)
 
 **UI hint**: yes
 
@@ -234,7 +234,7 @@ needs a quiet tree; and the `verify-web-tab-live.mjs` plant reds, which need a d
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 13. Chrome Bar + Strip-Relocation Spike | 5/5 | In Progress|  |
+| 13. Chrome Bar + Strip-Relocation Spike | 5/5 | Complete | 2026-09-06 |
 | 14. Modes + Windows & Setups | 3/3 | Complete | 2026-09-06 |
 | 15. Panorama Organising | 3/3 | Complete | 2026-09-06 |
 
@@ -287,16 +287,6 @@ Plans:
 
 ### Phase 999.1: SQL-browser-memory (BACKLOG)
 
-Deferred here 2026-09-25 under D4 (a): NG-075..NG-082 (distribution work
-that needs hosts, accounts or long builds outside this machine: Windows
-MSIX, macOS DMG, install matrix and per-OS MAR hop, release pipeline,
-update host, production crash-ingest host, per-fixture builds, Theia re-pin
-to 1.75.0). Deferred here 2026-09-28: NG-074 (CI verify on main) and NG-084
-(the five v1.2 human UAT sheets) move to Phase 15. Chris: "Run them for me"
-for NG-075..NG-082 (ledger/history/log.jsonl lines 332–339) and "Defer all
-the checks" for NG-074 and NG-084 (ledger/history/log.jsonl lines 364 and
-366), each op carrying the quoted answer.
-
 **Goal:** [Captured for future planning]
 **Requirements:** TBD
 **Plans:** 0 plans
@@ -324,6 +314,26 @@ property this would build on, and most browsers do not have it.
 **Boundary to respect if this is ever planned:** ARCHITECTURE.md Anti-Pattern 6
 — if a downstream needs to change platform behaviour, the platform needs an
 extension point; adding a `[features]` flag is the bug, not the fix.
+
+Plans:
+
+- [ ] TBD (promote with /gsd-review-backlog when ready)
+
+### Phase 999.2: Release and distribution (BACKLOG)
+
+Deferred here 2026-09-25 under D4 (a): NG-075..NG-082 (distribution work
+that needs hosts, accounts or long builds outside this machine: Windows
+MSIX, macOS DMG, install matrix and per-OS MAR hop, release pipeline,
+update host, production crash-ingest host, per-fixture builds, Theia re-pin
+to 1.75.0). Deferred here 2026-09-28: NG-074 (CI verify on main) and NG-084
+(the five v1.2 human UAT sheets) move to Phase 15. Chris: "Run them for me"
+for NG-075..NG-082 (ledger/history/log.jsonl lines 332–339) and "Defer all
+the checks" for NG-074 and NG-084 (ledger/history/log.jsonl lines 364 and
+366), each op carrying the quoted answer.
+
+**Goal:** [Captured for future planning]
+**Requirements:** TBD
+**Plans:** 0 plans
 
 Plans:
 
