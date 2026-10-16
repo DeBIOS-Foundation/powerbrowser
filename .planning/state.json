@@ -1,12 +1,12 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v1.3",
+  "milestone": "v1.4",
   "phases": [
     {
       "number": "13",
       "name": "Chrome Bar + Strip-Relocation Spike",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "14",
@@ -20,9 +20,9 @@
     }
   ],
   "next": {
-    "command": "/gsd:progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 14.1.1 of 6 · executing"
+    "command": "/gsd-discuss-phase",
+    "label": "Discuss the first phase",
+    "reason": "Project initialized — plan your first phase"
   },
-  "updated_at": "2026-09-08T10:11:50.293Z"
+  "updated_at": "2026-10-16T20:34:32.573Z"
 }
