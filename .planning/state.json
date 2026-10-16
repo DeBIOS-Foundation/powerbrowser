@@ -1,28 +1,58 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v1.4",
+  "milestone": "v1.4 — Platform Updates and GUI Close-out",
   "phases": [
     {
-      "number": "13",
-      "name": "Chrome Bar + Strip-Relocation Spike",
-      "status": "complete"
+      "number": "17",
+      "name": "OpenCode Removal",
+      "status": "pending"
     },
     {
-      "number": "14",
-      "name": "Modes + Windows & Setups",
-      "status": "complete"
+      "number": "18",
+      "name": "Firefox 153.5.0esr",
+      "status": "pending"
     },
     {
-      "number": "15",
-      "name": "Panorama Organising",
-      "status": "complete"
+      "number": "19",
+      "name": "Node 24, React 19, Theia 1.76.0",
+      "status": "pending"
+    },
+    {
+      "number": "20",
+      "name": "Non-GUI Gaps",
+      "status": "pending"
+    },
+    {
+      "number": "21",
+      "name": "Panorama Spec and gui08 Checks",
+      "status": "pending"
+    },
+    {
+      "number": "22",
+      "name": "Panorama Worklist",
+      "status": "pending"
+    },
+    {
+      "number": "23",
+      "name": "Modes Leftovers and Sketch 005 Verdict",
+      "status": "pending"
+    },
+    {
+      "number": "24",
+      "name": "Live UAT Pass",
+      "status": "pending"
+    },
+    {
+      "number": "25",
+      "name": "CI Green on Main",
+      "status": "pending"
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase",
-    "label": "Discuss the first phase",
-    "reason": "Project initialized — plan your first phase"
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 2 of 9 · 0% · executing"
   },
-  "updated_at": "2026-10-16T20:34:32.573Z"
+  "updated_at": "2026-10-16T22:34:36.261Z"
 }

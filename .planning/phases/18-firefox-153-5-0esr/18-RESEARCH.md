@@ -321,7 +321,13 @@ The empty guard matters: `grep -qF ''` matches every line, so an empty expected 
 | A4 | The 153.4 BUILD1/RELEASE divergence (`f92008fc60` vs `508788b6f8`) is cited from STACK.md, not re-run this session | Pattern 1, comment text | Comment wording only |
 | A5 | Live rows have a usable display in the executor's environment (`DISPLAY=:0`, Wayland session present at research time) | Validation | Live rows go red for an environmental reason |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Resolutions (2026-10-16): Q1 — RESOLVED by the locked criterion-4 reading in
+18-CONTEXT.md; the recommended `checkpoint:human-verify` is SUPERSEDED (autonomous
+run: no human checkpoint; the reading is reported in the phase summary). Q2 —
+RESOLVED: plans cite NG-074 and NG-084 (18-03). Q3 — RESOLVED: no registry
+feature; a plan-level log comparison.
 
 1. **What does "a full `verify-platform.sh` run passes" mean at this commit?**
    - What we know: the full run includes the four `gui08` rows (red now; Phase 21) and `ng074-ci-green-on-main` (red; NG-074, Phase 25, needs Chris to push). `--gate` excuses neither. Phase 17 has not run, so `ng051-backend-off` and `ai-opencode-held` are still registered (backend off; expected green). No full run has been recorded since 2026-09-05, when the registry had 105 rows; it now has 218.
