@@ -11,7 +11,7 @@
     {
       "number": "18",
       "name": "Firefox 153.5.0esr",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "19",
@@ -51,8 +51,8 @@
   ],
   "next": {
     "command": "/gsd-progress --next",
-    "label": "Advance to the next step (verify)",
-    "reason": "Phase 2 of 9 · 0% · ready to verify"
+    "label": "Advance to the next step (plan phase 17)",
+    "reason": "Phase 1 of 9 — needs a plan"
   },
-  "updated_at": "2026-10-17T01:55:22.887Z"
+  "updated_at": "2026-10-17T02:32:56.553Z"
 }

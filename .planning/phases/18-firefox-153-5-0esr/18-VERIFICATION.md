@@ -1,8 +1,8 @@
 ---
 phase: 18-firefox-153-5-0esr
 verified: 2026-10-17T02:30:00Z
-status: human_needed
-score: 10/11 must-haves verified
+status: passed
+score: 11/11 must-haves verified
 covered_files:
   - ".github/workflows/rebase-upstream.yml"
   - ".planning/phases/18-firefox-153-5-0esr/18-01-PLAN.md"
@@ -18,21 +18,23 @@ covered_files:
   - "docs/BUILD.md"
   - "scripts/fetch-upstream.sh"
   - "scripts/smoke-firefox.sh"
+  - "scripts/smoke-theia.sh"
   - "scripts/verify-platform.sh"
-covered_digest: "v3:sha256:413548470fa08a6cb9aac76c9762d8173a39df1403e7d53020a55ae7fe4565a8"
+  - "theia/applications/browser/package.json"
+covered_digest: "v3:sha256:5a4102bb6995d3d5e4c2f93e5214f689421b4f5268c3a2bd73e3bed02f2dea0f"
 behavior_unverified: 0
 overrides_applied: 0
-human_verification:
-  - test: "Free localhost:3000 (it is held by the host-networked mem0-dashboard-1 container), then run each of: scripts/verify-platform.sh --only smoke-theia; --only diff-theia-core; --only gui01-command-registered; --only verify-branding; --only verify-customize-inert; --only verify-dev-flag-off; --only verify-uri-roundtrip"
-    expected: "Each of the 7 rows prints `<label>: PASS` against the 153.5 objdirs. Any FAIL that is not a port-collision line is a 153.5 regression (or a pre-existing defect) that the phase did not measure."
-    why_human: "Port 3000 is owned by Chris's container; the verifier is not permitted to stop it. These 7 rows were red with the same port-collision line at both 153.1 and 153.5, so the subset rule holds on them without measuring anything. Three of them (verify-branding, verify-uri-roundtrip, gui01-command-registered) drive objdir/dist/bin/powerbrowser over WebDriver BiDi (scripts/lib/firefox-bidi.mjs:44), so they are Gecko-version-sensitive and have no 153.5 evidence."
+human_verification_resolved:
+  - test: "Measure the 7 port-bound rows at 153.5"
+    result: "PASS x7 on 2026-10-17 after 3079774 moved the verify dev app to PB_VERIFY_PORT=3939 (Chris: use a different port than 3000); log .planning/phases/18-firefox-153-5-0esr/logs/port-rows-153.5.log"
+
 ---
 
 # Phase 18: Firefox 153.5.0esr Verification Report
 
 **Phase Goal:** PowerBrowser builds on Gecko 153.5.0esr and passes the full verification run on both build variants
 **Verified:** 2026-10-17T02:30:00Z
-**Status:** human_needed
+**Status:** passed (human_needed item resolved 2026-10-17)
 **Re-verification:** No (initial verification)
 
 ## Goal Achievement
@@ -150,3 +152,13 @@ Deferral was considered and rejected. Phase 19 runs live sidecar checks, but it 
 
 _Verified: 2026-10-17T02:30:00Z_
 _Verifier: Claude (gsd-verifier)_
+
+
+## Resolution of the human-verification item (2026-10-17)
+
+Chris asked to use a port other than 3000. Commit 3079774 makes the verify dev app run on
+`PB_VERIFY_PORT` (default 3939); `smoke-theia.sh` uses the same port; plain `yarn start`
+still defaults to 3000. The seven previously unmeasured rows then ran at 153.5:
+smoke-theia, diff-theia-core, gui01-command-registered, verify-branding,
+verify-customize-inert, verify-dev-flag-off, verify-uri-roundtrip — all PASS (exit 0).
+The quick gate after the change still has only the four gui08 rows red (Phase 21).

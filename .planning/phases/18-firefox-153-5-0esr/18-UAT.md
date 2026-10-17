@@ -1,5 +1,5 @@
 ---
-status: testing
+status: complete
 phase: 18-firefox-153-5-0esr
 source: [18-VERIFICATION.md]
 started: 2026-10-17
@@ -20,20 +20,20 @@ expected: |
   scripts/verify-platform.sh --only verify-customize-inert
   scripts/verify-platform.sh --only verify-dev-flag-off
   scripts/verify-platform.sh --only verify-uri-roundtrip
-awaiting: user response
+awaiting: none
 
 ## Tests
 
 ### 1. Measure the 7 port-bound rows at 153.5
 expected: each of the seven --only rows above prints PASS with port 3000 free
-result: [pending]
+result: pass — all 7 PASS on :3939 (3079774)
 
 ## Summary
 
 total: 1
-passed: 0
+passed: 1
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 

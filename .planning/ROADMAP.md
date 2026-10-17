@@ -89,7 +89,7 @@ decisions 1 and 2), 23 (G-23, G-32, sketch 005, G-11 live confirmation), 24 (NG-
 live UAT itself).
 
 - [ ] **Phase 17: OpenCode Removal** - The OpenCode adapter, its `[ai]` manifest path, its checks and its docs leave the tree; NG-051 amended
-- [ ] **Phase 18: Firefox 153.5.0esr** - Gecko re-pinned to `FIREFOX_153_5_0esr_BUILD1`; dev and release builds and the full verification run pass
+- [x] **Phase 18: Firefox 153.5.0esr** - Gecko re-pinned to `FIREFOX_153_5_0esr_BUILD1`; dev and release builds and the full verification run pass (completed 2026-10-16)
 - [ ] **Phase 19: Node 24, React 19, Theia 1.76.0** - Three commits, each checked live; Theia's AI framework runs stock; NG-082 amended
 - [ ] **Phase 20: Non-GUI Gaps** - Clean-checkout build, group-channel check, schema ledger rows, `generate-check`, archived phase paths
 - [ ] **Phase 21: Panorama Spec and gui08 Checks** - 15-UI-SPEC re-pinned to the shipped Panorama; the commit gate is green
@@ -127,7 +127,7 @@ live UAT itself).
   3. The dev objdir and `objdir-release` both build at 153.5, and both binaries report 153.5.0esr
   4. A full `scripts/verify-platform.sh` run passes, with the `mar-update-hop` evidence labelled pre-153.5
 
-**Plans**: 3/3 plans executed (two Gecko builds, about 50 and 55 minutes; `rebase-upstream.yml` is recorded as unexercised, never cited as proof)
+**Plans**: 3/3 plans complete (two Gecko builds, about 50 and 55 minutes; `rebase-upstream.yml` is recorded as unexercised, never cited as proof)
 
 Plans:
 **Wave 1**
@@ -255,7 +255,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 17. OpenCode Removal | 0/TBD | Not started | - |
-| 18. Firefox 153.5.0esr | 3/3 | In Progress | - |
+| 18. Firefox 153.5.0esr | 3/3 | Complete    | 2026-10-16 |
 | 19. Node 24, React 19, Theia 1.76.0 | 0/TBD | Not started | - |
 | 20. Non-GUI Gaps | 0/TBD | Not started | - |
 | 21. Panorama Spec and gui08 Checks | 0/TBD | Not started | - |
