@@ -1,5 +1,5 @@
 {
-  "ledger_version": 368,
+  "ledger_version": 369,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -655,7 +655,7 @@
     {
       "id": "NG-051",
       "text": "With `backend = \"off\"`, no opencode process and no `/mcp` endpoint start. Evidence: the backend module binds both unconditionally (node/backend-opencode-backend-module.ts:18-27); five crashes call `process.exit(78)` (supervisor.ts:274-281); docs/REBRANDING.md:303.",
-      "status": "done",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:75",
       "test_ref": "scripts/verify-ng-051-backend-off.mjs::ng051-backend-off",
       "code_ref": "",
@@ -663,7 +663,7 @@
       "owner": "",
       "phase": "",
       "deferred_at": "",
-      "reason": ""
+      "reason": "OpenCode adapter removed from the tree in v1.4 Phase 17 (RM-01)"
     },
     {
       "id": "NG-052",
