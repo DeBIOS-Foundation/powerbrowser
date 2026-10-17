@@ -16,7 +16,7 @@
     {
       "number": "19",
       "name": "Node 24, React 19, Theia 1.76.0",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "20",
@@ -51,8 +51,8 @@
   ],
   "next": {
     "command": "/gsd-progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 3 of 9 · 22% · executing"
+    "label": "Advance to the next step (plan phase 20)",
+    "reason": "Phase 4 of 9 — needs a plan"
   },
-  "updated_at": "2026-10-17T20:20:55.878Z"
+  "updated_at": "2026-10-17T20:59:56.301Z"
 }

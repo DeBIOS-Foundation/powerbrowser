@@ -17,7 +17,7 @@ Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
       OpenCode/NG-051 verify scripts, their registry rows, and the docs.
       `generate --check` reports 53 targets. AI-01..05 are removed from the
       requirements. The NG-051 ledger amend is approved by Chris before the commit.
-- [ ] **RM-02**: Theia's AI framework runs as upstream ships it: both D-22
+- [x] **RM-02**: Theia's AI framework runs as upstream ships it: both D-22
       overrides are removed from `@powerbrowser/branding`; the 12 `@theia/ai-*`
       packages stay composed and unmodified (Chris, 2026-10-16: "Theia AI should
       remain as stock, and we will work with it later").
@@ -30,18 +30,18 @@ Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
       the run-together line at `configuration.toml:104` is fixed.
 - [x] **UPD-06**: Dev and release builds at 153.5 both succeed and the full
       `verify-platform.sh` run passes; MAR-hop evidence is labelled pre-153.5.
-- [ ] **UPD-07**: The `.#theia` dev shell runs Node 24, with only `flake.nix`
+- [x] **UPD-07**: The `.#theia` dev shell runs Node 24, with only `flake.nix`
       changed and `flake.lock` untouched (supersedes D-16).
-- [ ] **UPD-08**: React is 19.2.8 with exactly one installed copy each of react,
+- [x] **UPD-08**: React is 19.2.8 with exactly one installed copy each of react,
       react-dom, `@types/react`, `@types/react-dom` and inversify, enforced by a
       new `--quick` check with a planted-duplicate self-test.
-- [ ] **UPD-09**: Every `@theia/*` package (except `@theia/monaco-editor-core`) is
+- [x] **UPD-09**: Every `@theia/*` package (except `@theia/monaco-editor-core`) is
       1.76.0 and `diff-theia-core.sh` passes. The Theia ledger row is replaced,
       per Chris's 2026-10-17 decision ("Drop it, add a new row"): Chris drops
       NG-082 (the 1.75.0 row) himself; the agent adds
       NG-086 (Theia 1.76.0 + React 19 + Node 24), records its failing run and
       closes it with evidence; Chris re-locks the check hashes.
-- [ ] **UPD-10**: A live sidecar check at 1.76 passes on a fresh and on a
+- [x] **UPD-10**: A live sidecar check at 1.76 passes on a fresh and on a
       carried-over config dir: only the PowerBrowser welcome opens (no Theia
       Welcome page), `view:` URIs open, and the token-gate rows pass live. The
       `telemetry.telemetryLevel` collision is decided by Chris and recorded.
@@ -131,13 +131,13 @@ the project's own planning record.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | RM-01 | Phase 17 | Complete |
-| RM-02 | Phase 19 | Pending |
+| RM-02 | Phase 19 | Complete |
 | UPD-05 | Phase 18 | Complete |
 | UPD-06 | Phase 18 | Complete |
-| UPD-07 | Phase 19 | Pending |
-| UPD-08 | Phase 19 | Pending |
-| UPD-09 | Phase 19 | Pending |
-| UPD-10 | Phase 19 | Pending |
+| UPD-07 | Phase 19 | Complete |
+| UPD-08 | Phase 19 | Complete |
+| UPD-09 | Phase 19 | Complete |
+| UPD-10 | Phase 19 | Complete |
 | PLAT-01 | Phase 20 | Pending |
 | PLAT-02 | Phase 20 | Pending |
 | PLAT-03 | Phase 20 | Pending |
