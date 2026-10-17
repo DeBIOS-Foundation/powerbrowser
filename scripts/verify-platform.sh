@@ -4549,6 +4549,10 @@ run_own_checks() {
     # --quick per the function comment above: the extension's own tsc over
     # its own project, --noEmit, seconds, no build/browser/display/network.
     "tab-uris-typecheck|check_tab_uris_typecheck"
+    # NEW (Phase 19, UPD-10): judge() of the live first-boot check against planted faults
+    # (surplus tab, getting-started, startup editor, telemetry copy, boot errors). Honestly
+    # --quick: text reads of the tree and pure comparisons, no build, browser or network.
+    "first-boot-surface-self-test|node $REPO_ROOT/scripts/verify-first-boot-surface.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
@@ -4863,6 +4867,11 @@ run_own_checks() {
       "ng-036-setup-records-dock-layout|node $REPO_ROOT/scripts/verify-ng-036-setup-dock-layout.mjs"
       "ng-037-core-close-quits|node $REPO_ROOT/scripts/verify-ng-037-core-close-quits.mjs"
       "ng-038-actor-refuses-hostile-senders|node $REPO_ROOT/scripts/verify-ng-038-actor-sender-wall.mjs"
+
+      # NEW (Phase 19, UPD-10): the first-boot surface on a fresh config dir -- main area,
+      # launch mode, telemetry Settings copy, zero boot errors and a forced render error
+      # through the supervised shell. Full tier: it needs the built binary and sidecar.
+      "first-boot-surface-fresh|node $REPO_ROOT/scripts/verify-first-boot-surface.mjs"
     )
   fi
 
