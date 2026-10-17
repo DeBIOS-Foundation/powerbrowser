@@ -284,14 +284,8 @@ check_gui01_command_registered() { _run_app_check_mjs verify-gui01-command.mjs; 
 # value at the top of the file, so no row relies on ambient environment.
 check_verify_downstream_fixtures() {
   local root rc_brand rc_ext
-  root=$(echo "$REPO_ROOT"/.planning/phases/07-*/fixtures)
-  # v1.0 closeout archived the 07 phase under milestones/: fall back to the
-  # archived fixtures root when the live phases dir no longer carries one.
-  # Still a glob, never spelled (see the note above), and still loud on a
-  # miss -- the harness fails on an unknown path.
-  if [ ! -d "$root" ]; then
-    root=$(echo "$REPO_ROOT"/.planning/milestones/v1.0-phases/07-*/fixtures)
-  fi
+  # The archived roots, no fallback: the planning-paths row fails naming either glob if it stops matching exactly one tracked dir.
+  root=$(echo "$REPO_ROOT"/.planning/milestones/v1.0-phases/07-*/fixtures)
   setsid node "$REPO_ROOT/scripts/verify-downstream-fixture.mjs" --all --fixtures-root "$root" &
   CURRENT_CHECK_PID=$!
   rc_brand=0; wait "$CURRENT_CHECK_PID" || rc_brand=$?; CURRENT_CHECK_PID=""
@@ -301,14 +295,8 @@ check_verify_downstream_fixtures() {
   # path, and the harness fails loudly on an unknown or empty root. Both
   # drives run even when the first is red, so one failing set cannot mask the
   # other; the row fails when either drive fails.
-  # v1.1 closeout archived the 09 phase under milestones/ (v1.0 precedent
-  # above): fall back to the archived fixtures root when the live phases dir
-  # no longer carries one.
   local extroot
-  extroot=$(echo "$REPO_ROOT"/.planning/phases/09-*/fixtures)
-  if [ ! -d "$extroot" ]; then
-    extroot=$(echo "$REPO_ROOT"/.planning/milestones/v1.1-phases/09-*/fixtures)
-  fi
+  extroot=$(echo "$REPO_ROOT"/.planning/milestones/v1.1-phases/09-*/fixtures)
   setsid node "$REPO_ROOT/scripts/verify-downstream-fixture.mjs" --all --fixtures-root "$extroot" &
   CURRENT_CHECK_PID=$!
   rc_ext=0; wait "$CURRENT_CHECK_PID" || rc_ext=$?; CURRENT_CHECK_PID=""
@@ -4576,6 +4564,13 @@ run_own_checks() {
     # fault in mkdtemp copies of the three files.
     "node-major-agreement|node $REPO_ROOT/scripts/verify-node-major-agreement.mjs"
     "node-major-agreement-self-test|node $REPO_ROOT/scripts/verify-node-major-agreement.mjs --self-test"
+    # NEW (Phase 20, PLAT-05): every planning-path literal in tracked scripts/ and .github/
+    # resolves against git ls-files (a file, a dir prefix, or a glob matching exactly one).
+    # Honestly --quick: git ls-files and text reads only. Red on any unresolved literal or on
+    # zero references. The v1.4 closeout turns it red on purpose if a script still points
+    # into a live phase dir.
+    "planning-paths|node $REPO_ROOT/scripts/verify-planning-paths.mjs"
+    "planning-paths-self-test|node $REPO_ROOT/scripts/verify-planning-paths.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then

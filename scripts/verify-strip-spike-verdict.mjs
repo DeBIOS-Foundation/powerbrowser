@@ -60,7 +60,7 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const NAME = 'verify-strip-spike-verdict';
 
-const RECORD_REL = '.planning/phases/13-chrome-bar-strip-relocation-spike/13-SPIKE-STRIP-RELOCATION.md';
+const RECORD_REL = '.planning/milestones/v1.3-phases/13-chrome-bar-strip-relocation-spike/13-SPIKE-STRIP-RELOCATION.md';
 const RECORD_PHASE_DIR = '13-chrome-bar-strip-relocation-spike';
 const RECORD_FILE = '13-SPIKE-STRIP-RELOCATION.md';
 const CORE_DIFF_REL = 'scripts/diff-theia-core.sh';

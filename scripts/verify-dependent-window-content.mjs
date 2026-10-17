@@ -47,7 +47,7 @@ const MODES_SOURCE_RELS = [
     'theia/extensions/modes/src/browser/modes-frontend-module.ts',
 ];
 const SECONDARY_ASSET_REL = 'theia/applications/browser/lib/frontend/secondary-window.html';
-const PROBE_RECORD_REL = '.planning/phases/14-modes-windows-setups/14-PROBE-DEPENDENT-WINDOWS.md';
+const PROBE_RECORD_REL = '.planning/milestones/v1.3-phases/14-modes-windows-setups/14-PROBE-DEPENDENT-WINDOWS.md';
 const PROBE_PHASE_DIR = '14-modes-windows-setups';
 const PROBE_FILE = '14-PROBE-DEPENDENT-WINDOWS.md';
 
