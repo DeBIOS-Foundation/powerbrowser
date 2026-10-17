@@ -56,7 +56,6 @@
 **Critical:**
 - `@theia/core` 1.74.1 — every `@powerbrowser/*` extension depends on it
 - `better-sqlite3` 13.0.3 — read-only reader for the chrome-owned tab store (`theia/extensions/tab-uris/src/node/tab-query-service.ts`, local typings in `better-sqlite3.d.ts`). Native module, hence the Node-version pin.
-- `@agentclientprotocol/sdk` 1.4.0 — ACP client for the OpenCode chat backend (`theia/extensions/backend-opencode/src/node/opencode-acp-supervisor.ts`)
 - `p-debounce` ^2.1.0 — used by `chrome-bar`, `customize`, `modes`
 
 **Infrastructure (in-repo workspaces, `theia/extensions/`):**
@@ -67,14 +66,13 @@
 - `@powerbrowser/chrome-bar` 0.1.0 — the in-Theia bar/strip
 - `@powerbrowser/customize` 0.1.0 — user-storage-backed customization
 - `@powerbrowser/telemetry` 0.1.0 — manifest-gated sender, off by default
-- `@powerbrowser/backend-opencode` 0.1.0 — the optional AI chat backend
 
 ## Configuration
 
 **Rebrand manifest (the only hand-edited input):**
-- `configuration.toml` — `[product] [identity] [legal] [theia] [[variants]] [installer] [telemetry] [upstreams] [ai]`
+- `configuration.toml` — `[product] [identity] [legal] [theia] [[variants]] [installer] [telemetry] [upstreams]`
 - `brand/mark.svg` — the one raster/vector source
-- `node scripts/generate.mjs` rewrites `generated/`: `identity.configure`, `upstream-pins.env`, `theia-frontend-config.json`, `theia-branding.json`, `theia-telemetry.json`, `theia-plugins.json`, `ai-backend.json`, `endpoint-hosts.json`, `webextensions-settings.json`, `branding/`, `installer/`, desktop files
+- `node scripts/generate.mjs` rewrites `generated/`: `identity.configure`, `upstream-pins.env`, `theia-frontend-config.json`, `theia-branding.json`, `theia-telemetry.json`, `theia-plugins.json`, `endpoint-hosts.json`, `webextensions-settings.json`, `branding/`, `installer/`, desktop files
 - `generate --check` and the `generated-byte-identity` verification row assert the derived files match the tracked hand-written ones
 
 **Build:**
@@ -87,7 +85,7 @@
 
 **Runtime environment variables:**
 - `POWERBROWSER_*` — the shell→sidecar channel, captured and scrubbed in `theia/extensions/token-gate/src/node/powerbrowser-env.ts`
-- `POWERBROWSER_MCP_PORT`, `POWERBROWSER_MCP_TOKEN`, `POWERBROWSER_PROFILE_DIR`, `POWERBROWSER_SIDECAR_PREFS`, `POWERBROWSER_MODES_JSON`, `POWERBROWSER_DECK_STATE`, `POWERBROWSER_BRANDING`, `POWERBROWSER_OBJDIR`, `POWERBROWSER_REPO_ROOT`
+- `POWERBROWSER_PROFILE_DIR`, `POWERBROWSER_SIDECAR_PREFS`, `POWERBROWSER_MODES_JSON`, `POWERBROWSER_DECK_STATE`, `POWERBROWSER_BRANDING`, `POWERBROWSER_OBJDIR`, `POWERBROWSER_REPO_ROOT`
 - `THEIA_CONFIG_DIR` — set to `${XDG_CONFIG_HOME:-$HOME/.config}/powerbrowser` by the app's `start` script
 - `VSX_REGISTRY_URL=https://open-vsx.org` — same script
 - No `.env` file in the tree; configuration flows through the manifest and process env.

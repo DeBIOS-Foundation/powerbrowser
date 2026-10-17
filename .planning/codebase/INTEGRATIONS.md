@@ -31,8 +31,7 @@ Normandy and health-report telemetry are compiled out entirely by `imply_option`
 **Extension marketplace:**
 - Open VSX — `https://open-vsx.org`, set via `VSX_REGISTRY_URL` in `theia/applications/browser/package.json`'s `start` script. Extension pins would be declared in `configuration.toml` `[[extensions]]`; this project declares none, so `generated/theia-plugins.json` stays empty. `scripts/verify-extension-pins.mjs` guards it.
 
-**AI backend (optional, off by default):**
-- OpenCode over Agent Client Protocol — `@agentclientprotocol/sdk`, supervised as a local subprocess in `theia/extensions/backend-opencode/src/node/opencode-acp-supervisor.ts`. Selected by `configuration.toml` `[ai] backend` (currently `"off"`, echoed to `generated/ai-backend.json`). Config in `opencode.json`. Checks: `scripts/verify-opencode-bridge.mjs`, `verify-opencode-presets.mjs`, `verify-opencode-tracer.mjs`.
+**AI framework:**
 - `@theia/ai-anthropic` and `@theia/ai-openai` ship as dependencies of the app but no provider credentials are configured in the tree.
 
 ## Data Storage
@@ -53,7 +52,6 @@ Normandy and health-report telemetry are compiled out entirely by `imply_option`
 - None external. The only auth boundary is the sidecar's own token gate: `@powerbrowser/token-gate`.
   - `theia/extensions/token-gate/src/node/powerbrowser-env.ts` snapshots every `POWERBROWSER_*` variable at module load and deletes it from `process.env`, so child processes and Theia's `EnvironmentUtils.mergeProcessEnv` never inherit it.
   - `token-gate-backend-contribution.ts` enforces the token on backend endpoints; `parent-watchdog-backend-contribution.ts` terminates the sidecar when the chrome parent dies.
-  - Shared secret and port arrive as `POWERBROWSER_MCP_TOKEN` / `POWERBROWSER_MCP_PORT` (also surfaced as `OPENCODE_BRIDGE_ENV_TOKEN` / `OPENCODE_BRIDGE_ENV_PORT` for the AI bridge).
   - `POWERBROWSER_TOKEN_DISABLE=1` exists for standalone sidecar debugging only.
 - Checks: `scripts/verify-theia-endpoints.mjs`, `verify-backend-env-readers.mjs`, `verify-endpoints.sh`.
 
@@ -86,7 +84,6 @@ Normandy and health-report telemetry are compiled out entirely by `imply_option`
 ## Environment Configuration
 
 **Required at runtime (set by the chrome shell for the sidecar):**
-- `POWERBROWSER_MCP_PORT`, `POWERBROWSER_MCP_TOKEN` — sidecar endpoint and gate token
 - `POWERBROWSER_PROFILE_DIR` — profile root, where `tabs.sqlite` lives
 - `POWERBROWSER_SIDECAR_PREFS`, `POWERBROWSER_MODES_JSON`, `POWERBROWSER_DECK_STATE`, `POWERBROWSER_APP_IDENTITY`, `POWERBROWSER_MARK_SVG` / `POWERBROWSER_MARK_DATA_URI`
 - `THEIA_CONFIG_DIR`, `VSX_REGISTRY_URL` — set by the app `start` script

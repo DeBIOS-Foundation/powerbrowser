@@ -109,7 +109,7 @@
 **Theia extension layer (unprivileged web content):**
 - Purpose: the default GUI
 - Location: `theia/extensions/*/src/{browser,node,common}/`
-- Contains: eight `@powerbrowser/*` extensions — `branding`, `token-gate`, `tab-uris`, `customize`, `telemetry`, `modes`, `chrome-bar`, `backend-opencode`
+- Contains: seven `@powerbrowser/*` extensions — `branding`, `token-gate`, `tab-uris`, `customize`, `telemetry`, `modes`, `chrome-bar`
 - Depends on: `@theia/*` npm packages and Inversify DI; never Theia core sources
 - Used by: `theia/applications/browser` (the composed app)
 

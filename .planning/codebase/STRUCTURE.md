@@ -41,7 +41,7 @@ Power-Browser/
 
 **`generated/`:**
 - Purpose: the derived mirror of the above, written only by `scripts/generate.mjs`
-- Contains: `.mozconfig`, `identity.configure`, `branding/{dev,release}/` (adds `firefox.ico`, `firefox.icns`, `branding.nsi`, `firefox.VisualElementsManifest.xml`), `installer/{dev,release}/`, `theia-frontend-config.json`, `theia-branding.json`, `theia-telemetry.json`, `theia-plugins.json`, `endpoint-hosts.json`, `upstream-pins.env`, `webextensions-settings.json`, `ai-backend.json`, the desktop files
+- Contains: `.mozconfig`, `identity.configure`, `branding/{dev,release}/` (adds `firefox.ico`, `firefox.icns`, `branding.nsi`, `firefox.VisualElementsManifest.xml`), `installer/{dev,release}/`, `theia-frontend-config.json`, `theia-branding.json`, `theia-telemetry.json`, `theia-plugins.json`, `endpoint-hosts.json`, `upstream-pins.env`, `webextensions-settings.json`, the desktop files
 - Generated: Yes. Committed: Yes (it is the comparand).
 
 **`theia/`:**
@@ -49,8 +49,8 @@ Power-Browser/
 - Key file: `theia/package.json` pins every `@theia/*` to `1.74.1` under `resolutions` and defines the ordered `build:extensions` chain
 
 **`theia/applications/browser/`:**
-- Purpose: the composed Theia app; depends on all eight `@powerbrowser/*` extensions and the `@theia/*` set
-- Key file: `theia/applications/browser/package.json` — carries the `theia.frontend.config` block (applicationName, `powerbrowserBranding`, `powerbrowserTelemetry`, `powerbrowserPrivilegedJs`, `powerbrowserAiBackend`, legal notices)
+- Purpose: the composed Theia app; depends on all seven `@powerbrowser/*` extensions and the `@theia/*` set
+- Key file: `theia/applications/browser/package.json` — carries the `theia.frontend.config` block (applicationName, `powerbrowserBranding`, `powerbrowserTelemetry`, `powerbrowserPrivilegedJs`, legal notices)
 - `src-gen/` and `lib/` are build outputs
 
 **`theia/extensions/`:**
@@ -62,7 +62,6 @@ Power-Browser/
 - `telemetry/` — opt-in sender, preferences, logger
 - `modes/` — mode service, group model, panorama, organising tree/widget, setups, dependent windows, group actor client
 - `chrome-bar/` — commands, keybindings, suggestion service (frontend + node impl)
-- `backend-opencode/` — ACP supervisor, chat agent, preset commands, MCP contribution, changeset emitter
 
 **`patches/`:**
 - Purpose: the entire Gecko diff
