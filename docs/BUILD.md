@@ -555,6 +555,8 @@ thing, which they are not.
 | #1 (dev, `objdir/`) | pre-rename tree, `legion`, 2026-08-21 | `MOZCONFIG=../.mozconfig ./mach build` | **2368s (~39m28s)** | not recoverable — the sccache server that ran this build had already recycled by the time its stats were checked in the same session (`03-01-SUMMARY.md`, "Issues Encountered") | `03-01-SUMMARY.md` |
 | #2 (release, `objdir-release/`) | pre-rename tree, `legion`, 2026-08-21 | `POWERBROWSER_OBJDIR=objdir-release POWERBROWSER_BRANDING=powerbrowser/branding/release MOZCONFIG=../.mozconfig ./mach build` | **2822s (~47m2s)** | **0.14%** — 5648 new sccache requests this build's delta, 5043 executed, 7 hits, 5022 misses | `03-05-SUMMARY.md` |
 | #3 (dev, `objdir/`) | **Power Browser tree**, `legion`, 2026-08-30 | `scripts/smoke-firefox.sh` (which runs `MOZCONFIG=../.mozconfig ./mach build`) | **2830s (~47m11s)** | not sampled — the build ran under `scripts/smoke-firefox.sh`, which does not capture `sccache --show-stats`; the near-zero hit rate measured for #2 is the expectation for this class of change | `01-04-SUMMARY.md` |
+| #4 (dev, `objdir/`) | **Power Browser tree** at `FIREFOX_153_5_0esr_BUILD1`, `legion`, 2026-10-16 | `scripts/smoke-firefox.sh` (which runs `MOZCONFIG=../.mozconfig ./mach build`), after `./mach clobber` | **2388s (~39m48s)** | not sampled | `18-02-SUMMARY.md` |
+| #5 (release, `objdir-release/`) | **Power Browser tree** at `FIREFOX_153_5_0esr_BUILD1`, `legion`, 2026-10-16 | `POWERBROWSER_OBJDIR=objdir-release POWERBROWSER_BRANDING=powerbrowser/branding/release MOZCONFIG=../.mozconfig ./mach build`, after `./mach clobber` with the same env | **2620s (~43m40s)** | not sampled | `18-03-SUMMARY.md` |
 
 Builds #1 and #2 are not re-run — doing so would spend two more full compiles
 for figures that would not differ; both are taken verbatim, with their exact
@@ -562,7 +564,8 @@ commands, from the SUMMARY that actually ran them. Build #3 is this repo's own
 first full compile, from a `scripts/fetch-upstream.sh` clone (677s, 5.6 G) with
 both patches applied. The **release** variant was deliberately **not** re-built
 after the rename: nothing in this phase needs a second objdir, and row #2's
-figure already bounds it.
+figure already bounds it. Rows #4 and #5 are the Phase 18 re-pin builds at 153.5.0esr, each from a
+clobbered objdir.
 
 ### The three tiers, at a glance
 
