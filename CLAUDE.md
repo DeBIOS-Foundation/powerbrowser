@@ -142,7 +142,7 @@ Two rules about what a check may be, both earned by shipping the mistake first:
 
 ## User-facing copy
 
-`.planning/phases/01-platform-extraction-and-rename/01-UI-SPEC.md` holds the design contract.
+`.planning/milestones/v1.0-phases/01-platform-extraction-and-rename/01-UI-SPEC.md` holds the design contract.
 The rule that keeps being violated by accident: **no internal identifier may appear in
 user-facing text.** No pref key, sentinel name, port, timeout, or raw exception message. Every
 user-facing error string names the product as "PowerBrowser", states the problem in plain
