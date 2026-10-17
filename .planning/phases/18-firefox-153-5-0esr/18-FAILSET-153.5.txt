@@ -1,0 +1,12 @@
+diff-theia-core	unmeasured: port 3000 held by mem0-dashboard-1 (needs Chris to free it, then re-run with --only)
+gui01-command-registered	unmeasured: port 3000 held by mem0-dashboard-1 (needs Chris to free it, then re-run with --only)
+gui08-canvas-geometry	Phase 21
+gui08-canvas-geometry-self-test	Phase 21
+gui08-panorama-copy	Phase 21
+gui08-panorama-copy-self-test	Phase 21
+ng074-ci-green-on-main	NG-074 (Phase 25)
+smoke-theia	unmeasured: port 3000 held by mem0-dashboard-1 (needs Chris to free it, then re-run with --only)
+verify-branding	unmeasured: port 3000 held by mem0-dashboard-1 (needs Chris to free it, then re-run with --only)
+verify-customize-inert	unmeasured: port 3000 held by mem0-dashboard-1 (needs Chris to free it, then re-run with --only)
+verify-dev-flag-off	unmeasured: port 3000 held by mem0-dashboard-1 (needs Chris to free it, then re-run with --only)
+verify-uri-roundtrip	unmeasured: port 3000 held by mem0-dashboard-1 (needs Chris to free it, then re-run with --only)
