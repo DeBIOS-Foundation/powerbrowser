@@ -3756,6 +3756,17 @@ run_own_checks() {
     "gui02-web-tab-bridge|node $REPO_ROOT/scripts/verify-web-tab-bridge.mjs"
     "gui02-web-tab-bridge-self-test|node $REPO_ROOT/scripts/verify-web-tab-bridge.mjs --self-test"
 
+    # NEW (Phase 20, PLAT-02, G-14.1.1-10): the PowerBrowserGroup channel's
+    # static contract. The five 15-01 faults that kept the channel dead for a
+    # phase -- no wantUntrusted on the child events entry, a chrome:// child
+    # module, the jar.mn resource alias, document dispatch with bubbles, and
+    # the content-compartment reply clone -- plus event-name agreement and
+    # window response listeners, all derived from the tree (D0-D6). Honestly
+    # --quick: text reads only, upstream/ read-only. In a clone without
+    # upstream/ it fails like the other upstream readers (R33).
+    # gui02-web-tab-live stays the runtime proof.
+    "group-channel|node $REPO_ROOT/scripts/verify-group-channel.mjs"
+
     # NEW (13-02): GUI-07's spike-verdict gate. Parses the strip-relocation
     # record for a one-line GREEN/RED verdict with a cause on RED plus the
     # Variant routing, and checks the zero-core claim against the
