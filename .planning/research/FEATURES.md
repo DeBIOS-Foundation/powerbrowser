@@ -53,7 +53,9 @@ Evidence runs taken this session:
   `GROUP_ACTOR_CHILD_MODULE = "resource://powerbrowser/GroupActorChild.sys.mjs"`
   (`powerbrowser/shell/PowerBrowserAPI.sys.mjs:255`), `wantUntrusted: true` (`:2196`),
   `document.dispatchEvent(... bubbles: true)`
-  (`theia/extensions/modes/src/browser/group-actor-client.ts:90-91`), `cloneInto` on the reply.
+  (`theia/extensions/modes/src/browser/group-actor-client.ts:90-91`), and the reply detail built
+  by the content window's own `JSON.parse(JSON.stringify(...))` through `win.wrappedJSObject`
+  (`powerbrowser/shell/GroupActorChild.sys.mjs`; there is no `cloneInto`).
   `scripts/verify-platform.sh` has **no** row for them (grep for group-channel, wantUntrusted
   and GroupActorChild returns nothing). Only live checks touch the channel:
   `verify-ng-038-actor-sender-wall.mjs` and `verify-web-tab-live.mjs`. The file that held this gap,
@@ -63,6 +65,8 @@ Evidence runs taken this session:
   `window` dispatch, `bubbles:false`, uncloned reply). Each plant goes red and names its fault.
   Clean control is green. The expected values are derived from the source, not hand-kept
   (CLAUDE.md, Verification rule 2).
+- **Closed (Phase 20, plan 20-03):** the `group-channel` and `group-channel-self-test` rows
+  now cover all five, plus event-name agreement and `window` response listeners.
 - **Class:** Table stakes.
 
 ### G-14.1.1-11 (G-11) — Variant B strip relocation, ratification
