@@ -1,5 +1,5 @@
 {
-  "ledger_version": 390,
+  "ledger_version": 391,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -1152,7 +1152,7 @@
   "mockup_freeze": null,
   "scope_lock": null,
   "check_locks": {
-    "commit": "e0fbf8b97196dc715ff8a728640223686c1b3b5b",
+    "commit": "facaba2a1ce09f9bb09bbc4e6f1e1b037c188e57",
     "files": {
       "scripts/verify-ng-001-one-key-rule.mjs": "642d3d25ab836395e0137652c047e432cfc8e31a37c76191845694bd000242c4",
       "scripts/verify-ng-002-navigation-keeps-row.mjs": "d5fc1ec38c3503606a20716ecd0b12e1696f6ea552a479f3ac12e2cf740e74b4",
@@ -1206,7 +1206,9 @@
       "scripts/verify-ng-072-policies-webextension.mjs": "f4f0b662928514eebc1052c85c951b5136b296555e36618b850112e6c160ca14",
       "scripts/verify-ng-073-declared-extension-loads.mjs": "6512fe2bb9b0b368fa0e2289d9af0507add516c6f5587997d88bdaaa724eabff",
       "scripts/verify-ng-085-quit-closes-store.mjs": "bf16b1f1afeeea86b0f4ec8aa29f9f38837dff59d0708e6c343d0a3827d070cc",
-      "scripts/verify-ng-086-theia-react-node.mjs": "9e20680687870a8850cf98b6b14c090c476721ddc19b7f3cd576b1d16c7f4646"
+      "scripts/verify-ng-086-theia-react-node.mjs": "9e20680687870a8850cf98b6b14c090c476721ddc19b7f3cd576b1d16c7f4646",
+      "scripts/verify-ng-087-loose-position-across-restart.mjs": "3d00130947215916d7d0e90086f5b22a26bd9b23713718178944c66a4a12978c",
+      "scripts/verify-ng-088-group-order-across-restart.mjs": "07ae875155339090c1d45225bf8411aeb14f871a5fc92474f529f3c1e46b90a9"
     }
   },
   "check_baseline": 252
