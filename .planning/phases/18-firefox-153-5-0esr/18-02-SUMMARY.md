@@ -41,7 +41,7 @@ key-decisions:
   - "smoke-firefox.sh puts 2>/dev/null before the < redirect, so an absent version file prints only the FAIL line (redirections run left to right)"
   - "The rebase workflow is registered and active (id 350520027) with zero runs; docs/BUILD.md records it as unexercised from the gh run list result on 2026-10-16"
 
-requirements-completed: [UPD-05, UPD-06]
+requirements-completed: [UPD-05]  # UPD-06 dev half only; release build and full run are 18-03
 
 coverage:
   - id: D1

@@ -24,7 +24,7 @@ Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
 
 ### Upstream updates
 
-- [ ] **UPD-05**: Gecko is pinned to `FIREFOX_153_5_0esr_BUILD1` with its commit
+- [x] **UPD-05**: Gecko is pinned to `FIREFOX_153_5_0esr_BUILD1` with its commit
       SHA recorded; the four patches replay unchanged; `smoke-firefox.sh` derives
       the version from the tree; the `fetch-upstream.sh` tag comment is corrected;
       the run-together line at `configuration.toml:104` is fixed.
@@ -129,7 +129,7 @@ the project's own planning record.
 |-------------|-------|--------|
 | RM-01 | Phase 17 | Pending |
 | RM-02 | Phase 19 | Pending |
-| UPD-05 | Phase 18 | Pending |
+| UPD-05 | Phase 18 | Complete |
 | UPD-06 | Phase 18 | Pending |
 | UPD-07 | Phase 19 | Pending |
 | UPD-08 | Phase 19 | Pending |

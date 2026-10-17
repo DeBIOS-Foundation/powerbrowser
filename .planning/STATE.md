@@ -5,16 +5,16 @@ milestone_name: Platform Updates and GUI Close-out
 current_phase: 18
 current_phase_name: Firefox 153.5.0esr
 status: executing
-stopped_at: Completed 18-01-PLAN.md
-last_updated: "2026-10-16T23:28:03.520Z"
+stopped_at: Completed 18-02-PLAN.md
+last_updated: "2026-10-17T00:23:27.377Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 18 execution started
-state_head: d36e3d31f2ac2560d2c469d934dd169901a5335c
+state_head: 9a8be1542ac9c6cf16fa770c5bf272a6c4abdea3
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-16)
 ## Current Position
 
 Phase: 18 (Firefox 153.5.0esr) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-10-16 — Phase 18 execution started
 
@@ -133,6 +133,7 @@ Last activity: 2026-10-16 — Phase 18 execution started
 | Phase 14.1.1 P15 | 2 min | 1 tasks | 2 files |
 | Phase 14.1.1 P16 | 10 min | 2 tasks | 3 files |
 | Phase 18 P01 | 50 min | 2 tasks | 3 files |
+| Phase 18 P02 | 53min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -345,6 +346,8 @@ Recent decisions affecting current work:
 - [Phase 14.1.1]: 14.1.1-16: G-14.1.1-8's in_tree status left as found (criterion said open); the protected fact is its deferred_to line and the held file, both intact
 - [Phase 18]: 153.1 baseline B has 30 FAIL rows: 4 gui08 (Phase 21), ng074 (NG-074), 18 ng rows blocked by the clean-tree guard (pass on rerun), 7 theia-app rows blocked by port 3000 held by mem0-dashboard (unowned)
 - [Phase 18]: Plan 03 must free port 3000 and run with a clean tree or PB_NG_ALLOW_DIRTY=1 before the 153.5 full run, else 25 rows go unmeasured
+- [Phase 18]: smoke-firefox.sh derives its expected version from upstream/browser/config/version_display.txt, read before the build; absent or empty fails
+- [Phase 18]: rebase-upstream.yml is registered but has zero runs (gh run list, 2026-10-16); docs/BUILD.md records it as unexercised
 
 ### Pending Todos
 
@@ -444,8 +447,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-16T23:28:03.493Z
-Stopped at: Completed 18-01-PLAN.md
+Last session: 2026-10-17T00:23:27.343Z
+Stopped at: Completed 18-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
