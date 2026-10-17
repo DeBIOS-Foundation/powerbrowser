@@ -29,7 +29,9 @@ MODE=default
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --workflow) WORKFLOW="${2:-}"; shift 2 ;;
+    --workflow)
+      [ $# -ge 2 ] || { echo "$NAME: FAIL -- --workflow needs a file"; exit 2; }
+      WORKFLOW="$2"; shift 2 ;;
     --self-test) MODE=self-test; shift ;;
     --plant-in-clone) MODE=plant; shift ;;
     *) echo "$NAME: FAIL -- unknown argument: $1"; exit 2 ;;
