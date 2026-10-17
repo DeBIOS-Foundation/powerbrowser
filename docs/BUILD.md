@@ -45,7 +45,8 @@ shell pins at 1.4.4. Bare `node scripts/generate.mjs` on a host without an
 `inkscape` it is worse, producing rasters that pass the icon step and then
 fail the byte-identity check as though the tree were at fault. The
 invocations written as `node scripts/generate.mjs` below are all inside
-that shell, and CI runs them the same way.
+that shell. `verify.yml` runs them the same way; `rebase-upstream.yml` does
+not (see the **CI story** note under the rebase section).
 
 ## Theia half
 
@@ -1142,8 +1143,10 @@ successful CI replay — not a CI step, because the toolchain that produces it
 only exists in the `firefox` devShell this workflow does not enter.
 `.github/workflows/rebase-upstream.yml` has never been dispatched: on
 2026-10-16, `gh run list --workflow rebase-upstream.yml` returned no runs
-(`[]`), with the workflow registered and active. Its generate step runs outside
-Nix, so inkscape is not pinned there. The 153.5 rebase ran locally. The
+(`[]`), with the workflow registered and active. Its generate step runs bare
+`node scripts/generate.mjs` on a runner with no inkscape, so the first dispatch
+is expected to fail at that step, before the rebase. Wrapping the workflow in
+Nix is deferred (18-CONTEXT). The 153.5 rebase ran locally. The
 workflow is therefore unexercised and is not cited as proof of any rebase.
 
 **Desktop install (local dev testing).** `powerbrowser/powerbrowser.desktop` (dev)
