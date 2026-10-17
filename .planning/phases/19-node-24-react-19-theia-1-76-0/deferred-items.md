@@ -23,3 +23,24 @@ Out-of-scope findings logged during execution. None is fixed here.
   another re-run.
 - **Stale lib files in modes and tab-uris remain.** 19-05 ran only branding's `clean`, as its plan
   specified. The three source-less files listed under 19-01 are still in `lib/`.
+
+## From 19-06
+
+- **The 19-05 `first-boot-surface-carried` intermittent red is root-caused and fixed (commit
+  dfef881).** It is not a product regression. Web tabs come back from
+  `SetupsService.applyLastSession`, which by design runs after `ready` (setups-service.ts
+  `onStart`). A tight poll (logs/carried-timeline2-19-06.log) shows that at `ready` the main area
+  is the core layout alone, `[view:welcome, view:disassembly-view-widget]`, which is exactly the
+  failing observation. The web tab follows about 40 ms later. The check read at `ready`, so it
+  raced that restore. Carried mode now waits up to 20 s for the fixture's set before it reads.
+- **`.planning/codebase/STACK.md:24` still says Node.js 22** (`pkgs.nodejs_22`,
+  `engines.node >= 22`). It is outside 19-06's docs file list. The next `/gsd-map-codebase`
+  refresh should correct it.
+- **The chrome-bar dropdown does not follow a pill that moves while the dropdown is open.**
+  At 1.76.0 the top panel grows from 72 to 73 px, and the pill moves from 65.5 to 68.5 px, in the
+  first ~0.5 s after the address input becomes visible (logs/dropdown-diag-19-06.log). The
+  dropdown derives its geometry on render and on window resize only (chrome-bar-widget.tsx
+  `renderDropdown`). A dropdown opened inside that window therefore sits 2.5 px above its
+  designed anchor until the next keystroke. Opened after layout settles, it is 0.5 px from the
+  anchor. This is pre-existing design, and only a sub-second boot window exposes it. A
+  ResizeObserver on the pill would close it, if it ever matters.
