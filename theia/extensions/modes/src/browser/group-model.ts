@@ -484,64 +484,6 @@ export class GroupModel {
     }
 
     /**
-     * Auto-draws one box around the given cards (the drop-matrix gesture:
-     * card-onto-card contains both, card-onto-field contains the one).
-     * Paints the box plus the membership move optimistically; the write is
-     * one composite (createGroup, idempotent upsert, then one setTabGroup
-     * per card) so Retry replays it whole and a second failure reverts it
-     * whole. Returns the painted box, or undefined when no URI resolved.
-     */
-    async autoBox(client: GroupActorClient, uris: readonly string[], at: { x: number; y: number }): Promise<PanoramaGroup | undefined> {
-        const placements = [...new Set(uris)].flatMap(uri => {
-            const found = this.locateCard(uri);
-            return found ? [{ uri, groupId: found.groupId, card: found.card }] : [];
-        });
-        if (!placements.length) {
-            return undefined;
-        }
-        const group: PanoramaGroup = {
-            id: `group-${Date.now().toString(36)}-${Math.floor(Math.random() * 0x100000).toString(36)}`,
-            title: UNTITLED_GROUP_TITLE,
-            x: Math.max(0, Math.floor(at.x)),
-            y: Math.max(0, Math.floor(at.y)),
-            w: 400,
-            h: 300,
-            isActive: false,
-        };
-        const apply = (): void => {
-            this.groups = [...this.groups, group];
-            this.members.set(group.id, []);
-            for (const placement of placements) {
-                this.removeCardLocal(placement.uri);
-                this.insertCardLocal(placement.card, group.id);
-            }
-        };
-        const revert = (): void => {
-            this.groups = this.groups.filter(candidate => candidate.id !== group.id);
-            this.members.delete(group.id);
-            for (const placement of placements) {
-                this.removeCardLocal(placement.uri);
-                this.insertCardLocal(placement.card, placement.groupId);
-            }
-            if (this.activeGroupId === group.id) {
-                this.activeGroupId = undefined;
-            }
-        };
-        await this.persist(`autobox:${group.id}`, apply, revert, async () => {
-            await client.mutate({ kind: 'createGroup', id: group.id, title: group.title, x: group.x, y: group.y, w: group.w, h: group.h });
-            for (const placement of placements) {
-                await this.writeMembership(client, placement.uri, group.id);
-            }
-        });
-        return group;
-    }
-
-    /**
-     * Relocates one card between a box and the tray (or box to box). When
-     * the source box ends up empty the caller follows with dissolveGroup --
-     * the last-card-out gesture -- so nothing is orphaned.
-     */
-    /**
      * Moves a card into a group, optionally at a chosen place in it. Dropping
      * a card between two others is a move AND a reorder, so both are written:
      * the membership, then the group's new order as one list.

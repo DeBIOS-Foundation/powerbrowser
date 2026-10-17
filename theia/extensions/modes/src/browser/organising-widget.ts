@@ -1710,24 +1710,17 @@ export class OrganisingWidget extends Widget {
             card.classList.remove('is-dragging');
             this.clearDropTargets();
             const under = hitTest(ev);
-            const targetCard = under?.closest('.pb-org-card') as HTMLElement | null;
             const targetBox = under?.closest('.pb-org-box') as HTMLElement | null;
             // Read the slot BEFORE detach clears it -- it is where the card
             // goes, and the preview promised exactly this place.
             const at = targetBox && targetBox.dataset.g === this.dropPreviewGroupId
                 ? this.dropPreviewIndex
                 : undefined;
-            // A GROUP is checked before a card, and this order is the whole
-            // fix: since the cards tile to fill their group, nearly every drop
-            // inside a box now lands on a card rather than on bare box. With
-            // the card checked first, dropping a tab into a group ran
-            // card-onto-card and auto-drew a NEW group around the pair -- so
-            // the group never gained the tab, and never re-packed either.
-            // Dropping into a group means joining that group, always.
-            //
-            // Card-onto-card keeps its meaning only where there is no group to
-            // join: two loose cards in the tray, which is where drawing a box
-            // around them is the useful thing to do.
+            // A group is checked first: since the cards tile to fill their
+            // group, nearly every drop inside a box lands on a card rather
+            // than on bare box, and that drop joins the group at the
+            // previewed slot. A drop on empty canvas places the card loose
+            // there. A release anywhere else changes nothing.
             if (targetBox && targetBox.dataset.g) {
                 void this.dropCard(ev, targetBox.dataset.g, at);
             } else if (under?.closest('.pb-org-canvas')) {
@@ -1805,37 +1798,6 @@ export class OrganisingWidget extends Widget {
             await this.dissolveEmptied(drag.fromGroup, toGroup);
         } catch (error) {
             console.error('[@powerbrowser/modes] card drop failed:', error);
-        }
-        this.render();
-    }
-
-    /**
-     * Card-onto-card: auto-draws one box containing both cards at the drop
-     * point, then dissolves any source box left empty (last-card-out) --
-     * BOTH sources, not just the drag source (WR-03: a cross-group drop
-     * onto a sole card in B emptied B without dissolving it).
-     */
-    protected async dropCardOntoCard(event: MouseEvent, targetUri: string, targetGroup: string | null): Promise<void> {
-        event.preventDefault();
-        event.stopPropagation();
-        const drag = this.dragCard;
-        this.dragCard = undefined;
-        this.clearDropTargets();
-        if (!drag || drag.uri === targetUri) {
-            return;
-        }
-        try {
-            const box = await this.model.autoBox(this.actor, [drag.uri, targetUri], this.canvasPoint(event));
-            if (box) {
-                if (drag.fromGroup !== null && drag.fromGroup !== box.id) {
-                    await this.dissolveEmptied(drag.fromGroup, box.id);
-                }
-                if (targetGroup !== null && targetGroup !== box.id && targetGroup !== drag.fromGroup) {
-                    await this.dissolveEmptied(targetGroup, box.id);
-                }
-            }
-        } catch (error) {
-            console.error('[@powerbrowser/modes] card auto-box failed:', error);
         }
         this.render();
     }
