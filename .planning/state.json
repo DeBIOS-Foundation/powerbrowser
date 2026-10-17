@@ -6,7 +6,7 @@
     {
       "number": "17",
       "name": "OpenCode Removal",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "18",
@@ -51,8 +51,8 @@
   ],
   "next": {
     "command": "/gsd-progress --next",
-    "label": "Advance to the next step (verify)",
-    "reason": "Phase 1 of 9 · 11% · ready to verify"
+    "label": "Advance to the next step (plan phase 19)",
+    "reason": "Phase 3 of 9 — needs a plan"
   },
-  "updated_at": "2026-10-17T07:55:36.373Z"
+  "updated_at": "2026-10-17T08:10:43.138Z"
 }

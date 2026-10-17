@@ -89,7 +89,7 @@ ledger approvals: 17 (NG-051), 19 (NG-082, telemetry), 20 (schema v3/v4 rows), 2
 decisions 1 and 2), 23 (G-23, G-32, sketch 005, G-11 live confirmation), 24 (NG-084 text, the
 live UAT itself).
 
-- [ ] **Phase 17: OpenCode Removal** - The OpenCode adapter, its `[ai]` manifest path, its checks and its docs leave the tree; NG-051 amended
+- [x] **Phase 17: OpenCode Removal** - The OpenCode adapter, its `[ai]` manifest path, its checks and its docs leave the tree; NG-051 amended (completed 2026-10-17)
 - [x] **Phase 18: Firefox 153.5.0esr** - Gecko re-pinned to `FIREFOX_153_5_0esr_BUILD1`; dev and release builds and the full verification run pass (completed 2026-10-16)
 - [ ] **Phase 19: Node 24, React 19, Theia 1.76.0** - Three commits, each checked live; Theia's AI framework runs stock; NG-082 amended
 - [ ] **Phase 20: Non-GUI Gaps** - Clean-checkout build, group-channel check, schema ledger rows, `generate-check`, archived phase paths
@@ -114,7 +114,7 @@ live UAT itself).
   3. On a working tree with the ignored leftovers removed (`lib/`, the workspace symlink, `generated/ai-backend.json`), `yarn install --frozen-lockfile` passes on the committed lockfile, which no longer contains `@agentclientprotocol/sdk`, and `scripts/verify-platform.sh --quick` shows no FAIL row beyond the four `gui08` rows; `quick-baseline.txt` is refreshed
   4. The NG-051 amend is in the ledger with Chris's approval, recorded before the removal commit; no live planning record lists AI-01..05 as a requirement; the 12 `@theia/ai-*` packages are still composed
 
-**Plans**: 4/4 plans executed (split by removal set to stay under `size-gate.py`; sequential, one fix at a time)
+**Plans**: 4/4 plans complete (split by removal set to stay under `size-gate.py`; sequential, one fix at a time)
 
 Plans:
 **Wave 1**
@@ -275,7 +275,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 17. OpenCode Removal | 4/4 | In Progress|  |
+| 17. OpenCode Removal | 4/4 | Complete    | 2026-10-17 |
 | 18. Firefox 153.5.0esr | 3/3 | Complete    | 2026-10-16 |
 | 19. Node 24, React 19, Theia 1.76.0 | 0/TBD | Not started | - |
 | 20. Non-GUI Gaps | 0/TBD | Not started | - |
