@@ -1,5 +1,5 @@
 {
-  "ledger_version": 370,
+  "ledger_version": 371,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -1058,7 +1058,7 @@
     {
       "id": "NG-082",
       "text": "Theia is re-pinned to 1.75.0 (UPD-02, UPD-04). Evidence: docs/BUILD.md:258-264 \"staged, not executed\".",
-      "status": "deferred-approved",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:112",
       "test_ref": "",
       "code_ref": "",
@@ -1066,7 +1066,7 @@
       "owner": "chris",
       "phase": "999.2",
       "deferred_at": "2026-09-25",
-      "reason": "D4(a) 2026-09-25: needs hosts, accounts or long builds outside this machine; backlog 999.2 distribution"
+      "reason": "Superseded: Theia target moved from 1.75.0 to 1.76.0 with React 19 and Node 24 in v1.4 Phase 19"
     },
     {
       "id": "NG-083",
