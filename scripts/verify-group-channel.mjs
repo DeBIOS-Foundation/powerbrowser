@@ -302,7 +302,103 @@ function loadSources() {
     return sources;
 }
 
+/**
+ * Planted faults, each applied in memory to one source: `from` (string or
+ * non-global RegExp anchored on today's text) is replaced once by `to`, and
+ * some failure line must contain every `expect` substring. Plants 1-3, 4-7
+ * and 8 are the five 15-01 faults; 3, 5, 7 and 11 are second forms and the
+ * broken-instrument case.
+ */
+const PLANTS = [
+    { id: '1 chrome child module', file: API,
+        from: 'const GROUP_ACTOR_CHILD_MODULE = "resource://powerbrowser/GroupActorChild.sys.mjs"',
+        to: 'const GROUP_ACTOR_CHILD_MODULE = "chrome://powerbrowser/content/GroupActorChild.sys.mjs"',
+        expect: ['GROUP_ACTOR_CHILD_MODULE', 'chrome:'] },
+    { id: '2 wantUntrusted false', file: API,
+        from: 'PowerBrowserGroupRequest: { capture: true, wantUntrusted: true }',
+        to: 'PowerBrowserGroupRequest: { capture: true, wantUntrusted: false }',
+        expect: ['wantUntrusted'] },
+    { id: '3 wantUntrusted deleted (15-01 shape)', file: API,
+        from: 'PowerBrowserGroupRequest: { capture: true, wantUntrusted: true }',
+        to: 'PowerBrowserGroupRequest: { capture: true }',
+        expect: ['wantUntrusted'] },
+    { id: '4 window dispatch', file: 'theia/extensions/tab-uris/src/browser/chrome-store-client.ts',
+        from: 'document.dispatchEvent(new CustomEvent(GROUP_REQUEST_EVENT, { bubbles: true, detail: { requestId, msg } }));',
+        to: 'window.dispatchEvent(new CustomEvent(GROUP_REQUEST_EVENT, { bubbles: true, detail: { requestId, msg } }));',
+        expect: ['chrome-store-client.ts', 'not document.dispatchEvent'] },
+    { id: '5 window dispatch of a bound event', file: 'theia/extensions/tab-uris/src/browser/browser-window-command.ts',
+        from: 'return !document.dispatchEvent(request);',
+        to: 'return !window.dispatchEvent(request);',
+        expect: ['browser-window-command.ts', 'D4 dispatch target'] },
+    { id: '6 bubbles false', file: 'theia/extensions/modes/src/browser/group-actor-client.ts',
+        from: '{ detail: { requestId, msg }, bubbles: true }',
+        to: '{ detail: { requestId, msg }, bubbles: false }',
+        expect: ['group-actor-client.ts', 'bubbles'] },
+    { id: '7 bubbles deleted', file: 'theia/extensions/tab-uris/src/browser/profile-storage.ts',
+        from: /bubbles: true,\n(\s*detail: \{ requestId, msg: \{ kind: 'shellStateSave')/,
+        to: '$1',
+        expect: ['profile-storage.ts', 'bubbles'] },
+    { id: '8 reply round trip removed', file: CHILD,
+        from: 'detail: win.wrappedJSObject.JSON.parse(JSON.stringify({ requestId, reply })),',
+        to: 'detail: { requestId, reply },',
+        expect: ['PowerBrowserGroupResponse', 'win.wrappedJSObject.JSON.parse(JSON.stringify( round trip'] },
+    { id: '9 jar resource alias removed', file: JAR,
+        from: /^%\s+resource powerbrowser .*\n/m,
+        to: '',
+        expect: ['jar.mn', '% resource powerbrowser'] },
+    { id: '10 request name respelled', file: 'theia/extensions/tab-uris/src/browser/profile-storage.ts',
+        from: "export const SHELL_STATE_REQUEST_EVENT = 'PowerBrowserGroupRequest';",
+        to: "export const SHELL_STATE_REQUEST_EVENT = 'PowerBrowserGroupRequets';",
+        expect: ['profile-storage.ts', 'PowerBrowserGroupRequets'] },
+    { id: '11 child guard renamed', file: CHILD,
+        from: 'event.type !== "PowerBrowserGroupRequest"',
+        to: 'event.kind !== "PowerBrowserGroupRequest"',
+        expect: ['ZERO'] },
+    { id: '12 response listener on document', file: 'theia/extensions/modes/src/browser/group-actor-client.ts',
+        from: 'window.addEventListener(GROUP_RESPONSE_EVENT, this.onResponse);',
+        to: 'document.addEventListener(GROUP_RESPONSE_EVENT, this.onResponse);',
+        expect: ['group-actor-client.ts', 'not window'] },
+];
+
+function selfTest() {
+    const sources = loadSources();
+    const clean = checkChannel(sources).failures;
+    if (clean.length) {
+        console.error(`${NAME}-self-test: FAIL -- unmodified tree is already red, so the plants would be meaningless:`);
+        clean.forEach(line => console.error(`  ${line}`));
+        return 1;
+    }
+    let bad = 0;
+    for (const plant of PLANTS) {
+        const original = sources.get(plant.file);
+        const planted = original === undefined ? undefined : original.replace(plant.from, plant.to);
+        if (planted === undefined || planted === original) {
+            console.error(`${NAME}-self-test: FAIL -- plant ${plant.id}: anchor drifted in ${plant.file}, nothing was planted`);
+            bad += 1;
+            continue;
+        }
+        const copy = new Map(sources);
+        copy.set(plant.file, planted);
+        const { failures } = checkChannel(copy);
+        const hit = failures.find(line => plant.expect.every(s => line.includes(s)));
+        if (hit) {
+            console.log(`  plant ${plant.id}: red -- ${hit}`);
+        } else {
+            console.error(`${NAME}-self-test: FAIL -- plant ${plant.id} did not go red naming ${plant.expect.join(' + ')}; got: ${failures.join(' | ') || '(no failures)'}`);
+            bad += 1;
+        }
+    }
+    if (bad) {
+        return 1;
+    }
+    console.log(`${NAME}-self-test: PASS -- clean tree green, ${PLANTS.length} plants red`);
+    return 0;
+}
+
 function main() {
+    if (process.argv.includes('--self-test')) {
+        return selfTest();
+    }
     const { failures, stats } = checkChannel(loadSources());
     if (failures.length) {
         failures.forEach(line => console.error(line));

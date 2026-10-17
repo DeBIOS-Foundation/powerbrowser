@@ -3766,6 +3766,7 @@ run_own_checks() {
     # upstream/ it fails like the other upstream readers (R33).
     # gui02-web-tab-live stays the runtime proof.
     "group-channel|node $REPO_ROOT/scripts/verify-group-channel.mjs"
+    "group-channel-self-test|node $REPO_ROOT/scripts/verify-group-channel.mjs --self-test"
 
     # NEW (13-02): GUI-07's spike-verdict gate. Parses the strip-relocation
     # record for a one-line GREEN/RED verdict with a cause on RED plus the
