@@ -475,6 +475,10 @@ function selfTest() {
     const carried = { ...expected, carried: true, mainArea: [...expected.mainArea, 'planted-fixture-view'] };
     const plants = [
         ['surplus main-area id', expected, o => { o.areas.main.push('planted-surplus-tab'); }, /planted-surplus-tab/],
+        ['seed missing from the main area', expected, o => { o.areas.main = []; }, /missing \["/],
+        ['wrong perspective', expected, o => { o.perspective = 'planted-perspective'; }, /planted-perspective.*launch mode/],
+        ['schema description drift, DOM correct', expected, o => { o.settings.schema.description = 'planted-schema-desc'; }, /schema description .*planted-schema-desc/],
+        ['enumDescriptions drift', expected, o => { o.settings.schema.enumDescriptions = ['planted-enum']; }, /planted-enum/],
         ['getting-started present', withGs, o => { o.gettingStartedPresent = true; o.gettingStartedControl = true; }, /getting-started id/],
         ['getting-started control failed', withGs, o => { o.gettingStartedPresent = false; o.gettingStartedControl = false; }, /positive control/],
         ['startup editor differs from declared default', declared, o => { o.startupEditor = 'planted-welcomePage'; }, /planted-welcomePage/],
