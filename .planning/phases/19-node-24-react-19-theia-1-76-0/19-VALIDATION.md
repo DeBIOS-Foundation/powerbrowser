@@ -1,9 +1,9 @@
 ---
 phase: "19"
 slug: "node-24-react-19-theia-1-76-0"
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-10-17"
 ---
 
@@ -25,24 +25,24 @@ created: "2026-10-17"
 
 ### Phase Requirements → Test Map
 
-| Req ID | Behavior | Test Type | Automated Command | Failing direction (must go red when…) | File Exists? |
+| Req ID | Behavior | Test Type | Automated Command | Failing direction (must go red when…) | File Exists? | Status |
 |--------|----------|-----------|-------------------|------|------|
-| UPD-07 | Shell is Node 24, lock untouched | smoke | `nix develop .#theia --command node -v` → `v24.19.0`; `git diff --quiet HEAD~1 -- flake.lock`; `--only smoke-theia` | `nodejs_22` left in `flake.nix:20`; any `flake.lock` byte change; node-pty spawn fails | ✅ smoke-theia |
-| UPD-07 | drivelist built for Node 24 | smoke | `grep '"nodedir"' theia/node_modules/drivelist/build/config.gypi` contains `nodejs-slim-24.19.0` | A Node 22 build left in place | ✅ (command) |
-| UPD-08 | One copy each of 5 packages | unit (`--quick`) | `--only single-copy-deps`, `--only single-copy-deps-self-test` | A planted nested `react` copy, a missing package, an absent `node_modules`; a symlinked duplicate must **not** count | ❌ Wave 0 |
-| UPD-08 | React 19.2.8 installed | static | NG-082 check assertion 2, or `node -p "require('./theia/node_modules/react/package.json').version"` | 18.3.1 still installed | ❌ Wave 0 |
-| UPD-09 | Pins agree at 1.76.0 | static (`--quick`) | `--only verify-upstream-pins` + `-self-test` | A member at 1.74.1; a lock stanza drift | ✅ |
-| UPD-09 | Installed closure = manifest pin | static | NG-082 check | Manifest at 1.76.0 while installed 1.74.1 (the record-fail moment) | ❌ Wave 0 |
-| UPD-09 | Core untouched | integration | `--only diff-theia-core` | Any byte under `node_modules/@theia` differs from a fresh resolve | ✅ |
-| RM-02 | No D-22 override; ai-* stock | static | `! git ls-files theia/extensions/branding \| xargs grep -l "ai-ide"`; `--only theia-build-order`; `--only gui07-mode-switch-tabs-live` | The file or either rebind remains; the `@theia/ai-*` set differs from HEAD's 12; `ai-first` unaccounted | ✅ / gui07 needs edit |
-| UPD-10 | Fresh: only `welcome`, `startupEditor` none, no getting.started | live | new first-boot row (fresh mode) | Main area ≠ `['welcome']`; positive control: getting-started command does not produce the widget | ❌ Wave 0 |
-| UPD-10 | Carried-over: persisted layout restored, no Welcome added | live | same row (carried mode, fixture env var) | Main-area set ≠ fixture's persisted set; `getting.started.widget` present | ❌ Wave 0 |
-| UPD-10 | Settings shows PowerBrowser telemetry copy | live | same row (N3) | Description ≠ the string read from `telemetry-preferences.ts` (the unfixed tree gives "Controls the level of telemetry.") | ❌ Wave 0 |
-| UPD-10 | React 19 render errors reach capture | live | same row (N4) | The forced `ForcedRenderError` is not seen by `logError` | ❌ Wave 0 |
-| UPD-10 | `view:` URIs open | live | `--only verify-uri-roundtrip` (covers `ai-configuration`, `verify-uri-roundtrip.mjs:104`) | Factory id renamed | ✅ |
-| UPD-10 | Token gate live | live | `--only side02-token-negative`, `--only side02-token-positive` | 200 without a token / 403 with one | ✅ |
-| N2 | Authored widgets render | live | `--only verify-branding`, `--only gui01-command-registered`, `--only gui02-web-tab-live`, `--only gui07-mode-switch-tabs-live`, `--only ng067-frontend-errors-reach-telemetry` | Empty widget / missing version / no capture | ✅ |
-| N2 backstop | Dropdown anchor, dependent-window dark theme | manual | gsd-browser / KWin screenshot (memory notes) | Dropdown at origin; light secondary window | manual-only: DOM geometry and theme are not asserted by any row |
+| UPD-07 | Shell is Node 24, lock untouched | smoke | `nix develop .#theia --command node -v` → `v24.19.0`; `git diff --quiet HEAD~1 -- flake.lock`; `--only smoke-theia` | `nodejs_22` left in `flake.nix:20`; any `flake.lock` byte change; node-pty spawn fails | ✅ smoke-theia | ✅ (19-03: v24.19.0, lock unchanged, smoke-theia PASS) |
+| UPD-07 | drivelist built for Node 24 | smoke | `grep '"nodedir"' theia/node_modules/drivelist/build/config.gypi` contains `nodejs-slim-24.19.0` | A Node 22 build left in place | ✅ (command) | ✅ (19-03) |
+| UPD-08 | One copy each of 5 packages | unit (`--quick`) | `--only single-copy-deps`, `--only single-copy-deps-self-test` | A planted nested `react` copy, a missing package, an absent `node_modules`; a symlinked duplicate must **not** count | ❌ Wave 0 | ✅ (19-02, `--quick` PASS 2026-10-17) |
+| UPD-08 | React 19.2.8 installed | static | NG-082 check assertion 2, or `node -p "require('./theia/node_modules/react/package.json').version"` | 18.3.1 still installed | ❌ Wave 0 | ✅ (19-05: 19.2.8) |
+| UPD-09 | Pins agree at 1.76.0 | static (`--quick`) | `--only verify-upstream-pins` + `-self-test` | A member at 1.74.1; a lock stanza drift | ✅ | ✅ (19-05, PASS 2026-10-17) |
+| UPD-09 | Installed closure = manifest pin | static | NG-082 check | Manifest at 1.76.0 while installed 1.74.1 (the record-fail moment) | ❌ Wave 0 | ✅ (NG-086 red 19-05, green 19-05/19-07, PASS 2026-10-17) |
+| UPD-09 | Core untouched | integration | `--only diff-theia-core` | Any byte under `node_modules/@theia` differs from a fresh resolve | ✅ | ✅ (19-06 full run) |
+| RM-02 | No D-22 override; ai-* stock | static | `! git ls-files theia/extensions/branding \| xargs grep -l "ai-ide"`; `--only theia-build-order`; `--only gui07-mode-switch-tabs-live` | The file or either rebind remains; the `@theia/ai-*` set differs from HEAD's 12; `ai-first` unaccounted | ✅ / gui07 needs edit | ✅ (no ai-layout file; branding hit is only the `@theia/ai-ide` dependency; theia-build-order PASS; gui07 fixed 19-02, PASS 19-06) |
+| UPD-10 | Fresh: only `welcome`, `startupEditor` none, no getting.started | live | new first-boot row (fresh mode) | Main area ≠ `['welcome']`; positive control: getting-started command does not produce the widget | ❌ Wave 0 | ✅ (19-01 row, PASS 19-06) |
+| UPD-10 | Carried-over: persisted layout restored, no Welcome added | live | same row (carried mode, fixture env var) | Main-area set ≠ fixture's persisted set; `getting.started.widget` present | ❌ Wave 0 | ✅ (PASS 19-06 after dfef881 race fix) |
+| UPD-10 | Settings shows PowerBrowser telemetry copy | live | same row (N3) | Description ≠ the string read from `telemetry-preferences.ts` (the unfixed tree gives "Controls the level of telemetry.") | ❌ Wave 0 | ✅ (19-05/19-06) |
+| UPD-10 | React 19 render errors reach capture | live | same row (N4) | The forced `ForcedRenderError` is not seen by `logError` | ❌ Wave 0 | ✅ (19-01 forced error, 19-06) |
+| UPD-10 | `view:` URIs open | live | `--only verify-uri-roundtrip` (covers `ai-configuration`, `verify-uri-roundtrip.mjs:104`) | Factory id renamed | ✅ | ✅ (19-03, 19-06) |
+| UPD-10 | Token gate live | live | `--only side02-token-negative`, `--only side02-token-positive` | 200 without a token / 403 with one | ✅ | ✅ (19-03, 19-06) |
+| N2 | Authored widgets render | live | `--only verify-branding`, `--only gui01-command-registered`, `--only gui02-web-tab-live`, `--only gui07-mode-switch-tabs-live`, `--only ng067-frontend-errors-reach-telemetry` | Empty widget / missing version / no capture | ✅ | ✅ (19-06 full run) |
+| N2 backstop | Dropdown anchor, dependent-window dark theme | manual | gsd-browser / KWin screenshot (memory notes) | Dropdown at origin; light secondary window | manual-only: DOM geometry and theme are not asserted by any row | ✅ manual (19-06 backstops held) |
 
 ### Sampling Rate
 - **Per task commit:** `scripts/verify-platform.sh --quick` with the R33 subtraction (empty output passes).
@@ -50,11 +50,11 @@ created: "2026-10-17"
 - **Phase gate:** full `scripts/verify-platform.sh`, the first-boot row in both modes, `python3 scripts/plan-gate.py --root . --phase 19 --plans <phase dir>`, `python3 scripts/phase-gate.py --root .`, and `node scripts/scan-brand-residue.mjs` after staging.
 
 ### Wave 0 Gaps
-- [ ] `scripts/verify-single-copy-deps.mjs` (+ `--self-test`), covering UPD-08
-- [ ] First-boot live check (fresh and carried-over modes, N1/N3/N4, with positive controls), covering UPD-10. It must be a new file because ng067 is locked
-- [ ] The carried-over fixture captured on the pre-bump tree, outside the repo, read through an env var
-- [ ] `scripts/verify-ng-082-<slug>.mjs` (+ self-test), covering UPD-09/NG-082. Write it **before** commit 3's pin edits
-- [ ] `verify-mode-switch-tabs-live.mjs` upstream-perspective derivation, which must land in commit 3
+- [x] `scripts/verify-single-copy-deps.mjs` (+ `--self-test`), covering UPD-08
+- [x] First-boot live check (fresh and carried-over modes, N1/N3/N4, with positive controls), covering UPD-10. It must be a new file because ng067 is locked
+- [x] The carried-over fixture captured on the pre-bump tree, outside the repo, read through an env var
+- [x] `scripts/verify-ng-082-<slug>.mjs` (+ self-test), covering UPD-09/NG-082. Landed as `scripts/verify-ng-086-theia-react-node.mjs` (NG-082 dropped; NG-086 replaces it). Write it **before** commit 3's pin edits
+- [x] `verify-mode-switch-tabs-live.mjs` upstream-perspective derivation, which must land in commit 3
 
 **quick-baseline.txt (R33):** today it holds the 4 gui08 rows, and Phase 17 measured 114 PASS / 4 FAIL. With the placements above, no committed state adds a red `--quick` row: single-copy passes at every step, and the NG-082 check turns red and green inside commit 3's working tree. Refresh the file only if the measured FAIL set differs after commit 3. If it is unchanged, record "unchanged at the Phase 19 refresh" in `decisions.md:39`, following the Phase 17 wording precedent.
 
@@ -66,3 +66,17 @@ created: "2026-10-17"
 4. **19-04 Commit 3: Theia 1.76.0.** `checkpoint:human-verify`. NG-082: settle the open question with Chris, then `set-status open`, `set --test-ref`, edit `configuration.toml:116`, `record-fail`. Then the runbook mover, engines, app version, `startupEditor`, RM-02 deletion plus stale lib cleanup, telemetry `initSchema`, the gui07 check fix and the false comments (telemetry header, `verify-mode-switch-tabs-live.mjs:50-57`). Install, drivelist, build, frozen re-install, `verify-upstream-pins`, `diff-theia-core`, `--quick`, scan after staging. One commit.
 5. **19-05 Live verification and close-out (docs commit).** First-boot row fresh and carried-over, `side02-token-*`, `verify-uri-roundtrip`, `gui07-mode-switch-tabs-live`, `ng067`, `ng069-sidecar-egress`, the manual dropdown and dependent-window backstops, then the full `verify-platform.sh`. NG-082: `set --evidence` and `set-status done`. Update `docs/BUILD.md:268-286` and `README.md:87`, decide quick-baseline, and write SUMMARY records (telemetry mechanism and evidence, the app version choice, the `theia-ide.org` deviation, NG-082 path).
 
+
+## Validation Audit 2026-10-17
+
+| Metric | Count |
+|---|---|
+| Gaps found | 1 |
+| Resolved | 0 |
+| Escalated | 1 |
+
+| Gap | Requirement | Status | Needed check |
+|---|---|---|---|
+| Packaged Node runtime pin `powerbrowser/packaging/node-runtime.json` still `v22.23.2` while the shell is Node 24 | UPD-07 (shipped runtime, not dev shell) | escalated to the accepted Phase 19 gap plan; not a Phase 19 pass | a `--quick` row deriving the major from `flake.nix` `nodejs_NN` and failing when `node-runtime.json` `version` major differs, with a `--self-test` planting a mismatch |
+
+Static rows re-run in this audit (all PASS): single-copy-deps, single-copy-deps-self-test, ng086-theia-react-node, verify-upstream-pins, first-boot-surface-self-test, theia-build-order. Live rows were not re-run (static-only audit); their status cites the 19-03/19-05/19-06 SUMMARY logs. Note: the RM-02 command `git ls-files theia/extensions/branding | xargs grep -l "ai-ide"` matches `package.json`'s `@theia/ai-ide` dependency, so it is not a usable red/green command; the ai-layout file is absent from `git ls-files`.
