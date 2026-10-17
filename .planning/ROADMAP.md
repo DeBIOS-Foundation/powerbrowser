@@ -258,8 +258,24 @@ Plans:
   3. `scripts/verify-platform.sh --quick` reports no FAIL row, and `quick-baseline.txt` is empty
   4. No stale tray code, comments or CSS remain, and the canvas still shows ungrouped tabs as loose cards
 
-**Plans**: TBD
+**Plans**: 5 plans in 3 waves (waves 1 and 2 each run two file-disjoint plans in parallel; execution starts after Phase 20 completes)
 **UI hint**: yes
+
+Plans:
+
+**Wave 1**
+
+- [ ] 21-01-PLAN.md — PAN-01: 15-UI-SPEC re-pinned to `7b7a1f7` in a parseable form, with one shared parse module (`scripts/lib/ui-spec.mjs`) proven equal to the tree
+- [ ] 21-02-PLAN.md — PAN-07: dead card-onto-card path and GroupModel auto-box write removed; tray wording gone from comments and locals outside modes.css; wave-1 `--quick`
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 21-03-PLAN.md — PAN-01: `gui08-panorama-copy` derives contract and retired copy from 15-UI-SPEC; 9-plant self-test
+- [ ] 21-04-PLAN.md — PAN-01, PAN-07: `gui08-canvas-geometry` derives geometry and type from 15-UI-SPEC with a tray negation; tray CSS removed, loose cards with zero groups, loose and expanded cards in the focus scope, heading at 400; 12-plant self-test; wave-2 `--quick`
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 21-05-PLAN.md — PAN-01, PAN-07: full-tier `gui08-loose-cards-live` row PASS on a rebuilt sidecar with in-run probe controls; `--quick` green; `quick-baseline.txt` derived empty
 
 ### Phase 22: Panorama Worklist
 
