@@ -13,9 +13,14 @@
 // in-scope file may carry that token (the scanners' scope excludes
 // .planning/, so callers pass the root as argv instead). Per fixture the
 // harness copies the source to a mkdtemp external dir (path-independence --
-// never generates from inside the repo), snapshots the platform generated/
-// tree hashes, then runs env PB_CONFIG_DIR=<stage> node scripts/generate.mjs
-// in a child process.
+// never generates from inside the repo), then runs env PB_CONFIG_DIR=<stage>
+// node scripts/generate.mjs --out <stage>/out in a child process.
+//
+// ISOLATION (PLAT-04 cause B). The harness never reads or writes the shared
+// generated/ tree. Each fixture generates into its own --out dir, and the
+// platform default comparand is generated once per invocation into a private
+// mkdtemp. Rewriting generated/ in place let a concurrent reader -- another
+// check, another session's --quick -- see a fixture's brand.
 //
 // EXPECTED-PASS: exit 0; expectations derived at check time through the
 // imported resolveConfig (platform manifest as defaults, staged manifest as
@@ -31,15 +36,14 @@
 // emitter literal, derived per run by set comparison, never hand-kept; E2: the
 // fixed forever-identifiers enumerated from docs/REBRANDING.md step 5); every
 // other platform value present covered by a default-applied echo line from the
-// fixture run. Always restores with a clean-env default generate plus --check
-// fresh, and the post-restore hashes must equal the snapshot.
+// fixture run.
 //
 // EXPECTED-FAIL (needed by plan 07-03): exit non-zero with stderr carrying
 // <substring>, plain-words copy shape (names the setting or asset, ends with
 // the re-run next step in either of the generator's two canonical casings --
 // "Then run:" for required-setting failures, "then run:" for artwork ones --
-// matched case-insensitively, no stack), and the generated/ snapshot
-// byte-identical before and after. Under --all, a fixture dir holding an expect-fail.txt
+// matched case-insensitively, no stack), and the fixture's private out dir
+// never created (a failing run writes nothing). Under --all, a fixture dir holding an expect-fail.txt
 // file runs in expect-fail mode with its trimmed content as the substring
 // (CLI --expect-fail overrides); absent file means expected-pass.
 //
@@ -59,8 +63,7 @@
 //   node scripts/verify-downstream-fixture.mjs --self-test
 
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -72,7 +75,6 @@ const NAME = 'verify-downstream-fixture';
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GENERATE = join(REPO_ROOT, 'scripts', 'generate.mjs');
 const PLATFORM_MANIFEST = join(REPO_ROOT, 'configuration.toml');
-const GENERATED_ROOT = join(REPO_ROOT, 'generated');
 const CASE_FORM = 'title';
 
 function assertNonZeroAssertions(count) {
@@ -108,20 +110,6 @@ function filesUnder(dir, prefix, out) {
     return out;
 }
 
-/** sha256 per file, keyed by slash-joined relative path. Absent dir -> empty. */
-function snapshotHashes(root) {
-    const hashes = new Map();
-    try {
-        if (!statSync(root).isDirectory()) return hashes;
-    } catch {
-        return hashes;
-    }
-    for (const rel of filesUnder(root, '', [])) {
-        hashes.set(rel, createHash('sha256').update(readFileSync(join(root, rel))).digest('hex'));
-    }
-    return hashes;
-}
-
 /** UTF-8 text per non-binary file. Binary files are hashed, never read. */
 function snapshotText(root) {
     const texts = new Map();
@@ -135,14 +123,6 @@ function snapshotText(root) {
         texts.set(rel, readFileSync(join(root, rel), 'utf8'));
     }
     return texts;
-}
-
-function snapshotsEqual(a, b) {
-    if (a.size !== b.size) return false;
-    for (const [k, v] of a) {
-        if (b.get(k) !== v) return false;
-    }
-    return true;
 }
 
 /** Dotted scalar leaves of a resolved config (mirrors the generator's dotted paths). */
@@ -196,25 +176,44 @@ function readConfigureDisplayLine(text) {
 
 // --- child generate ---------------------------------------------------------
 
-function runGenerate(envExtra) {
+/**
+ * A child generate into `outDir`. An out dir is required: without one the
+ * child would rewrite the shared generated/ tree other checks read.
+ */
+function runGenerate(envExtra, outDir) {
+    if (outDir === undefined || outDir === null) {
+        throw new Error('runGenerate needs a private out dir -- generating without one would rewrite the shared generated/ tree');
+    }
     const env = { ...process.env };
     if (envExtra === null) delete env.PB_CONFIG_DIR;
     else if (envExtra !== undefined) env.PB_CONFIG_DIR = envExtra;
     try {
-        const stdout = execFileSync(process.execPath, [GENERATE], { cwd: REPO_ROOT, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000 });
+        const stdout = execFileSync(process.execPath, [GENERATE, '--out', outDir], { cwd: REPO_ROOT, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000 });
         return { status: 0, stdout, stderr: '' };
     } catch (err) {
         return { status: err.status ?? 1, stdout: err.stdout ?? '', stderr: err.stderr ?? '' };
     }
 }
 
-function runGenerateCheck() {
-    try {
-        const stdout = execFileSync(process.execPath, [GENERATE, '--check'], { cwd: REPO_ROOT, env: { ...process.env, PB_CONFIG_DIR: '' }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000 });
-        return { status: 0, stdout, stderr: '' };
-    } catch (err) {
-        return { status: err.status ?? 1, stdout: err.stdout ?? '', stderr: err.stderr ?? '' };
+/**
+ * The platform default tree, generated once per invocation into a private
+ * mkdtemp (removed at exit) with PB_CONFIG_DIR unset. Returns the dir, or
+ * null with `defaultTreeFailure` set when the default generate fails.
+ */
+let defaultTreeRoot;
+let defaultTreeFailure = null;
+function defaultTree() {
+    if (defaultTreeRoot !== undefined) return defaultTreeRoot;
+    const dir = mkdtempSync(join(tmpdir(), 'pb-downstream-default-'));
+    process.on('exit', () => rmSync(dir, { recursive: true, force: true }));
+    const run = runGenerate(null, join(dir, 'out'));
+    if (run.status === 0) {
+        defaultTreeRoot = join(dir, 'out');
+    } else {
+        defaultTreeRoot = null;
+        defaultTreeFailure = `the platform default tree could not be generated (exit ${run.status}); stderr:\n${run.stderr.split('\n').slice(0, 8).join('\n')}`;
     }
+    return defaultTreeRoot;
 }
 
 function parseEchoedDefaults(stderr) {
@@ -446,9 +445,8 @@ function driveFixture(sourceDir, { expectFail } = {}) {
             stagedSvgLine = null;
         }
 
-        const beforeHashes = snapshotHashes(GENERATED_ROOT);
-        const beforeTexts = snapshotText(GENERATED_ROOT);
-        const run = runGenerate(stage);
+        const out = join(stage, 'out');
+        const run = runGenerate(stage, out);
         const echoed = parseEchoedDefaults(run.stderr);
 
         if (expectFail !== undefined) {
@@ -457,37 +455,33 @@ function driveFixture(sourceDir, { expectFail } = {}) {
                 note(run.stderr.includes(expectFail), `stderr does not carry ${JSON.stringify(expectFail)}; it was:\n${run.stderr.split('\n').slice(0, 12).join('\n')}`);
                 note(/then run:/i.test(run.stderr), 'failure does not end with the re-run next step (plain-words copy shape)');
                 note(!/^\s+at /m.test(run.stderr) && !run.stderr.includes('Traceback'), 'failure carries a stack trace (plain-words copy shape forbids it)');
-                const afterHashes = snapshotHashes(GENERATED_ROOT);
-                note(snapshotsEqual(beforeHashes, afterHashes), 'generated/ changed during a failing run -- a failed run must leave the output tree exactly as it found it');
+                note(!existsSync(out), 'the out dir was created during a failing run -- a failed run must write nothing');
             }
             return { ok: failures.length === 0, failures, assertions };
         }
 
         note(run.status === 0, `fixture generate exited ${run.status}, want 0; stderr:\n${run.stderr.split('\n').slice(0, 15).join('\n')}`);
         if (run.status !== 0) {
-            restoreDefault(beforeHashes, failures, () => { assertions += 1; });
             return { ok: false, failures, assertions };
         }
 
         const { failures: fxFailures, config: fxConfig } = resolveConfig(PLATFORM_MANIFEST, stagedManifest);
         note(fxFailures.length === 0, `staged manifest does not resolve: ${fxFailures.join('; ')}`);
         if (fxFailures.length > 0 || fxConfig === undefined) {
-            restoreDefault(beforeHashes, failures, () => { assertions += 1; });
             return { ok: false, failures, assertions };
         }
         const { failures: defFailures, config: defConfig } = resolveConfig(PLATFORM_MANIFEST, undefined);
         note(defFailures.length === 0, `platform manifest does not resolve, so no expectation can be derived: ${defFailures.join('; ')}`);
         if (defFailures.length > 0 || defConfig === undefined) {
-            restoreDefault(beforeHashes, failures, () => { assertions += 1; });
             return { ok: false, failures, assertions };
         }
 
         note(stagedSvgLine !== null, 'staged brand/mark.svg carries no single-line <svg> element for the runtime channel');
-        const surfaces = checkEmittedSurfaces(GENERATED_ROOT, fxConfig, stagedSvgLine);
+        const surfaces = checkEmittedSurfaces(out, fxConfig, stagedSvgLine);
         assertions += surfaces.count;
         failures.push(...surfaces.failures);
 
-        const extFragment = checkExtensionFragment(GENERATED_ROOT, fxConfig);
+        const extFragment = checkExtensionFragment(out, fxConfig);
         assertions += extFragment.count;
         failures.push(...extFragment.failures);
 
@@ -496,38 +490,18 @@ function driveFixture(sourceDir, { expectFail } = {}) {
         const swept = [...new Set([devFull, releaseFull, defConfig.product.vendor_display, defConfig.product.vendor_machine, defConfig.legal.trademark_notice])];
         const sweptSet = new Set(swept);
         const otherLeaves = collectStringLeaves(defConfig, '', []).filter(({ value }) => !sweptSet.has(value));
-        const absence = checkPlatformAbsence(snapshotText(GENERATED_ROOT), beforeTexts, swept, otherLeaves, echoed, fxConfig);
+        const defaultRoot = defaultTree();
+        if (defaultRoot === null) {
+            failures.push(defaultTreeFailure);
+            return { ok: false, failures, assertions };
+        }
+        const absence = checkPlatformAbsence(snapshotText(out), snapshotText(defaultRoot), swept, otherLeaves, echoed, fxConfig);
         assertions += absence.count;
         failures.push(...absence.failures);
-
-        const restored = restoreDefault(beforeHashes, failures, () => { assertions += 1; });
-        if (restored) {
-            const check = runGenerateCheck();
-            assertions += 1;
-            if (!(check.status === 0 && check.stdout.includes('--check PASS'))) {
-                failures.push(`post-restore --check not fresh (status ${check.status}): ${(check.stdout + check.stderr).split('\n').slice(0, 8).join('\n')}`);
-            }
-        }
         return { ok: failures.length === 0, failures, assertions };
     } finally {
         rmSync(stage, { recursive: true, force: true });
     }
-}
-
-/** Clean-env default generate; then the hashes must equal the snapshot. */
-function restoreDefault(beforeHashes, failures, tally) {
-    const run = runGenerate(null);
-    tally();
-    if (run.status !== 0) {
-        failures.push(`default restore generate exited ${run.status}; stderr:\n${run.stderr.split('\n').slice(0, 8).join('\n')}`);
-        return false;
-    }
-    tally();
-    if (!snapshotsEqual(beforeHashes, snapshotHashes(GENERATED_ROOT))) {
-        failures.push('restored generated/ hashes differ from the pre-fixture snapshot -- the default tree was not restored byte-identical');
-        return false;
-    }
-    return true;
 }
 
 // --- fixture discovery ----------------------------------------------------------
@@ -557,8 +531,10 @@ function discoverFixtures(root) {
 // expect-fail substring going red, the extension-fragment oracle going green
 // per kind (npm, local-path, openvsx, direct URL with the downloader
 // placeholder verbatim) plus drifted/missing/stale ids each going red naming
-// the id, a brand-only manifest adding no fragment assertions, and the three
-// non-vacuity cases each failing distinctly.
+// the id, a brand-only manifest adding no fragment assertions, the three
+// non-vacuity cases each failing distinctly, and the two PLAT-04 isolation
+// plants: a generate without a private out dir is refused, and --out leaves a
+// copied tree's generated/ absent.
 
 const SELFTEST_MANIFEST = [
     '[product]',
@@ -623,7 +599,7 @@ function runSelfTest() {
         // S2: a platform-valued tree goes red naming file and value.
         const { config: defConfig } = resolveConfig(PLATFORM_MANIFEST, undefined);
         const platformTree = join(scratchRoot, 'platform-tree');
-        cpSync(GENERATED_ROOT, platformTree, { recursive: true });
+        cpSync(defaultTree(), platformTree, { recursive: true });
         const devFull = `${defConfig.identity.display_name}${(defConfig.variants || []).find((v) => v.id === 'dev')?.name_suffix ?? ''}`;
         const swept = [...new Set([devFull, defConfig.product.vendor_display, defConfig.product.vendor_machine, defConfig.legal.trademark_notice])];
         const absence = checkPlatformAbsence(snapshotText(platformTree), new Map(), swept, [], new Set(), defConfig);
@@ -631,7 +607,7 @@ function runSelfTest() {
 
         // S3: an ftl/properties drift goes red.
         const driftTree = join(scratchRoot, 'drift-tree');
-        cpSync(GENERATED_ROOT, driftTree, { recursive: true });
+        cpSync(defaultTree(), driftTree, { recursive: true });
         const propsPath = join(driftTree, 'branding', 'dev', 'locales', 'en-US', 'brand.properties');
         writeFileSync(propsPath, readFileSync(propsPath, 'utf8').replace(/^brandFullName=.*$/m, 'brandFullName=Drift Value'));
         const drift = checkEmittedSurfaces(driftTree, defConfig, readFileSync(join(REPO_ROOT, 'brand', 'mark.svg'), 'utf8').split('\n').find((l) => l.startsWith('<svg')).trim());
@@ -693,6 +669,39 @@ function runSelfTest() {
         // S9: a brand-only manifest adds no fragment assertions (still non-vacuous overall).
         const brandOnly = checkExtensionFragment(extTree, {});
         check('extension-fragment-brand-only-quiet', brandOnly.ok && brandOnly.count === 0, `want pass with zero added assertions, got ok=${brandOnly.ok} assertions=${brandOnly.count}`);
+
+        // S10 (PLAT-04 cause B): a generate with no private out dir is refused.
+        let refusal = null;
+        try {
+            runGenerate(null);
+        } catch (err) {
+            refusal = err.message;
+        }
+        check('shared-tree-refused', refusal !== null && refusal.includes('shared generated/ tree'), `want runGenerate without an out dir to throw naming the shared generated/ tree, got: ${JSON.stringify(refusal)}`);
+
+        // S11 (PLAT-04 cause B): a copied tree run with --out leaves its own
+        // generated/ absent; the same copy run without --out creates it
+        // (the positive control, so an absence is not a broken copy).
+        const copy = join(scratchRoot, 'copy');
+        for (const rel of ['scripts/generate.mjs', 'scripts/lib', 'configuration.toml', 'brand']) {
+            cpSync(join(REPO_ROOT, rel), join(copy, rel), { recursive: true });
+        }
+        const copyEnv = { ...process.env };
+        delete copyEnv.PB_CONFIG_DIR;
+        const runCopy = (extra) => {
+            try {
+                execFileSync(process.execPath, [join(copy, 'scripts', 'generate.mjs'), ...extra], { cwd: copy, env: copyEnv, stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000 });
+                return 0;
+            } catch (err) {
+                return err.status ?? 1;
+            }
+        };
+        const isolatedOut = join(scratchRoot, 'o');
+        const withOut = runCopy(['--out', isolatedOut]);
+        const isolated = withOut === 0 && !existsSync(join(copy, 'generated')) && existsSync(isolatedOut) && readdirSync(isolatedOut).length > 0;
+        const withoutOut = runCopy([]);
+        const created = withoutOut === 0 && existsSync(join(copy, 'generated'));
+        check('out-dir-isolation', isolated && created, `want --out to leave the copy's generated/ absent and a bare run to create it, got --out exit ${withOut} isolated=${isolated}, bare exit ${withoutOut} created=${created}`);
     } finally {
         rmSync(scratchRoot, { recursive: true, force: true });
     }

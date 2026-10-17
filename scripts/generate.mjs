@@ -93,6 +93,7 @@
 //   node scripts/generate.mjs
 //   node scripts/generate.mjs --check
 //   node scripts/generate.mjs --self-test
+//   node scripts/generate.mjs --out <dir>    (write the tree under <dir>, not generated/)
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, existsSync } from 'node:fs';
@@ -158,13 +159,31 @@ const IS_MAIN = isEntryPoint();
 // flag dispatches do: an importer's own flags are not this file's, and
 // rejecting them here would make `verify-generated-identity.mjs --self-test`
 // die at import time complaining about an argument the generator never saw.
+//
+// Returns the --out folder, or undefined. --out is a flag and never an env
+// var: an inherited variable could silently redirect generate-check (PLAT-04).
 function rejectUnknownArguments() {
-    for (const a of args) {
-        if (a !== '--check' && a !== '--self-test') {
+    let out;
+    for (let i = 0; i < args.length; i++) {
+        const a = args[i];
+        if (a === '--out') {
+            const value = args[i + 1];
+            if (value === undefined || value.startsWith('--')) {
+                console.error(`${NAME}: FAIL -- --out needs the folder to write the generated files into. Next step: run: ${RERUN} --out <folder>`);
+                process.exit(1);
+            }
+            out = value;
+            i++;
+        } else if (a !== '--check' && a !== '--self-test') {
             console.error(`${NAME}: FAIL -- unknown argument '${a}'`);
             process.exit(1);
         }
     }
+    if (out !== undefined && (args.includes('--check') || args.includes('--self-test'))) {
+        console.error(`${NAME}: FAIL -- --out cannot be combined with --check or --self-test, because those always read the generated folder of this project. Next step: run the two separately.`);
+        process.exit(1);
+    }
+    return out;
 }
 // Both flags are dispatched at the BOTTOM of this file, not here. --check has
 // to echo the applied defaults on its way past (D-08), and --self-test has to
@@ -5979,7 +5998,7 @@ function selfTest() {
 // Everything below runs ONLY when this file is the entry point. Importing it
 // parses no manifest, writes no file and exits no process -- see IS_MAIN.
 function main() {
-    rejectUnknownArguments();
+    const outArg = rejectUnknownArguments();
 
     if (args.includes('--self-test')) return selfTest();
 
@@ -6019,9 +6038,10 @@ function main() {
     // sits here and not next to the argument loop at the top of the file.
     if (args.includes('--check')) return checkTargets(config);
 
-    const count = writeTargets(config, OUTPUT_ROOT);
+    const out = outArg === undefined ? undefined : resolve(process.cwd(), outArg);
+    const count = writeTargets(config, out ?? OUTPUT_ROOT);
     console.log(
-        `${NAME}: PASS -- ${count} file(s) written under generated/ from ${MANIFEST_NAME}, `
+        `${NAME}: PASS -- ${count} file(s) written under ${out ?? 'generated/'} from ${MANIFEST_NAME}, `
         + `${defaulted.length} default(s) applied`,
     );
     return 0;

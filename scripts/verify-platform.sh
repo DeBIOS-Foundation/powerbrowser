@@ -277,7 +277,8 @@ check_gui01_command_registered() { _run_app_check_mjs verify-gui01-command.mjs; 
 # on the unknown path, never as a quiet pass.
 #
 # Honestly --quick: the harness copies fixtures to mkdtemp, runs the
-# generator only, and restores the default tree hash-equal. No build, no
+# generator only, and generates each fixture and the default comparand into
+# private mkdtemp dirs; it never reads or writes generated/ (PLAT-04). No build, no
 # browser, no display, no network. PB_CONFIG_DIR reaches the generator per
 # child command from the harness itself; this driver unsets any inherited
 # value at the top of the file, so no row relies on ambient environment.
