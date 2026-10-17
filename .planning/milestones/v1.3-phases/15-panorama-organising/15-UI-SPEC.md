@@ -87,14 +87,6 @@ from 13/14-UI-SPEC; `12px` is a declared step, not an exception.
 | 2xl | 48px | Not used in Phase 15 (reserved) |
 | 3xl | 64px | Not used in Phase 15 (reserved) |
 
-Fixed geometry (prescriptive): tab card **160px wide**, thumbnail
-**160×90** (16:9, `object-fit: cover`), `radius-sm` (4px) on cards,
-boxes, and tree rows. Group box minimum **200×144** (fits header plus
-one card); box positions are user pixels, never snapped. Corner resize
-handle **16×16** hit area (visual 12px grip, bottom-right corner only).
-Ungrouped tray **144px tall**, fixed to the bottom of the organising main
-area. Hairline borders `1px var(--color-border)` throughout.
-
 Exceptions:
 
 | Exception | Value | Why it stands |
@@ -105,25 +97,70 @@ Exceptions:
 
 ---
 
+## Canvas Geometry
+
+The geometry contract. A row whose Key is one or more identifiers joined by ` × ` is a const
+row: its Value numbers, read before the first `(`, equal that const in the tree. A row whose Key
+is a backticked selector and a property is a CSS row: that property is declared once in the rule
+for exactly that selector in `modes.css`, as that many px. `verify-gui08-canvas-geometry` reads
+both through `scripts/lib/ui-spec.mjs`, and every top-level numeric const in
+`organising-widget.ts`, `organising-tiling.ts` and `organising-geometry.ts` has a const row. Rows
+with a Key of two or more plain words are description and are not compared. Box positions are
+user pixels, never snapped. Hairline borders are `1px var(--color-border)` and `radius-sm` (4px)
+is on cards, boxes and tree rows.
+
+| Key | Value | Source |
+|-----|-------|--------|
+| ZOOM_STEPS | 25, 50, 75, 100, 125, 150, 200 (%) | `organising-widget.ts` |
+| DEFAULT_ZOOM_INDEX | 3 (resolves to 100%) | `organising-widget.ts` |
+| GROUP_BOX_MIN_W × GROUP_BOX_MIN_H | 200 × 144 px | `group-model.ts`; CSS floor on `.pb-org-box` |
+| New Group default box | 400 × 300 px at (24, 24) | `group-model.ts` `createGroup()` |
+| GROUP_DRAW_MIN | 30 px (a band smaller on both axes is a click) | `organising-widget.ts` |
+| CARD_DRAG_THRESHOLD | 4 px | `organising-widget.ts` |
+| PUSH_GAP | 12 px | `organising-geometry.ts` |
+| ESCAPE_ATTEMPTS | 6 (push-away passes, bounded so an arrangement cannot spin) | `organising-geometry.ts` |
+| TILE_GAP | 8 px | `organising-tiling.ts` |
+| TILE_ASPECT | 0.72 (height / width) | `organising-tiling.ts` |
+| TILE_MIN_W × TILE_MIN_H | 84 × 60 px (below this a group stacks) | `organising-tiling.ts` (`TILE_MIN_H = round(84 × 0.72)`) |
+| LOOSE_W × LOOSE_H | 160 × 115 px (a loose card) | `organising-widget.ts` (`LOOSE_H = round(160 × 0.72)`) |
+| LOOSE_MARGIN | 16 px | `organising-widget.ts` |
+| PILE_VISIBLE | 4 | `organising-widget.ts` |
+| STACK_VISIBLE | 5 | `organising-widget.ts` |
+| STACK_OFFSET | 4 px | `organising-widget.ts` |
+| SHELL_CAPTURE_SETTLE_MS | 700 ms (settle before a tab is photographed) | `organising-widget.ts` |
+| targetWidth | 160 px (capture target width) | `PowerBrowserAPI.sys.mjs` |
+| TAB_THUMBNAIL_CAPTURE_MAX_CHARS | 102400 chars (capture cap) | `PowerBrowserAPI.sys.mjs` |
+| `.pb-org-card` width | 220 px (base card, expanded-stack panel) | `modes.css` |
+| `.pb-org-card-thumb` height | 124 px (base card preview) | `modes.css` |
+| `.pb-org-box` min-width | 200 px | `modes.css` |
+| `.pb-org-box` min-height | 144 px | `modes.css` |
+| `.pb-org-box-resize` width | 16 px (visible grip, bottom-right) | `modes.css` |
+| `.pb-org-box-resize` height | 16 px | `modes.css` |
+| `.pb-org-skeleton` height | 144 px (loading skeleton box) | `modes.css` |
+| Stack card width | 40-170 px, fitted to the box | `organising-widget.ts` `stackCards()` |
+| Edge grips | 8 px strips on n/s/e/w; 14 × 14 corners nw/ne/sw | `modes.css` `.pb-org-box-grip-*` |
+| Canvas minimum height | 320 px, or host height − 4 | `modes.css` `.pb-org-canvas`; `renderCanvas()` |
+
+Tiled and stacked card sizes are computed from the box (`fitTiles()`, `stackCards()`); a tiled or
+loose card's preview fills the card height above its title. A group grids or stacks its cards and
+never scrolls.
+
+---
+
 ## Typography
 
-Theia side is delegated — the table below binds the delegation to exact
-rendered sizes (3 sizes, 2 weights). No `font-size` / `font-weight` literal
-may appear in `@powerbrowser/*` that is not one of these three sizes.
+Three sizes, two weights. The only `font-size` literals under `.pb-org-*` are 12, 13 and 14, and
+`verify-gui08-canvas-geometry` enforces that. Font families are delegated to the Theia theme.
 
-| Role | Size | Weight | Line Height | Applies to |
+| Role | Size | Weight | Line height | Applies to |
 |------|------|--------|-------------|------------|
-| Body | 14px | 400 (600 when active-group) | 1.5 | Group-box titles, tree group headers, empty-state body, error-bar text, dialog body |
-| Label | 13px | 400 | 1.4 | Card titles, tree tab rows, toolbar buttons, toggle segments (600 when active segment) |
-| Caption | 12px | 400 | 1.5 | Card URI captions (`--theia-code-font-family` mono), tray label + tray empty caption, zoom-level readout |
+| Body | 14px | 400 (600 when active group) | 1.5 | Box titles, tree group titles, expanded-stack heading, empty-state heading and body, error-bar text, rename input |
+| Label | 13px | 400 (600 on active toggle segment) | 1.4 | Base card title, tree rows, toggle segments, zoom steps, close glyph, blank-preview label (line height 1.3, frozen) |
+| Caption | 12px | 400 | 1.5 | URI captions, tiled and loose card titles, stack count, pile count, Expand pill, zoom readout, tree count, empty-group hint |
 
-600 (semibold) is reserved for exactly three selection families, nothing
-else: **(a)** the active toggle segment — mode toggle (carried) and the
-canvas/tree toggle (net-new); **(b)** the current-setup / current-mode
-marked row (carried from Phase 14); **(c)** the active-group title — group
-box on canvas and group header in tree. Card titles, tree tab rows, and
-inactive group titles never set 600; tree tab selection is a
-surface-raised wash only. There are no headings above 14px in this phase.
+600 marks selection only: the active toggle segment, the active-group title (canvas box and tree
+section), and the current-mode or current-setup row (carried from 14-UI-SPEC). The expanded-stack
+heading `.pb-org-expand-heading` is 400. There are no headings above 14px.
 
 ---
 
@@ -190,36 +227,52 @@ never a spinner.
 
 ## Copywriting Contract
 
-Product rules inherited from 13/14-UI-SPEC and CLAUDE.md: every
-user-facing string names the product as **"PowerBrowser"** where a
-product name is needed, states the problem in plain language, ends with a
-next step that is a real affordance on screen, and carries **no internal
-identifier** (no pref key, sentinel, port, table name, `group_id`,
-bounds, URI-scheme internals, or raw exception text). Naming is fixed:
-**"Canvas"** / **"Tree"** toggle, **"New Group"**, **"Ungrouped"** tray,
-**"Untitled group"** default title.
+Copy rule (CLAUDE.md, inherited from 13/14-UI-SPEC): every user-facing string names the product
+as "PowerBrowser" where a product name is needed, states the problem in plain language, ends
+with a next step that is a real control on screen, and carries no internal identifier (no pref
+key, sentinel, port, table name, `group_id`, bounds, URI-scheme internals or raw exception text).
+
+Form: every contracted literal is written bolded and quoted in a table row below, with the exact
+characters painted (U+2014 em dash, U+2019 in the two error bars, a straight apostrophe in the
+dialog bodies, U+2212 minus, U+00D7 times). Interpolation slots are written `{name}` and `{N}`.
+`verify-gui08-panorama-copy` derives the contract and the retired set from these tables through
+`scripts/lib/ui-spec.mjs`.
 
 | Element | Copy |
 |---------|------|
 | Primary CTA | **"New Group"** — toolbar button; creates a box titled "Untitled group" with its title in edit mode (text selected) |
-| View toggle segments | **"Canvas"**, **"Tree"** — in this order; active segment carries accent ink + 600 |
-| Zoom controls | Tooltips **"Zoom in"**, **"Zoom out"**, **"Reset zoom"**; level readout caption (e.g. "100%") is text, never the sole carrier of zoom state |
+| View toggle segments | **"Canvas"**, **"Tree"** — in this order; the active segment carries accent ink and 600 |
+| Zoom controls | Tooltips **"Zoom in"**, **"Zoom out"**, **"Reset zoom"** |
 | Group title edit placeholder | **"Group name"** |
 | New-group default title | **"Untitled group"** |
 | Empty canvas heading | **"No tab groups"** |
 | Empty canvas body | **"There are no tab groups yet — choose New Group, or drag a tab onto the canvas to start one."** |
-| Empty-box hint | **"Empty group — drag tabs here."** (muted caption inside a group box with zero cards) |
-| Tray label | **"Ungrouped"** |
-| Empty tray caption | **"No ungrouped tabs — drag a tab here to ungroup it."** |
-| Empty tree heading | **"No tab groups"** |
 | Empty tree body | **"There are no tab groups yet — choose New Group to start one."** |
-| Groups-load error | **"PowerBrowser couldn't load your tab groups. Your tabs are unchanged — choose Retry."** — button **"Retry"** re-issues the load |
-| Groups-save error | **"PowerBrowser couldn't save your tab groups. The canvas shows your latest arrangement — choose Retry."** — button **"Retry"** replays the failed write; the painted change is reverted if the retry fails again |
+| Empty-box hint | **"Empty group — drag tabs here."** (muted caption inside a group box with zero cards) |
+| Stack expand control | **"Expand"** — pill under a stacked group; opens the expanded-stack panel for that group |
+| Expanded-stack close | **"Done"** — `theia-button` top-right of the panel; closes it. Esc and a click on the scrim also close it. |
+| Groups-load error | **"PowerBrowser couldn’t load your tab groups. Your tabs are unchanged — choose Retry."** |
+| Groups-save error | **"PowerBrowser couldn’t save your tab groups. The canvas shows your latest arrangement — choose Retry."** |
+| Error-bar action | **"Retry"** — re-issues the load, or replays the failed write |
 | Group close button tooltip | **"Close group"** |
-| Destructive confirmation | **Close Group**: title **"Close Group"**, body **"Close "{name}"? Its {N} tab(s) will close too. You can't undo this."** (singular/plural exact), buttons **"Close Group"** / **"Cancel"** (Close Group in destructive ink). This is the ONLY destructive action in the phase. |
+| Destructive confirmation | **"Close Group"** (title and confirm button, in destructive ink), **"Close "{name}"? Its 1 tab will close too. You can't undo this."**, **"Close "{name}"? Its {N} tabs will close too. You can't undo this."**, **"Cancel"**. This is the only destructive action on this surface. |
 | Group closed confirmation | **"Group "{name}" closed."** (status-bar flash) |
-| Rename rules | Double-click a group title to edit; **Enter** commits, **Esc** cancels; committing empty reverts to the prior title (never a blank header); titles cap at 60 characters with pasted overflow cut at the cap; duplicate titles are allowed (boxes are distinguished by position and content — no duplicate-name error) |
-| Search provisional (ONLY if shipped cheap) | Placeholder **"Search tabs"**; no-match **"No matching tabs — clear the search to see every group."** — if search is not cheap it is deferred with no copy and no surface |
+| Widget label | **"Organising"** |
+| Mechanical labels and glyphs | **"Resize group"**, **"−"**, **"+"**, **"100%"**, **"×"** — the resize-grip label, the zoom-out, zoom-in and zoom-reset controls, and the close glyph |
+| Rename rules | Double-click or Enter on a group title edits it; Enter commits, Esc cancels; committing empty reverts to the prior title (never a blank header); titles cap at 60 characters with pasted overflow cut at the cap; duplicate titles are allowed (boxes are distinguished by position and content, so there is no duplicate-name error) |
+
+### Retired copy
+
+Strings that must not ship. `verify-gui08-panorama-copy` searches the shipped sources for each
+bolded literal in this table and fails on any hit.
+
+| Element | Copy | Why |
+|---------|------|-----|
+| Empty tray caption | **"No ungrouped tabs — drag a tab here to ungroup it."** | No tray ships. Ungrouped tabs are loose cards, and zero loose cards paints nothing. |
+| Tray label | The bare word Ungrouped, in plain text | Not searched: `listUngrouped` and `listUngroupedTabs` in `group-model.ts` contain the word, so a substring search would always fail. If it returns as painted copy, the copy check's set-equality diff reports it as surplus. |
+| Placeholder heading | **"Organising arrives next"** | The 14-02/14-03 placeholder slot is replaced by the canvas and tree. |
+| Placeholder action | **"Back to Browsing"** | As above. |
+| Placeholder body | **"The freeform canvas for arranging tabs lands in the next update"** | As above. |
 
 ---
 
