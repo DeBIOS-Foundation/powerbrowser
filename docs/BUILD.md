@@ -443,7 +443,7 @@ Run `node scripts/generate.mjs` before `./mach configure`: `generated/` is gitig
 build, see D-11/D-12) took 3224s (~54 minutes) wall time on 16 cores /
 62 GB RAM, peaking at 14 G of `objdir/`. Expect similar order-of-magnitude
 numbers; do not be surprised if a first-time contributor's build takes an
-hour. The resulting binary reports **`DeBIOS powerbrowser 153.1.0esr`** via
+hour. The resulting binary reports **`DeBIOS powerbrowser 153.5.0esr`** via
 `./mach run --version` — `--version` concatenates `MOZ_APP_VENDOR` with the
 app **basename** (`MOZ_APP_NAME`, the fixed lowercase platform name), not
 with the display name, so `PowerBrowser` correctly does **not** appear
@@ -796,6 +796,12 @@ it — both directions observed live in 08-04.
 
 ### MAR build and serve loop (the N to N-plus-1 proof)
 
+The recorded hop evidence predates 153.5: it is the N = 153.1.0 to
+N-plus-1 = 153.1.1 hop in `.mozbuild/mar-hop/hop.json`, and it was not re-run
+at 153.5. A `mar-update-hop` PASS re-verifies that recorded evidence and is not
+a 153.5 proof. A re-run needs an N-plus-1 above the current N, and
+`powerbrowser/packaging/version-nplus1/` still carries 153.1.1 (backlog 999.2).
+
 Prerequisites: the task-1 rebuilt tree is version N
 (`objdir/dist/bin/application.ini`: `Version=153.1.0`); the N-plus-1
 sources are `powerbrowser/packaging/version-nplus1/` (test-only fork
@@ -1031,7 +1037,8 @@ Rows `installer-build-proof` and `mar-update-hop` both re-run PASS on the
 current tree 2026-09-05 (nix-linux). The Linux cells below ran live the same
 day via `.mozbuild/matrix/run-matrix.sh` (untracked proof tooling, same
 standing as `drive-hop.py`); Windows and macOS cells are staged-unexecuted
-per the capability record above, never green without their logs.
+per the capability record above, never green without their logs. The Linux
+row's evidence, the hop included, predates 153.5 and was not re-run at 153.5.
 
 | OS / host | install | launch | alongside stock Firefox | uninstall + no-residue | N to N-plus-1 hop |
 |---|---|---|---|---|---|
@@ -1102,6 +1109,18 @@ pin, the tree, and every phase proof agree: drills rehearse, pins decide.
 Adopting 153.2.0esr is a future rebase-adoption task (pin move plus full
 tier-3 rebuilds), not part of this drill.
 
+**Pinned ESR (Phase 18).** The pin is `FIREFOX_153_5_0esr_BUILD1` at commit
+`223014c6b9299ac9b035b4c50ea481e5c6de282c`. On 2026-10-16, `git ls-remote`
+resolved both `FIREFOX_153_5_0esr_BUILD1` and `FIREFOX_153_5_0esr_RELEASE` to
+that commit. Tag names alone are not identity: at 153.4, `_RELEASE` resolved to
+`508788b6f8314edb3c33905f6d56c3fe6b087670` (the `_BUILD3` commit) while
+`_BUILD1` resolved to `f92008fc60401bb78216ce83704f6f58be94cc20`, so the commit
+SHA is the identity. The four patches replayed unchanged. The rebase ran
+locally through `scripts/rebase-upstream.sh --tag FIREFOX_153_5_0esr_BUILD1`
+(340 s wall, clone 279 s). The clobbered dev build through
+`scripts/smoke-firefox.sh` took 2388 s wall (mach reported 2376 s) on the
+reference host.
+
 **CI story:** `.github/workflows/rebase-upstream.yml` is `workflow_dispatch`-only
 (no `schedule:` — the ~4-weekly ESR cadence is a standing post-v4.0 operational
 item, not a Phase 3 deliverable) and runs the same replay off this machine, on
@@ -1115,6 +1134,11 @@ sequence — it never runs `./mach build`. Consequently, the
 **local operator follow-up**, run under `nix develop .#firefox` after a
 successful CI replay — not a CI step, because the toolchain that produces it
 only exists in the `firefox` devShell this workflow does not enter.
+`.github/workflows/rebase-upstream.yml` has never been dispatched: on
+2026-10-16, `gh run list --workflow rebase-upstream.yml` returned no runs
+(`[]`), with the workflow registered and active. Its generate step runs outside
+Nix, so inkscape is not pinned there. The 153.5 rebase ran locally. The
+workflow is therefore unexercised and is not cited as proof of any rebase.
 
 **Desktop install (local dev testing).** `powerbrowser/powerbrowser.desktop` (dev)
 and `powerbrowser/powerbrowser-release.desktop` (release) install at the user-scope

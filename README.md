@@ -84,7 +84,7 @@ scripts/verify-platform.sh --gate    # everything, plus the known-open exclusion
 ## Status
 
 Alpha. Both halves build and run on the reference host. Pinned to Firefox ESR
-153 (`FIREFOX_153_1_0esr_RELEASE`) and Theia 1.74.1, Linux first. The rebrand
+153 (`FIREFOX_153_5_0esr_BUILD1`) and Theia 1.74.1, Linux first. The rebrand
 manifest and generator are complete; the remaining verification is live-build
 drills that need a human at a screen.
 
