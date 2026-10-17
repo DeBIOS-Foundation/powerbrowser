@@ -2897,6 +2897,61 @@ function iconSourceFailures(readFrom = markSvgAbs()) {
  */
 const iconRasterCache = new Map();
 
+// PLAT-04 cause A: inkscape 1.4.4 aborts (Gio::DBus::Error) when several instances register on the session bus at once.
+export const RASTER_ENV = Object.freeze({ ...process.env, DBUS_SESSION_BUS_ADDRESS: 'disabled:' });
+
+const RASTER_BUS_FAILURE = 'inkscape would join the session bus, where icon exports started at the same moment can abort one another. '
+    + `Keep every icon export off the session bus, then run: ${RERUN}`;
+
+// Assembled, so this file's text carries the call shape only at the real spawn site.
+const INKSCAPE_SPAWN = ['spawnSync(', "'inkscape'"].join('');
+
+/**
+ * The [start, end) span of the options object of every inkscape spawnSync
+ * call in `sourceText`: the last brace-matched object at the call's top
+ * level. Strings are skipped so a quoted bracket cannot shift the depth.
+ */
+function inkscapeSpawnOptionSpans(sourceText) {
+    const spans = [];
+    for (let at = sourceText.indexOf(INKSCAPE_SPAWN); at !== -1; at = sourceText.indexOf(INKSCAPE_SPAWN, at + 1)) {
+        let depth = 0;
+        let objectStart = -1;
+        let last = null;
+        for (let i = at + 'spawnSync'.length; i < sourceText.length; i++) {
+            const ch = sourceText[i];
+            if (ch === "'" || ch === '"' || ch === '`') {
+                for (i++; i < sourceText.length && sourceText[i] !== ch; i++) if (sourceText[i] === '\\') i++;
+                continue;
+            }
+            if (ch === '(' || ch === '[' || ch === '{') {
+                if (depth === 1 && ch === '{') objectStart = i;
+                depth++;
+            } else if (ch === ')' || ch === ']' || ch === '}') {
+                depth--;
+                if (depth === 1 && ch === '}' && objectStart !== -1) last = [objectStart, i + 1];
+                if (depth === 0) break;
+            }
+        }
+        spans.push(last);
+    }
+    return spans;
+}
+
+/**
+ * PLAT-04 cause A's guard: the raster env must keep inkscape off the session
+ * bus, and every inkscape spawn in `sourceText` must pass that env. No spawn
+ * site at all is the same failure: the guard would be checking nothing.
+ */
+function rasterBusFailures(env, sourceText) {
+    if (env.DBUS_SESSION_BUS_ADDRESS !== 'disabled:') return [RASTER_BUS_FAILURE];
+    const spans = inkscapeSpawnOptionSpans(sourceText);
+    if (spans.length === 0) return [RASTER_BUS_FAILURE];
+    for (const span of spans) {
+        if (span === null || !/\benv:\s*RASTER_ENV\b/.test(sourceText.slice(span[0], span[1]))) return [RASTER_BUS_FAILURE];
+    }
+    return [];
+}
+
 function iconPngBytes(size) {
     const hit = iconRasterCache.get(size);
     if (hit !== undefined) return hit;
@@ -2913,7 +2968,7 @@ function iconPngBytes(size) {
             '--export-filename', out,
             '-w', String(size),
             '-h', String(size),
-        ], { encoding: 'utf8' });
+        ], { encoding: 'utf8', env: RASTER_ENV });
         // The child's own output is deliberately unread: a failure here must
         // speak plain words, never inkscape's vocabulary or this machine's
         // paths, which the self-test's no-internals assertion enforces.
@@ -4644,6 +4699,58 @@ function probeExternalConfigMissing() {
 }
 
 /**
+ * One round of concurrent exports, started together by a node child so
+ * selfTest() stays synchronous. The child inherits RASTER_ENV and passes it
+ * on; it prints one "<exit code> <width> <height>" line per export.
+ */
+const CONCURRENT_RASTER_ROUND = `
+const { spawn } = require('child_process');
+const { readFileSync } = require('fs');
+const { join } = require('path');
+const [src, dir, round] = process.argv.slice(1);
+Promise.all([0, 1, 2, 3, 4, 5].map(i => new Promise(done => {
+    const out = join(dir, 'r' + round + '-' + i + '.png');
+    const c = spawn('inkscape', [src, '--export-filename', out, '-w', '32', '-h', '32'], { env: process.env, stdio: 'ignore' });
+    c.on('error', () => done('error 0 0'));
+    c.on('close', code => {
+        let w = 0, h = 0;
+        try {
+            const b = readFileSync(out);
+            if (b.length >= 24 && b.readUInt32BE(12) === 0x49484452) { w = b.readUInt32BE(16); h = b.readUInt32BE(20); }
+        } catch {}
+        done(code + ' ' + w + ' ' + h);
+    });
+}))).then(lines => console.log(lines.join('\\n')));
+`;
+
+/** PLAT-04 cause A's positive half: 3 rounds of 6 concurrent exports at 32 px, never the planted crash. */
+function probeConcurrentRasters(sourceText) {
+    const failures = [...rasterBusFailures(RASTER_ENV, sourceText)];
+    const dir = mkdtempSync(join(tmpdir(), 'generate-selftest-rasters-'));
+    try {
+        for (let round = 1; round <= 3; round++) {
+            const child = spawnSync(process.execPath, ['-e', CONCURRENT_RASTER_ROUND, markSvgAbs(), dir, String(round)], {
+                encoding: 'utf8',
+                env: RASTER_ENV,
+            });
+            const lines = (child.stdout ?? '').split('\n').filter(line => line !== '');
+            if (child.status !== 0 || lines.length !== 6) {
+                failures.push(`round ${round} of the concurrent icon exports did not report all six exports. Check that inkscape is installed, then run: ${RERUN} --self-test`);
+                continue;
+            }
+            lines.forEach((line, i) => {
+                if (line !== '0 32 32') {
+                    failures.push(`export ${i + 1} of round ${round} did not finish with a 32 by 32 icon. Check that the artwork opens as an image, then run: ${RERUN} --self-test`);
+                }
+            });
+        }
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+    return failures;
+}
+
+/**
  * THE CROSS-CUTTING ASSERTION, applied to every case's output rather than
  * written as one more case -- because it is a property of every case, and a case
  * of its own would only ever check whatever fixture that case happened to use.
@@ -5158,6 +5265,9 @@ function selfTest() {
             rmSync(dir, { recursive: true, force: true });
         }
     })();
+
+    // PLAT-04 cause A's spawn-site cases read this file's own text.
+    const ownText = readFileSync(fileURLToPath(import.meta.url), 'utf8');
 
     const cases = [
         {
@@ -5751,6 +5861,41 @@ function selfTest() {
             name: 'external config dir without a manifest',
             probe: probeExternalConfigMissing,
             expect: 'PB_CONFIG_DIR',
+        },
+        {
+            // PLAT-04 cause A. An env that lost the override inherits the bus.
+            name: 'concurrent-raster: env without the bus override',
+            probe: () => {
+                const env = { ...RASTER_ENV };
+                delete env.DBUS_SESSION_BUS_ADDRESS;
+                return rasterBusFailures(env, ownText);
+            },
+            expect: 'inkscape would join the session bus',
+        },
+        {
+            name: 'concurrent-raster: env carrying a host bus address',
+            probe: () => rasterBusFailures({ ...RASTER_ENV, DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/1000/bus' }, ownText),
+            expect: 'inkscape would join the session bus',
+        },
+        {
+            // The spawn site itself, read from this file: removing the env
+            // option there must go red even though RASTER_ENV is intact.
+            name: 'concurrent-raster: spawn site without RASTER_ENV',
+            probe: () => {
+                const span = inkscapeSpawnOptionSpans(ownText)[0];
+                if (span === undefined || span === null) return [`${BROKEN} no inkscape spawn site was found to plant against`];
+                const options = ownText.slice(span[0], span[1]);
+                const planted = ownText.slice(0, span[0]) + options.replace(/,?\s*env:\s*RASTER_ENV\b/, '') + ownText.slice(span[1]);
+                if (planted === ownText) return [`${BROKEN} the planted removal of the env option did not land at the spawn site`];
+                return rasterBusFailures(RASTER_ENV, planted);
+            },
+            expect: 'inkscape would join the session bus',
+        },
+        {
+            name: 'concurrent-raster: 18 concurrent exports',
+            probe: () => probeConcurrentRasters(ownText),
+            holds: 'all 18 exports exit 0 with a 32x32 PNG',
+            resolved: () => true,
         },
     ];
 
