@@ -21,6 +21,16 @@ if [ ! -f "$MOZCONFIG_FILE" ]; then
   exit 1
 fi
 
+# Derive the expected version from the tree, never a hand-kept literal. Read it
+# before the build so a missing file fails before a long compile; an empty value
+# must fail too, because a fixed-string grep for '' matches everything.
+VERSION_FILE="$UPSTREAM_DIR/browser/config/version_display.txt"
+EXPECTED_VERSION="$(tr -d '[:space:]' 2>/dev/null < "$VERSION_FILE" || true)"
+if [ -z "$EXPECTED_VERSION" ]; then
+  echo "smoke-firefox: FAIL -- $VERSION_FILE is absent or empty, so there is no version to compare against" >&2
+  exit 1
+fi
+
 LOG_DIR="$REPO_ROOT/.mozbuild"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/smoke-firefox-build.log"
@@ -38,9 +48,9 @@ if [ "$BOOTSTRAP_COUNT" -ne 0 ]; then
 fi
 
 VERSION_OUTPUT="$(nix develop "$REPO_ROOT#firefox" --command bash -c "cd '$UPSTREAM_DIR' && MOZCONFIG='$MOZCONFIG_FILE' ./mach run --version")"
-if ! echo "$VERSION_OUTPUT" | grep -q '153.1.0esr'; then
-  echo "smoke-firefox: FAIL -- './mach run --version' did not report 153.1.0esr" >&2
+if ! printf '%s\n' "$VERSION_OUTPUT" | grep -qF -- "$EXPECTED_VERSION"; then
+  echo "smoke-firefox: FAIL -- './mach run --version' did not report $EXPECTED_VERSION (read from $VERSION_FILE)" >&2
   exit 1
 fi
 
-echo "smoke-firefox: PASS"
+echo "smoke-firefox: PASS -- reports $EXPECTED_VERSION (read from upstream/browser/config/version_display.txt)"

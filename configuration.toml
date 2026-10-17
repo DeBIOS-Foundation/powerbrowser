@@ -112,7 +112,7 @@ level = "off"
 # Edit one value, run `node scripts/generate.mjs`, and every consumer
 # follows -- no second copy lives anywhere else in the tree.
 [upstreams]
-firefox_esr_tag = "FIREFOX_153_1_0esr_RELEASE"
+firefox_esr_tag = "FIREFOX_153_5_0esr_BUILD1"
 theia_release = "1.74.1"
 
 # AI backend selection (16-03, SPEC R4; retired from the default build by
