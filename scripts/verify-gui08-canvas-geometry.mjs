@@ -30,12 +30,16 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { geometryDiff, stripCssComments } from './lib/ui-spec.mjs';
 
 const NAME = 'verify-gui08-canvas-geometry';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, '..');
 
+const SPEC_REL = '.planning/milestones/v1.3-phases/15-panorama-organising/15-UI-SPEC.md';
 const WIDGET_REL = 'theia/extensions/modes/src/browser/organising-widget.ts';
+const TILING_REL = 'theia/extensions/modes/src/browser/organising-tiling.ts';
+const GEOMETRY_REL = 'theia/extensions/modes/src/browser/organising-geometry.ts';
 const TREE_REL = 'theia/extensions/modes/src/browser/organising-tree.ts';
 const CSS_REL = 'theia/extensions/modes/src/browser/modes.css';
 const COMMANDS_REL = 'theia/extensions/modes/src/browser/panorama-commands.ts';
@@ -60,16 +64,6 @@ const EXPECTED_LABELLED_COMMAND = "label: 'New Group'";
 const EXPECTED_CLOSE_DIALOG_TITLE = "title: 'Close Group'";
 const EXPECTED_CLOSE_DIALOG_OK = "ok: 'Close Group'";
 const EXPECTED_CLOSE_TOOLTIP = "= 'Close group'";
-const EXPECTED_ZOOM_MIN = 25;
-const EXPECTED_ZOOM_MAX = 200;
-const EXPECTED_ZOOM_RESET = 100;
-const EXPECTED_BOX_MIN_W = 200;
-const EXPECTED_BOX_MIN_H = 144;
-const EXPECTED_TRAY_HEIGHT = 144;
-const EXPECTED_CARD_WIDTH = 160;
-const EXPECTED_THUMB_HEIGHT = 90;
-const EXPECTED_CAPTURE_TARGET_WIDTH = 160;
-const EXPECTED_CAPTURE_CAP = 102400;
 
 /**
  * Held-out live halves (15-UI-SPEC.md backstops). Flat scalars: no evidence
@@ -96,11 +90,6 @@ function diff(actual, expected) {
     };
 }
 
-/** CSS with block comments stripped (so prose never counts as code). */
-function stripCssComments(css) {
-    return css.replace(/\/\*[\s\S]*?\*\//g, '');
-}
-
 /** Every panorama command id declared in the commands source. */
 function derivedCommandIds(commandsSrc) {
     const ids = [];
@@ -110,28 +99,6 @@ function derivedCommandIds(commandsSrc) {
         }
     }
     return ids;
-}
-
-/** The ZOOM_STEPS literal from the widget source. */
-function derivedZoomSteps(widgetSrc) {
-    const m = /const ZOOM_STEPS\s*=\s*\[([^\]]+)\]/.exec(widgetSrc);
-    if (!m) {
-        return [];
-    }
-    return m[1].split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n));
-}
-
-function derivedZoomReset(widgetSrc, steps) {
-    const m = /const DEFAULT_ZOOM_INDEX\s*=\s*(\d+)/.exec(widgetSrc);
-    if (!m || !steps.length) {
-        return undefined;
-    }
-    return steps[Number(m[1])];
-}
-
-function derivedModelMin(modelSrc, name) {
-    const m = new RegExp(`const ${name}\\s*=\\s*(\\d+)`).exec(modelSrc);
-    return m ? Number(m[1]) : undefined;
 }
 
 /** The buildCard function body (for the text-first ordering check). */
@@ -144,21 +111,21 @@ function derivedBuildCard(widgetSrc) {
     return widgetSrc.slice(start, end < 0 ? undefined : end);
 }
 
-/** Span of the `if (tab.thumbnail) { ... }` block inside buildCard. */
-function thumbnailIfSpan(cardBody) {
-    const at = cardBody.indexOf('if (tab.thumbnail)');
+/** Span from `head` to the brace that closes the first `{` after it, or null. */
+function braceSpan(src, head) {
+    const at = src.indexOf(head);
     if (at < 0) {
         return null;
     }
-    const open = cardBody.indexOf('{', at);
+    const open = src.indexOf('{', at + head.length);
     if (open < 0) {
         return null;
     }
     let depth = 0;
-    for (let i = open; i < cardBody.length; i += 1) {
-        if (cardBody[i] === '{') {
+    for (let i = open; i < src.length; i += 1) {
+        if (src[i] === '{') {
             depth += 1;
-        } else if (cardBody[i] === '}') {
+        } else if (src[i] === '}') {
             depth -= 1;
             if (depth === 0) {
                 return { start: at, end: i + 1 };
@@ -168,6 +135,17 @@ function thumbnailIfSpan(cardBody) {
     return null;
 }
 
+/** Text of `head`'s brace-matched block, or '' when it is not found. */
+function braceBlock(src, head) {
+    const span = braceSpan(src, head);
+    return span ? src.slice(span.start, span.end) : '';
+}
+
+/** Every selector in the stylesheet (comments already stripped). */
+function cssSelectors(css) {
+    return [...css.matchAll(/([^{};]+)\{/g)].flatMap(m => m[1].split(',').map(s => s.trim().replace(/\s+/g, ' ')));
+}
+
 /** @returns {string[]} failure messages -- empty means the gate holds. */
 function checkStatic(sources) {
     const failures = [];
@@ -175,12 +153,12 @@ function checkStatic(sources) {
     const treeSrc = sources[TREE_REL] ?? '';
     const cssSrc = stripCssComments(sources[CSS_REL] ?? '');
     const commandsSrc = sources[COMMANDS_REL] ?? '';
-    const modelSrc = sources[MODEL_REL] ?? '';
     const apiSrc = sources[API_REL] ?? '';
     const catalogueSrc = sources[CATALOGUE_REL] ?? '';
+    const spec = sources[SPEC_REL] ?? '';
 
     // 1. Canvas hooks derived from the widget source.
-    for (const hook of ['dataset.canvas', 'dataset.tray', 'dataset.g', 'dataset.u']) {
+    for (const hook of ['dataset.canvas', 'dataset.g', 'dataset.u']) {
         if (!widgetSrc.includes(hook)) {
             failures.push(`${WIDGET_REL}: canvas hook '${hook}' underivable -- the data-canvas/data-g/data-u anchor drifted`);
         }
@@ -189,51 +167,40 @@ function checkStatic(sources) {
         failures.push(`${WIDGET_REL}: the corner-resize handle hook 'pb-org-box-resize' is gone -- resize has no affordance`);
     }
 
-    // 2. Zoom range consts: 25-200 fixed steps with a 100 reset.
-    const steps = derivedZoomSteps(widgetSrc);
-    if (!steps.length) {
-        failures.push(`${WIDGET_REL}: ZOOM_STEPS underivable -- the zoom anchor drifted`);
-    } else {
-        if (Math.min(...steps) !== EXPECTED_ZOOM_MIN || Math.max(...steps) !== EXPECTED_ZOOM_MAX) {
-            failures.push(`${WIDGET_REL}: zoom range is ${Math.min(...steps)}-${Math.max(...steps)}, declared ${EXPECTED_ZOOM_MIN}-${EXPECTED_ZOOM_MAX} -- zoom drifted off contract`);
-        }
-        if (!steps.includes(EXPECTED_ZOOM_RESET)) {
-            failures.push(`${WIDGET_REL}: zoom steps ${steps.join(',')} carry no ${EXPECTED_ZOOM_RESET} -- the reset level is gone`);
-        }
-        const reset = derivedZoomReset(widgetSrc, steps);
-        if (reset === undefined) {
-            failures.push(`${WIDGET_REL}: DEFAULT_ZOOM_INDEX underivable -- the reset anchor drifted`);
-        } else if (reset !== EXPECTED_ZOOM_RESET) {
-            failures.push(`${WIDGET_REL}: zoom reset resolves to ${reset}, declared ${EXPECTED_ZOOM_RESET}`);
-        }
+    // 2. Every geometry value (zoom, box floor, tiles, loose cards, capture
+    // target and cap, CSS sizes) from the 15-UI-SPEC Canvas Geometry table.
+    // Code sources only: the spec and the catalogue never count as the tree.
+    const codeSources = Object.fromEntries(Object.entries(sources).filter(([rel]) => /\.(ts|mjs|css)$/.test(rel)));
+    for (const f of geometryDiff(spec, codeSources, { canvasRels: [WIDGET_REL, TILING_REL, GEOMETRY_REL], cssRel: CSS_REL })) {
+        failures.push(`${SPEC_REL} Canvas Geometry vs tree: ${f}`);
     }
 
-    // 3. Box minimums: model consts plus the CSS floor plus the live clamp.
-    const minW = derivedModelMin(modelSrc, 'GROUP_BOX_MIN_W');
-    const minH = derivedModelMin(modelSrc, 'GROUP_BOX_MIN_H');
-    if (minW === undefined || minH === undefined) {
-        failures.push(`${MODEL_REL}: GROUP_BOX_MIN_W/H underivable -- the min-size anchor drifted`);
-    } else {
-        if (minW !== EXPECTED_BOX_MIN_W || minH !== EXPECTED_BOX_MIN_H) {
-            failures.push(`${MODEL_REL}: box minimum is ${minW}x${minH}, declared ${EXPECTED_BOX_MIN_W}x${EXPECTED_BOX_MIN_H}`);
-        }
-    }
-    if (!cssSrc.includes(`min-width: ${EXPECTED_BOX_MIN_W}px`) || !cssSrc.includes(`min-height: ${EXPECTED_BOX_MIN_H}px`)) {
-        failures.push(`${CSS_REL}: the ${EXPECTED_BOX_MIN_W}x${EXPECTED_BOX_MIN_H} box floor is gone from the stylesheet`);
-    }
+    // 3. The live clamp: the resize path uses the model's box floor.
     if (!widgetSrc.includes('GROUP_BOX_MIN_W') || !widgetSrc.includes('GROUP_BOX_MIN_H')) {
         failures.push(`${WIDGET_REL}: the resize path no longer clamps at GROUP_BOX_MIN_W/H -- the live floor drifted`);
     }
 
-    // 4. Tray height plus card geometry on the locked tokens.
-    if (!cssSrc.includes('.pb-org-tray {') || !cssSrc.includes(`height: ${EXPECTED_TRAY_HEIGHT}px`)) {
-        failures.push(`${CSS_REL}: the ${EXPECTED_TRAY_HEIGHT}px tray height is gone -- the tray contract drifted`);
+    // 4. PAN-07: the tray is gone. A search of the code under test.
+    for (const selector of cssSelectors(cssSrc)) {
+        if (selector.includes('.pb-org-tray')) {
+            failures.push(`${CSS_REL}: tray selector '${selector}' survives -- ungrouped tabs are loose cards on the canvas (PAN-07)`);
+        }
     }
-    if (!cssSrc.includes(`width: ${EXPECTED_CARD_WIDTH}px`)) {
-        failures.push(`${CSS_REL}: the ${EXPECTED_CARD_WIDTH}px card width is gone -- the card contract drifted`);
+    for (const needle of ['pb-org-tray', 'dataset.tray']) {
+        if (widgetSrc.includes(needle)) {
+            failures.push(`${WIDGET_REL}: tray reference '${needle}' survives -- ungrouped tabs are loose cards on the canvas (PAN-07)`);
+        }
     }
-    if (!cssSrc.includes(`height: ${EXPECTED_THUMB_HEIGHT}px`)) {
-        failures.push(`${CSS_REL}: the ${EXPECTED_CARD_WIDTH}x${EXPECTED_THUMB_HEIGHT} thumbnail box is gone`);
+
+    // 4a. 21-UI-SPEC A5: every card scope is in the roving focus.
+    const focusBody = braceBlock(widgetSrc, 'protected moveCardFocus(');
+    if (!focusBody) {
+        failures.push(`${WIDGET_REL}: moveCardFocus underivable -- the keyboard-focus anchor drifted`);
+    } else {
+        const missing = ['.pb-org-box-cards', '.pb-org-expand-cards', 'is-loose'].filter(s => !focusBody.includes(s));
+        if (missing.length) {
+            failures.push(`${WIDGET_REL}: moveCardFocus does not scope ${missing.join(', ')} -- those cards cannot be reached by keyboard (21-UI-SPEC A5)`);
+        }
     }
 
     // 5. Thumbnail fallback: img-behind-guard, no spinner, text first.
@@ -252,7 +219,7 @@ function checkStatic(sources) {
     if (!cardBody) {
         failures.push(`${WIDGET_REL}: buildCard underivable -- the card anchor drifted`);
     } else {
-        const span = thumbnailIfSpan(cardBody);
+        const span = braceSpan(cardBody, 'if (tab.thumbnail)');
         if (!span) {
             failures.push(`${WIDGET_REL}: the 'if (tab.thumbnail)' gate is gone -- snapshots no longer fill in behind text`);
         } else {
@@ -329,13 +296,11 @@ function checkStatic(sources) {
         failures.push(`${CSS_REL}: '!important' present -- the user layer wins by cascade position, never by force`);
     }
 
-    // 9. Capture surface: PageThumbs reach-through, 160px target, 100KB cap,
-    // private skip, catalogue row.
+    // 9. Capture surface: PageThumbs reach-through, settle scheduler, private
+    // skip, catalogue row. The 160px target and the cap are spec rows (2).
     for (const [needle, why] of [
         ['PageThumbs', 'the PageThumbs reach-through is gone'],
         ['captureToCanvas', 'the captureToCanvas call is gone'],
-        [`targetWidth: ${EXPECTED_CAPTURE_TARGET_WIDTH}`, `the ${EXPECTED_CAPTURE_TARGET_WIDTH}px capture target drifted`],
-        [`TAB_THUMBNAIL_CAPTURE_MAX_CHARS = ${EXPECTED_CAPTURE_CAP}`, 'the 100KB capture cap drifted'],
         ['scheduleSettleCapture', 'the settle scheduler is gone -- captures run on the hot path'],
         ['captureTabThumbnail', 'the capture method is gone'],
         ['isWindowPrivate', 'the private-window skip is gone from a capture site'],
@@ -353,7 +318,10 @@ function checkStatic(sources) {
 function readSources() {
     const read = rel => readFileSync(join(REPO_ROOT, rel), 'utf8');
     return {
+        [SPEC_REL]: read(SPEC_REL),
         [WIDGET_REL]: read(WIDGET_REL),
+        [TILING_REL]: read(TILING_REL),
+        [GEOMETRY_REL]: read(GEOMETRY_REL),
         [TREE_REL]: read(TREE_REL),
         [CSS_REL]: read(CSS_REL),
         [COMMANDS_REL]: read(COMMANDS_REL),

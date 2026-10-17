@@ -524,37 +524,11 @@
 }
 
 /*
- * Loose tabs -- the ones in no group. No bar: no panel background, no border,
- * no label. They read as tabs lying on the canvas in a line along the bottom,
- * because that is what they are; the surrounding chrome only made the canvas
- * look like it stopped above them.
- *
- * Still a real element, and still takes the pointer, because it is the drop
- * target meaning "take this out of its group": a drop in this strip ungroups,
- * a drop higher on bare canvas draws a new group.
+ * Positioned, not flowed: loose cards are placed on the canvas, along a line
+ * fitted to the width it actually has, so a card can never sit half off the
+ * edge. Anything past what fits goes into the pile at the end instead of off
+ * the side.
  */
-.pb-org-tray {
-    flex: none;
-    height: 132px;
-    box-sizing: border-box;
-    padding: 10px 16px;
-    position: relative;
-    background: transparent;
-}
-
-.pb-org-tray-label {
-    display: none;
-}
-
-/*
- * Positioned, not flowed: the row is fitted to the width it actually has, so
- * a card can never sit half off the edge. Anything past what fits goes into
- * the pile at the end instead of off the side.
- */
-.pb-org-tray-cards {
-    position: relative;
-    height: 100%;
-}
 .pb-org-card.is-loose {
     position: absolute;
     display: flex;
@@ -603,12 +577,6 @@
  */
 .pb-org-card.is-band-target {
     opacity: 0.45;
-}
-
-.pb-org-tray-empty {
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--color-text-muted, #9a99a8);
 }
 
 .pb-org-tree {

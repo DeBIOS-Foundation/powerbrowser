@@ -1854,15 +1854,24 @@ export class OrganisingWidget extends Widget {
     }
 
     /**
-     * Roving tabindex within one box or the tray: arrows move focus to the
-     * sibling card, which takes the single tab stop. Enter still dives.
+     * Roving tabindex within one scope -- a group's card area, the
+     * expanded-stack list, or the visible loose cards on the canvas: arrows
+     * move focus to the next card, which takes the single tab stop. Enter
+     * still opens.
      */
     protected moveCardFocus(card: HTMLElement, delta: 1 | -1): void {
-        const scope = card.closest('.pb-org-box-cards, .pb-org-tray-cards');
-        if (!scope) {
-            return;
+        let scoped: HTMLElement[];
+        if (card.classList.contains('is-loose')) {
+            scoped = (Array.from(this.canvasRoot.children) as HTMLElement[])
+                .filter(child => child.matches('.pb-org-card.is-loose'));
+        } else {
+            const scope = card.closest('.pb-org-box-cards, .pb-org-expand-cards');
+            if (!scope) {
+                return;
+            }
+            scoped = Array.from(scope.querySelectorAll('.pb-org-card')) as HTMLElement[];
         }
-        const cards = Array.from(scope.querySelectorAll('.pb-org-card')) as HTMLElement[];
+        const cards = scoped.filter(candidate => !candidate.hidden);
         const at = cards.indexOf(card);
         if (at < 0 || cards.length < 2) {
             return;
