@@ -4916,6 +4916,14 @@ run_own_checks() {
       # The same check on a carried-over config dir: the fixture named by PB_FIRST_BOOT_FIXTURE,
       # outside the repo, copied before launch; unset prints a notice (decisions.md R7).
       "first-boot-surface-carried|node $REPO_ROOT/scripts/verify-first-boot-surface.mjs --carried"
+
+      # NEW (Phase 20, PLAT-01, G-14.1.1-9): a build from a clean checkout passes. A fresh
+      # clone of committed HEAD (uncommitted work is invisible to it, Pitfall 2) runs the CI
+      # step "Install and build the Theia workspace", read from verify.yml at check time.
+      # Full tier: dev shell, yarn cache, minutes. The static `theia-build-order` row cannot
+      # see P2 (a lib-only import) or P3 (the web-tab.css path); the self-test plants both.
+      "theia-fresh-clone-build|bash $REPO_ROOT/scripts/verify-theia-fresh-clone-build.sh"
+      "theia-fresh-clone-build-self-test|bash $REPO_ROOT/scripts/verify-theia-fresh-clone-build.sh --self-test"
     )
   fi
 
