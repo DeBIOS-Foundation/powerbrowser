@@ -5,16 +5,16 @@ milestone_name: Platform Updates and GUI Close-out
 current_phase: 17
 current_phase_name: OpenCode Removal
 status: executing
-stopped_at: Phase 18 complete, ready to plan Phase 17
-last_updated: "2026-10-17T03:51:14.027Z"
+stopped_at: Completed 17-01-PLAN.md
+last_updated: "2026-10-17T06:06:11.583Z"
 last_activity: 2026-10-16
-last_activity_desc: Phase 18 complete, transitioned to Phase 17
-state_head: 2ba3f6cdd40da318d6199d7709c6695952b2537d
+last_activity_desc: Phase 17 execution started
+state_head: 5dfecb530782ad37c85777ceb56fc46318d7722f
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 7
-  completed_plans: 3
+  completed_plans: 4
   percent: 11
 ---
 
@@ -25,14 +25,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-16)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 18 — Firefox 153.5.0esr
+**Current focus:** Phase 17 — OpenCode Removal
 
 ## Current Position
 
-Phase: 17 (OpenCode Removal) — READY TO EXECUTE
-Plan: Not started
+Phase: 17 (OpenCode Removal) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-10-16 — Phase 18 complete, transitioned to Phase 17
+Last activity: 2026-10-16 — Phase 17 execution started
 
 ## Performance Metrics
 
@@ -136,6 +136,7 @@ Last activity: 2026-10-16 — Phase 18 complete, transitioned to Phase 17
 | Phase 18 P01 | 50 min | 2 tasks | 3 files |
 | Phase 18 P02 | 53min | 2 tasks | 5 files |
 | Phase 18 P03 | 90min | 2 tasks | 2 files |
+| Phase 17 P01 | 2h13m | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -353,6 +354,7 @@ Recent decisions affecting current work:
 - [Phase 18]: Phase 18 full run at 153.5: 218 rows, 206 PASS, 12 FAIL; A subset of B; 17 version rows PASS
 - [Phase 18]: 7 theia-app rows unmeasured at 153.1 and 153.5: port 3000 held by mem0-dashboard-1; Chris to free it and re-run with --only
 - [Phase 18]: mar-update-hop PASS at 153.5 re-verifies pre-153.5 evidence (hop N 153.1.0 vs built 153.5.0); re-run belongs to 999.2
+- [Phase 17]: 17-01: RM-01 stays open after the workspace slice; plans 02-04 carry the remaining removal surface
 
 ### Pending Todos
 
@@ -452,8 +454,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T01:55:23.789Z
-Stopped at: Phase 18 complete, ready to plan Phase 17
+Last session: 2026-10-17T06:06:11.519Z
+Stopped at: Completed 17-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
