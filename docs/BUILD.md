@@ -200,11 +200,11 @@ declared once as `[upstreams] theia_release` in `configuration.toml`, and
 resolved `@theia` tarball in `theia/yarn.lock` agrees with it. The one
 known exception is `@theia/monaco-editor-core`, which tracks upstream's
 own monaco line rather than the Theia release and is excluded by exact
-package name in the check. No re-pin has been performed under this
-procedure yet — it is proven structurally by the check's `--self-test`
-(a patch-bumped member pin and a drifted lockfile stanza both go red
-naming the file) and is exercised live only when an actual Theia release
-demands it. Do NOT perform it speculatively: it rewrites the lockfile and
+package name in the check. One re-pin has been performed under this
+procedure, Phase 19's move to 1.76.0 (recorded below). It is also proven
+structurally by the check's `--self-test` (a patch-bumped member pin and
+a drifted lockfile stanza both go red naming the file), and is exercised
+live only when an actual Theia release demands it. Do NOT perform it speculatively: it rewrites the lockfile and
 reinstalls `node_modules`, which is network and time neither a static
 check nor a review needs.
 
@@ -266,25 +266,30 @@ vendored Theia monorepo, or a `--latest` float anywhere. `yarn upgrade
 newest rather than to the declared pin, which is the unpinned behavior
 the manifest exists to forbid.
 
-**UPD-04 proof record (09-04).** Agreement proven at the stated pin
-`theia_release = "1.74.1"` on 2026-09-05: `node
+**UPD-04 proof record (Phase 19).** Agreement proven at the stated pin
+`theia_release = "1.76.0"` on 2026-10-17: `node
 scripts/verify-upstream-pins.mjs --self-test` PASS (4 planted faults red
 naming the file) and the `verify-upstream-pins` registry row PASS
-(resolutions plus member files plus lockfile stanzas, `@theia/monaco-editor-core`
-excepted by exact name). Token-gate intactness at the same pin: `tsc -b
-theia/extensions/token-gate` exits 0 with no errors, and the telemetry
-suite passes 9/9 (ping/report separation included). No framework source
-was edited for any of this — pins and lockfile only, per hard rule 1.
+(resolutions plus 8 member files plus lockfile stanzas, `@theia/monaco-editor-core`
+excepted by exact name, staying at 1.108.201). Token-gate intactness at the
+same pin: `tsc -b theia/extensions/token-gate` exits 0, and the telemetry
+suite passes 9/9 (ping/report separation included). `diff-theia-core` PASS
+(zero changes inside `@theia/*`) in the full `scripts/verify-platform.sh`
+run at commit `dfef881821be1c816461e0cfe46bee6169b90c30`. The pins and the
+lockfile moved in commit 3, `2700e4c3e6b65fde1ed7350a1c2e87c95589a892`. No
+framework source was edited for any of this — pins and lockfile only, per
+hard rule 1. (The 09-04 record it replaces proved the same at 1.74.1 on
+2026-09-05.)
 
-**Live bump staged, not executed.** A newer stable upstream tag exists
-(1.75.0 observed on the registry 2026-09-05; the pin is 1.74.1), so the
-runbook above is staged for it, not run against it: a minor-line re-pin
-rewrites every `@theia/*` pin, re-resolves the lockfile, reinstalls
-`node_modules`, and recompiles every extension — adoption-scale work with
-real breakage risk that no phase-09 requirement demands. Unblock
-(operator): when the 1.75.0 line (or later) is adopted, run steps 1-6
-above verbatim at that pin, keep the `monaco-editor-core` exception, and
-re-record this section with the new agreement-plus-token-gate evidence.
+**Live bump executed (Phase 19).** Phase 19 ran runbook steps 1-6 above
+verbatim at 1.76.0, keeping the `monaco-editor-core` exception, after two
+prerequisite commits: Node 24 for the theia dev shell (commit 1,
+`4cf6806f30a6eb1630e85f4a7f3153d842dd0c35`) and React 19.2.8 at Theia
+1.74.1 (commit 2, `58007062987f372d36cda4ccac69c356c93b4eb9`). The re-pin
+itself is commit 3, `2700e4c3e6b65fde1ed7350a1c2e87c95589a892`. The 1.75.0
+line staged here earlier was skipped, not adopted. A frozen
+`--ignore-scripts` reinstall on a fresh copy of the manifests reproduces the
+committed lock byte for byte, with `@theia/core` at 1.76.0.
 
 ### Extension tier-3 drill (09-04, BLD-02): new source kinds on real artifacts
 

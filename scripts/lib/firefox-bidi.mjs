@@ -2,7 +2,7 @@
 //
 // Zero-dependency WebDriver BiDi driver for `objdir/dist/bin/firefox`, the
 // Firefox build this repo already produces (Phase 1). Per D-69: not
-// Playwright, not Puppeteer, not geckodriver -- the pinned `nodejs_22`
+// Playwright, not Puppeteer, not geckodriver -- the pinned `nodejs_24`
 // exposes a global `WebSocket`, so this file imports no package, only Node
 // built-ins and globals.
 //

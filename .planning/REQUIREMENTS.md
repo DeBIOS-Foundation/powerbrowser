@@ -36,8 +36,11 @@ Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
       react-dom, `@types/react`, `@types/react-dom` and inversify, enforced by a
       new `--quick` check with a planted-duplicate self-test.
 - [ ] **UPD-09**: Every `@theia/*` package (except `@theia/monaco-editor-core`) is
-      1.76.0 and `diff-theia-core.sh` passes. The NG-082 ledger amend (1.75.0 →
-      1.76.0) is approved by Chris.
+      1.76.0 and `diff-theia-core.sh` passes. The Theia ledger row is replaced,
+      per Chris's 2026-10-17 decision ("Drop it, add a new row"): Chris drops
+      NG-082 (the 1.75.0 row) himself; the agent adds
+      NG-086 (Theia 1.76.0 + React 19 + Node 24), records its failing run and
+      closes it with evidence; Chris re-locks the check hashes.
 - [ ] **UPD-10**: A live sidecar check at 1.76 passes on a fresh and on a
       carried-over config dir: only the PowerBrowser welcome opens (no Theia
       Welcome page), `view:` URIs open, and the token-gate rows pass live. The

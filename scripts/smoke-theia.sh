@@ -56,7 +56,7 @@ if [ ! -f "$PTY_ARTIFACT" ]; then
 fi
 
 # D-10's real proof: node-pty must actually spawn a shell, accept written
-# input, and return real output under the pinned Node 22 -- not just report
+# input, and return real output under the pinned Node 24 -- not just report
 # a zero exit code from a build step.
 nix develop "$REPO_ROOT#theia" --command node -e '
   const pty = require("node-pty");

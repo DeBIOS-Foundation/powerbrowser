@@ -36,7 +36,7 @@ No wave D. NG-084 is yours (Task 12).
 
 ## Quick-tier baseline
 
-`docs/non-gui/quick-baseline.txt` lists the `--quick` rows red at its Phase 17 refresh, after the OpenCode removal (the gui08 rows Phase 21 owns).
+`docs/non-gui/quick-baseline.txt` lists the `--quick` rows red at its Phase 17 refresh, after the OpenCode removal (the gui08 rows Phase 21 owns). The list was unchanged at the Phase 19 refresh, after the Theia 1.76.0 re-pin.
 The commit gate for every wave is: no `--quick` failure outside that list, except a wave's own
 recorded NG checks. Command:
 

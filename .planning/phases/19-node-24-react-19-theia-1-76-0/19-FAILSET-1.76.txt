@@ -1,0 +1,5 @@
+gui08-canvas-geometry	Phase 21
+gui08-canvas-geometry-self-test	Phase 21
+gui08-panorama-copy	Phase 21
+gui08-panorama-copy-self-test	Phase 21
+ng074-ci-green-on-main	NG-074 (Phase 25)

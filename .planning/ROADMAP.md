@@ -165,7 +165,7 @@ Plans:
 **Goal**: The sidecar runs Theia 1.76.0 with React 19 on Node 24, with Theia's AI framework as upstream ships it, and each step is checked live before the next
 **Depends on**: Phase 18 (the live sidecar check runs against the final Gecko)
 **Requirements**: RM-02, UPD-07, UPD-08, UPD-09, UPD-10
-**Needs Chris**: the NG-082 ledger amend (1.75.0 → 1.76.0, plus React 19 and Node 24, moved out of 999.2); the `telemetry.telemetryLevel` collision decision, taken at the live check
+**Needs Chris**: dropping the 1.75.0 row NG-082 in his own terminal (CONTEXT 2026-10-17: "Drop it, add a new row"), then re-locking the check hashes once NG-086 is closed; the `telemetry.telemetryLevel` collision decision, taken at the live check
 **Research**: yes — runtime behaviour at 1.76 / React 19 is unverified (which telemetry schema wins, `view:` factory ids, `pagehide` persistence, dependent-window theme)
 **Success Criteria** (what must be TRUE):
 

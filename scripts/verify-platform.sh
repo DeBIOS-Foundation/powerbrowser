@@ -2970,7 +2970,7 @@ BACKEND_LOG=""
 # Spawns theia/applications/browser/lib/backend/main.js directly (D-101,
 # Pitfall 2 -- never through the yarn/bash `theia start` wrapper, which
 # would make kill() only reach a shell and orphan the real backend), inside
-# `nix develop $REPO_ROOT#theia --command` so it gets the pinned Node 22.
+# `nix develop $REPO_ROOT#theia --command` so it gets the pinned Node 24.
 # Binds --hostname 127.0.0.1 --port 0 (SIDE-01). Polls BACKEND_LOG for a
 # `POWERBROWSER_BACKEND_READY {"port":N,"pid":N}` line for up to 90s. Returns
 # 0 with BACKEND_TOKEN/BACKEND_PORT/BACKEND_PID/BACKEND_SPAWN_PID all set
