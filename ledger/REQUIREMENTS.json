@@ -1,5 +1,5 @@
 {
-  "ledger_version": 375,
+  "ledger_version": 377,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -1110,11 +1110,11 @@
     {
       "id": "NG-086",
       "text": "Theia is re-pinned to 1.76.0 with React 19.2.8 on Node 24 (UPD-07, UPD-08, UPD-09)",
-      "status": "open",
+      "status": "done",
       "spec_ref": ".planning/REQUIREMENTS.md UPD-07, UPD-08, UPD-09",
       "test_ref": "scripts/verify-ng-086-theia-react-node.mjs::ng086-theia-react-node",
       "code_ref": "configuration.toml [upstreams] theia_release",
-      "evidence": "",
+      "evidence": "2700e4c (commit 3): ng086-theia-react-node PASS after its recorded red; diff-theia-core, first-boot-surface fresh and carried, side02-token-negative and -positive PASS in the full run at dfef881; .planning/phases/19-node-24-react-19-theia-1-76-0/19-FAILSET-1.76.txt holds owned reds only",
       "owner": "",
       "phase": "19",
       "deferred_at": "",
