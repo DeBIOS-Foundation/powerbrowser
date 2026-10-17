@@ -237,6 +237,10 @@ downstream must state it — omission is a hard failure naming the setting.
 "Optional" means omission is legal; the row states the default, which is
 also echoed at generate time as a `generate: default applied` line.
 
+**Removed setting.** The `[ai]` table (`backend`) was removed in v1.4 together
+with the OpenCode adapter. A manifest that still carries it now fails with
+`unknown setting 'ai.backend'`; delete the table — nothing replaces it.
+
 ### `[product]` — who ships this browser
 
 | Setting | Required? | If omitted | Reaches |

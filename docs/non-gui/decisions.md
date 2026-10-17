@@ -44,8 +44,9 @@ recorded NG checks. Command:
       | grep ': FAIL$' | awk '{print $1}' | sed 's/:$//' | sort \
       | comm -13 docs/non-gui/quick-baseline.txt -
 
-It prints the new failures; empty output passes. NG-016 and NG-040 own two baseline rows
-(`gui08-persistence-roundtrip`, `internals-catalogue`) and must turn them green.
+It prints the new failures; empty output passes. (Before the Phase 17 refresh, NG-016 and
+NG-040 owned two further baseline rows, `gui08-persistence-roundtrip` and `internals-catalogue`;
+both now pass and left the list.)
 
 ## Controller rulings on the drafters' questions (2026-09-25)
 
