@@ -252,7 +252,7 @@ export class GroupModel {
     }
 
     /**
-     * Loads groups, membership, and the tray from the reader. Total parse:
+     * Loads groups, membership, and the loose (ungrouped) tabs from the reader. Total parse:
      * unparseable rows are dropped, a corrupt payload lands the contracted
      * empty state, and failures resolve with loadFailed set -- never throws.
      *
@@ -279,14 +279,14 @@ export class GroupModel {
                 }) : [];
                 nextMembers.set(group.id, tabs);
             }
-            const trayRows = await reader.listUngroupedTabs();
-            let tray: PanoramaTab[] = Array.isArray(trayRows) ? trayRows.flatMap(row => {
+            const looseRows = await reader.listUngroupedTabs();
+            let loose: PanoramaTab[] = Array.isArray(looseRows) ? looseRows.flatMap(row => {
                 const tab = this.parseTab(row);
                 return tab ? [tab] : [];
             }) : [];
             // NG-009: every key the store holds a row for, open or not.
             this.stored.clear();
-            for (const tabs of [...nextMembers.values(), tray]) {
+            for (const tabs of [...nextMembers.values(), loose]) {
                 for (const tab of tabs) {
                     this.stored.add(tab.uri);
                 }
@@ -298,7 +298,7 @@ export class GroupModel {
                 const liveByUri = new Map(live.map(tab => [tab.uri, tab]));
                 const thumbnails = new Map<string, string | null | undefined>();
                 const placements = new Map<string, { x?: number; y?: number }>();
-                for (const tabs of [...nextMembers.values(), tray]) {
+                for (const tabs of [...nextMembers.values(), loose]) {
                     for (const tab of tabs) {
                         thumbnails.set(tab.uri, tab.thumbnail ?? this.sessionThumbs.get(tab.uri));
                         placements.set(tab.uri, { x: tab.x, y: tab.y });
@@ -318,7 +318,7 @@ export class GroupModel {
                         return tab.uri.startsWith('stock:') ? [] : [{ ...tab, open: false }];
                     }));
                 }
-                // Everything else open is in the tray, placed where the store
+                // Everything else open is loose, placed where the store
                 // says -- a tab seconds old whose row does not exist yet included.
                 const rest: PanoramaTab[] = [];
                 for (const tab of live) {
@@ -335,7 +335,7 @@ export class GroupModel {
                         y: placed?.y,
                     });
                 }
-                tray = rest;
+                loose = rest;
                 for (const tab of live) {
                     if (claimed.has(tab.uri) || placements.has(tab.uri)) {
                         this.watchClose(tab.uri);
@@ -347,7 +347,7 @@ export class GroupModel {
             for (const [id, tabs] of nextMembers) {
                 this.members.set(id, tabs);
             }
-            this.ungrouped = tray;
+            this.ungrouped = loose;
             const active = parsed.find(group => group.isActive);
             this.activeGroupId = active?.id;
             this.loaded = true;
@@ -762,8 +762,8 @@ export class GroupModel {
                 return { groupId, card };
             }
         }
-        const tray = this.ungrouped.find(tab => tab.uri === uri);
-        return tray ? { groupId: null, card: tray } : undefined;
+        const loose = this.ungrouped.find(tab => tab.uri === uri);
+        return loose ? { groupId: null, card: loose } : undefined;
     }
 
     private removeCardLocal(uri: string): void {

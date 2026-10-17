@@ -1951,7 +1951,7 @@ export const PowerBrowserAPI = Object.freeze({
    * GUI-08 (15-02): PNG last-view snapshot for one tab row. Finds the live
    * stock tab OR the live in-shell overlay by opaque URI key (14.1.1-02 --
    * before that every in-shell tab captured nothing), draws it at card width (160px target,
-   * sketch background so unpainted regions match the tray), and stores the
+   * sketch background so unpainted regions match the canvas), and stores the
    * data URL through writeThumbnail -- over the capture cap, or with no live
    * browser, the row clears to NULL and the card keeps its contracted text
    * fallback. Private windows skip here as well as at schedule time (v1

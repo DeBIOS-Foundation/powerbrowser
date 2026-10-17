@@ -261,10 +261,9 @@ export class TabQueryService {
     }
 
     /**
-     * GUI-08 (15-01): tray listing -- tab rows with no group, newest first.
-     * Same lazy readonly handle, bound params. Throws when the store cannot
-     * be read (NG-012). Without this the always-rendered Ungrouped tray has
-     * no data source.
+     * GUI-08 (15-01): loose-tab listing -- tab rows with no group, newest
+     * first. Same lazy readonly handle, bound params. Throws when the store
+     * cannot be read (NG-012). Without this the canvas has no loose cards.
      */
     async listUngroupedTabs(): Promise<GroupTabRow[]> {
         return this.read('listUngroupedTabs', db => db.prepare(

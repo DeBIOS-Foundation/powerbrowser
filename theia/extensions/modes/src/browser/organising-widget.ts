@@ -1,29 +1,19 @@
 /**
- * GUI-08 (15-01): the tracer Panorama organising widget.
+ * GUI-08: the Panorama organising widget.
  *
  * Plain-Widget (placeholder idiom -- NOT React; drag needs direct DOM
  * transforms) owning the organising slot behind the same
  * `registerOrganisingSlot` seam. Canvas and tree are two render roots over
  * the ONE GroupModel: flipping the toggle never reloads and never loses
- * selection. The 144px tray is always rendered as the stable ungrouping
- * drop target.
+ * selection.
  *
- * Tracer slice ONLY: New Group, header-drag move (150ms-debounced persist
- * with pointerup commit), card dive, last-card-out dissolve. No corner
- * resize, no auto-box on drop, no close-through-tabs beyond the contracted
- * dialog (those are 15-02). Zoom is a pure view transform here -- card data
- * and box bounds are untouched, nothing persists.
- *
- * 15-02: full canvas geometry. Corner resize (16x16 handle, 200x144 live
- * floor, same debounce/commit discipline), the four-gesture auto-box drop
- * matrix (card-onto-card, card-onto-field, card-into-box, card-into-tray)
- * with optimistic paint and contracted rollback, Esc cancelling any geometry
- * gesture with paint reverted and no further persist, dragged-card 0.7 with
- * no transition while dragging, accent target outline (reserved use 7).
- * Card drags ride native HTML5 DnD, so an Esc-cancelled drag fires no drop
- * and persists nothing by construction -- there is no mid-drag paint to
- * revert. Zoom stays a pure view transform: bounds plus card data untouched,
- * thumbnails scaling by CSS, never re-captured.
+ * Groups tile their cards to fill the box, then stack them behind Expand
+ * once the tiles would be too small. Ungrouped tabs are loose cards on the
+ * canvas, each at its own position. Card drags use pointer events, not
+ * HTML5 drag and drop (no `draggable`). A group resizes from eight grips and
+ * pushes its neighbours away. Esc cancels a geometry gesture with its paint
+ * reverted and nothing further persisted. Zoom is a pure view transform:
+ * bounds and card data are untouched, nothing persists.
  *
  * Copy: contracted 15-UI-SPEC.md strings verbatim; no placeholder copy
  * survives. Names render as textContent, never innerHTML.
@@ -450,7 +440,8 @@ export class OrganisingWidget extends Widget {
         this.render();
     }
 
-    // Rendering: one model, two roots plus the always-rendered tray.
+    // Rendering: one model, two roots (canvas and tree); loose cards are
+    // drawn on the canvas.
 
     protected render(): void {
         if (this.suppressRender) {
