@@ -4569,6 +4569,12 @@ run_own_checks() {
     # with the manifest pin moved ahead of the install.
     "ng086-theia-react-node|node $REPO_ROOT/scripts/verify-ng-086-theia-react-node.mjs"
     "ng086-theia-react-node-self-test|node $REPO_ROOT/scripts/verify-ng-086-theia-react-node.mjs --self-test"
+    # NEW (Phase 19, 19-08, WR-05): the packaged Node major in node-runtime.json agrees with
+    # flake.nix's nodejs_NN, and both meet theia/package.json engines.node. Honestly --quick:
+    # three text reads, no build, browser, display or network. The self-test plants each
+    # fault in mkdtemp copies of the three files.
+    "node-major-agreement|node $REPO_ROOT/scripts/verify-node-major-agreement.mjs"
+    "node-major-agreement-self-test|node $REPO_ROOT/scripts/verify-node-major-agreement.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
