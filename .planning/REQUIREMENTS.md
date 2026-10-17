@@ -28,7 +28,7 @@ Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
       SHA recorded; the four patches replay unchanged; `smoke-firefox.sh` derives
       the version from the tree; the `fetch-upstream.sh` tag comment is corrected;
       the run-together line at `configuration.toml:104` is fixed.
-- [x] **UPD-06**: Dev and release builds at 153.5 both succeed and the full
+- [ ] **UPD-06**: Dev and release builds at 153.5 both succeed and the full
       `verify-platform.sh` run passes; MAR-hop evidence is labelled pre-153.5.
 - [ ] **UPD-07**: The `.#theia` dev shell runs Node 24, with only `flake.nix`
       changed and `flake.lock` untouched (supersedes D-16).
@@ -130,7 +130,7 @@ the project's own planning record.
 | RM-01 | Phase 17 | Pending |
 | RM-02 | Phase 19 | Pending |
 | UPD-05 | Phase 18 | Complete |
-| UPD-06 | Phase 18 | Complete |
+| UPD-06 | Phase 18 | Pending (7 port-bound rows unmeasured; see 18-UAT.md) |
 | UPD-07 | Phase 19 | Pending |
 | UPD-08 | Phase 19 | Pending |
 | UPD-09 | Phase 19 | Pending |
