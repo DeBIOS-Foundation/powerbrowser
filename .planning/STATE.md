@@ -4,17 +4,17 @@ milestone: v1.4
 milestone_name: Platform Updates and GUI Close-out
 current_phase: 18
 current_phase_name: Firefox 153.5.0esr
-status: executing
-stopped_at: Completed 18-02-PLAN.md
-last_updated: "2026-10-17T00:23:27.377Z"
+status: verifying
+stopped_at: Completed 18-03-PLAN.md
+last_updated: "2026-10-17T01:55:23.819Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 18 execution started
-state_head: 9a8be1542ac9c6cf16fa770c5bf272a6c4abdea3
+state_head: 2dc257ad3f2b300ee5bda6abf6403c48c54e320a
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-10-16)
 
 Phase: 18 (Firefox 153.5.0esr) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-10-16 — Phase 18 execution started
 
 ## Performance Metrics
@@ -134,6 +134,7 @@ Last activity: 2026-10-16 — Phase 18 execution started
 | Phase 14.1.1 P16 | 10 min | 2 tasks | 3 files |
 | Phase 18 P01 | 50 min | 2 tasks | 3 files |
 | Phase 18 P02 | 53min | 2 tasks | 5 files |
+| Phase 18 P03 | 90min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -348,6 +349,9 @@ Recent decisions affecting current work:
 - [Phase 18]: Plan 03 must free port 3000 and run with a clean tree or PB_NG_ALLOW_DIRTY=1 before the 153.5 full run, else 25 rows go unmeasured
 - [Phase 18]: smoke-firefox.sh derives its expected version from upstream/browser/config/version_display.txt, read before the build; absent or empty fails
 - [Phase 18]: rebase-upstream.yml is registered but has zero runs (gh run list, 2026-10-16); docs/BUILD.md records it as unexercised
+- [Phase 18]: Phase 18 full run at 153.5: 218 rows, 206 PASS, 12 FAIL; A subset of B; 17 version rows PASS
+- [Phase 18]: 7 theia-app rows unmeasured at 153.1 and 153.5: port 3000 held by mem0-dashboard-1; Chris to free it and re-run with --only
+- [Phase 18]: mar-update-hop PASS at 153.5 re-verifies pre-153.5 evidence (hop N 153.1.0 vs built 153.5.0); re-run belongs to 999.2
 
 ### Pending Todos
 
@@ -447,8 +451,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T00:23:27.343Z
-Stopped at: Completed 18-02-PLAN.md
+Last session: 2026-10-17T01:55:23.789Z
+Stopped at: Completed 18-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
