@@ -31,11 +31,15 @@ See ROADMAP.md Phase 19 success criteria. Phases 17 (OpenCode removed) and 18
 - Telemetry collision (autonomous decision, recommended by CLAUDE.md's
   user-facing-copy rule): the PowerBrowser `telemetry.telemetryLevel` registration
   must be the one the Settings UI shows (its copy names PowerBrowser); make it win
-  deterministically and assert that live. Record the decision in the SUMMARY.
-- NG-082: reopen and retarget the ledger row from 1.75.0 to 1.76.0 (+ React 19,
-  Node 24) with agent-allowed `ledger-amend.py set` / `set-status open`, then
-  close it with evidence when verified. If the hook refuses a step, stop and
-  surface the exact command for Chris.
+  deterministically and assert that live. Record the decision in the SUMMARY and
+  flag it for Chris's acknowledgement (UPD-10 names him as the decider).
+- Old ledger row NG-082 (Chris, 2026-10-17: "Drop it, add a new row"): its text
+  says 1.75.0 and `ledger-amend.py set` cannot change text, so Chris removes that
+  row himself. The agent then creates a new row with the agent-allowed
+  `ledger-amend.py add` for "Theia 1.76.0 + React 19 + Node 24", records its
+  failing run, and closes it with evidence. Plans cite the new row ID plus NG-074
+  and NG-084. If the old row is still open when that plan starts, the plan stops
+  and surfaces the exact terminal command for Chris.
 - New `--quick` row: exactly one installed copy each of react, react-dom,
   `@types/react`, `@types/react-dom`, inversify; derived from node_modules, with a
   `--self-test` that plants a duplicate and must go red naming the package.
