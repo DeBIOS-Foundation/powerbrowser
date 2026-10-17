@@ -40,7 +40,7 @@ const HEALTH_PATH = "/powerbrowser/health";
  */
 const USER_MESSAGE = {
   interfaceFilesMissing: "PowerBrowser can't find its interface files. This build looks incomplete — reinstall, or open Details for the missing path.",
-  nodeMissing: "PowerBrowser needs Node.js and couldn't find it. Install Node.js 22 or later and open PowerBrowser again, or open Details for where it looked.",
+  nodeMissing: "PowerBrowser needs Node.js and couldn't find it. Install Node.js 24 or later and open PowerBrowser again, or open Details for where it looked.",
   couldNotStart: "PowerBrowser couldn't start its interface. Choose Retry, or open Details to see the error.",
   // 01-13: the one place a SECOND `couldNotStart` sentence is warranted, and the
   // one place 01-10 declined to mint a key. 01-10's reasoning was that a new key

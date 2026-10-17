@@ -1,14 +1,16 @@
 // The telemetry.telemetryLevel preference (04-03, TEL-01).
 //
-// THE PLAN'S "REAL PREFERENCE", CONTRIBUTED HERE. @theia/core 1.74.1
-// ships only the TelemetryLogger/TelemetrySender interfaces and no
-// telemetryLevel preference at all (the off/crash/error/all enum the
-// plan cites is VS Code's); nothing else in this tree contributes a
-// `telemetry.*` preference either, so this namespace is free. Contributing
-// it from @powerbrowser/telemetry is composition, not a core patch: the
-// sender reads the live value per event, so a runtime change takes effect
-// without restart, and the manifest level (powerbrowserTelemetry fragment)
-// stays the default for users who never touch the setting --
+// @theia/core ships no telemetryLevel preference, but @theia/telemetry
+// (pulled in by @theia/plugin-ext at 1.76) registers the same key with its
+// own text. This contribution carries no static `schema`: its initSchema
+// awaits one microtask, so it runs after every contribution's synchronous
+// addSchema and PowerBrowser's text and default win in any module order
+// (Phase 19, UPD-10). It updates the existing property when the key is
+// already registered, and adds its own schema when it is not (a tree
+// without @theia/telemetry). Composition, not a core patch: the sender
+// reads the live value per event, so a runtime change takes effect without
+// restart, and the manifest level (powerbrowserTelemetry fragment) stays
+// the default for users who never touch the setting --
 // PreferenceService.get(name, manifestDefault) in the frontend module.
 //
 // The contribution default agrees with the manifest default (`off`), so
@@ -20,6 +22,7 @@ import {
     PreferenceContribution,
     PreferenceProxy,
     PreferenceSchema,
+    PreferenceSchemaService,
     PreferenceService,
 } from '@theia/core/lib/common/preferences';
 import { TELEMETRY_LEVELS } from './telemetry-sender';
@@ -56,11 +59,20 @@ export function createTelemetryPreferences(preferences: PreferenceService, schem
 }
 
 export function bindTelemetryPreferences(bind: interfaces.Bind): void {
-    bind(TelemetryPreferences).toDynamicValue(ctx => {
-        const preferences = ctx.container.get<PreferenceService>(PreferenceService);
-        const contribution = ctx.container.get<PreferenceContribution>(TelemetryPreferenceContribution);
-        return createTelemetryPreferences(preferences, contribution.schema);
-    }).inSingletonScope();
-    bind(TelemetryPreferenceContribution).toConstantValue({ schema: TelemetryPreferenceSchema });
+    bind(TelemetryPreferences).toDynamicValue(ctx =>
+        createTelemetryPreferences(ctx.container.get<PreferenceService>(PreferenceService))).inSingletonScope();
+    const contribution: PreferenceContribution = {
+        initSchema: async (service: PreferenceSchemaService) => {
+            await Promise.resolve(); // run after every contribution's synchronous addSchema
+            const own = TelemetryPreferenceSchema.properties[TELEMETRY_LEVEL_PREFERENCE];
+            if (service.getSchemaProperty(TELEMETRY_LEVEL_PREFERENCE)) {
+                // Full property: an update with a different default fires a change event.
+                service.updateSchemaProperty(TELEMETRY_LEVEL_PREFERENCE, { ...own });
+            } else {
+                service.addSchema(TelemetryPreferenceSchema);
+            }
+        },
+    };
+    bind(TelemetryPreferenceContribution).toConstantValue(contribution);
     bind(PreferenceContribution).toService(TelemetryPreferenceContribution);
 }

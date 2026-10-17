@@ -113,4 +113,4 @@ level = "off"
 # follows -- no second copy lives anywhere else in the tree.
 [upstreams]
 firefox_esr_tag = "FIREFOX_153_5_0esr_BUILD1"
-theia_release = "1.74.1"
+theia_release = "1.76.0"
