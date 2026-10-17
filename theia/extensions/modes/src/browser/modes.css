@@ -21,8 +21,8 @@
  */
 @layer powerbrowser-modes {
 
-/* The organising host fills the main area. Since 15-01 it stacks the
-   tracer toolbar, error bars, canvas/tree view, and tray vertically. */
+/* The organising host fills the main area. It stacks the toolbar, the
+   error bars, and the canvas or tree view vertically. */
 .pb-modes-organising {
     display: flex;
     flex-direction: column;
@@ -123,9 +123,9 @@
 /* GUI-08 (15-01): the tracer Panorama surface. Same layer, same tokens,
    same focus idiom; no second hue, no typeface literal, no !important.
    Type roles: 14px group titles/empty/error copy, 13px cards/rows/buttons,
-   12px URI captions/tray/zoom readout. 600 rides exactly the active toggle
-   segment and the active-group title -- card titles and inactive group
-   titles never set it. */
+   12px URI captions, tiled and loose card titles, and the zoom readout.
+   600 rides exactly the active toggle segment and the active-group title --
+   card titles and inactive group titles never set it. */
 .pb-org-toolbar {
     display: flex;
     align-items: center;
@@ -380,7 +380,7 @@
 }
 .pb-org-expand-heading {
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 400;
     padding-right: 80px;
 }
 .pb-org-expand-done {
@@ -491,8 +491,7 @@
 }
 
 /* GUI-08 (15-02): drag idiom. The dragged card rides at 0.7 with no
-   transition while dragging so it tracks the pointer; a card hovered as an
-   auto-box target carries the reserved accent outline (use 7). */
+   transition while dragging so it tracks the pointer. */
 .pb-org-card.is-dragging {
     opacity: 0.7;
     transition: none;
@@ -569,7 +568,6 @@
     color: var(--color-text, #fbfbfe);
     font-size: 12px;
 }
-/* A loose tab the rubber band encloses, and will take in on release. */
 /*
  * A loose tab the rubber band encloses. It goes translucent rather than
  * outlined -- the same language the drop slot speaks: "this one is coming

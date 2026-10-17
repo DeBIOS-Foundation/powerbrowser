@@ -1,24 +1,23 @@
 #!/usr/bin/env node
 // scripts/verify-gui08-canvas-geometry.mjs
 //
-// GUI-08's canvas-geometry gate (15-02): the full Panorama interaction
-// contract over the 15-01 write path -- free header-drag, corner resize,
-// auto-box drops, zoom, tray, renames, confirmed Close Group, PNG cards with
-// the guaranteed text-first fallback.
+// GUI-08's canvas-geometry gate: the static half of the Panorama canvas
+// contract -- groups as boxes, loose cards on the canvas, zoom, the keyboard
+// scope, and PNG cards with the guaranteed text-first fallback.
 //
-// It DERIVES at check time from the tree: canvas hooks (data-canvas/data-g/
-// data-u), zoom range consts, min-size consts, tray height, card geometry,
-// the thumbnail-fallback shape, and the panorama command registry from the
-// sources named below. Each is compared as SET EQUALITY (or exact value)
-// against the one EXPECTED block: a surplus id is unreviewed surface, a
-// missing one is a dropped contract row, a reworded label breaks the
-// contracted copy -- each reported BY NAME. An empty derivation fails as a
-// broken instrument, never passes as clean.
+// Geometry and type come from 15-UI-SPEC at check time, through
+// scripts/lib/ui-spec.mjs: every Canvas Geometry row is compared with the
+// tree (geometryDiff), and the stylesheet's font sizes and weights with the
+// Typography table. Nothing numeric is hand-kept here. The command registry
+// and the Close Group dialog literals have no 15-UI-SPEC home, so they are
+// this script's declared contract (the EXPECTED block below), compared as set
+// equality or exact text and reported BY NAME. PAN-07 is a negated search of
+// the code under test: a surviving tray selector or hook is red. An empty
+// derivation fails as a broken instrument, never passes as clean.
 //
-// The live halves (drag feel, auto-box matrix through a headed shell, the
-// close exactness matrix) are recorded below as flat BACKSTOPS: at verify
-// time no explicit evidence is attached, so they report HELD-OUT for the
-// full suite -- reserved live, never a silent pass.
+// The live halves are recorded below as flat BACKSTOPS and report HELD-OUT:
+// reserved live, never a silent pass. gui08-loose-cards-live (21-05) is the
+// live proof for loose cards.
 //
 // Honestly --quick: reads text sources only. No build, no browser, no
 // display, no network.
@@ -30,7 +29,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { geometryDiff, stripCssComments } from './lib/ui-spec.mjs';
+import { geometryDiff, geometryRows, stripCssComments, typography } from './lib/ui-spec.mjs';
 
 const NAME = 'verify-gui08-canvas-geometry';
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -70,9 +69,9 @@ const EXPECTED_CLOSE_TOOLTIP = "= 'Close group'";
  * attached, so the gate reports them HELD-OUT -- never a silent pass.
  */
 const BACKSTOPS = Object.freeze([
-    { statement: 'dropping a card onto another card auto-draws a box containing both', verification: 'backstop' },
-    { statement: 'dropping a card onto empty field auto-draws a box around it', verification: 'backstop' },
-    { statement: 'dropping into a box joins; dropping into the tray ungroups', verification: 'backstop' },
+    { statement: 'drawing a band of at least 30px on empty canvas creates a group there and takes the enclosed loose cards', verification: 'backstop' },
+    { statement: 'a drop over a group joins it at the previewed slot; a drop on empty canvas places the card loose', verification: 'backstop' },
+    { statement: 'every loose and expanded-stack card is reachable by Tab plus arrows, and Enter opens it', verification: 'backstop' },
     { statement: 'tree renders identical order and membership after every mutation and flip', verification: 'backstop' },
     { statement: 'confirming Close Group closes exactly that group tabs; cancel changes nothing', verification: 'backstop' },
 ]);
@@ -269,28 +268,42 @@ function checkStatic(sources) {
         failures.push(`${WIDGET_REL}: a re-spelled 'powerbrowser.panorama.*' literal -- call sites import the const, never the string`);
     }
 
-    // 8. Type and ink discipline on the locked tokens.
-    const sizes = new Set();
-    for (const m of cssSrc.matchAll(/font-size:\s*(\d+)px/g)) {
-        sizes.add(Number(m[1]));
-    }
-    if (!sizes.size) {
-        failures.push(`${CSS_REL}: derived ZERO font-size literals -- the type anchor drifted`);
+    // 8. Type and ink: sizes and weights from the 15-UI-SPEC Typography table.
+    const type = typography(spec);
+    if (!type.sizes.length || !type.weights.length) {
+        failures.push(`derived ZERO type roles from the Typography table in ${SPEC_REL} -- broken instrument`);
     } else {
-        const rogue = [...sizes].filter(n => n !== 12 && n !== 13 && n !== 14);
-        if (rogue.length) {
-            failures.push(`${CSS_REL}: font-size literals outside the 14/13/12 roles: ${rogue.join(', ')}px`);
+        const sizes = new Set([...cssSrc.matchAll(/font-size:\s*(\d+)px/g)].map(m => Number(m[1])));
+        const sizeDiff = diff([...sizes], type.sizes);
+        if (sizeDiff.surplus.length) {
+            failures.push(`${CSS_REL}: font-size ${sizeDiff.surplus.join(', ')}px is not a ${SPEC_REL} Typography size (${type.sizes.join('/')})`);
+        }
+        if (sizeDiff.missing.length) {
+            failures.push(`${CSS_REL}: Typography size ${sizeDiff.missing.join(', ')}px from ${SPEC_REL} is declared nowhere in the stylesheet`);
+        }
+        for (const m of cssSrc.matchAll(/(?<=^|[{};])\s*([^{};@]+?)\s*\{([^{}]*)\}/g)) {
+            const selector = m[1].replace(/\s+/g, ' ');
+            if (!selector.startsWith('.pb-org-')) {
+                continue;
+            }
+            for (const w of m[2].matchAll(/font-weight:\s*(\d+)/g)) {
+                const weight = Number(w[1]);
+                if (!type.weights.includes(weight)) {
+                    failures.push(`${CSS_REL}: font-weight ${weight} on '${selector}' is not a ${SPEC_REL} Typography weight (${type.weights.join('/')})`);
+                } else if (weight === 600 && !selector.includes('is-active')) {
+                    failures.push(`${CSS_REL}: 600 weight on '${selector}' -- semibold rides the active-group title and active toggle only`);
+                }
+            }
         }
     }
-    let currentSelector = '';
-    for (const line of cssSrc.split('\n')) {
-        const brace = line.indexOf('{');
-        if (brace >= 0) {
-            currentSelector = line.slice(0, brace).trim();
-        }
-        if (/font-weight:\s*600/.test(line) && currentSelector.startsWith('.pb-org-') && !currentSelector.includes('is-active')) {
-            failures.push(`${CSS_REL}: 600 weight on '${currentSelector}' -- semibold rides the active-group title and active toggle only`);
-        }
+
+    // 8a. 21-UI-SPEC A3: with zero groups the canvas still draws loose cards.
+    const renderCanvas = braceBlock(widgetSrc, 'protected renderCanvas(');
+    const zeroGroups = braceBlock(renderCanvas, 'if (groups.length === 0)');
+    if (!zeroGroups) {
+        failures.push(`${WIDGET_REL}: the zero-group branch of renderCanvas is underivable -- the empty-canvas anchor drifted`);
+    } else if (!zeroGroups.includes('this.renderLoose()')) {
+        failures.push(`${WIDGET_REL}: renderCanvas returns on zero groups without renderLoose() -- ungrouped tabs vanish when no group exists (21-UI-SPEC A3)`);
     }
     if (cssSrc.includes('!important')) {
         failures.push(`${CSS_REL}: '!important' present -- the user layer wins by cascade position, never by force`);
@@ -339,7 +352,9 @@ function main() {
         failures.forEach(f => console.error(`  ${f}`));
         process.exit(1);
     }
-    console.log(`${NAME}: PASS -- hooks, zoom, minimums, tray, cards, fallback, registry, discipline, and capture surface hold`);
+    const rows = geometryRows(sources[SPEC_REL]);
+    const type = typography(sources[SPEC_REL]);
+    console.log(`${NAME}: PASS -- ${rows.consts.length} const rows and ${rows.css.length} CSS rows equal 15-UI-SPEC Canvas Geometry; type sizes ${type.sizes.join('/')}px and weights ${type.weights.join('/')} from its Typography table; no tray; loose cards with zero groups; loose and expanded cards in focus scope; fallback, registry, discipline and capture hold`);
     for (const backstop of BACKSTOPS) {
         console.log(`${NAME}: HELD-OUT (reserved live) -- ${backstop.statement} [verification: ${backstop.verification}]`);
     }

@@ -496,6 +496,7 @@ export class OrganisingWidget extends Widget {
                 'There are no tab groups yet — choose New Group, or drag a tab onto the canvas to start one.',
                 true
             ));
+            this.renderLoose();
             return;
         }
         for (const group of groups) {
