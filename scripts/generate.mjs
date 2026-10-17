@@ -98,7 +98,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parse, TomlError } from './lib/toml.cjs';
@@ -168,8 +168,14 @@ function rejectUnknownArguments() {
         const a = args[i];
         if (a === '--out') {
             const value = args[i + 1];
-            if (value === undefined || value.startsWith('--')) {
+            if (value === undefined || value === '' || value.startsWith('--')) {
                 console.error(`${NAME}: FAIL -- --out needs the folder to write the generated files into. Next step: run: ${RERUN} --out <folder>`);
+                process.exit(1);
+            }
+            // Inside the project, --out would overwrite tracked files such as the root .mozconfig.
+            const rel = relative(REPO_ROOT, resolve(process.cwd(), value));
+            if (rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) {
+                console.error(`${NAME}: FAIL -- --out must name a folder outside this project, because the generated files would overwrite files the project tracks. Next step: run: ${RERUN} --out <folder outside the project>`);
                 process.exit(1);
             }
             out = value;
@@ -3850,9 +3856,16 @@ function writeTargets(config, root) {
     failures.push(...localeAgreementFailures(pending));
     report(failures);
 
-    for (const { outPath, body } of pending) {
-        mkdirSync(dirname(outPath), { recursive: true });
-        writeFileSync(outPath, body, 'utf8');
+    for (const { outPath, rel, body } of pending) {
+        try {
+            mkdirSync(dirname(outPath), { recursive: true });
+            writeFileSync(outPath, body, 'utf8');
+        } catch {
+            // A filesystem failure, not a manifest one: keep it away from the manifest advice in the top-level catch.
+            console.error(`${NAME}: FAIL -- ${rel} could not be written into the output folder. The folder is not writable, or a file stands where a folder is needed. Files written before it are left in place.`);
+            console.error(`  Next step: make the output folder writable, or choose another folder with --out, then run: ${RERUN}`);
+            process.exit(1);
+        }
     }
     return pending.length;
 }
