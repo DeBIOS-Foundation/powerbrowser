@@ -57,7 +57,11 @@ unset PB_CONFIG_DIR # a stray export must never silently rebrand CI; fixture row
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 THEIA_DIR="$REPO_ROOT/theia"
-APP_URL="http://localhost:3000"
+# Not 3000: that is Theia's stock dev port and other local services (a host-networked
+# container, a second dev app) commonly hold it. Override with PB_VERIFY_PORT.
+PB_VERIFY_PORT="${PB_VERIFY_PORT:-3939}"
+export PB_VERIFY_PORT
+APP_URL="http://localhost:$PB_VERIFY_PORT"
 
 QUICK=0
 ONLY=""
@@ -142,7 +146,7 @@ cleanup() {
     BROWSER_SPAWN_PID=""
   fi
   # Ported from verify-phase-02.sh: yarn does not exec-replace itself running a
-  # package script, so the Node backend actually holding :3000 is a GRANDCHILD
+  # package script, so the Node backend actually holding $APP_URL is a GRANDCHILD
   # of the tracked PID -- signal the whole process group.
   if [ -n "$SERVER_PID" ]; then
     kill -- "-$SERVER_PID" 2>/dev/null || kill "$SERVER_PID" 2>/dev/null || true
@@ -214,7 +218,7 @@ theia_app_up() {
   # POWERBROWSER_TOKEN; this dev loop drives it unauthenticated (including from
   # a cookie-less browser session), so it opts out via the named bypass. The
   # supervised PowerBrowser path never sets this.
-  setsid env POWERBROWSER_TOKEN_DISABLE=1 nix develop "$REPO_ROOT#theia" --command yarn --cwd "$THEIA_DIR" start &
+  setsid env POWERBROWSER_TOKEN_DISABLE=1 nix develop "$REPO_ROOT#theia" --command yarn --cwd "$THEIA_DIR" start --port "$PB_VERIFY_PORT" &
   SERVER_PID=$!
   local deadline=$((SECONDS + 60))
   until curl -sf "$APP_URL" >/dev/null 2>&1; do
