@@ -1121,8 +1121,11 @@ tier-3 rebuilds), not part of this drill.
 resolved both `FIREFOX_153_5_0esr_BUILD1` and `FIREFOX_153_5_0esr_RELEASE` to
 that commit. Tag names alone are not identity: at 153.4, `_RELEASE` resolved to
 `508788b6f8314edb3c33905f6d56c3fe6b087670` (the `_BUILD3` commit) while
-`_BUILD1` resolved to `f92008fc60401bb78216ce83704f6f58be94cc20`, so the commit
-SHA is the identity. The four patches replayed unchanged. The rebase ran
+`_BUILD1` resolved to `f92008fc60401bb78216ce83704f6f58be94cc20`. The SHA
+above is the identity recorded at adoption, and no gate checks it:
+`configuration.toml` pins only the tag, and `fetch-upstream.sh` and
+`rebase-upstream.sh` resolve the tag name. If the mirror re-pointed the tag, a
+fresh clone would get the new commit and every gate would pass. The four patches replayed unchanged. The rebase ran
 locally through `scripts/rebase-upstream.sh --tag FIREFOX_153_5_0esr_BUILD1`
 (340 s wall, clone 279 s). The clobbered dev build through
 `scripts/smoke-firefox.sh` took 2388 s wall (mach reported 2376 s) on the
