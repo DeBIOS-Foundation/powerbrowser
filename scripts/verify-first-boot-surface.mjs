@@ -24,19 +24,38 @@
  * upstream link text: the getting-started links are click handlers, so that absence check
  * is vacuous; the widget-id check with its positive control replaces it.
  *
+ * Carried-over config dir (--carried): a fixture captured by --capture on the pristine tree
+ * (decisions.md R7: outside the repo, read through PB_FIRST_BOOT_FIXTURE, a printed notice
+ * when unset). The fixture is copied into fresh temp dirs and never launched against. The
+ * main area must equal the fixture's captured set, compared by tab address (MAIN_ADDRESSES);
+ * every other assertion is unchanged.
+ *
  * Usage:
  *   node scripts/verify-first-boot-surface.mjs              fresh config dir (full tier)
+ *   node scripts/verify-first-boot-surface.mjs --carried    carried-over config dir (full tier)
+ *   node scripts/verify-first-boot-surface.mjs --capture <dir>  write a carried-over fixture
  *   node scripts/verify-first-boot-surface.mjs --self-test  judge() against planted faults (--quick)
  */
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve, sep } from 'node:path';
 import { withFirefoxPage } from './lib/firefox-bidi.mjs';
-import { GET_BY_NAME, makeProfile, probe, REPO_ROOT } from './lib/pb-relaunch.mjs';
+import { GET_BY_NAME, makeProfile, probe, REPO_ROOT, servePages, withShell } from './lib/pb-relaunch.mjs';
 
 const NAME = 'first-boot-surface';
 const SEED_REL = 'theia/extensions/branding/src/browser/powerbrowser-welcome-contribution.ts';
 const TELEMETRY_PREFS_REL = 'theia/extensions/telemetry/src/browser/telemetry-preferences.ts';
 const MANIFEST_REL = 'theia/applications/browser/package.json';
+const VIEW_TABLE_REL = 'theia/extensions/tab-uris/src/browser/view-factory-table.ts';
+const FIXTURE_ENV = 'PB_FIRST_BOOT_FIXTURE';
+// A main-area tab's stable address: TabUriRegistry.uriOf, the product's own typeable address.
+// Widget ids do not survive a relaunch for web tabs (the per-session counter is in the id and
+// out of the URI, docs/URI-SCHEMES.md rule 4), so the carried mode compares addresses.
+const MAIN_ADDRESSES = `(() => {
+    const registry = get('TabUriRegistry');
+    return get('ApplicationShell').getWidgets('main').map(w => { const u = registry.uriOf(w); return u ? u.toString(true) : 'widget-id:' + w.id; });
+})()`;
 // The mode a launch opens in when no shipped mode was persisted (applyLaunchMode). Measured
 // live: the product, not @theia/core's 'default' perspective, decides the first-boot perspective.
 const MODE_SERVICE_REL = 'theia/extensions/modes/src/browser/mode-service.ts';
@@ -141,8 +160,14 @@ export function derive() {
 /** Failure strings for one observation. Pure: the live run and --self-test both call it. */
 export function judge(expected, observed) {
     const f = [];
-    if (!sameList(observed.areas.main, expected.mainArea) || observed.areas.main.length !== expected.mainArea.length) {
-        f.push(`main area is ${show(observed.areas.main)}, expected exactly ${show(expected.mainArea)}`);
+    if (expected.carried && expected.mainArea.length < 2) {
+        f.push(`the fixture's main area holds ${expected.mainArea.length} id(s) ${show(expected.mainArea)}; fewer than two could equal a fresh boot, so restoring it proves nothing`);
+    }
+    const main = expected.carried ? observed.mainAddresses : observed.areas.main;
+    if (!sameList(main, expected.mainArea) || main.length !== expected.mainArea.length) {
+        const missing = expected.mainArea.filter(id => !main.includes(id));
+        const surplus = main.filter(id => !expected.mainArea.includes(id));
+        f.push(`main area is ${show(main)}, expected exactly ${show(expected.mainArea)}${expected.carried ? ' (the fixture)' : ''}: missing ${show(missing)}, surplus ${show(surplus)}`);
     }
     if (observed.perspective !== expected.defaultPerspective) {
         f.push(`active perspective is ${show(observed.perspective)}, expected the launch mode ${show(expected.defaultPerspective)}`);
@@ -216,6 +241,7 @@ async function observe(expected, profileDir) {
             const shell = get('ApplicationShell');
             const areas = {};
             for (const a of ['main', 'left', 'right', 'bottom']) areas[a] = shell.getWidgets(a).map(w => w.id);
+            const mainAddresses = ${MAIN_ADDRESSES};
             const perspective = get('PerspectiveService').getActivePerspectiveId();
             const prefs = get('PreferenceService');
             await prefs.ready;
@@ -241,7 +267,7 @@ async function observe(expected, profileDir) {
             const prop = get('PreferenceSchemaService').getSchemaProperty(E.level.key);
             const schema = prop ? { description: prop.description, default: prop.default, enumDescriptions: prop.enumDescriptions } : null;
             settingsWidget.close();
-            return { areas, perspective, startupEditor, level, gettingStartedPresent, gettingStartedControl, settings: { domDescription, schema } };
+            return { areas, mainAddresses, perspective, startupEditor, level, gettingStartedPresent, gettingStartedControl, settings: { domDescription, schema } };
         `);
         if (obs.error) throw new Error(obs.error);
         obs.counterPresent = counterPresent === true;
@@ -305,12 +331,127 @@ async function runFresh() {
         `main area [${a.main.join(', ')}], perspective ${observed.perspective}, telemetry level ${observed.level}, Settings shows the telemetry-preferences.ts description, 0 boot errors, forced ${FORCED_ERROR_TYPE} reached logError and the counter`);
 }
 
+function fail(label, reason) {
+    report(label, [reason]);
+}
+
+/** --capture <dir>: a fresh profile with one web tab and one main-area view: tab, quit, copied out. */
+async function runCapture(target) {
+    const label = `${NAME}-capture`;
+    if (!target) fail(label, '--capture needs a target directory');
+    const dir = resolve(target);
+    let probeDir = dir;
+    while (!existsSync(probeDir)) probeDir = dirname(probeDir);
+    const real = join(realpathSync(probeDir), dir.slice(probeDir.length));
+    const repo = realpathSync(REPO_ROOT);
+    if (real === repo || real.startsWith(repo + sep)) fail(label, `${dir} resolves inside the repo (${repo}); the fixture must live outside it (decisions.md R7)`);
+    if (existsSync(dir) && readdirSync(dir).length > 0) fail(label, `${dir} exists and is not empty; refusing to overwrite a fixture`);
+    const { failures, expected } = derive();
+    if (failures.length) report(label, failures);
+    const seed = expected.mainArea[0];
+    const candidates = [...read(VIEW_TABLE_REL).matchAll(/factoryId:\s*'([^']+)'/g)].map(m => m[1])
+        .filter(id => id !== seed && !/^(ai-|chat-)/.test(id)); // prefer a non-AI view
+    if (candidates.length === 0) fail(label, `broken instrument: ${VIEW_TABLE_REL} yielded no non-AI view factory id`);
+    const pages = await servePages({ '/carried': { title: 'Carried over', body: 'first-boot-surface fixture page' } });
+    const profile = await makeProfile();
+    let result;
+    let harness;
+    try {
+        result = await withShell(profile, async app => {
+            const seen = await probe(app, `
+                const shell = get('ApplicationShell');
+                await get('WebTabOpenHandler').openUrl(${show(pages.url('/carried'))});
+                if (!(await until(() => webTabs().some(t => t.url === ${show(pages.url('/carried'))}), 20000))) return { error: 'the web tab never opened' };
+                const URI = get('TabUriRegistry').uriOf(shell.getWidgetById(${show(seed)})).constructor;
+                const opener = get('OpenerService');
+                let view = null;
+                for (const id of ${show(candidates)}) {
+                    const before = !!shell.getWidgetById(id);
+                    const uri = new URI('view:' + id);
+                    try { await (await opener.getOpener(uri)).open(uri); } catch (e) { continue; }
+                    await sleep(300);
+                    const w = shell.getWidgetById(id);
+                    if (w && shell.getAreaFor(w) === 'main') { view = id; break; }
+                    if (w && !before) w.close();
+                }
+                if (!view) return { error: 'no non-AI view: target opened in the main area' };
+                await sleep(1000);
+                return { view, ids: shell.getWidgets('main').map(w => w.id), main: ${MAIN_ADDRESSES} };
+            `);
+            return { seen, quit: seen.error ? 'skipped' : await app.quit() };
+        });
+    } catch (error) {
+        harness = `harness: ${error.message}`;
+    }
+    await pages.close();
+    if (!harness && result.seen.error) harness = `harness: ${result.seen.error}`;
+    if (!harness && result.quit !== 'exited') harness = `quitting with the close button returned '${result.quit}', not 'exited'`;
+    if (harness) {
+        await profile.dispose();
+        fail(label, harness);
+    }
+    mkdirSync(dir, { recursive: true });
+    cpSync(profile.profileDir, join(dir, 'profile'), { recursive: true, verbatimSymlinks: true });
+    cpSync(profile.configHome, join(dir, 'config'), { recursive: true, verbatimSymlinks: true });
+    await profile.dispose();
+    const json = JSON.stringify(result.seen.main, null, 2) + '\n';
+    writeFileSync(join(dir, 'main-area.json'), json);
+    console.log(`${label}: view chosen ${result.seen.view}; main area ids ${show(result.seen.ids)}, addresses ${show(result.seen.main)}`);
+    console.log(`${label}: PASS -- wrote ${dir}; main-area.json sha256 ${createHash('sha256').update(json).digest('hex')}`);
+    process.exit(0);
+}
+
+/** --carried: the fixture named by PB_FIRST_BOOT_FIXTURE, copied, then observed like a fresh boot. */
+async function runCarried() {
+    const label = `${NAME}-carried`;
+    const fixture = process.env[FIXTURE_ENV];
+    if (!fixture) {
+        console.log(`${label}: notice -- ${FIXTURE_ENV} is not set; the carried-over fixture was skipped (decisions.md R7)`);
+        process.exit(0);
+    }
+    for (const part of ['profile', 'config', 'main-area.json']) {
+        if (!existsSync(join(fixture, part))) fail(label, `${FIXTURE_ENV} names ${fixture}, which has no ${part}`);
+    }
+    let captured;
+    try {
+        captured = JSON.parse(readFileSync(join(fixture, 'main-area.json'), 'utf8'));
+    } catch (error) {
+        fail(label, `${fixture}/main-area.json is not JSON (${error.message})`);
+    }
+    if (!Array.isArray(captured) || !captured.every(id => typeof id === 'string')) fail(label, `${fixture}/main-area.json is not a list of widget ids`);
+    const { failures, notices, expected } = derive();
+    for (const n of notices) console.log(`${label}: notice -- ${n}`);
+    if (failures.length) report(label, failures);
+    const carried = { ...expected, carried: true, mainArea: captured };
+    const profileDir = mkdtempSync(join(tmpdir(), 'pb-first-boot-carried-profile-'));
+    const configHome = mkdtempSync(join(tmpdir(), 'pb-first-boot-carried-config-'));
+    cpSync(join(fixture, 'profile'), profileDir, { recursive: true, verbatimSymlinks: true });
+    cpSync(join(fixture, 'config'), configHome, { recursive: true, verbatimSymlinks: true });
+    process.env.XDG_CONFIG_HOME = configHome;
+    let observed;
+    let harness;
+    try {
+        observed = await observe(carried, profileDir);
+    } catch (error) {
+        harness = `harness: ${error.message}`;
+    } finally {
+        rmSync(profileDir, { recursive: true, force: true });
+        rmSync(configHome, { recursive: true, force: true });
+    }
+    if (harness) fail(label, harness);
+    const a = observed.areas;
+    console.log(`${label}: observed -- left ${show(a.left)} right ${show(a.right)} bottom ${show(a.bottom)}; forced error logged ${observed.forced.logged}x, counted ${observed.forced.counted}x`);
+    report(label, judge(carried, observed),
+        `restored main area [${observed.mainAddresses.join(', ')}] equals the fixture's captured set, perspective ${observed.perspective}, telemetry level ${observed.level}, Settings shows the telemetry-preferences.ts description, 0 boot errors, forced ${FORCED_ERROR_TYPE} reached logError and the counter`);
+}
+
 function selfTest() {
     const label = `${NAME}-self-test`;
     const { failures, expected } = derive();
     if (failures.length) report(label, failures);
     const clean = exp => ({
         areas: { main: [...exp.mainArea], left: [], right: [], bottom: [] },
+        mainAddresses: [...exp.mainArea],
         perspective: exp.defaultPerspective,
         startupEditor: exp.startupEditor ?? null,
         level: exp.manifestLevel,
@@ -323,6 +464,7 @@ function selfTest() {
     });
     const withGs = { ...expected, gettingStarted: expected.gettingStarted ?? { widgetId: 'planted.gs.widget', commandId: 'planted.gs.widget' } };
     const declared = { ...expected, startupEditor: expected.startupEditor ?? 'planted-declared-default' };
+    const carried = { ...expected, carried: true, mainArea: [...expected.mainArea, 'planted-fixture-view'] };
     const plants = [
         ['surplus main-area id', expected, o => { o.areas.main.push('planted-surplus-tab'); }, /planted-surplus-tab/],
         ['getting-started present', withGs, o => { o.gettingStartedPresent = true; o.gettingStartedControl = true; }, /getting-started id/],
@@ -334,9 +476,12 @@ function selfTest() {
         ['missing counter', expected, o => { o.counterPresent = false; }, /counter never reached/],
         ['one boot error', expected, o => { o.bootErrors = [{ type: 'TypeError', message: 'planted boot error' }]; }, /planted boot error/],
         ['forced error unseen', expected, o => { o.forced = { logged: 0, counted: 0 }; }, /never reached PowerBrowserTelemetryLogger[\s\S]*never reached the boot error counter/],
+        ['carried: restored set missing a fixture id', carried, o => { o.mainAddresses = o.mainAddresses.filter(id => id !== 'planted-fixture-view'); }, /missing \["planted-fixture-view"\]/],
+        ['carried: restored set with a surplus id', carried, o => { o.mainAddresses.push('planted-carried-surplus'); }, /surplus \["planted-carried-surplus"\]/],
+        ['carried: one-id fixture', { ...carried, mainArea: [...expected.mainArea] }, () => {}, /fewer than two/],
     ];
     const out = [];
-    const cleanFailures = [expected, withGs, declared].flatMap(exp => judge(exp, clean(exp)));
+    const cleanFailures = [expected, withGs, declared, carried].flatMap(exp => judge(exp, clean(exp)));
     if (cleanFailures.length) out.push(`clean control went red: ${cleanFailures.join(' | ')}`);
     for (const [name, exp, plant, mustName] of plants) {
         const o = clean(exp);
@@ -350,4 +495,6 @@ function selfTest() {
 
 const args = process.argv.slice(2);
 if (args.includes('--self-test')) selfTest();
+else if (args.includes('--capture')) await runCapture(args[args.indexOf('--capture') + 1]);
+else if (args.includes('--carried')) await runCarried();
 else await runFresh();

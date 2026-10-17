@@ -4872,6 +4872,9 @@ run_own_checks() {
       # launch mode, telemetry Settings copy, zero boot errors and a forced render error
       # through the supervised shell. Full tier: it needs the built binary and sidecar.
       "first-boot-surface-fresh|node $REPO_ROOT/scripts/verify-first-boot-surface.mjs"
+      # The same check on a carried-over config dir: the fixture named by PB_FIRST_BOOT_FIXTURE,
+      # outside the repo, copied before launch; unset prints a notice (decisions.md R7).
+      "first-boot-surface-carried|node $REPO_ROOT/scripts/verify-first-boot-surface.mjs --carried"
     )
   fi
 
