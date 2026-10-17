@@ -69,8 +69,9 @@ plugin, which is planned outside this tree. The adapter cuts fall with the
 same decision (selectable `@Pi` / DSH backends, per-line comment-to-steer,
 `/btw` ephemeral question, file-wide Supercomplete Tab-accept). Chris:
 "Run them for me" (ledger/history/log.jsonl lines 310–330, one drop op per
-row, each carrying that answer as its quote). Kept and built: NG-051
-(`backend = "off"` starts no opencode process and no `/mcp` endpoint).
+row, each carrying that answer as its quote). NG-051
+(`backend = "off"` starts no opencode process and no `/mcp` endpoint) was kept and built, then
+dropped 2026-10-17 (c3929e9) when Phase 17 removed the adapter.
 Goal (was): selectable `@OpenCode` backend in sidecar chat with staged
 accept/reject review. Requirements (was): AI-01..AI-05, removed in v1.4.
 Plans 16-01, 16-02, 16-03 executed.

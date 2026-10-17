@@ -4,6 +4,9 @@ date: 2026-09-06
 context: gsd-explore on wiring opencode + pi into PowerBrowser Theia sidecar
 ---
 
+> **Superseded 2026-10-16.** OpenCode was removed from the tree in v1.4 Phase 17 (RM-01), and DSH is a separate project outside Power Browser's scope.
+> Nothing in this note is planned here. Kept as history only.
+
 # AI backends — goal
 
 Recreate Antigravity 1.x's best editor GUI inside Power Browser's Theia

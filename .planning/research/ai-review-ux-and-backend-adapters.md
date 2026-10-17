@@ -1,5 +1,8 @@
 # AI Review UX + Backend Adapters — Discussion Brief
 
+> **Superseded 2026-10-16.** OpenCode was removed from the tree in v1.4 Phase 17 (RM-01), and DSH is a separate project outside Power Browser's scope.
+> Nothing in this note is planned here. Kept as history only.
+
 Date: 2026-09-06. Purpose: capture the Antigravity research, the goal, and Theia's
 existing capabilities so a build plan can be written later. No code changes proposed.
 

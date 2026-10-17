@@ -4,6 +4,9 @@ date: 2026-09-10
 context: gsd-explore follow-on to pba-plugin-shipping-design.md; the seed for the v1.4 PBA milestone intake
 ---
 
+> **Superseded 2026-10-16.** DSH is a separate project and is out of Power Browser's scope.
+> Nothing in this note is planned here. Kept as history only.
+
 # Order of events
 
 1. **Dream pass.** One explore session on everything PBA could do. Output: the milestone
