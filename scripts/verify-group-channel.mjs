@@ -44,14 +44,43 @@ const JAR = 'powerbrowser/shell/jar.mn';
 const UPSTREAM_REGISTRY = 'upstream/browser/components/DesktopActorRegistry.sys.mjs';
 const FRONTEND_RE = /^theia\/extensions\/[^/]+\/src\/.+\.tsx?$/;
 
-// Helpers copied from verify-web-tab-bridge.mjs:61-107, minus the unused diff (importing it would run its main()).
+// Helpers derived from verify-web-tab-bridge.mjs:61-107, minus the unused diff (importing it would run its main()).
 /**
- * Strip `/* … *\/` blocks and `//` line comments. A `//` counts only when it
- * begins a line or follows whitespace, so `http://…` inside a string and
- * `\/\//` inside a regex literal survive.
+ * Strip `/* … *\/` blocks and `//` line comments with a scanner that skips
+ * quoted text, so a `/*` inside a `//` comment or a string ('image/*') never
+ * opens a block. A backslash outside a string escapes the next character,
+ * which keeps `\/\//` inside a regex literal intact.
+ * shortcut: a quote inside a regex literal opens a string; '/" strings end at
+ * the line break to bound that, and `${}` nesting in templates is not tracked.
  */
 function stripComments(text) {
-    return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
+    let out = '';
+    let i = 0;
+    while (i < text.length) {
+        const c = text[i];
+        const two = text.slice(i, i + 2);
+        if (two === '/*') {
+            const end = text.indexOf('*/', i + 2);
+            i = end === -1 ? text.length : end + 2;
+        } else if (two === '//') {
+            const end = text.indexOf('\n', i);
+            i = end === -1 ? text.length : end;
+        } else if (c === '\\') {
+            out += two;
+            i += 2;
+        } else if (c === '\'' || c === '"' || c === '`') {
+            let j = i + 1;
+            while (j < text.length && text[j] !== c && !(c !== '`' && text[j] === '\n')) {
+                j += text[j] === '\\' ? 2 : 1;
+            }
+            out += text.slice(i, j + 1);
+            i = j + 1;
+        } else {
+            out += c;
+            i += 1;
+        }
+    }
+    return out;
 }
 
 function derive(text, re) {
@@ -358,6 +387,10 @@ const PLANTS = [
         from: 'window.addEventListener(GROUP_RESPONSE_EVENT, this.onResponse);',
         to: 'document.addEventListener(GROUP_RESPONSE_EVENT, this.onResponse);',
         expect: ['group-actor-client.ts', 'not window'] },
+    { id: '13 block opener inside a string', file: 'theia/extensions/tab-uris/src/browser/chrome-store-client.ts',
+        from: 'document.dispatchEvent(new CustomEvent(GROUP_REQUEST_EVENT, { bubbles: true, detail: { requestId, msg } }));',
+        to: "const accept = 'image/*'; window.dispatchEvent(new CustomEvent(GROUP_REQUEST_EVENT, { bubbles: true, detail: { requestId, msg } })); /* end */",
+        expect: ['chrome-store-client.ts', 'not document.dispatchEvent'] },
 ];
 
 function selfTest() {
