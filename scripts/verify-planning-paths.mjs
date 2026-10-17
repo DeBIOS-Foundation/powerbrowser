@@ -5,6 +5,10 @@
 // file, a tracked directory prefix, or a `*` glob matching exactly one of
 // those. Derived from the tree at check time; there is no hand-kept path list.
 //
+// Coverage is contiguous literals only: the phases or milestones segment
+// followed by a phase number or a `*` (and a `v*` version glob). A path
+// assembled from separate join() arguments is not seen by this row.
+//
 // The tracked set is both the scan input and the resolution target, so the
 // row sees what a clean clone and CI see. An unresolved literal has no
 // fallback here: a fallback is the breakage this row exists to catch.
@@ -20,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 const NAME = 'planning-paths';
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SCOPE = ['scripts/', '.github/'];
-const LITERAL = /\.planning\/(?:phases|milestones\/v[0-9.]+-phases)\/[0-9][^\s'"`$<>{}()]*/g;
+const LITERAL = /\.planning\/(?:phases|milestones\/v[0-9.*]+-phases)\/[0-9*][^\s'"`$<>{}()]*/g;
 
 function clean(literal) {
     let prev;
@@ -87,6 +91,8 @@ function selfTest() {
         { name: 'shell glob matching 0', src: one(`root=$(echo "$R"/${arch('v1.0', '08-*', 'fixtures')})\n`), expect: [`scripts/plant.mjs:1 ${arch('v1.0', '08-*', 'fixtures')} (matches 0)`] },
         { name: 'glob matching 2', src: one(`x\nroot=$(echo "$R"/${arch('v1.1', '09-*', 'fixtures')})\n`), expect: [`scripts/plant.mjs:2 ${arch('v1.1', '09-*', 'fixtures')} (matches 2)`] },
         { name: 'wrong milestone', src: one(`const R = '${arch('v1.1', '07-alpha', 'REC.md')}';\n`), expect: [`scripts/plant.mjs:1 ${arch('v1.1', '07-alpha', 'REC.md')} (0 tracked)`] },
+        { name: 'version glob matching 2', src: one(`root=$(echo "$R"/${arch('v*', '09-*', 'fixtures')})\n`), expect: [`scripts/plant.mjs:1 ${arch('v*', '09-*', 'fixtures')} (matches 2)`] },
+        { name: 'leading phase glob matching 0', src: one(`root=$(echo "$R"/${live('*', 'fixtures')})\n`), expect: [`scripts/plant.mjs:1 ${live('*', 'fixtures')} (matches 0)`] },
         { name: 'empty source set', src: new Map(), expect: ['zero references'] },
         {
             name: 'mixed file',
@@ -101,6 +107,7 @@ function selfTest() {
                 `c=$(echo "$R"/${arch('v1.0', '07-*', 'fixtures')})`,
                 `d = \`${p('phases')}/\${phaseDir}/x.md\``,
                 `e = '${p('milestones', '<v>-phases')}/07-alpha'`,
+                `f=$(echo "$R"/${arch('v*', '07-*', 'fixtures')})`,
             ].join('\n')),
             expect: [],
         },
@@ -145,7 +152,7 @@ function main() {
         failures.forEach((f) => console.log(`${NAME}: FAIL -- ${f}`));
         process.exit(1);
     }
-    console.log(`${NAME}: PASS -- ${references} references in ${sources.size} tracked files under scripts/ and .github/ resolve to tracked paths (scope is scripts/ and .github/ only; docs/ and CLAUDE.md are not checked)`);
+    console.log(`${NAME}: PASS -- ${references} references in ${sources.size} tracked files under scripts/ and .github/ resolve to tracked paths (contiguous literals only, not paths assembled from separate join() arguments; scope is scripts/ and .github/ only; docs/ and CLAUDE.md are not checked)`);
 }
 
 if (process.argv.includes('--self-test')) {
