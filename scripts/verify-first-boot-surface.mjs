@@ -239,6 +239,14 @@ async function observe(expected, profileDir) {
             window.__pbLogged = [];
             logger.logError = (e, d) => { window.__pbLogged.push({ name: String(e), type: d && d.type }); return orig(e, d); };
             const shell = get('ApplicationShell');
+            // Carried: web tabs come back from SetupsService.applyLastSession, which runs after
+            // 'ready' by design (setups-service.ts onStart), so the read waits for that restore.
+            // Measured at 1.76.0: 'ready' shows the core layout alone, the web tab follows ~40 ms
+            // later. A restore that never completes still reads, and judge() still names it.
+            if (E.carried) {
+                const sorted = list => JSON.stringify([...list].sort());
+                await until(() => sorted(${MAIN_ADDRESSES}) === sorted(E.mainArea), 20000);
+            }
             const areas = {};
             for (const a of ['main', 'left', 'right', 'bottom']) areas[a] = shell.getWidgets(a).map(w => w.id);
             const mainAddresses = ${MAIN_ADDRESSES};
