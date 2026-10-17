@@ -98,10 +98,6 @@ const EXPECTED_ENV_TOUCHERS = new Map([
     'theia/extensions/token-gate/src/node/powerbrowser-env.ts',
     'the capture-and-delete loop at module load -- the sole sanctioned reader; it sweeps every prefixed key out of the live environment and re-exports the captured values',
   ],
-  [
-    'theia/extensions/backend-opencode/src/node/opencode-bridge-env.ts',
-    'builds the forwarded opencode child environment for ordinary values (PATH, HOME, ...) and EXCLUDES the prefixed keys; its own secret comes from the captured map, never from the live environment',
-  ],
 ]);
 
 // Any member or index access on the Node process environment object.

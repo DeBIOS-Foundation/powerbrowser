@@ -4557,7 +4557,7 @@ run_own_checks() {
     # environment directly finds nothing and fails SILENTLY -- GUI-DEFECTS item
     # 9, guarded until now by a comment in tab-query-service.ts, and a comment
     # is not a check. Two derived assertions: the set of backend files touching
-    # the live environment at all equals a two-entry allowlist each carrying its
+    # the live environment at all equals a one-entry allowlist carrying its
     # reason (red on an ungated new reader AND on a stale entry), and the set
     # reading a prefixed key straight off it is empty. The prefix is derived
     # from the capture loop itself, so the rebrand cannot leave the gate
