@@ -443,8 +443,9 @@ Run `node scripts/generate.mjs` before `./mach configure`: `generated/` is gitig
 build, see D-11/D-12) took 3224s (~54 minutes) wall time on 16 cores /
 62 GB RAM, peaking at 14 G of `objdir/`. Expect similar order-of-magnitude
 numbers; do not be surprised if a first-time contributor's build takes an
-hour. The resulting binary reports **`DeBIOS powerbrowser 153.5.0esr`** via
-`./mach run --version` — `--version` concatenates `MOZ_APP_VENDOR` with the
+hour. That measured build predates 153.5. At the current pin the binary
+reports **`DeBIOS powerbrowser 153.5.0esr`** via `./mach run --version`
+(observed in 18-02 and 18-03, both objdirs) — `--version` concatenates `MOZ_APP_VENDOR` with the
 app **basename** (`MOZ_APP_NAME`, the fixed lowercase platform name), not
 with the display name, so `PowerBrowser` correctly does **not** appear
 here. The display name is asserted on its own surfaces
