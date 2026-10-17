@@ -216,6 +216,17 @@ function main() {
     console.log(`${NAME}: PASS -- ${painted} painted strings equal the ${new Set(contract.map(normaliseSlots)).size} literals of the 15-UI-SPEC Copywriting Contract; ${retired.length} retired literals absent; no internals in copy`);
 }
 
+/** A planted edit: `from` replaced by `to`, or `to` appended when `from` is null. */
+function swap(from, to) {
+    return {
+        apply: text => (from === null ? `${text}\n${to}\n` : text.replace(from, to)),
+        // The planted form must be present (or, for a deletion, the anchor gone).
+        landed: (before, after) => after !== before && (to ? after.includes(to) : !(typeof from === 'string' ? after.includes(from) : from.test(after))),
+    };
+}
+
+const matches = (line, m) => (typeof m === 'string' ? line.includes(m) : m.test(line));
+
 function selfTest() {
     const real = readSources();
     const baseline = [...checkStatic(real)];
@@ -225,79 +236,53 @@ function selfTest() {
         process.exit(1);
     }
     console.log(`${NAME} --self-test: unmodified tree green, planting faults`);
+
+    const DESCRIPTORS_REL = `${MODES_BROWSER_REL}/mode-descriptors.ts`;
+    // `expect` is a list of groups; each group must be matched in full by one failure line.
+    const plants = [
+        { id: 'label drift', file: COMMANDS_REL, ...swap("label: 'New Group'", "label: 'New group'"),
+            expect: [[/unreviewed copy/, '"New group"']] },
+        { id: 'Expand removed', file: WIDGET_REL, ...swap(/^[ \t]*expander\.textContent = 'Expand';\n/m, ''),
+            expect: [[/are GONE/, '"Expand"']] },
+        { id: 'placeholder revival', file: WIDGET_REL, ...swap(null, "hint.textContent = 'Organising arrives next';"),
+            expect: [[/retired copy/, '"Organising arrives next"', WIDGET_REL]] },
+        { id: 'unscanned-file revival', file: DESCRIPTORS_REL, ...swap(null, "hint.textContent = 'Back to Browsing';"),
+            expect: [[/retired copy/, '"Back to Browsing"', DESCRIPTORS_REL]] },
+        { id: 'spec Done row deleted', file: SPEC_REL, ...swap(/^\|[^\n]*\*\*"Done"\*\*[^\n]*\n/m, ''),
+            expect: [[/unreviewed copy/, '"Done"']] },
+        { id: 'spec Retry reworded', file: SPEC_REL, ...swap('**"Retry"**', '**"Try again"**'),
+            expect: [[/unreviewed copy/, '"Retry"'], [/are GONE/, '"Try again"']] },
+        { id: 'spec heading stripped', file: SPEC_REL, ...swap(/^## Copywriting Contract$/m, '## Copy Contract'),
+            expect: [[/ZERO contracted literals/, SPEC_REL]] },
+        { id: 'retired caption revived', file: WIDGET_REL, ...swap(null, "caption.textContent = 'No ungrouped tabs \u2014 drag a tab here to ungroup it.';"),
+            expect: [[/retired copy/, '"No ungrouped tabs \u2014 drag a tab here to ungroup it."', WIDGET_REL]] },
+        { id: 'Retired copy heading stripped', file: SPEC_REL, ...swap(/^### Retired copy$/m, '### Retired strings'),
+            expect: [[/ZERO retired literals/, SPEC_REL]] },
+    ];
+
     let failed = 0;
-
-    // Plant 1: label drift must go red naming the drift.
-    {
-        const mutated = { ...real, [COMMANDS_REL]: real[COMMANDS_REL].replace("label: 'New Group'", "label: 'New group'") };
-        const landed = mutated[COMMANDS_REL].includes("label: 'New group'");
-        const result = checkStatic(mutated);
-        if (!landed) {
-            console.error(`${NAME} --self-test: FAIL -- 'label drift' plant did not land`);
+    for (const plant of plants) {
+        const before = real[plant.file] ?? '';
+        const after = plant.apply(before);
+        if (!plant.landed(before, after)) {
+            console.error(`${NAME} --self-test: FAIL -- plant '${plant.id}': anchor drifted in ${plant.file}, so the plant did not land`);
             failed += 1;
-        } else if (!result.some(f => /New group/.test(f))) {
-            console.error(`${NAME} --self-test: FAIL -- 'label drift' did not go red naming 'New group'; got: ${result.join(' | ') || '(no failures at all)'}`);
-            failed += 1;
-        } else {
-            console.log(`  ok  label drift -> red, naming 'New group'`);
+            continue;
         }
-    }
-
-    // Plant 2: a removed string must go red naming the drift.
-    {
-        const needle = "caption.textContent = 'No ungrouped tabs";
-        const mutated = { ...real, [WIDGET_REL]: real[WIDGET_REL].replace(`${needle} \u2014 drag a tab here to ungroup it.';`, '') };
-        const landed = !mutated[WIDGET_REL].includes('No ungrouped tabs');
-        const result = checkStatic(mutated);
-        if (!landed) {
-            console.error(`${NAME} --self-test: FAIL -- 'removed string' plant did not land`);
-            failed += 1;
-        } else if (!result.some(f => /No ungrouped tabs/.test(f))) {
-            console.error(`${NAME} --self-test: FAIL -- 'removed string' did not go red naming the caption; got: ${result.join(' | ') || '(no failures at all)'}`);
+        const result = checkStatic({ ...real, [plant.file]: after });
+        const hits = plant.expect.map(group => result.find(line => group.every(m => matches(line, m))));
+        if (hits.some(h => !h)) {
+            console.error(`${NAME} --self-test: FAIL -- plant '${plant.id}' did not go red naming the drift; got: ${result.join(' | ') || '(no failures at all)'}`);
             failed += 1;
         } else {
-            console.log(`  ok  removed string -> red, naming the caption`);
-        }
-    }
-
-    // Plant 3: a reintroduced placeholder line must go red naming the drift.
-    {
-        const mutated = { ...real, [WIDGET_REL]: `${real[WIDGET_REL]}\nhint.textContent = 'Organising arrives next';\n` };
-        const landed = mutated[WIDGET_REL].includes('Organising arrives next');
-        const result = checkStatic(mutated);
-        if (!landed) {
-            console.error(`${NAME} --self-test: FAIL -- 'reintroduced placeholder' plant did not land`);
-            failed += 1;
-        } else if (!result.some(f => /Organising arrives next/.test(f))) {
-            console.error(`${NAME} --self-test: FAIL -- 'reintroduced placeholder' did not go red naming the placeholder; got: ${result.join(' | ') || '(no failures at all)'}`);
-            failed += 1;
-        } else {
-            console.log(`  ok  reintroduced placeholder -> red, naming the placeholder`);
-        }
-    }
-
-    // Plant 4 (WR-05b): retired copy revived in a previously-unscanned file
-    // must go red naming the file.
-    {
-        const OTHER_REL = `${MODES_BROWSER_REL}/mode-descriptors.ts`;
-        const mutated = { ...real, [OTHER_REL]: `${real[OTHER_REL]}\nhint.textContent = 'Back to Browsing';\n` };
-        const landed = mutated[OTHER_REL].includes('Back to Browsing');
-        const result = checkStatic(mutated);
-        if (!landed) {
-            console.error(`${NAME} --self-test: FAIL -- 'unscanned-file placeholder' plant did not land`);
-            failed += 1;
-        } else if (!result.some(f => /Back to Browsing/.test(f) && new RegExp(OTHER_REL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(f))) {
-            console.error(`${NAME} --self-test: FAIL -- 'unscanned-file placeholder' did not go red naming the file; got: ${result.join(' | ') || '(no failures at all)'}`);
-            failed += 1;
-        } else {
-            console.log(`  ok  unscanned-file placeholder -> red, naming the file`);
+            console.log(`  ok  ${plant.id} -> ${hits.join(' | ')}`);
         }
     }
 
     if (failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all four fault directions went red naming the drift`);
+    console.log(`${NAME} --self-test: PASS -- ${plants.length} planted faults went red naming the drift`);
 }
 
 if (process.argv.includes('--self-test')) {
