@@ -4553,6 +4553,14 @@ run_own_checks() {
     # (surplus tab, getting-started, startup editor, telemetry copy, boot errors). Honestly
     # --quick: text reads of the tree and pure comparisons, no build, browser or network.
     "first-boot-surface-self-test|node $REPO_ROOT/scripts/verify-first-boot-surface.mjs --self-test"
+    # NEW (Phase 19, UPD-08): exactly one installed copy each of react, react-dom,
+    # @types/react, @types/react-dom and inversify under theia/, walked without following
+    # symlinks. An absent theia/node_modules is a FAIL, not a skip; CI installs before
+    # --quick. Honestly --quick: text reads of installed manifests only, no build, browser,
+    # display or network. The self-test plants a nested and a symlinked duplicate, a
+    # missing package and an absent install in mkdtemp trees.
+    "single-copy-deps|node $REPO_ROOT/scripts/verify-single-copy-deps.mjs"
+    "single-copy-deps-self-test|node $REPO_ROOT/scripts/verify-single-copy-deps.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
