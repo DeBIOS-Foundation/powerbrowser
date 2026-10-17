@@ -175,7 +175,36 @@ Plans:
   4. `@powerbrowser/branding` contains neither D-22 override, and the 12 `@theia/ai-*` packages are composed at 1.76.0 and unmodified
   5. The NG-082 amend and Chris's telemetry decision are recorded, and `quick-baseline.txt` is refreshed
 
-**Plans**: TBD
+**Plans**: 7 plans (checks first, then the three locked commits, then live proof and the ledger close; sequential, one fix at a time)
+
+Plans:
+**Wave 1**
+
+- [ ] 19-01-PLAN.md — tracer: live first-boot surface check (fresh and carried-over modes, self-test), carried-over fixture captured on the pristine tree, both modes green at baseline
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 19-02-PLAN.md — single-copy `--quick` row (UPD-08), the NG-086 check file, gui07 upstream-perspective accounting
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 19-03-PLAN.md — commit 1: Node 24 (`flake.nix` only), drivelist rebuilt, live start
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 19-04-PLAN.md — package-legitimacy checkpoint (blocking-human), commit 2: React 19.2.8 at 1.74.1, frozen reinstall, live N1/N2/N4
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 19-05-PLAN.md — NG-082 removal precondition (Chris), NG-086 added and recorded red, commit 3: Theia 1.76.0 with RM-02, startup-editor default and telemetry `initSchema`
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 19-06-PLAN.md — frozen reinstall, first boot both modes, visual backstops, full run with owned FAIL set, R33 baseline, docs
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 19-07-PLAN.md — NG-086 closed with evidence; Chris's re-lock and telemetry acknowledgement (blocking-human)
 
 ### Phase 20: Non-GUI Gaps
 
