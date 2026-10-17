@@ -1,5 +1,5 @@
 {
-  "ledger_version": 378,
+  "ledger_version": 390,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -1117,6 +1117,32 @@
       "evidence": "2700e4c (commit 3): ng086-theia-react-node PASS after its recorded red; diff-theia-core, first-boot-surface fresh and carried, side02-token-negative and -positive PASS in the full run at dfef881; .planning/phases/19-node-24-react-19-theia-1-76-0/19-FAILSET-1.76.txt holds owned reds only",
       "owner": "",
       "phase": "19",
+      "deferred_at": "",
+      "reason": ""
+    },
+    {
+      "id": "NG-087",
+      "text": "A tab placed loose on the Panorama canvas keeps its position across a quit and relaunch (tab store schema v3, x and y): a Theia tab stays placed, and an in-shell web tab's row keeps its position as closed-tab history and brings it back when the tab is reopened. Evidence: v3 landed in 7b7a1f7 with no ledger row; NG-007 covers non-web tabs only.",
+      "status": "done",
+      "spec_ref": ".planning/REQUIREMENTS.md PLAT-03",
+      "test_ref": "scripts/verify-ng-087-loose-position-across-restart.mjs::ng087-loose-position-across-restart",
+      "code_ref": "powerbrowser/shell/PowerBrowserAPI.sys.mjs TAB_POSITION_V3_DDL, migrateTabStoreToV3, setTabPosition, closeEndedWebRows",
+      "evidence": "b3e8883: ng087-loose-position-across-restart PASS at head; red recorded against b9412fa (pre-v3 writer refuses setTabPosition)",
+      "owner": "",
+      "phase": "20",
+      "deferred_at": "",
+      "reason": ""
+    },
+    {
+      "id": "NG-088",
+      "text": "A group's card order set by hand survives a quit and relaunch, and the reader returns the group's tabs in that order (tab store schema v4, ord). Evidence: v4 landed in 7b7a1f7 with no ledger row; NG-002 covers ord across a navigation only, NG-015 across a migration only.",
+      "status": "done",
+      "spec_ref": ".planning/REQUIREMENTS.md PLAT-03",
+      "test_ref": "scripts/verify-ng-088-group-order-across-restart.mjs::ng088-group-order-across-restart",
+      "code_ref": "powerbrowser/shell/PowerBrowserAPI.sys.mjs TAB_ORDER_V4_DDL, migrateTabStoreToV4, setGroupOrder; theia/extensions/tab-uris/src/node/tab-query-service.ts getGroupTabs",
+      "evidence": "b3e8883: ng088-group-order-across-restart PASS at head; red recorded against b9412fa (pre-v3 writer refuses setGroupOrder)",
+      "owner": "",
+      "phase": "20",
       "deferred_at": "",
       "reason": ""
     }
