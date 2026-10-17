@@ -806,8 +806,10 @@ at 153.5. A `mar-update-hop` PASS re-verifies that recorded evidence and is not
 a 153.5 proof. A re-run needs an N-plus-1 above the current N, and
 `powerbrowser/packaging/version-nplus1/` still carries 153.1.1 (backlog 999.2).
 
-Prerequisites: the task-1 rebuilt tree is version N
-(`objdir/dist/bin/application.ini`: `Version=153.1.0`); the N-plus-1
+Prerequisites: the task-1 rebuilt tree is version N (at the recorded 08-04
+hop, `objdir/dist/bin/application.ini` read `Version=153.1.0`; the current
+tree reads `Version=153.5.0`, so `version-nplus1/` must be bumped above it
+first, backlog 999.2); the N-plus-1
 sources are `powerbrowser/packaging/version-nplus1/` (test-only fork
 version `153.1.1` / `153.1.1esr` — NOT an upstream ESR tag; the file
 shapes match `upstream/browser/config/version*.txt` byte for byte except
