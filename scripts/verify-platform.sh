@@ -4678,7 +4678,9 @@ run_own_checks() {
       # NEW (01-04): the Gecko smoke script. On an already-built tree its
       # `./mach build` is an incremental no-op and what it actually asserts is
       # post-build -- that the build never invoked `mach bootstrap` (D-18) and
-      # that `./mach run --version` reports the pinned ESR version.
+      # that `./mach run --version` reports the version in upstream/'s
+      # version_display.txt. Before the build it runs fetch-upstream.sh, which
+      # fails unless upstream/ HEAD is the pinned tag's commit.
       "smoke-firefox|bash $REPO_ROOT/scripts/smoke-firefox.sh"
       "verify-endpoints|bash $REPO_ROOT/scripts/verify-endpoints.sh"
       "verify-endpoints-interrupt-self-test|bash $REPO_ROOT/scripts/verify-endpoints.sh --interrupt-self-test"

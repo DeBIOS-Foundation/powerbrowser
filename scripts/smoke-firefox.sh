@@ -21,6 +21,16 @@ if [ ! -f "$MOZCONFIG_FILE" ]; then
   exit 1
 fi
 
+# The version below is derived from upstream/, so first prove upstream/ is the
+# pin: fetch-upstream.sh makes no network call when upstream/ exists, compares
+# HEAD with the pinned tag's commit and runs the dirt classifier. TAG is unset
+# so an exported rebase target cannot stand in for the pin. Its FAIL lines go
+# to stderr and stay visible.
+if ! env -u TAG "$REPO_ROOT/scripts/fetch-upstream.sh" >/dev/null; then
+  echo "smoke-firefox: FAIL -- upstream/ is not at the pinned ESR tag (see fetch-upstream output above)" >&2
+  exit 1
+fi
+
 # Derive the expected version from the tree, never a hand-kept literal. Read it
 # before the build so a missing file fails before a long compile; an empty value
 # must fail too, because a fixed-string grep for '' matches everything.
