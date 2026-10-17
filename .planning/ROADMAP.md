@@ -113,19 +113,23 @@ live UAT itself).
   3. On a working tree with the ignored leftovers removed (`lib/`, the workspace symlink, `generated/ai-backend.json`), `yarn install --frozen-lockfile` passes on the committed lockfile, which no longer contains `@agentclientprotocol/sdk`, and `scripts/verify-platform.sh --quick` shows no FAIL row beyond the four `gui08` rows; `quick-baseline.txt` is refreshed
   4. The NG-051 amend is in the ledger with Chris's approval, recorded before the removal commit; no live planning record lists AI-01..05 as a requirement; the 12 `@theia/ai-*` packages are still composed
 
-**Plans**: 1/4 plans executed (split by removal set to stay under `size-gate.py`; sequential, one fix at a time)
+**Plans**: 2/4 plans executed (split by removal set to stay under `size-gate.py`; sequential, one fix at a time)
 
 Plans:
 **Wave 1**
+
 - [x] 17-01-PLAN.md — tracer: workspace set (adapter directory, `build:extensions` clause, env-allowlist entry, regenerated lock); frozen install on a fresh manifest copy
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 17-02-PLAN.md — registry and manifest sets in one commit (the removal SHA): four scripts, registry rows, `[ai]`, schema key, emitter, REBRANDING section; 53 targets
+
+- [x] 17-02-PLAN.md — registry and manifest sets in one commit (the removal SHA): four scripts, registry rows, `[ai]`, schema key, emitter, REBRANDING section; 53 targets
 
 **Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 17-03-PLAN.md — live planning records: codebase map, the roadmap's NG-051 sentence, superseded banners
 
 **Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 17-04-PLAN.md — R33 quick baseline from a measured run, full success-criteria sweep, then Chris's re-lock (blocking-human) and the ledger commit
 
 ### Phase 18: Firefox 153.5.0esr
@@ -144,12 +148,15 @@ Plans:
 
 Plans:
 **Wave 1**
+
 - [x] 18-01-PLAN.md — 153.1 full-run FAIL baseline before any change; fetch-upstream tag comment and `configuration.toml:104` corrected
 
 **Wave 2** *(blocked on Wave 1 completion)*
+
 - [x] 18-02-PLAN.md — tracer: pin `FIREFOX_153_5_0esr_BUILD1`, replay, clobbered dev build, tree-derived smoke version; package, docs and README
 
 **Wave 3** *(blocked on Wave 2 completion)*
+
 - [x] 18-03-PLAN.md — release build at 153.5; full run compared with the 153.1 baseline (criterion-4 reading)
 
 ### Phase 19: Node 24, React 19, Theia 1.76.0
@@ -267,7 +274,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 17. OpenCode Removal | 1/4 | In Progress | - |
+| 17. OpenCode Removal | 2/4 | In Progress|  |
 | 18. Firefox 153.5.0esr | 3/3 | Complete    | 2026-10-16 |
 | 19. Node 24, React 19, Theia 1.76.0 | 0/TBD | Not started | - |
 | 20. Non-GUI Gaps | 0/TBD | Not started | - |
