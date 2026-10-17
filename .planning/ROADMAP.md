@@ -222,7 +222,29 @@ Plans:
   4. `generate-check` is closed as not reproducible with the passing runs recorded (host shell and `.#theia`), or it is reproduced and fixed
   5. Every verify-script path into `.planning/phases/` resolves to its archived location, or the check fails naming the missing path
 
-**Plans**: TBD (also adds the `-purgecaches` line to `docs/BUILD.md`)
+**Plans**: 5 plans (sequential, one wave each; also adds the `-purgecaches` line to `docs/BUILD.md`)
+
+Plans:
+
+**Wave 1**
+
+- [ ] 20-01-PLAN.md — PLAT-04: generator concurrency reproduced and fixed (inkscape off the session bus; fixture harness never writes `generated/`), passing runs recorded in both shells before and after
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 20-02-PLAN.md — PLAT-05: derived `planning-paths` `--quick` row, five live-phase literals repointed to the archive with their fallbacks deleted
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 20-03-PLAN.md — PLAT-02: `group-channel` `--quick` row (D0-D6) and its 12-plant self-test; G-14.1.1-10 closed
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 20-04-PLAN.md — PLAT-03: NG-087 / NG-088 checks, Chris accepts the row texts (blocking-human), rows added, recorded red against `b9412fa`, closed
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 20-05-PLAN.md — PLAT-01: full-tier `theia-fresh-clone-build` row PASS at the final code HEAD with a 3-plant self-test; G-14.1.1-9 closed; `-purgecaches` in BUILD.md; Chris's re-lock (blocking-human)
 
 ### Phase 21: Panorama Spec and gui08 Checks
 
