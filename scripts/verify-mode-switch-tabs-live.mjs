@@ -48,13 +48,17 @@
  *     reports. Red on a mode in the tree that never registered AND on a
  *     perspective in the app that no source accounts for.
  *   - the registration sinks. There are TWO spellings and the second is the one
- *     that gets missed: `registerPerspective(` (modes-frontend-module.ts:41,
- *     mode-service.ts:413) and the `registerPerspectives` OVERRIDE at
- *     branding/src/browser/powerbrowser-ai-layout-contribution.ts:23, which is
- *     a no-op today and would be a whole extra mode tomorrow. Both are
- *     enumerated from the sources, and any literal id a sink registers must be
- *     one the live app registered -- a mode that reached the registry without
- *     reaching the exemption is exactly the hole this covers.
+ *     that gets missed: `registerPerspective(` and any `registerPerspectives(`
+ *     OVERRIDE of the PerspectiveContribution hook, in the extension sources
+ *     under theia/extensions/<ext>/src. An override is a sink whether or not it
+ *     registers anything today. Both are enumerated from the sources, and any
+ *     literal id a sink registers must be one the live app registered -- a mode
+ *     that reached the registry without reaching the exemption is exactly the
+ *     hole this covers.
+ *   - upstream registrations, accounted from the installed @theia/* libs
+ *     (upstreamPerspectiveIds), for the SURPLUS assertion only: a stock
+ *     perspective a composed package registers is accounted, and one that is
+ *     not composed never reads as a missing mode.
  *   - the seed widget and its area, from powerbrowser-welcome-contribution.ts.
  *     If that contribution ever stops declaring area 'main' the seed stops
  *     being a main-area tab, and the check fails as a broken instrument rather
@@ -92,8 +96,8 @@
  * `document`, no shell and no widget to observe in a bare Node tier, and on a
  * tree with no `objdir/` it fails at the binary's existence check rather than
  * degrading into a text scan. Register it in the full set, never the commit
- * gate. One clean run is roughly 30 seconds; `--self-test` boots five sessions
- * and takes a little over two minutes.
+ * gate. One clean run is roughly 30 seconds; `--self-test` boots six sessions
+ * and takes about three minutes.
  *
  * WHAT IT DOES NOT PROVE. It observes one profile, one boot and one walk. It
  * says nothing about a layout restored from a PREVIOUS session (the browser
@@ -127,6 +131,9 @@ const EXTENSIONS_REL = 'theia/extensions';
 
 /** Stock source, read never written: the 'default' perspective id is upstream's, not ours. */
 const STOCK_PERSPECTIVE_JS_REL = 'theia/node_modules/@theia/core/lib/browser/perspective-service.js';
+
+/** The self-test's planted perspective id; no source defines it, so it must read as surplus. */
+const UNACCOUNTED_PLANT_ID = 'unaccounted-plant';
 
 const HELP = `Usage: node scripts/${NAME}.mjs [--self-test]
 
@@ -205,6 +212,52 @@ function registrationSinks() {
     return sinks;
 }
 
+/**
+ * Perspective ids that installed upstream packages register, for the SURPLUS
+ * assertion only. Every browser-side lib JS file under
+ * theia/node_modules/@theia/<pkg>/lib/browser that calls `registerPerspective(`
+ * marks <pkg> as a registering package; the `*_PERSPECTIVE_ID = '...'` string
+ * constants that package's lib defines are the ids it can register. Stock's
+ * default id is excluded (derived on its own above). An upstream id registered
+ * by a literal rather than a constant is not accounted, so it reads as surplus:
+ * the derivation fails closed. Zero registering files is a broken instrument --
+ * stock's own perspective-service.js registers the default perspective.
+ */
+function upstreamPerspectiveIds(defaultId) {
+    const scopeRel = 'theia/node_modules/@theia';
+    const jsUnder = rel => {
+        const out = [];
+        const walk = r => {
+            for (const entry of readdirSync(join(REPO_ROOT, r), { withFileTypes: true })) {
+                const child = `${r}/${entry.name}`;
+                if (entry.isDirectory()) {
+                    if (entry.name !== 'node_modules') walk(child);
+                } else if (entry.name.endsWith('.js') && !entry.name.endsWith('.spec.js')) {
+                    out.push(child);
+                }
+            }
+        };
+        try { walk(rel); } catch { /* a package with no lib/ registers nothing */ }
+        return out;
+    };
+    const registering = [];
+    const ids = new Map(); // id -> the lib file that defines its constant
+    for (const pkg of readdirSync(join(REPO_ROOT, scopeRel)).sort()) {
+        const lib = `${scopeRel}/${pkg}/lib`;
+        const files = jsUnder(lib);
+        const callers = files.filter(rel => rel.startsWith(`${lib}/browser/`)
+            && /\bregisterPerspective\s*\(/.test(stripTs(read(rel))));
+        if (callers.length === 0) continue;
+        registering.push(...callers);
+        for (const rel of files) {
+            for (const m of stripTs(read(rel)).matchAll(/\b[A-Z][A-Z0-9_]*_PERSPECTIVE_ID\s*=\s*'([^']+)'/g)) {
+                if (m[1] !== defaultId && !ids.has(m[1])) ids.set(m[1], rel);
+            }
+        }
+    }
+    return { registering, ids };
+}
+
 function derive() {
     const failures = [];
     const shipped = [...read(DESCRIPTORS_REL).matchAll(/^\s*id:\s*'([^']+)'/gm)].map(m => m[1]);
@@ -241,7 +294,12 @@ function derive() {
         failures.push(`${EXTENSIONS_REL}: derived ZERO perspective registration sinks -- neither registerPerspective( nor a registerPerspectives( override was found anywhere, so the registry comparison below has no source of truth`);
     }
 
-    return { failures, shipped, defaultId, organisingWidgetId, activateCommandId, seedId, sinks };
+    const upstream = upstreamPerspectiveIds(defaultId);
+    if (upstream.registering.length === 0) {
+        failures.push(`theia/node_modules/@theia: derived ZERO upstream registerPerspective( callers -- stock's own perspective-service.js registers the default perspective, so the installed-lib walk is broken and upstream perspectives cannot be accounted`);
+    }
+
+    return { failures, shipped, defaultId, organisingWidgetId, activateCommandId, seedId, sinks, upstream };
 }
 
 function diff(actual, expected) {
@@ -283,7 +341,7 @@ function __getByName(container, name) {
 /**
  * The protocol, as one page-realm expression.
  *
- * `plant` is '' for the real check. The self-test passes one of four fault
+ * `plant` is '' for the real check. The self-test passes one of five fault
  * names; each is applied through the SAME code path the real run takes, so a
  * plant can only go red by the assertions actually working.
  */
@@ -294,6 +352,7 @@ function protocolExpression(derived, plant) {
         organisingWidgetId: derived.organisingWidgetId,
         activateCommandId: derived.activateCommandId,
         seedId: derived.seedId,
+        unaccountedId: UNACCOUNTED_PLANT_ID,
         plant,
     });
     return `(async () => { ${GET_BY_NAME}
@@ -326,6 +385,14 @@ function protocolExpression(derived, plant) {
         const widgetsIn = area => (area === 'main' ? shell.mainAreaTabBars : shell.bottomAreaTabBars)
             .flatMap(bar => Array.from(bar.titles).map(title => title.owner))
             .filter(widget => widget.id !== cfg.organisingWidgetId);
+
+        // --- plant (self-test only): a perspective no source accounts for,
+        // registered through the same live service before the ids are read.
+        // Its hooks are no-ops so only the surplus assertion can name it.
+        if (cfg.plant === 'unaccounted') {
+            persp.registerPerspective({ id: cfg.unaccountedId, label: 'Unaccounted Plant', onActivate: () => {}, onDeactivate: () => {} });
+            report.notes.push("PLANT unaccounted: perspective '" + cfg.unaccountedId + "' registered live");
+        }
 
         // --- registry derivation, compared set-equal against the tree ------
         const descriptors = persp.getRegisteredPerspectives();
@@ -517,12 +584,16 @@ function assertReport(derived, report) {
     }
     const failures = [...report.failures];
     const expectedIds = [derived.defaultId, ...derived.shipped, ...(report.customIds ?? [])];
-    const idDiff = diff(report.liveIds ?? [], expectedIds);
+    // Upstream ids widen the surplus side only: one that is not composed must never read as a missing mode.
+    const idDiff = {
+        surplus: diff(report.liveIds ?? [], [...expectedIds, ...derived.upstream.ids.keys()]).surplus,
+        missing: diff(report.liveIds ?? [], expectedIds).missing,
+    };
     if ((report.liveIds ?? []).length === 0) {
         failures.push('the live frontend registered ZERO perspectives -- the walk had nothing to switch between, so a clean result would be green-by-empty-set');
     }
     if (idDiff.surplus.length) {
-        failures.push(`the live frontend registered perspective(s) no source accounts for: ${idDiff.surplus.join(', ')} -- a mode registered outside ${DESCRIPTORS_REL} and outside the custom-mode store, which the main-area exemption may never have chained`);
+        failures.push(`the live frontend registered perspective(s) no source accounts for: ${idDiff.surplus.join(', ')} -- a mode registered outside ${DESCRIPTORS_REL}, the custom-mode store and the installed @theia libs, which the main-area exemption may never have chained`);
     }
     if (idDiff.missing.length) {
         failures.push(`mode id(s) declared in ${DESCRIPTORS_REL} never reached the live registry: ${idDiff.missing.join(', ')}`);
@@ -566,6 +637,7 @@ async function main() {
         return 1;
     }
     console.log(`${NAME}: derived modes [${derived.shipped.join(', ')}] + stock '${derived.defaultId}'; seed '${derived.seedId}'; registration sinks: ${derived.sinks.map(s => s.rel).join(', ')}`);
+    console.log(`${NAME}: upstream perspective ids (surplus accounting only): ${[...derived.upstream.ids].map(([id, rel]) => `'${id}' from ${rel}`).join(', ') || '(none)'}; upstream registerPerspective( callers: ${derived.upstream.registering.join(', ')}`);
 
     const report = await runProtocol(derived, '');
     printReport(report);
@@ -628,6 +700,13 @@ async function selfTest() {
             plant: 'surplus',
             expect: 'APPEARED',
         },
+        {
+            // Proves the upstream accounting did not widen the surplus
+            // assertion into one that cannot fire.
+            name: 'unaccounted perspective',
+            plant: 'unaccounted',
+            expect: `no source accounts for: ${UNACCOUNTED_PLANT_ID} `,
+        },
     ];
 
     let failed = 0;
@@ -673,7 +752,7 @@ async function selfTest() {
         console.error(`${NAME} --self-test: FAIL -- ${failed} case(s) did not behave as required`);
         return 1;
     }
-    console.log(`${NAME} --self-test: PASS -- the clean control is green and all four planted faults went red`);
+    console.log(`${NAME} --self-test: PASS -- the clean control is green and all ${cases.length - 1} planted faults went red`);
     return 0;
 }
 
