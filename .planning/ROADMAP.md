@@ -114,7 +114,7 @@ live UAT itself).
   3. On a working tree with the ignored leftovers removed (`lib/`, the workspace symlink, `generated/ai-backend.json`), `yarn install --frozen-lockfile` passes on the committed lockfile, which no longer contains `@agentclientprotocol/sdk`, and `scripts/verify-platform.sh --quick` shows no FAIL row beyond the four `gui08` rows; `quick-baseline.txt` is refreshed
   4. The NG-051 amend is in the ledger with Chris's approval, recorded before the removal commit; no live planning record lists AI-01..05 as a requirement; the 12 `@theia/ai-*` packages are still composed
 
-**Plans**: 2/4 plans executed (split by removal set to stay under `size-gate.py`; sequential, one fix at a time)
+**Plans**: 3/4 plans executed (split by removal set to stay under `size-gate.py`; sequential, one fix at a time)
 
 Plans:
 **Wave 1**
@@ -127,7 +127,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 17-03-PLAN.md — live planning records: codebase map, the roadmap's NG-051 sentence, superseded banners
+- [x] 17-03-PLAN.md — live planning records: codebase map, the roadmap's NG-051 sentence, superseded banners
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -275,7 +275,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 17. OpenCode Removal | 2/4 | In Progress|  |
+| 17. OpenCode Removal | 3/4 | In Progress|  |
 | 18. Firefox 153.5.0esr | 3/3 | Complete    | 2026-10-16 |
 | 19. Node 24, React 19, Theia 1.76.0 | 0/TBD | Not started | - |
 | 20. Non-GUI Gaps | 0/TBD | Not started | - |

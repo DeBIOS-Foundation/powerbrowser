@@ -1,20 +1,20 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Platform Updates and GUI Close-out
 current_phase: 17
 current_phase_name: OpenCode Removal
 status: executing
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-10-17T06:10:55.144Z"
+stopped_at: Completed 17-03-PLAN.md
+last_updated: "2026-10-17T06:14:19.091Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 17 execution started
-state_head: 02fffb6210fda013fe22c0794c3bad92b1daa2c5
+state_head: e4c5079e6b87d12632faff1fd19c19c01230b144
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 11
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-16)
 ## Current Position
 
 Phase: 17 (OpenCode Removal) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-10-16 — Phase 17 execution started
 
@@ -138,6 +138,7 @@ Last activity: 2026-10-16 — Phase 17 execution started
 | Phase 18 P03 | 90min | 2 tasks | 2 files |
 | Phase 17 P01 | 2h13m | 2 tasks | 5 files |
 | Phase 17 P02 | 2min | 2 tasks | 12 files |
+| Phase 17 P03 | 6min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -357,6 +358,7 @@ Recent decisions affecting current work:
 - [Phase 18]: mar-update-hop PASS at 153.5 re-verifies pre-153.5 evidence (hop N 153.1.0 vs built 153.5.0); re-run belongs to 999.2
 - [Phase 17]: 17-01: RM-01 stays open after the workspace slice; plans 02-04 carry the remaining removal surface
 - [Phase 17]: 17-02: Sets R and M landed as one removal commit 02fffb6 (deleted scripts imported emitAiBackend); phase-gate locked-check-missing for the 051 file is the expected red until plan 04 re-lock
+- [Phase 17]: 17-03: STACK.md keeps its opencode.json line because the file is Chris's CLI config and still exists
 
 ### Pending Todos
 
@@ -456,8 +458,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T06:10:55.107Z
-Stopped at: Completed 17-02-PLAN.md
+Last session: 2026-10-17T06:14:19.030Z
+Stopped at: Completed 17-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
