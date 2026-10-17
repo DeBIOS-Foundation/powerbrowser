@@ -234,9 +234,27 @@ function checkChannel(sources) {
     }
 
     // D3, D4, D6 over every frontend source.
+    // Every `export const X = '<value>'` in the frontend, so an imported X counts as that name.
+    // shortcut: matched by exported identifier, not by resolving the import path.
+    const exported = new Map();
+    for (const [, text] of frontend) {
+        for (const m of text.matchAll(/\bexport\s+const\s+([\w$]+)\s*=\s*(['"`])([^'"`]*)\2/g)) {
+            if (!exported.has(m[1])) exported.set(m[1], new Set());
+            exported.get(m[1]).add(m[3]);
+        }
+    }
     let sites = 0;
     let files = 0;
     for (const [file, text] of frontend) {
+        // Local names this file imports, as [imported identifier, local alias].
+        const imports = [];
+        for (const m of text.matchAll(/\bimport\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"][^'"]+['"]/g)) {
+            for (const spec of m[1].split(',')) {
+                const parts = spec.trim().replace(/^type\s+/, '').split(/\s+as\s+/);
+                if (parts[0]) imports.push([parts[0], (parts[1] || parts[0]).trim()]);
+            }
+        }
+        const importedAs = name => imports.filter(([id]) => exported.get(id)?.has(name)).map(([, local]) => local);
         // D3: every prefixed literal is a DOM name the child uses.
         for (const lit of derive(text, new RegExp(`(['"\`]${prefix}[\\w$]*['"\`])`, 'g'))) {
             const value = lit.slice(1, -1);
@@ -251,11 +269,14 @@ function checkChannel(sources) {
         const bindingCache = new Map();
         function bindings(name) {
             if (!bindingCache.has(name)) {
-                bindingCache.set(name, new Set(derive(text, new RegExp(`\\bconst\\s+([\\w$]+)\\s*=\\s*(['"\`])${name}\\2`, 'g'))));
+                bindingCache.set(name, new Set([
+                    ...derive(text, new RegExp(`\\bconst\\s+([\\w$]+)\\s*=\\s*(['"\`])${name}\\2`, 'g')),
+                    ...importedAs(name),
+                ]));
             }
             return bindingCache.get(name);
         }
-        const namesRequest = new RegExp(`(['"\`])${request}\\1`).test(text);
+        const namesRequest = new RegExp(`(['"\`])${request}\\1`).test(text) || importedAs(request).length > 0;
 
         // D4: every request CustomEvent bubbles and reaches document.dispatchEvent.
         let fileSites = 0;
@@ -391,6 +412,14 @@ const PLANTS = [
         from: 'document.dispatchEvent(new CustomEvent(GROUP_REQUEST_EVENT, { bubbles: true, detail: { requestId, msg } }));',
         to: "const accept = 'image/*'; window.dispatchEvent(new CustomEvent(GROUP_REQUEST_EVENT, { bubbles: true, detail: { requestId, msg } })); /* end */",
         expect: ['chrome-store-client.ts', 'not document.dispatchEvent'] },
+    { id: '14 imported request name dispatched on window', file: 'theia/extensions/modes/src/browser/planted-import.ts',
+        add: "import { GROUP_REQUEST_EVENT } from './group-actor-client';\n"
+            + 'export function send(): void { window.dispatchEvent(new CustomEvent(GROUP_REQUEST_EVENT, {})); }\n',
+        expect: ['planted-import.ts', 'not document.dispatchEvent'] },
+    { id: '15 imported response name listened on document', file: 'theia/extensions/modes/src/browser/planted-import.ts',
+        add: "import { GROUP_RESPONSE_EVENT as RESPONSE } from './group-actor-client';\n"
+            + 'export function listen(f: EventListener): void { document.addEventListener(RESPONSE, f); }\n',
+        expect: ['planted-import.ts', 'D6 response listener'] },
 ];
 
 function selfTest() {
@@ -404,7 +433,9 @@ function selfTest() {
     let bad = 0;
     for (const plant of PLANTS) {
         const original = sources.get(plant.file);
-        const planted = original === undefined ? undefined : original.replace(plant.from, plant.to);
+        // An `add` plant is a new in-memory file; it must not already exist.
+        const planted = plant.add !== undefined ? (original === undefined ? plant.add : undefined)
+            : original === undefined ? undefined : original.replace(plant.from, plant.to);
         if (planted === undefined || planted === original) {
             console.error(`${NAME}-self-test: FAIL -- plant ${plant.id}: anchor drifted in ${plant.file}, nothing was planted`);
             bad += 1;
