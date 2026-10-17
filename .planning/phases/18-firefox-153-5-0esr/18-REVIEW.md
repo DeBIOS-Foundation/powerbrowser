@@ -2,7 +2,7 @@
 phase: 18-firefox-153-5-0esr
 reviewed: 2026-10-16T00:00:00Z
 depth: standard
-files_reviewed: 6
+files_reviewed: 7
 files_reviewed_list:
   - .github/workflows/rebase-upstream.yml
   - README.md
@@ -10,12 +10,14 @@ files_reviewed_list:
   - docs/BUILD.md
   - scripts/fetch-upstream.sh
   - scripts/smoke-firefox.sh
+  - scripts/verify-platform.sh
 findings:
   critical: 0
-  warning: 5
-  info: 4
-  total: 9
-status: issues_found
+  warning: 0
+  info: 5
+  total: 5
+status: clean
+iteration: 2
 ---
 
 # Phase 18: Code Review Report
@@ -160,3 +162,31 @@ If the mirror re-points `_BUILD1`, a fresh clone gets the new commit and every g
 _Reviewed: 2026-10-16_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+## Iteration 2
+
+**Re-reviewed:** 2026-10-16. Scope: fix commits 01d92d4, 8075360, 657657b, de37088 and 2e810ea, from `git show <sha>`. After the fixes, `bash -n` is clean on smoke-firefox.sh and verify-platform.sh, `verify-upstream-pins` PASS, and `scan-brand-residue` PASS (365 files).
+
+| Finding | Verdict | Evidence |
+|---|---|---|
+| WR-01 | resolved | 01d92d4 adds `env -u TAG "$REPO_ROOT/scripts/fetch-upstream.sh" >/dev/null` after the `upstream/` and `.mozconfig` existence checks. Because `upstream/` is proven to exist first, the precheck can never start a clone. On the real built tree it exits 0 in 0.8 s and leaves `git status` unchanged. I tested it on a scratch fixture with a copied `fetch-upstream.sh` and `smoke-firefox.sh` and a two-tag repo. HEAD at T1 with the fragment pinned to T2 and `TAG=T1` exported gives FAIL exit 1, which proves `env -u TAG` ignores an exported rebase target. HEAD matching the pin passes the precheck. An absent fragment gives FAIL exit 1. FAIL lines reach stderr while stdout is discarded. The new registry comment at `verify-platform.sh:4681-4683` is accurate. |
+| WR-02 | resolved | 8075360 says the 3224 s build predates 153.5 and attaches the `153.5.0esr` output to 18-02 and 18-03. Both summaries record that output. |
+| WR-03 | resolved | 657657b gives `Version=153.1.0` as the value at the 08-04 hop, gives the current `153.5.0`, and states that `version-nplus1/` must be bumped first (999.2). |
+| WR-04 | resolved | de37088 says the first dispatch is expected to fail at generate, before the rebase. BUILD.md:47-49 now names `verify.yml` as the workflow that runs generate inside `nix develop .#theia`. That is confirmed at `verify.yml:67,70`, and `verify.yml:15-18` records that the bare runner had no inkscape. |
+| WR-05 | resolved | 2e810ea replaces "the commit SHA is the identity" with "the identity recorded at adoption, and no gate checks it", and names the tag-moved hazard. The doc now matches the mechanism. Enforcing the SHA in a gate remains an option and is not required. |
+| IN-01 to IN-04 | not addressed | These are Info items and were outside the fix loop. They stand as written. |
+
+### IN-05 (new): smoke-firefox gives one cause for three different precheck failures
+
+**File:** `scripts/smoke-firefox.sh:29-32`
+
+**Issue:** Any non-zero exit from `fetch-upstream.sh` prints "upstream/ is not at the pinned ESR tag". That precheck fails for three different reasons:
+- HEAD does not match the pinned tag.
+- `generated/upstream-pins.env` is absent (shown in the fixture run above).
+- The D-76 classifier finds dirt that no patch accounts for.
+
+In the second and third cases the summary line is wrong. The fetch-upstream line printed above it is correct, so the next step is still visible on screen.
+
+**Fix:** Change the summary line to say the precheck failed and point to the line above it, e.g. `smoke-firefox: FAIL -- upstream/ failed the fetch-upstream.sh pin and cleanliness check (reason above)`.
+
+**Remaining after iteration 2:** 0 critical, 0 warning, 5 info (IN-01 to IN-05). Status: clean.
