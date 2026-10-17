@@ -1,5 +1,5 @@
 {
-  "ledger_version": 371,
+  "ledger_version": 375,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -1104,6 +1104,19 @@
       "evidence": "8ba1963: ng-085-quit-closes-store passes in main",
       "owner": "",
       "phase": "",
+      "deferred_at": "",
+      "reason": ""
+    },
+    {
+      "id": "NG-086",
+      "text": "Theia is re-pinned to 1.76.0 with React 19.2.8 on Node 24 (UPD-07, UPD-08, UPD-09)",
+      "status": "open",
+      "spec_ref": ".planning/REQUIREMENTS.md UPD-07, UPD-08, UPD-09",
+      "test_ref": "scripts/verify-ng-086-theia-react-node.mjs::ng086-theia-react-node",
+      "code_ref": "configuration.toml [upstreams] theia_release",
+      "evidence": "",
+      "owner": "",
+      "phase": "19",
       "deferred_at": "",
       "reason": ""
     }
