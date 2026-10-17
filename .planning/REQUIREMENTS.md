@@ -12,7 +12,7 @@ Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
 
 ### Removal
 
-- [ ] **RM-01**: OpenCode is gone from the tree: `theia/extensions/backend-opencode`,
+- [x] **RM-01**: OpenCode is gone from the tree: `theia/extensions/backend-opencode`,
       the `[ai]` manifest key, its schema entry and generator emitter, the four
       OpenCode/NG-051 verify scripts, their registry rows, and the docs.
       `generate --check` reports 53 targets. AI-01..05 are removed from the
@@ -127,7 +127,7 @@ the project's own planning record.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RM-01 | Phase 17 | Pending |
+| RM-01 | Phase 17 | Complete |
 | RM-02 | Phase 19 | Pending |
 | UPD-05 | Phase 18 | Complete |
 | UPD-06 | Phase 18 | Complete |
