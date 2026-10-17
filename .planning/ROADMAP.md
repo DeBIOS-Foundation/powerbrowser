@@ -222,7 +222,7 @@ Plans:
   4. `generate-check` is closed as not reproducible with the passing runs recorded (host shell and `.#theia`), or it is reproduced and fixed
   5. Every verify-script path into `.planning/phases/` resolves to its archived location, or the check fails naming the missing path
 
-**Plans**: 3/5 plans executed (sequential, one wave each; also adds the `-purgecaches` line to `docs/BUILD.md`)
+**Plans**: 4/5 plans executed (sequential, one wave each; also adds the `-purgecaches` line to `docs/BUILD.md`)
 
 Plans:
 
@@ -240,7 +240,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 20-04-PLAN.md — PLAT-03: NG-087 / NG-088 checks, Chris accepts the row texts (blocking-human), rows added, recorded red against `b9412fa`, closed
+- [x] 20-04-PLAN.md — PLAT-03: NG-087 / NG-088 checks, Chris accepts the row texts (blocking-human), rows added, recorded red against `b9412fa`, closed
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -331,7 +331,7 @@ Plans:
 | 17. OpenCode Removal | 4/4 | Complete    | 2026-10-17 |
 | 18. Firefox 153.5.0esr | 3/3 | Complete    | 2026-10-16 |
 | 19. Node 24, React 19, Theia 1.76.0 | 8/8 | Complete    | 2026-10-17 |
-| 20. Non-GUI Gaps | 3/5 | In Progress | - |
+| 20. Non-GUI Gaps | 4/5 | In Progress | - |
 | 21. Panorama Spec and gui08 Checks | 0/TBD | Not started | - |
 | 22. Panorama Worklist | 0/TBD | Not started | - |
 | 23. Modes Leftovers and Sketch 005 Verdict | 0/TBD | Not started | - |
