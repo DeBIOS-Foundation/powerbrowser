@@ -4561,6 +4561,14 @@ run_own_checks() {
     # missing package and an absent install in mkdtemp trees.
     "single-copy-deps|node $REPO_ROOT/scripts/verify-single-copy-deps.mjs"
     "single-copy-deps-self-test|node $REPO_ROOT/scripts/verify-single-copy-deps.mjs --self-test"
+    # NEW (NG-086, Phase 19, UPD-07..UPD-09): the installed @theia/* closure equals
+    # configuration.toml's theia_release (monaco-editor-core excepted), the installed React
+    # packages satisfy @theia/core's peers, and flake.nix's Node major meets engines.node.
+    # Honestly --quick: text reads of manifests and installed package.json files only, no
+    # build, browser, display or network. Its demonstrated red is the record-fail taken
+    # with the manifest pin moved ahead of the install.
+    "ng086-theia-react-node|node $REPO_ROOT/scripts/verify-ng-086-theia-react-node.mjs"
+    "ng086-theia-react-node-self-test|node $REPO_ROOT/scripts/verify-ng-086-theia-react-node.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
