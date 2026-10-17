@@ -222,21 +222,21 @@ Plans:
   4. `generate-check` is closed as not reproducible with the passing runs recorded (host shell and `.#theia`), or it is reproduced and fixed
   5. Every verify-script path into `.planning/phases/` resolves to its archived location, or the check fails naming the missing path
 
-**Plans**: 5 plans (sequential, one wave each; also adds the `-purgecaches` line to `docs/BUILD.md`)
+**Plans**: 3/5 plans executed (sequential, one wave each; also adds the `-purgecaches` line to `docs/BUILD.md`)
 
 Plans:
 
 **Wave 1**
 
-- [ ] 20-01-PLAN.md — PLAT-04: generator concurrency reproduced and fixed (inkscape off the session bus; fixture harness never writes `generated/`), passing runs recorded in both shells before and after
+- [x] 20-01-PLAN.md — PLAT-04: generator concurrency reproduced and fixed (inkscape off the session bus; fixture harness never writes `generated/`), passing runs recorded in both shells before and after
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 20-02-PLAN.md — PLAT-05: derived `planning-paths` `--quick` row, five live-phase literals repointed to the archive with their fallbacks deleted
+- [x] 20-02-PLAN.md — PLAT-05: derived `planning-paths` `--quick` row, five live-phase literals repointed to the archive with their fallbacks deleted
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 20-03-PLAN.md — PLAT-02: `group-channel` `--quick` row (D0-D6) and its 12-plant self-test; G-14.1.1-10 closed
+- [x] 20-03-PLAN.md — PLAT-02: `group-channel` `--quick` row (D0-D6) and its 12-plant self-test; G-14.1.1-10 closed
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -331,7 +331,7 @@ Plans:
 | 17. OpenCode Removal | 4/4 | Complete    | 2026-10-17 |
 | 18. Firefox 153.5.0esr | 3/3 | Complete    | 2026-10-16 |
 | 19. Node 24, React 19, Theia 1.76.0 | 8/8 | Complete    | 2026-10-17 |
-| 20. Non-GUI Gaps | 0/TBD | Not started | - |
+| 20. Non-GUI Gaps | 3/5 | In Progress | - |
 | 21. Panorama Spec and gui08 Checks | 0/TBD | Not started | - |
 | 22. Panorama Worklist | 0/TBD | Not started | - |
 | 23. Modes Leftovers and Sketch 005 Verdict | 0/TBD | Not started | - |
