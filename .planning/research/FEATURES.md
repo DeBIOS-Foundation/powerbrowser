@@ -33,12 +33,15 @@ Evidence runs taken this session:
 - **Defined:** `.planning/milestones/v1.3-phases/14.1.1-gui-conformance-sweep/14.1.1-UAT.md:651-665`
   (truth: "`yarn build` in theia/ succeeds from a clean checkout"); carry-forward at
   `.../14.1.1-gui-conformance-sweep/deferred-items.md:44-64`.
-- **Current state:** `status: in_tree`. The order fix landed: `theia/package.json:69` builds
-  `token-gate` before `tab-uris`, and the `theia-build-order` and `theia-build-order-self-test`
-  quick rows PASS (8 chain entries, 6 edges). The literal clean build (`rm -rf
-  theia/extensions/*/lib && yarn build:extensions`) has never been run. The blocker is gone:
-  `git status --porcelain` shows no `theia/` changes, so the tree is quiet. The chain still ends
-  in `extensions/backend-opencode build`, so OpenCode removal changes the chain this test runs.
+- **Current state:** `status: fixed` (Phase 20 plan 20-05). The order fix landed:
+  `theia/package.json:69` builds `token-gate` before `tab-uris`, and the `theia-build-order` and
+  `theia-build-order-self-test` quick rows PASS. The chain has 7 entries and ends in
+  `extensions/chrome-bar build` (OpenCode and its `backend-opencode` entry were removed in
+  Phase 17), with 5 derived edges. The gap's suggested proof (`rm -rf theia/extensions/*/lib &&
+  yarn build:extensions`) is vacuous: under `composite`, `tsc -b` reads `tsconfig.tsbuildinfo`,
+  which sits outside `lib/`, and reports "up to date" over an empty `lib/`. The proof is the
+  full-tier `theia-fresh-clone-build` row, which runs CI's install-and-build step in a fresh
+  clone of HEAD, with `theia-fresh-clone-build-self-test` showing it red on three planted faults.
 - **Acceptance:** On a fresh `git clone` (or after deleting every `theia/extensions/*/lib`),
   `nix develop .#theia -c bash -c 'cd theia && yarn install --frozen-lockfile && yarn build'`
   exits 0, and the UAT entry flips to `fixed`, citing that run.

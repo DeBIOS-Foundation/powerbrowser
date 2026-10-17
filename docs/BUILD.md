@@ -510,6 +510,21 @@ fresh `bash scripts/fetch-upstream.sh` (exit 0) confirmed the tree returned to
 exactly the expected-dirt state `scripts/fetch-upstream.sh` accepts — no
 residual tier-1 edit.
 
+**Chrome-side JS needs a startup-cache purge, or the edit silently does not run.**
+Edits under `powerbrowser/shell/` (`*.js`, `*.sys.mjs`) reach `objdir/dist/bin`
+through symlinks, but Gecko's startup cache serves the previously compiled
+script: no error, no warning, the old code runs. After such an edit, launch with
+
+```sh
+rm -rf objdir/tmp/profile-default/startupCache
+MOZ_PURGE_CACHES=1 ./objdir/dist/bin/powerbrowser -purgecaches
+```
+
+Theia-side edits need a rebuild instead (`yarn build` in `theia/`). Observed
+2026-09-06 on `legion`, on the tree of the GUI-02 spike: an env-gated block
+added to `powerbrowser/shell/powerbrowser.js` printed nothing until the cache
+was purged.
+
 ### Tier 2 — `./mach build faster`
 
 For a **preprocessed frontend file** — one `moz.build` compiles via `PP_FILES`
