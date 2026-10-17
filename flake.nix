@@ -11,13 +11,14 @@
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
 
-      # D-16 / PITFALLS #7: one Node version for the whole sidecar toolchain.
-      # nixpkgs' `yarn` is built against the default nodejs (24.x) and its shebang
-      # hard-codes it, so yarn runs every lifecycle script and every node-gyp
-      # compile under Node 24 even when nodejs_22 is the shell's `node`. Native
-      # modules would then be built for MODULE_VERSION 137 and fail to load in the
-      # Node 22 backend. Override so yarn itself runs on the pinned Node.
-      nodejs = pkgs.nodejs_22;
+      # UPD-07 supersedes D-16's Node 22 pin; PITFALLS #7 still holds: one Node
+      # version serves the whole sidecar toolchain. nixpkgs' `yarn` is built
+      # against the default nodejs and its shebang hard-codes it, so without the
+      # override yarn would run every lifecycle script and every node-gyp compile
+      # under whatever Node the default is, not the shell's `node`, and native
+      # modules built for another MODULE_VERSION fail to load in the backend.
+      # Override so yarn itself, and every compile it drives, runs on the pinned Node.
+      nodejs = pkgs.nodejs_24;
       yarn = pkgs.yarn.override { inherit nodejs; };
     in
     {
@@ -53,8 +54,9 @@
             # drivelist ships no prebuild for 12.0.2, so its install script falls
             # through to `node-gyp rebuild` and the install aborts without one.
             # Use the node-gyp bundled with the pinned Node's npm rather than
-            # pkgs.node-gyp, which is built against the default nodejs (24.x) and
-            # would drag that Node back into the toolchain (D-16 / PITFALLS #7).
+            # pkgs.node-gyp, which is built against nixpkgs' default nodejs and would
+            # bring a second Node into the toolchain whenever that default is not
+            # the pinned one (PITFALLS #7).
             export PATH="${nodejs}/lib/node_modules/npm/bin/node-gyp-bin:$PATH"
             echo "PowerBrowser theia shell ready. Next: cd theia && yarn install && yarn build && yarn start" >&2
           '';
