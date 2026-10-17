@@ -11,8 +11,9 @@
 // list, so they are named here. Everything else is read off disk.
 //
 // WALK. Real directories only, with lstat, so no symlink is ever followed:
-// theia/node_modules, theia/applications/*/node_modules and
-// theia/extensions/*/node_modules, recursing into every <pkg>/node_modules
+// theia/node_modules and <group>/*/node_modules for every <group>/* pattern
+// in theia/package.json's `workspaces` field (a pattern of any other shape
+// is a FAIL, not a skip), recursing into every <pkg>/node_modules
 // and @scope/<pkg>/node_modules. The yarn workspace links
 // (node_modules/@powerbrowser/*, node_modules/powerbrowser-theia-browser-app)
 // are symlinks and are therefore never entered; following them would
@@ -26,7 +27,8 @@
 //
 // --self-test builds mkdtemp trees, one per case (clean control, nested
 // duplicate, missing @types/react-dom, absent node_modules, symlinked
-// duplicate), and requires each to give its stated result naming the package.
+// duplicate, duplicate under a third workspace group, unexpandable workspace
+// pattern), and requires each to give its stated result naming the package.
 // No tracked file is touched.
 
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -76,8 +78,14 @@ function judge(root) {
   }
   const found = new Map(TARGETS.map((n) => [n, []]));
   const starts = [top];
-  for (const group of ['applications', 'extensions']) {
-    const g = join(theia, group);
+  let ws;
+  try { ws = JSON.parse(readFileSync(join(theia, 'package.json'), 'utf8')).workspaces ?? []; } catch (e) {
+    return { ok: false, lines: [`${NAME}: FAIL -- cannot read the workspaces field of ${join(theia, 'package.json')}: ${e.message}`] };
+  }
+  for (const pat of (Array.isArray(ws) ? ws : ws.packages ?? [])) {
+    const m = /^([^*]+)\/\*$/.exec(pat);
+    if (!m) return { ok: false, lines: [`${NAME}: FAIL -- workspace pattern '${pat}' is not <dir>/*; the walk cannot expand it`] };
+    const g = join(theia, m[1]);
     if (!isRealDir(g)) continue;
     for (const member of readdirSync(g)) {
       const nm = join(g, member, 'node_modules');
@@ -109,10 +117,11 @@ function plantPackage(dir, name, version) {
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version }));
 }
 
-function cleanTree() {
+function cleanTree(workspaces = ['applications/*', 'extensions/*']) {
   const root = mkdtempSync(join(tmpdir(), 'single-copy-'));
   const nm = join(root, 'theia', 'node_modules');
   for (const n of TARGETS) plantPackage(join(nm, n), n, '1.0.0');
+  writeFileSync(join(root, 'theia', 'package.json'), JSON.stringify({ workspaces }));
   return root;
 }
 
@@ -159,6 +168,21 @@ function selfTest() {
         return root;
       },
       want: (r) => r.ok,
+    },
+    {
+      label: 'duplicate under a third workspace group',
+      build: () => {
+        const root = cleanTree(['applications/*', 'extensions/*', 'packages/*']);
+        plantPackage(join(root, 'theia', 'packages', 'p', 'node_modules', 'inversify'), 'inversify', '2.0.0');
+        return root;
+      },
+      want: (r) => !r.ok && r.lines.some((l) => l.includes('-- inversify: 2 ')
+        && l.includes(join('theia', 'packages', 'p', 'node_modules', 'inversify') + ' ')),
+    },
+    {
+      label: 'unexpandable workspace pattern',
+      build: () => cleanTree(['packages/**']),
+      want: (r) => !r.ok && r.lines.some((l) => l.includes("'packages/**' is not <dir>/*")),
     },
   ];
   const misses = [];
