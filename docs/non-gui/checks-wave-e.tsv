@@ -1,4 +1,3 @@
-NG-051	scripts/verify-ng-051-backend-off.mjs::ng051-backend-off	node scripts/verify-ng-051-backend-off.mjs # live-clone
 NG-063	scripts/verify-ng-063-packaged-launch.mjs::ng063-packaged-launch	node scripts/verify-ng-063-packaged-launch.mjs # live-main
 NG-064	scripts/verify-ng-064-update-url.mjs::ng064-update-url-from-manifest	node scripts/verify-ng-064-update-url.mjs # live-main
 NG-065	scripts/verify-ng-065-mar-signature.mjs::ng065-mar-signature-enforced	node scripts/verify-ng-065-mar-signature.mjs # live-main

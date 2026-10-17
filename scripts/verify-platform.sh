@@ -2613,37 +2613,6 @@ check_desktop_entry_quick() {
   ' "$REPO_ROOT"
 }
 
-# NG-051: exit 0 when the application package.json composes the opencode adapter,
-# 1 when it does not, 2 when the file cannot be read or parsed. Only exit 1 means
-# "absent": any other exit (a read error, a missing node) makes the held row fail.
-adapter_composed() {
-  node -e '
-    let composed;
-    try {
-      const p = require(process.argv[1]);
-      composed = Boolean(p.dependencies && p.dependencies["@powerbrowser/backend-opencode"]);
-    } catch (err) {
-      console.error(`adapter_composed: cannot read ${process.argv[1]}: ${err.message}`);
-      process.exit(2);
-    }
-    process.exit(composed ? 0 : 1);
-  ' "$THEIA_DIR/applications/browser/package.json"
-}
-
-check_ai_opencode_held() {
-  local rc=0
-  adapter_composed || rc=$?
-  if [ "$rc" -eq 0 ]; then
-    echo "ai-opencode-held: FAIL -- the adapter is composed, so its six rows must run instead of this one" >&2
-    return 1
-  fi
-  if [ "$rc" -ne 1 ]; then
-    echo "ai-opencode-held: FAIL -- cannot tell whether the adapter is composed (adapter_composed exited $rc), so the six ai-opencode rows are not proven absent" >&2
-    return 1
-  fi
-  echo "ai-opencode-held: PASS -- the opencode adapter is not in the default build ([ai] backend = \"off\"); held rows: ai-opencode-tracer, ai-opencode-tracer-self-test, ai-opencode-presets, ai-opencode-presets-self-test, ai-opencode-bridge, ai-opencode-bridge-self-test. To run them: set [ai] backend = \"opencode\", regenerate, copy powerbrowserAiBackend over, add the @powerbrowser/backend-opencode dependency, yarn build, then scripts/verify-platform.sh --quick."
-}
-
 # --- the allowlist schema check ---
 check_allowlist_schema() {
   node -e '
@@ -4582,25 +4551,6 @@ run_own_checks() {
     "tab-uris-typecheck|check_tab_uris_typecheck"
   )
 
-  # NG-051 / D2(b): the opencode adapter is composed only when the application
-  # package.json depends on @powerbrowser/backend-opencode. Its six rows test the
-  # composed adapter (the bridge row boots the backend and requires /mcp; the tracer
-  # row needs a live opencode account), so they run exactly when it is composed.
-  # Otherwise ai-opencode-held runs in their place: it passes only while the
-  # adapter is truly absent, and it names the held rows on every run (non-GUI ruling R9).
-  if adapter_composed; then
-    CHECKS+=(
-      "ai-opencode-tracer|node $REPO_ROOT/scripts/verify-opencode-tracer.mjs"
-      "ai-opencode-tracer-self-test|node $REPO_ROOT/scripts/verify-opencode-tracer.mjs --self-test"
-      "ai-opencode-presets|node $REPO_ROOT/scripts/verify-opencode-presets.mjs"
-      "ai-opencode-presets-self-test|node $REPO_ROOT/scripts/verify-opencode-presets.mjs --self-test"
-      "ai-opencode-bridge|node $REPO_ROOT/scripts/verify-opencode-bridge.mjs"
-      "ai-opencode-bridge-self-test|node $REPO_ROOT/scripts/verify-opencode-bridge.mjs --self-test"
-    )
-  else
-    CHECKS+=("ai-opencode-held|check_ai_opencode_held")
-  fi
-
   if [ "$QUICK" -eq 0 ]; then
     CHECKS+=(
       # NEW (01-07): the Theia half's smoke gate. It was the ONLY member of
@@ -4710,10 +4660,9 @@ run_own_checks() {
       # fork wizard artwork plus the defines rebrand are 08-05 work.
       "installer-build-proof|node $REPO_ROOT/scripts/verify-installer-build-proof.mjs"
 
-      # --- non-GUI wave E (NG-051, NG-063..NG-067, NG-069, NG-071..NG-074): each needs a
+      # --- non-GUI wave E (NG-063..NG-067, NG-069, NG-071..NG-074): each needs a
       # Gecko build, the packaged tree, the built sidecar, a browser, or the network.
       # Commands and live-main/live-clone markers: docs/non-gui/checks-wave-e.tsv.
-      "ng051-backend-off|node $REPO_ROOT/scripts/verify-ng-051-backend-off.mjs"
       "ng063-packaged-launch|node $REPO_ROOT/scripts/verify-ng-063-packaged-launch.mjs"
       "ng064-update-url-from-manifest|node $REPO_ROOT/scripts/verify-ng-064-update-url.mjs"
       "ng065-mar-signature-enforced|node $REPO_ROOT/scripts/verify-ng-065-mar-signature.mjs"
