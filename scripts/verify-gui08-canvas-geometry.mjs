@@ -360,6 +360,24 @@ function main() {
     }
 }
 
+const once = (from, to) => src => src.replace(from, to);
+
+/** Planted faults on in-memory copies: code, CSS and spec, each red naming its drift. */
+const PLANTS = [
+    { id: 'removed canvas hook', file: WIDGET_REL, apply: once("dataset.canvas = 'true'", "dataset.field = 'true'"), landed: s => !s.includes('dataset.canvas'), expect: /dataset\.canvas/ },
+    { id: 'zoom step drift', file: WIDGET_REL, apply: once('const ZOOM_STEPS = [25, 50, 75, 100, 125, 150, 200]', 'const ZOOM_STEPS = [25, 50, 75, 100, 125, 150, 250]'), landed: s => s.includes('150, 250]'), expect: /ZOOM_STEPS/ },
+    { id: 'label drift', file: COMMANDS_REL, apply: once("label: 'New Group'", "label: 'New group'"), landed: s => s.includes("label: 'New group'"), expect: /New Group/ },
+    { id: 'spec value drift', file: SPEC_REL, apply: once('| LOOSE_W × LOOSE_H | 160 ×', '| LOOSE_W × LOOSE_H | 170 ×'), landed: s => s.includes('| LOOSE_W × LOOSE_H | 170 ×'), expect: /LOOSE_W/ },
+    { id: 'source value drift', file: TILING_REL, apply: once('export const TILE_GAP = 8;', 'export const TILE_GAP = 10;'), landed: s => s.includes('TILE_GAP = 10;'), expect: /TILE_GAP is 10/ },
+    { id: 'spec row deleted', file: SPEC_REL, apply: s => s.replace(/^\| TILE_GAP \|.*\n/m, ''), landed: s => !/^\| TILE_GAP \|/m.test(s), expect: /undeclared canvas constant TILE_GAP/ },
+    { id: 'CSS out of its rule', file: CSS_REL, apply: s => s.replace(/(\n\.pb-org-card-thumb \{[^}]*?)\n    height: 124px;/, '$1') + '\n.pb-org-x { height: 124px; }\n', landed: s => s.includes('.pb-org-x { height: 124px; }') && !/\n\.pb-org-card-thumb \{[^}]*height: 124px;/.test(s), expect: /\.pb-org-card-thumb/ },
+    { id: 'tray revived', file: CSS_REL, apply: s => `${s}\n.pb-org-tray { height: 144px; }\n`, landed: s => s.includes('.pb-org-tray { height: 144px; }'), expect: /tray selector '\.pb-org-tray'/ },
+    { id: 'heading weight 500', file: CSS_REL, apply: once('.pb-org-expand-heading {\n    font-size: 14px;\n    font-weight: 400;', '.pb-org-expand-heading {\n    font-size: 14px;\n    font-weight: 500;'), landed: s => s.includes('.pb-org-expand-heading {\n    font-size: 14px;\n    font-weight: 500;'), expect: /font-weight 500 on '\.pb-org-expand-heading'/ },
+    { id: 'zero groups without loose cards', file: WIDGET_REL, apply: once('            this.renderLoose();\n            return;', '            return;'), landed: s => (s.match(/this\.renderLoose\(\);/g) || []).length === 1, expect: /without renderLoose\(\)/ },
+    { id: 'focus scope back to the tray', file: WIDGET_REL, apply: once("'.pb-org-box-cards, .pb-org-expand-cards'", "'.pb-org-box-cards, .pb-org-tray-cards'"), landed: s => s.includes("'.pb-org-box-cards, .pb-org-tray-cards'"), expect: /pb-org-tray|moveCardFocus does not scope/ },
+    { id: 'spec Typography 13px deleted', file: SPEC_REL, apply: s => s.replace(/^\| Label \| 13px \|.*\n/m, ''), landed: s => !/^\| Label \| 13px \|/m.test(s), expect: /font-size 13px/ },
+];
+
 function selfTest() {
     const real = readSources();
     const baseline = [...checkStatic(real)];
@@ -370,59 +388,26 @@ function selfTest() {
     }
     console.log(`${NAME} --self-test: unmodified tree green, planting faults`);
     let failed = 0;
-
-    // Plant 1: a removed canvas hook must go red naming the drift.
-    {
-        const mutated = { ...real, [WIDGET_REL]: real[WIDGET_REL].replace("dataset.canvas = 'true'", "dataset.field = 'true'") };
-        const landed = !mutated[WIDGET_REL].includes('dataset.canvas');
-        const result = checkStatic(mutated);
-        if (!landed) {
-            console.error(`${NAME} --self-test: FAIL -- 'removed hook' plant did not land`);
+    for (const plant of PLANTS) {
+        const text = plant.apply(real[plant.file]);
+        if (text === real[plant.file] || !plant.landed(text)) {
+            console.error(`${NAME} --self-test: FAIL -- '${plant.id}' anchor drifted in ${plant.file}: the plant did not land`);
             failed += 1;
-        } else if (!result.some(f => /dataset\.canvas/.test(f))) {
-            console.error(`${NAME} --self-test: FAIL -- 'removed hook' did not go red naming 'dataset.canvas'; got: ${result.join(' | ') || '(no failures at all)'}`);
+            continue;
+        }
+        const result = checkStatic({ ...real, [plant.file]: text });
+        const hit = result.find(f => plant.expect.test(f));
+        if (!hit) {
+            console.error(`${NAME} --self-test: FAIL -- '${plant.id}' did not go red naming ${plant.expect}; got: ${result.join(' | ') || '(no failures at all)'}`);
             failed += 1;
         } else {
-            console.log(`  ok  removed hook -> red, naming 'dataset.canvas'`);
+            console.log(`  ok  ${plant.id} -> ${hit}`);
         }
     }
-
-    // Plant 2: zoom-range drift must go red naming the drift.
-    {
-        const mutated = { ...real, [WIDGET_REL]: real[WIDGET_REL].replace('const ZOOM_STEPS = [25, 50, 75, 100, 125, 150, 200]', 'const ZOOM_STEPS = [25, 50, 75, 100, 125, 150, 250]') };
-        const landed = mutated[WIDGET_REL].includes('150, 250]');
-        const result = checkStatic(mutated);
-        if (!landed) {
-            console.error(`${NAME} --self-test: FAIL -- 'zoom-range drift' plant did not land`);
-            failed += 1;
-        } else if (!result.some(f => /zoom range/.test(f))) {
-            console.error(`${NAME} --self-test: FAIL -- 'zoom-range drift' did not go red naming the zoom range; got: ${result.join(' | ') || '(no failures at all)'}`);
-            failed += 1;
-        } else {
-            console.log(`  ok  zoom-range drift -> red, naming the zoom range`);
-        }
-    }
-
-    // Plant 3: label drift must go red naming the drift.
-    {
-        const mutated = { ...real, [COMMANDS_REL]: real[COMMANDS_REL].replace("label: 'New Group'", "label: 'New group'") };
-        const landed = mutated[COMMANDS_REL].includes("label: 'New group'");
-        const result = checkStatic(mutated);
-        if (!landed) {
-            console.error(`${NAME} --self-test: FAIL -- 'label drift' plant did not land`);
-            failed += 1;
-        } else if (!result.some(f => /New Group/.test(f))) {
-            console.error(`${NAME} --self-test: FAIL -- 'label drift' did not go red naming 'New Group'; got: ${result.join(' | ') || '(no failures at all)'}`);
-            failed += 1;
-        } else {
-            console.log(`  ok  label drift -> red, naming 'New Group'`);
-        }
-    }
-
     if (failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all three fault directions went red naming the drift`);
+    console.log(`${NAME} --self-test: PASS -- ${PLANTS.length} planted faults went red naming the drift`);
 }
 
 if (process.argv.includes('--self-test')) {
