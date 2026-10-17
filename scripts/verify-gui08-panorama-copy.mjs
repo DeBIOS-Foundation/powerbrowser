@@ -1,27 +1,28 @@
 #!/usr/bin/env node
 // scripts/verify-gui08-panorama-copy.mjs
 //
-// GUI-08's panorama-copy gate (15-03): every contracted 15-UI-SPEC string
-// renders verbatim with no internal identifier in user-facing copy, and no
-// retired placeholder copy survives in shipped sources.
+// GUI-08's panorama-copy gate (15-03, re-derived in 21-03): every contracted
+// 15-UI-SPEC string renders verbatim with no internal identifier in
+// user-facing copy, and no retired copy survives in shipped sources.
 //
-// It DERIVES at check time from the Theia sources: user-facing literals at
-// the enumerated paint sites (textContent, title, aria-label, placeholder,
+// The EXPECTATION is the spec, read at check time: the contracted set is the
+// bolded literals of the Copywriting Contract table and the retired set is
+// the bolded literals of its `### Retired copy` table, both parsed by
+// scripts/lib/ui-spec.mjs from SPEC_REL. No copy list is kept in this file;
+// a deliberate copy change is a spec edit, reviewed in the spec's diff.
+//
+// The ACTUAL is derived from the Theia sources: user-facing literals at the
+// enumerated paint sites (textContent, title, aria-label, placeholder,
 // buildEmpty/buildBar call args, the ConfirmDialog fields, flash args,
-// command labels, the widget label, the Untitled const) versus the one
-// EXPECTED block, compared as SET EQUALITY -- a surplus string is
-// unreviewed copy, a missing one is dropped contract, a reworded label
-// breaks the contract -- each reported BY NAME. A NEGATED search asserts
-// zero occurrences of the retired placeholder copy in shipped sources. A
-// no-internals shape check runs over the same derived strings (no pref
-// key, table, group_id, bounds, URI-scheme literal, or raw exception
-// shape inside user-facing copy). An empty derivation fails as a broken
-// instrument, never passes as clean.
-//
-// This is a NEW file rather than an extension of the shell-error-copy
-// harness: that harness proves table-derived error text plus a leak shape,
-// while this gate proves verbatim contracted literals plus placeholder
-// absence -- one gate owns these strings.
+// command labels, the widget label, the Untitled const). The two compare as
+// SET EQUALITY after slot normalisation (`${...}` and `{name}`/`{N}` become
+// one token; apostrophes and dashes compare exactly) -- a surplus string is
+// unreviewed copy, a missing one is dropped contract, each reported BY NAME.
+// A NEGATED search asserts zero occurrences of each retired literal in every
+// shipped modes-browser source (never the spec, which names them). A
+// no-internals shape check runs over the raw derived strings (no pref key,
+// table, group_id, bounds, URI-scheme literal, or raw exception shape). An
+// empty derivation on either side fails as a broken instrument, never passes.
 //
 // Honestly --quick: reads text sources only. No build, no browser, no
 // display, no network.
@@ -33,6 +34,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { copyContract, normaliseSlots } from './lib/ui-spec.mjs';
 
 const NAME = 'verify-gui08-panorama-copy';
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -45,55 +47,7 @@ const COMMANDS_REL = `${MODES_BROWSER_REL}/panorama-commands.ts`;
 const MODEL_REL = `${MODES_BROWSER_REL}/group-model.ts`;
 const CSS_REL = `${MODES_BROWSER_REL}/modes.css`;
 const MODULE_REL = `${MODES_BROWSER_REL}/modes-frontend-module.ts`;
-
-/**
- * The declared panorama copy contract. The ONE hand-kept block in this
- * file: editing it is how a deliberate copy change is made -- it shows up
- * in the diff for review. Everything it is compared against is derived at
- * check time from the sources named above. Entries marked MECHANICAL are
- * control glyphs and carried a11y labels the enumeration surfaces, not
- * contracted UI-SPEC prose -- pinned so their removal still goes red.
- */
-const EXPECTED_COPY = Object.freeze([
-    'New Group',
-    'Canvas',
-    'Tree',
-    'Zoom in',
-    'Zoom out',
-    'Reset zoom',
-    'Group name',
-    'Untitled group',
-    'No tab groups',
-    'There are no tab groups yet \u2014 choose New Group, or drag a tab onto the canvas to start one.',
-    'There are no tab groups yet \u2014 choose New Group to start one.',
-    'Empty group \u2014 drag tabs here.',
-    'Ungrouped',
-    'No ungrouped tabs \u2014 drag a tab here to ungroup it.',
-    'PowerBrowser couldn\u2019t load your tab groups. Your tabs are unchanged \u2014 choose Retry.',
-    'PowerBrowser couldn\u2019t save your tab groups. The canvas shows your latest arrangement \u2014 choose Retry.',
-    'Retry',
-    'Close group',
-    'Close Group',
-    'Close "${group.title}"? Its 1 tab will close too. You can\'t undo this.',
-    'Close "${group.title}"? Its ${count} tabs will close too. You can\'t undo this.',
-    'Cancel',
-    'Group "${closed.name}" closed.',
-    'Organising',
-    // MECHANICAL: resize-grip screen-reader label, kept verbatim.
-    'Resize group',
-    // MECHANICAL: zoom-step and close control glyphs, kept verbatim.
-    '\u2212',
-    '+',
-    '100%',
-    '\u00d7',
-]);
-
-/** Retired placeholder copy: zero occurrences allowed in shipped sources. */
-const RETIRED_COPY = Object.freeze([
-    'Organising arrives next',
-    'Back to Browsing',
-    'The freeform canvas for arranging tabs lands in the next update',
-]);
+const SPEC_REL = '.planning/milestones/v1.3-phases/15-panorama-organising/15-UI-SPEC.md';
 
 function fail(message) {
     throw new Error(`${NAME}: FAIL -- ${message}`);
@@ -191,7 +145,12 @@ function checkStatic(sources) {
         failures.push('derived ZERO user-facing strings from the panorama sources -- the enumeration matches nothing, so this comparison proves nothing');
         return failures;
     }
-    const copyDiff = diff(derived, [...EXPECTED_COPY]);
+    const { contract, retired } = copyContract(sources[SPEC_REL] ?? '');
+    if (!contract.length) {
+        failures.push(`derived ZERO contracted literals from the Copywriting Contract table in ${SPEC_REL} -- the table parse matches nothing, so this comparison proves nothing (broken instrument, not a clean tree)`);
+        return failures;
+    }
+    const copyDiff = diff(derived.map(normaliseSlots), contract.map(normaliseSlots));
     if (copyDiff.surplus.length) {
         failures.push(`user-facing strings NOT in the declared contract (unreviewed copy): ${copyDiff.surplus.map(s => JSON.stringify(s)).join(', ')}`);
     }
@@ -203,17 +162,20 @@ function checkStatic(sources) {
             failures.push(`user-facing string ${JSON.stringify(value)} leaks the internal identifier ${JSON.stringify(hit)} -- it belongs in a diagnostics field row`);
         }
     }
+    if (!retired.length) {
+        failures.push(`derived ZERO retired literals from the ### Retired copy table in ${SPEC_REL} -- the table parse matches nothing, so the retired-copy search proves nothing (broken instrument, not a clean tree)`);
+        return failures;
+    }
     // WR-05b: the retired-copy proof scans the DERIVED shipped set (every
-    // modes-browser .ts plus the CSS/module files), never a hand-kept list
-    // -- placeholder copy reintroduced in any other shipped source goes red.
-    const shippedRels = Object.keys(sources);
-    const shipped = shippedRels.map(rel => sources[rel] ?? '');
-    RETIRED_COPY.forEach((needle) => {
-        const at = shipped.findIndex(src => src.includes(needle));
-        if (at >= 0) {
-            failures.push(`retired placeholder copy ${JSON.stringify(needle)} survives in ${shippedRels[at]} -- the placeholder is retired, not reused`);
+    // modes-browser .ts plus the CSS/module files). The spec names every
+    // retired literal, so it is never part of the shipped set.
+    const shippedRels = Object.keys(sources).filter(rel => rel !== SPEC_REL);
+    for (const needle of retired) {
+        const at = shippedRels.find(rel => (sources[rel] ?? '').includes(needle));
+        if (at) {
+            failures.push(`retired copy ${JSON.stringify(needle)} survives in ${at} -- the 15-UI-SPEC Retired copy table says it must not ship`);
         }
-    });
+    }
     return failures;
 }
 
@@ -226,6 +188,7 @@ function readSources() {
         [MODEL_REL]: read(MODEL_REL),
         [CSS_REL]: read(CSS_REL),
         [MODULE_REL]: read(MODULE_REL),
+        [SPEC_REL]: read(SPEC_REL),
     };
     // WR-05b: derive the shipped set -- every modes-browser .ts rides the
     // retired-copy proof, so a seventh file cannot silently carry a revival.
@@ -248,7 +211,9 @@ function main() {
         failures.forEach(f => console.error(`  ${f}`));
         process.exit(1);
     }
-    console.log(`${NAME}: PASS -- contracted copy verbatim, placeholder absent, no internals in copy`);
+    const { contract, retired } = copyContract(sources[SPEC_REL]);
+    const painted = new Set(derivedCopy(sources).map(normaliseSlots)).size;
+    console.log(`${NAME}: PASS -- ${painted} painted strings equal the ${new Set(contract.map(normaliseSlots)).size} literals of the 15-UI-SPEC Copywriting Contract; ${retired.length} retired literals absent; no internals in copy`);
 }
 
 function selfTest() {
