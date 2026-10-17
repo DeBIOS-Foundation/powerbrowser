@@ -17,18 +17,18 @@ touches no Gecko file.
 ## Implementation Decisions
 
 ### Locked
-- **NG-051 is already dropped by Chris** (ledger commit c3929e9, 2026-10-17, via
+- NG-051 is already dropped by Chris (ledger commit c3929e9, 2026-10-17, via
   `scripts/ledger-amend.py drop`). The removal commit may now delete
   `scripts/verify-ng-051-backend-off.mjs`.
-- **Re-lock is Chris's step.** `ledger-amend.py lock-checks --commit <sha>` is not
+- Re-lock is Chris's step. `ledger-amend.py lock-checks --commit <sha>` is not
   agent-allowed (hook). After the removal commit the phase gate will report
   `locked check missing: scripts/verify-ng-051-backend-off.mjs` until Chris runs
   `python3 scripts/ledger-amend.py --root . lock-checks --commit <removal-sha>` in
   his terminal. The plan ends with that as a `blocking-human` step that prints
   the exact command with the SHA filled in.
-- **Theia AI stays stock** (Chris, 2026-10-16): the 12 `@theia/ai-*` packages stay
-  composed and unmodified. Do not touch the D-22 overrides here (RM-02 is Phase 19).
-- **DSH is out of scope**; nothing replaces OpenCode.
+- Theia AI stays stock (Chris, 2026-10-16): the 12 `@theia/ai-*` packages stay
+  composed and unmodified. Do not touch the AI-layout overrides (decision 22 in PROJECT.md) here (RM-02 is Phase 19).
+- DSH is out of scope; nothing replaces OpenCode.
 - Removal surface and pitfalls: `.planning/research/ARCHITECTURE.md` (three sets:
   manifest, workspace, registry) and `.planning/research/PITFALLS.md`. Each set is
   green only as a whole.
