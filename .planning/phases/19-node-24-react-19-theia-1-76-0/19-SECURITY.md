@@ -57,7 +57,7 @@ created: "2026-10-17"
 | T-19-22 | Tampering | ledger commit sweeping foreign files | medium | mitigate | 0d4f2c9, 02864f8, e0fbf8b, 5db8a80 each hold exactly the three ledger files | closed |
 | T-19-23 | Repudiation | telemetry decision without Chris's words | medium | mitigate | 19-07-SUMMARY quotes "telemetry ok (Recommended)" | closed |
 | T-19-SC | Tampering | npm installs (React 19.2.8 set, @theia 1.76.0 set) | high | mitigate | Chris's "approved" before any install; registry probe and provenance; "Ignored scripts due to flag" in every install log; exact pins; no @theia stanza moved in 5800706; no new non-@theia package in 2700e4c; frozen reinstall lock `cmp` identical | closed |
-| T-19-NR | DoS | packaged Node runtime pin (v22.23.2) vs Theia 1.76 `engines.node >=24` | medium | transfer | Gap plan `/gsd-plan-phase 19 --gaps`: Chris supplies a GPG-verified v24.x sha256 at a blocking-human checkpoint; node-runtime.json unchanged in phase 19; ng063-packaged-launch PASS on v22 | open — below high threshold (non-blocking) |
+| T-19-NR | DoS | packaged Node runtime pin (v22.23.2) vs Theia 1.76 `engines.node >=24` | medium | transfer | Gap plan `/gsd-plan-phase 19 --gaps`: Chris supplies a GPG-verified v24.x sha256 at a blocking-human checkpoint; node-runtime.json unchanged in phase 19; ng063-packaged-launch PASS on v22 | closed — 19-08: 160652d pins v24.19.0 (sha from Chris's gpgv-verified SHASUMS256.txt, key 5BE8A3F6…B168D356; independent download hash equal); ng063/ng065/ng072 PASS on the rebuilt package; node-major-agreement in --quick (a42c962) |
 
 *Status: open · closed · open — below high threshold (non-blocking)*
 
@@ -69,7 +69,7 @@ created: "2026-10-17"
 |---------|------------|-----------|-------------|------|
 | AR-19-01 | T-19-SC | In plans 19-01, 19-02, 19-03 and 19-07 no package is added; 19-03's only install is smoke-theia's frozen `--ignore-scripts` install against the unchanged lock | plans 19-01, 19-02, 19-03, 19-07 (autonomous run) | 2026-10-17 |
 
-T-19-NR is not an accepted risk. It is transferred to the phase 19 gap plan and stays open until node-runtime.json pins a verified Node 24.
+T-19-NR was not an accepted risk. It was transferred to gap plan 19-08 and closed there. Residual (T-19-26): Chris did not report the optional README fingerprint cross-check of the release keyring.
 
 ---
 
@@ -78,6 +78,7 @@ T-19-NR is not an accepted risk. It is transferred to the phase 19 gap plan and 
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-10-17 | 25 | 24 | 1 (non-blocking) | gsd-security-auditor (L1 grep-depth plus re-run static checks and re-derived set equality) |
+| 2026-10-17 | 25 | 25 | 0 | orchestrator, after gap plan 19-08 (evidence in 19-08-SUMMARY.md) |
 
 ---
 
@@ -88,4 +89,4 @@ T-19-NR is not an accepted risk. It is transferred to the phase 19 gap plan and 
 - [x] `threats_open: 0` confirmed
 - [x] `status: verified` set in frontmatter
 
-**Approval:** verified 2026-10-17. T-19-NR remains open and non-blocking, routed to the phase 19 gap plan.
+**Approval:** verified 2026-10-17. T-19-NR closed by gap plan 19-08.

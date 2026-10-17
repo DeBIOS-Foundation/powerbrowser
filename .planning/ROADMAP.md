@@ -175,9 +175,11 @@ Plans:
   4. `@powerbrowser/branding` contains neither D-22 override, and the 12 `@theia/ai-*` packages are composed at 1.76.0 and unmodified
   5. The NG-082 amend and Chris's telemetry decision are recorded, and `quick-baseline.txt` is refreshed
 
-**Plans**: 7/7 plans executed (checks first, then the three locked commits, then live proof and the ledger close; sequential, one fix at a time)
+**Plans**: 8/8 plans executed (checks first, then the three locked commits, then live proof and the ledger close; sequential, one fix at a time)
 
 Plans:
+- [x] 19-08-PLAN.md
+
 **Wave 1**
 
 - [x] 19-01-PLAN.md — tracer: live first-boot surface check (fresh and carried-over modes, self-test), carried-over fixture captured on the pristine tree, both modes green at baseline
@@ -306,7 +308,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 17. OpenCode Removal | 4/4 | Complete    | 2026-10-17 |
 | 18. Firefox 153.5.0esr | 3/3 | Complete    | 2026-10-16 |
-| 19. Node 24, React 19, Theia 1.76.0 | 7/7 | In Progress | - |
+| 19. Node 24, React 19, Theia 1.76.0 | 8/8 | In Progress | - |
 | 20. Non-GUI Gaps | 0/TBD | Not started | - |
 | 21. Panorama Spec and gui08 Checks | 0/TBD | Not started | - |
 | 22. Panorama Worklist | 0/TBD | Not started | - |
