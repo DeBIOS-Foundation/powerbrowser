@@ -92,7 +92,7 @@ live UAT itself).
 - [x] **Phase 17: OpenCode Removal** - The OpenCode adapter, its `[ai]` manifest path, its checks and its docs leave the tree; NG-051 amended (completed 2026-10-17)
 - [x] **Phase 18: Firefox 153.5.0esr** - Gecko re-pinned to `FIREFOX_153_5_0esr_BUILD1`; dev and release builds and the full verification run pass (completed 2026-10-16)
 - [x] **Phase 19: Node 24, React 19, Theia 1.76.0** - Three commits, each checked live; Theia's AI framework runs stock; NG-082 amended (completed 2026-10-17)
-- [ ] **Phase 20: Non-GUI Gaps** - Clean-checkout build, group-channel check, schema ledger rows, `generate-check`, archived phase paths
+- [x] **Phase 20: Non-GUI Gaps** - Clean-checkout build, group-channel check, schema ledger rows, `generate-check`, archived phase paths (completed 2026-10-17)
 - [ ] **Phase 21: Panorama Spec and gui08 Checks** - 15-UI-SPEC re-pinned to the shipped Panorama; the commit gate is green
 - [ ] **Phase 22: Panorama Worklist** - Strip filtered by the active group, Undo Close Group, per-card close, last group kept
 - [ ] **Phase 23: Modes Leftovers and Sketch 005 Verdict** - Variant B records, name cap, panel slide, 14-VERIFICATION, sketch 005 decided
@@ -222,7 +222,7 @@ Plans:
   4. `generate-check` is closed as not reproducible with the passing runs recorded (host shell and `.#theia`), or it is reproduced and fixed
   5. Every verify-script path into `.planning/phases/` resolves to its archived location, or the check fails naming the missing path
 
-**Plans**: 5/5 plans executed (sequential, one wave each; also adds the `-purgecaches` line to `docs/BUILD.md`)
+**Plans**: 5/5 plans complete (sequential, one wave each; also adds the `-purgecaches` line to `docs/BUILD.md`)
 
 Plans:
 
@@ -258,20 +258,20 @@ Plans:
   3. `scripts/verify-platform.sh --quick` reports no FAIL row, and `quick-baseline.txt` is empty
   4. No stale tray code, comments or CSS remain, and the canvas still shows ungrouped tabs as loose cards
 
-**Plans**: 5 plans in 3 waves (waves 1 and 2 each run two file-disjoint plans in parallel; execution starts after Phase 20 completes)
+**Plans**: 4/5 plans executed in 3 waves (waves 1 and 2 each run two file-disjoint plans in parallel; execution starts after Phase 20 completes)
 **UI hint**: yes
 
 Plans:
 
 **Wave 1**
 
-- [ ] 21-01-PLAN.md — PAN-01: 15-UI-SPEC re-pinned to `7b7a1f7` in a parseable form, with one shared parse module (`scripts/lib/ui-spec.mjs`) proven equal to the tree
-- [ ] 21-02-PLAN.md — PAN-07: dead card-onto-card path and GroupModel auto-box write removed; tray wording gone from comments and locals outside modes.css; wave-1 `--quick`
+- [x] 21-01-PLAN.md — PAN-01: 15-UI-SPEC re-pinned to `7b7a1f7` in a parseable form, with one shared parse module (`scripts/lib/ui-spec.mjs`) proven equal to the tree
+- [x] 21-02-PLAN.md — PAN-07: dead card-onto-card path and GroupModel auto-box write removed; tray wording gone from comments and locals outside modes.css; wave-1 `--quick`
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 21-03-PLAN.md — PAN-01: `gui08-panorama-copy` derives contract and retired copy from 15-UI-SPEC; 9-plant self-test
-- [ ] 21-04-PLAN.md — PAN-01, PAN-07: `gui08-canvas-geometry` derives geometry and type from 15-UI-SPEC with a tray negation; tray CSS removed, loose cards with zero groups, loose and expanded cards in the focus scope, heading at 400; 12-plant self-test; wave-2 `--quick`
+- [x] 21-03-PLAN.md — PAN-01: `gui08-panorama-copy` derives contract and retired copy from 15-UI-SPEC; 9-plant self-test
+- [x] 21-04-PLAN.md — PAN-01, PAN-07: `gui08-canvas-geometry` derives geometry and type from 15-UI-SPEC with a tray negation; tray CSS removed, loose cards with zero groups, loose and expanded cards in the focus scope, heading at 400; 12-plant self-test; wave-2 `--quick`
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -347,8 +347,8 @@ Plans:
 | 17. OpenCode Removal | 4/4 | Complete    | 2026-10-17 |
 | 18. Firefox 153.5.0esr | 3/3 | Complete    | 2026-10-16 |
 | 19. Node 24, React 19, Theia 1.76.0 | 8/8 | Complete    | 2026-10-17 |
-| 20. Non-GUI Gaps | 5/5 | In Progress | - |
-| 21. Panorama Spec and gui08 Checks | 0/TBD | Not started | - |
+| 20. Non-GUI Gaps | 5/5 | Complete    | 2026-10-17 |
+| 21. Panorama Spec and gui08 Checks | 4/5 | In Progress | - |
 | 22. Panorama Worklist | 0/TBD | Not started | - |
 | 23. Modes Leftovers and Sketch 005 Verdict | 0/TBD | Not started | - |
 | 24. Live UAT Pass | 0/TBD | Not started | - |

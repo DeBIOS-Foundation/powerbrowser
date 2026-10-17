@@ -48,13 +48,13 @@ Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
 
 ### Platform gaps
 
-- [ ] **PLAT-01**: A build from a clean checkout passes (G-14.1.1-9).
-- [ ] **PLAT-02**: The group channel has a `--quick` check with a planted-fault
+- [x] **PLAT-01**: A build from a clean checkout passes (G-14.1.1-9).
+- [x] **PLAT-02**: The group channel has a `--quick` check with a planted-fault
       self-test (G-14.1.1-10; the checks 14-05 planned and never wrote).
-- [ ] **PLAT-03**: The schema v3/v4 work has ledger rows, approved by Chris.
-- [ ] **PLAT-04**: `generate-check` is closed as not reproducible with the
+- [x] **PLAT-03**: The schema v3/v4 work has ledger rows, approved by Chris.
+- [x] **PLAT-04**: `generate-check` is closed as not reproducible with the
       passing runs recorded, or reproduced and fixed.
-- [ ] **PLAT-05**: Every verify-script path into `.planning/phases/` resolves to
+- [x] **PLAT-05**: Every verify-script path into `.planning/phases/` resolves to
       its archived location, or the check fails loudly.
 
 ### Panorama (finishes GUI-08)
@@ -138,11 +138,11 @@ the project's own planning record.
 | UPD-08 | Phase 19 | Complete |
 | UPD-09 | Phase 19 | Complete |
 | UPD-10 | Phase 19 | Complete |
-| PLAT-01 | Phase 20 | Pending |
-| PLAT-02 | Phase 20 | Pending |
-| PLAT-03 | Phase 20 | Pending |
-| PLAT-04 | Phase 20 | Pending |
-| PLAT-05 | Phase 20 | Pending |
+| PLAT-01 | Phase 20 | Complete |
+| PLAT-02 | Phase 20 | Complete |
+| PLAT-03 | Phase 20 | Complete |
+| PLAT-04 | Phase 20 | Complete |
+| PLAT-05 | Phase 20 | Complete |
 | PAN-01 | Phase 21 | Pending |
 | PAN-02 | Phase 22 | Pending |
 | PAN-03 | Phase 22 | Pending |
