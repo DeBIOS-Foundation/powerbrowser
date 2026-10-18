@@ -22,8 +22,10 @@ writes only via the single chrome-side writer path; sessionstore stays restore-a
 Gecko outside the patch stack.
 
 **Binding constraints.** The 13-01 spike verdict RED still binds: the tab strip **STAYS TOP** —
-no contract below moves, filters, or re-skins the strip, and choosing a tab never hides other
-tabs. The organising slot hosts the canvas/tree surface; the Phase 14 placeholder copy is listed
+no contract below moves or re-skins the strip. While a group is active, the Browsing strip shows
+that group's tabs, the loose tabs and the current tab;
+Coding's tab bars and Organising are not filtered, and no tab is closed, moved or detached by the filter.
+The organising slot hosts the canvas/tree surface; the Phase 14 placeholder copy is listed
 under Retired copy and does not ship. Sketch 002 organising view is the visual reference; the
 Panorama research note and `15-PANORAMA-GAP.md` (the Firefox 44 Panorama reference) are the
 interaction authority.
@@ -306,7 +308,7 @@ bolded literal in this table and fails on any hit.
   group title as heading, "Done", and every card at base size (220px) in a wrapping, vertically
   scrolling list. Done, Esc or a scrim click closes it.
 - Clicking a header or the box background makes that group active (muted border plus title 600).
-  Opening a tab marks its group active. Active-group state never filters or hides the tab strip.
+  Opening a tab marks its group active. Which tabs the Browsing strip shows follows the active group (see Binding constraints).
   Double-click or Enter on a title renames it: Enter commits, Esc cancels, an empty commit
   reverts, 60 character cap, duplicates allowed.
 
@@ -372,10 +374,10 @@ one tab stop.
 
 ## UI Considerations
 
-Applicable state considerations resolved: 22 covered, 5 backstop, 0 unresolved.
+Applicable state considerations resolved: 30 covered, 7 backstop, 0 unresolved.
 
 Elements: E1 canvas, E2 group box, E3 card, E4 loose cards, E5 tree, E6 toolbar, E7 rename
-input, E8 Close Group dialog, E9 error bars, E10 expanded stack.
+input, E8 Close Group dialog, E9 error bars, E10 expanded stack, E11 Browsing strip filter.
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
@@ -401,11 +403,21 @@ input, E8 Close Group dialog, E9 error bars, E10 expanded stack.
 | empty / long-text | E7 rename | ✅ covered | Empty commit reverts; paste cut at 60 |
 | long-text | E8 dialog | ✅ covered | Name never truncated in the confirmation |
 | populated | E10 expanded | ✅ covered | Heading, Done, every card at 220px, wrapping list scrolls vertically past 80% height |
+| populated | E11 strip | ✅ covered | Active group's tabs plus loose tabs plus the current tab, in dock order |
+| empty | E11 strip | ✅ covered | Active group with no open tab and no loose tab → the current tab only; no placeholder |
+| loading | E11 strip | ✅ covered | Membership not yet known → unfiltered; never zero tabs |
+| error | E11 strip | ✅ covered | Group load failed → unfiltered; the error shows in Organising's existing load bar |
+| zero-one-many | E11 strip | ✅ covered | No groups or no active group → every tab; one or many groups → the active one filters |
+| scope | E11 strip | ✅ covered | Browsing strip only; Coding dock bars, split panes and Organising unfiltered (D2) |
+| populated | E11 + "+" | ✅ covered | "+" with an active group → member, card at the group's end; else loose |
+| error | E11 + "+" | ✅ covered | Membership write fails → tab stays open and loose; save-error bar with Retry |
 | draw | E1 band | 🧪 backstop | Live: a drawn band ≥30px creates a group at that rectangle and takes enclosed loose cards; Esc cancels |
 | join / place | E2 + E4 drag | 🧪 backstop | Live: drop over a group joins at the previewed slot; drop on empty canvas places loose; emptied group dissolves |
 | parity | E1 + E5 | 🧪 backstop | Live: tree shows identical groups, order and membership after every mutation and flip |
 | close-group | E8 | 🧪 backstop | Live: confirm closes exactly that group's tabs; cancel changes nothing |
 | keyboard | E3 + E4 + E10 | 🧪 backstop | Live: every loose and expanded card reachable by Tab plus arrows; Enter opens |
+| filter-live | E11 + E1 | 🧪 backstop | Live: after a card drag, band draw, close, undo and "+", the Browsing strip matches the active group's members plus loose plus current, with no reload |
+| mode-scope | E11 | 🧪 backstop | Live: Coding dock bars list every tab while a group is active |
 
 **Dismissed (reasoned):** E10 loading and error (it paints from the in-memory model
 synchronously); E6 loading (local controls).
@@ -460,4 +472,4 @@ FLAGs on dimensions 1, 3 and 5; this file was not re-run through the checker.
 | Tree as vertical stacked lists over identical data | Panorama note tree-toggle section + 15-CONTEXT.md |
 | SQL groups shape, single-writer path, sessionstore authority, PNG snapshots | REQUIREMENTS.md GUI-08 + 15-CONTEXT.md + `.planning/notes/tab-sql-substrate.md` |
 | Dead layout blob reserved for this canvas | 14 REVIEW-FIX.md WR-10 |
-| Deferred (not specified here) | Type-anywhere search, strip relocation (closed by RED verdict), bookmarks strip, browser menu, in-Theia web tabs (GUI-02), unified tab strip (GUI-05); strip filtering by active group, Undo Close Group, per-card close and keeping the last group (Phase 22) |
+| Deferred (not specified here) | Type-anywhere search, strip relocation (closed by RED verdict), bookmarks strip, browser menu, in-Theia web tabs (GUI-02), unified tab strip (GUI-05); Undo Close Group, per-card close and keeping the last group (Phase 22) |

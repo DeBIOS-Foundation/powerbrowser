@@ -13,14 +13,18 @@
  * and on nack/timeout keeps the painted change behind the contracted
  * save-error bar with Retry; Retry replays the write once and reverts the
  * painted change only if the replay fails again (15-UI-SPEC.md).
+ *
+ * Phase 22 (PAN-03): the model loads itself at layout init, so the Browsing
+ * strip can follow the active group before Organising ever opens.
  */
 
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
-import { ApplicationShell, OpenerService, Widget } from '@theia/core/lib/browser';
+import { ApplicationShell, FrontendApplicationContribution, OpenerService, Widget } from '@theia/core/lib/browser';
 import { NavigatableWidget } from '@theia/core/lib/browser/navigatable-types';
 import { Emitter, Event } from '@theia/core/lib/common';
 import URI from '@theia/core/lib/common/uri';
-import type { GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-query-service';
+import pDebounce from 'p-debounce';
+import { GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-query-service';
 import { TabUriRegistry } from '@powerbrowser/tab-uris/lib/browser/tab-uri-registry';
 import { EMPTY_PAGE_URL, WebTabOpenerOptions, WebTabWidget } from '@powerbrowser/tab-uris/lib/browser/web-tab';
 import { GroupActorClient } from './group-actor-client';
@@ -106,7 +110,7 @@ export function tabKeyOf(widget: Widget, registry: TabUriRegistry): string {
 }
 
 @injectable()
-export class GroupModel {
+export class GroupModel implements FrontendApplicationContribution {
     private readonly changeEmitter = new Emitter<void>();
     readonly onDidChange: Event<void> = this.changeEmitter.event;
 
@@ -137,6 +141,9 @@ export class GroupModel {
 
     @inject(OpenerService)
     protected readonly openers: OpenerService;
+
+    @inject(GroupQueryService)
+    protected readonly reader: GroupQueryService;
 
     /** Theia tabs whose close already reaches the store. */
     private readonly watched = new WeakSet<Widget>();
@@ -177,6 +184,83 @@ export class GroupModel {
                     .catch(error => console.error('[@powerbrowser/modes] recording a tab access failed:', error));
             }
         });
+    }
+
+    /**
+     * PAN-03: the model loads at layout init, so the Browsing strip has
+     * membership to read before Organising ever opens. Returns nothing and
+     * awaits nothing: awaiting a backend read in the boot chain re-enters the
+     * deadlock modes-frontend-module.ts documents.
+     */
+    onDidInitializeLayout(): void {
+        this.shell.onDidAddWidget(() => void this.scheduleReload());
+        this.shell.onDidRemoveWidget(() => void this.scheduleReload());
+        void this.reload();
+    }
+
+    /** Coalesced, as the canvas's own reload is: a setup adds several widgets in one turn. */
+    readonly scheduleReload = pDebounce(() => this.reload(), 120);
+
+    /** Re-reads the store against the tabs the shell has open now. Never throws (`load`). */
+    async reload(): Promise<void> {
+        if (this.shell?.mainPanel) {
+            await this.load(this.reader, this.liveTabs([...this.shell.mainPanel.widgets()]));
+        }
+    }
+
+    /**
+     * The given shell tabs in the shape `load` joins on (see
+     * `OrganisingWidget.liveTabs`). Organising is skipped by its id string:
+     * it is a mode, not a tab, and importing the widget here would be a cycle.
+     */
+    liveTabs(widgets: readonly Widget[]): LiveTab[] {
+        return widgets.flatMap(widget => {
+            if (widget.id === 'powerbrowser.modes.organising') {
+                return [];
+            }
+            const page = widget instanceof WebTabWidget && widget.hasPage ? widget.url : '';
+            return [{ uri: this.keyOf(widget), url: page, title: widget.title.label || page }];
+        });
+    }
+
+    /**
+     * PAN-03 (22-UI-SPEC A5, A6; decision D1): whether the Browsing strip
+     * paints this tab. Every tab while nothing is loaded or no group is
+     * active; otherwise the current tab, the loose tabs (a key not seen yet
+     * counts as loose) and the active group's tabs.
+     */
+    showsInStrip(widget: Widget, current: Widget | undefined): boolean {
+        if (!this.loaded || this.loadFailed || !this.activeGroupId || widget === current) {
+            return true;
+        }
+        const groupId = this.locateCard(this.keyOf(widget))?.groupId ?? null;
+        return groupId === null || groupId === this.activeGroupId;
+    }
+
+    /**
+     * PAN-03 (22-UI-SPEC A7): a tab opened with "+" joins the active group,
+     * appended, through the same writer every card move uses. No active group
+     * leaves it loose (D1). Reloads once after the write lands, so a load that
+     * read the store before it cannot repaint the card loose.
+     */
+    async joinActiveGroup(widget: Widget): Promise<void> {
+        if (!this.loaded) {
+            await this.reload();
+        }
+        const groupId = this.activeGroupId;
+        if (!groupId) {
+            return;
+        }
+        const key = this.keyOf(widget);
+        if (!this.locateCard(key)) {
+            const [live] = this.liveTabs([widget]);
+            if (!live) {
+                return;
+            }
+            this.insertCardLocal(live, null);
+        }
+        await this.moveCard(this.actor, key, groupId);
+        void this.scheduleReload();
     }
 
     /**

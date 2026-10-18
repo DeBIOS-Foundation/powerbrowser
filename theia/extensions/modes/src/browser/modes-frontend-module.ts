@@ -81,6 +81,8 @@ export default new ContainerModule(bind => {
         WebSocketConnectionProvider.createProxy<GroupQueryService>(ctx.container, GROUP_PATH)
     ).inSingletonScope();
     bind(GroupModel).toSelf().inSingletonScope();
+    // Phase 22, PAN-03: the model loads at layout init, not awaited.
+    bind(FrontendApplicationContribution).toService(GroupModel);
     bind(GroupActorClient).toSelf().inSingletonScope();
     bind(PanoramaCommandHandler).to(OrganisingCommandHandler).inSingletonScope();
     bind(PanoramaCommandContribution).toSelf().inSingletonScope();

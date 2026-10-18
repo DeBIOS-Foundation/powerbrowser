@@ -197,11 +197,8 @@ export class OrganisingWidget extends Widget {
         super.onAfterAttach(msg);
         if (!this.watchingShell) {
             this.watchingShell = true;
-            this.shell.onDidAddWidget(widget => {
-                this.scheduleReload();
-                this.holdTheMainArea(widget);
-            });
-            this.shell.onDidRemoveWidget(() => this.scheduleReload());
+            // The model reloads itself on add and remove (PAN-03).
+            this.shell.onDidAddWidget(widget => this.holdTheMainArea(widget));
             this.shell.onDidChangeCurrentWidget(() => this.scheduleShellCapture());
         }
         this.scheduleReload();
@@ -332,13 +329,7 @@ export class OrganisingWidget extends Widget {
         if (!this.shell?.mainPanel) {
             return [];
         }
-        return [...this.shell.mainPanel.widgets()].flatMap(widget => {
-            if (widget === this) {
-                return [];
-            }
-            const page = widget instanceof WebTabWidget && widget.hasPage ? widget.url : '';
-            return [{ uri: this.model.keyOf(widget), url: page, title: widget.title.label || page }];
-        });
+        return this.model.liveTabs([...this.shell.mainPanel.widgets()].filter(widget => widget !== this));
     }
 
     // PanoramaCommandHandler surface (delegated by the contribution below).

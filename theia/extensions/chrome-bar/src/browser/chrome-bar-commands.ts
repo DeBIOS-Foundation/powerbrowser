@@ -3,6 +3,7 @@ import { Command, CommandContribution, CommandRegistry } from '@theia/core/lib/c
 import { OpenerService, Widget } from '@theia/core/lib/browser';
 import URI from '@theia/core/lib/common/uri';
 import { EMPTY_PAGE_URL, WebTabWidget } from '@powerbrowser/tab-uris/lib/browser/web-tab';
+import { GroupModel } from '@powerbrowser/modes/lib/browser/group-model';
 
 /**
  * GUI-06 (13-03): the chrome bar's five commands -- back, forward, reload,
@@ -105,6 +106,9 @@ export class ChromeBarCommandContribution implements CommandContribution {
     @inject(OpenerService)
     protected readonly openerService: OpenerService;
 
+    @inject(GroupModel)
+    protected readonly groups: GroupModel;
+
     registerCommands(commands: CommandRegistry): void {
         // Disabled-not-removed (13-UI-SPEC.md): visibility stays true while
         // enablement follows the shared navigable-tab predicate narrowed by
@@ -143,11 +147,20 @@ export class ChromeBarCommandContribution implements CommandContribution {
         // hands focus to the pill, which is the affordance for the empty tab.
         // No command id is re-spelled and no popup is issued: the stock
         // window survives only behind the GUI-01 palette command.
+        // PAN-03 (22-UI-SPEC A7): the new tab joins the active group, if any;
+        // a failed join leaves it open and loose behind the save-error bar.
         commands.registerCommand(CHROME_BAR_NEW_TAB, {
             execute: async () => {
                 const uri = new URI(EMPTY_PAGE_URL);
                 const handler = await this.openerService.getOpener(uri);
-                await handler.open(uri);
+                const widget = await handler.open(uri);
+                if (widget instanceof Widget) {
+                    try {
+                        await this.groups.joinActiveGroup(widget);
+                    } catch (error) {
+                        console.error('[@powerbrowser/chrome-bar] joining the active group failed:', error instanceof Error ? error.name : typeof error);
+                    }
+                }
                 focusAddressPill();
             },
         });

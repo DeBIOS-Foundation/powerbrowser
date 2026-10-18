@@ -6,6 +6,7 @@ import { Drag } from '@theia/core/shared/@lumino/dragdrop';
 import { MimeData } from '@theia/core/shared/@lumino/coreutils';
 import { Message } from '@theia/core/shared/@lumino/messaging';
 import { DockPanel, TabBar } from '@theia/core/shared/@lumino/widgets';
+import { GroupModel } from '@powerbrowser/modes/lib/browser/group-model';
 
 /** Marks a home-pane tab that the strip lists, so the pane's own bar does not. */
 const STRIP_ONLY_CLASS = 'pb-strip-only';
@@ -66,6 +67,10 @@ const DRAG_THRESHOLD = 5;
  * dock and nothing else; it adds no tab model of its own, so it cannot
  * become a second source of truth that the bridge would later have to
  * reconcile.
+ *
+ * PAN-03 (Phase 22): in Browsing it paints only the active group's tabs, the
+ * loose tabs and the current tab. It reads GroupModel for that membership and
+ * still keeps no tab model of its own.
  */
 @injectable()
 export class TabStripWidget extends ReactWidget {
@@ -74,6 +79,9 @@ export class TabStripWidget extends ReactWidget {
 
     @inject(ApplicationShell)
     protected readonly shell: ApplicationShell;
+
+    @inject(GroupModel)
+    protected readonly groups: GroupModel;
 
     protected readonly toDispose = new DisposableCollection();
 
@@ -91,6 +99,7 @@ export class TabStripWidget extends ReactWidget {
             this.shell.onDidAddWidget(() => this.update()),
             this.shell.onDidRemoveWidget(() => this.update()),
             this.shell.onDidChangeCurrentWidget(() => this.update()),
+            this.groups.onDidChange(() => this.update()),
         ]);
         this.shell.mainPanel.onDidChangeCurrent(() => this.update());
         // A split moves a tab between panes without adding or removing it,
@@ -540,7 +549,7 @@ export class TabStripWidget extends ReactWidget {
 
     protected render(): React.ReactNode {
         const current = this.shell.mainPanel.currentTitle?.owner;
-        const tabs = this.mainTabs();
+        const tabs = this.mainTabs().filter(widget => this.groups.showsInStrip(widget, current));
         const stack = this.stackWidgets();
         // The home bar shows only stacked tabs; the rest are the strip's.
         // Said on the title, which the bar renders as a class on its tab.
