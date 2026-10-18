@@ -4841,6 +4841,11 @@ run_own_checks() {
       # in-run probe controls. Not --quick: binary, Theia build, headless
       # browser.
       "pan04-undo-close-group-live|node $REPO_ROOT/scripts/verify-pan04-undo-close-group-live.mjs"
+      # NEW (Phase 22, PAN-05): the card x and Delete close exactly that tab,
+      # a dirty editor prompts, a not-open card stays closed, one tab stop per
+      # scope, with two in-run probe controls. Not --quick: binary, Theia
+      # build, headless browser.
+      "pan05-card-close-live|node $REPO_ROOT/scripts/verify-pan05-card-close-live.mjs"
       "ng-009-content-age-columns|node $REPO_ROOT/scripts/verify-ng-009-content-age-columns.mjs"
       "ng-010-closed-tab-history|node $REPO_ROOT/scripts/verify-ng-010-closed-tab-history.mjs"
       "ng-011-settings-table-read|node $REPO_ROOT/scripts/verify-ng-011-settings-table-read.mjs"
