@@ -40,6 +40,19 @@ export const GROUP_BOX_MIN_H = 144;
 /** Default title for New Group (contracted copy, verbatim). */
 export const UNTITLED_GROUP_TITLE = 'Untitled group';
 
+/** PAN-04 (22-UI-SPEC A2): how long a closed group stays restorable before its close is written. */
+export const UNDO_CLOSE_MS = 15000;
+
+/** A closed group inside its undo window: hidden everywhere, nothing written yet. */
+interface ClosingGroup {
+    group: PanoramaGroup;
+    index: number;
+    tabs: PanoramaTab[];
+    wasActive: boolean;
+    deadline: number;
+    timer: number | undefined;
+}
+
 export interface PanoramaGroup {
     id: string;
     title: string;
@@ -118,6 +131,8 @@ export class GroupModel implements FrontendApplicationContribution {
     private readonly members = new Map<string, PanoramaTab[]>();
     private ungrouped: PanoramaTab[] = [];
     private readonly reopening = new Set<string>();
+    /** PAN-04: groups in their undo window, by id. Lives here, not on the widget, so a mode switch never ends it. */
+    private readonly closing = new Map<string, ClosingGroup>();
     private activeGroupId: string | undefined;
     private loaded = false;
     private loadFailed = false;
@@ -230,6 +245,10 @@ export class GroupModel implements FrontendApplicationContribution {
      * counts as loose) and the active group's tabs.
      */
     showsInStrip(widget: Widget, current: Widget | undefined): boolean {
+        // PAN-04 (A3): a tab of a group in its undo window is shown nowhere, current or not.
+        if (this.isClosingKey(this.keyOf(widget))) {
+            return false;
+        }
         if (!this.loaded || this.loadFailed || !this.activeGroupId || widget === current) {
             return true;
         }
@@ -335,6 +354,28 @@ export class GroupModel implements FrontendApplicationContribution {
         return this.activeGroupId;
     }
 
+    /** PAN-04: whether this group is in its undo window. */
+    isClosing(id: string): boolean {
+        return this.closing.has(id);
+    }
+
+    /** PAN-04: whether this row key is a member of a group in its undo window. */
+    isClosingKey(key: string): boolean {
+        for (const entry of this.closing.values()) {
+            if (entry.tabs.some(tab => tab.uri === key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** PAN-04: the groups in their undo window, in group order. */
+    listClosing(): readonly { group: PanoramaGroup; index: number; deadline: number }[] {
+        return Object.freeze([...this.closing.values()]
+            .sort((a, b) => a.index - b.index)
+            .map(({ group, index, deadline }) => ({ group, index, deadline })));
+    }
+
     /**
      * Loads groups, membership, and the loose (ungrouped) tabs from the reader. Total parse:
      * unparseable rows are dropped, a corrupt payload lands the contracted
@@ -426,14 +467,26 @@ export class GroupModel implements FrontendApplicationContribution {
                     }
                 }
             }
-            this.groups = parsed;
+            // PAN-04 (Pitfall 5): the store still holds a group in its undo
+            // window. Its open tabs were claimed above, so they are neither a
+            // box nor loose; the closing entry keeps the tabs it captured.
+            const storeActive = parsed.find(group => group.isActive)?.id;
+            const visible = parsed.filter(group => !this.closing.has(group.id));
+            for (const id of this.closing.keys()) {
+                nextMembers.delete(id);
+            }
+            this.groups = visible;
             this.members.clear();
             for (const [id, tabs] of nextMembers) {
                 this.members.set(id, tabs);
             }
             this.ungrouped = loose;
-            const active = parsed.find(group => group.isActive);
-            this.activeGroupId = active?.id;
+            // A pending group still flagged active in the store keeps the in-memory hand-off.
+            const active = storeActive !== undefined && this.closing.has(storeActive) ? this.activeGroupId : storeActive;
+            this.activeGroupId = visible.some(group => group.id === active) ? active : undefined;
+            for (const group of visible) {
+                group.isActive = group.id === this.activeGroupId;
+            }
             this.loaded = true;
             this.loadFailed = false;
         } catch (error) {
@@ -698,35 +751,99 @@ export class GroupModel implements FrontendApplicationContribution {
         await this.persist(`dissolve:${id}`, apply, revert, () => client.mutate({ kind: 'dissolveGroup', id }));
     }
 
-    /** Closes exactly one group's tabs and removes its box (destructive). */
+    /**
+     * PAN-04: closes one group into its undo window. The box and its tabs are
+     * hidden at once and nothing is written: `commitClose` writes the close
+     * when UNDO_CLOSE_MS ends or PowerBrowser quits; `undoCloseGroup` restores it.
+     */
     async closeGroup(client: GroupActorClient, id: string): Promise<{ name: string; count: number } | undefined> {
         const index = this.groups.findIndex(candidate => candidate.id === id);
         if (index < 0) {
             return undefined;
         }
-        const removed = this.groups[index];
+        const group = this.groups[index];
         const tabs = [...(this.members.get(id) ?? [])];
         const wasActive = this.activeGroupId === id;
-        const priorActive = this.activeGroupId;
-        const apply = (): void => {
-            this.groups = this.groups.filter(candidate => candidate.id !== id);
-            this.members.delete(id);
-            this.ungrouped = this.ungrouped.filter(tab => !tabs.some(other => other.uri === tab.uri));
-            this.activeGroupId = wasActive ? this.groups[0]?.id : this.activeGroupId;
-            for (const group of this.groups) {
-                group.isActive = group.id === this.activeGroupId;
+        this.groups = this.groups.filter(candidate => candidate.id !== id);
+        this.members.delete(id);
+        this.activeGroupId = wasActive ? this.groups[0]?.id : this.activeGroupId;
+        for (const other of this.groups) {
+            other.isActive = other.id === this.activeGroupId;
+        }
+        const timer = window.setTimeout(() => {
+            this.commitClose(client, id).catch(error =>
+                console.error('[@powerbrowser/modes] committing a group close failed:', error instanceof Error ? error.name : typeof error));
+        }, UNDO_CLOSE_MS);
+        this.closing.set(id, { group, index, tabs, wasActive, deadline: Date.now() + UNDO_CLOSE_MS, timer });
+        this.changeEmitter.fire();
+        return { name: group.title, count: tabs.length };
+    }
+
+    /** PAN-04: restores a group in its undo window: title, bounds, membership, card order and activity. Writes nothing. */
+    undoCloseGroup(id: string): PanoramaGroup | undefined {
+        const entry = this.closing.get(id);
+        if (!entry) {
+            return undefined;
+        }
+        window.clearTimeout(entry.timer);
+        this.closing.delete(id);
+        this.restoreClosing(entry);
+        this.changeEmitter.fire();
+        return entry.group;
+    }
+
+    private restoreClosing(entry: ClosingGroup): void {
+        const at = Math.min(entry.index, this.groups.length);
+        this.groups = [...this.groups.slice(0, at), entry.group, ...this.groups.slice(at)];
+        this.members.set(entry.group.id, entry.tabs);
+        if (entry.wasActive) {
+            this.activeGroupId = entry.group.id;
+        }
+        for (const group of this.groups) {
+            group.isActive = group.id === this.activeGroupId;
+        }
+    }
+
+    /**
+     * PAN-04: writes one pending close through the unchanged chrome-side
+     * `closeGroupRows`, persists the activity hand-off, then closes the
+     * members' shell widgets (NG-006; a dirty editor keeps Theia's save prompt).
+     * A failed write reverts to the restored group (22-UI-SPEC step 9).
+     */
+    async commitClose(client: GroupActorClient, id: string): Promise<void> {
+        const entry = this.closing.get(id);
+        if (!entry) {
+            return;
+        }
+        window.clearTimeout(entry.timer);
+        const handOff = entry.wasActive ? this.activeGroupId : undefined;
+        await this.persist(`close:${id}`, () => {
+            this.closing.delete(id);
+        }, () => {
+            this.restoreClosing(entry);
+        }, async () => {
+            await client.mutate({ kind: 'closeGroup', id });
+            // Inside the write, so a Retry that lands also closes the widgets.
+            for (const tab of entry.tabs) {
+                this.widgetOf(tab.uri)?.close();
             }
-        };
-        const revert = (): void => {
-            this.groups = [...this.groups.slice(0, index), removed, ...this.groups.slice(index)];
-            this.members.set(id, tabs);
-            this.activeGroupId = priorActive;
-            for (const group of this.groups) {
-                group.isActive = group.id === priorActive;
-            }
-        };
-        await this.persist(`close:${id}`, apply, revert, () => client.mutate({ kind: 'closeGroup', id }));
-        return { name: removed.title, count: tabs.length };
+        });
+        if (handOff && this.groups.some(group => group.id === handOff)) {
+            // The shipped close never wrote the hand-off, so after a reload no group was active.
+            await this.persist(`active:${handOff}`, () => undefined, () => undefined,
+                () => client.mutate({ kind: 'setActiveGroup', id: handOff }));
+        }
+    }
+
+    /** PAN-04: commits every pending close (the quit flush). */
+    async commitAllClosing(client: GroupActorClient): Promise<void> {
+        await Promise.all([...this.closing.keys()].map(id => this.commitClose(client, id).catch(error =>
+            console.error('[@powerbrowser/modes] committing a group close failed:', error instanceof Error ? error.name : typeof error))));
+    }
+
+    /** The open main-area widget for a row key, matched as `liveTabs` keys it. */
+    private widgetOf(uri: string): Widget | undefined {
+        return [...this.shell.mainPanel.widgets()].find(widget => widget.id !== 'powerbrowser.modes.organising' && this.keyOf(widget) === uri);
     }
 
     /** Marks one group active (accent border + title 600, persisted). */
