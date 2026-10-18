@@ -169,9 +169,12 @@ function checkStatic(sources) {
     // WR-05b: the retired-copy proof scans the DERIVED shipped set (every
     // modes-browser .ts plus the CSS/module files). The spec names every
     // retired literal, so it is never part of the shipped set.
+    // WR-04: both spellings -- raw text and \uXXXX-unescaped -- so an escaped
+    // revival cannot hide from a needle that holds the real character.
     const shippedRels = Object.keys(sources).filter(rel => rel !== SPEC_REL);
+    const unescaped = Object.fromEntries(shippedRels.map(rel => [rel, unescapeUnicode(sources[rel] ?? '')]));
     for (const needle of retired) {
-        const at = shippedRels.find(rel => (sources[rel] ?? '').includes(needle));
+        const at = shippedRels.find(rel => (sources[rel] ?? '').includes(needle) || unescaped[rel].includes(needle));
         if (at) {
             failures.push(`retired copy ${JSON.stringify(needle)} survives in ${at} -- the 15-UI-SPEC Retired copy table says it must not ship`);
         }
@@ -256,6 +259,8 @@ function selfTest() {
             expect: [[/ZERO contracted literals/, SPEC_REL]] },
         { id: 'retired caption revived', file: WIDGET_REL, ...swap(null, "caption.textContent = 'No ungrouped tabs \u2014 drag a tab here to ungroup it.';"),
             expect: [[/retired copy/, '"No ungrouped tabs \u2014 drag a tab here to ungroup it."', WIDGET_REL]] },
+        { id: 'escaped revival in an unscanned file', file: DESCRIPTORS_REL, ...swap(null, "x.textContent = 'No ungrouped tabs \\u2014 drag a tab here to ungroup it.';"),
+            expect: [[/retired copy/, '"No ungrouped tabs \u2014 drag a tab here to ungroup it."', DESCRIPTORS_REL]] },
         { id: 'Retired copy heading stripped', file: SPEC_REL, ...swap(/^### Retired copy$/m, '### Retired strings'),
             expect: [[/ZERO retired literals/, SPEC_REL]] },
     ];
