@@ -3897,7 +3897,9 @@ run_own_checks() {
     # 15-UI-SPEC's Canvas Geometry and Typography tables through
     # scripts/lib/ui-spec.mjs at check time and compares them with the
     # tree's consts and CSS, with the thumbnail-fallback shape and the
-    # panorama command registry. Its live DOM half is the full-tier row
+    # panorama command registry. Since Phase 22 that includes the Undo
+    # Close Group rows (UNDO_CLOSE_MS, UNDO_FADE_MS, .pb-org-undo) and the
+    # card-close rows (.pb-org-card-close). Its live DOM half is the full-tier row
     # gui08-loose-cards-live. Honestly --quick: text reads only. No build, no browser, no display, no
     # network. The self-test rides alongside for the reason every other
     # self-test row in this array gives.
@@ -3916,12 +3918,18 @@ run_own_checks() {
     "gui08-view-parity|node $REPO_ROOT/scripts/verify-gui08-view-parity.mjs"
     "gui08-view-parity-self-test|node $REPO_ROOT/scripts/verify-gui08-view-parity.mjs --self-test"
 
-    # NEW (15-03): GUI-08's close-exactness gate. Derives the contracted
-    # Close Group dialog copy verbatim, the cancel-before-mutation ordering,
-    # the model close wiring, and the chrome-side per-tab close surface at
-    # check time and compares as set equality against one EXPECTED const;
-    # live confirm/cancel/activity halves ride as HELD-OUT backstops,
-    # honestly reserved for the full suite. Honestly --quick: text reads
+    # NEW (15-03; rewritten for PAN-04 and PAN-06 in 22-04 and 22-05):
+    # GUI-08's close-exactness gate. Derives the deferred close at check
+    # time: x builds no dialog and closes the group into its undo window;
+    # the close is written only by commitClose, which the UNDO_CLOSE_MS
+    # timer and the quit flush (onWillFlush to commitAllClosing) reach;
+    # Undo clears the timer and writes nothing; the last-group guard
+    # (canCloseGroup) refuses the close and hides the x on the canvas and
+    # in the tree. It also derives the unchanged chrome-side close surface
+    # (the closeGroup dispatch arm reaching the per-tab stock close loop).
+    # It compares as set equality against one EXPECTED const; the live
+    # halves ride as HELD-OUT backstops, proved live by
+    # pan04-undo-close-group-live and ng-006. Honestly --quick: text reads
     # only. No build, no browser, no display, no network. The self-test
     # rides alongside for the reason every other self-test row in this array
     # gives.
