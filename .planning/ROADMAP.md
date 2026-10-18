@@ -292,7 +292,18 @@ Plans:
   4. User can close a card from the card itself (W5)
   5. User cannot close the last remaining group (W11, first part)
 
-**Plans**: TBD
+**Plans**: 7 plans in 7 waves (sequential: every plan shares group-model.ts, organising-widget.ts or 15-UI-SPEC; each owns its wave's `--quick`)
+
+Plans:
+
+- [ ] 22-01-PLAN.md — PAN-02, PAN-03: the model loads itself; the Browsing strip shows the active group's tabs, loose tabs and the current tab; "+" joins the active group; 15-UI-SPEC amended in the same commit; `pan03-strip-group-live`; Chris's copy review for the whole phase (blocking-human)
+- [ ] 22-02-PLAN.md — the held Phase 21 copy (empty-canvas body, WR-05 strings, zoom readout) as Chris worded it; the copy check derives from every text sink
+- [ ] 22-03-PLAN.md — PAN-04 mechanism: the 15 s undo window on the model, commit by timer or quit through the unchanged `closeGroupRows`, hidden in every tab bar; `pan04-undo-close-group-live`
+- [ ] 22-04-PLAN.md — PAN-04 UI: Undo Close Group replaces the dialog; spec copy and the gui08 checks in one commit (SC3); ng-006 through the window; Chris's re-lock of the check hashes (blocking-human)
+- [ ] 22-05-PLAN.md — PAN-06: the last remaining group has no close control and the command ignores it
+- [ ] 22-06-PLAN.md — PAN-05: card × and Delete close the tab through its own close path; `pan05-card-close-live`
+- [ ] 22-07-PLAN.md — full suite on one rebuilt sidecar, derived FAIL set, provenance, `--quick`, the end-of-phase review for Chris
+
 **UI hint**: yes
 
 ### Phase 23: Modes Leftovers and Sketch 005 Verdict
@@ -309,8 +320,27 @@ Plans:
   4. `14-VERIFICATION.md` exists
   5. Sketch 005 is committed with a MANIFEST row, and Chris's verdict (adopt into a named later milestone, or reject) is recorded before Phase 24 starts
 
-**Plans**: TBD
+**Plans**: 5 plans in 4 waves (wave 1 runs two file-disjoint plans in parallel; execution starts after Phase 22 completes)
 **UI hint**: yes
+
+Plans:
+
+**Wave 1**
+
+- [ ] 23-02-PLAN.md — MODE-02: Save as Mode and Save Setup cut names at 60 while typing (stock `createInputBox()`), 14-UI-SPEC states the rule, `modes-name-cap-at-input` with plants plus a live row, ng-035/036 answer the real input, wave-1 `--quick`, Chris's re-lock if those check files are locked (blocking-human)
+- [ ] 23-04-PLAN.md — SK-01: sketch 005 committed with its MANIFEST row and the adopt-into-v1.5 verdict; the G-32 options put to Chris with no recommendation (blocking-human); the v1.5 milestone and the mode-or-setup-name wording recorded
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 23-03-PLAN.md — MODE-03: Chris's G-32 choice applied to code and 14-UI-SPEC in one commit, `modes-panel-motion` with branch plants, a live motion row under a slide, wave-2 `--quick`
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 23-01-PLAN.md — MODE-01 (and the record halves of MODE-02, MODE-03): the five Variant B records current with the G-11 hand-off to Phase 24; G-23 and G-32 closed on the 23-02 and 23-03 commits; UAT summaries recounted; wave-3 `--quick`
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 23-05-PLAN.md — MODE-04: retroactive 14-VERIFICATION with a seam digest; the phase's closing gate
 
 ### Phase 24: Live UAT Pass
 
