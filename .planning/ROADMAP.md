@@ -93,7 +93,7 @@ live UAT itself).
 - [x] **Phase 18: Firefox 153.5.0esr** - Gecko re-pinned to `FIREFOX_153_5_0esr_BUILD1`; dev and release builds and the full verification run pass (completed 2026-10-16)
 - [x] **Phase 19: Node 24, React 19, Theia 1.76.0** - Three commits, each checked live; Theia's AI framework runs stock; NG-082 amended (completed 2026-10-17)
 - [x] **Phase 20: Non-GUI Gaps** - Clean-checkout build, group-channel check, schema ledger rows, `generate-check`, archived phase paths (completed 2026-10-17)
-- [ ] **Phase 21: Panorama Spec and gui08 Checks** - 15-UI-SPEC re-pinned to the shipped Panorama; the commit gate is green
+- [x] **Phase 21: Panorama Spec and gui08 Checks** - 15-UI-SPEC re-pinned to the shipped Panorama; the commit gate is green (completed 2026-10-17)
 - [ ] **Phase 22: Panorama Worklist** - Strip filtered by the active group, Undo Close Group, per-card close, last group kept
 - [ ] **Phase 23: Modes Leftovers and Sketch 005 Verdict** - Variant B records, name cap, panel slide, 14-VERIFICATION, sketch 005 decided
 - [ ] **Phase 24: Live UAT Pass** - Every open UAT sheet run live with no pending result, React 19 line included (NG-084)
@@ -258,7 +258,7 @@ Plans:
   3. `scripts/verify-platform.sh --quick` reports no FAIL row, and `quick-baseline.txt` is empty
   4. No stale tray code, comments or CSS remain, and the canvas still shows ungrouped tabs as loose cards
 
-**Plans**: 5/5 plans executed in 3 waves (waves 1 and 2 each run two file-disjoint plans in parallel; execution starts after Phase 20 completes)
+**Plans**: 5/5 plans complete in 3 waves (waves 1 and 2 each run two file-disjoint plans in parallel; execution starts after Phase 20 completes)
 **UI hint**: yes
 
 Plans:
@@ -348,7 +348,7 @@ Plans:
 | 18. Firefox 153.5.0esr | 3/3 | Complete    | 2026-10-16 |
 | 19. Node 24, React 19, Theia 1.76.0 | 8/8 | Complete    | 2026-10-17 |
 | 20. Non-GUI Gaps | 5/5 | Complete    | 2026-10-17 |
-| 21. Panorama Spec and gui08 Checks | 5/5 | In Progress | - |
+| 21. Panorama Spec and gui08 Checks | 5/5 | Complete    | 2026-10-17 |
 | 22. Panorama Worklist | 0/TBD | Not started | - |
 | 23. Modes Leftovers and Sketch 005 Verdict | 0/TBD | Not started | - |
 | 24. Live UAT Pass | 0/TBD | Not started | - |

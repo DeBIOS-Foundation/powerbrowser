@@ -59,7 +59,7 @@ Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
 
 ### Panorama (finishes GUI-08)
 
-- [ ] **PAN-01**: 15-UI-SPEC describes the shipped Panorama redesign (commit
+- [x] **PAN-01**: 15-UI-SPEC describes the shipped Panorama redesign (commit
       `7b7a1f7`); `verify-gui08-canvas-geometry` and `verify-gui08-panorama-copy`
       derive from it and pass; the commit gate is green and `quick-baseline.txt`
       is empty.
@@ -70,7 +70,7 @@ Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
 - [ ] **PAN-04**: The user can restore a closed group with Undo Close Group (W4).
 - [ ] **PAN-05**: The user can close a card from the card itself (W5).
 - [ ] **PAN-06**: The last remaining group cannot be closed (W11, first part).
-- [ ] **PAN-07**: The stale tray code, comments and CSS are removed.
+- [x] **PAN-07**: The stale tray code, comments and CSS are removed.
 
 ### Modes and windows (finishes GUI-07)
 
@@ -143,13 +143,13 @@ the project's own planning record.
 | PLAT-03 | Phase 20 | Complete |
 | PLAT-04 | Phase 20 | Complete |
 | PLAT-05 | Phase 20 | Complete |
-| PAN-01 | Phase 21 | Pending |
+| PAN-01 | Phase 21 | Complete |
 | PAN-02 | Phase 22 | Pending |
 | PAN-03 | Phase 22 | Pending |
 | PAN-04 | Phase 22 | Pending |
 | PAN-05 | Phase 22 | Pending |
 | PAN-06 | Phase 22 | Pending |
-| PAN-07 | Phase 21 | Pending |
+| PAN-07 | Phase 21 | Complete |
 | MODE-01 | Phase 23 | Pending |
 | MODE-02 | Phase 23 | Pending |
 | MODE-03 | Phase 23 | Pending |
