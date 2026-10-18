@@ -22,7 +22,6 @@
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
 import {
     ApplicationShell,
-    ConfirmDialog,
     Message,
     StatusBar,
     StatusBarAlignment,
@@ -40,7 +39,7 @@ import { GroupModel, GROUP_BOX_MIN_H, GROUP_BOX_MIN_W, GROUP_TITLE_MAX_CHARS, Li
 import { buildTreeSection } from './organising-tree';
 import { fitTiles, TILE_ASPECT, TILE_GAP } from './organising-tiling';
 import { pushAway } from './organising-geometry';
-import { PANORAMA_CLOSE_GROUP_COMMAND_ID, PANORAMA_NEW_GROUP_COMMAND_ID } from './panorama-commands';
+import { PANORAMA_CLOSE_GROUP_COMMAND_ID, PANORAMA_NEW_GROUP_COMMAND_ID, PANORAMA_UNDO_CLOSE_GROUP_COMMAND_ID } from './panorama-commands';
 import { PanoramaCommandHandler } from './panorama-commands';
 // Resolved through src/, not './', because the build is `tsc -b` alone: tsc
 // emits no CSS into lib/, so a lib-relative specifier resolves to a file that
@@ -73,6 +72,9 @@ const ORGANISING_MODE_ID = 'organising';
 
 /** Settle before photographing a tab, so switching quickly captures once. */
 const SHELL_CAPTURE_SETTLE_MS = 700;
+
+/** The Undo Close Group control's fade-out before its window ends; equals its CSS opacity transition. */
+const UNDO_FADE_MS = 150;
 
 /**
  * The eight resize grips, named by compass point. `n`/`w` move the box's
@@ -357,43 +359,37 @@ export class OrganisingWidget extends Widget {
     }
 
     async closeGroupById(id: string): Promise<void> {
-        const group = this.model.listGroups().find(candidate => candidate.id === id);
-        if (!group) {
-            return;
-        }
-        const count = this.model.getTabs(id).length;
-        const closeMsg = count === 1
-            ? `Close "${group.title}"? Its 1 tab will close too. You can't undo this.`
-            : `Close "${group.title}"? Its ${count} tabs will close too. You can't undo this.`;
-        let confirmed: boolean | undefined = false;
         try {
-            const dialog = new ConfirmDialog({
-                title: 'Close Group',
-                msg: closeMsg,
-                ok: 'Close Group',
-                cancel: 'Cancel',
-            });
-            dialog.addClass('pb-org-close-confirm');
-            confirmed = await dialog.open();
-        } catch (error) {
-            console.error('[@powerbrowser/modes] close-group dialog failed:', error);
-            return;
-        }
-        if (!confirmed) {
-            return;
-        }
-        try {
+            // No confirmation (22-UI-SPEC A1): the close is reversible from the Undo control,
+            // and the model's timer or the quit flush writes it.
             const closed = await this.model.closeGroup(this.actor, id);
             if (closed) {
-                // The confirmation dialog promises an immediate close, so confirming commits at once.
-                await this.model.commitClose(this.actor, id);
                 await this.flash(`Group "${closed.name}" closed.`);
             }
             this.render();
+            if (closed) {
+                this.focusUndo(id);
+            }
         } catch (error) {
             console.error('[@powerbrowser/modes] close-group failed:', error);
             this.render();
         }
+    }
+
+    async undoCloseGroupById(id: string): Promise<void> {
+        if (!this.model.undoCloseGroup(id)) {
+            return;
+        }
+        // The restored box keeps its bounds; anything now overlapping them moves clear.
+        await this.separateGroups(id);
+        const at = CSS.escape(id);
+        const root = this.view === 'canvas' ? this.canvasRoot : this.treeRoot;
+        (root.querySelector(`[data-g="${at}"] .pb-org-box-title, [data-g="${at}"] .pb-org-tree-title`) as HTMLElement | null)?.focus();
+    }
+
+    protected focusUndo(id: string): void {
+        const root = this.view === 'canvas' ? this.canvasRoot : this.treeRoot;
+        (root.querySelector(`.pb-org-undo[data-closing="${CSS.escape(id)}"]`) as HTMLElement | null)?.focus();
     }
 
     showCanvasView(): void {
@@ -433,11 +429,23 @@ export class OrganisingWidget extends Widget {
         if (this.suppressRender) {
             return;
         }
+        // A rebuild drops focus; keep it on an Undo control, or send it to New Group once that window has ended.
+        const active = document.activeElement;
+        const undoFocus = active instanceof HTMLElement && active.classList.contains('pb-org-undo') && this.node.contains(active)
+            ? active.dataset.closing
+            : undefined;
         this.renderToolbar();
         this.renderBars();
         this.renderCanvas();
         this.renderTree();
         this.renderExpanded();
+        if (undoFocus !== undefined) {
+            if (this.model.isClosing(undoFocus)) {
+                this.focusUndo(undoFocus);
+            } else {
+                (this.node.querySelector('.pb-org-new') as HTMLElement | null)?.focus();
+            }
+        }
     }
 
     protected renderToolbar(): void {
@@ -483,6 +491,7 @@ export class OrganisingWidget extends Widget {
                 true
             );
             this.canvasRoot.append(empty);
+            this.renderUndo();
             // In a short host the bottom line would run through the in-flow panel.
             this.renderLoose(empty.offsetTop + empty.offsetHeight + LOOSE_MARGIN);
             return;
@@ -490,6 +499,7 @@ export class OrganisingWidget extends Widget {
         for (const group of groups) {
             this.canvasRoot.append(this.buildBox(group));
         }
+        this.renderUndo();
         this.renderLoose();
         this.tileCards();
     }
@@ -741,17 +751,71 @@ export class OrganisingWidget extends Widget {
             return;
         }
         const groups = this.model.listGroups();
+        const closing = this.model.listClosing();
         if (groups.length === 0) {
             this.treeRoot.append(this.buildEmpty(
                 'No tab groups',
                 'There are no tab groups yet — choose New Group to start one.',
                 true
             ));
+            this.treeRoot.append(...closing.map(entry => this.buildUndo(entry)));
             return;
         }
-        for (const group of groups) {
-            this.treeRoot.append(this.buildSection(group));
+        const sections: HTMLElement[] = groups.map(group => this.buildSection(group));
+        // Each pending group's control sits in its section's place in group order.
+        for (const entry of closing) {
+            sections.splice(Math.min(entry.index, sections.length), 0, this.buildUndo(entry));
         }
+        this.treeRoot.append(...sections);
+    }
+
+    /**
+     * PAN-04: one Undo Close Group control per group in its undo window, centred in
+     * the group's stored bounds on the zoomed layer. It carries no `data-g`, so it is
+     * no drop target and takes no part in push-away.
+     */
+    protected renderUndo(): void {
+        for (const entry of this.model.listClosing()) {
+            const undo = this.buildUndo(entry);
+            undo.style.position = 'absolute';
+            undo.style.left = `${entry.group.x + entry.group.w / 2}px`;
+            undo.style.top = `${entry.group.y + entry.group.h / 2}px`;
+            undo.style.transform = 'translate(-50%, -50%)';
+            this.canvasRoot.append(undo);
+        }
+    }
+
+    /** The Undo Close Group control, one builder for canvas and tree (22-01 C1 items 1 and 2). */
+    protected buildUndo(entry: { group: PanoramaGroup; deadline: number }): HTMLButtonElement {
+        const id = entry.group.id;
+        const undo = document.createElement('button');
+        undo.type = 'button';
+        undo.className = 'pb-org-undo';
+        undo.dataset.command = PANORAMA_UNDO_CLOSE_GROUP_COMMAND_ID;
+        undo.dataset.closing = id;
+        undo.textContent = 'Undo Close Group';
+        undo.title = `Undo Close Group "${entry.group.title}"`;
+        undo.setAttribute('aria-label', `Undo Close Group "${entry.group.title}"`);
+        // No band starts on it.
+        undo.addEventListener('pointerdown', event => event.stopPropagation());
+        undo.addEventListener('click', event => {
+            event.stopPropagation();
+            void this.undoCloseGroupById(id);
+        });
+        undo.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                event.stopPropagation();
+                void this.undoCloseGroupById(id);
+            }
+        });
+        const leaveIn = entry.deadline - UNDO_FADE_MS - Date.now();
+        if (leaveIn > 0) {
+            window.setTimeout(() => undo.classList.add('is-leaving'), leaveIn);
+        } else {
+            undo.classList.add('is-leaving');
+        }
+        return undo;
     }
 
     // Canvas pieces.
@@ -2112,6 +2176,12 @@ export class OrganisingCommandHandler implements PanoramaCommandHandler {
     async closeGroup(id: string): Promise<void> {
         if (id) {
             await this.widget()?.closeGroupById(id);
+        }
+    }
+
+    async undoCloseGroup(id: string): Promise<void> {
+        if (id) {
+            await this.widget()?.undoCloseGroupById(id);
         }
     }
 

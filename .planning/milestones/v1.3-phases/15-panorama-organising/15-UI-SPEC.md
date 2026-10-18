@@ -130,6 +130,8 @@ is on cards, boxes and tree rows.
 | STACK_VISIBLE | 5 | `organising-widget.ts` |
 | STACK_OFFSET | 4 px | `organising-widget.ts` |
 | SHELL_CAPTURE_SETTLE_MS | 700 ms (settle before a tab is photographed) | `organising-widget.ts` |
+| UNDO_CLOSE_MS | 15000 ms (the undo window after a group closes) | `group-model.ts` |
+| UNDO_FADE_MS | 150 ms (the Undo Close Group control's fade-out at the end of its window) | `organising-widget.ts` |
 | targetWidth | 160 px (capture target width) | `PowerBrowserAPI.sys.mjs` |
 | TAB_THUMBNAIL_CAPTURE_MAX_CHARS | 102400 chars (capture cap) | `PowerBrowserAPI.sys.mjs` |
 | `.pb-org-card` width | 220 px (base card, expanded-stack panel) | `modes.css` |
@@ -139,6 +141,8 @@ is on cards, boxes and tree rows.
 | `.pb-org-box-resize` width | 16 px (visible grip, bottom-right) | `modes.css` |
 | `.pb-org-box-resize` height | 16 px | `modes.css` |
 | `.pb-org-skeleton` height | 144 px (loading skeleton box) | `modes.css` |
+| `.pb-org-undo` height | 32 px (Undo Close Group control) | `modes.css` |
+| Undo Close Group position | Centred in the closed group's stored bounds, on the zoomed layer; no drop target, no part in push-away | `organising-widget.ts` `renderUndo()` |
 | Stack card width | 40-170 px, fitted to the box | `organising-widget.ts` `stackCards()` |
 | Edge grips | 8 px strips on n/s/e/w; 14 × 14 corners nw/ne/sw | `modes.css` `.pb-org-box-grip-*` |
 | Canvas minimum height | 320 px, or host height − 4; with zero groups it grows further so the loose line stays below the empty panel, and the host scrolls | `modes.css` `.pb-org-canvas`; `renderCanvas()`, `renderLoose()` |
@@ -174,11 +178,11 @@ outside it, apart from the frozen translucencies listed below.
 | Role | Value | Usage |
 |------|-------|-------|
 | Dominant (60%) | `#1c1b22` `--color-bg` | Organising host, canvas host, tree background, card preview background |
-| Secondary (30%) | `#2b2a33` `--color-surface`, `#35343f` `--color-surface-raised`, `#3f3e4a` `--color-border` | Toolbar, error bars, group boxes, tree sections, expanded panel; cards on surface-raised; hairlines |
+| Secondary (30%) | `#2b2a33` `--color-surface`, `#35343f` `--color-surface-raised`, `#3f3e4a` `--color-border` | Toolbar, error bars, group boxes, tree sections, expanded panel, the Undo Close Group control (surface fill, surface-raised on hover); cards on surface-raised; hairlines |
 | Text | `#fbfbfe` `--color-text`, `#9a99a8` `--color-text-muted` | Primary ink; secondary ink, inactive segments, active-group border |
 | Accent (10%) | `#00a6f5` `--color-primary` | Reserved list below |
 | Accent, light | `#8ad4ff` `--color-accent` | The Expand pill text only |
-| Destructive | `#ff848b` `--color-danger` | Close Group confirm button only (`.pb-org-close-confirm .theia-button.main`) |
+| Destructive | `#ff848b` `--color-danger` | Not used on this surface. Its only Panorama use was the Close Group confirm button, removed with the dialog in Phase 22 (22-UI-SPEC A1). |
 
 **Accent reserved for (exhaustive):**
 
@@ -203,23 +207,25 @@ loose card 0.45, resize grip 0.6.
 Pairings from 13/14-UI-SPEC: `#fbfbfe` on `#1c1b22` ≈ 16:1; `#fbfbfe` on `#2b2a33` ≈ 13:1;
 `#9a99a8` on `#2b2a33` ≈ 5:1 (AA for secondary text and captions). `#8ad4ff` on the 0.72-black
 pill over `#2b2a33` is above 10:1. The active group is never shown by colour alone: title 600
-carries it too. `#ff848b` on `#2b2a33` ≈ 5:1 — the Close Group control pairs destructive ink with
-its explicit label and a confirmation step, so colour is never the sole carrier.
+carries it too.
 
 ### Focus
 
 Every Panorama control shows `outline: 2px solid var(--color-primary); outline-offset: 2px` on
 `:focus-visible` (WCAG 2.4.7 / 2.4.11, same idiom as 13/14-UI-SPEC): toggle segments, New Group,
 zoom steps, error-bar Retry, box and tree close buttons, cards, tree rows, box and tree titles,
-the rename input, the visible resize grip, and the empty-state action. Cards are reached by
+the rename input, the visible resize grip, the empty-state action, and the Undo Close Group
+control (`.pb-org-undo`). Cards are reached by
 roving tabindex within their scope (see Interaction Contract, Cards).
 
 ### Motion
 
 Baseline `transition: all 0.15s ease` (sketch-locked, carried); zoom transform 0.15s; the drop
 slot moves at 0.12s; the drag ghost and the dragged card have no transition. Opening a tab from a
-card uses the stock tab-open path with no authored animation. `prefers-reduced-motion` removes
-transitions on the canvas layer, cards, the resize grip and every toolbar control. Group data
+card uses the stock tab-open path with no authored animation. The Undo Close Group control
+appears at once and fades out over 0.15s at the end of its window. `prefers-reduced-motion`
+removes transitions on the canvas layer, cards, the resize grip, the Undo Close Group control
+(`.pb-org-undo`) and every toolbar control. Group data
 paints with skeleton boxes until first load, never a spinner.
 
 ---
@@ -233,7 +239,7 @@ key, sentinel, port, table name, `group_id`, bounds (other than the resize grip'
 
 Form: every contracted literal is written bolded and quoted in a table row below, with the exact
 characters painted (U+2014 em dash, U+2019 in the two error bars, a straight apostrophe in the
-dialog bodies, U+2212 minus, U+00D7 times). Interpolation slots are written `{name}` and `{N}`.
+retired dialog bodies, U+2212 minus, U+00D7 times). Interpolation slots are written `{name}` and `{N}`.
 `verify-gui08-panorama-copy` derives the contract and the retired set from these tables through
 `scripts/lib/ui-spec.mjs`.
 
@@ -254,7 +260,8 @@ dialog bodies, U+2212 minus, U+00D7 times). Interpolation slots are written `{na
 | Groups-save error | **"PowerBrowser couldn’t save your tab groups. The canvas shows your latest arrangement — choose Retry."** |
 | Error-bar action | **"Retry"** — re-issues the load, or replays the failed write |
 | Group close button tooltip | **"Close group"** |
-| Destructive confirmation | **"Close Group"** (title and confirm button, in destructive ink), **"Close "{name}"? Its 1 tab will close too. You can't undo this."**, **"Close "{name}"? Its {N} tabs will close too. You can't undo this."**, **"Cancel"**. This is the only destructive action on this surface. |
+| Undo control label | **"Undo Close Group"** — the control in the closed group's bounds (canvas) or in its section's place (tree); restores the group and its tabs (22-01 C1 item 1) |
+| Undo control accessible name | **"Undo Close Group "{name}""** — the control's `aria-label` and `title`, so two open undo windows are told apart (22-01 C1 item 2) |
 | Group closed confirmation | **"Group "{name}" closed."** (status-bar flash) |
 | Widget label | **"Organising"** |
 | Resize grip value | **"{w} by {h} pixels"** — the se resize grip's `aria-valuetext`, the box's current width and height (22-01 C1 item 5) |
@@ -276,6 +283,9 @@ bolded literal in this table and fails on any hit.
 | Placeholder action | **"Back to Browsing"** | As above. |
 | Placeholder body | **"The freeform canvas for arranging tabs lands in the next update"** | As above. |
 | Empty canvas body (before 22-02) | **"There are no tab groups yet — choose New Group, or drag a tab onto the canvas to start one."** | Names a gesture that places the tab loose; drawing a band starts a group. |
+| Close Group dialog body, one tab (before 22-04) | **"Close "{name}"? Its 1 tab will close too. You can't undo this."** | The confirmation is removed (22-UI-SPEC A1); with Undo Close Group, "You can't undo this." is false. A `{name}` slot matches any template slot in source. |
+| Close Group dialog body, many tabs (before 22-04) | **"Close "{name}"? Its {N} tabs will close too. You can't undo this."** | As above; `{name}` and `{N}` each match any template slot. |
+| Close Group dialog title, confirm and cancel buttons | The words Close Group and Cancel, in plain text | Not searched: Close Group is a substring of Undo Close Group, and Cancel is too common a word. If either returns as painted copy, the copy check's set-equality diff reports it as surplus. The bare sentence about undoing is not searched either: Setups ships it. |
 
 ---
 
@@ -349,9 +359,27 @@ bolded literal in this table and fails on any hit.
   switches to Browsing for a page, or Coding for an editor or the Welcome view. It then
   activates the open widget, or reopens the tab through the opener if it is closed (NG-008).
   Opening never closes, moves or detaches any other tab.
-- **Close Group:** × opens the destructive confirmation. Confirming closes exactly that group's
-  tabs and the box, then the status-bar flash appears. Cancel changes nothing. If the closed
-  group was active, activity passes to a remaining group or to none, never to a removed box.
+- **Close Group and Undo Close Group** (Phase 22, PAN-04):
+  1. × on a box header, or on a tree section, closes the group at once. No dialog.
+  2. The box is removed and its tabs leave every strip, dock bar and card set, in every mode. If
+     it was active, activity passes to a remaining group or to none, never to a removed box. The
+     status-bar flash "Group "{name}" closed." shows.
+  3. "Undo Close Group" appears centred in the group's bounds on the canvas, and in the tree in
+     the section's place in group order. Focus moves to it, since the × it came from is gone.
+  4. Undo (click, or Enter or Space on the focused control) restores the group: same title,
+     bounds, membership and card order, its tabs back in place. Boxes that now overlap those
+     bounds move clear; the restored box does not move. It is active again only if it was active
+     when closed. Focus moves to the restored box title (canvas) or section title (tree).
+  5. After `UNDO_CLOSE_MS` (15000 ms) without Undo, the control fades out and the close commits:
+     the tabs close for good as closed-tab history and the group row is removed. If focus was on
+     the control, it moves to "New Group".
+  6. Several groups can be in their undo windows at once, each with its own control and timer.
+  7. Switching mode or view during the window does not end it; the control is still there on
+     return while the timer runs. Quitting during the window commits the close.
+  8. Unsaved editor changes are never discarded without Theia's stock save prompt, at the click
+     or at the commit.
+  9. A failed restore or commit write reverts the painted change and raises the save-error bar
+     with Retry. No new copy.
 
 ### Cards
 
@@ -377,10 +405,11 @@ one tab stop.
 
 ## UI Considerations
 
-Applicable state considerations resolved: 30 covered, 7 backstop, 0 unresolved.
+Applicable state considerations resolved: 35 covered, 8 backstop, 0 unresolved.
 
 Elements: E1 canvas, E2 group box, E3 card, E4 loose cards, E5 tree, E6 toolbar, E7 rename
-input, E8 Close Group dialog, E9 error bars, E10 expanded stack, E11 Browsing strip filter.
+input, E8 retired (the Close Group dialog, removed in Phase 22), E9 error bars, E10 expanded
+stack, E11 Browsing strip filter, E12 Undo Close Group control.
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
@@ -404,7 +433,6 @@ input, E8 Close Group dialog, E9 error bars, E10 expanded stack, E11 Browsing st
 | populated | E5 tree | ✅ covered | Sections with title, count and close over 32px rows; groups only |
 | populated | E6 toolbar | ✅ covered | Toggle, New Group, zoom cluster hidden in Tree |
 | empty / long-text | E7 rename | ✅ covered | Empty commit reverts; paste cut at 60 |
-| long-text | E8 dialog | ✅ covered | Name never truncated in the confirmation |
 | populated | E10 expanded | ✅ covered | Heading, Done, every card at 220px, wrapping list scrolls vertically past 80% height |
 | populated | E11 strip | ✅ covered | Active group's tabs plus loose tabs plus the current tab, in dock order |
 | empty | E11 strip | ✅ covered | Active group with no open tab and no loose tab → the current tab only; no placeholder |
@@ -414,16 +442,24 @@ input, E8 Close Group dialog, E9 error bars, E10 expanded stack, E11 Browsing st
 | scope | E11 strip | ✅ covered | Browsing strip only; Coding dock bars, split panes and Organising unfiltered (D2) |
 | populated | E11 + "+" | ✅ covered | "+" with an active group → member, card at the group's end; else loose |
 | error | E11 + "+" | ✅ covered | Membership write fails → tab stays open and loose; save-error bar with Retry |
+| populated | E12 undo | ✅ covered | Centred in the vacated bounds (canvas) or in the section's place (tree); focus moves to it |
+| zero-one-many | E12 undo | ✅ covered | Several windows at once, each with its own control, timer and named accessible label |
+| timeout | E12 undo | ✅ covered | 15000 ms → fades out, close commits, focus to New Group if it was on the control |
+| error | E12 undo | ✅ covered | Restore or commit write fails → paint reverts, save-error bar with Retry |
+| restart | E12 undo | ✅ covered | Quit inside the window → closed for good; never an empty box or loose leftovers |
+| long-text | E12 undo | ✅ covered | Visible label is fixed; the group name is only in the accessible name, never truncated there |
 | draw | E1 band | 🧪 backstop | Live: a drawn band ≥30px creates a group at that rectangle and takes enclosed loose cards; Esc cancels |
 | join / place | E2 + E4 drag | 🧪 backstop | Live: drop over a group joins at the previewed slot; drop on empty canvas places loose; emptied group dissolves |
 | parity | E1 + E5 | 🧪 backstop | Live: tree shows identical groups, order and membership after every mutation and flip |
-| close-group | E8 | 🧪 backstop | Live: confirm closes exactly that group's tabs; cancel changes nothing |
+| undo-restore | E12 | 🧪 backstop | Live: Undo restores title, bounds, membership, card order and tabs; the strip shows them again if the group was active |
+| undo-commit | E12 | 🧪 backstop | Live: after 15 s the tabs are closed (no widget, no overlay, no stock tab) and the box is gone |
 | keyboard | E3 + E4 + E10 | 🧪 backstop | Live: every loose and expanded card reachable by Tab plus arrows; Enter opens |
 | filter-live | E11 + E1 | 🧪 backstop | Live: after a card drag, band draw, close, undo and "+", the Browsing strip matches the active group's members plus loose plus current, with no reload |
 | mode-scope | E11 | 🧪 backstop | Live: Coding dock bars list every tab while a group is active |
 
 **Dismissed (reasoned):** E10 loading and error (it paints from the in-memory model
-synchronously); E6 loading (local controls).
+synchronously); E6 loading (local controls); E8 states (the dialog is removed); E12 overflow (one
+fixed-length label).
 
 <!-- Status vocabulary (locked by probe-core projectTruths):
      ✅ covered   → a plain truth string lifted into must_haves.truths
@@ -469,10 +505,10 @@ FLAGs on dimensions 1, 3 and 5; this file was not re-run through the checker.
 |---|---|
 | Re-pinned to the shipped redesign | Phase 21 (v1.4), 2026-10-17: re-pinned to the Panorama redesign in commit `7b7a1f7`, with every value read from the tree on `main` at the re-pin commit. Content source: 21-UI-SPEC (Phase 21). The Canvas Geometry, Typography and Copywriting Contract tables are parsed by `scripts/lib/ui-spec.mjs` for `verify-gui08-canvas-geometry` and `verify-gui08-panorama-copy`, which re-prove them against the tree on every run. |
 | Design system = none | Codebase scan — no `components.json` / `tailwind.config.*`; `theia/extensions/modes` + `chrome-bar` are `@theia/*` contributions, not an app shell; rationale inherits 13/14-UI-SPEC |
-| Tokens, ramp, focus, motion, copy rules | 14-UI-SPEC.md verbatim inheritance + sketch `sources/themes/default.css` (no new hue; `--color-danger` reused for Close Group; `--color-accent` for the Expand pill) |
+| Tokens, ramp, focus, motion, copy rules | 14-UI-SPEC.md verbatim inheritance + sketch `sources/themes/default.css` (no new hue; `--color-accent` for the Expand pill) |
 | Strip stays top, placeholder retired | 13-01 spike verdict RED (binding) + 14-UI-SPEC placeholder slot + 15-CONTEXT.md (slot hosts the real canvas) |
 | Header-drag, eight grips, pixel-free placement, push-away, tile then stack, loose cards, band-drawn groups, zoom | `.planning/notes/browser-organising-panorama.md` (locked research) + `15-PANORAMA-GAP.md` (Firefox 44 Panorama reference) + the shipped tree at `7b7a1f7` |
 | Tree as vertical stacked lists over identical data | Panorama note tree-toggle section + 15-CONTEXT.md |
 | SQL groups shape, single-writer path, sessionstore authority, PNG snapshots | REQUIREMENTS.md GUI-08 + 15-CONTEXT.md + `.planning/notes/tab-sql-substrate.md` |
 | Dead layout blob reserved for this canvas | 14 REVIEW-FIX.md WR-10 |
-| Deferred (not specified here) | Type-anywhere search, strip relocation (closed by RED verdict), bookmarks strip, browser menu, in-Theia web tabs (GUI-02), unified tab strip (GUI-05); Undo Close Group, per-card close and keeping the last group (Phase 22) |
+| Deferred (not specified here) | Type-anywhere search, strip relocation (closed by RED verdict), bookmarks strip, browser menu, in-Theia web tabs (GUI-02), unified tab strip (GUI-05); per-card close and keeping the last group (Phase 22) |

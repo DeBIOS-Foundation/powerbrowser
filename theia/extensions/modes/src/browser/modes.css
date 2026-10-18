@@ -289,6 +289,33 @@
 }
 
 /*
+ * PAN-04: Undo Close Group, in the closed group's bounds (canvas) or its
+ * section's place (tree). It appears at once and fades out over the last
+ * 0.15s of the window (UNDO_FADE_MS in organising-widget.ts).
+ */
+.pb-org-undo {
+    height: 32px;
+    padding: 0 16px;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.4;
+    white-space: nowrap;
+    color: var(--color-text, #fbfbfe);
+    background: var(--color-surface, #2b2a33);
+    border: 1px solid var(--color-border, #3f3e4a);
+    border-radius: 4px;
+    transition: opacity 0.15s ease;
+}
+
+.pb-org-undo:hover {
+    background: var(--color-surface-raised, #35343f);
+}
+
+.pb-org-undo.is-leaving {
+    opacity: 0;
+}
+
+/*
  * The tiling surface. Children are absolutely positioned by tileCards, which
  * sizes them to fit -- so this fills whatever the box has left and never
  * scrolls. `is-scrolling` is the one fallback: more cards than the floor tile
@@ -727,7 +754,8 @@
 .pb-org-tree-title:focus-visible,
 .pb-org-rename:focus-visible,
 .pb-org-box-resize:focus-visible,
-.pb-org-empty-action:focus-visible {
+.pb-org-empty-action:focus-visible,
+.pb-org-undo:focus-visible {
     outline: 2px solid var(--color-primary, #00a6f5);
     outline-offset: 2px;
 }
@@ -743,47 +771,38 @@
     .pb-org-errorbar-retry,
     .pb-org-box-close,
     .pb-org-tree-close,
-    .pb-org-empty-action {
+    .pb-org-empty-action,
+    .pb-org-undo {
         transition: none;
     }
 }
 
 }
 
-/* GUI-08 (15-UI-REVIEW Top Fix #1): destructive ink for the Close Group
-   confirm button -- the ONLY destructive action in the phase. Scoped to
-   the dialog instance the close path tags via the public Widget addClass
-   (`pb-org-close-confirm`), so no other stock dialog is selected and
-   nothing bleeds. Unlayered by cascade necessity: this sheet's layer
-   loses to Theia's unlayered `.theia-button` color by construction, so
-   this one scoped rule rides outside the layer to win it. No !important,
-   no new hue -- the contracted `--color-danger` token only.
+/* G-14.1.1-22 (14.1.1-03): destructive ink for Setups' Delete Setup confirm
+   button (`pb-setup-delete-confirm`, 14-UI-SPEC.md:136 and :213), the one
+   danger-scoped confirmation left in this sheet. Panorama's Close Group
+   confirmation was removed in Phase 22 (22-UI-SPEC A1): closing a group is
+   undone from the Undo Close Group control, so the Panorama no longer uses
+   `--color-danger`. Scoped to the dialog instance the delete path tags via
+   the public Widget addClass, so no other stock dialog is selected and
+   nothing bleeds. Unlayered by cascade necessity: this sheet's layer loses
+   to Theia's unlayered `.theia-button` color by construction, so this one
+   scoped rule rides outside the layer to win it. No !important, no new hue
+   -- the contracted `--color-danger` token only.
 
-   G-14.1.1-22 (14.1.1-03) adds the second and last of these: Setups' Delete
-   Setup (`pb-setup-delete-confirm`, 14-UI-SPEC.md:136 and :213). Panorama's
-   Close Group and Setups' Delete Setup are the ONLY two destructive
-   confirmations in the tree, so by DESIGN these are the only two
-   danger-scoped confirm selectors this sheet may carry.
-
-   That limit is the design's, not a gate's (WR-02, 14.1.1-09; corrected
-   14.1.1-12). What `gui09-setups-copy` asserts, kept separate from the
-   design statement above: it walks EVERY `ConfirmDialog` construction in
-   `setups-service.ts`, attributes each `addClass` to that dialog's own
-   binding, and requires each dialog to carry a class that has a
-   danger-scoped rule in this sheet -- so a second destructive dialog added
-   with no class is red (self-test plant 10), the case the previous wording
-   claimed was covered and was not. What it does NOT assert: it does not
-   enumerate this sheet's danger-scoped selectors and does not go red on a
-   third one appearing here; and it reads only `setups-service.ts`, so a
-   confirmation painted from another file in this extension is outside its
-   scope. No assertion is added for either on purpose -- an enumerated
-   selector list inside a gate would be exactly the hand-kept expectation
-   this project's verification rules forbid. */
-.pb-org-close-confirm .theia-button.main {
-    color: var(--color-danger, #ff848b);
-    border-color: var(--color-danger, #ff848b);
-}
-
+   What `gui09-setups-copy` asserts (WR-02, 14.1.1-09; corrected 14.1.1-12):
+   it walks EVERY confirmation-dialog construction in `setups-service.ts`,
+   attributes each `addClass` to that dialog's own binding, and requires
+   each dialog to carry a class that has a danger-scoped rule in this sheet
+   -- so a second destructive dialog added with no class is red (self-test
+   plant 10). What it does NOT assert: it does not enumerate this sheet's
+   danger-scoped selectors and does not go red on another one appearing
+   here; and it reads only `setups-service.ts`, so a confirmation painted
+   from another file in this extension is outside its scope. No assertion
+   is added for either on purpose -- an enumerated selector list inside a
+   gate would be exactly the hand-kept expectation this project's
+   verification rules forbid. */
 .pb-setup-delete-confirm .theia-button.main {
     color: var(--color-danger, #ff848b);
     border-color: var(--color-danger, #ff848b);

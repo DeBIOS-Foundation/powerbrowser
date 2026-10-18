@@ -9,7 +9,7 @@
 // scripts/lib/ui-spec.mjs: every Canvas Geometry row is compared with the
 // tree (geometryDiff), and the stylesheet's font sizes and weights with the
 // Typography table. Nothing numeric is hand-kept here. The command registry
-// and the Close Group dialog literals have no 15-UI-SPEC home, so they are
+// and the Close group tooltip literal have no 15-UI-SPEC home, so they are
 // this script's declared contract (the EXPECTED block below), compared as set
 // equality or exact text and reported BY NAME. PAN-07 is a negated search of
 // the code under test: a surviving tray selector or hook is red. An empty
@@ -58,10 +58,9 @@ const EXPECTED_COMMAND_IDS = Object.freeze([
     'powerbrowser.panorama.show-canvas',
     'powerbrowser.panorama.show-tree',
     'powerbrowser.panorama.retry-save',
+    'powerbrowser.panorama.undo-close-group',
 ]);
 const EXPECTED_LABELLED_COMMAND = "label: 'New Group'";
-const EXPECTED_CLOSE_DIALOG_TITLE = "title: 'Close Group'";
-const EXPECTED_CLOSE_DIALOG_OK = "ok: 'Close Group'";
 const EXPECTED_CLOSE_TOOLTIP = "= 'Close group'";
 
 /**
@@ -73,7 +72,7 @@ const BACKSTOPS = Object.freeze([
     { statement: 'a drop over a group joins it at the previewed slot; a drop on empty canvas places the card loose', verification: 'backstop' },
     { statement: 'every visible loose card and every expanded-stack card is reachable by Tab plus arrows, and Enter opens it; hidden pile cards are skipped (21-UI-SPEC A5)', verification: 'backstop' },
     { statement: 'tree renders identical order and membership after every mutation and flip', verification: 'backstop' },
-    { statement: 'confirming Close Group closes exactly that group tabs; cancel changes nothing', verification: 'backstop' },
+    { statement: 'Undo Close Group restores title, bounds, membership, order and tabs; after the window the tabs are closed and the box is gone', verification: 'backstop' },
 ]);
 
 function fail(message) {
@@ -247,10 +246,7 @@ function checkStatic(sources) {
     }
     const labelCount = (commandsSrc.match(/label:/g) || []).length;
     if (labelCount !== 1 || !commandsSrc.includes(EXPECTED_LABELLED_COMMAND)) {
-        failures.push(`${COMMANDS_REL}: exactly one labelled command ('New Group') is declared -- found ${labelCount} label sites; toggles and close stay labelless`);
-    }
-    if (!widgetSrc.includes(EXPECTED_CLOSE_DIALOG_TITLE) || !widgetSrc.includes(EXPECTED_CLOSE_DIALOG_OK)) {
-        failures.push(`${WIDGET_REL}: the contracted Close Group dialog copy drifted -- title/ok must read 'Close Group' verbatim`);
+        failures.push(`${COMMANDS_REL}: exactly one labelled command ('New Group') is declared -- found ${labelCount} label sites; toggles, close and undo-close stay labelless`);
     }
     if ((widgetSrc.match(/= 'Close group'/g) || []).length < 1
         || (treeSrc.match(/= 'Close group'/g) || []).length < 1) {
@@ -380,6 +376,11 @@ const PLANTS = [
     { id: 'zero groups without loose cards', file: WIDGET_REL, apply: s => s.replace(/\n *this\.renderLoose\([^)\n]*\);(\n *return;)/, '$1'), landed: s => (s.match(/this\.renderLoose\(/g) || []).length === 1, expect: /without renderLoose\(\)/ },
     { id: 'focus scope back to the tray', file: WIDGET_REL, apply: once("'.pb-org-box-cards, .pb-org-expand-cards'", "'.pb-org-box-cards, .pb-org-tray-cards'"), landed: s => s.includes("'.pb-org-box-cards, .pb-org-tray-cards'"), expect: /pb-org-tray|moveCardFocus does not scope/ },
     { id: 'every .pb-org-* 13px deleted', file: CSS_REL, apply: s => s.replace(/(\.pb-org-[^{}]*\{[^{}]*?)\n    font-size: 13px;/g, '$1'), landed: s => /\.pb-modes-custom-row \{[^}]*font-size: 13px/.test(s) && !/\.pb-org-[^{}]*\{[^{}]*font-size: 13px/.test(s), expect: /Typography size 13px .* declared under no \.pb-org-\* rule/ },
+    // 22-04: the Undo Close Group rows and its labelless command.
+    { id: 'UNDO_CLOSE_MS spec value drifted', file: SPEC_REL, apply: once('| UNDO_CLOSE_MS | 15000 ms', '| UNDO_CLOSE_MS | 10000 ms'), landed: s => s.includes('| UNDO_CLOSE_MS | 10000 ms'), expect: /UNDO_CLOSE_MS is 15000 in the tree, the spec says 10000/ },
+    { id: '.pb-org-undo height drifted', file: CSS_REL, apply: s => s.replace(/(\n\.pb-org-undo \{\n)    height: 32px;/, '$1    height: 28px;'), landed: s => /\n\.pb-org-undo \{\n    height: 28px;/.test(s), expect: /\.pb-org-undo height is '28px'/ },
+    { id: 'undo id removed from the source', file: COMMANDS_REL, apply: once("export const PANORAMA_UNDO_CLOSE_GROUP_COMMAND_ID = 'powerbrowser.panorama.undo-close-group';", "export const PANORAMA_UNDO_CLOSE_GROUP_COMMAND_ID = PANORAMA_CLOSE_GROUP_COMMAND_ID;"), landed: s => !s.includes("'powerbrowser.panorama.undo-close-group'"), expect: /declared command ids are GONE: powerbrowser\.panorama\.undo-close-group/ },
+    { id: 'label added to the undo command', file: COMMANDS_REL, apply: once('    id: PANORAMA_UNDO_CLOSE_GROUP_COMMAND_ID,\n', "    id: PANORAMA_UNDO_CLOSE_GROUP_COMMAND_ID,\n    label: 'Undo Close Group',\n"), landed: s => s.includes("label: 'Undo Close Group'"), expect: /found 2 label sites/ },
     { id: 'spec Typography 13px deleted', file: SPEC_REL, apply: s => s.replace(/^\| Label \| 13px \|.*\n/m, ''), landed: s => !/^\| Label \| 13px \|/m.test(s), expect: /font-size 13px/ },
 ];
 

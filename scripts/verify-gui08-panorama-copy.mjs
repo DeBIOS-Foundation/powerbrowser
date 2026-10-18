@@ -13,15 +13,17 @@
 //
 // The ACTUAL is derived from the Theia sources: user-facing literals at the
 // enumerated paint sites (textContent, title, aria-label, placeholder,
-// buildEmpty/buildBar call args, the ConfirmDialog fields, flash args,
-// command labels, the widget label, the Untitled const), plus (22-02) every
+// buildEmpty/buildBar call args, flash args, command labels, the widget label, the Untitled const), plus (22-02) every
 // single-quoted or template literal at any text sink, ternary branches
 // included and conditions excluded (see SINK). The two compare as
 // SET EQUALITY after slot normalisation (`${...}` and `{name}`/`{N}` become
 // one token; apostrophes and dashes compare exactly) -- a surplus string is
 // unreviewed copy, a missing one is dropped contract, each reported BY NAME.
 // A NEGATED search asserts zero occurrences of each retired literal in every
-// shipped modes-browser source (never the spec, which names them). A
+// shipped modes-browser source (never the spec, which names them). The search
+// is slot-aware (22-04): a `{word}` slot in a retired literal matches any
+// `${...}` in source, so a retired template is found however its slot is
+// spelled; a slot-free literal keeps the plain substring search. A
 // no-internals shape check runs over the raw derived strings (no pref key,
 // table, group_id, bounds, URI-scheme literal, or raw exception shape). An
 // empty derivation on either side fails as a broken instrument, never passes.
@@ -138,27 +140,25 @@ function derivedCopy(sources) {
         pushAll(out, src.matchAll(/widgetName:\s*'([^']+)'/g));
         sinkCopy(src, out);
     }
-    const dialogAt = widgetSrc.indexOf('new ConfirmDialog({');
-    if (dialogAt >= 0) {
-        const dialog = widgetSrc.slice(dialogAt, dialogAt + 800);
-        pushAll(out, dialog.matchAll(/title:\s*'([^']+)'/g));
-        pushAll(out, dialog.matchAll(/ok:\s*'([^']+)'/g));
-        pushAll(out, dialog.matchAll(/cancel:\s*'([^']+)'/g));
-        // 15-UI-REVIEW Top Fix #3: the body rides a `count === 1` branch
-        // declared above the dialog block, so both templates are derived
-        // by shape (every template naming the close-too clause) rather
-        // than by a `msg:`-anchored literal.
-        const msgRegion = widgetSrc.slice(Math.max(0, dialogAt - 600), dialogAt + 800);
-        for (const m of msgRegion.matchAll(/`([^`]*will close too[^`]*)`/g)) {
-            out.push(m[1]);
-        }
-    }
     for (const m of widgetSrc.matchAll(/flash\(\s*(`[^`]+`)/g)) {
         out.push(m[1].slice(1, -1));
     }
     pushAll(out, commandsSrc.matchAll(/label:\s*'([^']+)'/g));
     pushAll(out, modelSrc.matchAll(/UNTITLED_GROUP_TITLE\s*=\s*'([^']+)'/g));
     return out;
+}
+
+/**
+ * 22-04: a retired literal's search. A `{word}` slot matches any `${...}` in
+ * source; a slot-free literal is a plain substring search.
+ */
+function retiredMatcher(needle) {
+    if (!/\{[A-Za-z]+\}/.test(needle)) {
+        return text => text.includes(needle);
+    }
+    const pattern = needle.split(/\{[A-Za-z]+\}/).map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\$\\{[^}]*\\}');
+    const re = new RegExp(pattern);
+    return text => re.test(text);
 }
 
 /** Internal-identifier shapes that must never sit inside user copy. */
@@ -220,7 +220,8 @@ function checkStatic(sources) {
     const shippedRels = Object.keys(sources).filter(rel => rel !== SPEC_REL);
     const unescaped = Object.fromEntries(shippedRels.map(rel => [rel, unescapeUnicode(sources[rel] ?? '')]));
     for (const needle of retired) {
-        const at = shippedRels.find(rel => (sources[rel] ?? '').includes(needle) || unescaped[rel].includes(needle));
+        const found = retiredMatcher(needle);
+        const at = shippedRels.find(rel => found(sources[rel] ?? '') || found(unescaped[rel]));
         if (at) {
             failures.push(`retired copy ${JSON.stringify(needle)} survives in ${at} -- the 15-UI-SPEC Retired copy table says it must not ship`);
         }
@@ -314,6 +315,9 @@ function selfTest() {
             expect: [[/unreviewed copy/, '"Planted words"']] },
         { id: 'template textContent added', file: WIDGET_REL, ...swap(null, 'x.textContent = `Planted ${n} words`;'),
             expect: [[/unreviewed copy/, '"Planted {} words"']] },
+        // 22-04: the slot-aware retired search finds a dialog body however its slots are spelled.
+        { id: 'retired plural dialog body re-added', file: WIDGET_REL, ...swap(null, 'const closeMsg = `Close "${group.title}"? Its ${count} tabs will close too. You can\'t undo this.`;'),
+            expect: [[/retired copy/, 'Its {N} tabs will close too', WIDGET_REL]] },
         { id: 'grip value reworded', file: WIDGET_REL, ...swap('`${group.w} by ${group.h} pixels`', '`${group.w} wide, ${group.h} high`'),
             expect: [[/unreviewed copy/, '"{} wide, {} high"'], [/are GONE/, '"{} by {} pixels"']] },
     ];

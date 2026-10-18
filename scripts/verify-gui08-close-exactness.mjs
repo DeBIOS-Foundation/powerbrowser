@@ -1,27 +1,30 @@
 #!/usr/bin/env node
 // scripts/verify-gui08-close-exactness.mjs
 //
-// GUI-08's close-exactness gate (15-03): confirming Close Group closes
-// exactly that group's tabs and removes its box; cancelling changes
-// nothing; activity never rests on a removed box.
+// GUI-08's close-exactness gate (15-03; rewritten for PAN-04 in 22-04): x
+// closes the group into its undo window with no dialog, and the close is
+// written only when that window ends or PowerBrowser quits. Undo reverses the
+// paint and writes nothing. When the close is written it closes exactly that
+// group's tabs and removes its box, and activity never rests on a removed box.
 //
-// It DERIVES at check time from the tree: the confirmation dialog copy
-// verbatim (title, singular/plural body, buttons), the cancel-before-
-// mutation ordering in the widget's close path, the model close wiring
-// (closeGroup actor kind plus the activity handoff), and the chrome-side
-// close surface (the closeGroup dispatch arm reaching the per-tab stock
-// close loop plus the member rows marked closed). Each is compared as SET EQUALITY
-// against the one EXPECTED block: a reworded dialog breaks the contracted
-// copy, a cancel that mutates breaks the only-destructive-action
-// discipline, a close that skips the per-tab loop orphans rows -- each
-// reported BY NAME. An empty derivation fails as a broken instrument,
-// never passes as clean.
+// It DERIVES at check time from the tree:
+//   (a) the widget's closeGroupById constructs no dialog, calls no commit,
+//       and reaches the model close (`closeGroup(this.actor`);
+//   (b) the model's closeGroup writes no `kind: 'closeGroup'` and arms a
+//       setTimeout naming UNDO_CLOSE_MS whose callback reaches commitClose;
+//   (c) commitClose carries the `kind: 'closeGroup'` write;
+//   (d) undoCloseGroup clears the timer and writes nothing (no `.mutate(`);
+//   (e) an onWillFlush listener reaches commitAllClosing (the quit flush);
+//   (f) the activity hand-off `this.groups[0]?.id` stays;
+//   (g) the chrome-side close surface (the closeGroup dispatch arm reaching
+//       the per-tab stock close loop, the member rows marked closed, the
+//       group row deleted, idempotent on an unknown group).
+// Each is reported BY NAME. An underivable anchor fails as a broken
+// instrument, never passes as clean.
 //
-// The live halves (confirm-closes-exact-tabs, cancel-no-op, and
-// activity-never-on-removed-box through a headed shell) are recorded below
-// as flat BACKSTOPS: at verify time no explicit evidence is attached, so
-// they report HELD-OUT for the full suite -- reserved live, never a silent
-// pass.
+// The live halves are recorded below as flat BACKSTOPS and report HELD-OUT
+// for the full suite: reserved live, never a silent pass.
+// pan04-undo-close-group-live and ng-006 are their live proofs.
 //
 // Honestly --quick: reads text sources only. No build, no browser, no
 // display, no network.
@@ -48,86 +51,64 @@ const API_REL = 'powerbrowser/shell/PowerBrowserAPI.sys.mjs';
  * the diff for review. Everything it is compared against is derived at
  * check time from the sources named above.
  */
-const EXPECTED_DIALOG_TITLE = 'Close Group';
-// 15-UI-REVIEW Top Fix #3: the body is singular/plural exact -- both forms
-// are contracted (15-UI-SPEC.md Copywriting Contract), branched on
-// `count === 1` in closeGroupById. Editing either form is a deliberate
-// contract change -- it shows up in the diff for review.
-const EXPECTED_DIALOG_MSG_ONE = 'Close "${group.title}"? Its 1 tab will close too. You can\'t undo this.';
-const EXPECTED_DIALOG_MSG_MANY = 'Close "${group.title}"? Its ${count} tabs will close too. You can\'t undo this.';
-const EXPECTED_DIALOG_OK = 'Close Group';
-const EXPECTED_DIALOG_CANCEL = 'Cancel';
 const EXPECTED_CLOSE_KIND = "kind: 'closeGroup'";
 const EXPECTED_DISPATCH_ARM = 'case "closeGroup":';
 const EXPECTED_CLOSE_CALL = 'closeGroupRows(data.id)';
 
 /**
- * Held-out live halves (15-UI-SPEC.md close-group backstop). Flat scalars:
- * no evidence attached, so the gate reports them HELD-OUT -- never a
- * silent pass.
+ * Held-out live halves (15-UI-SPEC.md and 22-UI-SPEC backstops). Flat
+ * scalars: no evidence attached, so the gate reports them HELD-OUT -- never
+ * a silent pass.
  */
 const BACKSTOPS = Object.freeze([
-    { statement: 'confirming Close Group closes exactly that group tabs and removes its box', verification: 'backstop' },
-    { statement: 'cancelling the Close Group dialog changes nothing', verification: 'backstop' },
+    { statement: 'Undo Close Group restores title, bounds, membership, card order and tabs', verification: 'backstop' },
+    { statement: 'after the undo window the group tabs are closed and its box is gone', verification: 'backstop' },
     { statement: 'activity never rests on a removed box after Close Group', verification: 'backstop' },
 ]);
 
-function fail(message) {
-    throw new Error(`${NAME}: FAIL -- ${message}`);
-}
-
-/** The closeGroupById method body from the widget source. */
-function derivedClosePath(widgetSrc) {
-    const at = widgetSrc.indexOf('async closeGroupById(');
+/** Text from `head` to the brace closing the body that opens at the end of its line, or ''. */
+function methodBody(src, head) {
+    const at = src.indexOf(head);
     if (at < 0) {
         return '';
     }
-    const open = widgetSrc.indexOf('{', at);
+    // The body brace ends its line; a return type such as `Promise<{ ... }>` does not.
+    const open = src.indexOf('{\n', at);
     if (open < 0) {
         return '';
     }
     let depth = 0;
-    for (let i = open; i < widgetSrc.length; i += 1) {
-        if (widgetSrc[i] === '{') {
+    for (let i = open; i < src.length; i += 1) {
+        if (src[i] === '{') {
             depth += 1;
-        } else if (widgetSrc[i] === '}') {
+        } else if (src[i] === '}') {
             depth -= 1;
             if (depth === 0) {
-                return widgetSrc.slice(at, i + 1);
+                return src.slice(at, i + 1);
             }
         }
     }
     return '';
 }
 
-/** The ConfirmDialog argument block from the close path. */
-function derivedDialogBlock(closePath) {
-    const at = closePath.indexOf('new ConfirmDialog({');
+/** Text of the call from `head` (which ends in `(`) to its closing paren, or ''. */
+function callSpan(src, head) {
+    const at = src.indexOf(head);
     if (at < 0) {
         return '';
     }
-    const open = closePath.indexOf('{', at);
     let depth = 0;
-    for (let i = open; i < closePath.length; i += 1) {
-        if (closePath[i] === '{') {
+    for (let i = at + head.length - 1; i < src.length; i += 1) {
+        if (src[i] === '(') {
             depth += 1;
-        } else if (closePath[i] === '}') {
+        } else if (src[i] === ')') {
             depth -= 1;
             if (depth === 0) {
-                return closePath.slice(at, i + 1);
+                return src.slice(at, i + 1);
             }
         }
     }
     return '';
-}
-
-function derivedField(block, name) {
-    const single = new RegExp(`${name}:\\s*'([^']+)'`).exec(block);
-    if (single) {
-        return single[1];
-    }
-    const template = new RegExp(`${name}:\\s*\`([^\`]+)\``).exec(block);
-    return template ? template[1] : undefined;
 }
 
 /** @returns {string[]} failure messages -- empty means the gate holds. */
@@ -137,75 +118,78 @@ function checkStatic(sources) {
     const modelSrc = sources[MODEL_REL] ?? '';
     const apiSrc = sources[API_REL] ?? '';
 
-    // 1. Dialog copy verbatim: title, singular/plural body, both buttons.
-    const closePath = derivedClosePath(widgetSrc);
+    // (a) The click path: no dialog, no commit, reaches the model close.
+    const closePath = methodBody(widgetSrc, 'async closeGroupById(');
     if (!closePath) {
         failures.push(`${WIDGET_REL}: 'closeGroupById' underivable -- the close anchor drifted`);
-        return failures;
-    }
-    const dialog = derivedDialogBlock(closePath);
-    if (!dialog) {
-        failures.push(`${WIDGET_REL}: the ConfirmDialog block is gone from the close path -- closing without the contracted confirmation`);
     } else {
-        const title = derivedField(dialog, 'title');
-        const ok = derivedField(dialog, 'ok');
-        const cancel = derivedField(dialog, 'cancel');
-        if (title === undefined || ok === undefined || cancel === undefined) {
-            failures.push(`${WIDGET_REL}: the dialog block no longer derives title/ok/cancel -- the confirmation anchor drifted`);
-        } else {
-            if (title !== EXPECTED_DIALOG_TITLE) {
-                failures.push(`${WIDGET_REL}: dialog title is ${JSON.stringify(title)}, declared ${JSON.stringify(EXPECTED_DIALOG_TITLE)}`);
-            }
-            if (ok !== EXPECTED_DIALOG_OK) {
-                failures.push(`${WIDGET_REL}: dialog ok is ${JSON.stringify(ok)}, declared ${JSON.stringify(EXPECTED_DIALOG_OK)}`);
-            }
-            if (cancel !== EXPECTED_DIALOG_CANCEL) {
-                failures.push(`${WIDGET_REL}: dialog cancel is ${JSON.stringify(cancel)}, declared ${JSON.stringify(EXPECTED_DIALOG_CANCEL)}`);
-            }
+        if (/new [A-Za-z]*Dialog\(/.test(closePath)) {
+            failures.push(`${WIDGET_REL}: closeGroupById constructs a dialog -- the close confirmation is back, and Undo Close Group replaced it (22-UI-SPEC A1)`);
         }
-        // The body rides a `count === 1` branch: both templates must derive
-        // from the close path verbatim (set equality -- a reworded singular
-        // or plural breaks its side, a lost branch breaks the pairing).
-        if (!closePath.includes('`' + EXPECTED_DIALOG_MSG_ONE + '`')) {
-            failures.push(`${WIDGET_REL}: dialog singular body drifted -- declared ${JSON.stringify(EXPECTED_DIALOG_MSG_ONE)}`);
+        if (/commit(?:All)?Clos(?:e|ing)\(/.test(closePath)) {
+            failures.push(`${WIDGET_REL}: closeGroupById calls a commit -- the click writes the close instead of the undo window's timer or the quit flush`);
         }
-        if (!closePath.includes('`' + EXPECTED_DIALOG_MSG_MANY + '`')) {
-            failures.push(`${WIDGET_REL}: dialog plural body drifted -- declared ${JSON.stringify(EXPECTED_DIALOG_MSG_MANY)}`);
-        }
-        if (!/count\s*===\s*1/.test(closePath)) {
-            failures.push(`${WIDGET_REL}: no 'count === 1' branch -- the singular/plural pairing lost its selector`);
+        if (!closePath.includes('closeGroup(this.actor')) {
+            failures.push(`${WIDGET_REL}: closeGroupById never reaches 'closeGroup(this.actor' -- x closes nothing`);
         }
     }
 
-    // 2. Cancel path returns before any mutation: the unconfirmed return
-    // sits ahead of the model close call in the same method body.
-    const cancelAt = closePath.indexOf('if (!confirmed)');
-    const mutateAt = closePath.indexOf('closeGroup(this.actor');
-    if (cancelAt < 0) {
-        failures.push(`${WIDGET_REL}: no 'if (!confirmed)' guard -- cancelling the dialog can no longer be a no-op`);
-    } else if (closePath.slice(cancelAt).indexOf('return;') < 0) {
-        failures.push(`${WIDGET_REL}: the unconfirmed branch never returns -- cancelling falls through toward mutation`);
-    }
-    if (mutateAt < 0) {
-        failures.push(`${WIDGET_REL}: the close path never reaches the model close -- confirming closes nothing`);
-    }
-    if (cancelAt >= 0 && mutateAt >= 0 && cancelAt > mutateAt) {
-        failures.push(`${WIDGET_REL}: the cancel guard sits AFTER the model close -- cancelling mutates before it can return`);
-    }
-
-    // 3. Model wiring: the closeGroup actor kind plus the activity handoff
-    // to the next remaining box (never a removed one).
-    if (!modelSrc.includes('async closeGroup(')) {
+    // (b) The model close hides and arms the timer; it writes nothing.
+    const closeBody = methodBody(modelSrc, 'async closeGroup(');
+    if (!closeBody) {
         failures.push(`${MODEL_REL}: 'closeGroup' underivable -- the model close anchor drifted`);
+    } else {
+        if (closeBody.includes(EXPECTED_CLOSE_KIND)) {
+            failures.push(`${MODEL_REL}: closeGroup carries the ${EXPECTED_CLOSE_KIND} write -- the close is written at the click, before its undo window`);
+        }
+        const timer = callSpan(closeBody, 'setTimeout(');
+        if (!timer) {
+            failures.push(`${MODEL_REL}: closeGroup arms no setTimeout -- the undo window never ends, so the close is never written`);
+        } else {
+            if (!timer.includes('UNDO_CLOSE_MS')) {
+                failures.push(`${MODEL_REL}: closeGroup's setTimeout does not name UNDO_CLOSE_MS -- the window length drifted from its contract`);
+            }
+            if (!timer.includes('commitClose(')) {
+                failures.push(`${MODEL_REL}: closeGroup's setTimeout callback never reaches commitClose( -- the window ends without writing the close`);
+            }
+        }
     }
-    if (!modelSrc.includes(EXPECTED_CLOSE_KIND)) {
-        failures.push(`${MODEL_REL}: no ${EXPECTED_CLOSE_KIND} mutate -- the model close never reaches the chrome-side close arm`);
+
+    // (c) The commit carries the write.
+    const commitBody = methodBody(modelSrc, 'async commitClose(');
+    if (!commitBody) {
+        failures.push(`${MODEL_REL}: 'commitClose' underivable -- the commit anchor drifted`);
+    } else if (!commitBody.includes(EXPECTED_CLOSE_KIND)) {
+        failures.push(`${MODEL_REL}: commitClose has no ${EXPECTED_CLOSE_KIND} mutate -- the commit never reaches the chrome-side close arm`);
     }
+
+    // (d) Undo clears the timer and writes nothing.
+    const undoBody = methodBody(modelSrc, '\n    undoCloseGroup(');
+    if (!undoBody) {
+        failures.push(`${MODEL_REL}: 'undoCloseGroup' underivable -- the undo anchor drifted`);
+    } else {
+        if (!undoBody.includes('clearTimeout(')) {
+            failures.push(`${MODEL_REL}: undoCloseGroup never calls clearTimeout( -- the timer still commits a restored group`);
+        }
+        if (undoBody.includes('.mutate(')) {
+            failures.push(`${MODEL_REL}: undoCloseGroup calls .mutate( -- Undo writes, but the close it reverses was never written`);
+        }
+    }
+
+    // (e) The quit flush commits every pending close (22-UI-SPEC A4).
+    const flush = callSpan(modelSrc, 'onWillFlush(');
+    if (!flush) {
+        failures.push(`${MODEL_REL}: no onWillFlush listener -- a quit inside an undo window leaves the close unwritten`);
+    } else if (!flush.includes('commitAllClosing(')) {
+        failures.push(`${MODEL_REL}: the onWillFlush listener never reaches commitAllClosing( -- a quit inside an undo window leaves the close unwritten`);
+    }
+
+    // (f) The activity hand-off to the next remaining box (never a removed one).
     if (!modelSrc.includes('this.groups[0]?.id')) {
         failures.push(`${MODEL_REL}: the activity handoff ('this.groups[0]?.id') is gone -- activity can rest on the removed box`);
     }
 
-    // 4. Chrome wiring: the dispatch arm reaches the per-tab stock close
+    // (g) Chrome wiring: the dispatch arm reaches the per-tab stock close
     // loop plus the member-row close in one surface.
     if (!apiSrc.includes(EXPECTED_DISPATCH_ARM)) {
         failures.push(`${API_REL}: no ${EXPECTED_DISPATCH_ARM} arm -- the close mutation reaches no chrome close`);
@@ -254,11 +238,42 @@ function main() {
         failures.forEach(f => console.error(`  ${f}`));
         process.exit(1);
     }
-    console.log(`${NAME}: PASS -- contracted dialog, cancel-first ordering, exact close wiring`);
+    console.log(`${NAME}: PASS -- no dialog and no commit at the click; the timer and the quit flush commit; Undo clears the timer and writes nothing; exact close wiring`);
     for (const backstop of BACKSTOPS) {
         console.log(`${NAME}: HELD-OUT (reserved live) -- ${backstop.statement} [verification: ${backstop.verification}]`);
     }
 }
+
+/** Replaces `from` with `to` inside the body `head` derives from, so a plant lands in that method only. */
+const inBody = (head, from, to) => src => {
+    const body = methodBody(src, head);
+    return body ? src.replace(body, body.replace(from, to)) : src;
+};
+
+/** Planted faults on in-memory copies, each red naming its drift. */
+const PLANTS = [
+    { id: 'dialog construction re-added', file: WIDGET_REL,
+        apply: inBody('async closeGroupById(', '        try {\n', "        const dialog = new ConfirmDialog({ title: 'Close Group' });\n        try {\n"),
+        landed: s => s.includes("new ConfirmDialog({ title: 'Close Group' })"), expect: /constructs a dialog/ },
+    { id: 'closeGroup write moved back into closeGroup', file: MODEL_REL,
+        apply: inBody('async closeGroup(', '        this.closing.set(id,', "        await client.mutate({ kind: 'closeGroup', id });\n        this.closing.set(id,"),
+        landed: s => methodBody(s, 'async closeGroup(').includes("kind: 'closeGroup'"), expect: /closeGroup carries the kind: 'closeGroup' write/ },
+    { id: 'commit call added to closeGroupById', file: WIDGET_REL,
+        apply: inBody('async closeGroupById(', '                await this.flash(', '                await this.model.commitClose(this.actor, id);\n                await this.flash('),
+        landed: s => methodBody(s, 'async closeGroupById(').includes('commitClose('), expect: /closeGroupById calls a commit/ },
+    { id: 'flush commit removed', file: MODEL_REL,
+        apply: s => s.replace('event.waitUntil(this.commitAllClosing(this.actor))', 'event.waitUntil(Promise.resolve())'),
+        landed: s => s.includes('event.waitUntil(Promise.resolve())'), expect: /onWillFlush listener never reaches commitAllClosing/ },
+    { id: 'clearTimeout removed from undo', file: MODEL_REL,
+        apply: inBody('\n    undoCloseGroup(', '        window.clearTimeout(entry.timer);\n', ''),
+        landed: s => !methodBody(s, '\n    undoCloseGroup(').includes('clearTimeout('), expect: /undoCloseGroup never calls clearTimeout/ },
+    { id: 'already-closed turned into a throw', file: API_REL,
+        apply: s => s.replace('return "already-closed";', 'throw new Error(`closeGroupRows: unknown group ${id}`);'),
+        landed: s => s.includes('closeGroupRows: unknown group'), expect: /already-closed|unknown group/ },
+    { id: 'closeGroupRows(data.id) removed', file: API_REL,
+        apply: s => s.replace('await PowerBrowserAPI.closeGroupRows(data.id);', 'await PowerBrowserAPI.removeGroupRow(data.id);'),
+        landed: s => s.includes('await PowerBrowserAPI.removeGroupRow(data.id);'), expect: /closeGroupRows\(data\.id\)/ },
+];
 
 function selfTest() {
     const real = readSources();
@@ -270,93 +285,26 @@ function selfTest() {
     }
     console.log(`${NAME} --self-test: unmodified tree green, planting faults`);
     let failed = 0;
-
-    // Plant 1: dialog-copy drift must go red naming the drift.
-    {
-        const mutated = { ...real, [WIDGET_REL]: real[WIDGET_REL].replace("title: 'Close Group'", "title: 'Close group'") };
-        const landed = mutated[WIDGET_REL].includes("title: 'Close group'");
-        const result = checkStatic(mutated);
-        if (!landed) {
-            console.error(`${NAME} --self-test: FAIL -- 'dialog-copy drift' plant did not land`);
+    for (const plant of PLANTS) {
+        const text = plant.apply(real[plant.file]);
+        if (text === real[plant.file] || !plant.landed(text)) {
+            console.error(`${NAME} --self-test: FAIL -- '${plant.id}' anchor drifted in ${plant.file}: the plant did not land`);
             failed += 1;
-        } else if (!result.some(f => /dialog title/.test(f))) {
-            console.error(`${NAME} --self-test: FAIL -- 'dialog-copy drift' did not go red naming the dialog title; got: ${result.join(' | ') || '(no failures at all)'}`);
+            continue;
+        }
+        const result = checkStatic({ ...real, [plant.file]: text });
+        const hit = result.find(f => plant.expect.test(f));
+        if (!hit) {
+            console.error(`${NAME} --self-test: FAIL -- '${plant.id}' did not go red naming ${plant.expect}; got: ${result.join(' | ') || '(no failures at all)'}`);
             failed += 1;
         } else {
-            console.log(`  ok  dialog-copy drift -> red, naming the dialog title`);
+            console.log(`  ok  ${plant.id} -> ${hit}`);
         }
     }
-
-    // Plant 2: removing the chrome close call must go red naming the drift.
-    {
-        const mutated = { ...real, [API_REL]: real[API_REL].replace('await PowerBrowserAPI.closeGroupRows(data.id);', 'await PowerBrowserAPI.removeGroupRow(data.id);') };
-        const landed = mutated[API_REL].includes('await PowerBrowserAPI.removeGroupRow(data.id);');
-        const result = checkStatic(mutated);
-        if (!landed) {
-            console.error(`${NAME} --self-test: FAIL -- 'wiring removal' plant did not land`);
-            failed += 1;
-        } else if (!result.some(f => /closeGroupRows\(data\.id\)/.test(f))) {
-            console.error(`${NAME} --self-test: FAIL -- 'wiring removal' did not go red naming the close call; got: ${result.join(' | ') || '(no failures at all)'}`);
-            failed += 1;
-        } else {
-            console.log(`  ok  wiring removal -> red, naming the close call`);
-        }
-    }
-
-    // Plant 3: removing the cancel guard must go red naming the no-op loss.
-    {
-        const mutated = { ...real, [WIDGET_REL]: real[WIDGET_REL].replace('        if (!confirmed) {\n            return;\n        }\n', '') };
-        const landed = !mutated[WIDGET_REL].includes('if (!confirmed)');
-        const result = checkStatic(mutated);
-        if (!landed) {
-            console.error(`${NAME} --self-test: FAIL -- 'cancel-guard removal' plant did not land`);
-            failed += 1;
-        } else if (!result.some(f => /!confirmed/.test(f))) {
-            console.error(`${NAME} --self-test: FAIL -- 'cancel-guard removal' did not go red naming '!confirmed'; got: ${result.join(' | ') || '(no failures at all)'}`);
-            failed += 1;
-        } else {
-            console.log(`  ok  cancel-guard removal -> red, naming '!confirmed'`);
-        }
-    }
-
-    // Plant 4 (WR-02): the unknown-group throw must go red naming the
-    // idempotency loss.
-    {
-        const mutated = { ...real, [API_REL]: real[API_REL].replace('return "already-closed";', 'throw new Error(`closeGroupRows: unknown group ${id}`);') };
-        const landed = mutated[API_REL].includes('closeGroupRows: unknown group');
-        const result = checkStatic(mutated);
-        if (!landed) {
-            console.error(`${NAME} --self-test: FAIL -- 'unknown-group throw' plant did not land`);
-            failed += 1;
-        } else if (!result.some(f => /already-closed|unknown group/.test(f))) {
-            console.error(`${NAME} --self-test: FAIL -- 'unknown-group throw' did not go red naming the idempotency loss; got: ${result.join(' | ') || '(no failures at all)'}`);
-            failed += 1;
-        } else {
-            console.log(`  ok  unknown-group throw -> red, naming the idempotency loss`);
-        }
-    }
-
-    // Plant 5 (15-UI-REVIEW Top Fix #3): singular-body drift must go red
-    // naming the singular form.
-    {
-        const mutated = { ...real, [WIDGET_REL]: real[WIDGET_REL].replace('Its 1 tab will close too.', 'Its 1 tabs will close too.') };
-        const landed = mutated[WIDGET_REL].includes('Its 1 tabs will close too.');
-        const result = checkStatic(mutated);
-        if (!landed) {
-            console.error(`${NAME} --self-test: FAIL -- 'singular-body drift' plant did not land`);
-            failed += 1;
-        } else if (!result.some(f => /singular body/.test(f))) {
-            console.error(`${NAME} --self-test: FAIL -- 'singular-body drift' did not go red naming the singular body; got: ${result.join(' | ') || '(no failures at all)'}`);
-            failed += 1;
-        } else {
-            console.log(`  ok  singular-body drift -> red, naming the singular body`);
-        }
-    }
-
     if (failed) {
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- all five fault directions went red naming the drift`);
+    console.log(`${NAME} --self-test: PASS -- ${PLANTS.length} planted faults went red naming the drift`);
 }
 
 if (process.argv.includes('--self-test')) {
