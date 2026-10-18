@@ -560,11 +560,19 @@ export class TabStripWidget extends ReactWidget {
         // class has to come off a tab the moment it is dragged into another
         // pane, or that pane's bar hides it too -- the pill listed three
         // stacked tabs while the right pane showed none (2026-09-10).
+        // Only this strip's two classes are toggled: Theia keeps its own
+        // state (theia-mod-dirty, -pinned, -active) in the same string.
         const home = this.homeWidgets();
         for (const widget of this.shell.mainPanel.widgets()) {
-            const stripOnly = home.includes(widget) && !this.stacked.has(widget) ? STRIP_ONLY_CLASS : '';
-            const closing = this.groups.isClosingKey(this.groups.keyOf(widget)) ? GROUP_CLOSING_CLASS : '';
-            widget.title.className = [stripOnly, closing].filter(Boolean).join(' ');
+            const kept = widget.title.className.split(' ')
+                .filter(c => c && c !== STRIP_ONLY_CLASS && c !== GROUP_CLOSING_CLASS);
+            if (home.includes(widget) && !this.stacked.has(widget)) {
+                kept.push(STRIP_ONLY_CLASS);
+            }
+            if (this.groups.isClosingKey(this.groups.keyOf(widget))) {
+                kept.push(GROUP_CLOSING_CLASS);
+            }
+            widget.title.className = kept.join(' ');
         }
         return <div className='pb-tab-strip-row' role='tablist'>
             {tabs.map(widget => this.renderTab(widget, widget === current))}
