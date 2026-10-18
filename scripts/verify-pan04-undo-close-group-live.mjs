@@ -422,15 +422,22 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
             } finally {
                 delete org.undoCloseGroupById;
             }
-            undoOf(org.canvasRoot, S.g5).focus();
+            // Focus lands once the restored Organising surface is shown; retry until then.
+            const focused = await settle(() => {
+                const now = undoOf(org.canvasRoot, S.g5);
+                if (now && document.activeElement !== now) now.focus();
+                return !!now && document.activeElement === now;
+            });
+            const v = undoOf(org.canvasRoot, S.g5);
+            const why = v ? { connected: v.isConnected, shown: !!v.offsetParent, display: getComputedStyle(org.node).display, visible: org.isVisible, attached: org.isAttached, hasFocus: document.hasFocus(), active: document.activeElement ? document.activeElement.tagName + '.' + document.activeElement.className : null } : null;
             const entry = m.listClosing().find(x => x.group.id === S.g5);
-            return { red, deadline: entry ? entry.deadline : null, focused: document.activeElement === undoOf(org.canvasRoot, S.g5) };
+            return { red, deadline: entry ? entry.deadline : null, focused, why };
         `);
         if (p4.deadline === null) {
             failures.push('(g) G5 left its undo window before the deadline step');
             return undefined;
         }
-        expect(p4.focused, '(g) setup: focus never reached the Undo control before its deadline');
+        expect(p4.focused, `(g) setup: focus never reached the Undo control before its deadline: ${JSON.stringify(p4.why)}`);
         const g4done = await waitUntil(() => run(`${PROBES} return !m.isClosing(S.g5) && !m.listGroups().some(g => g.id === S.g5);`), Math.max(0, p4.deadline - Date.now()) + 10000, 125);
         const g4d = await run(`
             ${DOM}
