@@ -120,9 +120,10 @@ NG-006: recorded failure is stale (test file changed since the failing run for s
 
 This line is rebuilt from the format string at line 152 and NG-006's `test_ref`. The captured output from that run is not in any file this executor can read. NG-006 was completed after the old check baseline (252). Its recorded failure carries the sha256 of the pre-edit file (`3aef2f3d...f317473d`), so it no longer matches the locked hash. Per the plan, the agent stopped, showed Chris the line, and ran no ledger command.
 
-**Options put to Chris (a/b/c).** The executor that reached this point put three options to Chris. The verbatim a/b/c text was given in that session and is not in any artifact this executor can read. Two of the paths it offered can be inferred from what followed:
-- record a fresh red of the edited NG-006 check: run it against a mutated tree in a scratch worktree, then use the agent-permitted `record-fail`;
-- Chris moves the check baseline himself with the user-only `baseline-checks`.
+**Options put to Chris (a/b/c).** Recorded by the orchestrator, as they were put to Chris in chat:
+- a. Mutation red. Make a scratch worktree at HEAD, delete the `commitClose` widget-close loop in that copy only, build it, and run the locked NG-006 check against it with `PB_BACKEND_MAIN`. Then reopen the row and run the agent-permitted `record-fail`, the green run on main, and `done`. This was the executor's recommendation. No historical red exists: every product before 9c7e543 blocks on the confirm dialog, which would be a harness timeout and not an admissible red.
+- b. Chris runs the user-only `baseline-checks`. It waives the failure-proof check for every row completed at or before the new baseline (all 55 done rows), not only NG-006.
+- c. Set NG-006 back to `open` and report it unmet. Phase 22 then cannot be claimed complete.
 
 **Mutation-red attempt denied.** The agent's attempt to create a detached scratch worktree for the mutation-red run was denied by the permission system, as the orchestrating session reports. The agent stopped and did not work around the denial. Chris then created the worktree in his own terminal (`git worktree add --detach .../scratchpad/wt-ng006 HEAD`, "HEAD is now at 2a153a0"). After that he chose not to record a red. The worktree is his. Nothing in this plan used it, and it is left in place.
 
