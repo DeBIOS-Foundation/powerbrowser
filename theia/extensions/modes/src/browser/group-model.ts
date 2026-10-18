@@ -841,9 +841,12 @@ export class GroupModel implements FrontendApplicationContribution {
         return entry.group;
     }
 
+    /** Idempotent: a failed commit restores the box, and a failed Retry must not paint it twice. */
     private restoreClosing(entry: ClosingGroup): void {
-        const at = Math.min(entry.index, this.groups.length);
-        this.groups = [...this.groups.slice(0, at), entry.group, ...this.groups.slice(at)];
+        if (!this.groups.some(group => group.id === entry.group.id)) {
+            const at = Math.min(entry.index, this.groups.length);
+            this.groups = [...this.groups.slice(0, at), entry.group, ...this.groups.slice(at)];
+        }
         this.members.set(entry.group.id, entry.tabs);
         if (entry.wasActive) {
             this.activeGroupId = entry.group.id;
@@ -872,10 +875,23 @@ export class GroupModel implements FrontendApplicationContribution {
             this.restoreClosing(entry);
         }, async () => {
             await client.mutate({ kind: 'closeGroup', id });
+            // A Retry that lands after a failed first commit removes the box that failure restored.
+            if (this.groups.some(group => group.id === id)) {
+                this.groups = this.groups.filter(group => group.id !== id);
+                this.members.delete(id);
+                if (this.activeGroupId === id) {
+                    this.activeGroupId = undefined;
+                }
+            }
             // Inside the write, so a Retry that lands also closes the widgets.
             for (const tab of entry.tabs) {
                 this.widgetOf(tab.uri)?.close();
             }
+        }).catch(error => {
+            // Step 9: the first failure reverts too; the close: slot stays for the save-error bar's Retry.
+            this.restoreClosing(entry);
+            this.changeEmitter.fire();
+            throw error;
         });
         if (handOff && this.groups.some(group => group.id === handOff)) {
             // The shipped close never wrote the hand-off, so after a reload no group was active.
