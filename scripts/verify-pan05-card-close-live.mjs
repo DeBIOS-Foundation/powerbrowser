@@ -335,20 +335,23 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
                     org.render();
                 }
                 const restored = stops();
-                const card = cardOf(S.k.c);
-                card.focus();
+                // Keyboard focus, as Tab or the arrows give it: a script focus alone may not match :focus-visible.
+                cardOf(S.k.c).focus({ focusVisible: true });
                 await A.sleep(400);
+                const card = cardOf(S.k.c);
+                const keyboard = !!card && document.activeElement === card && card.matches(':focus-visible');
                 const shown = getComputedStyle(xOf(S.k.c)).opacity;
-                return { real, ok: stopsOk(real), red: !stopsOk(planted), restored: stopsOk(restored), shown };
+                return { real, ok: stopsOk(real), red: !stopsOk(planted), restored: stopsOk(restored), keyboard, shown };
             `);
             expect(g.ok, `(g) tab stops: ${JSON.stringify(g.real)}, want exactly one per scope and every x at tabIndex -1`);
-            expect(g.shown === '1', `(g) the focused card's x has opacity ${g.shown}, want 1`);
+            expect(g.keyboard, '(g) setup: /c\'s card is not the focused element matching :focus-visible, so its x cannot be checked');
+            expect(g.shown === '1', `(g) the keyboard-focused card's x has opacity ${g.shown}, want 1`);
             expect(g.red, 'probe control every x tabbable did not go red -- the probe cannot see that fault');
             expect(g.restored, 'probe control every x tabbable was not restored: a re-render left a tabbable x');
             if (process.env.PB_PAN05_SHOT) {
                 writeFileSync(process.env.PB_PAN05_SHOT, await screenshot());
             }
-            detail(`(g) tab stops ${g.real.scopes.map(s => `${s.name === 'loose' ? 'loose' : 'group'} ${s.stops}`).join(', ')}; ${g.real.xs} card x, ${g.real.tabbableX} tabbable; the focused card shows its x (opacity ${g.shown})`);
+            detail(`(g) tab stops ${g.real.scopes.map(s => `${s.name === 'loose' ? 'loose' : 'group'} ${s.stops}`).join(', ')}; ${g.real.xs} card x, ${g.real.tabbableX} tabbable; the keyboard-focused card shows its x (opacity ${g.shown})`);
         });
     } finally {
         rmSync(dir, { recursive: true, force: true });
