@@ -3841,6 +3841,12 @@ run_own_checks() {
     "gui09-setup-roundtrip|node $REPO_ROOT/scripts/verify-setup-roundtrip.mjs"
     "gui09-setup-roundtrip-self-test|node $REPO_ROOT/scripts/verify-setup-roundtrip.mjs --self-test"
 
+    # NEW (Phase 23, G-23): the Save as Mode and Save Setup name fields are cut at the cap while
+    # typing through inputCappedName, and 14-UI-SPEC states the rule. Text reads only; the live half
+    # is modes-name-cap-at-input-live.
+    "modes-name-cap-at-input|node $REPO_ROOT/scripts/verify-name-cap-at-input.mjs"
+    "modes-name-cap-at-input-self-test|node $REPO_ROOT/scripts/verify-name-cap-at-input.mjs --self-test"
+
     # NEW (14-03): GUI-09's dependent-window content gate. The static half
     # derives the built secondary asset, the membership pins, and the
     # closed-state copy at check time; the live half (extraction, geometry,

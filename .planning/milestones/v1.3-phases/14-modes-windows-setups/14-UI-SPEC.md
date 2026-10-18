@@ -273,6 +273,7 @@ above.
   tab-count chip re-asserts the invariant on every switch (carried pattern)"*.
 - Custom modes save the current panel visibility/layout as data with shipped
   defaults behind them; a custom mode never alters a shipped default in place.
+  Save as Mode uses the same quick input and the same rule: the name field holds at most 60 characters while typing, and pasted text is cut to its first 60.
   No `[features]`/`[modes]` manifest flag exists anywhere in this contract.
 - A mode switch is never destructive and never needs confirmation.
 
@@ -313,7 +314,7 @@ above.
 
 ### Named setups (geometry + tab placement + mode)
 
-- **Save:** dialog with one name field (cap 60 characters) + Save/Cancel.
+- **Save:** a quick input with one name field, capped at 60 characters while typing; pasted text is cut to its first 60 characters. Enter saves, Esc cancels.
   Empty commits render the empty-name error; duplicates render the
   duplicate-name error; success flashes the saved confirmation and marks the
   new row current. Overwriting an existing name is not offered — delete first.
@@ -357,7 +358,7 @@ Elements probed: E1 mode toggle + custom-mode menu
 | overflow | E1 menu | ✅ covered | Menu beyond its cap scrolls internally; it never grows the chrome bar or shifts bar layout |
 | empty | E2 name input | ✅ covered | Empty input renders the contracted "Setup name" placeholder; committing empty renders the contracted empty-name error, never a silent no-op |
 | error | E2 name input | ✅ covered | Duplicates render the contracted duplicate-name error; validation never writes partial data |
-| long-text | E2 name input | ✅ covered | Input capped at 60 characters; pasted overflow is cut at the cap before commit |
+| long-text | E2 name input | ✅ covered | Input holds at most 60 characters; typed and pasted overflow is cut at the cap while typing, before commit |
 | empty | E3 setups list | ✅ covered | Zero setups render the contracted "No saved setups" copy (see Copywriting Contract, not restated here) |
 | populated | E3 setups list | ✅ covered | Typical row renders name (14px) over meta line (12px muted, "{Mode} · {N} window(s) · {M} tab(s)"); current setup carries the accent marker + 600 |
 | overflow | E3 setups list | ✅ covered | Beyond the visible cap the list scrolls internally; it never grows its host or overlaps neighbouring regions |
