@@ -123,13 +123,20 @@ export function ruleBodies(css, selector) {
 
 const NUM = '-?\\d+(?:\\.\\d+)?';
 const ID = '[A-Za-z_][A-Za-z0-9_]*';
-const CONST_EXPR = new RegExp(`^(?:${NUM}|\\[\\s*${NUM}(?:\\s*,\\s*${NUM})*\\s*,?\\s*\\]|Math\\.round\\(\\s*(?:${ID}|${NUM})\\s*\\*\\s*(?:${ID}|${NUM})\\s*\\))$`);
 
-/** Map of SCREAMING_CASE name to expression for top-level numeric consts. */
+/**
+ * Map of SCREAMING_CASE name to expression for every top-level const that is
+ * not a string or a string list -- any spacing, a type annotation, a
+ * multi-line or derived expression. Nothing is dropped for being outside the
+ * evaluator's grammar: such a const still needs a row, and resolveConst then
+ * reports its form as unsupported rather than the check skipping it.
+ */
 export function topLevelNumericConsts(src) {
     const out = new Map();
-    for (const m of src.matchAll(/^(?:export )?const ([A-Z][A-Z0-9_]*) = ([^;\n]+);/gm)) {
-        if (CONST_EXPR.test(m[2].trim())) out.set(m[1], m[2].trim());
+    for (const m of src.matchAll(/^(?:export\s+)?const\s+([A-Z][A-Z0-9_]*)\s*(?::[^=\n]+)?=\s*([^;]+);/gm)) {
+        const expr = m[2].trim();
+        if (/^['"`]/.test(expr) || /^\[\s*['"`]/.test(expr)) continue;
+        out.set(m[1], expr);
     }
     return out;
 }
@@ -156,7 +163,7 @@ function evaluate(expr, texts, depth) {
 export function resolveConst(name, texts, depth = 0) {
     if (depth > 8) return { error: `${name}: definition chain too deep` };
     const all = texts.join('\n');
-    let exprs = [...all.matchAll(new RegExp(`(?:^|\\n)[ \\t]*(?:export\\s+)?const\\s+${esc(name)}\\s*=\\s*([^;\\n]+);`, 'g'))].map(m => m[1]);
+    let exprs = [...all.matchAll(new RegExp(`(?:^|\\n)[ \\t]*(?:export\\s+)?const\\s+${esc(name)}\\s*(?::[^=\\n]+)?=\\s*([^;\\n]+);`, 'g'))].map(m => m[1]);
     if (!exprs.length) {
         exprs = [...all.matchAll(new RegExp(`(?<![A-Za-z0-9_$.])${esc(name)}\\s*:\\s*(${NUM})(?![0-9.])`, 'g'))].map(m => m[1]);
     }
