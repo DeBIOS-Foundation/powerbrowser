@@ -4836,6 +4836,11 @@ run_own_checks() {
       # and the relaunch load, with two in-run probe controls. Not --quick:
       # binary, Theia build, headless browser.
       "pan03-strip-group-live|node $REPO_ROOT/scripts/verify-pan03-strip-group-live.mjs"
+      # NEW (Phase 22, PAN-04): the undo window on the group model -- hide,
+      # undo, the timer commit and mode switches inside the window, with
+      # in-run probe controls. Not --quick: binary, Theia build, headless
+      # browser.
+      "pan04-undo-close-group-live|node $REPO_ROOT/scripts/verify-pan04-undo-close-group-live.mjs"
       "ng-009-content-age-columns|node $REPO_ROOT/scripts/verify-ng-009-content-age-columns.mjs"
       "ng-010-closed-tab-history|node $REPO_ROOT/scripts/verify-ng-010-closed-tab-history.mjs"
       "ng-011-settings-table-read|node $REPO_ROOT/scripts/verify-ng-011-settings-table-read.mjs"
