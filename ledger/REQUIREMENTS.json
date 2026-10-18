@@ -1,5 +1,5 @@
 {
-  "ledger_version": 392,
+  "ledger_version": 393,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -1211,5 +1211,5 @@
       "scripts/verify-ng-088-group-order-across-restart.mjs": "07ae875155339090c1d45225bf8411aeb14f871a5fc92474f529f3c1e46b90a9"
     }
   },
-  "check_baseline": 252
+  "check_baseline": 392
 }
