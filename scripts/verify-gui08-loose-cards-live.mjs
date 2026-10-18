@@ -48,6 +48,13 @@ const PROBES = `
             nowKey: now && now.dataset ? now.dataset.u || now.className : String(now),
         };
     };
+    // Visible loose cards not wholly inside the canvas host's box: clipped or scrolled off.
+    const outside = () => {
+        const h = document.querySelector('.pb-org-canvas-host').getBoundingClientRect();
+        return visibleLoose().map(c => ({ key: c.dataset.u, b: c.getBoundingClientRect() }))
+            .filter(({ b }) => b.left < h.left || b.top < h.top || b.right > h.right || b.bottom > h.bottom)
+            .map(({ key, b }) => ({ key, rect: [b.left, b.top, b.right, b.bottom], host: [h.left, h.top, h.right, h.bottom] }));
+    };
     const settle = async test => { for (let i = 0; i < 40 && !test(); i++) await A.sleep(125); };
 `;
 
@@ -84,6 +91,7 @@ await runCheck(`verify-${NAME}`, async ({ expect, failures }) => {
                 looseDom: loose().length,
                 looseModel: A.model().listUngrouped().length,
                 overlaps,
+                outside: outside(),
                 flat: [empty].concat(visibleLoose()).filter(el => el && !(el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0)).map(el => el.dataset.u || el.className),
                 tray: trayProbe(),
                 arrow: arrowProbe(),
@@ -98,7 +106,8 @@ await runCheck(`verify-${NAME}`, async ({ expect, failures }) => {
         expect(zero.looseDom === zero.looseModel, `zero groups: ${zero.looseDom} loose card(s) on the canvas, but the model has ${zero.looseModel} ungrouped tab(s)`);
         expect(zero.flat.length === 0, `zero groups: element(s) with no laid-out area, so the overlap probe cannot see them: ${zero.flat.join(', ')}`);
         expect(zero.overlaps.length === 0, `zero groups: loose card(s) overlap the "No tab groups" panel ${JSON.stringify(zero.emptyRect)}: ${JSON.stringify(zero.overlaps)}`);
-        detail(`zero groups: ${zero.keys.length} terminal tabs are loose cards beside the empty panel (no overlap); DOM loose ${zero.looseDom} = model ungrouped ${zero.looseModel}`);
+        expect(zero.outside.length === 0, `zero groups: loose card(s) not wholly inside the canvas host, so they are clipped: ${JSON.stringify(zero.outside)}`);
+        detail(`zero groups: ${zero.keys.length} terminal tabs are loose cards beside the empty panel (no overlap, all inside the canvas host); DOM loose ${zero.looseDom} = model ungrouped ${zero.looseModel}`);
         expect(zero.tray.cards > 0, 'no tray: the positive control found no pb-org-card element, so the query did not run in the Theia document');
         expect(zero.tray.tray === 0, `no tray: ${zero.tray.tray} element(s) carry a pb-org-tray class`);
         detail(`no tray: 0 pb-org-tray elements beside ${zero.tray.cards} pb-org-card elements`);
@@ -164,12 +173,14 @@ await runCheck(`verify-${NAME}`, async ({ expect, failures }) => {
                 boxes: canvas().querySelectorAll('.pb-org-box').length,
                 empty: !!canvas().querySelector('.pb-org-empty'),
                 missing: keys.filter(k => !cardFor(k)),
+                outside: outside(),
             };
         `);
         expect(one.boxes === 1, `one group: ${one.boxes} .pb-org-box element(s) on the canvas, want 1`);
         expect(!one.empty, 'one group: the "No tab groups" panel is still on the canvas');
         expect(one.missing.length === 0, `one group: no loose card for ${one.missing.join(', ')}`);
-        detail(`one group: 1 box, no empty panel, ${zero.keys.length - one.missing.length} loose cards still on the canvas`);
+        expect(one.outside.length === 0, `one group: loose card(s) not wholly inside the canvas host, so they are clipped: ${JSON.stringify(one.outside)}`);
+        detail(`one group: 1 box, no empty panel, ${zero.keys.length - one.missing.length} loose cards still on the canvas, all inside the canvas host`);
         if (controls.every(([, red]) => red)) {
             detail('probe controls: 3 planted page faults each turned their probe red');
         }
