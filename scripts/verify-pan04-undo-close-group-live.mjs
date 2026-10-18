@@ -24,7 +24,13 @@
 //       restores G5 at its bounds with focus on its title; in Tree view the
 //       control sits at the section's index; a mode switch to Browsing and
 //       back leaves it there; with focus on it at its deadline, focus is on
-//       New Group after the commit.
+//       New Group after the commit;
+//   (h) the last group (22-05, PAN-06), with G2 the only visible group: no x on
+//       its canvas box or tree section; the close-group command on G2 opens no
+//       undo window, paints no Undo control and flashes no status-bar notice
+//       (the notice was shown after G5's close, so the probe sees its emitter);
+//       a new G6 brings both x back, closing G6 removes G2's again (a pending
+//       group does not count), and Undo brings both back.
 //
 // UNDO_CLOSE_MS is read from group-model.ts at check time, never typed here.
 //
@@ -32,7 +38,8 @@
 // Like the other ng-a-live rows it has no --self-test. In-run probe controls
 // stand in for one: each plants a page fault (undoCloseGroup stubbed to a
 // no-op, commitClose stubbed to a no-op, isClosingKey stubbed to false, the
-// widget's undoCloseGroupById stubbed to a no-op) and requires the probe that
+// widget's undoCloseGroupById stubbed to a no-op, canCloseGroup stubbed to
+// always true) and requires the probe that
 // passed to go red, so every probe is shown able to fail.
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -337,6 +344,9 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
             const enter = el => el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
             // The root of the view on screen: the hidden one cannot take focus.
             const shown = () => org.view === 'canvas' ? org.canvasRoot : org.treeRoot;
+            const notice = () => !!document.getElementById('status-bar-powerbrowser.modes.panorama-notice');
+            // Whether the group's x is in the canvas box and in the tree section.
+            const xs = id => ({ canvas: !!org.canvasRoot.querySelector('.pb-org-box' + at(id) + ' .pb-org-box-close'), tree: !!org.treeRoot.querySelector('.pb-org-tree-section' + at(id) + ' .pb-org-tree-close') });
         `;
         const g1d = await run(`
             ${DOM}
@@ -351,6 +361,8 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
             box.querySelector('.pb-org-box-close').click();
             await settle(() => !!undoOf(org.canvasRoot, g5.id) && document.activeElement === undoOf(org.canvasRoot, g5.id));
             await A.sleep(500);
+            // The positive control for (h): a closable close flashes the status-bar notice.
+            const noticed = await settle(notice, 16);
             const u = undoOf(org.canvasRoot, g5.id);
             const now = u ? centre(u) : null;
             return {
@@ -365,6 +377,7 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
                 name: u ? u.getAttribute('aria-label') : null,
                 tip: u ? u.title : null,
                 command: u ? u.dataset.command : null,
+                noticed,
             };
         `);
         if (process.env.PB_PAN04_SHOT) {
@@ -452,6 +465,58 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
         expect(p4.red, 'probe control undoCloseGroupById stubbed to a no-op did not go red -- the probe cannot see that fault');
         detail(`(g) tree: the Undo control sits at section index ${g2d.at}, focused; Browsing and back: the control is still there (${g3d.view} view); at the deadline with focus on it, the commit left focus on New Group`);
 
+        // (h) the last remaining group (PAN-06). G5 has committed, so G2 is the only visible group.
+        const h1 = await run(`
+            ${DOM}
+            const groups = m.listGroups().map(g => g.id);
+            const closing = m.listClosing().length;
+            const hidden = await settle(() => !xs(S.g2).canvas && !xs(S.g2).tree);
+            const quiet = await settle(() => !notice(), 64);
+            await A.get('CommandRegistry').executeCommand('powerbrowser.panorama.close-group', S.g2);
+            await A.sleep(1500);
+            const after = { pending: m.isClosing(S.g2), listed: m.listGroups().some(g => g.id === S.g2), undo: org.node.querySelectorAll('.pb-org-undo').length, notice: notice() };
+            // P5: with canCloseGroup stubbed to always true, the last group's x must render.
+            let red;
+            try {
+                m.canCloseGroup = () => true;
+                org.render();
+                red = await settle(() => xs(S.g2).canvas && xs(S.g2).tree);
+            } finally {
+                delete m.canCloseGroup;
+                org.render();
+            }
+            const reHidden = await settle(() => !xs(S.g2).canvas && !xs(S.g2).tree);
+            return { groups, closing, hidden, x: xs(S.g2), quiet, after, red, reHidden };
+        `);
+        expect(h1.groups.length === 1 && h1.groups[0] === g2 && h1.closing === 0, `(h) setup: visible groups [${h1.groups.join(', ')}] with ${h1.closing} pending, want G2 ${g2} alone`);
+        expect(h1.hidden, `(h) the last group G2 shows a close control: ${JSON.stringify(h1.x)}`);
+        expect(g1d.noticed, '(h) setup: no status-bar notice after G5\'s close, so its absence below proves nothing');
+        expect(h1.quiet, '(h) setup: the status-bar notice from an earlier close never cleared');
+        expect(!h1.after.pending && h1.after.listed && h1.after.undo === 0 && !h1.after.notice, `(h) close-group on the last group G2 acted: ${JSON.stringify(h1.after)}`);
+        expect(h1.reHidden, '(h) probe control canCloseGroup was not restored: G2 still shows a close control');
+        detail(`(h) one visible group G2: no x on its canvas box or tree section; close-group on G2: pending ${h1.after.pending}, still listed, ${h1.after.undo} Undo controls, notice ${h1.after.notice} (shown after G5's close: ${g1d.noticed})`);
+
+        const h2 = await run(`
+            ${DOM}
+            const g6 = await m.createGroup(A.actor(), { x: 40, y: 40 });
+            S.g6 = g6.id;
+            const both = () => xs(S.g2).canvas && xs(S.g2).tree && xs(S.g6).canvas && xs(S.g6).tree;
+            const two = await settle(both);
+            const twoX = { g2: xs(S.g2), g6: xs(S.g6) };
+            await org.closeGroupById(S.g6);
+            const pending = m.isClosing(S.g6);
+            const gone = await settle(() => !xs(S.g2).canvas && !xs(S.g2).tree);
+            const oneX = xs(S.g2);
+            await org.undoCloseGroupById(S.g6);
+            const back = await settle(() => !m.isClosing(S.g6) && both());
+            return { two, twoX, pending, gone, oneX, back, g2: xs(S.g2), g6: xs(S.g6) };
+        `);
+        expect(h2.two, `(h) with G6 beside G2 the x is missing: ${JSON.stringify(h2.twoX)}`);
+        expect(h2.pending && h2.gone, `(h) with G6 pending (${h2.pending}) G2 still shows a close control: ${JSON.stringify(h2.oneX)}`);
+        expect(h2.back, `(h) after the undo of G6 the x is missing: G2 ${JSON.stringify(h2.g2)}, G6 ${JSON.stringify(h2.g6)}`);
+        expect(h1.red, 'probe control canCloseGroup stubbed to always true did not go red -- the probe cannot see that fault');
+        detail(`(h) G6 created: x on G2 and G6 in both views; G6 closed: G2 has no x while G6 is pending; Undo: both x return`);
+
         // (f) set up G4 with /q1 and /q2, close it, and quit inside its window.
         const f0 = await run(`
             ${PROBES}
@@ -525,6 +590,6 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
         detail(`(f) relaunch: /s restored; the reader lists ${JSON.stringify(f.reader)} (no G4 ${first.g4}); no web tab on /q1 or /q2; rows ${show(qRows)}; no loose or grouped card for them`);
     });
     if (!failures.length) {
-        detail('probe controls: 4 planted page faults each turned their probe red');
+        detail('probe controls: 5 planted page faults each turned their probe red');
     }
 });
