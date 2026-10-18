@@ -379,6 +379,7 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
             expect(g.focusRule && g.hoverRule, `(g) the loaded stylesheet lacks the rule that shows the x on card focus (${g.focusRule}) or hover (${g.hoverRule})`);
             expect(g.red, 'probe control every x tabbable did not go red -- the probe cannot see that fault');
             expect(g.restored, 'probe control every x tabbable was not restored: a re-render left a tabbable x');
+            detail(`(g) tab stops ${g.real.scopes.map(s => `${s.name === 'loose' ? 'loose' : 'group'} ${s.stops}`).join(', ')}; ${g.real.xs} card x, ${g.real.tabbableX} tabbable; /c's x at opacity ${g.idle} idle and ${hover.shown} under a trusted hover; the loaded stylesheet shows it on focus-visible (${g.focusRule}) and hover (${g.hoverRule}); document.hasFocus() is ${g.hasFocus}, so focus is read from the CSSOM`);
         });
     } finally {
         rmSync(dir, { recursive: true, force: true });
