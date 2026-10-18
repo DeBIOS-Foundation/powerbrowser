@@ -213,7 +213,10 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
                 const saveables = A.get('SaveableService');
                 S.autoSaveWas = saveables.autoSave;
                 saveables.autoSave = 'off';
-                S.e.editor.getControl().getModel().setValue('pan05 dirty\\n');
+                const doc = S.e.editor && S.e.editor.document;
+                const text = doc && doc.textEditorModel;
+                if (!text) return { setup: 'no text model on the editor: widget ' + (S.e && S.e.constructor && S.e.constructor.name) + ', editor ' + typeof (S.e && S.e.editor) + ', document ' + typeof doc };
+                text.setValue('pan05 dirty\\n');
                 const dirty = await settle(() => !!S.e.saveable && S.e.saveable.dirty);
                 xOf(S.k.e).click();
                 const dialog = await settle(() => !!document.querySelector('.dialogOverlay'));
@@ -231,8 +234,8 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
                 await S.e.closeWithoutSaving();
                 A.get('SaveableService').autoSave = S.autoSaveWas;
             `);
-            if (!d.dirty) {
-                failures.push('(d) setup: the editor never became dirty, so the save prompt cannot be reached');
+            if (d.setup || !d.dirty) {
+                failures.push(`(d) setup: ${d.setup || 'the editor never became dirty'}, so the save prompt cannot be reached`);
             } else {
                 expect(d.dialog && d.cancelled, `(d) the dirty editor's card x opened no save prompt with Cancel (dialog ${d.dialog}, title ${JSON.stringify(d.title)}): the close discards unsaved changes`);
                 expect(d.shut, '(d) the save prompt did not close on Cancel');
