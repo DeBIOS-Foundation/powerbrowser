@@ -44,6 +44,9 @@ export const UNTITLED_GROUP_TITLE = 'Untitled group';
 /** PAN-04 (22-UI-SPEC A2): how long a closed group stays restorable before its close is written. */
 export const UNDO_CLOSE_MS = 15000;
 
+/** How long a "+" join waits before its one retry when the new web tab's row is not written yet. */
+const JOIN_ROW_RETRY_MS = 500;
+
 /** A closed group inside its undo window: hidden everywhere, nothing written yet. */
 interface ClosingGroup {
     group: PanoramaGroup;
@@ -318,7 +321,19 @@ export class GroupModel implements FrontendApplicationContribution {
             await this.moveCard(this.actor, key, groupId);
         } catch (error) {
             this.leaveLoose(key, groupId);
-            throw error;
+            // WR-05: chrome writes a new web tab's row fire-and-forget on the
+            // web-tab channel, so the join can arrive first. Retry once.
+            if (!key.startsWith('web:') || !/unknown tab URI/.test(error instanceof Error ? error.message : '')) {
+                throw error;
+            }
+            this.pendingWrites.delete(`card:${key}`);
+            await new Promise(resolve => window.setTimeout(resolve, JOIN_ROW_RETRY_MS));
+            try {
+                await this.moveCard(this.actor, key, groupId);
+            } catch (again) {
+                this.leaveLoose(key, groupId);
+                throw again;
+            }
         }
         void this.scheduleReload();
     }
