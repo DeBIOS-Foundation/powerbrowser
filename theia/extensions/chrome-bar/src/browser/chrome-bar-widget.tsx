@@ -404,11 +404,12 @@ export class ChromeBarWidget extends ReactWidget {
      * The address the pill shows for a widget (UI-SPEC "The address pill,
      * bound to the active tab"): a web tab's live page URL when it has one;
      * any other tab's registry URI string; the empty string for a page-less
-     * web tab, a widget with no registry URI, or no widget at all. The
-     * empty-page URL, factory ids and tab counters never reach here.
+     * web tab, a widget with no registry URI, a mode surface such as
+     * Organising (a mode, not a tab: it has no address), or no widget at
+     * all. The empty-page URL, factory ids and tab counters never reach here.
      */
     protected addressOf(widget: Widget | undefined): string {
-        if (!widget) {
+        if (!widget || TabStripWidget.MODE_SURFACES.includes(widget.id)) {
             return '';
         }
         if (widget instanceof WebTabWidget) {
