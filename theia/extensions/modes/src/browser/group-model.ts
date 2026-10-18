@@ -857,7 +857,11 @@ export class GroupModel implements FrontendApplicationContribution {
         return { name: group.title, count: tabs.length };
     }
 
-    /** PAN-04: restores a group in its undo window: title, bounds, membership, card order and activity. Writes nothing. */
+    /**
+     * PAN-04: restores a group in its undo window: title, bounds, membership,
+     * card order and activity. Writes nothing. Activity comes back only if no
+     * activity write landed during the window (`activityWritten`).
+     */
     undoCloseGroup(id: string): PanoramaGroup | undefined {
         const entry = this.closing.get(id);
         if (!entry) {
@@ -924,8 +928,20 @@ export class GroupModel implements FrontendApplicationContribution {
         });
         if (handOff && this.groups.some(group => group.id === handOff)) {
             // The shipped close never wrote the hand-off, so after a reload no group was active.
+            this.activityWritten();
             await this.persist(`active:${handOff}`, () => undefined, () => undefined,
                 () => client.mutate({ kind: 'setActiveGroup', id: handOff }));
+        }
+    }
+
+    /**
+     * PAN-04 (step 4): once an activity write lands in the store, a group
+     * still in its undo window is no longer the stored active group, so Undo
+     * must not make it active in memory only; the next reload would override it.
+     */
+    private activityWritten(): void {
+        for (const entry of this.closing.values()) {
+            entry.wasActive = false;
         }
     }
 
@@ -984,6 +1000,7 @@ export class GroupModel implements FrontendApplicationContribution {
             for (const group of this.groups) {
                 group.isActive = group.id === id;
             }
+            this.activityWritten();
         };
         const revert = (): void => {
             this.activeGroupId = prior;
