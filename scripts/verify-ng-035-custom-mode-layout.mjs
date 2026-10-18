@@ -143,14 +143,18 @@ await runCheck(LABEL, async ({ profile, fail }) => {
         await commands.executeCommand(${JSON.stringify(ACTIVATE)}, dataId);
         await sleep(1000);
         const data = { explorer: explorerArea(), right: appShell.isExpanded('right'), statusBarHidden: get('StatusBarImpl').isHidden };
-        const input = get('QuickInputService');
-        const original = input.input;
-        input.input = async () => 'NG035 Saved';
-        try {
-            await commands.executeCommand(${JSON.stringify(SAVE_AS_MODE)});
-        } finally {
-            input.input = original;
+        // Answers the real capped name field (G-23): the save no longer calls quickInput.input.
+        const nameField = () => [...document.querySelectorAll('.quick-input-widget .quick-input-box input')]
+            .find(element => element.offsetParent !== null) || null;
+        const saving = commands.executeCommand(${JSON.stringify(SAVE_AS_MODE)});
+        if (!(await until(() => nameField() !== null, 10000))) {
+            return { error: 'Save as Mode opened no visible quick-input name field' };
         }
+        nameField().value = 'NG035 Saved';
+        nameField().dispatchEvent(new Event('input', { bubbles: true }));
+        await until(() => nameField().value === 'NG035 Saved', 2000);
+        await get('MonacoQuickInputImplementation').accept();
+        await saving;
         await sleep(500);
         const stored = JSON.parse((await files.read(modes.modesUri)).value);
         return { legacy, data, saved: (stored.customs || []).find(row => row.name === 'NG035 Saved') || null };

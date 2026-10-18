@@ -105,14 +105,18 @@ await runCheck(LABEL, async ({ profile, fail, defer }) => {
         const arranged = bars();
         const arrangedFull = full();
         const arrangedSizes = liveSizes();
-        const input = get('QuickInputService');
-        const original = input.input;
-        input.input = async () => 'NG036';
-        try {
-            await commands.executeCommand(${JSON.stringify(SAVE_SETUP)});
-        } finally {
-            input.input = original;
+        // Answers the real capped name field (G-23): the save no longer calls quickInput.input.
+        const nameField = () => [...document.querySelectorAll('.quick-input-widget .quick-input-box input')]
+            .find(element => element.offsetParent !== null) || null;
+        const saving = commands.executeCommand(${JSON.stringify(SAVE_SETUP)});
+        if (!(await until(() => nameField() !== null, 10000))) {
+            return { error: 'Save Setup opened no visible quick-input name field' };
         }
+        nameField().value = 'NG036';
+        nameField().dispatchEvent(new Event('input', { bubbles: true }));
+        await until(() => nameField().value === 'NG036', 2000);
+        await get('MonacoQuickInputImplementation').accept();
+        await saving;
         const stored = JSON.parse((await files.read(setups.setupsUri)).value);
         const row = (stored.setups || []).find(entry => entry.name === 'NG036') || null;
         await appShell.addWidget(tab(C), { area: 'main', mode: 'tab-after', ref: tab(A) });
