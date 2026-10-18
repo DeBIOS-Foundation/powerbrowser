@@ -984,10 +984,75 @@ export class OrganisingWidget extends Widget {
             } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
                 event.preventDefault();
                 this.moveCardFocus(card, -1);
+            } else if (event.key === 'Delete') {
+                event.preventDefault();
+                void this.closeCardFrom(card, tab, groupId, true);
             }
         });
         card.addEventListener('pointerdown', event => this.beginCardDrag(event, card, tab, groupId));
+        // PAN-05 (A9): a pointer target only; Delete is the keyboard close, so each scope keeps one tab stop.
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'pb-org-card-close';
+        close.tabIndex = -1;
+        close.textContent = '×';
+        close.title = 'Close tab';
+        close.setAttribute('aria-label', 'Close tab');
+        // No drag starts and no dive opens from the ×, as on the strip's close.
+        close.addEventListener('pointerdown', event => event.stopPropagation());
+        close.addEventListener('dblclick', event => event.stopPropagation());
+        close.addEventListener('click', event => {
+            event.stopPropagation();
+            void this.closeCardFrom(card, tab, groupId, false);
+        });
+        card.append(close);
         return card;
+    }
+
+    /**
+     * PAN-05: closes a card's tab (`GroupModel.closeCard`). After a keyboard
+     * close focus moves to the next card in the scope, else the previous, else
+     * the box title (group) or New Group (loose). The expanded-stack panel
+     * closes once its last card goes.
+     */
+    protected async closeCardFrom(card: HTMLElement, tab: PanoramaTab, groupId: string | null, keyboard: boolean): Promise<void> {
+        const scope = this.cardScope(card);
+        const at = scope.indexOf(card);
+        const nextKey = (scope[at + 1] ?? scope[at - 1])?.dataset.u;
+        const expanded = !!card.closest('.pb-org-expand-cards');
+        const loose = card.classList.contains('is-loose');
+        let closed: boolean;
+        try {
+            closed = await this.model.closeCard(this.actor, tab);
+        } catch (error) {
+            console.error('[@powerbrowser/modes] closing a tab from its card failed:', error instanceof Error ? error.name : typeof error);
+            this.render();
+            return;
+        }
+        if (!closed) {
+            return;
+        }
+        if (expanded && groupId !== null && !this.model.getTabs(groupId).length) {
+            this.expandedGroupId = undefined;
+        }
+        this.render();
+        if (!keyboard) {
+            return;
+        }
+        const inScope = expanded ? '.pb-org-expand-cards ' : loose ? '' : `[data-g="${CSS.escape(groupId ?? '')}"] .pb-org-box-cards `;
+        const next = nextKey === undefined ? null : (expanded ? this.expandRoot : this.canvasRoot)
+            .querySelector(`${inScope}.pb-org-card${loose ? '.is-loose' : ''}[data-u="${CSS.escape(nextKey)}"]`) as HTMLElement | null;
+        if (next) {
+            for (const candidate of this.cardScope(next)) {
+                candidate.tabIndex = candidate === next ? 0 : -1;
+            }
+            next.focus();
+            return;
+        }
+        const fallback = groupId !== null
+            ? this.canvasRoot.querySelector(`[data-g="${CSS.escape(groupId)}"] .pb-org-box-title`)
+            : this.node.querySelector('.pb-org-new');
+        (fallback as HTMLElement | null)?.focus();
     }
 
     /** The preview panel for a tab that has no capture: its name, plainly. */
@@ -1946,6 +2011,22 @@ export class OrganisingWidget extends Widget {
             candidate.tabIndex = candidate === next ? 0 : -1;
         }
         next.focus();
+    }
+
+    /**
+     * The visible cards of a card's roving scope, in order: the same rule as
+     * `moveCardFocus`, whose body canvas-geometry reads for the scope selectors.
+     */
+    protected cardScope(card: HTMLElement): HTMLElement[] {
+        let scoped: HTMLElement[];
+        if (card.classList.contains('is-loose')) {
+            scoped = (Array.from(this.canvasRoot.children) as HTMLElement[])
+                .filter(child => child.matches('.pb-org-card.is-loose'));
+        } else {
+            const scope = card.closest('.pb-org-box-cards, .pb-org-expand-cards');
+            scoped = scope ? Array.from(scope.querySelectorAll('.pb-org-card')) as HTMLElement[] : [];
+        }
+        return scoped.filter(candidate => !candidate.hidden);
     }
 
     /**

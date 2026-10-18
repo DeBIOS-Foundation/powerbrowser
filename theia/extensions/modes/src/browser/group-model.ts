@@ -895,6 +895,36 @@ export class GroupModel implements FrontendApplicationContribution {
         return [...this.shell.mainPanel.widgets()].find(widget => widget.id !== 'powerbrowser.modes.organising' && this.keyOf(widget) === uri);
     }
 
+    /**
+     * PAN-05 (22-UI-SPEC A8): closes the tab a card stands for, as the strip's
+     * × does. An open tab closes through Theia's own close, which awaits the
+     * stock save prompt for a dirty editor; its row is marked closed by the web
+     * tab or by `watchClose`. A card whose tab is not open has its row marked
+     * closed. No membership write (R6): an emptied group stays. Returns whether
+     * the card closed; a cancelled save prompt keeps the card and the tab.
+     */
+    async closeCard(client: GroupActorClient, tab: PanoramaTab): Promise<boolean> {
+        const widget = this.widgetOf(tab.uri);
+        if (widget) {
+            await this.shell.closeWidget(widget.id);
+            if (!widget.isDisposed) {
+                return false;
+            }
+            this.removeCardLocal(tab.uri);
+            this.changeEmitter.fire();
+            return true;
+        }
+        const from = this.locateCard(tab.uri);
+        if (tab.open !== false || !from) {
+            return false;
+        }
+        const index = from.groupId === null ? undefined : (this.members.get(from.groupId) ?? []).findIndex(card => card.uri === tab.uri);
+        await this.persist(`closeTab:${tab.uri}`, () => this.removeCardLocal(tab.uri),
+            () => this.insertCardLocal(from.card, from.groupId, index),
+            () => client.mutate({ kind: 'closeTab', uri: tab.uri }));
+        return true;
+    }
+
     /** Marks one group active (accent border + title 600, persisted). */
     async setActiveGroup(client: GroupActorClient, id: string): Promise<void> {
         if (this.activeGroupId === id) {

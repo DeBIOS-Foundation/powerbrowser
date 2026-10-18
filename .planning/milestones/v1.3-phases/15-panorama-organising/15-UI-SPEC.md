@@ -142,6 +142,9 @@ is on cards, boxes and tree rows.
 | `.pb-org-box-resize` height | 16 px | `modes.css` |
 | `.pb-org-skeleton` height | 144 px (loading skeleton box) | `modes.css` |
 | `.pb-org-undo` height | 32 px (Undo Close Group control) | `modes.css` |
+| `.pb-org-card-close` width | 24 px (card close control) | `modes.css` |
+| `.pb-org-card-close` height | 24 px | `modes.css` |
+| Card close position | 4 px from the card's top and right edges, above the preview, on every card that takes the pointer; a stacked or piled back card draws none | `modes.css` `.pb-org-card-close` |
 | Undo Close Group position | Centred in the closed group's stored bounds, on the zoomed layer; no drop target, no part in push-away | `organising-widget.ts` `renderUndo()` |
 | Stack card width | 40-170 px, fitted to the box | `organising-widget.ts` `stackCards()` |
 | Edge grips | 8 px strips on n/s/e/w; 14 × 14 corners nw/ne/sw | `modes.css` `.pb-org-box-grip-*` |
@@ -196,7 +199,7 @@ carry no accent treatment. The active group is marked by a `--color-text-muted` 
 600, on canvas and tree, not by accent. A valid drop target shows a translucent slot that opens in
 the target group's grid, not an accent outline.
 
-**Frozen translucencies:** stack count, pile count and Expand pill background `rgba(0,0,0,0.72)`;
+**Frozen translucencies:** stack count, pile count, Expand pill and card × background `rgba(0,0,0,0.72)`;
 expanded-stack scrim `rgba(0,0,0,0.55)`; rubber band `rgba(255,255,255,0.08)`; drop slot
 `rgba(255,255,255,0.10)`; blank-preview hatching `rgba(255,255,255,0.02)`; drag ghost shadow
 `0 8px 22px rgba(0,0,0,0.55)`. Opacities: source card while dragging 0.7, ghost 0.9, band-enclosed
@@ -216,16 +219,18 @@ Every Panorama control shows `outline: 2px solid var(--color-primary); outline-o
 zoom steps, error-bar Retry, box and tree close buttons, cards, tree rows, box and tree titles,
 the rename input, the visible resize grip, the empty-state action, and the Undo Close Group
 control (`.pb-org-undo`). Cards are reached by
-roving tabindex within their scope (see Interaction Contract, Cards).
+roving tabindex within their scope (see Interaction Contract, Cards). The card × is not
+focusable (22-UI-SPEC A9); a focused card shows its ×, so the Delete affordance is visible.
 
 ### Motion
 
 Baseline `transition: all 0.15s ease` (sketch-locked, carried); zoom transform 0.15s; the drop
 slot moves at 0.12s; the drag ghost and the dragged card have no transition. Opening a tab from a
 card uses the stock tab-open path with no authored animation. The Undo Close Group control
-appears at once and fades out over 0.15s at the end of its window. `prefers-reduced-motion`
-removes transitions on the canvas layer, cards, the resize grip, the Undo Close Group control
-(`.pb-org-undo`) and every toolbar control. Group data
+appears at once and fades out over 0.15s at the end of its window. The card × fades in on card
+`:hover` and `:focus-visible` (opacity 0 to 1, 0.15s ease). `prefers-reduced-motion`
+removes transitions on the canvas layer, cards, the card × (`.pb-org-card-close`), the resize
+grip, the Undo Close Group control (`.pb-org-undo`) and every toolbar control. Group data
 paints with skeleton boxes until first load, never a spinner.
 
 ---
@@ -260,6 +265,7 @@ retired dialog bodies, U+2212 minus, U+00D7 times). Interpolation slots are writ
 | Groups-save error | **"PowerBrowser couldn’t save your tab groups. The canvas shows your latest arrangement — choose Retry."** |
 | Error-bar action | **"Retry"** — re-issues the load, or replays the failed write |
 | Group close button tooltip (every group except the last) | **"Close group"** |
+| Card close control | **"Close tab"** — `aria-label` and `title` of the card ×; parallels "Close group" (22-01 C1 item 3) |
 | Undo control label | **"Undo Close Group"** — the control in the closed group's bounds (canvas) or in its section's place (tree); restores the group and its tabs (22-01 C1 item 1) |
 | Undo control accessible name | **"Undo Close Group "{name}""** — the control's `aria-label` and `title`, so two open undo windows are told apart (22-01 C1 item 2) |
 | Group closed confirmation | **"Group "{name}" closed."** (status-bar flash) |
@@ -395,6 +401,21 @@ spinner. The URI line is present only when the tab has a real address; internal 
 appear. Cards are focusable. Enter opens the tab, and arrow keys move focus within the card's
 scope.
 
+- **Card ×** (Phase 22, PAN-05). Every card that takes the pointer carries a × at its top right,
+  shown on card hover and when the card has focus. Click closes that tab. The press never starts
+  a card drag, and a double click on it never opens the tab.
+- **Delete** on a focused card does the same. The × is a pointer target only (`tabindex="-1"`),
+  so each scope keeps exactly one tab stop.
+- The close is the tab's own close, exactly as the strip's ×: no confirmation, and Theia's stock
+  save prompt for an editor with unsaved changes. Cancelling the prompt keeps the card and the
+  tab. A card whose tab is not open has its row marked closed; nothing reopens.
+- The card leaves its group or the loose line in place, and the grid re-packs. A group emptied
+  this way stays and shows "Empty group — drag tabs here."; only a drag dissolves a group.
+- Focus after a keyboard close: the next card in the same scope, else the previous one, else
+  the box title (group scope), else "New Group" (loose scope). In the expanded-stack panel the
+  panel stays open with the remaining cards and closes when none remain, returning focus to the
+  box title.
+
 **Roving-focus scopes:** each group's card area, the set of visible loose cards on the canvas (in
 model order, hidden pile cards skipped), and the expanded-stack card list. Each scope has exactly
 one tab stop.
@@ -410,11 +431,11 @@ one tab stop.
 
 ## UI Considerations
 
-Applicable state considerations resolved: 36 covered, 9 backstop, 0 unresolved.
+Applicable state considerations resolved: 40 covered, 10 backstop, 0 unresolved.
 
 Elements: E1 canvas, E2 group box, E3 card, E4 loose cards, E5 tree, E6 toolbar, E7 rename
 input, E8 retired (the Close Group dialog, removed in Phase 22), E9 error bars, E10 expanded
-stack, E11 Browsing strip filter, E12 Undo Close Group control.
+stack, E11 Browsing strip filter, E12 Undo Close Group control, E13 card close control.
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
@@ -454,6 +475,10 @@ stack, E11 Browsing strip filter, E12 Undo Close Group control.
 | restart | E12 undo | ✅ covered | Quit inside the window → closed for good; never an empty box or loose leftovers |
 | long-text | E12 undo | ✅ covered | Visible label is fixed; the group name is only in the accessible name, never truncated there |
 | zero-one-many | E2 + E5 close | ✅ covered | One remaining group → no × on canvas or tree; two or more → × on each; undo-window groups not counted |
+| populated | E13 card × | ✅ covered | On hover or focus, top-right, 24 × 24, every card that takes the pointer |
+| keyboard | E13 card × | ✅ covered | Delete on a focused card; focus moves to the next, previous, box title or New Group |
+| partial | E13 card × | ✅ covered | Card for a tab that is not open → row marked closed, card gone, nothing reopens |
+| zero-one-many | E2 + E13 | ✅ covered | Last card closed → group stays with "Empty group — drag tabs here."; expanded panel closes when empty |
 | draw | E1 band | 🧪 backstop | Live: a drawn band ≥30px creates a group at that rectangle and takes enclosed loose cards; Esc cancels |
 | join / place | E2 + E4 drag | 🧪 backstop | Live: drop over a group joins at the previewed slot; drop on empty canvas places loose; emptied group dissolves |
 | parity | E1 + E5 | 🧪 backstop | Live: tree shows identical groups, order and membership after every mutation and flip |
@@ -463,6 +488,7 @@ stack, E11 Browsing strip filter, E12 Undo Close Group control.
 | filter-live | E11 + E1 | 🧪 backstop | Live: after a card drag, band draw, close, undo and "+", the Browsing strip matches the active group's members plus loose plus current, with no reload |
 | mode-scope | E11 | 🧪 backstop | Live: Coding dock bars list every tab while a group is active |
 | last-group | E2 + E5 | 🧪 backstop | Live: with one group the × is absent in both views; it returns when a second group exists |
+| card-close | E13 | 🧪 backstop | Live: × and Delete close exactly that tab, a dirty editor prompts, the press never starts a drag |
 
 **Dismissed (reasoned):** E10 loading and error (it paints from the in-memory model
 synchronously); E6 loading (local controls); E8 states (the dialog is removed); E12 overflow (one
@@ -518,4 +544,4 @@ FLAGs on dimensions 1, 3 and 5; this file was not re-run through the checker.
 | Tree as vertical stacked lists over identical data | Panorama note tree-toggle section + 15-CONTEXT.md |
 | SQL groups shape, single-writer path, sessionstore authority, PNG snapshots | REQUIREMENTS.md GUI-08 + 15-CONTEXT.md + `.planning/notes/tab-sql-substrate.md` |
 | Dead layout blob reserved for this canvas | 14 REVIEW-FIX.md WR-10 |
-| Deferred (not specified here) | Type-anywhere search, strip relocation (closed by RED verdict), bookmarks strip, browser menu, in-Theia web tabs (GUI-02), unified tab strip (GUI-05); per-card close (Phase 22) |
+| Deferred (not specified here) | Type-anywhere search, strip relocation (closed by RED verdict), bookmarks strip, browser menu, in-Theia web tabs (GUI-02), unified tab strip (GUI-05) |
