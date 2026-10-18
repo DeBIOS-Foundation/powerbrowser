@@ -258,7 +258,7 @@ Plans:
   3. `scripts/verify-platform.sh --quick` reports no FAIL row, and `quick-baseline.txt` is empty
   4. No stale tray code, comments or CSS remain, and the canvas still shows ungrouped tabs as loose cards
 
-**Plans**: 4/5 plans executed in 3 waves (waves 1 and 2 each run two file-disjoint plans in parallel; execution starts after Phase 20 completes)
+**Plans**: 5/5 plans executed in 3 waves (waves 1 and 2 each run two file-disjoint plans in parallel; execution starts after Phase 20 completes)
 **UI hint**: yes
 
 Plans:
@@ -275,7 +275,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 21-05-PLAN.md — PAN-01, PAN-07: full-tier `gui08-loose-cards-live` row PASS on a rebuilt sidecar with in-run probe controls; `--quick` green; `quick-baseline.txt` derived empty
+- [x] 21-05-PLAN.md — PAN-01, PAN-07: full-tier `gui08-loose-cards-live` row PASS on a rebuilt sidecar with in-run probe controls; `--quick` green; `quick-baseline.txt` derived empty
 
 ### Phase 22: Panorama Worklist
 
@@ -348,7 +348,7 @@ Plans:
 | 18. Firefox 153.5.0esr | 3/3 | Complete    | 2026-10-16 |
 | 19. Node 24, React 19, Theia 1.76.0 | 8/8 | Complete    | 2026-10-17 |
 | 20. Non-GUI Gaps | 5/5 | Complete    | 2026-10-17 |
-| 21. Panorama Spec and gui08 Checks | 4/5 | In Progress | - |
+| 21. Panorama Spec and gui08 Checks | 5/5 | In Progress | - |
 | 22. Panorama Worklist | 0/TBD | Not started | - |
 | 23. Modes Leftovers and Sketch 005 Verdict | 0/TBD | Not started | - |
 | 24. Live UAT Pass | 0/TBD | Not started | - |
