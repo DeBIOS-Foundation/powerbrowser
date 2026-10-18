@@ -17,15 +17,23 @@
 //       display none, and no bar's current title is a G1 widget (A3);
 //   (f) a quit inside G4's window closes it for good: after a relaunch on the
 //       same profile the reader lists no G4, /q1 and /q2 are not open, their
-//       rows are closed and the model has no card for them (A4).
+//       rows are closed and the model has no card for them (A4);
+//   (g) the DOM (22-04), on a fresh G5 beside G2 in Organising: x on the
+//       canvas opens no dialog and paints one Undo Close Group control
+//       centred in G5's vacated bounds, focused and named for G5; Enter on it
+//       restores G5 at its bounds with focus on its title; in Tree view the
+//       control sits at the section's index; a mode switch to Browsing and
+//       back leaves it there; with focus on it at its deadline, focus is on
+//       New Group after the commit.
 //
 // UNDO_CLOSE_MS is read from group-model.ts at check time, never typed here.
 //
 // Full tier only: the built binary, a Theia build and a headless browser.
 // Like the other ng-a-live rows it has no --self-test. In-run probe controls
 // stand in for one: each plants a page fault (undoCloseGroup stubbed to a
-// no-op, commitClose stubbed to a no-op, isClosingKey stubbed to false) and
-// requires the probe that passed to go red, so every probe is shown able to fail.
+// no-op, commitClose stubbed to a no-op, isClosingKey stubbed to false, the
+// widget's undoCloseGroupById stubbed to a no-op) and requires the probe that
+// passed to go red, so every probe is shown able to fail.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -148,9 +156,6 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
                 store: await storeGroups(),
             };
         `);
-        if (process.env.PB_PAN04_SHOT) {
-            writeFileSync(process.env.PB_PAN04_SHOT, await screenshot());
-        }
         const aRows = rowsOf(g1Keys);
         expect(a.closed && a.closed.count === 3, `(a) closeGroup returned ${JSON.stringify(a.closed)}, want a count of 3`);
         expect(a.pending, '(a) G1 is not pending after closeGroup');
@@ -322,6 +327,121 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
         expect(e.p3, 'probe control isClosingKey stubbed to false did not go red -- the probe cannot see that fault');
         expect(e.p3Restored, 'probe control isClosingKey was not restored: the strip still paints a G1 tab');
 
+        // (g) the Undo Close Group control in the DOM, on a fresh G5 beside G2.
+        const DOM = `
+            ${PROBES}
+            const org = await A.organising();
+            const at = id => '[data-g="' + CSS.escape(id) + '"]';
+            const centre = el => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+            const undoOf = (root, id) => root.querySelector('.pb-org-undo[data-closing="' + CSS.escape(id) + '"]');
+            const enter = el => el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        `;
+        const g1d = await run(`
+            ${DOM}
+            org.showCanvasView();
+            const g5 = await m.createGroup(A.actor(), { x: 40, y: 40 });
+            S.g5 = g5.id;
+            await settle(() => !!org.canvasRoot.querySelector('.pb-org-box' + at(g5.id) + ' .pb-org-box-close'));
+            S.before5 = snap(g5.id);
+            const box = org.canvasRoot.querySelector('.pb-org-box' + at(g5.id));
+            const scale = box.getBoundingClientRect().width / g5.w;
+            const was = centre(box);
+            box.querySelector('.pb-org-box-close').click();
+            await settle(() => !!undoOf(org.canvasRoot, g5.id) && document.activeElement === undoOf(org.canvasRoot, g5.id));
+            await A.sleep(500);
+            const u = undoOf(org.canvasRoot, g5.id);
+            const now = u ? centre(u) : null;
+            return {
+                title: g5.title,
+                pending: m.isClosing(g5.id),
+                dialog: !!document.querySelector('.dialogOverlay'),
+                count: org.canvasRoot.querySelectorAll('.pb-org-undo').length,
+                scale,
+                off: now ? Math.max(Math.abs(now.x - was.x), Math.abs(now.y - was.y)) : null,
+                focused: !!u && document.activeElement === u,
+                label: u ? u.textContent : null,
+                name: u ? u.getAttribute('aria-label') : null,
+                tip: u ? u.title : null,
+                command: u ? u.dataset.command : null,
+            };
+        `);
+        if (process.env.PB_PAN04_SHOT) {
+            writeFileSync(process.env.PB_PAN04_SHOT, await screenshot());
+        }
+        const g1n = `Undo Close Group "${g1d.title}"`;
+        expect(g1d.pending, '(g) clicking G5\'s x did not open its undo window');
+        expect(!g1d.dialog, '(g) clicking G5\'s x opened a dialog');
+        expect(g1d.count === 1, `(g) ${g1d.count} Undo controls on the canvas after one close, want 1`);
+        expect(g1d.off !== null && g1d.off <= 2 * g1d.scale, `(g) the Undo control's centre is ${g1d.off} px from G5's vacated box centre, want at most ${2 * g1d.scale}`);
+        expect(g1d.focused, '(g) focus is not on the Undo control after the close');
+        expect(g1d.label === 'Undo Close Group' && g1d.name === g1n && g1d.tip === g1n, `(g) the control reads ${JSON.stringify(g1d.label)}, named ${JSON.stringify(g1d.name)}, tooltip ${JSON.stringify(g1d.tip)}`);
+        expect(g1d.command === 'powerbrowser.panorama.undo-close-group', `(g) the control's data-command is ${g1d.command}`);
+        const g1e = await run(`
+            ${DOM}
+            enter(undoOf(org.canvasRoot, S.g5));
+            const back = await settle(() => restored(S.g5, S.before5));
+            const titled = await settle(() => document.activeElement === org.canvasRoot.querySelector(at(S.g5) + ' .pb-org-box-title'));
+            return { back, titled, now: snap(S.g5), active: document.activeElement ? document.activeElement.className : null };
+        `);
+        expect(g1e.back, `(g) Enter on the Undo control did not restore G5 at its bounds: ${JSON.stringify(g1e.now)}`);
+        expect(g1e.titled, `(g) after the restore focus is on ${g1e.active}, want G5's box title`);
+        detail(`(g) canvas: x on G5 opened no dialog; 1 Undo control, ${g1d.off} px from the vacated centre at scale ${g1d.scale}, focused, label ${JSON.stringify(g1d.label)}, name ${JSON.stringify(g1d.name)}; Enter restored G5 at ${JSON.stringify(g1e.now)} with focus on its title`);
+
+        const g2d = await run(`
+            ${DOM}
+            org.showTreeView();
+            await settle(() => !!org.treeRoot.querySelector(at(S.g5) + ' .pb-org-tree-close'));
+            const section = org.treeRoot.querySelector('.pb-org-tree-section' + at(S.g5));
+            const index = Array.from(org.treeRoot.children).indexOf(section);
+            section.querySelector('.pb-org-tree-close').click();
+            await settle(() => !!undoOf(org.treeRoot, S.g5) && document.activeElement === undoOf(org.treeRoot, S.g5));
+            const u = undoOf(org.treeRoot, S.g5);
+            return { index, at: u ? Array.from(org.treeRoot.children).indexOf(u) : -1, focused: !!u && document.activeElement === u, pending: m.isClosing(S.g5) };
+        `);
+        expect(g2d.pending && g2d.index >= 0 && g2d.at === g2d.index, `(g) tree: G5's section was at index ${g2d.index}, its Undo control is at ${g2d.at} (pending ${g2d.pending})`);
+        expect(g2d.focused, '(g) tree: focus is not on the Undo control after the close');
+        const g3d = await run(`
+            ${PROBES}
+            await A.get('ModeService').activateMode('browsing');
+            await settle(() => document.body.dataset.pbMode === 'browsing');
+            const org = await A.organising();
+            const there = await settle(() => !!org.canvasRoot.querySelector('.pb-org-undo[data-closing="' + CSS.escape(S.g5) + '"]'));
+            return { there, pending: m.isClosing(S.g5) };
+        `);
+        expect(g3d.there && g3d.pending, `(g) after Browsing and back, the Undo control is ${g3d.there ? 'there' : 'gone'} and G5 pending ${g3d.pending}`);
+        // P4: with the widget's undoCloseGroupById stubbed to a no-op, Enter must not restore.
+        const p4 = await run(`
+            ${DOM}
+            const u = undoOf(org.canvasRoot, S.g5);
+            let red;
+            try {
+                org.undoCloseGroupById = async () => undefined;
+                enter(u);
+                await A.sleep(1000);
+                red = !restored(S.g5, S.before5);
+            } finally {
+                delete org.undoCloseGroupById;
+            }
+            undoOf(org.canvasRoot, S.g5).focus();
+            const entry = m.listClosing().find(x => x.group.id === S.g5);
+            return { red, deadline: entry ? entry.deadline : null, focused: document.activeElement === undoOf(org.canvasRoot, S.g5) };
+        `);
+        if (p4.deadline === null) {
+            failures.push('(g) G5 left its undo window before the deadline step');
+            return undefined;
+        }
+        expect(p4.focused, '(g) setup: focus never reached the Undo control before its deadline');
+        const g4done = await waitUntil(() => run(`${PROBES} return !m.isClosing(S.g5) && !m.listGroups().some(g => g.id === S.g5);`), Math.max(0, p4.deadline - Date.now()) + 10000, 125);
+        const g4d = await run(`
+            ${DOM}
+            await settle(() => document.activeElement === org.node.querySelector('.pb-org-new'), 40);
+            return { onNew: document.activeElement === org.node.querySelector('.pb-org-new'), active: document.activeElement ? document.activeElement.className : null, left: org.node.querySelectorAll('.pb-org-undo').length };
+        `);
+        expect(g4done, '(g) G5 never committed at the end of its window');
+        expect(g4d.onNew && g4d.left === 0, `(g) after the commit focus is on ${g4d.active} with ${g4d.left} Undo controls left, want New Group and none`);
+        expect(p4.red, 'probe control undoCloseGroupById stubbed to a no-op did not go red -- the probe cannot see that fault');
+        detail(`(g) tree: the Undo control sits at section index ${g2d.at}, focused; Browsing and back: the control is still there; at the deadline with focus on it, the commit left focus on New Group`);
+
         // (f) set up G4 with /q1 and /q2, close it, and quit inside its window.
         const f0 = await run(`
             ${PROBES}
@@ -395,6 +515,6 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
         detail(`(f) relaunch: /s restored; the reader lists ${JSON.stringify(f.reader)} (no G4 ${first.g4}); no web tab on /q1 or /q2; rows ${show(qRows)}; no loose or grouped card for them`);
     });
     if (!failures.length) {
-        detail('probe controls: 3 planted page faults each turned their probe red');
+        detail('probe controls: 4 planted page faults each turned their probe red');
     }
 });
