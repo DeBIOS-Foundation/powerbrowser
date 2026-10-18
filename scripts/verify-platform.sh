@@ -3892,12 +3892,13 @@ run_own_checks() {
     # Honestly --quick: a mkdtemp stage, no build, no browser, no network.
     "tab-store-offline|node $REPO_ROOT/scripts/verify-tab-store-offline.mjs"
 
-    # NEW (15-02): GUI-08's canvas-geometry gate. Derives canvas hooks,
-    # zoom/min/tray/card consts, the thumbnail-fallback shape, and the
-    # panorama command registry at check time and compares as set equality
-    # against one EXPECTED const; live drag/auto-box/close halves ride as
-    # HELD-OUT backstops, honestly reserved for the full suite. Honestly
-    # --quick: text reads only. No build, no browser, no display, no
+    # NEW (15-02; derived from 15-UI-SPEC since Phase 21): GUI-08's
+    # canvas-geometry gate. Derives the canvas geometry and type from
+    # 15-UI-SPEC's Canvas Geometry and Typography tables through
+    # scripts/lib/ui-spec.mjs at check time and compares them with the
+    # tree's consts and CSS, with the thumbnail-fallback shape and the
+    # panorama command registry. Its live DOM half is the full-tier row
+    # gui08-loose-cards-live. Honestly --quick: text reads only. No build, no browser, no display, no
     # network. The self-test rides alongside for the reason every other
     # self-test row in this array gives.
     "gui08-canvas-geometry|node $REPO_ROOT/scripts/verify-gui08-canvas-geometry.mjs"
@@ -3927,9 +3928,10 @@ run_own_checks() {
     "gui08-close-exactness|node $REPO_ROOT/scripts/verify-gui08-close-exactness.mjs"
     "gui08-close-exactness-self-test|node $REPO_ROOT/scripts/verify-gui08-close-exactness.mjs --self-test"
 
-    # NEW (15-03): GUI-08's panorama-copy gate. Derives every contracted
-    # panorama string from the Theia sources at check time versus EXPECTED
-    # literals verbatim as set equality, proves zero retired placeholder
+    # NEW (15-03; derived from 15-UI-SPEC since Phase 21): GUI-08's
+    # panorama-copy gate. Takes the contracted strings and the retired list
+    # from the 15-UI-SPEC Copywriting Contract at check time and compares
+    # them with the Theia sources as set equality, proves zero retired
     # copy in shipped sources by negated search, and runs the no-internals
     # shape check over the same strings. Honestly --quick: text reads only.
     # No build, no browser, no display, no network. The self-test rides

@@ -1,4 +1,0 @@
-gui08-canvas-geometry
-gui08-canvas-geometry-self-test
-gui08-panorama-copy
-gui08-panorama-copy-self-test
