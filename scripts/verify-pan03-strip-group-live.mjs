@@ -30,7 +30,8 @@ const NEW_TAB = 'powerbrowser.chrome-bar.new-tab';
 // Shared by the real assertions and the probe controls. No backticks inside.
 const PROBES = `
     const S = window.__pan03 = window.__pan03 || {};
-    const strip = () => A.shell().getWidgetById('powerbrowser.tab-strip');
+    // A DI singleton inside the chrome bar, not a shell-area widget, so getWidgetById cannot see it.
+    const strip = () => A.get('TabStripWidget');
     const labelOf = w => w.title.label || w.id;
     const current = () => { const t = A.shell().mainPanel.currentTitle; return t ? t.owner : undefined; };
     const keyOf = w => A.model().keyOf(w);
