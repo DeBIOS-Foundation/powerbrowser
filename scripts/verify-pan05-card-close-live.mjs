@@ -17,7 +17,9 @@
 //   (f) G2, emptied by (e), stays and shows the empty-group hint; no close
 //       wrote a membership, order or dissolve mutation;
 //   (g) each card scope has exactly one tab stop and every card x has
-//       tabIndex -1; a focused card shows its x.
+//       tabIndex -1; the x is hidden until a trusted hover shows it, and the
+//       loaded stylesheet shows it on card :focus-visible (this harness window
+//       never has system focus, so :focus cannot match here).
 //
 // Auto-save is switched off on the in-memory SaveableService for step (d):
 // with the browser default (afterDelay) Theia's own close saves a dirty editor
@@ -29,7 +31,7 @@
 // closeTab write swallowed for a second not-open card) and requires the probe
 // that passed to go red, so every probe is shown able to fail.
 //
-// PB_PAN05_SHOT=<path> writes a screenshot with a card focused, showing its x.
+// PB_PAN05_SHOT=<path> writes a screenshot with a card focused and hovered, showing its x.
 
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -87,7 +89,7 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
     const urls = { a: pages.url('/a'), c: pages.url('/c'), l: pages.url('/l') };
     const rowOf = key => tabsOf(profile).find(r => r.uri === key);
     try {
-        await withShell(profile, async ({ run, topLevelContexts, screenshot }) => {
+        await withShell(profile, async ({ run, topLevelContexts, screenshot, send }) => {
             // Setup: G holds /a, /c, a terminal and a file editor; G2 is empty; /l is loose.
             const keys = await run(`
                 ${PROBES}
@@ -335,23 +337,48 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
                     org.render();
                 }
                 const restored = stops();
-                // Keyboard focus, as Tab or the arrows give it: a script focus alone may not match :focus-visible.
-                cardOf(S.k.c).focus({ focusVisible: true });
+                // The focus half is read from the loaded CSSOM: this harness window never has
+                // system focus (document.hasFocus() is false), so no element can match :focus.
+                const rules = [];
+                const walk = list => { for (const r of Array.from(list || [])) { if (r.selectorText) rules.push(r); walk(r.cssRules); } };
+                for (const sheet of Array.from(document.styleSheets)) { try { walk(sheet.cssRules); } catch (err) { /* a cross-origin sheet */ } }
+                const shows = sel => rules.some(r => r.selectorText.split(',').map(t => t.trim()).includes(sel) && r.style.opacity === '1');
+                const card = cardOf(S.k.c);
+                card.focus();
+                const b = card.getBoundingClientRect();
+                return {
+                    real, ok: stopsOk(real), red: !stopsOk(planted), restored: stopsOk(restored),
+                    focusRule: shows('.pb-org-card:focus-visible .pb-org-card-close'), hoverRule: shows('.pb-org-card:hover .pb-org-card-close'),
+                    hasFocus: document.hasFocus(), idle: getComputedStyle(xOf(S.k.c)).opacity,
+                    at: { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) },
+                };
+            `);
+            // Trusted hover: a pointer move from BiDi input, which a script event cannot stand in for.
+            const href = await run('return location.href;');
+            const ctx = (await topLevelContexts()).find(x => x.url === href);
+            if (!ctx) {
+                failures.push(`(g) setup: no top-level context for the shell at ${href}, so the hover cannot be driven`);
+                return;
+            }
+            const pointer = actions => send('input.performActions', { context: ctx.context, actions: [{ type: 'pointer', id: 'pan05-mouse', parameters: { pointerType: 'mouse' }, actions }] });
+            await pointer([{ type: 'pointerMove', x: g.at.x, y: g.at.y }]);
+            const hover = await run(`
+                ${PROBES}
                 await A.sleep(400);
                 const card = cardOf(S.k.c);
-                const keyboard = !!card && document.activeElement === card && card.matches(':focus-visible');
-                const shown = getComputedStyle(xOf(S.k.c)).opacity;
-                return { real, ok: stopsOk(real), red: !stopsOk(planted), restored: stopsOk(restored), keyboard, shown };
+                return { hovered: card.matches(':hover'), shown: getComputedStyle(xOf(S.k.c)).opacity, focused: document.activeElement === card };
             `);
-            expect(g.ok, `(g) tab stops: ${JSON.stringify(g.real)}, want exactly one per scope and every x at tabIndex -1`);
-            expect(g.keyboard, '(g) setup: /c\'s card is not the focused element matching :focus-visible, so its x cannot be checked');
-            expect(g.shown === '1', `(g) the keyboard-focused card's x has opacity ${g.shown}, want 1`);
-            expect(g.red, 'probe control every x tabbable did not go red -- the probe cannot see that fault');
-            expect(g.restored, 'probe control every x tabbable was not restored: a re-render left a tabbable x');
             if (process.env.PB_PAN05_SHOT) {
                 writeFileSync(process.env.PB_PAN05_SHOT, await screenshot());
             }
-            detail(`(g) tab stops ${g.real.scopes.map(s => `${s.name === 'loose' ? 'loose' : 'group'} ${s.stops}`).join(', ')}; ${g.real.xs} card x, ${g.real.tabbableX} tabbable; the keyboard-focused card shows its x (opacity ${g.shown})`);
+            await pointer([{ type: 'pointerMove', x: 1, y: 1 }]);
+            await send('input.releaseActions', { context: ctx.context });
+            expect(g.ok, `(g) tab stops: ${JSON.stringify(g.real)}, want exactly one per scope and every x at tabIndex -1`);
+            expect(g.idle === '0', `(g) /c's x has opacity ${g.idle} before any hover, want 0: the x is always shown`);
+            expect(hover.hovered && hover.shown === '1', `(g) a trusted hover on /c's card: hovered ${hover.hovered}, its x has opacity ${hover.shown}, want 1`);
+            expect(g.focusRule && g.hoverRule, `(g) the loaded stylesheet lacks the rule that shows the x on card focus (${g.focusRule}) or hover (${g.hoverRule})`);
+            expect(g.red, 'probe control every x tabbable did not go red -- the probe cannot see that fault');
+            expect(g.restored, 'probe control every x tabbable was not restored: a re-render left a tabbable x');
         });
     } finally {
         rmSync(dir, { recursive: true, force: true });
