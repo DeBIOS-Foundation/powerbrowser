@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // scripts/verify-ng-006-close-group-closes-web-tabs.mjs -- NG-006 (non-GUI
 // wave A): the Close Group command closes the group's in-shell web tabs (their
-// widgets and overlays) and its stock tabs, as its dialog says, and leaves no
-// open row listed in the closed group.
+// widgets and overlays) and its stock tabs when its undo window ends (PAN-04),
+// not at the click, and leaves no open row listed in the closed group. A
+// second group stays, so the closed group is never the last one (PAN-06).
 
 import { newProfile, runCheck, show, sleep, tabsOf, waitUntil, withShell } from './lib/ng-a-live.mjs';
 
@@ -18,6 +19,7 @@ await runCheck('verify-ng-006-close-group-closes-web-tabs', async ({ pages, expe
             await A.mutate({ kind: 'openStockTab', url: ${JSON.stringify(s)} });
             await A.sleep(1500);
             const group = await A.model().createGroup(A.actor(), { x: 40, y: 40 });
+            await A.model().createGroup(A.actor(), { x: 600, y: 40 });
             await A.model().moveCard(A.actor(), await A.cardKey(w1), group.id);
             await A.model().moveCard(A.actor(), await A.cardKey(w2), group.id);
             return { group: group.id, ids: [w1.id, w2.id] };
@@ -29,11 +31,15 @@ await runCheck('verify-ng-006-close-group-closes-web-tabs', async ({ pages, expe
         }
         const assigned = await run(`return A.mutate({ kind: 'setTabGroup', uri: ${JSON.stringify(stock.uri)}, groupId: ${JSON.stringify(out.group)} });`);
         expect(assigned.ok, `setup: the stock tab could not join the group: ${assigned.message}`);
-        await run(`
+        const kept = await run(`
             const done = A.get('CommandRegistry').executeCommand('powerbrowser.panorama.close-group', ${JSON.stringify(out.group)});
-            await A.confirmDialog();
             await done;
-            await A.sleep(2000);
+            return A.mainWidgets().filter(w => ${JSON.stringify(out.ids)}.includes(w.id)).map(w => w.id);
+        `);
+        expect(kept.length === 2, `Close Group closed in-shell tabs at the click, before its undo window ended: only ${kept.join(', ') || 'none'} still open`);
+        await run(`
+            await A.closeGroupCommitted(${JSON.stringify(out.group)});
+            await A.sleep(1000);
         `);
         const left = await run(`return A.mainWidgets().filter(w => ${JSON.stringify(out.ids)}.includes(w.id)).map(w => w.id);`);
         expect(left.length === 0, `Close Group left the group's in-shell tabs open: ${left.join(', ')}`);

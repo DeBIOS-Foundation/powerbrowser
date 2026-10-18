@@ -264,14 +264,14 @@ window.__ngA = window.__ngA || (function () {
             if (live.length !== 1) throw new Error('the Panorama model has ' + live.length + ' card(s) for widget ' + widget.id + ', want 1');
             return live[0].uri;
         },
-        confirmDialog: async function () {
-            var button;
-            for (var i = 0; i < 100 && !button; i++) {
-                button = document.querySelector('.pb-org-close-confirm .theia-button.main');
-                if (!button) await A.sleep(100);
-            }
-            if (!button) throw new Error('the Close Group dialog never opened');
-            button.click();
+        // PAN-04: Close Group opens an undo window and commits when it ends.
+        // Both bounds are timeouts only, never an expected duration.
+        closeGroupCommitted: async function (id) {
+            var i;
+            for (i = 0; i < 50 && !A.model().isClosing(id); i++) await A.sleep(100);
+            if (!A.model().isClosing(id)) throw new Error('the Close Group undo window never opened');
+            for (i = 0; i < 600 && A.model().isClosing(id); i++) await A.sleep(100);
+            if (A.model().isClosing(id)) throw new Error('the Close Group undo window never ended');
         },
     };
     return A;
