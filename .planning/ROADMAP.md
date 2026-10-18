@@ -292,14 +292,14 @@ Plans:
   4. User can close a card from the card itself (W5)
   5. User cannot close the last remaining group (W11, first part)
 
-**Plans**: 1/7 plans executed in 7 waves (sequential: every plan shares group-model.ts, organising-widget.ts or 15-UI-SPEC; each owns its wave's `--quick`)
+**Plans**: 4/7 plans executed in 7 waves (sequential: every plan shares group-model.ts, organising-widget.ts or 15-UI-SPEC; each owns its wave's `--quick`)
 
 Plans:
 
 - [x] 22-01-PLAN.md — PAN-02, PAN-03: the model loads itself; the Browsing strip shows the active group's tabs, loose tabs and the current tab; "+" joins the active group; 15-UI-SPEC amended in the same commit; `pan03-strip-group-live`; Chris's copy review for the whole phase (blocking-human)
-- [ ] 22-02-PLAN.md — the held Phase 21 copy (empty-canvas body, WR-05 strings, zoom readout) as Chris worded it; the copy check derives from every text sink
-- [ ] 22-03-PLAN.md — PAN-04 mechanism: the 15 s undo window on the model, commit by timer or quit through the unchanged `closeGroupRows`, hidden in every tab bar; `pan04-undo-close-group-live`
-- [ ] 22-04-PLAN.md — PAN-04 UI: Undo Close Group replaces the dialog; spec copy and the gui08 checks in one commit (SC3); ng-006 through the window; Chris's re-lock of the check hashes (blocking-human)
+- [x] 22-02-PLAN.md — the held Phase 21 copy (empty-canvas body, WR-05 strings, zoom readout) as Chris worded it; the copy check derives from every text sink
+- [x] 22-03-PLAN.md — PAN-04 mechanism: the 15 s undo window on the model, commit by timer or quit through the unchanged `closeGroupRows`, hidden in every tab bar; `pan04-undo-close-group-live`
+- [x] 22-04-PLAN.md — PAN-04 UI: Undo Close Group replaces the dialog; spec copy and the gui08 checks in one commit (SC3); ng-006 through the window; Chris's re-lock of the check hashes (blocking-human)
 - [ ] 22-05-PLAN.md — PAN-06: the last remaining group has no close control and the command ignores it
 - [ ] 22-06-PLAN.md — PAN-05: card × and Delete close the tab through its own close path; `pan05-card-close-live`
 - [ ] 22-07-PLAN.md — full suite on one rebuilt sidecar, derived FAIL set, provenance, `--quick`, the end-of-phase review for Chris
@@ -379,7 +379,7 @@ Plans:
 | 19. Node 24, React 19, Theia 1.76.0 | 8/8 | Complete    | 2026-10-17 |
 | 20. Non-GUI Gaps | 5/5 | Complete    | 2026-10-17 |
 | 21. Panorama Spec and gui08 Checks | 5/5 | Complete    | 2026-10-17 |
-| 22. Panorama Worklist | 1/7 | In Progress | - |
+| 22. Panorama Worklist | 4/7 | In Progress | - |
 | 23. Modes Leftovers and Sketch 005 Verdict | 0/TBD | Not started | - |
 | 24. Live UAT Pass | 0/TBD | Not started | - |
 | 25. CI Green on Main | 0/TBD | Not started | - |
