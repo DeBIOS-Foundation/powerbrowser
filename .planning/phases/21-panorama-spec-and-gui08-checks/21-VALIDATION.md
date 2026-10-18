@@ -1,9 +1,9 @@
 ---
 phase: "21"
 slug: "panorama-spec-and-gui08-checks"
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-10-17"
 ---
 
@@ -48,22 +48,22 @@ created: "2026-10-17"
 
 | Criterion | Plan | Wave | Check / command | Failing direction (must go red when…) | File Exists | Status |
 |---|---|---|---|---|---|---|
-| SC1: 15-UI-SPEC describes the shipped redesign | 21-01 | 1 | `grep -c 'pb-org-tray\|144px tall\|160×90' .planning/milestones/v1.3-phases/15-panorama-organising/15-UI-SPEC.md` = 0 outside the Retired copy table; `grep -F '**"Expand"**'` and `grep -F '**"Done"**'` each match; a `## Canvas Geometry` section exists | Any stale tray or geometry claim remains, or a reviewed literal is missing | ✅ (rewrite) | ⬜ pending |
-| SC1: parse form holds | 21-01 | 1 | After 21-02/21-03: both checks pass against the rewritten spec | ZERO derivation from either section | ✅ | ⬜ pending |
-| SC2: copy derives from the spec | 21-02 | 2 | `node scripts/verify-gui08-panorama-copy.mjs` | A painted literal not in the spec contract, a spec literal not painted, a retired literal found in shipped sources, or an internal identifier in copy | ✅ (rewrite) | ⬜ pending |
-| SC2: copy plants | 21-02 | 2 | `node scripts/verify-gui08-panorama-copy.mjs --self-test` | The baseline is not green, or any of plants 1-8 is not red naming its drift: label drift, Expand removed, placeholder revival, unscanned-file revival, spec Done row deleted, spec "Retry" reworded, spec heading stripped (ZERO), retired caption revived | ✅ (rewrite) | ⬜ pending |
-| SC2: geometry derives from the spec | 21-03 | 2 | `node scripts/verify-gui08-canvas-geometry.mjs` | A spec const row ≠ its source const; a rule-scoped CSS value ≠ its spec row; an underivable row; a font size or weight outside the spec Typography table; any `pb-org-tray*` selector or `dataset.tray` | ✅ (rewrite) | ⬜ pending |
-| SC2: geometry plants | 21-03 | 2 | `node scripts/verify-gui08-canvas-geometry.mjs --self-test` | The baseline is not green, or any of plants 1-11 is not red: hook, zoom, label, spec `LOOSE_W` 170, source `TILE_GAP` 10, spec row deleted, 124px moved to another selector, `.pb-org-tray` revived, weight 500, zero-group `renderLoose` removed, tray focus scope restored | ✅ (rewrite) | ⬜ pending |
-| SC4: no tray code | 21-03 | 2 | `git grep -n -i 'pb-org-tray\|dataset\.tray\|tray-cards' -- theia` prints nothing; `git grep -n -w -i 'tray' -- theia/extensions` prints nothing (and `powerbrowser/shell` too if the optional `PowerBrowserAPI.sys.mjs:1954` comment edit is taken) | Any line | — (command) | ⬜ pending |
-| SC4: dead drop path gone | 21-03 | 2 | `git grep -n 'dropCardOntoCard\|autoBox' -- theia scripts` prints nothing | Any line | — (command) | ⬜ pending |
-| SC4: live API kept | 21-03 | 2 | `git grep -c 'listUngroupedTabs' -- theia/extensions` unchanged; `--only gui08-view-parity`, `--only gui08-view-parity-self-test` | A rename of `ungrouped`, `listUngrouped` or `listUngroupedTabs` | ✅ | ⬜ pending |
-| SC4: TS builds | 21-03 | 2 | `nix develop .#theia --command bash -c 'cd theia && yarn --cwd extensions/modes build'` exits 0 | Any tsc error | ✅ | ⬜ pending |
-| SC4: loose cards render, keyboard reach | 21-04 | 3 | `PB_VERIFY_PORT=3939 scripts/verify-platform.sh --only gui08-loose-cards-live`, run once on the pre-fix bundle (expect red) and once after the rebuild (green), with both outputs quoted in the SUMMARY | With zero groups or with one group, no `.pb-org-canvas .pb-org-card.is-loose`; any `[class*="pb-org-tray"]` element; `ArrowRight` on loose card 1 does not move focus to another loose card | ❌ W0 | ⬜ pending |
-| SC4: model unchanged | 21-04 | 3 | `PB_VERIFY_PORT=3939 scripts/verify-platform.sh --only ng-007-shell-tabs-keep-group-across-restart`, `--only ng-008-panorama-card-reopens-through-opener` | Membership or loose position lost; card does not reopen | ✅ | ⬜ pending |
-| No regression | 21-04 | 3 | `--only` for `gui08-close-exactness`, `gui08-persistence-roundtrip`, `ng-016-gui08-persistence-at-head`, each with `-self-test` where one exists | Any red | ✅ | ⬜ pending |
-| SC3: commit gate green | 21-04 | 3 | `scripts/verify-platform.sh --quick > .planning/phases/21-panorama-spec-and-gui08-checks/logs/quick-21-04.log 2>&1`, then the R33 pipeline prints nothing | Any FAIL row | ✅ | ⬜ pending |
-| SC3: baseline empty by derivation | 21-04 | 3 | Derive with the R33 pipeline (plain `sort`) into `docs/non-gui/quick-baseline.txt`; `test -f docs/non-gui/quick-baseline.txt && test ! -s docs/non-gui/quick-baseline.txt`; `grep -q 'Phase 21 refresh' docs/non-gui/decisions.md` | The file is non-empty, deleted, or typed by hand (no log cited in the SUMMARY) | ✅ | ⬜ pending |
-| Gate, every plan | all | — | `node scripts/scan-brand-residue.mjs` exits 0 after staging; `python3 scripts/phase-gate.py --root .` prints nothing | Residue hit; `test file changed` (a locked ng check was edited) | ✅ | ⬜ pending |
+| SC1: 15-UI-SPEC describes the shipped redesign | 21-01 | 1 | `grep -c 'pb-org-tray\|144px tall\|160×90' .planning/milestones/v1.3-phases/15-panorama-organising/15-UI-SPEC.md` = 0 outside the Retired copy table; `grep -F '**"Expand"**'` and `grep -F '**"Done"**'` each match; a `## Canvas Geometry` section exists | Any stale tray or geometry claim remains, or a reviewed literal is missing | ✅ (rewrite) | ✅ green |
+| SC1: parse form holds | 21-01 | 1 | After 21-02/21-03: both checks pass against the rewritten spec | ZERO derivation from either section | ✅ | ✅ green |
+| SC2: copy derives from the spec | 21-02 | 2 | `node scripts/verify-gui08-panorama-copy.mjs` | A painted literal not in the spec contract, a spec literal not painted, a retired literal found in shipped sources, or an internal identifier in copy | ✅ (rewrite) | ✅ green |
+| SC2: copy plants | 21-02 | 2 | `node scripts/verify-gui08-panorama-copy.mjs --self-test` | The baseline is not green, or any of plants 1-8 is not red naming its drift: label drift, Expand removed, placeholder revival, unscanned-file revival, spec Done row deleted, spec "Retry" reworded, spec heading stripped (ZERO), retired caption revived | ✅ (rewrite) | ✅ green |
+| SC2: geometry derives from the spec | 21-03 | 2 | `node scripts/verify-gui08-canvas-geometry.mjs` | A spec const row ≠ its source const; a rule-scoped CSS value ≠ its spec row; an underivable row; a font size or weight outside the spec Typography table; any `pb-org-tray*` selector or `dataset.tray` | ✅ (rewrite) | ✅ green |
+| SC2: geometry plants | 21-03 | 2 | `node scripts/verify-gui08-canvas-geometry.mjs --self-test` | The baseline is not green, or any of plants 1-11 is not red: hook, zoom, label, spec `LOOSE_W` 170, source `TILE_GAP` 10, spec row deleted, 124px moved to another selector, `.pb-org-tray` revived, weight 500, zero-group `renderLoose` removed, tray focus scope restored | ✅ (rewrite) | ✅ green |
+| SC4: no tray code | 21-03 | 2 | `git grep -n -i 'pb-org-tray\|dataset\.tray\|tray-cards' -- theia` prints nothing; `git grep -n -w -i 'tray' -- theia/extensions` prints nothing (and `powerbrowser/shell` too if the optional `PowerBrowserAPI.sys.mjs:1954` comment edit is taken) | Any line | — (command) | ✅ green |
+| SC4: dead drop path gone | 21-03 | 2 | `git grep -n 'dropCardOntoCard\|autoBox' -- theia scripts` prints nothing | Any line | — (command) | ✅ green |
+| SC4: live API kept | 21-03 | 2 | `git grep -c 'listUngroupedTabs' -- theia/extensions` unchanged; `--only gui08-view-parity`, `--only gui08-view-parity-self-test` | A rename of `ungrouped`, `listUngrouped` or `listUngroupedTabs` | ✅ | ✅ green |
+| SC4: TS builds | 21-03 | 2 | `nix develop .#theia --command bash -c 'cd theia && yarn --cwd extensions/modes build'` exits 0 | Any tsc error | ✅ | ✅ green |
+| SC4: loose cards render, keyboard reach | 21-04 | 3 | `PB_VERIFY_PORT=3939 scripts/verify-platform.sh --only gui08-loose-cards-live`, run once on the pre-fix bundle (expect red) and once after the rebuild (green), with both outputs quoted in the SUMMARY | With zero groups or with one group, no `.pb-org-canvas .pb-org-card.is-loose`; any `[class*="pb-org-tray"]` element; `ArrowRight` on loose card 1 does not move focus to another loose card | ✅ | ✅ green |
+| SC4: model unchanged | 21-04 | 3 | `PB_VERIFY_PORT=3939 scripts/verify-platform.sh --only ng-007-shell-tabs-keep-group-across-restart`, `--only ng-008-panorama-card-reopens-through-opener` | Membership or loose position lost; card does not reopen | ✅ | ✅ green |
+| No regression | 21-04 | 3 | `--only` for `gui08-close-exactness`, `gui08-persistence-roundtrip`, `ng-016-gui08-persistence-at-head`, each with `-self-test` where one exists | Any red | ✅ | ✅ green |
+| SC3: commit gate green | 21-04 | 3 | `scripts/verify-platform.sh --quick > .planning/phases/21-panorama-spec-and-gui08-checks/logs/quick-21-04.log 2>&1`, then the R33 pipeline prints nothing | Any FAIL row | ✅ | ✅ green |
+| SC3: baseline empty by derivation | 21-04 | 3 | Derive with the R33 pipeline (plain `sort`) into `docs/non-gui/quick-baseline.txt`; `test -f docs/non-gui/quick-baseline.txt && test ! -s docs/non-gui/quick-baseline.txt`; `grep -q 'Phase 21 refresh' docs/non-gui/decisions.md` | The file is non-empty, deleted, or typed by hand (no log cited in the SUMMARY) | ✅ | ✅ green |
+| Gate, every plan | all | — | `node scripts/scan-brand-residue.mjs` exits 0 after staging; `python3 scripts/phase-gate.py --root .` prints nothing | Residue hit; `test file changed` (a locked ng check was edited) | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -71,8 +71,8 @@ created: "2026-10-17"
 
 ## Wave 0 Requirements
 
-- [ ] `scripts/verify-gui08-loose-cards-live.mjs` plus 1 full-tier row beside ng-007/ng-008 (21-04). Commit before the live run (`assertCleanTree`), and `git add` before `scan-brand-residue`.
-- [ ] Spec-reading rewrites of `scripts/verify-gui08-panorama-copy.mjs` (21-02) and `scripts/verify-gui08-canvas-geometry.mjs` (21-03), with the new plants. The files and registry rows exist; the spec derivation does not.
+- [x] `scripts/verify-gui08-loose-cards-live.mjs` plus 1 full-tier row beside ng-007/ng-008 (21-04). Commit before the live run (`assertCleanTree`), and `git add` before `scan-brand-residue`.
+- [x] Spec-reading rewrites of `scripts/verify-gui08-panorama-copy.mjs` (21-02) and `scripts/verify-gui08-canvas-geometry.mjs` (21-03), with the new plants. The files and registry rows exist; the spec derivation does not.
 
 `quick-baseline.txt` keeps its 4 gui08 rows until 21-04 derives it empty after Phase 20 has finished.
 
@@ -91,11 +91,26 @@ created: "2026-10-17"
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 60 s for static rows (live rows are full tier only)
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 60 s for static rows (live rows are full tier only)
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-10-17 (Nyquist audit)
+
+## Validation Audit 2026-10-17
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+Static checks re-run in this audit (all exit 0): `verify-gui08-panorama-copy.mjs` and `verify-gui08-canvas-geometry.mjs`, each with `--self-test`; the SC1 greps on 15-UI-SPEC (no stale tray or geometry claim, `**"Expand"**`, `**"Done"**` and `## Canvas Geometry` each match once); the SC4 `git grep` commands (tray and `dropCardOntoCard|autoBox` print nothing; `listUngroupedTabs` is still present); `--only` gui08-view-parity, gui08-close-exactness and gui08-persistence-roundtrip, each with `-self-test`, plus ng-016-gui08-persistence-at-head; `docs/non-gui/quick-baseline.txt` exists and is 0 bytes; `decisions.md` contains "Phase 21 refresh"; `scan-brand-residue.mjs` exits 0; `phase-gate.py` prints nothing. Not re-run (static-only audit): `--quick`, the TS build, and the live rows. Their status cites `logs/`: `quick-21-05-base.log` and `quick-21-05.log` (132 PASS, 0 FAIL), `build-21-05.log`, `loose-cards-red-21-05.log` (FAIL on the pre-fix bundle), and `loose-cards-21-05.log`, `ng007-21-05.log`, `ng008-21-05.log` (each PASS).
+
+Notes:
+- Plan numbering moved. The live loose-cards row, the C1 checkpoint and the derived empty baseline landed in 21-05, not 21-04 as the map says. Read the 21-04 rows marked "live" and "baseline" as 21-05.
+- No `ng-016-gui08-persistence-at-head-self-test` or `gui08-loose-cards-live-self-test` registry row exists. `--only` rejects both labels, so the clause "with `-self-test` where one exists" is met. 21-05-SUMMARY reports planted page faults inside the live script.
+- Open manual items: the A2-A5 ratification (C2) and the optional sketch-findings edit (C3) still need Chris. The zero-group layout was screenshotted (`logs/loose-cards-zero-groups-21-05.png`) and is now asserted by the live row, which requires every loose card to lie inside the canvas.

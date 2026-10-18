@@ -139,7 +139,7 @@ is on cards, boxes and tree rows.
 | `.pb-org-skeleton` height | 144 px (loading skeleton box) | `modes.css` |
 | Stack card width | 40-170 px, fitted to the box | `organising-widget.ts` `stackCards()` |
 | Edge grips | 8 px strips on n/s/e/w; 14 × 14 corners nw/ne/sw | `modes.css` `.pb-org-box-grip-*` |
-| Canvas minimum height | 320 px, or host height − 4 | `modes.css` `.pb-org-canvas`; `renderCanvas()` |
+| Canvas minimum height | 320 px, or host height − 4; with zero groups it grows further so the loose line stays below the empty panel, and the host scrolls | `modes.css` `.pb-org-canvas`; `renderCanvas()`, `renderLoose()` |
 
 Tiled and stacked card sizes are computed from the box (`fitTiles()`, `stackCards()`); a tiled or
 loose card's preview fills the card height above its title. A group grids or stacks its cards and
@@ -314,7 +314,9 @@ bolded literal in this table and fails on any hit.
 
 - A tab in no group is a **loose card** on the canvas itself: 160×115, no panel, no border
   around the set, no label. A loose card that has a stored position is drawn there. One with no
-  position is laid out on a line `LOOSE_MARGIN` above the canvas bottom, left to right. When that
+  position is laid out on a line `LOOSE_MARGIN` above the canvas bottom, left to right. With zero
+  groups the line never starts above the "No tab groups" panel's bottom edge plus `LOOSE_MARGIN`;
+  in a host too short for both, the canvas grows and the host scrolls. When that
   line is full, the rest pile at its end: up to 4 cards drawn, offset 4px, with a count of the
   unplaced remainder. Piled cards behind the front one take no pointer.
 - Loose cards take part in push-away like groups do.
