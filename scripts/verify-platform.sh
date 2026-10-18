@@ -4824,6 +4824,12 @@ run_own_checks() {
       "ng-006-close-group-closes-web-tabs|node $REPO_ROOT/scripts/verify-ng-006-close-group-closes-web-tabs.mjs"
       "ng-007-shell-tabs-keep-group-across-restart|node $REPO_ROOT/scripts/verify-ng-007-shell-tabs-keep-group-across-restart.mjs"
       "ng-008-panorama-card-reopens-through-opener|node $REPO_ROOT/scripts/verify-ng-008-panorama-card-reopens-through-opener.mjs"
+      # NEW (Phase 21, PAN-07): the live DOM half that gui08-canvas-geometry
+      # holds out -- loose cards on the Organising canvas with zero groups and
+      # with one, no tray element, ArrowRight between loose cards, and three
+      # in-run probe controls. Not --quick: binary, Theia build, headless
+      # browser.
+      "gui08-loose-cards-live|node $REPO_ROOT/scripts/verify-gui08-loose-cards-live.mjs"
       "ng-009-content-age-columns|node $REPO_ROOT/scripts/verify-ng-009-content-age-columns.mjs"
       "ng-010-closed-tab-history|node $REPO_ROOT/scripts/verify-ng-010-closed-tab-history.mjs"
       "ng-011-settings-table-read|node $REPO_ROOT/scripts/verify-ng-011-settings-table-read.mjs"
