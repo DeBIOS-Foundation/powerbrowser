@@ -323,7 +323,8 @@ active group.
 - Loose cards take part in push-away like groups do.
 - Loose cards render whenever ungrouped tabs exist, **including when there are zero groups**. In
   that state the "No tab groups" panel and the loose cards are both shown (A3; HEAD does not do
-  this yet).
+  this yet). The line never starts above the panel's bottom edge plus `LOOSE_MARGIN`; in a host
+  too short for both, the canvas grows and the host scrolls (21-REVIEW WR-01).
 - The tree view lists groups only. Loose cards have no tree representation, as the tray had
   none.
 

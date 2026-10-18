@@ -55,6 +55,19 @@ const PROBES = `
             .filter(({ b }) => b.left < h.left || b.top < h.top || b.right > h.right || b.bottom > h.bottom)
             .map(({ key, b }) => ({ key, rect: [b.left, b.top, b.right, b.bottom], host: [h.left, h.top, h.right, h.bottom] }));
     };
+    const rect = el => { const b = el.getBoundingClientRect(); return { left: b.left, top: b.top, right: b.right, bottom: b.bottom }; };
+    const hits = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    // Visible loose cards that overlap any canvas element matching sel.
+    const overlapping = sel => {
+        const others = Array.from(canvas().querySelectorAll(sel)).map(rect);
+        return visibleLoose().map(c => ({ key: c.dataset.u, rect: rect(c) })).filter(({ rect: b }) => others.some(o => hits(b, o)));
+    };
+    // Visible loose cards not wholly on the .pb-org-canvas placement surface.
+    const offCanvas = () => {
+        const k = rect(canvas());
+        return visibleLoose().map(c => ({ key: c.dataset.u, rect: rect(c) }))
+            .filter(({ rect: b }) => b.left < k.left || b.top < k.top || b.right > k.right || b.bottom > k.bottom);
+    };
     const settle = async test => { for (let i = 0; i < 40 && !test(); i++) await A.sleep(125); };
 `;
 
@@ -78,10 +91,8 @@ await runCheck(`verify-${NAME}`, async ({ expect, failures }) => {
             org = await A.organising();
             await settle(() => keys.every(k => cardFor(k)));
             const empty = canvas().querySelector('.pb-org-empty');
-            const r = el => { const b = el.getBoundingClientRect(); return { left: b.left, top: b.top, right: b.right, bottom: b.bottom }; };
-            const emptyRect = empty ? r(empty) : null;
-            const overlaps = emptyRect ? visibleLoose().map(c => ({ key: c.dataset.u, rect: r(c) })).filter(({ rect }) =>
-                rect.left < emptyRect.right && rect.right > emptyRect.left && rect.top < emptyRect.bottom && rect.bottom > emptyRect.top) : [];
+            const emptyRect = empty ? rect(empty) : null;
+            const overlaps = overlapping('.pb-org-empty');
             return {
                 groupsBefore,
                 keys,
@@ -125,6 +136,39 @@ await runCheck(`verify-${NAME}`, async ({ expect, failures }) => {
             writeFileSync(process.env.PB_GUI08_LOOSE_SHOT, await screenshot());
             detail(`screenshot of the zero-group canvas: ${process.env.PB_GUI08_LOOSE_SHOT}`);
         }
+
+        // (a2) a short host (a bottom panel open, a small window): the bottom
+        // line would run through the in-flow panel, so it must start below it
+        // and stay on the canvas, which grows and lets the host scroll.
+        const short = await run(`
+            ${PROBES}
+            const org = await A.organising();
+            const host = document.querySelector('.pb-org-canvas-host');
+            const saved = host.getAttribute('style');
+            try {
+                host.style.flex = 'none';
+                host.style.boxSizing = 'border-box';
+                host.style.height = '300px';
+                org.render();
+                const out = { hostH: host.clientHeight, visible: visibleLoose().length, overlaps: overlapping('.pb-org-empty'), offCanvas: offCanvas() };
+                // Control: the bottom line alone (minTop dropped) must overlap
+                // the panel here, or 300px is not short enough to test anything.
+                const real = Object.getPrototypeOf(org).renderLoose;
+                org.renderLoose = function () { return real.call(this); };
+                org.render();
+                out.control = overlapping('.pb-org-empty').length;
+                return out;
+            } finally {
+                delete org.renderLoose;
+                if (saved === null) host.removeAttribute('style'); else host.setAttribute('style', saved);
+                org.render();
+            }
+        `);
+        expect(short.hostH <= 300 && short.visible > 0, `short host: the probe did not get a short host with loose cards (host ${short.hostH}px, ${short.visible} visible loose cards)`);
+        expect(short.overlaps.length === 0, `short host (${short.hostH}px): loose card(s) overlap the "No tab groups" panel: ${JSON.stringify(short.overlaps)}`);
+        expect(short.offCanvas.length === 0, `short host (${short.hostH}px): loose card(s) not wholly on the canvas: ${JSON.stringify(short.offCanvas)}`);
+        expect(short.control > 0, `short host: probe control (line not clamped below the panel) did not overlap the panel, so ${short.hostH}px does not exercise the clamp`);
+        detail(`short host: at ${short.hostH}px the ${short.visible} loose cards sit below the empty panel and on the canvas`);
 
         // (d) probe controls, each restored afterwards.
         const probes = await run(`

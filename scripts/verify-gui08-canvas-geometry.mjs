@@ -302,7 +302,7 @@ function checkStatic(sources) {
     const zeroGroups = braceBlock(renderCanvas, 'if (groups.length === 0)');
     if (!zeroGroups) {
         failures.push(`${WIDGET_REL}: the zero-group branch of renderCanvas is underivable -- the empty-canvas anchor drifted`);
-    } else if (!zeroGroups.includes('this.renderLoose()')) {
+    } else if (!zeroGroups.includes('this.renderLoose(')) {
         failures.push(`${WIDGET_REL}: renderCanvas returns on zero groups without renderLoose() -- ungrouped tabs vanish when no group exists (21-UI-SPEC A3)`);
     }
     if (cssSrc.includes('!important')) {
@@ -373,7 +373,7 @@ const PLANTS = [
     { id: 'CSS out of its rule', file: CSS_REL, apply: s => s.replace(/(\n\.pb-org-card-thumb \{[^}]*?)\n    height: 124px;/, '$1') + '\n.pb-org-x { height: 124px; }\n', landed: s => s.includes('.pb-org-x { height: 124px; }') && !/\n\.pb-org-card-thumb \{[^}]*height: 124px;/.test(s), expect: /\.pb-org-card-thumb/ },
     { id: 'tray revived', file: CSS_REL, apply: s => `${s}\n.pb-org-tray { height: 144px; }\n`, landed: s => s.includes('.pb-org-tray { height: 144px; }'), expect: /tray selector '\.pb-org-tray'/ },
     { id: 'heading weight 500', file: CSS_REL, apply: once('.pb-org-expand-heading {\n    font-size: 14px;\n    font-weight: 400;', '.pb-org-expand-heading {\n    font-size: 14px;\n    font-weight: 500;'), landed: s => s.includes('.pb-org-expand-heading {\n    font-size: 14px;\n    font-weight: 500;'), expect: /font-weight 500 on '\.pb-org-expand-heading'/ },
-    { id: 'zero groups without loose cards', file: WIDGET_REL, apply: once('            this.renderLoose();\n            return;', '            return;'), landed: s => (s.match(/this\.renderLoose\(\);/g) || []).length === 1, expect: /without renderLoose\(\)/ },
+    { id: 'zero groups without loose cards', file: WIDGET_REL, apply: s => s.replace(/\n *this\.renderLoose\([^)\n]*\);(\n *return;)/, '$1'), landed: s => (s.match(/this\.renderLoose\(/g) || []).length === 1, expect: /without renderLoose\(\)/ },
     { id: 'focus scope back to the tray', file: WIDGET_REL, apply: once("'.pb-org-box-cards, .pb-org-expand-cards'", "'.pb-org-box-cards, .pb-org-tray-cards'"), landed: s => s.includes("'.pb-org-box-cards, .pb-org-tray-cards'"), expect: /pb-org-tray|moveCardFocus does not scope/ },
     { id: 'spec Typography 13px deleted', file: SPEC_REL, apply: s => s.replace(/^\| Label \| 13px \|.*\n/m, ''), landed: s => !/^\| Label \| 13px \|/m.test(s), expect: /font-size 13px/ },
 ];

@@ -491,12 +491,14 @@ export class OrganisingWidget extends Widget {
         }
         const groups = this.model.listGroups();
         if (groups.length === 0) {
-            this.canvasRoot.append(this.buildEmpty(
+            const empty = this.buildEmpty(
                 'No tab groups',
                 'There are no tab groups yet — choose New Group, or drag a tab onto the canvas to start one.',
                 true
-            ));
-            this.renderLoose();
+            );
+            this.canvasRoot.append(empty);
+            // In a short host the bottom line would run through the in-flow panel.
+            this.renderLoose(empty.offsetTop + empty.offsetHeight + LOOSE_MARGIN);
             return;
         }
         for (const group of groups) {
@@ -517,14 +519,18 @@ export class OrganisingWidget extends Widget {
      * hundred loose tabs still occupy one line's worth of canvas instead of
      * covering it.
      */
-    protected renderLoose(): void {
+    protected renderLoose(minTop = 0): void {
         const tabs = this.model.listUngrouped();
         if (!tabs.length) {
             return;
         }
         const width = Math.max(LOOSE_W + LOOSE_MARGIN * 2, this.canvasHost.clientWidth);
         const height = Math.max(LOOSE_H + LOOSE_MARGIN * 2, this.canvasHost.clientHeight);
-        const line = height - LOOSE_H - LOOSE_MARGIN;
+        const line = Math.max(minTop, height - LOOSE_H - LOOSE_MARGIN);
+        if (line + LOOSE_H + LOOSE_MARGIN > height) {
+            // Pushed below the host: grow the canvas so the line is still on it (the host scrolls).
+            this.canvasRoot.style.minHeight = `${line + LOOSE_H + LOOSE_MARGIN}px`;
+        }
         const room = Math.max(1, Math.floor((width - LOOSE_MARGIN * 2 + TILE_GAP) / (LOOSE_W + TILE_GAP)));
         const unplaced = tabs.filter(tab => tab.x === undefined || tab.y === undefined);
         const inLine = unplaced.length <= room ? unplaced.length : Math.max(1, room - 1);
