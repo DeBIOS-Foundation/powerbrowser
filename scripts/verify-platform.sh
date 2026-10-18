@@ -4832,6 +4832,10 @@ run_own_checks() {
       # in-run probe controls. Not --quick: binary, Theia build, headless
       # browser.
       "gui08-loose-cards-live|node $REPO_ROOT/scripts/verify-gui08-loose-cards-live.mjs"
+      # NEW (Phase 22, PAN-03): the strip filter, the + join, Coding scope
+      # and the relaunch load, with two in-run probe controls. Not --quick:
+      # binary, Theia build, headless browser.
+      "pan03-strip-group-live|node $REPO_ROOT/scripts/verify-pan03-strip-group-live.mjs"
       "ng-009-content-age-columns|node $REPO_ROOT/scripts/verify-ng-009-content-age-columns.mjs"
       "ng-010-closed-tab-history|node $REPO_ROOT/scripts/verify-ng-010-closed-tab-history.mjs"
       "ng-011-settings-table-read|node $REPO_ROOT/scripts/verify-ng-011-settings-table-read.mjs"
