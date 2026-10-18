@@ -335,6 +335,8 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
             const centre = el => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
             const undoOf = (root, id) => root.querySelector('.pb-org-undo[data-closing="' + CSS.escape(id) + '"]');
             const enter = el => el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+            // The root of the view on screen: the hidden one cannot take focus.
+            const shown = () => org.view === 'canvas' ? org.canvasRoot : org.treeRoot;
         `;
         const g1d = await run(`
             ${DOM}
@@ -401,18 +403,19 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
         expect(g2d.pending && g2d.index >= 0 && g2d.at === g2d.index, `(g) tree: G5's section was at index ${g2d.index}, its Undo control is at ${g2d.at} (pending ${g2d.pending})`);
         expect(g2d.focused, '(g) tree: focus is not on the Undo control after the close');
         const g3d = await run(`
-            ${PROBES}
             await A.get('ModeService').activateMode('browsing');
-            await settle(() => document.body.dataset.pbMode === 'browsing');
-            const org = await A.organising();
-            const there = await settle(() => !!org.canvasRoot.querySelector('.pb-org-undo[data-closing="' + CSS.escape(S.g5) + '"]'));
-            return { there, pending: m.isClosing(S.g5) };
+            for (let i = 0; i < 40 && document.body.dataset.pbMode !== 'browsing'; i++) await A.sleep(125);
+            const wasBrowsing = document.body.dataset.pbMode === 'browsing';
+            ${DOM}
+            const there = await settle(() => !!undoOf(shown(), S.g5) && !!undoOf(shown(), S.g5).offsetParent);
+            return { wasBrowsing, there, pending: m.isClosing(S.g5), view: org.view };
         `);
+        expect(g3d.wasBrowsing, '(g) the switch to Browsing inside the window never landed');
         expect(g3d.there && g3d.pending, `(g) after Browsing and back, the Undo control is ${g3d.there ? 'there' : 'gone'} and G5 pending ${g3d.pending}`);
         // P4: with the widget's undoCloseGroupById stubbed to a no-op, Enter must not restore.
         const p4 = await run(`
             ${DOM}
-            const u = undoOf(org.canvasRoot, S.g5);
+            const u = undoOf(shown(), S.g5);
             let red;
             try {
                 org.undoCloseGroupById = async () => undefined;
@@ -424,11 +427,11 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
             }
             // Focus lands once the restored Organising surface is shown; retry until then.
             const focused = await settle(() => {
-                const now = undoOf(org.canvasRoot, S.g5);
+                const now = undoOf(shown(), S.g5);
                 if (now && document.activeElement !== now) now.focus();
                 return !!now && document.activeElement === now;
             });
-            const v = undoOf(org.canvasRoot, S.g5);
+            const v = undoOf(shown(), S.g5);
             const why = v ? { connected: v.isConnected, shown: !!v.offsetParent, display: getComputedStyle(org.node).display, visible: org.isVisible, attached: org.isAttached, hasFocus: document.hasFocus(), active: document.activeElement ? document.activeElement.tagName + '.' + document.activeElement.className : null } : null;
             const entry = m.listClosing().find(x => x.group.id === S.g5);
             return { red, deadline: entry ? entry.deadline : null, focused, why };
@@ -447,7 +450,7 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
         expect(g4done, '(g) G5 never committed at the end of its window');
         expect(g4d.onNew && g4d.left === 0, `(g) after the commit focus is on ${g4d.active} with ${g4d.left} Undo controls left, want New Group and none`);
         expect(p4.red, 'probe control undoCloseGroupById stubbed to a no-op did not go red -- the probe cannot see that fault');
-        detail(`(g) tree: the Undo control sits at section index ${g2d.at}, focused; Browsing and back: the control is still there; at the deadline with focus on it, the commit left focus on New Group`);
+        detail(`(g) tree: the Undo control sits at section index ${g2d.at}, focused; Browsing and back: the control is still there (${g3d.view} view); at the deadline with focus on it, the commit left focus on New Group`);
 
         // (f) set up G4 with /q1 and /q2, close it, and quit inside its window.
         const f0 = await run(`
