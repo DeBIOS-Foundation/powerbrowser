@@ -7,10 +7,12 @@
 // tab stop; and after a group is created the loose cards stay on the canvas.
 //
 // Full tier only: the built binary, a Theia build and a headless browser.
-// Like the other ng-a-live rows it has no --self-test. Three in-run probe
-// controls stand in for one: each plants a page fault (renderLoose stubbed,
-// moveCardFocus stubbed, a tray element appended) and requires the same probe
-// that passed to go red, so every probe is shown able to fail.
+// Like the other ng-a-live rows it has no --self-test. In-run probe controls
+// stand in for one: each plants a page fault (renderLoose stubbed,
+// moveCardFocus stubbed, a tray element appended, a card shifted out of the
+// host, a card laid on the empty panel, the short-host clamp dropped) and
+// requires the same probe that passed to go red, so every probe is shown able
+// to fail.
 //
 // PB_GUI08_LOOSE_SHOT=<path> writes a screenshot of the zero-group canvas.
 
@@ -175,22 +177,53 @@ await runCheck(`verify-${NAME}`, async ({ expect, failures }) => {
             ${PROBES}
             const org = await A.organising();
             const out = {};
-            org.renderLoose = function () {};
-            org.render();
-            out.renderLoose = loose().length;
-            delete org.renderLoose;
-            org.render();
+            // Each plant is undone in finally, so a throw cannot carry a stub into block (e).
+            try {
+                org.renderLoose = function () {};
+                org.render();
+                out.renderLoose = loose().length;
+            } finally {
+                delete org.renderLoose;
+                org.render();
+            }
             out.restoredLoose = loose().length;
-            org.moveCardFocus = function () {};
-            out.moveCardFocus = arrowProbe();
-            delete org.moveCardFocus;
-            org.render();
+            try {
+                org.moveCardFocus = function () {};
+                out.moveCardFocus = arrowProbe();
+            } finally {
+                delete org.moveCardFocus;
+                org.render();
+            }
             const planted = document.createElement('div');
             planted.className = 'pb-org-tray';
-            org.canvasRoot.append(planted);
-            out.tray = trayProbe().tray;
-            planted.remove();
+            try {
+                org.canvasRoot.append(planted);
+                out.tray = trayProbe().tray;
+            } finally {
+                planted.remove();
+            }
             out.trayAfter = trayProbe().tray;
+            // The rectangle probes: one card shifted out of the host, one laid on
+            // the panel. transition: none, or the rect still reads the old place.
+            try {
+                const card = visibleLoose()[0];
+                card.style.transition = 'none';
+                card.style.top = '-500px';
+                out.outside = outside().length;
+            } finally {
+                org.render();
+            }
+            try {
+                const empty = canvas().querySelector('.pb-org-empty');
+                const card = visibleLoose()[0];
+                card.style.transition = 'none';
+                card.style.left = empty.offsetLeft + 'px';
+                card.style.top = empty.offsetTop + 'px';
+                out.overlaps = overlapping('.pb-org-empty').length;
+            } finally {
+                org.render();
+            }
+            out.restoredClean = outside().length === 0 && overlapping('.pb-org-empty').length === 0;
             return out;
         `);
         const controls = [
@@ -198,12 +231,14 @@ await runCheck(`verify-${NAME}`, async ({ expect, failures }) => {
             ['moveCardFocus stubbed', !probes.moveCardFocus.error && probes.moveCardFocus.focused && !probes.moveCardFocus.moved,
                 JSON.stringify(probes.moveCardFocus)],
             ['tray element appended', probes.tray === 1, `tray probe read ${probes.tray}`],
+            ['loose card shifted out of the host', probes.outside > 0, `outside probe read ${probes.outside}`],
+            ['loose card laid on the empty panel', probes.overlaps > 0, `overlap probe read ${probes.overlaps}`],
         ];
         for (const [name, red, seen] of controls) {
             expect(red, `probe control ${name} did not go red -- the probe cannot see that fault (${seen})`);
         }
-        expect(probes.restoredLoose === zero.looseModel && probes.trayAfter === 0,
-            `probe controls were not restored: ${probes.restoredLoose} loose card(s), ${probes.trayAfter} tray element(s) afterwards`);
+        expect(probes.restoredLoose === zero.looseModel && probes.trayAfter === 0 && probes.restoredClean,
+            `probe controls were not restored: ${probes.restoredLoose} loose card(s), ${probes.trayAfter} tray element(s), rectangle probes clean ${probes.restoredClean} afterwards`);
 
         // (e) one group.
         const one = await run(`
@@ -218,15 +253,17 @@ await runCheck(`verify-${NAME}`, async ({ expect, failures }) => {
                 empty: !!canvas().querySelector('.pb-org-empty'),
                 missing: keys.filter(k => !cardFor(k)),
                 outside: outside(),
+                onBox: overlapping('.pb-org-box'),
             };
         `);
         expect(one.boxes === 1, `one group: ${one.boxes} .pb-org-box element(s) on the canvas, want 1`);
         expect(!one.empty, 'one group: the "No tab groups" panel is still on the canvas');
         expect(one.missing.length === 0, `one group: no loose card for ${one.missing.join(', ')}`);
         expect(one.outside.length === 0, `one group: loose card(s) not wholly inside the canvas host, so they are clipped: ${JSON.stringify(one.outside)}`);
-        detail(`one group: 1 box, no empty panel, ${zero.keys.length - one.missing.length} loose cards still on the canvas, all inside the canvas host`);
+        expect(one.onBox.length === 0, `one group: loose card(s) overlap the group box: ${JSON.stringify(one.onBox)}`);
+        detail(`one group: 1 box, no empty panel, ${zero.keys.length - one.missing.length} loose cards still on the canvas, all inside the canvas host and clear of the box`);
         if (controls.every(([, red]) => red)) {
-            detail('probe controls: 3 planted page faults each turned their probe red');
+            detail(`probe controls: ${controls.length} planted page faults each turned their probe red`);
         }
     });
 });
