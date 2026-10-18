@@ -6,6 +6,7 @@
 // written only when that window ends or PowerBrowser quits. Undo reverses the
 // paint and writes nothing. When the close is written it closes exactly that
 // group's tabs and removes its box, and activity never rests on a removed box.
+// The last visible group cannot be closed (PAN-06, 22-05).
 //
 // It DERIVES at check time from the tree:
 //   (a) the widget's closeGroupById constructs no dialog, calls no commit,
@@ -18,7 +19,12 @@
 //   (f) the activity hand-off `this.groups[0]?.id` stays;
 //   (g) the chrome-side close surface (the closeGroup dispatch arm reaching
 //       the per-tab stock close loop, the member rows marked closed, the
-//       group row deleted, idempotent on an unknown group).
+//       group row deleted, idempotent on an unknown group);
+//   (h) the model's closeGroup starts with a canCloseGroup( guard that returns;
+//   (i) canCloseGroup compares this.groups.length with 1 (pending groups are
+//       already out of groups, so they do not count);
+//   (j) the widget builds pb-org-box-close only inside an if naming canCloseGroup(;
+//   (k) the tree builds pb-org-tree-close only inside if (hooks.closable).
 // Each is reported BY NAME. An underivable anchor fails as a broken
 // instrument, never passes as clean.
 //
@@ -43,6 +49,7 @@ const REPO_ROOT = join(HERE, '..');
 
 const WIDGET_REL = 'theia/extensions/modes/src/browser/organising-widget.ts';
 const MODEL_REL = 'theia/extensions/modes/src/browser/group-model.ts';
+const TREE_REL = 'theia/extensions/modes/src/browser/organising-tree.ts';
 const API_REL = 'powerbrowser/shell/PowerBrowserAPI.sys.mjs';
 
 /**
@@ -64,6 +71,7 @@ const BACKSTOPS = Object.freeze([
     { statement: 'Undo Close Group restores title, bounds, membership, card order and tabs', verification: 'backstop' },
     { statement: 'after the undo window the group tabs are closed and its box is gone', verification: 'backstop' },
     { statement: 'activity never rests on a removed box after Close Group', verification: 'backstop' },
+    { statement: 'with one visible group no close control renders on canvas or tree; a second group brings both back', verification: 'backstop' },
 ]);
 
 /** Text from `head` to the brace closing the body that opens at the end of its line, or ''. */
@@ -111,12 +119,46 @@ function callSpan(src, head) {
     return '';
 }
 
+/** The head of the block enclosing `at` (its text from line start to the opening brace), or ''. */
+function enclosingHead(src, at) {
+    let depth = 0;
+    for (let i = at; i >= 0; i -= 1) {
+        if (src[i] === '}') {
+            depth += 1;
+        } else if (src[i] === '{') {
+            if (depth === 0) {
+                return src.slice(src.lastIndexOf('\n', i) + 1, i + 1).trim();
+            }
+            depth -= 1;
+        }
+    }
+    return '';
+}
+
+/** Failure messages for every `className = '<cls>'` in src not directly inside a block whose head passes `ok`. */
+function guardedBuilds(rel, src, cls, ok, want) {
+    const needle = `className = '${cls}'`;
+    const failures = [];
+    let at = src.indexOf(needle);
+    if (at < 0) {
+        return [`${rel}: no ${needle} -- the close button anchor drifted`];
+    }
+    for (; at >= 0; at = src.indexOf(needle, at + 1)) {
+        const head = enclosingHead(src, at);
+        if (!ok(head)) {
+            failures.push(`${rel}: ${cls} is built outside ${want} (enclosing block: '${head}') -- the last remaining group shows a close control`);
+        }
+    }
+    return failures;
+}
+
 /** @returns {string[]} failure messages -- empty means the gate holds. */
 function checkStatic(sources) {
     const failures = [];
     const widgetSrc = sources[WIDGET_REL] ?? '';
     const modelSrc = sources[MODEL_REL] ?? '';
     const apiSrc = sources[API_REL] ?? '';
+    const treeSrc = sources[TREE_REL] ?? '';
 
     // (a) The click path: no dialog, no commit, reaches the model close.
     const closePath = methodBody(widgetSrc, 'async closeGroupById(');
@@ -218,6 +260,28 @@ function checkStatic(sources) {
     if (apiSrc.includes('closeGroupRows: unknown group')) {
         failures.push(`${API_REL}: the 'closeGroupRows: unknown group' throw is back -- the close path is not idempotent`);
     }
+
+    // (h) The model guard is closeGroup's first statement, below every caller (PAN-06).
+    if (closeBody) {
+        const first = closeBody.slice(closeBody.indexOf('{\n') + 2).trimStart();
+        if (!/^if \(!this\.canCloseGroup\(id\)\) \{\s*return\b/.test(first)) {
+            failures.push(`${MODEL_REL}: closeGroup does not start with a canCloseGroup( guard that returns -- the close command can close the last remaining group`);
+        }
+    }
+
+    // (i) The rule itself: more than one visible group.
+    const canBody = methodBody(modelSrc, '\n    canCloseGroup(');
+    if (!canBody) {
+        failures.push(`${MODEL_REL}: 'canCloseGroup' underivable -- the last-group rule anchor drifted`);
+    } else if (!/this\.groups\.length > 1\b/.test(canBody)) {
+        failures.push(`${MODEL_REL}: canCloseGroup does not compare this.groups.length with 1 -- the last remaining group is closable, or more than the last is kept`);
+    }
+
+    // (j, k) Neither view builds a close control the rule forbids.
+    failures.push(...guardedBuilds(WIDGET_REL, widgetSrc, 'pb-org-box-close',
+        head => /^if \(.*canCloseGroup\(/.test(head), 'an if naming canCloseGroup('));
+    failures.push(...guardedBuilds(TREE_REL, treeSrc, 'pb-org-tree-close',
+        head => head === 'if (hooks.closable) {', "'if (hooks.closable)'"));
     return failures;
 }
 
@@ -227,6 +291,7 @@ function readSources() {
         [WIDGET_REL]: read(WIDGET_REL),
         [MODEL_REL]: read(MODEL_REL),
         [API_REL]: read(API_REL),
+        [TREE_REL]: read(TREE_REL),
     };
 }
 
@@ -238,7 +303,7 @@ function main() {
         failures.forEach(f => console.error(`  ${f}`));
         process.exit(1);
     }
-    console.log(`${NAME}: PASS -- no dialog and no commit at the click; the timer and the quit flush commit; Undo clears the timer and writes nothing; exact close wiring`);
+    console.log(`${NAME}: PASS -- no dialog and no commit at the click; the timer and the quit flush commit; Undo clears the timer and writes nothing; exact close wiring; the last group has no close in the model, the canvas or the tree`);
     for (const backstop of BACKSTOPS) {
         console.log(`${NAME}: HELD-OUT (reserved live) -- ${backstop.statement} [verification: ${backstop.verification}]`);
     }
@@ -273,6 +338,15 @@ const PLANTS = [
     { id: 'closeGroupRows(data.id) removed', file: API_REL,
         apply: s => s.replace('await PowerBrowserAPI.closeGroupRows(data.id);', 'await PowerBrowserAPI.removeGroupRow(data.id);'),
         landed: s => s.includes('await PowerBrowserAPI.removeGroupRow(data.id);'), expect: /closeGroupRows\(data\.id\)/ },
+    { id: 'last-group guard removed from the model close', file: MODEL_REL,
+        apply: inBody('async closeGroup(', /^( +)if \(!this\.canCloseGroup\(id\)\) \{\n +return undefined;\n +\}\n/m, ''),
+        landed: s => !methodBody(s, 'async closeGroup(').includes('canCloseGroup('), expect: /closeGroup does not start with a canCloseGroup\( guard/ },
+    { id: 'canvas close made unconditional', file: WIDGET_REL,
+        apply: s => s.replace(/if \(this\.model\.canCloseGroup\(group\.id\)\) \{(\n +const close = document\.createElement)/, '{$1'),
+        landed: s => !/if \(this\.model\.canCloseGroup\(group\.id\)\) \{\n +const close/.test(s), expect: /pb-org-box-close is built outside/ },
+    { id: 'tree close made unconditional', file: TREE_REL,
+        apply: s => s.replace('if (hooks.closable) {', '{'),
+        landed: s => !s.includes('if (hooks.closable) {'), expect: /pb-org-tree-close is built outside/ },
 ];
 
 function selfTest() {

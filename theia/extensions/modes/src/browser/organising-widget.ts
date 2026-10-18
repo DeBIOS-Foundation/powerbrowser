@@ -359,6 +359,10 @@ export class OrganisingWidget extends Widget {
     }
 
     async closeGroupById(id: string): Promise<void> {
+        // PAN-06: the last visible group stays: no flash, no Undo.
+        if (!this.model.canCloseGroup(id)) {
+            return;
+        }
         try {
             // No confirmation (22-UI-SPEC A1): the close is reversible from the Undo control,
             // and the model's timer or the quit flush writes it.
@@ -846,18 +850,21 @@ export class OrganisingWidget extends Widget {
             });
             header.append(title);
         }
-        const close = document.createElement('button');
-        close.type = 'button';
-        close.className = 'pb-org-box-close';
-        close.dataset.command = PANORAMA_CLOSE_GROUP_COMMAND_ID;
-        close.textContent = '×';
-        close.title = 'Close group';
-        close.setAttribute('aria-label', 'Close group');
-        close.addEventListener('click', event => {
-            event.stopPropagation();
-            void this.closeGroupById(group.id);
-        });
-        header.append(close);
+        // PAN-06: the last visible group has no ×; the title widens into the space.
+        if (this.model.canCloseGroup(group.id)) {
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'pb-org-box-close';
+            close.dataset.command = PANORAMA_CLOSE_GROUP_COMMAND_ID;
+            close.textContent = '×';
+            close.title = 'Close group';
+            close.setAttribute('aria-label', 'Close group');
+            close.addEventListener('click', event => {
+                event.stopPropagation();
+                void this.closeGroupById(group.id);
+            });
+            header.append(close);
+        }
         header.addEventListener('pointerdown', event => this.beginBoxMove(event, group));
         header.addEventListener('click', () => {
             void this.activateGroup(group.id);
@@ -1006,6 +1013,7 @@ export class OrganisingWidget extends Widget {
                 ? this.buildRename(target)
                 : this.buildTreeTitle(target),
             closeCommandId: PANORAMA_CLOSE_GROUP_COMMAND_ID,
+            closable: this.model.canCloseGroup(group.id),
             activateGroup: id => {
                 void this.activateGroup(id);
             },

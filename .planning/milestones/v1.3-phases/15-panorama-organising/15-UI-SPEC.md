@@ -259,7 +259,7 @@ retired dialog bodies, U+2212 minus, U+00D7 times). Interpolation slots are writ
 | Groups-load error | **"PowerBrowser couldn’t load your tab groups. Your tabs are unchanged — choose Retry."** |
 | Groups-save error | **"PowerBrowser couldn’t save your tab groups. The canvas shows your latest arrangement — choose Retry."** |
 | Error-bar action | **"Retry"** — re-issues the load, or replays the failed write |
-| Group close button tooltip | **"Close group"** |
+| Group close button tooltip (every group except the last) | **"Close group"** |
 | Undo control label | **"Undo Close Group"** — the control in the closed group's bounds (canvas) or in its section's place (tree); restores the group and its tabs (22-01 C1 item 1) |
 | Undo control accessible name | **"Undo Close Group "{name}""** — the control's `aria-label` and `title`, so two open undo windows are told apart (22-01 C1 item 2) |
 | Group closed confirmation | **"Group "{name}" closed."** (status-bar flash) |
@@ -325,6 +325,11 @@ bolded literal in this table and fails on any hit.
   Opening a tab marks its group active. Which tabs the Browsing strip shows follows the active group (see Binding constraints).
   Double-click or Enter on a title renames it: Enter commits, Esc cancels, an empty commit
   reverts, 60 character cap, duplicates allowed.
+- **The last group stays** (PAN-06). When exactly one group remains (groups in an undo window
+  not counted), its × is not rendered on the canvas box or the tree section. The title widens
+  into the space.
+- The close-group command called with that group's id does nothing: no flash, no undo control.
+- When a second group appears (New Group, a drawn band, an Undo), both × return.
 
 ### Loose cards
 
@@ -405,7 +410,7 @@ one tab stop.
 
 ## UI Considerations
 
-Applicable state considerations resolved: 35 covered, 8 backstop, 0 unresolved.
+Applicable state considerations resolved: 36 covered, 9 backstop, 0 unresolved.
 
 Elements: E1 canvas, E2 group box, E3 card, E4 loose cards, E5 tree, E6 toolbar, E7 rename
 input, E8 retired (the Close Group dialog, removed in Phase 22), E9 error bars, E10 expanded
@@ -448,6 +453,7 @@ stack, E11 Browsing strip filter, E12 Undo Close Group control.
 | error | E12 undo | ✅ covered | Restore or commit write fails → paint reverts, save-error bar with Retry |
 | restart | E12 undo | ✅ covered | Quit inside the window → closed for good; never an empty box or loose leftovers |
 | long-text | E12 undo | ✅ covered | Visible label is fixed; the group name is only in the accessible name, never truncated there |
+| zero-one-many | E2 + E5 close | ✅ covered | One remaining group → no × on canvas or tree; two or more → × on each; undo-window groups not counted |
 | draw | E1 band | 🧪 backstop | Live: a drawn band ≥30px creates a group at that rectangle and takes enclosed loose cards; Esc cancels |
 | join / place | E2 + E4 drag | 🧪 backstop | Live: drop over a group joins at the previewed slot; drop on empty canvas places loose; emptied group dissolves |
 | parity | E1 + E5 | 🧪 backstop | Live: tree shows identical groups, order and membership after every mutation and flip |
@@ -456,6 +462,7 @@ stack, E11 Browsing strip filter, E12 Undo Close Group control.
 | keyboard | E3 + E4 + E10 | 🧪 backstop | Live: every loose and expanded card reachable by Tab plus arrows; Enter opens |
 | filter-live | E11 + E1 | 🧪 backstop | Live: after a card drag, band draw, close, undo and "+", the Browsing strip matches the active group's members plus loose plus current, with no reload |
 | mode-scope | E11 | 🧪 backstop | Live: Coding dock bars list every tab while a group is active |
+| last-group | E2 + E5 | 🧪 backstop | Live: with one group the × is absent in both views; it returns when a second group exists |
 
 **Dismissed (reasoned):** E10 loading and error (it paints from the in-memory model
 synchronously); E6 loading (local controls); E8 states (the dialog is removed); E12 overflow (one
@@ -511,4 +518,4 @@ FLAGs on dimensions 1, 3 and 5; this file was not re-run through the checker.
 | Tree as vertical stacked lists over identical data | Panorama note tree-toggle section + 15-CONTEXT.md |
 | SQL groups shape, single-writer path, sessionstore authority, PNG snapshots | REQUIREMENTS.md GUI-08 + 15-CONTEXT.md + `.planning/notes/tab-sql-substrate.md` |
 | Dead layout blob reserved for this canvas | 14 REVIEW-FIX.md WR-10 |
-| Deferred (not specified here) | Type-anywhere search, strip relocation (closed by RED verdict), bookmarks strip, browser menu, in-Theia web tabs (GUI-02), unified tab strip (GUI-05); per-card close and keeping the last group (Phase 22) |
+| Deferred (not specified here) | Type-anywhere search, strip relocation (closed by RED verdict), bookmarks strip, browser menu, in-Theia web tabs (GUI-02), unified tab strip (GUI-05); per-card close (Phase 22) |

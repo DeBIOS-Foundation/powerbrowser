@@ -10,7 +10,7 @@
  *
  * Same affordances as canvas: active marker plus title 600 (via the shared
  * is-active class), double-click rename through the widget's identical rules,
- * header close with the identical confirmation, and the contracted
+ * header close with the identical undo window (absent on the last group), and the contracted
  * empty-group hint. NO thumbnails in tree -- that is the canvas's job, not a
  * missing state. Names render as textContent, never innerHTML.
  */
@@ -27,6 +27,8 @@ export interface TreeSectionHooks {
     renderTitle(group: PanoramaGroup): HTMLElement;
     /** Imported command const for the header close button (never a re-spelled string). */
     closeCommandId: string;
+    /** PAN-06: false for the last visible group, whose header has no close. Computed by the widget from GroupModel.canCloseGroup. */
+    closable: boolean;
     activateGroup(id: string): void;
     closeGroup(id: string): void;
     dive(tab: PanoramaTab, groupId: string): void;
@@ -48,18 +50,20 @@ export function buildTreeSection(
     count.className = 'pb-org-tree-count';
     count.textContent = `${tabs.length}`;
     header.append(count);
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'pb-org-tree-close';
-    close.dataset.command = hooks.closeCommandId;
-    close.textContent = '×';
-    close.title = 'Close group';
-    close.setAttribute('aria-label', 'Close group');
-    close.addEventListener('click', event => {
-        event.stopPropagation();
-        hooks.closeGroup(group.id);
-    });
-    header.append(close);
+    if (hooks.closable) {
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'pb-org-tree-close';
+        close.dataset.command = hooks.closeCommandId;
+        close.textContent = '×';
+        close.title = 'Close group';
+        close.setAttribute('aria-label', 'Close group');
+        close.addEventListener('click', event => {
+            event.stopPropagation();
+            hooks.closeGroup(group.id);
+        });
+        header.append(close);
+    }
     header.addEventListener('click', () => {
         hooks.activateGroup(group.id);
     });

@@ -395,6 +395,14 @@ export class GroupModel implements FrontendApplicationContribution {
         return this.closing.has(id);
     }
 
+    /**
+     * PAN-06: whether this group may be closed. The last visible group stays;
+     * groups in their undo window are already out of `groups`, so they do not count.
+     */
+    canCloseGroup(id: string): boolean {
+        return this.groups.length > 1 && this.groups.some(candidate => candidate.id === id);
+    }
+
     /** PAN-04: whether this row key is a member of a group in its undo window. */
     isClosingKey(key: string): boolean {
         for (const entry of this.closing.values()) {
@@ -791,8 +799,12 @@ export class GroupModel implements FrontendApplicationContribution {
      * PAN-04: closes one group into its undo window. The box and its tabs are
      * hidden at once and nothing is written: `commitClose` writes the close
      * when UNDO_CLOSE_MS ends or PowerBrowser quits; `undoCloseGroup` restores it.
+     * PAN-06: the last visible group is never closed, whichever caller asks.
      */
     async closeGroup(client: GroupActorClient, id: string): Promise<{ name: string; count: number } | undefined> {
+        if (!this.canCloseGroup(id)) {
+            return undefined;
+        }
         const index = this.groups.findIndex(candidate => candidate.id === id);
         if (index < 0) {
             return undefined;
