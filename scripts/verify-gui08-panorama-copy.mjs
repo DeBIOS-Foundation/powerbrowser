@@ -84,7 +84,7 @@ function pushAll(out, matches) {
  * text-bearing ARIA attribute. State attributes (aria-hidden, -pressed,
  * -valuemin, -valuenow) carry no copy and are not sinks.
  */
-const SINK = /\.(?:textContent|title|placeholder|alt|label)\s*=(?!=)\s*([^;\n]+)|setAttribute\('(?:aria-label|aria-valuetext|aria-description|aria-roledescription|aria-placeholder)',\s*([^;\n]+)\)/g;
+const SINK = /\.(?:textContent|title|placeholder|alt|label)\s*=(?!=)\s*([^;\n]+)|setAttribute\(['"](?:aria-label|aria-valuetext|aria-description|aria-roledescription|aria-placeholder)['"],\s*([^;\n]+)\)/g;
 
 /** The text after a ternary's top-level `?`, or the whole text when there is none. */
 function ternaryBranches(rhs) {
@@ -110,8 +110,8 @@ function ternaryBranches(rhs) {
 
 function sinkCopy(src, out) {
     for (const m of src.matchAll(SINK)) {
-        for (const lit of ternaryBranches(m[1] ?? m[2]).matchAll(/'((?:[^'\\\n]|\\.)*)'|`([^`\n]*)`/g)) {
-            const text = lit[1] ?? lit[2];
+        for (const lit of ternaryBranches(m[1] ?? m[2]).matchAll(/'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`([^`\n]*)`/g)) {
+            const text = lit[1] ?? lit[2] ?? lit[3];
             // Empty literals and pure-slot templates (`${tabs.length}`) are values, not copy.
             if (text && !/^\$\{[^}]*\}$/.test(text)) {
                 out.push(unescapeUnicode(text));
@@ -315,6 +315,11 @@ function selfTest() {
             expect: [[/unreviewed copy/, '"Planted words"']] },
         { id: 'template textContent added', file: WIDGET_REL, ...swap(null, 'x.textContent = `Planted ${n} words`;'),
             expect: [[/unreviewed copy/, '"Planted {} words"']] },
+        // WR-06: the sink pass reads double-quoted literals and attribute names too.
+        { id: 'double-quoted title added', file: WIDGET_REL, ...swap(null, 'x.title = "Planted words";'),
+            expect: [[/unreviewed copy/, '"Planted words"']] },
+        { id: 'double-quoted aria-label added', file: WIDGET_REL, ...swap(null, 'x.setAttribute("aria-label", "Planted label");'),
+            expect: [[/unreviewed copy/, '"Planted label"']] },
         // 22-04: the slot-aware retired search finds a dialog body however its slots are spelled.
         { id: 'retired plural dialog body re-added', file: WIDGET_REL, ...swap(null, 'const closeMsg = `Close "${group.title}"? Its ${count} tabs will close too. You can\'t undo this.`;'),
             expect: [[/retired copy/, 'Its {N} tabs will close too', WIDGET_REL]] },
