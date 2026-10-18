@@ -314,8 +314,37 @@ export class GroupModel implements FrontendApplicationContribution {
             }
             this.insertCardLocal(live, null);
         }
-        await this.moveCard(this.actor, key, groupId);
+        try {
+            await this.moveCard(this.actor, key, groupId);
+        } catch (error) {
+            this.leaveLoose(key, groupId);
+            throw error;
+        }
         void this.scheduleReload();
+    }
+
+    /**
+     * A7: a failed join leaves the tab loose in memory, as the store has it.
+     * The card: slot's Retry re-paints the join before replaying the write,
+     * so a Retry that lands joins it and one that fails reverts it loose.
+     */
+    private leaveLoose(key: string, groupId: string): void {
+        const card = this.locateCard(key)?.card;
+        if (!card) {
+            return;
+        }
+        this.removeCardLocal(key);
+        this.insertCardLocal(card, null);
+        const slot = this.pendingWrites.get(`card:${key}`);
+        if (slot) {
+            const write = slot.write;
+            slot.write = async () => {
+                this.removeCardLocal(key);
+                this.insertCardLocal(card, groupId);
+                await write();
+            };
+        }
+        this.changeEmitter.fire();
     }
 
     /**
