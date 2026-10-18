@@ -71,7 +71,7 @@ const EXPECTED_CLOSE_TOOLTIP = "= 'Close group'";
 const BACKSTOPS = Object.freeze([
     { statement: 'drawing a band of at least 30px on empty canvas creates a group there and takes the enclosed loose cards', verification: 'backstop' },
     { statement: 'a drop over a group joins it at the previewed slot; a drop on empty canvas places the card loose', verification: 'backstop' },
-    { statement: 'every loose and expanded-stack card is reachable by Tab plus arrows, and Enter opens it', verification: 'backstop' },
+    { statement: 'every visible loose card and every expanded-stack card is reachable by Tab plus arrows, and Enter opens it; hidden pile cards are skipped (21-UI-SPEC A5)', verification: 'backstop' },
     { statement: 'tree renders identical order and membership after every mutation and flip', verification: 'backstop' },
     { statement: 'confirming Close Group closes exactly that group tabs; cancel changes nothing', verification: 'backstop' },
 ]);
