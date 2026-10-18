@@ -438,11 +438,20 @@ export class OrganisingWidget extends Widget {
         const undoFocus = active instanceof HTMLElement && active.classList.contains('pb-org-undo') && this.node.contains(active)
             ? active.dataset.closing
             : undefined;
+        // PAN-05: a focused card keeps focus across a rebuild (a reload after a keyboard close).
+        const cardFocus = active instanceof HTMLElement && active.classList.contains('pb-org-card') && this.node.contains(active)
+            ? { key: active.dataset.u, expanded: !!active.closest('.pb-org-expand-cards') }
+            : undefined;
         this.renderToolbar();
         this.renderBars();
         this.renderCanvas();
         this.renderTree();
         this.renderExpanded();
+        const again = cardFocus?.key === undefined ? null : (cardFocus.expanded ? this.expandRoot : this.canvasRoot)
+            .querySelector(`.pb-org-card[data-u="${CSS.escape(cardFocus.key)}"]`) as HTMLElement | null;
+        if (again) {
+            this.focusCard(again);
+        }
         if (undoFocus !== undefined) {
             if (this.model.isClosing(undoFocus)) {
                 this.focusUndo(undoFocus);
@@ -1043,10 +1052,7 @@ export class OrganisingWidget extends Widget {
         const next = nextKey === undefined ? null : (expanded ? this.expandRoot : this.canvasRoot)
             .querySelector(`${inScope}.pb-org-card${loose ? '.is-loose' : ''}[data-u="${CSS.escape(nextKey)}"]`) as HTMLElement | null;
         if (next) {
-            for (const candidate of this.cardScope(next)) {
-                candidate.tabIndex = candidate === next ? 0 : -1;
-            }
-            next.focus();
+            this.focusCard(next);
             return;
         }
         const fallback = groupId !== null
@@ -2027,6 +2033,14 @@ export class OrganisingWidget extends Widget {
             scoped = scope ? Array.from(scope.querySelectorAll('.pb-org-card')) as HTMLElement[] : [];
         }
         return scoped.filter(candidate => !candidate.hidden);
+    }
+
+    /** Focuses a card and makes it its scope's one tab stop. */
+    protected focusCard(card: HTMLElement): void {
+        for (const candidate of this.cardScope(card)) {
+            candidate.tabIndex = candidate === card ? 0 : -1;
+        }
+        card.focus();
     }
 
     /**
