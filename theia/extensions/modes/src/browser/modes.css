@@ -224,7 +224,11 @@
     transition: transform 0.15s ease;
 }
 
+/* flow-root: the empty panel's top margin must not collapse through the
+   canvas and shift it below the host's padding edge, which is where
+   renderLoose() measures the loose line from. */
 .pb-org-canvas {
+    display: flow-root;
     position: relative;
     min-height: 320px;
 }
