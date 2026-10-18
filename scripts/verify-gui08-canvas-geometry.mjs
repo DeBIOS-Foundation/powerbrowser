@@ -273,20 +273,22 @@ function checkStatic(sources) {
     if (!type.sizes.length || !type.weights.length) {
         failures.push(`derived ZERO type roles from the Typography table in ${SPEC_REL} -- broken instrument`);
     } else {
-        const sizes = new Set([...cssSrc.matchAll(/font-size:\s*(\d+)px/g)].map(m => Number(m[1])));
+        // Sizes and weights read the same rule set: rules whose selector names
+        // a .pb-org-* class, comments stripped so a leading one cannot hide a
+        // rule. The .pb-modes-* rules belong to 14-UI-SPEC, not this table.
+        const orgRules = [...cssSrc.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(?<=^|[{};])\s*([^{};@]+?)\s*\{([^{}]*)\}/g)]
+            .map(m => ({ selector: m[1].replace(/\s+/g, ' '), body: m[2] }))
+            .filter(r => r.selector.includes('.pb-org-'));
+        const sizes = new Set(orgRules.flatMap(r => [...r.body.matchAll(/font-size:\s*(\d+)px/g)].map(m => Number(m[1]))));
         const sizeDiff = diff([...sizes], type.sizes);
         if (sizeDiff.surplus.length) {
-            failures.push(`${CSS_REL}: font-size ${sizeDiff.surplus.join(', ')}px is not a ${SPEC_REL} Typography size (${type.sizes.join('/')})`);
+            failures.push(`${CSS_REL}: font-size ${sizeDiff.surplus.join(', ')}px under .pb-org-* is not a ${SPEC_REL} Typography size (${type.sizes.join('/')})`);
         }
         if (sizeDiff.missing.length) {
-            failures.push(`${CSS_REL}: Typography size ${sizeDiff.missing.join(', ')}px from ${SPEC_REL} is declared nowhere in the stylesheet`);
+            failures.push(`${CSS_REL}: Typography size ${sizeDiff.missing.join(', ')}px from ${SPEC_REL} is declared under no .pb-org-* rule`);
         }
-        for (const m of cssSrc.matchAll(/(?<=^|[{};])\s*([^{};@]+?)\s*\{([^{}]*)\}/g)) {
-            const selector = m[1].replace(/\s+/g, ' ');
-            if (!selector.startsWith('.pb-org-')) {
-                continue;
-            }
-            for (const w of m[2].matchAll(/font-weight:\s*(\d+)/g)) {
+        for (const { selector, body } of orgRules) {
+            for (const w of body.matchAll(/font-weight:\s*(\d+)/g)) {
                 const weight = Number(w[1]);
                 if (!type.weights.includes(weight)) {
                     failures.push(`${CSS_REL}: font-weight ${weight} on '${selector}' is not a ${SPEC_REL} Typography weight (${type.weights.join('/')})`);
@@ -375,6 +377,7 @@ const PLANTS = [
     { id: 'heading weight 500', file: CSS_REL, apply: once('.pb-org-expand-heading {\n    font-size: 14px;\n    font-weight: 400;', '.pb-org-expand-heading {\n    font-size: 14px;\n    font-weight: 500;'), landed: s => s.includes('.pb-org-expand-heading {\n    font-size: 14px;\n    font-weight: 500;'), expect: /font-weight 500 on '\.pb-org-expand-heading'/ },
     { id: 'zero groups without loose cards', file: WIDGET_REL, apply: s => s.replace(/\n *this\.renderLoose\([^)\n]*\);(\n *return;)/, '$1'), landed: s => (s.match(/this\.renderLoose\(/g) || []).length === 1, expect: /without renderLoose\(\)/ },
     { id: 'focus scope back to the tray', file: WIDGET_REL, apply: once("'.pb-org-box-cards, .pb-org-expand-cards'", "'.pb-org-box-cards, .pb-org-tray-cards'"), landed: s => s.includes("'.pb-org-box-cards, .pb-org-tray-cards'"), expect: /pb-org-tray|moveCardFocus does not scope/ },
+    { id: 'every .pb-org-* 13px deleted', file: CSS_REL, apply: s => s.replace(/(\.pb-org-[^{}]*\{[^{}]*?)\n    font-size: 13px;/g, '$1'), landed: s => /\.pb-modes-custom-row \{[^}]*font-size: 13px/.test(s) && !/\.pb-org-[^{}]*\{[^{}]*font-size: 13px/.test(s), expect: /Typography size 13px .* declared under no \.pb-org-\* rule/ },
     { id: 'spec Typography 13px deleted', file: SPEC_REL, apply: s => s.replace(/^\| Label \| 13px \|.*\n/m, ''), landed: s => !/^\| Label \| 13px \|/m.test(s), expect: /font-size 13px/ },
 ];
 
