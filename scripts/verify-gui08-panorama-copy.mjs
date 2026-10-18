@@ -82,7 +82,7 @@ function pushAll(out, matches) {
  * text-bearing ARIA attribute. State attributes (aria-hidden, -pressed,
  * -valuemin, -valuenow) carry no copy and are not sinks.
  */
-const SINK = /\.(?:textContent|title|placeholder|alt|label)\s*=(?!=)\s*([^;\n]+)|setAttribute\('aria-(?:label|valuetext|description|roledescription|placeholder)',\s*([^;\n]+)\)/g;
+const SINK = /\.(?:textContent|title|placeholder|alt|label)\s*=(?!=)\s*([^;\n]+)|setAttribute\('(?:aria-label|aria-valuetext|aria-description|aria-roledescription|aria-placeholder)',\s*([^;\n]+)\)/g;
 
 /** The text after a ternary's top-level `?`, or the whole text when there is none. */
 function ternaryBranches(rhs) {
