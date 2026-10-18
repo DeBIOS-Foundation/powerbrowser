@@ -11,19 +11,25 @@
 //       order and activity, and the store is unchanged;
 //   (d) closed again, G1 is still pending 3 s before the deadline, then the
 //       timer commits it: widgets and pages gone, rows closed with group_id
-//       null, the group row deleted and G2 active in the store.
+//       null, the group row deleted and G2 active in the store;
+//   (e) during a window, in Browsing and in Coding, the strip paints none of
+//       G1's tabs, each G1 dock-bar tab carries pb-group-closing and computes
+//       display none, and no bar's current title is a G1 widget (A3);
+//   (f) a quit inside G4's window closes it for good: after a relaunch on the
+//       same profile the reader lists no G4, /q1 and /q2 are not open, their
+//       rows are closed and the model has no card for them (A4).
 //
 // UNDO_CLOSE_MS is read from group-model.ts at check time, never typed here.
 //
 // Full tier only: the built binary, a Theia build and a headless browser.
 // Like the other ng-a-live rows it has no --self-test. In-run probe controls
 // stand in for one: each plants a page fault (undoCloseGroup stubbed to a
-// no-op, commitClose stubbed to a no-op) and requires the probe that passed
-// to go red, so every probe is shown able to fail.
+// no-op, commitClose stubbed to a no-op, isClosingKey stubbed to false) and
+// requires the probe that passed to go red, so every probe is shown able to fail.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { REPO_ROOT, newProfile, runCheck, show, sleep, tabsOf, waitUntil, withShell } from './lib/ng-a-live.mjs';
+import { REPO_ROOT, newProfile, runCheck, show, sleep, tabsOf, waitUntil, withShell, withShellQuit } from './lib/ng-a-live.mjs';
 
 const NAME = 'pan04-undo-close-group-live';
 const MODEL_REL = 'theia/extensions/modes/src/browser/group-model.ts';
@@ -47,6 +53,28 @@ const PROBES = `
     // The commit probe: no longer pending, and every member widget is gone.
     const committed = (id, ws) => !m.isClosing(id) && alive(ws) === 0;
     const storeGroups = async () => (await A.reader().listGroups()).map(g => ({ id: g.id, is_active: g.is_active }));
+    const labelOf = w => w.title.label || w.id;
+    const current = () => { const t = A.shell().mainPanel.currentTitle; return t ? t.owner : undefined; };
+    const strip = () => A.get('TabStripWidget');
+    const painted = () => Array.from(document.querySelectorAll('.pb-tab-strip .pb-tab:not(.pb-tab-stack)')).map(e => e.getAttribute('title'));
+    // Every main-area bar, read for the given widgets: shown, unclassed, current, or in no bar at all.
+    const bars = ws => {
+        const out = { shown: [], unclassed: [], current: [], missing: [] };
+        const seen = new Set();
+        for (const bar of Array.from(A.shell().mainPanel.tabBars())) {
+            bar.titles.forEach((t, i) => {
+                if (!ws.includes(t.owner)) return;
+                seen.add(t.owner);
+                const el = bar.contentNode.children[i];
+                if (!el || !el.classList.contains('pb-group-closing')) out.unclassed.push(labelOf(t.owner));
+                if (el && getComputedStyle(el).display !== 'none') out.shown.push(labelOf(t.owner));
+            });
+            if (bar.currentTitle && ws.includes(bar.currentTitle.owner)) out.current.push(labelOf(bar.currentTitle.owner));
+        }
+        out.missing = ws.filter(w => !seen.has(w)).map(labelOf);
+        return out;
+    };
+    const hiddenEverywhere = ws => { const b = bars(ws); return !b.shown.length && !b.unclassed.length && !b.current.length && !b.missing.length; };
 `;
 
 await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
@@ -58,10 +86,11 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
     }
     const UNDO = Number(match[1]);
     const profile = newProfile('pan04');
+    const qUrls = [pages.url('/q1'), pages.url('/q2')];
     const urls = { a: pages.url('/a'), c: pages.url('/c'), s: pages.url('/s'), p: pages.url('/p') };
     const rowsOf = keys => tabsOf(profile).filter(r => keys.includes(r.uri));
 
-    await withShell(profile, async ({ run, topLevelContexts, screenshot }) => {
+    const first = await withShellQuit(profile, async ({ run, topLevelContexts, screenshot }) => {
         // Setup: /a, /c and a terminal in G1; /s in G2; /p in G3 for the probe controls; G1 active.
         const opened = await run(`
             ${PROBES}
@@ -168,6 +197,47 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
         expect(c.store.some(g => g.id === g1 && g.is_active === 1), `(c) the store's G1 is not the active group: ${JSON.stringify(c.store)}`);
         detail(`(c) undoCloseGroup(G1): index ${c.now && c.now.index}, title, x, y, w, h and card order [${c.now && c.now.keys.join(', ')}] equal; G1 active; store unchanged`);
 
+        // (e) every tab bar during a window, Browsing then Coding, with /a current at the close.
+        const e = await run(`
+            ${PROBES}
+            A.shell().activateWidget(S.a.id);
+            const wasCurrent = await settle(() => current() === S.a);
+            await m.closeGroup(A.actor(), S.g1);
+            const labels = S.w1.map(labelOf);
+            const look = async mode => {
+                await A.get('ModeService').activateMode(mode);
+                await settle(() => document.body.dataset.pbMode === mode);
+                const ok = await settle(() => hiddenEverywhere(S.w1) && (mode !== 'browsing' || !painted().some(l => labels.includes(l))));
+                return { mode, ok, bars: bars(S.w1), painted: mode === 'browsing' ? painted().filter(l => labels.includes(l)) : [], current: current() ? labelOf(current()) : null };
+            };
+            const browsing = await look('browsing');
+            const coding = await look('coding');
+            await A.get('ModeService').activateMode('browsing');
+            await settle(() => document.body.dataset.pbMode === 'browsing');
+            // P3: with isClosingKey stubbed to false the strip must paint a G1 tab.
+            let p3;
+            try {
+                m.isClosingKey = () => false;
+                strip().update();
+                p3 = await settle(() => painted().some(l => labels.includes(l)));
+            } finally {
+                delete m.isClosingKey;
+                strip().update();
+            }
+            const p3Restored = await settle(() => !painted().some(l => labels.includes(l)));
+            const pending = m.isClosing(S.g1);
+            m.undoCloseGroup(S.g1);
+            return { wasCurrent, labels, browsing, coding, p3, p3Restored, pending, back: restored(S.g1, S.before), active: m.getActiveGroupId() };
+        `);
+        expect(e.wasCurrent, '(e) setup: /a never became the current tab, so the steering is untested');
+        expect(e.pending, '(e) G1 left its undo window before the checks finished, so they prove nothing');
+        for (const look of [e.browsing, e.coding]) {
+            expect(look.ok, `(e) in ${look.mode} a G1 tab shows: dock bars ${JSON.stringify(look.bars)}, strip [${look.painted.join(' | ')}]`);
+        }
+        expect(e.back && e.active === g1, `(e) the undo after the checks did not restore G1 as the active group (active ${e.active})`);
+        detail(`(e) Browsing, /a current at the close: the strip paints none of [${e.labels.join(' | ')}]; each G1 dock tab has pb-group-closing and display none; no bar's current title is a G1 widget (current: ${e.browsing.current})`);
+        detail(`(e) Coding: each G1 dock tab has pb-group-closing and display none; no bar's current title is a G1 widget (current: ${e.coding.current})`);
+
         // (d) the timer, not the click, commits. Waits run node-side: one
         // page evaluation is bounded by the BiDi request timeout.
         const d0 = await run(`
@@ -249,8 +319,82 @@ await runCheck(`verify-${NAME}`, async ({ pages, expect, failures }) => {
         }
         expect(p1.back, 'probe control undoCloseGroup was not restored: the real undo did not bring G3 back');
         expect(p2.done, 'probe control commitClose was not restored: commitAllClosing did not commit G3');
+        expect(e.p3, 'probe control isClosingKey stubbed to false did not go red -- the probe cannot see that fault');
+        expect(e.p3Restored, 'probe control isClosingKey was not restored: the strip still paints a G1 tab');
+
+        // (f) set up G4 with /q1 and /q2, close it, and quit inside its window.
+        const f0 = await run(`
+            ${PROBES}
+            const q = ${JSON.stringify(qUrls)};
+            S.q = [];
+            for (const u of q) S.q.push(await A.open(u));
+            return S.q.map(keyOf);
+        `);
+        if (!await waitUntil(() => rowsOf(f0).length === 2, 15000)) {
+            failures.push(`(f) setup: /q1 and /q2 have no rows within 15 s: ${show(tabsOf(profile))}`);
+            return undefined;
+        }
+        const f1 = await run(`
+            ${PROBES}
+            const keys = ${JSON.stringify(f0)};
+            await settle(() => keys.every(k => m.listUngrouped().some(t => t.uri === k)), 80);
+            const g4 = await m.createGroup(A.actor(), { x: 480, y: 400 });
+            for (const k of keys) await m.moveCard(A.actor(), k, g4.id);
+            S.g4 = g4.id;
+            return { g4: g4.id, members: m.getTabs(g4.id).map(t => t.uri) };
+        `);
+        if (!await waitUntil(() => rowsOf(f0).every(r => r.group_id === f1.g4), 10000)) {
+            failures.push(`(f) setup: /q1 and /q2 never joined G4 ${f1.g4} in the store: ${show(rowsOf(f0))}`);
+            return undefined;
+        }
+        const f2 = await run(`
+            ${PROBES}
+            await m.closeGroup(A.actor(), S.g4);
+            const entry = m.listClosing().find(x => x.group.id === S.g4);
+            return { deadline: entry ? entry.deadline : null, now: Date.now() };
+        `);
+        if (f2.deadline === null || f2.deadline - Date.now() < 3000) {
+            failures.push(`(f) the quit cannot start inside G4's window: deadline ${f2.deadline}, now ${Date.now()}`);
+            return undefined;
+        }
+        return { g4: f1.g4, keys: f0, quitAt: Date.now(), deadline: f2.deadline, sUrl: urls.s };
+    });
+    if (!first || failures.length) {
+        return;
+    }
+    const exitedAt = Date.now();
+    detail(`(f) quit started ${first.deadline - first.quitAt} ms before G4's deadline; the browser exited ${exitedAt - first.quitAt} ms after the quit started`);
+
+    // (f) relaunch on the same profile: nothing of G4 comes back.
+    await withShell(profile, async ({ run, topLevelContexts }) => {
+        const f = await run(`
+            ${PROBES}
+            await settle(() => m.isLoaded, 160);
+            // The restore ran: G2's /s, open at the quit, is back.
+            const restoredS = await settle(() => A.webTabs().some(w => w.url === ${JSON.stringify(first.sUrl)}), 160);
+            await A.sleep(1500);
+            const keys = ${JSON.stringify(first.keys)};
+            const q = ${JSON.stringify(qUrls)};
+            return {
+                restoredS,
+                reader: (await A.reader().listGroups()).map(g => ({ id: g.id, title: g.title, is_active: g.is_active })),
+                open: A.webTabs().filter(w => keys.includes(w.rowKey) || q.includes(w.url)).map(w => w.url),
+                loose: m.listUngrouped().filter(t => keys.includes(t.uri)).map(t => t.uri),
+                carded: m.listGroups().flatMap(g => m.getTabs(g.id)).filter(t => keys.includes(t.uri)).map(t => t.uri),
+                groups: m.listGroups().map(g => g.id),
+            };
+        `);
+        const live = (await topLevelContexts()).map(x => x.url);
+        const qRows = rowsOf(first.keys);
+        expect(f.restoredS, '(f) after the relaunch the session restore never reopened /s, so the absence of /q1 and /q2 proves nothing');
+        expect(!f.reader.some(g => g.id === first.g4), `(f) after the relaunch the reader lists G4: ${JSON.stringify(f.reader)}`);
+        expect(!f.groups.includes(first.g4), `(f) after the relaunch the model shows G4 as a box: [${f.groups.join(', ')}]`);
+        expect(!f.open.length && !qUrls.some(u => live.includes(u)), `(f) a G4 tab came back after the relaunch: web tabs [${f.open.join(', ')}], contexts ${JSON.stringify(live)}`);
+        expect(qRows.length === 2 && qRows.every(r => r.closed_at != null && r.group_id == null), `(f) G4's rows are not closed with group_id null: ${show(qRows)}`);
+        expect(!f.loose.length && !f.carded.length, `(f) the model has cards for G4's tabs: loose [${f.loose.join(', ')}], grouped [${f.carded.join(', ')}]`);
+        detail(`(f) relaunch: /s restored; the reader lists ${JSON.stringify(f.reader)} (no G4 ${first.g4}); no web tab on /q1 or /q2; rows ${show(qRows)}; no loose or grouped card for them`);
     });
     if (!failures.length) {
-        detail('probe controls: 2 planted page faults each turned their probe red');
+        detail('probe controls: 3 planted page faults each turned their probe red');
     }
 });
