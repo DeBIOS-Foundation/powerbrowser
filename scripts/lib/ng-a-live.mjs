@@ -272,6 +272,10 @@ window.__ngA = window.__ngA || (function () {
             if (!A.model().isClosing(id)) throw new Error('the Close Group undo window never opened');
             for (i = 0; i < 600 && A.model().isClosing(id); i++) await A.sleep(100);
             if (A.model().isClosing(id)) throw new Error('the Close Group undo window never ended');
+            // isClosing turns false before the closeGroup write is sent; the
+            // pending slot clears only after the write and the widget closes.
+            for (i = 0; i < 600 && A.model().hasPendingWrite; i++) await A.sleep(100);
+            if (A.model().hasPendingWrite) throw new Error('the Close Group commit never finished');
         },
     };
     return A;
