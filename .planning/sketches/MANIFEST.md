@@ -20,3 +20,4 @@ bar, status bar) as the path-of-least-resistance constraint.
 | 002 | mode-toggle-tabs | How do coding / browsing / organising modes present tabs? | B (strip relocates) | modes, tabs, filtering |
 | 003 | mode-transitions | What is each mode's shell, and where do the tabs sit in it? | ratified 2026-09-08 | modes, tabs, shell |
 | 004 | panorama-reference | Which Firefox Panorama behaviours does Organising still need? | reference, not a choice | organising, panorama, gaps |
+| 005 | vscode-layout | How should Coding mode lay out its shell, VS Code style? | adopted into v1.5 (all four changes) | layout, coding, chrome |

@@ -1,0 +1,268 @@
+<title>Power Browser Workbench Layout</title>
+<style>
+  :root {
+    --bg: #f3f2f6; --surface: #ffffff; --raised: #e8e7ee; --border: #c9c8d3;
+    --text: #1c1b22; --muted: #5f5e6c; --primary: #0077b6; --change: #b66e00;
+    --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "JetBrains Mono", Menlo, monospace;
+    /* the frame depicts the product's own dark shell in both themes */
+    --pb-bg: #1c1b22; --pb-surface: #2b2a33; --pb-raised: #35343f; --pb-border: #3f3e4a;
+    --pb-text: #fbfbfe; --pb-muted: #9a99a8; --pb-primary: #00a6f5; --pb-accent: #8ad4ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1c1b22; --surface: #2b2a33; --raised: #35343f; --border: #3f3e4a;
+      --text: #fbfbfe; --muted: #9a99a8; --primary: #00a6f5; --change: #f0b83a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1c1b22; --surface: #2b2a33; --raised: #35343f; --border: #3f3e4a;
+    --text: #fbfbfe; --muted: #9a99a8; --primary: #00a6f5; --change: #f0b83a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding-block: 24px; padding-inline: 20px; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.45; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .lede { color: var(--muted); margin: 4px 0 0; max-width: 64ch; }
+  header { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+  .group { display: flex; align-items: center; gap: 6px; }
+  .group > span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-right: 4px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { background: var(--surface); color: var(--text); border: 0; padding: 5px 12px; font: inherit; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button:disabled { color: var(--muted); cursor: default; }
+  .seg button:disabled[aria-pressed="true"] { background: var(--raised); color: var(--muted); }
+  .seg button[aria-pressed="true"] { background: var(--primary); color: #fff; }
+  .seg button:focus-visible, .chk:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .chk { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); cursor: pointer; user-select: none; }
+  .chk input { margin: 0; accent-color: var(--primary); }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+  @media (max-width: 1100px) { .stage { grid-template-columns: 1fr; } }
+  .frame-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--pb-bg); }
+  .frame { min-width: 960px; aspect-ratio: 16 / 9.6; display: grid; grid-template-rows: 35px 1fr 22px; color: var(--pb-text); font-size: 12px; position: relative; }
+  .frame.today { grid-template-rows: auto 1fr 22px; }
+
+  /* title bar */
+  .title { display: flex; align-items: center; background: var(--pb-surface); border-bottom: 1px solid var(--pb-border); padding: 0 8px; gap: 6px; height: 35px; }
+  .title.two { flex-wrap: wrap; height: auto; padding: 0; }
+  .title.two > .row { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0 8px; height: 33px; }
+  .title.two > .row + .row { height: 40px; border-top: 1px solid var(--pb-border); }
+  .menu { display: flex; gap: 10px; color: var(--pb-text); white-space: nowrap; }
+  .drag { flex: 1; min-width: 12px; height: 100%; background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(255,255,255,0.06) 6px 7px); }
+  .cc { flex: 0 1 38%; height: 22px; border: 1px solid var(--pb-border); border-radius: 6px; background: var(--pb-bg); color: var(--pb-muted); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; }
+  .cc.full { flex: 1 1 auto; justify-content: flex-start; padding-left: 8px; }
+  .nav { display: flex; gap: 6px; color: var(--pb-muted); }
+  .icons { display: flex; gap: 8px; color: var(--pb-muted); letter-spacing: 0.1em; }
+  .modes { display: inline-flex; border: 1px solid var(--pb-border); border-radius: 4px; overflow: hidden; font-size: 11px; }
+  .modes span { padding: 3px 8px; color: var(--pb-muted); }
+  .modes span + span { border-left: 1px solid var(--pb-border); }
+  .modes .on { color: var(--pb-primary); }
+  .win { display: flex; gap: 10px; color: var(--pb-text); padding-left: 6px; }
+
+  /* body */
+  .body { display: grid; grid-template-columns: var(--left, 0) 1fr var(--right, 0); min-height: 0; }
+  .body.rail { grid-template-columns: 48px var(--left, 0) 1fr var(--right, 0); }
+  .side { border-right: 1px solid var(--pb-border); background: var(--pb-surface); display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+  .side.r { border-right: 0; border-left: 1px solid var(--pb-border); }
+  .side .bar { height: 35px; display: flex; align-items: center; gap: 12px; padding: 0 12px; color: var(--pb-muted); border-bottom: 1px solid var(--pb-border); letter-spacing: 0.1em; }
+  .side .hd { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--pb-muted); padding: 8px 12px 4px; }
+  .tree { padding: 0 12px; color: var(--pb-muted); line-height: 1.7; font-size: 11px; }
+  .tree b { color: var(--pb-text); font-weight: 500; }
+  .railv { background: var(--pb-surface); border-right: 1px solid var(--pb-border); display: flex; flex-direction: column; align-items: center; gap: 14px; padding-top: 10px; color: var(--pb-muted); }
+  .main { display: grid; grid-template-rows: 35px 1fr; min-width: 0; background: var(--pb-bg); }
+  .main.split { grid-template-rows: 35px 1fr 160px; }
+  .tabs { display: flex; align-items: flex-end; gap: 2px; padding: 0 6px; border-bottom: 1px solid var(--pb-border); background: var(--pb-surface); }
+  .tab { padding: 6px 12px; color: var(--pb-muted); border: 1px solid transparent; border-bottom: 0; font-size: 11px; white-space: nowrap; }
+  .tab.on { color: var(--pb-text); background: var(--pb-bg); border-color: var(--pb-primary); border-radius: 4px 4px 0 0; }
+  .editor { padding: 16px; color: var(--pb-muted); font-family: var(--mono); font-size: 11px; line-height: 1.6; overflow: hidden; }
+  .page { padding: 24px; color: var(--pb-muted); }
+  .page h2 { color: var(--pb-text); font-size: 18px; margin: 0 0 4px; }
+  .panel { border-top: 1px solid var(--pb-border); background: var(--pb-surface); padding: 8px 12px; color: var(--pb-muted); font-family: var(--mono); font-size: 11px; }
+  .status { background: var(--pb-surface); border-top: 1px solid var(--pb-border); display: flex; align-items: center; gap: 16px; padding: 0 10px; color: var(--pb-muted); font-size: 11px; }
+  .orgbar { height: 40px; display: flex; align-items: center; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--pb-border); color: var(--pb-muted); }
+  .orgbar .btn { border: 1px solid var(--pb-border); border-radius: 4px; padding: 3px 10px; color: var(--pb-text); }
+  .orgbar .btn.p { background: var(--pb-primary); border-color: var(--pb-primary); color: #fff; }
+  .canvas { display: flex; gap: 16px; padding: 20px; flex-wrap: wrap; align-content: flex-start; }
+  .card { width: 160px; height: 110px; border: 1px dashed var(--pb-border); border-radius: 6px; color: var(--pb-muted); font-size: 11px; padding: 8px; }
+
+  /* callouts */
+  .co { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: var(--pb-primary); color: #fff; font: 600 11px/20px var(--mono); text-align: center; box-shadow: 0 0 0 2px var(--pb-bg); pointer-events: none; }
+  .co.chg { background: #f0b83a; color: #1c1b22; }
+  .frame:not(.callouts) .co { display: none; }
+
+  /* legend */
+  .legend { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); overflow: hidden; }
+  .legend h2 { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .item { display: grid; grid-template-columns: 24px 1fr; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .item:last-child { border-bottom: 0; }
+  .item .n { width: 20px; height: 20px; border-radius: 50%; background: var(--primary); color: #fff; font: 600 11px/20px var(--mono); text-align: center; }
+  .item.chg .n { background: var(--change); color: #1c1b22; }
+  .item b { display: block; font-weight: 600; }
+  .item p { margin: 2px 0 0; color: var(--muted); }
+  .item .now { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+  .item .now::before { content: "today: "; color: var(--text); }
+  .key { display: flex; gap: 14px; padding: 8px 14px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .key i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+  @media (prefers-reduced-motion: no-preference) { .seg button, .chk { transition: background 0.15s ease; } }
+</style>
+
+<header>
+  <div>
+    <h1>Power Browser Workbench Layout</h1>
+    <p class="lede">Low-fidelity reference for the VS Code style shell in Coding. Browsing and Organising keep today's layout. Compare Today with Proposed and refer to the numbered callouts when marking what to change.</p>
+  </div>
+  <div class="controls">
+    <div class="group"><span>Mode</span>
+      <div class="seg" role="group" aria-label="Mode">
+        <button id="m-coding" data-mode="coding" aria-pressed="true">Coding</button>
+        <button id="m-browsing" data-mode="browsing" aria-pressed="false">Browsing</button>
+        <button id="m-organising" data-mode="organising" aria-pressed="false">Organising</button>
+      </div>
+    </div>
+    <div class="group"><span>Version</span>
+      <div class="seg" role="group" aria-label="Version">
+        <button id="v-proposed" data-ver="proposed" aria-pressed="true">Proposed</button>
+        <button id="v-today" data-ver="today" aria-pressed="false">Today</button>
+      </div>
+    </div>
+    <div class="group"><span>Show</span>
+      <label class="chk"><input id="t-left" type="checkbox" checked> Left sidebar</label>
+      <label class="chk"><input id="t-right" type="checkbox" checked> Right sidebar</label>
+      <label class="chk"><input id="t-panel" type="checkbox"> Bottom panel</label>
+      <label class="chk"><input id="t-co" type="checkbox" checked> Callouts</label>
+    </div>
+  </div>
+</header>
+
+<div class="stage">
+  <div class="frame-wrap"><div class="frame callouts" id="frame"></div></div>
+  <aside class="legend" id="legend">
+    <h2>Callouts</h2>
+    <div class="key"><span><i style="background: var(--change)"></i>changes from today</span><span><i style="background: var(--primary)"></i>already this way</span></div>
+    <div id="items"></div>
+  </aside>
+</div>
+
+<script>
+(function () {
+  const state = { mode: 'coding', ver: 'proposed', left: true, right: true, panel: false, co: true };
+  const hatch = '<div class="drag" title="empty space: moves the window"></div>';
+  const win = '<div class="win" aria-label="Window controls">⌄ ⌃ ✕</div>';
+  const modes = m => '<div class="modes">' + ['Coding', 'Browsing', 'Organising'].map(n =>
+    '<span class="' + (n.toLowerCase() === m ? 'on' : '') + '">' + n + '</span>').join('') + '</div>';
+  const cc = (m, full) => '<div class="cc' + (full ? ' full' : '') + '">' +
+    (m === 'coding' ? '⌕ Search or enter address' : m === 'browsing' ? '🔒 view:welcome' : 'view:powerbrowser.modes.organising') + '</div>';
+  const rightCluster = '<div class="icons" title="Layout: left sidebar · bottom panel · right sidebar · customize">⊞ ◫ ▭ ◫</div><div class="icons">◉ ⚙</div>';
+
+  const legend = {
+    1: ['chg', 'One title row', 'Menubar, navigation, the address box, the right cluster and the window buttons share the top row.', 'Menubar row plus a separate 40px URL row.'],
+    2: ['chg', 'Centred address box', 'The address pill is capped at about 38% of the row and centred, like the command centre. The hatched space either side moves the window.', 'The pill fills the whole row; the only grab areas are 8px gaps.'],
+    3: ['chg', 'Right cluster', 'Layout toggles (left sidebar, bottom panel, right sidebar, customize), account, settings. The mode toggle sits beside the address box; placement open.', 'None of these exist; the mode toggle is at the right end of the URL row.'],
+    4: ['chg', 'Activity icons across the top', 'The activity bar runs horizontally above the Explorer, inside the sidebar column.', 'A 48px vertical rail on the left edge. Theia has no preference for this; it is ours to build.'],
+    5: ['ok', 'Sidebar columns', 'Left and right sidebars run from the title row to the status bar.', 'Already so; the right panel is Theia\'s secondary sidebar.'],
+    6: ['ok', 'Tabs inside the editor group', 'Editors and web tabs share the dock\'s tab row in the middle column.', 'Already so in Coding.'],
+    7: ['ok', 'Status bar', 'Bottom row, Coding only.', 'Already so.'],
+    8: ['ok', 'Window buttons', 'Minimize, maximize, close on the top row; the OS title bar is gone.', 'Done today.'],
+  };
+
+  function co(n, x, y) {
+    const cls = legend[n][0] === 'chg' ? 'co chg' : 'co';
+    return '<div class="' + cls + '" style="left:' + x + ';top:' + y + '">' + n + '</div>';
+  }
+
+  function titleProposed(m) {
+    const left = m === 'coding'
+      ? '<span style="color:var(--pb-primary)">⏻</span><div class="menu"><span>File</span><span>Edit</span><span>Selection</span><span>View</span><span>Go</span><span>Run</span><span>Terminal</span><span>Help</span></div>'
+      : '<span style="color:var(--pb-primary)">⏻</span>';
+    return '<div class="title">' + left + hatch + '<div class="nav">‹ › ⟳</div>' + cc(m, false) + modes(m) + hatch + rightCluster + win + '</div>';
+  }
+  function titleToday(m) {
+    const row1 = m === 'coding'
+      ? '<div class="row"><div class="menu"><span>File</span><span>Edit</span><span>Selection</span><span>View</span><span>Go</span><span>Run</span><span>Terminal</span><span>Help</span></div>' + hatch + win + '</div>'
+      : m === 'browsing'
+        ? '<div class="row"><div class="tabs" style="border:0;background:none;padding:0"><span class="tab on">Welcome ×</span><span class="tab">New Tab ×</span><span class="tab">New Tab</span></div>' + hatch + win + '</div>'
+        : '';
+    const row2 = '<div class="row"><div class="nav">‹ › ⟳</div>' + cc(m, true) + '<span style="color:var(--pb-muted)">＋</span>' + modes(m) + (m === 'organising' ? win : '') + '</div>';
+    return '<div class="title two">' + row1 + row2 + '</div>';
+  }
+
+  function sideLeft(ver) {
+    const bar = ver === 'proposed' ? '<div class="bar">⎘ ⌕ ⑂ ▷ ⚗ ⊟ ⋯</div>' : '';
+    return '<div class="side">' + bar + '<div class="hd">Explorer</div><div class="tree"><b>▾ POWER-BROWSER</b><br>› .planning<br>› powerbrowser<br>› theia<br>› scripts<br>&nbsp;&nbsp;CLAUDE.md<br>&nbsp;&nbsp;README.md<br><br><b>› OUTLINE</b><br><b>› TIMELINE</b></div></div>';
+  }
+  function sideRight(ver) {
+    const bar = ver === 'proposed' ? '<div class="bar">＋ ⚙ ⋯</div>' : '';
+    return '<div class="side r">' + bar + '<div class="hd">Chat</div><div class="tree">Sessions<br>• Split view polish<br>• Custom title bar<br>• Panorama worklist</div></div>';
+  }
+  const railv = '<div class="railv">⎘<br>⌕<br>⑂<br>▷<br>⚗</div>';
+
+  function main(m, ver) {
+    const panel = state.panel ? '<div class="panel">TERMINAL &nbsp; PROBLEMS &nbsp; OUTPUT<br>$ scripts/verify-platform.sh --quick</div>' : '';
+    if (m === 'organising') {
+      return '<div class="main' + (state.panel ? ' split' : '') + '"><div class="orgbar"><span style="color:var(--pb-primary)">Canvas</span><span>Tree</span><span class="btn p">New Group</span>' + hatch + '<span class="btn">−</span><span>100%</span><span class="btn">+</span></div>' +
+        '<div class="canvas"><div class="card">Untitled group ×</div><div class="card">Research</div><div class="card">Ungrouped</div></div>' + panel + '</div>';
+    }
+    const tabs = m === 'coding'
+      ? '<span class="tab on">Welcome ×</span><span class="tab">chrome-bar-widget.tsx</span><span class="tab">New Tab</span>'
+      : (ver === 'proposed'
+        ? '<span class="tab on">Welcome ×</span><span class="tab">New Tab ×</span><span class="tab">New Tab</span>'
+        : '');
+    const body = m === 'coding'
+      ? '<div class="editor">export class ChromeBarContribution {<br>&nbsp;&nbsp;async onStart(): Promise&lt;void&gt; {<br>&nbsp;&nbsp;&nbsp;&nbsp;// custom title bar<br>&nbsp;&nbsp;}<br>}</div>'
+      : '<div class="page"><h2>PowerBrowser</h2>Version 1.74.1<br><span style="color:var(--pb-primary)">https://powerbrowser.org</span></div>';
+    const tabRow = (m === 'browsing' && ver === 'today') ? '' : '<div class="tabs">' + tabs + '</div>';
+    const rows = (m === 'browsing' && ver === 'today') ? 'grid-template-rows: 1fr' + (state.panel ? ' 160px' : '') : '';
+    return '<div class="main' + (state.panel ? ' split' : '') + '" style="' + rows + '">' + tabRow + body + panel + '</div>';
+  }
+
+  function render() {
+    const m = state.mode;
+    // Browsing and Organising keep today's layout: the proposal is Coding only.
+    const ver = m === 'coding' ? state.ver : 'today';
+    const f = document.getElementById('frame');
+    document.querySelectorAll('[data-ver]').forEach(b => { b.disabled = m !== 'coding'; });
+    f.className = 'frame' + (state.co ? ' callouts' : '') + (ver === 'today' ? ' today' : '');
+    const showSides = m === 'coding';
+    const left = showSides && state.left, right = showSides && state.right;
+    let body = '<div class="body' + (ver === 'today' && showSides ? ' rail' : '') + '" style="--left:' + (left ? '220px' : '0') + ';--right:' + (right ? '240px' : '0') + '">';
+    if (ver === 'today' && showSides) body += railv;
+    body += left ? sideLeft(ver) : '<div></div>';
+    body += main(m, ver);
+    body += right ? sideRight(ver) : '<div></div>';
+    body += '</div>';
+    const status = m === 'coding' ? '<div class="status">⑂ main* &nbsp; ⓘ 0 ⚠ 0 &nbsp; Environment: flake.nix</div>' : '<div class="status" style="visibility:hidden"></div>';
+    let cos = '';
+    if (ver === 'proposed') {
+      cos += co(1, '4px', '8px') + co(2, '46%', '8px') + co(3, 'calc(100% - 190px)', '8px') + co(8, 'calc(100% - 26px)', '8px');
+      if (left) cos += co(4, '8px', '44px') + co(5, '8px', '160px');
+      if (right) cos += co(5, 'calc(100% - 232px)', '160px');
+      cos += co(6, left ? '230px' : '10px', '44px') + co(7, '8px', 'calc(100% - 22px)');
+    }
+    f.innerHTML = (ver === 'proposed' ? titleProposed(m) : titleToday(m)) + body + status + cos;
+    const items = document.getElementById('items');
+    const visible = ver === 'proposed' ? [1, 2, 3, 4, 5, 6, 7, 8] : [];
+    items.innerHTML = visible.map(n => {
+      const [k, t, p, now] = legend[n];
+      return '<div class="item ' + k + '"><span class="n">' + n + '</span><div><b>' + t + '</b><p>' + p + '</p><span class="now">' + now + '</span></div></div>';
+    }).join('') || '<div class="item"><span></span><div><p>' + (m === 'coding'
+      ? 'Today\'s layout, as built. Switch to Proposed for the callouts.'
+      : (m === 'browsing' ? 'Browsing' : 'Organising') + ' does not change: this is today\'s layout and stays as it is. The proposal is Coding only.') + '</p></div></div>';
+  }
+
+  document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
+    state.mode = b.dataset.mode;
+    document.querySelectorAll('[data-mode]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    render();
+  }));
+  document.querySelectorAll('[data-ver]').forEach(b => b.addEventListener('click', () => {
+    state.ver = b.dataset.ver;
+    document.querySelectorAll('[data-ver]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    render();
+  }));
+  [['t-left', 'left'], ['t-right', 'right'], ['t-panel', 'panel'], ['t-co', 'co']].forEach(([id, key]) => {
+    document.getElementById(id).addEventListener('change', e => { state[key] = e.target.checked; render(); });
+  });
+  render();
+})();
+</script>
