@@ -484,7 +484,7 @@ export class OrganisingWidget extends Widget {
         if (groups.length === 0) {
             const empty = this.buildEmpty(
                 'No tab groups',
-                'There are no tab groups yet — choose New Group, or drag a tab onto the canvas to start one.',
+                'There are no tab groups yet — choose New Group, or drag across the canvas to draw one.',
                 true
             );
             this.canvasRoot.append(empty);

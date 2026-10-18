@@ -229,7 +229,7 @@ paints with skeleton boxes until first load, never a spinner.
 Copy rule (CLAUDE.md, inherited from 13/14-UI-SPEC): every user-facing string names the product
 as "PowerBrowser" where a product name is needed, states the problem in plain language, ends
 with a next step that is a real control on screen, and carries no internal identifier (no pref
-key, sentinel, port, table name, `group_id`, bounds, URI-scheme internals or raw exception text).
+key, sentinel, port, table name, `group_id`, bounds (other than the resize grip's spoken size of the user's own box, which Chris accepted at 22-01 C1 item 5), URI-scheme internals or raw exception text).
 
 Form: every contracted literal is written bolded and quoted in a table row below, with the exact
 characters painted (U+2014 em dash, U+2019 in the two error bars, a straight apostrophe in the
@@ -245,7 +245,7 @@ dialog bodies, U+2212 minus, U+00D7 times). Interpolation slots are written `{na
 | Group title edit placeholder | **"Group name"** |
 | New-group default title | **"Untitled group"** |
 | Empty canvas heading | **"No tab groups"** |
-| Empty canvas body | **"There are no tab groups yet — choose New Group, or drag a tab onto the canvas to start one."** |
+| Empty canvas body | **"There are no tab groups yet — choose New Group, or drag across the canvas to draw one."** |
 | Empty tree body | **"There are no tab groups yet — choose New Group to start one."** |
 | Empty-box hint | **"Empty group — drag tabs here."** (muted caption inside a group box with zero cards) |
 | Stack expand control | **"Expand"** — pill under a stacked group; opens the expanded-stack panel for that group |
@@ -257,6 +257,9 @@ dialog bodies, U+2212 minus, U+00D7 times). Interpolation slots are written `{na
 | Destructive confirmation | **"Close Group"** (title and confirm button, in destructive ink), **"Close "{name}"? Its 1 tab will close too. You can't undo this."**, **"Close "{name}"? Its {N} tabs will close too. You can't undo this."**, **"Cancel"**. This is the only destructive action on this surface. |
 | Group closed confirmation | **"Group "{name}" closed."** (status-bar flash) |
 | Widget label | **"Organising"** |
+| Resize grip value | **"{w} by {h} pixels"** — the se resize grip's `aria-valuetext`, the box's current width and height (22-01 C1 item 5) |
+| Card tooltip | **"{title}\n{url}"** — a card's tooltip, written with a literal backslash and n as the source spells it; the painted tooltip breaks the line there. A tab with no address shows its title only (22-01 C1 item 6) |
+| Zoom readout | **"{N}%"** — the current zoom level, between − and + in the zoom cluster (22-01 C1 item 7) |
 | Mechanical labels and glyphs | **"Resize group"**, **"−"**, **"+"**, **"100%"**, **"×"** — the resize-grip label, the zoom-out, zoom-in and zoom-reset controls, and the close glyph |
 | Rename rules | Double-click or Enter on a group title edits it; Enter commits, Esc cancels; committing empty reverts to the prior title (never a blank header); titles cap at 60 characters with pasted overflow cut at the cap; duplicate titles are allowed (boxes are distinguished by position and content, so there is no duplicate-name error) |
 
@@ -272,6 +275,7 @@ bolded literal in this table and fails on any hit.
 | Placeholder heading | **"Organising arrives next"** | The 14-02/14-03 placeholder slot is replaced by the canvas and tree. |
 | Placeholder action | **"Back to Browsing"** | As above. |
 | Placeholder body | **"The freeform canvas for arranging tabs lands in the next update"** | As above. |
+| Empty canvas body (before 22-02) | **"There are no tab groups yet — choose New Group, or drag a tab onto the canvas to start one."** | Names a gesture that places the tab loose; drawing a band starts a group. |
 
 ---
 
@@ -366,7 +370,6 @@ one tab stop.
 
 | Gap | Disposition |
 |-----|-------------|
-| The empty-canvas body says "drag a tab onto the canvas to start one", but dropping a tab on the canvas places it loose; drawing a band is what starts a group. | Copy change needs Chris's review; kept verbatim for the Phase 22 copy edit. |
 | The expanded-stack panel has no `role="dialog"`, does not move focus to Done on open, and does not return focus to Expand on close. | Phase 22/23 accessibility follow-up; no new copy needed. |
 | Group titles in a stack are the only way to tell which stack is open; the panel heading repeats the title, with no count. | As shipped. |
 

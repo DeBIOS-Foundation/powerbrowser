@@ -14,7 +14,9 @@
 // The ACTUAL is derived from the Theia sources: user-facing literals at the
 // enumerated paint sites (textContent, title, aria-label, placeholder,
 // buildEmpty/buildBar call args, the ConfirmDialog fields, flash args,
-// command labels, the widget label, the Untitled const). The two compare as
+// command labels, the widget label, the Untitled const), plus (22-02) every
+// single-quoted or template literal at any text sink, ternary branches
+// included and conditions excluded (see SINK). The two compare as
 // SET EQUALITY after slot normalisation (`${...}` and `{name}`/`{N}` become
 // one token; apostrophes and dashes compare exactly) -- a surplus string is
 // unreviewed copy, a missing one is dropped contract, each reported BY NAME.
@@ -73,6 +75,49 @@ function pushAll(out, matches) {
     }
 }
 
+/**
+ * 22-02 sink pass: every text sink, any quote style. The right-hand side of a
+ * property assignment to .textContent/.title/.placeholder/.alt/.label (a
+ * `const title =` declaration is not a sink), or the value of a
+ * text-bearing ARIA attribute. State attributes (aria-hidden, -pressed,
+ * -valuemin, -valuenow) carry no copy and are not sinks.
+ */
+const SINK = /\.(?:textContent|title|placeholder|alt|label)\s*=(?!=)\s*([^;\n]+)|setAttribute\('aria-(?:label|valuetext|description|roledescription|placeholder)',\s*([^;\n]+)\)/g;
+
+/** The text after a ternary's top-level `?`, or the whole text when there is none. */
+function ternaryBranches(rhs) {
+    let quote = null;
+    let depth = 0;
+    for (let i = 0; i < rhs.length; i += 1) {
+        const c = rhs[i];
+        if (quote) {
+            if (c === '\\') i += 1;
+            else if (c === quote) quote = null;
+        } else if (c === "'" || c === '"' || c === '`') {
+            quote = c;
+        } else if ('([{'.includes(c)) {
+            depth += 1;
+        } else if (')]}'.includes(c)) {
+            depth -= 1;
+        } else if (c === '?' && depth === 0 && rhs[i + 1] !== '.' && rhs[i + 1] !== '?' && rhs[i - 1] !== '?') {
+            return rhs.slice(i + 1);
+        }
+    }
+    return rhs;
+}
+
+function sinkCopy(src, out) {
+    for (const m of src.matchAll(SINK)) {
+        for (const lit of ternaryBranches(m[1] ?? m[2]).matchAll(/'((?:[^'\\\n]|\\.)*)'|`([^`\n]*)`/g)) {
+            const text = lit[1] ?? lit[2];
+            // Empty literals and pure-slot templates (`${tabs.length}`) are values, not copy.
+            if (text && !/^\$\{[^}]*\}$/.test(text)) {
+                out.push(unescapeUnicode(text));
+            }
+        }
+    }
+}
+
 /** Every user-facing literal at the enumerated paint sites. */
 function derivedCopy(sources) {
     const out = [];
@@ -91,6 +136,7 @@ function derivedCopy(sources) {
         pushAll(out, src.matchAll(/buildBar\(\s*'((?:[^'\\]|\\.)+)'/g));
         pushAll(out, src.matchAll(/\.label\s*=\s*'([^']+)'/g));
         pushAll(out, src.matchAll(/widgetName:\s*'([^']+)'/g));
+        sinkCopy(src, out);
     }
     const dialogAt = widgetSrc.indexOf('new ConfirmDialog({');
     if (dialogAt >= 0) {
@@ -263,6 +309,13 @@ function selfTest() {
             expect: [[/retired copy/, '"No ungrouped tabs \u2014 drag a tab here to ungroup it."', DESCRIPTORS_REL]] },
         { id: 'Retired copy heading stripped', file: SPEC_REL, ...swap(/^### Retired copy$/m, '### Retired strings'),
             expect: [[/ZERO retired literals/, SPEC_REL]] },
+        // 22-02: the broadened sink pass sees ARIA text attributes and template literals.
+        { id: 'aria-description literal added', file: WIDGET_REL, ...swap(null, "x.setAttribute('aria-description', 'Planted words')"),
+            expect: [[/unreviewed copy/, '"Planted words"']] },
+        { id: 'template textContent added', file: WIDGET_REL, ...swap(null, 'x.textContent = `Planted ${n} words`;'),
+            expect: [[/unreviewed copy/, '"Planted {} words"']] },
+        { id: 'grip value reworded', file: WIDGET_REL, ...swap('`${group.w} by ${group.h} pixels`', '`${group.w} wide, ${group.h} high`'),
+            expect: [[/unreviewed copy/, '"{} wide, {} high"'], [/are GONE/, '"{} by {} pixels"']] },
     ];
 
     let failed = 0;
