@@ -4936,6 +4936,10 @@ run_own_checks() {
       "ng-034-web-tab-history-survives-restart|node $REPO_ROOT/scripts/verify-ng-034-web-tab-history-restart.mjs"
       "ng-035-custom-mode-saves-layout|node $REPO_ROOT/scripts/verify-ng-035-custom-mode-layout.mjs"
       "ng-036-setup-records-dock-layout|node $REPO_ROOT/scripts/verify-ng-036-setup-dock-layout.mjs"
+      # NEW (Phase 23, G-23, MODE-02): the Save as Mode and Save Setup name fields cut at the cap
+      # while typing, with the stock uncapped input as the probe control. Not --quick (binary, sidecar,
+      # headless browser); the static half is modes-name-cap-at-input.
+      "modes-name-cap-at-input-live|node $REPO_ROOT/scripts/verify-name-cap-at-input-live.mjs"
       "ng-037-core-close-quits|node $REPO_ROOT/scripts/verify-ng-037-core-close-quits.mjs"
       "ng-038-actor-refuses-hostile-senders|node $REPO_ROOT/scripts/verify-ng-038-actor-sender-wall.mjs"
 

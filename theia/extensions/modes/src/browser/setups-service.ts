@@ -29,6 +29,7 @@ import pDebounce from 'p-debounce';
 import { SHIPPED_MODES } from './mode-descriptors';
 import { ModeService } from './mode-service';
 import { GroupModel, planWebTabRestore } from './group-model';
+import { inputCappedName } from './capped-name-input';
 
 /**
  * GUI-09 (14-03): named setups as user-storage data owned entirely
@@ -70,7 +71,7 @@ import { GroupModel, planWebTabRestore } from './group-model';
 /** Accepted store versions. Newer writers are read leniently: unknown fields drop. */
 export const SETUPS_STORE_VERSION = 1;
 
-/** Contracted name cap (14-UI-SPEC.md): pasted overflow is cut before commit. */
+/** Contracted name cap (14-UI-SPEC.md): inputCappedName cuts typed and pasted overflow while typing; the commit slice is a backstop. */
 export const SETUP_NAME_MAX = 60;
 
 /** User-storage file beside modes.json (never SQLite: single-writer rule). */
@@ -578,7 +579,7 @@ export class SetupsService implements FrontendApplicationContribution {
 
     /** Save the current windows, tabs, and mode under a typed name. */
     async saveCurrentAsSetup(): Promise<void> {
-        const answer = await this.quickInput.input({ prompt: SETUP_DIALOG_TITLE, placeHolder: SETUP_NAME_PLACEHOLDER });
+        const answer = await inputCappedName(this.quickInput, { prompt: SETUP_DIALOG_TITLE, placeHolder: SETUP_NAME_PLACEHOLDER }, SETUP_NAME_MAX);
         if (answer === undefined) {
             return;
         }

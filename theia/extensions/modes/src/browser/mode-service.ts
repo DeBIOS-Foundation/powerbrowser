@@ -16,6 +16,7 @@ import { UserStorageUri } from '@theia/userstorage/lib/browser/user-storage-uri'
 import pDebounce from 'p-debounce';
 import { SHIPPED_MODES, closeOrganisingSlot, openOrganisingSlot } from './mode-descriptors';
 import { publishModeAttribute } from './mode-attribute';
+import { inputCappedName } from './capped-name-input';
 
 
 /**
@@ -44,8 +45,9 @@ import { publishModeAttribute } from './mode-attribute';
  * until relaunch: the service drops it from every listing and falls back to
  * Browsing when stuck on it, and the stale toggle row clears on relaunch.
  *
- * Save path (14-PATTERNS.md section 3): the typed name is trimmed and cut at
- * the contracted 60-character cap before commit; the contracted empty-name
+ * Save path (14-PATTERNS.md section 3): the name field is cut at the
+ * contracted 60-character cap while typing (inputCappedName, G-23), and the
+ * commit-time trim and slice stay as a backstop; the contracted empty-name
  * and duplicate-name errors write nothing partial; success flashes the
  * contracted saved confirmation and lands in the new mode (whose stock switch
  * event repaints the toggle). A custom never alters a shipped default in
@@ -68,7 +70,7 @@ import { publishModeAttribute } from './mode-attribute';
 /** Accepted store versions. Newer writers are read leniently: unknown fields drop. */
 export const MODES_STORE_VERSION = 1;
 
-/** Contracted name cap (14-UI-SPEC.md): pasted overflow is cut before commit. */
+/** Contracted name cap (14-UI-SPEC.md): inputCappedName cuts typed and pasted overflow while typing; the commit slice is a backstop. */
 export const MODE_NAME_MAX = 60;
 
 /** NG-035: what a mode does to one side area -- open it, close it, or leave it as the user left it. */
@@ -440,7 +442,7 @@ export class ModeService implements FrontendApplicationContribution {
     }
 
     async saveCurrentAsMode(): Promise<void> {
-        const answer = await this.quickInput.input({ prompt: 'Save as Mode', placeHolder: 'Mode name' });
+        const answer = await inputCappedName(this.quickInput, { prompt: 'Save as Mode', placeHolder: 'Mode name' }, MODE_NAME_MAX);
         if (answer === undefined) {
             return;
         }
