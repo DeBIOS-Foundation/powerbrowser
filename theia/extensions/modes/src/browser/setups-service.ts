@@ -28,7 +28,7 @@ import { ProfileStorageService } from '@powerbrowser/tab-uris/lib/browser/profil
 import pDebounce from 'p-debounce';
 import { SHIPPED_MODES } from './mode-descriptors';
 import { ModeService } from './mode-service';
-import { planWebTabRestore } from './group-model';
+import { GroupModel, planWebTabRestore } from './group-model';
 
 /**
  * GUI-09 (14-03): named setups as user-storage data owned entirely
@@ -468,6 +468,10 @@ export class SetupsService implements FrontendApplicationContribution {
     @inject(GroupQueryService)
     protected readonly groupReader: GroupQueryService;
 
+    /** PAN-04 (A4): a web tab of a group in its undo window never enters the session snapshot. */
+    @inject(GroupModel)
+    protected readonly groupModel: GroupModel;
+
     /** NG-034: when each web tab (by row key) was last the current main-area tab. */
     protected webTabAccess = new Map<string, number>();
     protected restoreSeq = 0;
@@ -539,6 +543,8 @@ export class SetupsService implements FrontendApplicationContribution {
         const webTabs: SavedSessionWebTab[] = (['main', 'bottom'] as const)
             .flatMap(area => this.shell.getWidgets(area))
             .filter((widget): widget is WebTabWidget => widget instanceof WebTabWidget)
+            // PAN-04: even if the flush commit misses its bound, a pending tab must not be revived next launch.
+            .filter(tab => !this.groupModel.isClosingKey(tab.rowKey))
             .map(tab => ({ rowKey: tab.rowKey, url: tab.url, lastAccessed: tab === current ? now : this.webTabAccess.get(tab.rowKey) ?? null }));
         const session: SessionSnapshot = { modeId: this.currentModeId(), windows: this.snapshotWindows(), savedAt: now, webTabs };
         await this.profileStorage.setData(SESSION_STORAGE_KEY, session);

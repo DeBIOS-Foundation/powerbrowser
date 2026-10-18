@@ -25,6 +25,7 @@ import { Emitter, Event } from '@theia/core/lib/common';
 import URI from '@theia/core/lib/common/uri';
 import pDebounce from 'p-debounce';
 import { GroupQueryService } from '@powerbrowser/tab-uris/lib/browser/group-query-service';
+import { ProfileStorageService } from '@powerbrowser/tab-uris/lib/browser/profile-storage';
 import { TabUriRegistry } from '@powerbrowser/tab-uris/lib/browser/tab-uri-registry';
 import { EMPTY_PAGE_URL, WebTabOpenerOptions, WebTabWidget } from '@powerbrowser/tab-uris/lib/browser/web-tab';
 import { GroupActorClient } from './group-actor-client';
@@ -160,6 +161,9 @@ export class GroupModel implements FrontendApplicationContribution {
     @inject(GroupQueryService)
     protected readonly reader: GroupQueryService;
 
+    @inject(ProfileStorageService)
+    protected readonly profileStorage: ProfileStorageService;
+
     /** Theia tabs whose close already reaches the store. */
     private readonly watched = new WeakSet<Widget>();
 
@@ -210,7 +214,39 @@ export class GroupModel implements FrontendApplicationContribution {
     onDidInitializeLayout(): void {
         this.shell.onDidAddWidget(() => void this.scheduleReload());
         this.shell.onDidRemoveWidget(() => void this.scheduleReload());
+        // PAN-04 (Pitfall 10): a hidden tab is never the current tab of a bar.
+        this.shell.onDidChangeCurrentWidget(() => this.steerFromClosing());
+        // PAN-04 (A4): a quit inside an undo window closes the group for good,
+        // before the layout is stored (profile-storage.ts flush order).
+        this.profileStorage.onWillFlush(event => event.waitUntil(this.commitAllClosing(this.actor)));
         void this.reload();
+    }
+
+    /**
+     * PAN-04 (Pattern 3): moves each main-area bar whose current tab belongs
+     * to a group in its undo window onto that bar's first other tab, and
+     * activates it when the hidden tab was the active one. A bar holding only
+     * pending tabs is left to the dock (research Open Question 1).
+     */
+    private steerFromClosing(): void {
+        if (!this.closing.size || !this.shell?.mainPanel) {
+            return;
+        }
+        const active = this.shell.activeWidget;
+        for (const bar of this.shell.mainPanel.tabBars()) {
+            const owner = bar.currentTitle?.owner;
+            if (!owner || !this.isClosingKey(this.keyOf(owner))) {
+                continue;
+            }
+            const next = bar.titles.find(title => !this.isClosingKey(this.keyOf(title.owner)));
+            if (!next) {
+                continue;
+            }
+            bar.currentTitle = next;
+            if (owner === active) {
+                this.shell.activateWidget(next.owner.id);
+            }
+        }
     }
 
     /** Coalesced, as the canvas's own reload is: a setup adds several widgets in one turn. */
@@ -776,6 +812,7 @@ export class GroupModel implements FrontendApplicationContribution {
         }, UNDO_CLOSE_MS);
         this.closing.set(id, { group, index, tabs, wasActive, deadline: Date.now() + UNDO_CLOSE_MS, timer });
         this.changeEmitter.fire();
+        this.steerFromClosing();
         return { name: group.title, count: tabs.length };
     }
 

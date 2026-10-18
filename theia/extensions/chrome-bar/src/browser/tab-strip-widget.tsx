@@ -11,6 +11,9 @@ import { GroupModel } from '@powerbrowser/modes/lib/browser/group-model';
 /** Marks a home-pane tab that the strip lists, so the pane's own bar does not. */
 const STRIP_ONLY_CLASS = 'pb-strip-only';
 
+/** PAN-04 (A3): a tab of a group in its undo window, hidden in every tab bar. */
+const GROUP_CLOSING_CLASS = 'pb-group-closing';
+
 /**
  * The only mime type the main dock will accept a drop for. Its payload is a
  * zero-argument factory returning the widget to move (Lumino `DockPanel`
@@ -559,7 +562,9 @@ export class TabStripWidget extends ReactWidget {
         // stacked tabs while the right pane showed none (2026-09-10).
         const home = this.homeWidgets();
         for (const widget of this.shell.mainPanel.widgets()) {
-            widget.title.className = home.includes(widget) && !this.stacked.has(widget) ? STRIP_ONLY_CLASS : '';
+            const stripOnly = home.includes(widget) && !this.stacked.has(widget) ? STRIP_ONLY_CLASS : '';
+            const closing = this.groups.isClosingKey(this.groups.keyOf(widget)) ? GROUP_CLOSING_CLASS : '';
+            widget.title.className = [stripOnly, closing].filter(Boolean).join(' ');
         }
         return <div className='pb-tab-strip-row' role='tablist'>
             {tabs.map(widget => this.renderTab(widget, widget === current))}

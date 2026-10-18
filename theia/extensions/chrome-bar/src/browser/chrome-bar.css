@@ -453,6 +453,13 @@ body[data-pb-mode="browsing"] .lm-TabBar-tab.pb-strip-only {
     display: none;
 }
 
+/* PAN-04 (22-UI-SPEC A3): a closed group's tabs, in their undo window, show
+   in no tab bar in any mode. A closed tab is not a filtered one, so this rule
+   is not scoped to Browsing. */
+.lm-TabBar-tab.pb-group-closing {
+    display: none;
+}
+
 /* The stack: one strip entry for the tabs dragged down into panes. Lit while
    the stack is on screen; its items drag out of it one at a time. */
 .pb-tab.pb-tab-stack {
