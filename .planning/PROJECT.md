@@ -170,7 +170,7 @@ Non-GUI first, then GUI one step at a time (Chris, 2026-10-15).
       panel slide (G-32), 14-VERIFICATION
 - [ ] One live UAT pass over 13, 14, 14.1, 15 and the v1.2 sheets (NG-084),
       including the React 19 runtime check
-- [ ] Decision on sketch 005 (VS Code layout)
+- [x] Decision on sketch 005 (VS Code layout): adopted into v1.5 Coding Workbench Layout, all four changes (Chris, 2026-10-17)
 - [ ] CI green on main (NG-074)
 
 ### Validated (v1.2 — shipped 2026-09-05, override closeout, verifications deferred)
@@ -263,12 +263,13 @@ requirements still staged (human/tier-3 halves).
 
 ## Next Milestone Goals (v1.5+ candidates)
 
+- v1.5 Coding Workbench Layout: sketch 005's VS Code layout for Coding mode (SK-01)
 - GUI-05 unified tab strip (order and scope defined by a later
   milestone intake)
 - Release and distribution (backlog 999.2, SEED-001)
 - Seeds whose triggers are now met: deferred-browser-chrome,
   gui-component-dnd, firefox-parity-tabs (scope per seed trigger review)
-- Piles + type-anywhere search for the canvas; Variant-B re-probe;
+- Piles + type-anywhere search for the canvas;
   doc-sync flips and deferred verifications listed above
 
 ## Retired Milestone Section (v1.3 active scope, superseded by Current State above)

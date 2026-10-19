@@ -7,6 +7,7 @@
 - ✅ **v1.2 Sign-off Closeout and SQL Store** — Phases 10–12 (shipped 2026-09-05, override closeout — see `.planning/milestones/v1.2-ROADMAP.md`)
 - ✅ **v1.3 Browser GUI** — Phases 13–15, inserted 14.1 and 14.1.1, retired 16 (shipped 2026-09-06, verifications deferred — see `.planning/milestones/v1.3-ROADMAP.md`)
 - 🔄 **v1.4 Platform Updates and GUI Close-out** — Phases 17–25 (active: OpenCode removal, Firefox 153.5.0esr, Theia 1.76.0 with React 19 on Node 24, non-GUI gaps, then the v1.3 GUI leftovers one step at a time until the commit gate and CI are green)
+- 📋 **v1.5 Coding Workbench Layout** — sketch 005's VS Code layout for Coding mode, all four changes: one title row, centred address box, right cluster of layout toggles, activity icons across the top of the sidebar (SK-01, adopted 2026-10-17; Browsing and Organising unchanged)
 - 📋 **Future** — GUI-05 unified tab strip, W6 canvas search, release and distribution (backlog 999.2), deferred seeds (bookmarks strip, per-tab close/mute, browser menu, gui-component-dnd, firefox-parity-tabs) (v1.5+)
 
 ## Phases
@@ -311,11 +312,11 @@ Plans:
 **Goal**: The Phase 14 / 14.1.1 leftovers are closed with records that match the shipped behaviour, and the sketch 005 verdict fixes the layout that UAT will test
 **Depends on**: Phase 22
 **Requirements**: MODE-01, MODE-02, MODE-03, MODE-04, SK-01
-**Needs Chris**: the G-23 name-cap reading (MODE-02); slide or instant panels for G-32 (MODE-03); the sketch 005 verdict (SK-01); live confirmation of the strip relocation (MODE-01, may be taken in the Phase 24 session)
+**Needs Chris**: G-23 decided 2026-10-17 (cut at 60 while typing, MODE-02); SK-01 decided 2026-10-17 (adopt all into v1.5 Coding Workbench Layout; name taken as proposed by the orchestrator, Chris gave no name); G-32 chosen by Chris 2026-10-18: a (instant, spec amended; MODE-03); open: live confirmation of the strip relocation (G-11, MODE-01), handed to the Phase 24 session
 **Success Criteria** (what must be TRUE):
 
   1. The Variant B records are current (UAT entry, GUI-DEFECTS item 2, GUI-07 box, `mode-descriptors.ts` comment, 14-UAT test 3), and Chris has confirmed the strip relocation live (G-11)
-  2. A group name longer than 60 characters behaves as Chris decided (refused at the input, or cut at the cap), and 14-UI-SPEC states that rule (G-23)
+  2. A mode or setup name longer than 60 characters behaves as Chris decided (refused at the input, or cut at the cap), and 14-UI-SPEC states that rule (G-23)
   3. Side panels slide (200 ms or less, with a reduced-motion fallback) or switch instantly, as Chris decided, and 14-UI-SPEC describes what the user sees (G-32)
   4. `14-VERIFICATION.md` exists
   5. Sketch 005 is committed with a MANIFEST row, and Chris's verdict (adopt into a named later milestone, or reject) is recorded before Phase 24 starts

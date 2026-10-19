@@ -77,7 +77,7 @@ Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
 - [ ] **MODE-01**: The Variant B records are current (UAT entry, GUI-DEFECTS
       item 2, GUI-07 box, `mode-descriptors.ts` comment, 14-UAT test 3), and
       Chris confirms the strip relocation live (G-11).
-- [ ] **MODE-02**: The 60-character group-name cap behaviour is decided by Chris
+- [ ] **MODE-02**: The 60-character mode- and setup-name cap behaviour is decided by Chris
       and applied (G-23).
 - [ ] **MODE-03**: Side panels slide or switch instantly as Chris decides, and
       14-UI-SPEC matches (G-32).
@@ -106,7 +106,7 @@ the project's own planning record.
 
 - **W6**: Type-anywhere search on the Panorama canvas (Chris, 2026-10-16).
 - **W11 keys**: Keys to cycle between groups.
-- **Sketch 005**: Building the VS Code layout, if the verdict adopts it.
+- **v1.5 Coding Workbench Layout (SK-01, adopted by Chris 2026-10-17)**: build sketch 005's VS Code layout for Coding mode, all four changes: one title row, centred address box, right cluster of layout toggles, activity icons across the top of the sidebar. The mode toggle's placement (item 3) is still open. Browsing and Organising keep today's layout.
 - **GUI-05**: Unified tab strip (chrome-owned tab model, mirror/proxy bridge).
 - **Seeds**: deferred-browser-chrome, gui-component-dnd, firefox-parity-tabs.
 - **Release and distribution**: backlog 999.2 (NG-075..NG-081), SEED-001.
