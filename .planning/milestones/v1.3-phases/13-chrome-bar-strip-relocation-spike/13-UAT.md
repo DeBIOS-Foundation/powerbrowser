@@ -13,6 +13,17 @@ name: Suggestions list plus activation behaviour
 expected: |
   Typing suggests up to 8 rows; activating one (Enter or click) navigates; committing empty is a no-op; provider failure degrades to a plain address commit with the contracted error row.
 awaiting: user response
+build: |
+  Sidecar rebuilt by 24-04 on 2026-10-19 (build log date 2026-10-19T17:26:17Z,
+  .planning/phases/24-live-uat-pass/logs/build-24-04.log, untracked) from HEAD
+  612e0bf327b11bb72c4aab93bce847f980a6d6b9. `git status --porcelain --untracked-files=no --
+  theia powerbrowser` was empty at build time: a clean tree.
+  Theia (@theia/core) 1.76.0 and React 19.2.8, read from theia/node_modules/*/package.json;
+  Node v24.19.0 from `nix develop .#theia --command node -v`; Gecko 153.5.0 from
+  objdir/dist/bin/platform.ini Milestone= (BuildID 20261018083353, built after the last
+  powerbrowser/ and patches/ commit, 0b6ae33).
+  gui02-web-tab-live passed on this build with PB_VERIFY_PORT=3939
+  (logs/web-tab-live-24-04.log, untracked).
 
 ## Tests
 

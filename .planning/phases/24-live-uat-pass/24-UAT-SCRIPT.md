@@ -217,3 +217,52 @@ Route X: defer (Chris, 2026-10-19) deferred follow-up: no second person availabl
 
 24-04 writes the launch, fixture-server, corruption and customize commands here (and the T
 snippets if Route T is `t`), each starting with `cd /home/chris/coding/Power-Browser`.
+
+Written by 24-04 Task 1, 2026-10-19. Route T is `d`, so there is no `user.js`, no hostile page
+and no Toolbox snippet. The launches use a throwaway profile and a throwaway config directory
+under the UAT root; your own profile and config directory are never read or written. The
+sidecar's config directory is `$XDG_CONFIG_HOME/powerbrowser` (`_resolveConfigDir` in
+`powerbrowser/shell/TheiaService.sys.mjs`), so `modes.json` and `customize.css` live under
+`config/powerbrowser/` in the UAT root.
+
+UAT root: `/tmp/nix-shell.aDyem4/claude-1000/-home-chris-coding-Power-Browser/00a95695-3390-43d6-be13-e032e495c46a/scratchpad/uat-24`
+
+**Fixture server** (A12 retitling page, A13 slow page). It binds ephemeral loopback ports,
+refuses port 3000, prints one address per page, and runs until Ctrl+C:
+
+    cd /home/chris/coding/Power-Browser
+    node /tmp/nix-shell.aDyem4/claude-1000/-home-chris-coding-Power-Browser/00a95695-3390-43d6-be13-e032e495c46a/scratchpad/uat-24/fixtures.mjs
+
+**Launch A, and Launch B with the same command:**
+
+    cd /home/chris/coding/Power-Browser
+    XDG_CONFIG_HOME=/tmp/nix-shell.aDyem4/claude-1000/-home-chris-coding-Power-Browser/00a95695-3390-43d6-be13-e032e495c46a/scratchpad/uat-24/config objdir/dist/bin/powerbrowser --profile /tmp/nix-shell.aDyem4/claude-1000/-home-chris-coding-Power-Browser/00a95695-3390-43d6-be13-e032e495c46a/scratchpad/uat-24/profile --no-remote -purgecaches
+
+**Corruption, between A and B, with the app closed.** `parseModeStore` in
+`theia/extensions/modes/src/browser/mode-service.ts` treats unparseable JSON as a whole-file
+failure, so `handleCorruptStore` falls back to Browsing and shows the notice naming the custom
+mode that was active at the quit. The command writes only if the file exists and is non-empty;
+otherwise it prints an error and writes nothing:
+
+    cd /home/chris/coding/Power-Browser
+    F=/tmp/nix-shell.aDyem4/claude-1000/-home-chris-coding-Power-Browser/00a95695-3390-43d6-be13-e032e495c46a/scratchpad/uat-24/config/powerbrowser/modes.json
+    if test -s "$F"; then printf 'not json {\n' > "$F" && echo "Corrupted $F"; else echo "error: $F is missing or empty; nothing written. Say so on your B line."; fi
+
+**customize.css (A47).** The customize extension reads `user-storage:/user/customize.css`, which is
+`$THEIA_CONFIG_DIR/customize.css`, and reloads it on change. Write it (the status bar turns
+magenta):
+
+    cd /home/chris/coding/Power-Browser
+    printf '#theia-statusBar { background-color: #e5007d !important; }\n' > /tmp/nix-shell.aDyem4/claude-1000/-home-chris-coding-Power-Browser/00a95695-3390-43d6-be13-e032e495c46a/scratchpad/uat-24/config/powerbrowser/customize.css
+
+Delete it (the status bar returns to stock):
+
+    cd /home/chris/coding/Power-Browser
+    rm /tmp/nix-shell.aDyem4/claude-1000/-home-chris-coding-Power-Browser/00a95695-3390-43d6-be13-e032e495c46a/scratchpad/uat-24/config/powerbrowser/customize.css
+
+**Desktop entry (A02, 10/3).** `~/.local/share/applications/powerbrowser.desktop` was absent, so
+24-04 installed the dev entry with the docs/BUILD.md `sed` line (Name=PowerBrowser Dev, Icon=
+`powerbrowser/branding/dev/default128.png`). Installed by 24-04; remove after 10/3 if you like:
+
+    cd /home/chris/coding/Power-Browser
+    rm ~/.local/share/applications/powerbrowser.desktop
