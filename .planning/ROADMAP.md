@@ -356,7 +356,7 @@ Plans:
   3. The sheets carry a React 19 runtime line with a recorded result
   4. The widened NG-084 text is approved and recorded in the ledger
 
-**Plans**: 2/6 plans executed in 5 waves (wave 1 runs two file-disjoint plans in parallel; waves 2 to 5 each stop for Chris)
+**Plans**: 3/6 plans executed in 5 waves (wave 1 runs two file-disjoint plans in parallel; waves 2 to 5 each stop for Chris)
 
 Plans:
 
@@ -367,7 +367,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 24-03-PLAN.md — the ordered UAT script (sessions D, A, T, O, B, C, X with an item-to-row map and a terse reply format); the desk session (blocking-human); Chris's rulings, routes and any name recorded verbatim
+- [x] 24-03-PLAN.md — the ordered UAT script (sessions D, A, T, O, B, C, X with an item-to-row map and a terse reply format); the desk session (blocking-human); Chris's rulings, routes and any name recorded verbatim
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -405,7 +405,7 @@ Plans:
 | 21. Panorama Spec and gui08 Checks | 5/5 | Complete    | 2026-10-17 |
 | 22. Panorama Worklist | 7/7 | In Progress | - |
 | 23. Modes Leftovers and Sketch 005 Verdict | 5/5 | Complete    | 2026-10-18 |
-| 24. Live UAT Pass | 2/6 | In Progress | - |
+| 24. Live UAT Pass | 3/6 | In Progress | - |
 | 25. CI Green on Main | 0/TBD | Not started | - |
 
 ## Hard constraints (every phase)
