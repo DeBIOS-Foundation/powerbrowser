@@ -10,12 +10,14 @@ import { PerspectiveDescriptor } from '@theia/core/lib/browser/perspective-servi
  * additional descriptors built from user-storage JSON — a custom mode never
  * mutates an entry of SHIPPED_MODES in place.
  *
- * Strip binding (13-01 verdict RED): the tab strip stays top in every mode,
- * so no descriptor names the strip, the top area, or any relocation. Modes
- * reshape panel visibility and the main-area view only, per 14-UI-SPEC:
- * Browsing (launch default) and Organising collapse all three side areas;
- * Coding leaves Explorer visible with the remaining areas per saved layout.
- * The Organising placeholder show/hide hooks land in plan 14-02.
+ * Strip binding: the 13-01 spike re-probed GREEN and 14-UI-SPEC was amended
+ * on 2026-09-08, so the tab strip changes home per mode. The chrome bar owns
+ * that rule (chrome-bar-widget.tsx, applyStripHome), not a descriptor, so no
+ * descriptor names the strip or the top area. Descriptors reshape side-panel
+ * visibility and the main-area view only: Browsing (launch default) and
+ * Organising collapse all three side areas; Coding leaves Explorer visible
+ * with the remaining areas per saved layout.
+ * Organising view is the Panorama canvas (Phase 15).
  */
 const coding: PerspectiveDescriptor = {
     id: 'coding',

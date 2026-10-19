@@ -35,10 +35,10 @@ result: issue
 gap: G-14-1
 reason: "Stock restores the target mode's stale saved layout and Lumino unparents every widget absent from it. Conditional on a snapshot existing, so a first visit is safe and a second visit destroys — which is why every earlier check on this invariant, automated and human, could pass on a broken tree."
 
-### 3. Tab strip stays top in every mode
-expected: The strip does not move between shell areas; the per-mode change is side panels and main-area view only (14-UI-SPEC.md:222-223).
-result: skipped
-reason: "Ratified Variant-A fallback carried from Phase 13's RED verdict — the strip staying top IS the contract, so there is nothing here to fail. `.planning/GUI-DEFECTS.md` item 2 records a standing request to re-probe Variant B now that `diff-theia-core.sh` passes; that is a re-opened decision, not a Phase 14 defect."
+### 3. Tab strip relocates per mode (Variant B)
+expected: The tab strip changes home per mode, per the 14-UI-SPEC binding constraint (AMENDED 2026-09-08, 13-01 spike re-probed GREEN; 14-UI-SPEC.md:22) and the per-mode shell map under "Modes reshape panels, visibility, and where the strip lives" (14-UI-SPEC.md:249, table at :256-260). Browsing: the strip sits at the very top, above the URL row; with a split main area each pane shows its own tab bar under the URL row and the strip still lists the leftmost pane's tabs. Coding: the dock's own tab bars in the editor area. Organising: the Panorama canvas, with no strip. No tab is closed, moved to another window or detached across a switch.
+result: pending
+reason: "2026-10-18 (23-01, v1.4 Phase 23): the earlier skip reason described a fallback that the 2026-09-08 amendment superseded. The relocation shipped in 539ba36. Chris sets this result in the Phase 24 session (G-14.1.1-11)."
 
 ### 4. Launch opens the shell in the launch mode with no blank shell
 expected: A cold launch settles into Browsing with the layout attached, and no stock fallback warning about a missing saved layout.
@@ -82,9 +82,9 @@ reason: "Every one of the three funnels into `window.open(url, '_blank')`, and t
 
 total: 10
 passed: 0
-issues: 4
-pending: 3
-skipped: 1
+issues: 5
+pending: 4
+skipped: 0
 superseded: 1
 blocked: 0
 
