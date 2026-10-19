@@ -356,7 +356,30 @@ Plans:
   3. The sheets carry a React 19 runtime line with a recorded result
   4. The widened NG-084 text is approved and recorded in the ledger
 
-**Plans**: TBD
+**Plans**: 6 plans in 5 waves (wave 1 runs two file-disjoint plans in parallel; waves 2 to 5 each stop for Chris)
+
+Plans:
+
+**Wave 1**
+
+- [ ] 24-01-PLAN.md — NG-089 check (`ng089-uat-sheets`, plant self-test, two registry rows), Chris's removal of NG-084 with his own quote (blocking-human), NG-089 added with its recorded failing run
+- [ ] 24-02-PLAN.md — the Phase 15 UAT sheet (47 pending tests, React 19 first); a React 19 runtime test on sheets 10, 13, 14, 14.1 and 14.1.1; superseded expectations annotated; Summaries recounted
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 24-03-PLAN.md — the ordered UAT script (sessions D, A, T, O, B, C, X with an item-to-row map and a terse reply format); the desk session (blocking-human); Chris's rulings, routes and any name recorded verbatim
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 24-04-PLAN.md — sidecar rebuilt and proven on PB_VERIFY_PORT 3939, build recorded on the six sheets, throwaway profile and fixtures; Launch A and B run by Chris (blocking-human); his results recorded verbatim with gaps
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 24-05-PLAN.md — the GEN-05 fixture drill (10/4) and the 10/5 carry-test report (blocking-human); tree restored byte for byte, sidecar rebuilt, `--quick` green
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 24-06-PLAN.md — sheets closed and recounted, G-11 records if Chris passed it, NG-089 done on a green check, Chris's lock of the check hashes (blocking-human), gates clean
 
 ### Phase 25: CI Green on Main
 
