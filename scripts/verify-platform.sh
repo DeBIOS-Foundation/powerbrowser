@@ -4514,6 +4514,8 @@ run_own_checks() {
     "ng070-no-spaced-name|node $REPO_ROOT/scripts/verify-ng-070-no-spaced-name.mjs"
     "ng070-no-spaced-name-self-test|node $REPO_ROOT/scripts/verify-ng-070-no-spaced-name.mjs --self-test"
     "ng074-ci-green-on-main-self-test|node $REPO_ROOT/scripts/verify-ng-074-ci-main.mjs --self-test"
+    # NG-089 (Phase 24, UAT-01): the UAT-sheet check's plant self-test; quick.
+    "ng089-uat-sheets-self-test|node $REPO_ROOT/scripts/verify-ng-089-uat-sheets.mjs --self-test"
 
     # NEW (09-03): the WebExtensions declaration rows -- the manifest's
     # [[webextensions]] table reaches the policy engine as the tracked
@@ -4745,6 +4747,8 @@ run_own_checks() {
       "ng072-policies-packaged-webextension|node $REPO_ROOT/scripts/verify-ng-072-policies-webextension.mjs"
       "ng073-declared-extension-loads|node $REPO_ROOT/scripts/verify-ng-073-declared-extension-loads.mjs"
       "ng074-ci-green-on-main|node $REPO_ROOT/scripts/verify-ng-074-ci-main.mjs"
+      # NG-089 (Phase 24, UAT-01): no pending result on the listed sheets; full only, red until Chris runs them.
+      "ng089-uat-sheets|node $REPO_ROOT/scripts/verify-ng-089-uat-sheets.mjs"
 
       # from verify-phase-04.sh
       "side02-token-negative|check_side02_token_negative"
