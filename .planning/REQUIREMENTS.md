@@ -63,7 +63,7 @@ Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
       `7b7a1f7`); `verify-gui08-canvas-geometry` and `verify-gui08-panorama-copy`
       derive from it and pass; the commit gate is green and `quick-baseline.txt`
       is empty.
-- [ ] **PAN-02**: Panorama decisions 1 (ungrouped tabs) and 2 (strip filter
+- [x] **PAN-02**: Panorama decisions 1 (ungrouped tabs) and 2 (strip filter
       scope) are made by Chris and recorded.
 - [ ] **PAN-03**: The tab strip shows only the active group's tabs (W1), and a
       tab opened with "+" joins the active group (W2).
@@ -88,7 +88,7 @@ Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
 - [x] **SK-01**: The sketch 005 (VS Code layout) verdict is recorded before UAT.
 - [ ] **UAT-01**: A Phase 15 UAT sheet exists; the 10, 13, 14, 14.1, 14.1.1 and
       15 sheets have no pending result, including a React 19 runtime line (NG-084).
-- [ ] **CI-01**: CI is green on the pushed `main` (NG-074).
+- [x] **CI-01**: CI is green on the pushed `main` (NG-074).
 
 ### Inherited network egress (carried, not decided here)
 
@@ -144,19 +144,19 @@ the project's own planning record.
 | PLAT-04 | Phase 20 | Complete |
 | PLAT-05 | Phase 20 | Complete |
 | PAN-01 | Phase 21 | Complete |
-| PAN-02 | Phase 22 | Pending |
-| PAN-03 | Phase 22 | Pending |
-| PAN-04 | Phase 22 | Pending |
-| PAN-05 | Phase 22 | Pending |
-| PAN-06 | Phase 22 | Pending |
+| PAN-02 | Phase 22 | Complete |
+| PAN-03 | Phase 22 | Implemented; live checks deferred (NG-089, phase 26) |
+| PAN-04 | Phase 22 | Implemented; live checks deferred (NG-089, phase 26) |
+| PAN-05 | Phase 22 | Implemented; live checks deferred (NG-089, phase 26) |
+| PAN-06 | Phase 22 | Implemented; live checks deferred (NG-089, phase 26) |
 | PAN-07 | Phase 21 | Complete |
-| MODE-01 | Phase 23 | Complete |
+| MODE-01 | Phase 23 | Complete (records); live G-11 failed at A18, see 24-GAPS.md |
 | MODE-02 | Phase 23 | Complete |
 | MODE-03 | Phase 23 | Complete |
 | MODE-04 | Phase 23 | Complete |
 | SK-01 | Phase 23 | Complete |
-| UAT-01 | Phase 24 | Pending |
-| CI-01 | Phase 25 | Pending |
+| UAT-01 | Phase 24 | Deferred: NG-089 deferred-approved, phase 26 |
+| CI-01 | Phase 25 | Complete |
 
 **Coverage:**
 
