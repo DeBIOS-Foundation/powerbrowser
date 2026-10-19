@@ -1,5 +1,5 @@
 {
-  "ledger_version": 401,
+  "ledger_version": 402,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -1149,7 +1149,7 @@
     {
       "id": "NG-089",
       "text": "UAT sheets 10, 13, 14, 14.1, 14.1.1 and 15 have no pending result, and each records a React 19 runtime result (UAT-01).",
-      "status": "deferred-requested",
+      "status": "deferred-approved",
       "spec_ref": ".planning/REQUIREMENTS.md UAT-01",
       "test_ref": "scripts/verify-ng-089-uat-sheets.mjs::ng089-uat-sheets",
       "code_ref": ".planning/milestones UAT sheets 10, 13, 14, 14.1, 14.1.1, 15",
