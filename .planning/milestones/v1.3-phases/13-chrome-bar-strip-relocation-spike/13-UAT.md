@@ -3,7 +3,7 @@ status: partial
 phase: 13-chrome-bar-strip-relocation-spike
 source: [13-01-SUMMARY.md, 13-02-SUMMARY.md, 13-03-SUMMARY.md]
 started: 2026-09-06T18:20:42Z
-updated: 2026-10-19T17:02:32Z
+updated: 2026-10-19T22:49:07Z
 ---
 
 ## Current Test
@@ -56,7 +56,13 @@ verified: "Automated GUI loop 2026-09-06: clicking New Tab opened a new top-leve
 expected: Typing suggests up to 8 rows; activating one (Enter or click) navigates; committing empty is a no-op; provider failure degrades to a plain address commit with the contracted error row.
 expected_note: "2026-10-19 24-02: the matching and provider-failure clauses no longer match the shipped contract: matching is by substring over address and title, not by prefix (theia/extensions/tab-uris/src/node/tab-query-service.ts:222-238); the error row appears only when the open-tab reader throws, while a history or bookmark failure only logs and the open tabs still show (theia/extensions/chrome-bar/src/browser/chrome-bar-places-suggestions.ts:24-28). Chris accepts or rewords this at the desk session."
 expected_note_ruling: "2026-10-19, Chris: D: ok (Recommended)"
-result: [pending]
+result: skipped
+reason: "deferred follow-up: no on-screen trigger; needs fault-injection tooling (v1.5)"
+reported: "Accept the script's results"
+reported: "Q1: d"
+note: "The evidence is the scripted headless run on its own profile (scratch, untracked: uat-24/auto/report.json), which Chris accepted with this line."
+note: "Shared row: A09 (suggestions and activation) passed (\"ok\" or the accepted scripted run); the driver half is skipped by Route T d, so the row reads skipped (a row passes only if every owning item passed)."
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
 
 ### 7. Mode toggle immediate with tabs invariant
 expected: Clicking a mode segment selects it with immediate visual state (150ms or less); no tab is ever closed, moved windows, or detached across switches. Segments read Coding / Browsing / Organising.
@@ -114,8 +120,8 @@ result: [pending]
 total: 15
 passed: 11
 issues: 0
-pending: 2
-skipped: 2
+pending: 1
+skipped: 3
 blocked: 0
 
 ## Gaps

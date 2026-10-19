@@ -3,7 +3,7 @@ status: testing
 phase: 15-panorama-organising
 source: [15-UI-SPEC.md, 22-UI-SPEC.md, 22-VERIFICATION.md, 22-07-SUMMARY.md, 22-01-SUMMARY.md, 22-REVIEW-FIX.md]
 started: 2026-10-19T06:16:32Z
-updated: 2026-10-19T17:02:32Z
+updated: 2026-10-19T22:49:07Z
 ---
 
 ## Current Test
@@ -50,14 +50,20 @@ contract: 15-UI-SPEC.md:258-259, 127-128, 342-351, 286
 expected: Heading "No tab groups", body "There are no tab groups yet — choose New Group, or drag across the canvas to draw one.", and a New Group action. Loose cards are 160×115 on a line 16px from the bottom, never under the panel. No tray.
 evidence: partial: `gui08-loose-cards-live`; unverified live
 launch: A
-result: pending
+result: pass
+reported: "The checks all look fine did you run the already?"
+note: "Chris gave this line after the A01-A08 list; the orchestrator told him it had not run those checks, and counts the line as A01 to A08 ok."
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
 
 ### 3. Empty Tree, toggle, zoom hidden in Tree
 contract: 15-UI-SPEC.md:254, 260, 302-304
 expected: Segments "Canvas" then "Tree", the active one in accent ink at weight 600. Tree body "There are no tab groups yet — choose New Group to start one." The zoom cluster is hidden in Tree, not disabled.
 evidence: partial, static: `gui08-panorama-copy`; unverified live
 launch: A
-result: pending
+result: pass
+reported: "The checks all look fine did you run the already?"
+note: "Chris gave this line after the A01-A08 list; the orchestrator told him it had not run those checks, and counts the line as A01 to A08 ok."
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
 
 ### 4. New Group and rename rules
 contract: 15-UI-SPEC.md:119, 253, 277, 332-333
@@ -99,7 +105,10 @@ contract: 15-UI-SPEC.md:151, 342-348
 expected: Past the line's room, up to 4 cards form a pile, offset 4px, with a count; hidden pile cards take no pointer. With zero groups the canvas grows and the host scrolls.
 evidence: partial: `gui08-loose-cards-live`; unverified live
 launch: A
-result: pending
+result: pass
+reported: "The checks all look fine did you run the already?"
+note: "Chris gave this line after the A01-A08 list; the orchestrator told him it had not run those checks, and counts the line as A01 to A08 ok."
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
 
 ### 10. Zoom
 contract: 15-UI-SPEC.md:116-117, 255, 275, 307-309; 22-UI-SPEC.md:382
@@ -120,7 +129,10 @@ contract: 15-UI-SPEC.md:132, 274, 397-401
 expected: A card shows its PNG after the 700 ms settle, else a hatched panel with the title (3 lines), never a broken-image glyph. The URI shows only for a real address. The tooltip is the title, a line break, then the address. Overlaps 14.1.1-UAT test 6.
 evidence: partial: `gui02-web-tab-live` step 5b; unverified live
 launch: A
-result: pending
+result: pass
+reported: "The checks all look fine did you run the already?"
+note: "Chris gave this line after the A01-A08 list; the orchestrator told him it had not run those checks, and counts the line as A01 to A08 ok."
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
 
 ### 13. Keyboard roving focus and rings
 contract: 15-UI-SPEC.md:215-223, 419-421, 487
@@ -253,28 +265,40 @@ contract: 15-UI-SPEC.md:264 (E11)
 expected: "PowerBrowser couldn’t load your tab groups. Your tabs are unchanged — choose Retry." The strip stays unfiltered.
 evidence: unverified live; no live row plants this fault
 launch: T
-result: pending
+result: skipped
+reason: "deferred follow-up: no on-screen trigger; needs fault-injection tooling (v1.5)"
+reported: "Q1: d"
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
 
 ### 32. WR-01: failed closeGroup write
 contract: 15-UI-SPEC.md:265, 392-393; 22-REVIEW-FIX.md:39-47 (WR-01)
 expected: After a failed closeGroup write the group comes back once, with "PowerBrowser couldn’t save your tab groups. The canvas shows your latest arrangement — choose Retry."; Retry closes the group.
 evidence: unverified live (22-REVIEW-FIX WR-01: requires human verification)
 launch: T
-result: pending
+result: skipped
+reason: "deferred follow-up: no on-screen trigger; needs fault-injection tooling (v1.5)"
+reported: "Q1: d"
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
 
 ### 33. WR-02: failed "+" join
 contract: 22-REVIEW-FIX.md:49-57 (WR-02)
 expected: After a failed "+" join the tab stays open and loose. Organising shows the save-error bar and Retry; Browsing shows nothing (the copy decision is test 45).
 evidence: unverified live (22-REVIEW-FIX WR-02: requires human verification)
 launch: T
-result: pending
+result: skipped
+reason: "deferred follow-up: no on-screen trigger; needs fault-injection tooling (v1.5)"
+reported: "Q1: d"
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
 
 ### 34. WR-05: join before chrome's web-tab row
 contract: 22-REVIEW-FIX.md:75-83 (WR-05)
 expected: A "+" join that arrives before chrome's web-tab row retries once after 500 ms and lands; a second failure leaves the tab loose. The reversed order "was not reproduced" (22-REVIEW-FIX WR-05).
 evidence: unverified live (22-REVIEW-FIX WR-05: requires human verification)
 launch: T
-result: pending
+result: skipped
+reason: "deferred follow-up: no on-screen trigger; needs fault-injection tooling (v1.5)"
+reported: "Q1: d"
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
 
 ### 35. Screenshots
 contract: 22-VERIFICATION.md:52-54 (human item 1); 22-07-SUMMARY.md:115
@@ -380,10 +404,10 @@ reported: "D: ok (Recommended)"
 ## Summary
 
 total: 47
-passed: 10
+passed: 14
 issues: 0
-pending: 37
-skipped: 0
+pending: 29
+skipped: 4
 blocked: 0
 
 ## Gaps

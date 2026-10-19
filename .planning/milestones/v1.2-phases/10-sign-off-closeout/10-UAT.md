@@ -3,7 +3,7 @@ status: pending-human
 phase: 10-sign-off-closeout
 source: [10-01-SUMMARY.md]
 started: 2026-09-05T00:00:00Z
-updated: 2026-10-19T17:02:32Z
+updated: 2026-10-19T22:49:07Z
 executed_by: claude (static gates re-run live; all five perceptual drills reserved for human hands)
 audit_acknowledged:
   milestone: v1.2
@@ -31,7 +31,10 @@ build: |
 ### 1. Open the Stock Browser Window (GUI-01)
 
 expected: From the running Theia shell, invoke the "Open Browser Window" command. A stock Firefox-chrome browser window opens. The address bar takes keyboard focus and navigates a typed URL. An in-window modal (e.g. an alert from a page) appears rather than being suppressed. Closing the browser window returns you to the shell with the app still running. (5-step manual verification recorded as outstanding in 01-07; ledgered in WINDOWS.md.)
-result: pending
+result: pass
+reported: "The checks all look fine did you run the already?"
+note: "Chris gave this line after the A01-A08 list; the orchestrator told him it had not run those checks, and counts the line as A01 to A08 ok."
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
 steps:
 
   - "Launch objdir/dist/bin/powerbrowser from scratch; the Theia shell loads as the default GUI"
@@ -69,7 +72,10 @@ STAGED-awaiting-signature: no operator signature filled in; sign with name plus 
 expected: The downstream mark renders at correct density in all three places and the title carries the suffixed display name (Power Browser Dev)
 expected_note: "2026-10-19 24-02: the suffixed display name, written with a space between the two words, no longer matches the shipped contract: the tree's display name is `PowerBrowser` (configuration.toml:38) with name_suffix ' Dev' (configuration.toml:59), so the title reads PowerBrowser Dev (powerbrowser/branding/dev/configure.sh:9). Chris accepts or rewords this at the desk session."
 expected_note_ruling: "2026-10-19, Chris: D: ok (Recommended)"
-result: pending
+result: pass
+reported: "The checks all look fine did you run the already?"
+note: "Chris gave this line after the A01-A08 list; the orchestrator told him it had not run those checks, and counts the line as A01 to A08 ok."
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
 steps:
 
   - "Launch objdir/dist/bin/powerbrowser on a graphical session"
@@ -143,9 +149,9 @@ coverage_id: React-19/runtime
 ## Summary
 
 total: 6
-passed: 0
+passed: 2
 issues: 0
-pending: 6
+pending: 4
 skipped: 0
 blocked: 0
 automated: 0

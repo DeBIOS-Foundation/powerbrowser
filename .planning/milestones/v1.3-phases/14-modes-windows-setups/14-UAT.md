@@ -3,7 +3,7 @@ status: partial
 phase: 14-modes-windows-setups
 source: [14-01-SUMMARY.md, 14-02-SUMMARY.md, 14-03-SUMMARY.md, .planning/GUI-DEFECTS.md]
 started: 2026-09-06T21:05:00Z
-updated: 2026-10-19T17:02:32Z
+updated: 2026-10-19T22:49:07Z
 ---
 
 ## Current Test
@@ -36,7 +36,10 @@ because nobody has driven them.
 
 ### 1. Mode switch reshapes panels per the contracted map
 expected: Selecting Coding / Browsing / Organising applies the per-mode shell map at 14-UI-SPEC.md:225-228 — Coding shows the Explorer in a visible left panel and a visible bottom panel; Browsing and Organising hide all three side panels.
-result: issue
+result: pass
+reported: "Accept the script's results"
+note: "The evidence is the scripted headless run on its own profile (scratch, untracked: uat-24/auto/report.json), which Chris accepted with this line."
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
 gap: G-14-2, G-14-3
 reason: "Two independent causes, both proven statically. The shipped segments never reached ModeService at all, so the contracted map was dead code; and even when reached, the Explorer dock call is a lookup that no-ops on a miss."
 
@@ -44,13 +47,21 @@ reason: "Two independent causes, both proven statically. The shipped segments ne
 expected: No content tab unmounts, closes, moves windows, or detaches across a switch (14-UI-SPEC.md:232-233), and the status-bar chip re-asserts the count.
 expected_note: "2026-10-19 24-02: the clause 'the status-bar chip re-asserts the count' no longer matches the shipped contract: the tab-count chip was removed (commit b85b846, per the amended 14-UI-SPEC); the tab-survival half stands. Chris accepts or rewords this at the desk session."
 expected_note_ruling: "2026-10-19, Chris: D: ok (Recommended)"
-result: issue
+result: pass
+reported: "Accept the script's results"
+note: "The evidence is the scripted headless run on its own profile (scratch, untracked: uat-24/auto/report.json), which Chris accepted with this line."
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
 gap: G-14-1
 reason: "Stock restores the target mode's stale saved layout and Lumino unparents every widget absent from it. Conditional on a snapshot existing, so a first visit is safe and a second visit destroys — which is why every earlier check on this invariant, automated and human, could pass on a broken tree."
 
 ### 3. Tab strip relocates per mode (Variant B)
 expected: The tab strip changes home per mode, per the 14-UI-SPEC binding constraint (AMENDED 2026-09-08, 13-01 spike re-probed GREEN; 14-UI-SPEC.md:22) and the per-mode shell map under "Modes reshape panels, visibility, and where the strip lives" (14-UI-SPEC.md:249, table at :256-260). Browsing: the strip sits at the very top, above the URL row; with a split main area each pane shows its own tab bar under the URL row and the strip still lists the leftmost pane's tabs. Coding: the dock's own tab bars in the editor area. Organising: the Panorama canvas, with no strip. No tab is closed, moved to another window or detached across a switch.
-result: pending
+result: issue
+reported: "organising does not look good"
+reported: "ok"
+observed: "Screenshot with Chris's reply, as described by the orchestrator: with a split main area, Organising opens as a tab inside the right pane while the left pane keeps its tabs; the Organising tab icon is a blank white square; the group box is clipped at the right edge. Browsing, Coding and back to Browsing (steps 3, 4, 6): ok."
+recorded: "2026-10-19, 24-04, from Chris's reply in 24-UAT-REPLIES.md"
+gap: G-14-9
 reason: "2026-10-18 (23-01, v1.4 Phase 23): the earlier skip reason described a fallback that the 2026-09-08 amendment superseded. The relocation shipped in 539ba36. Chris sets this result in the Phase 24 session (G-14.1.1-11)."
 
 ### 4. Launch opens the shell in the launch mode with no blank shell
@@ -100,9 +111,9 @@ reason: "Added 2026-10-19 by Phase 24 (24-02). Chris sets this result at the end
 ## Summary
 
 total: 11
-passed: 0
-issues: 5
-pending: 5
+passed: 2
+issues: 4
+pending: 4
 skipped: 0
 superseded: 1
 blocked: 0
@@ -110,6 +121,8 @@ blocked: 0
 Note on the zero: no test in this file has been driven to a pass. That is a
 statement about the UAT record, not about the phase — the phase's automated gates
 were green throughout, which is precisely the finding G-14-1 turns on.
+On 2026-10-19 (24-04), tests 1 and 2 were passed on Chris's reply "Accept the script's results"
+(scripted headless evidence he accepted), and test 3 is an issue (G-14-9).
 
 ## Gaps
 
@@ -132,6 +145,7 @@ other claim below is static reading plus a typecheck plus the existing gates.
   truth: "Content tabs never unmount, close, move windows, or detach across a mode switch"
   contract: "14-UI-SPEC.md:232-233 (the never-detach sentence) and :223 (only side panels and the main-area view change)"
   status: in_tree
+  live_check: "2026-10-19, 24-04: test 2 passed on Chris's reply \"Accept the script's results\" (A19); the evidence is the scripted headless run, which he accepted, not a look in his own window."
   severity: critical
   test: 2
   reason: "Live testing showed main-area content tabs disappearing on a mode switch."
@@ -165,6 +179,7 @@ other claim below is static reading plus a typecheck plus the existing gates.
   truth: "The chrome-bar mode toggle applies the contracted per-mode shell map"
   contract: "14-UI-SPEC.md:225-228 (the per-mode shell map) — the whole table was unreachable for the three shipped modes"
   status: in_tree
+  live_check: "2026-10-19, 24-04: test 1 passed on Chris's reply \"Accept the script's results\" (A20); the evidence is the scripted headless run, which he accepted, not a look in his own window."
   severity: critical
   test: 1
   reason: "Coding mode showed no Theia view at all."
@@ -184,6 +199,7 @@ other claim below is static reading plus a typecheck plus the existing gates.
   truth: "Coding docks the Explorer in a visible left panel on every activation, not only the first"
   contract: "14-UI-SPEC.md:227 — Coding, left panel visible (Explorer)"
   status: in_tree
+  live_check: "2026-10-19, 24-04: test 1 passed on Chris's reply \"Accept the script's results\" (A20, Coding entered three times, once from Organising); scripted headless evidence, accepted by him."
   severity: major
   test: 1
   reason: "Coding showed no Theia view even once the switch was routed correctly."
@@ -295,3 +311,13 @@ other claim below is static reading plus a typecheck plus the existing gates.
     - "Renumber the seven rows against the final file, as the last edit before the commit, and re-run `check-internals-boundary.sh --catalogue`."
     - "One separately-stale row is already on record and is NOT part of this seven: PowerBrowserAPI.sys.mjs:817 for `SessionStore.getBrowserState`, which the F9 agent found already wrong before touching anything (the method is at :1643 in that agent's numbering). It carries no forbidden pattern, so the gate does not fail on it and it has been silently wrong for some time."
     - "The deeper problem is the keying, not the seven rows: a line-number-keyed catalogue is a merge-conflict magnet and goes stale on every insertion above it. Whether to re-key rows on a stable anchor — the enclosing function name, which the gate already reports — is a decision for whoever owns the boundary script, and is deliberately NOT taken here."
+
+- gap_id: G-14-9
+  truth: "Organising shows the Panorama canvas in the main area with no strip, whatever the main-area layout"
+  contract: "14-UI-SPEC.md:256-260 (per-mode shell map: Organising, the Panorama canvas, with no strip); 14-UAT.md test 3"
+  status: open
+  severity: major
+  test: 3
+  reason: "2026-10-19, 24-04, A18: Chris replied \"organising does not look good\" with a screenshot. As described by the orchestrator: with a split main area, Organising opens as a tab inside the right pane while the left pane keeps its tabs; the Organising tab icon is a blank white square; the group box is clipped at the right edge. Browsing, Coding and back to Browsing: \"ok\"."
+  missing:
+    - "Diagnose and fix through /gsd-plan-phase 24 --gaps; nothing was fixed in place. Same observation as G-14.1.1-11."
