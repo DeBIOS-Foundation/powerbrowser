@@ -356,13 +356,13 @@ Plans:
   3. The sheets carry a React 19 runtime line with a recorded result
   4. The widened NG-084 text is approved and recorded in the ledger
 
-**Plans**: 1/6 plans executed in 5 waves (wave 1 runs two file-disjoint plans in parallel; waves 2 to 5 each stop for Chris)
+**Plans**: 2/6 plans executed in 5 waves (wave 1 runs two file-disjoint plans in parallel; waves 2 to 5 each stop for Chris)
 
 Plans:
 
 **Wave 1**
 
-- [ ] 24-01-PLAN.md — NG-089 check (`ng089-uat-sheets`, plant self-test, two registry rows), Chris's removal of NG-084 with his own quote (blocking-human), NG-089 added with its recorded failing run
+- [x] 24-01-PLAN.md — NG-089 check (`ng089-uat-sheets`, plant self-test, two registry rows), Chris's removal of NG-084 with his own quote (blocking-human), NG-089 added with its recorded failing run
 - [x] 24-02-PLAN.md — the Phase 15 UAT sheet (47 pending tests, React 19 first); a React 19 runtime test on sheets 10, 13, 14, 14.1 and 14.1.1; superseded expectations annotated; Summaries recounted
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -405,7 +405,7 @@ Plans:
 | 21. Panorama Spec and gui08 Checks | 5/5 | Complete    | 2026-10-17 |
 | 22. Panorama Worklist | 7/7 | In Progress | - |
 | 23. Modes Leftovers and Sketch 005 Verdict | 5/5 | Complete    | 2026-10-18 |
-| 24. Live UAT Pass | 1/6 | In Progress | - |
+| 24. Live UAT Pass | 2/6 | In Progress | - |
 | 25. CI Green on Main | 0/TBD | Not started | - |
 
 ## Hard constraints (every phase)
