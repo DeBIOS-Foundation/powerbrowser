@@ -13,7 +13,8 @@
  *               theia/extensions/[name]/src, its per-panel expandThreshold and
  *               expandDuration (an identifier must resolve to the
  *               `matchMedia('(prefers-reduced-motion: reduce)')` ternary), the
- *               panel keys of stock ApplicationShell.DEFAULT_OPTIONS, and every
+ *               panel keys and expandDuration of stock ApplicationShell.DEFAULT_OPTIONS
+ *               (a panel the rebind leaves without expandDuration inherits it), and every
  *               `this.shell.resize(0, area)` in activateMode before that area's
  *               collapse.
  *
@@ -180,7 +181,7 @@ function stockPanelKeys(stock, failures) {
     return keys;
 }
 
-function deriveCode(tree, failures) {
+function deriveCode(tree, failures, stock) {
     const sites = [];
     for (const [rel, text] of Object.entries(tree.modules)) {
         const code = stripComments(text);
@@ -201,19 +202,26 @@ function deriveCode(tree, failures) {
     for (const m of body.matchAll(/(\w+Panel)\s*:\s*\{([^}]*)\}/g)) {
         const threshold = m[2].match(/expandThreshold\s*:\s*([^,\s]+)/)?.[1];
         const raw = m[2].match(/expandDuration\s*:\s*([^,\s]+)/)?.[1];
-        let ms = 0;
+        let ms;
         let guarded = true;
-        if (raw !== undefined && /^\d+$/.test(raw)) {
+        let from = '';
+        if (raw === undefined) {
+            // Absent => inherited: application-shell.js spreads DEFAULT_OPTIONS.<panel> under the rebind.
+            ms = stock[m[1]] ?? NaN;
+            guarded = ms === 0;
+            from = ' (inherited from stock DEFAULT_OPTIONS)';
+            if (Number.isNaN(ms)) failures.push(`ZERO: ${m[1]} has no expandDuration and stock declares none (broken instrument)`);
+        } else if (/^\d+$/.test(raw)) {
             ms = Number(raw);
             guarded = ms === 0;
-        } else if (raw !== undefined) {
+        } else {
             const decl = code.match(new RegExp(`const\\s+${raw}\\s*=\\s*([^;]+);`))?.[1]?.trim() ?? '';
             const g = decl.match(GUARD);
             ms = g ? Number(g[1]) : NaN;
             if (!g) failures.push(`${m[1]}.expandDuration '${raw}' does not resolve to the prefers-reduced-motion ternary (found: ${decl || 'no declaration'})`);
         }
         if (threshold !== '0') failures.push(`${m[1]} lost expandThreshold 0 (found: ${threshold ?? 'absent'}); the drag-reveal fix depends on it`);
-        if (!guarded) failures.push(`${m[1]}.expandDuration is a bare ${ms} with no prefers-reduced-motion guard`);
+        if (!guarded && !Number.isNaN(ms)) failures.push(`${m[1]}.expandDuration is a bare ${ms}${from} with no prefers-reduced-motion guard`);
         panels[m[1]] = ms;
     }
     return { rel, panels };
@@ -251,7 +259,7 @@ export function analyse(tree) {
     const failures = [];
     const spec = deriveSpec(tree.spec, failures);
     const stock = stockPanelKeys(tree.stock, failures);
-    const rebind = deriveCode(tree, failures);
+    const rebind = deriveCode(tree, failures, stock);
     const shrinks = deriveShrinks(tree, failures);
     let code = null;
     if (rebind && Object.keys(stock).length) {
@@ -328,7 +336,9 @@ function selfTest() {
             ? { name: '7 left shrink removed', mutate: mod(SERVICE_REL, s => s.replace(/this\.shell\.resize\(\s*0\s*,\s*'left'\s*\)/, "this.shell.isExpanded('left')")), expect: 'no kind' }
             : { name: '7 left shrink added', mutate: mod(SERVICE_REL, s => s.replace(leftCollapse, `this.shell.resize(0, 'left'); ${leftCollapse}`)), expect: 'no kind' },
         { name: '8 `### Motion` heading renamed', mutate: spec(s => s.replace('### Motion', '### Movement')), expect: 'ZERO' },
-    ];
+        // Only a panel that inherits its duration reads stock's value; under b/c every panel sets its own.
+        K === 'a' && { name: '9 stock leftPanel expandDuration 0 -> 150 (a re-pin that slides)', mutate: t => ({ ...t, stock: t.stock.replace(/(leftPanel:\s*Object\.freeze\(\{[^}]*expandDuration:\s*)0\b/, '$1150') }), expect: 'leftPanel.expandDuration is a bare 150 (inherited' },
+    ].filter(Boolean);
     let failed = 0;
     for (const c of cases) {
         const mutated = c.mutate(clean);
