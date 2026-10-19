@@ -1,5 +1,5 @@
 {
-  "ledger_version": 396,
+  "ledger_version": 400,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -1143,6 +1143,19 @@
       "evidence": "b3e8883: ng088-group-order-across-restart PASS at head; red recorded against b9412fa (pre-v3 writer refuses setGroupOrder)",
       "owner": "",
       "phase": "20",
+      "deferred_at": "",
+      "reason": ""
+    },
+    {
+      "id": "NG-089",
+      "text": "UAT sheets 10, 13, 14, 14.1, 14.1.1 and 15 have no pending result, and each records a React 19 runtime result (UAT-01).",
+      "status": "open",
+      "spec_ref": ".planning/REQUIREMENTS.md UAT-01",
+      "test_ref": "scripts/verify-ng-089-uat-sheets.mjs::ng089-uat-sheets",
+      "code_ref": ".planning/milestones UAT sheets 10, 13, 14, 14.1, 14.1.1, 15",
+      "evidence": "",
+      "owner": "",
+      "phase": "24",
       "deferred_at": "",
       "reason": ""
     }
