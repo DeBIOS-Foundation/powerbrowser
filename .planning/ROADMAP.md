@@ -321,7 +321,7 @@ Plans:
   4. `14-VERIFICATION.md` exists
   5. Sketch 005 is committed with a MANIFEST row, and Chris's verdict (adopt into a named later milestone, or reject) is recorded before Phase 24 starts
 
-**Plans**: 1/5 plans executed in 4 waves (wave 1 runs two file-disjoint plans in parallel; execution starts after Phase 22 completes)
+**Plans**: 2/5 plans executed in 4 waves (wave 1 runs two file-disjoint plans in parallel; execution starts after Phase 22 completes)
 **UI hint**: yes
 
 Plans:
@@ -329,7 +329,7 @@ Plans:
 **Wave 1**
 
 - [x] 23-02-PLAN.md — MODE-02: Save as Mode and Save Setup cut names at 60 while typing (stock `createInputBox()`), 14-UI-SPEC states the rule, `modes-name-cap-at-input` with plants plus a live row, ng-035/036 answer the real input, wave-1 `--quick`, Chris's re-lock if those check files are locked (blocking-human)
-- [ ] 23-04-PLAN.md — SK-01: sketch 005 committed with its MANIFEST row and the adopt-into-v1.5 verdict; the G-32 options put to Chris with no recommendation (blocking-human); the v1.5 milestone and the mode-or-setup-name wording recorded
+- [x] 23-04-PLAN.md — SK-01: sketch 005 committed with its MANIFEST row and the adopt-into-v1.5 verdict; the G-32 options put to Chris with no recommendation (blocking-human); the v1.5 milestone and the mode-or-setup-name wording recorded
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -381,7 +381,7 @@ Plans:
 | 20. Non-GUI Gaps | 5/5 | Complete    | 2026-10-17 |
 | 21. Panorama Spec and gui08 Checks | 5/5 | Complete    | 2026-10-17 |
 | 22. Panorama Worklist | 7/7 | In Progress | - |
-| 23. Modes Leftovers and Sketch 005 Verdict | 1/5 | In Progress | - |
+| 23. Modes Leftovers and Sketch 005 Verdict | 2/5 | In Progress | - |
 | 24. Live UAT Pass | 0/TBD | Not started | - |
 | 25. CI Green on Main | 0/TBD | Not started | - |
 
