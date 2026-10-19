@@ -3,7 +3,7 @@ status: pending-human
 phase: 10-sign-off-closeout
 source: [10-01-SUMMARY.md]
 started: 2026-09-05T00:00:00Z
-updated: 2026-10-19T06:20:00Z
+updated: 2026-10-19T17:02:32Z
 executed_by: claude (static gates re-run live; all five perceptual drills reserved for human hands)
 audit_acknowledged:
   milestone: v1.2
@@ -39,6 +39,7 @@ STAGED-awaiting-signature: no operator signature filled in; sign with name plus 
 
 expected: With the dev flag on, editing customize.css restyles the shell without a rebuild. Deleting the file reverts the shell to stock styling. (The automatable halves are green; this perceptual claim is the outstanding half from 01-07/01-02 D7.)
 expected_note: "2026-10-19 24-02: the dev-flag clause ('With the dev flag on', step 1 'customize dev flag on') no longer matches the shipped contract: the customize.css layer needs no flag and is read whenever the file exists; `powerbrowserPrivilegedJs` gates only the customize.js layer (docs/CUSTOMIZE.md:3-5, :67-68). Chris accepts or rewords this at the desk session."
+expected_note_ruling: "2026-10-19, Chris: D: ok (Recommended)"
 result: pending
 steps:
 
@@ -56,6 +57,7 @@ STAGED-awaiting-signature: no operator signature filled in; sign with name plus 
 
 expected: The downstream mark renders at correct density in all three places and the title carries the suffixed display name (Power Browser Dev)
 expected_note: "2026-10-19 24-02: the suffixed display name, written with a space between the two words, no longer matches the shipped contract: the tree's display name is `PowerBrowser` (configuration.toml:38) with name_suffix ' Dev' (configuration.toml:59), so the title reads PowerBrowser Dev (powerbrowser/branding/dev/configure.sh:9). Chris accepts or rewords this at the desk session."
+expected_note_ruling: "2026-10-19, Chris: D: ok (Recommended)"
 result: pending
 steps:
 

@@ -202,7 +202,7 @@ One line per session:
 - `g`: the live launcher (`scripts/lib/firefox-bidi.mjs`) is headless only, so a run you can watch
   needs a headed launcher. That becomes gap work, and the T rows stay pending until it lands.
 
-Route T: open
+Route T: d (Chris, 2026-10-19) deferred follow-up: no on-screen trigger; needs fault-injection tooling (v1.5)
 
 **Q2, the 10/5 carry-test (Session X).** The options:
 
@@ -211,7 +211,7 @@ Route T: open
 - `defer {reason}`.
 - `blocked {reason}`.
 
-Route X: open
+Route X: defer (Chris, 2026-10-19) deferred follow-up: no second person available this milestone
 
 ## Prepared paths
 

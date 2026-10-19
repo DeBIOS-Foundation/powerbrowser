@@ -3,7 +3,7 @@ status: testing
 phase: 15-panorama-organising
 source: [15-UI-SPEC.md, 22-UI-SPEC.md, 22-VERIFICATION.md, 22-07-SUMMARY.md, 22-01-SUMMARY.md, 22-REVIEW-FIX.md]
 started: 2026-10-19T06:16:32Z
-updated: 2026-10-19T06:16:32Z
+updated: 2026-10-19T17:02:32Z
 ---
 
 ## Current Test
@@ -270,21 +270,24 @@ contract: 22-VERIFICATION.md:52-54 (human item 1); 22-07-SUMMARY.md:115
 expected: `logs/undo-window-22-07.png` shows one centred "Undo Close Group"; `logs/card-close-22-07.png` shows the focused card's × top-right over the preview. Both are untracked and were taken at 48025d3, before the review fixes. A pass means Chris accepts them as recorded; he may instead ask for fresh ones from Launch A.
 evidence: the two PNGs in `.planning/phases/22-panorama-worklist/logs/`
 launch: D
-result: pending
+result: pass
+reported: "D: ok (Recommended)"
 
 ### 36. Ratify A1: no Close Group dialog
 contract: 22-UI-SPEC.md:58 (A1); 22-07-SUMMARY.md:117
 expected: A pass means the recorded behaviour stands: × closes the group at once and Undo Close Group takes its place, with no dialog. Overturned, it becomes a gap for `/gsd-plan-phase 22 --gaps`.
 evidence: unverified live
 launch: D
-result: pending
+result: pass
+reported: "D: ok (Recommended)"
 
 ### 37. Ratify A2: 15 s, no discard ×
 contract: 22-UI-SPEC.md:59 (A2); 22-07-SUMMARY.md:118
 expected: A pass means the recorded behaviour stands: the undo window is 15000 ms and the Undo control has no discard ×. Overturned, it becomes a gap for `/gsd-plan-phase 22 --gaps`.
 evidence: unverified live
 launch: D
-result: pending
+result: pass
+reported: "D: ok (Recommended)"
 
 ### 38. Ratify A4: a quit inside the window closes the group
 contract: 22-UI-SPEC.md:61 (A4); 22-07-SUMMARY.md:119
@@ -298,14 +301,16 @@ contract: 22-UI-SPEC.md:62 (A5); 22-07-SUMMARY.md:120
 expected: A pass means the recorded behaviour stands: the Browsing strip keeps the current tab even outside the active group (the alternative is that the active group follows the tab). Overturned, it becomes a gap for `/gsd-plan-phase 22 --gaps`.
 evidence: unverified live
 launch: D
-result: pending
+result: pass
+reported: "D: ok (Recommended)"
 
 ### 40. Ratify A7: "+" is the only joining path
 contract: 22-UI-SPEC.md:64 (A7); 22-07-SUMMARY.md:121
 expected: A pass means the recorded behaviour stands: "+" is the only path by which a new tab joins the active group. Overturned, it becomes a gap for `/gsd-plan-phase 22 --gaps`.
 evidence: unverified live
 launch: D
-result: pending
+result: pass
+reported: "D: ok (Recommended)"
 
 ### 41. Ratify A10: the last group dissolves on drag-out
 contract: 22-UI-SPEC.md:67 (A10); 22-07-SUMMARY.md:122
@@ -319,14 +324,16 @@ contract: 22-UI-SPEC.md:68 (A11); 22-07-SUMMARY.md:123
 expected: A pass means the recorded behaviour stands: the strip shows no label for the active group. Overturned, it becomes a gap for `/gsd-plan-phase 22 --gaps`.
 evidence: unverified live
 launch: D
-result: pending
+result: pass
+reported: "D: ok (Recommended)"
 
 ### 43. Ratify the "Group "{name}" closed." flash kept at the click
 contract: 15-UI-SPEC.md:271; 22-07-SUMMARY.md:124
 expected: A pass means the recorded behaviour stands: the status-bar flash "Group "{name}" closed." shows at the click, not at the commit. Overturned, it becomes a gap for `/gsd-plan-phase 22 --gaps`.
 evidence: unverified live
 launch: D
-result: pending
+result: pass
+reported: "D: ok (Recommended)"
 
 ### 44. Rule on the three 22-07 open questions
 contract: 22-07-SUMMARY.md:127-130 (item 3); 22-VERIFICATION.md:58-60 (human item 3)
@@ -340,28 +347,31 @@ contract: 24-CONTEXT (the WR-02 copy gap); 22-REVIEW-FIX.md:57 (WR-02); 22-VERIF
 expected: A pass means Chris's answer stands: either he words a Browsing notice for a failed "+" join, or he accepts console-only reporting. Any copy comes only from his own words.
 evidence: unverified live
 launch: D
-result: pending
+result: pass
+reported: "D: ok (Recommended)"
 
 ### 46. C1 copy answers, items 1–7
 contract: 22-01-SUMMARY.md:116-132 (Copy answers (C1))
 expected: A pass means the seven C1 answers stand as recorded, or as Chris revises them in his own words. They were taken as the recommended set after "just contiune the planed work"; he worded none.
 evidence: unverified live
 launch: D
-result: pending
+result: pass
+reported: "D: ok (Recommended)"
 
 ### 47. Optional: CR-01, view:<factory-id> in the pill for non-mode view: tabs
 contract: 22-REVIEW-FIX.md:27-31 (CR-01)
 expected: A pass means Chris's ruling stands on whether non-mode `view:` tabs (Explorer and the like) keep showing `view:<factory-id>` in the address pill, as 14.1-UI-SPEC A6 contracts.
 evidence: unverified live
 launch: D
-result: pending
+result: pass
+reported: "D: ok (Recommended)"
 
 ## Summary
 
 total: 47
-passed: 0
+passed: 10
 issues: 0
-pending: 47
+pending: 37
 skipped: 0
 blocked: 0
 

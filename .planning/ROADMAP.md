@@ -312,7 +312,7 @@ Plans:
 **Goal**: The Phase 14 / 14.1.1 leftovers are closed with records that match the shipped behaviour, and the sketch 005 verdict fixes the layout that UAT will test
 **Depends on**: Phase 22
 **Requirements**: MODE-01, MODE-02, MODE-03, MODE-04, SK-01
-**Needs Chris**: G-23 decided 2026-10-17 (cut at 60 while typing, MODE-02); SK-01 decided 2026-10-17 (adopt all into v1.5 Coding Workbench Layout; name taken as proposed by the orchestrator, Chris gave no name); G-32 chosen by Chris 2026-10-18: a (instant, spec amended; MODE-03); open: live confirmation of the strip relocation (G-11, MODE-01), handed to the Phase 24 session
+**Needs Chris**: G-23 decided 2026-10-17 (cut at 60 while typing, MODE-02); SK-01 decided 2026-10-17 (adopt all into v1.5 Coding Workbench Layout; name confirmed by Chris 2026-10-19); G-32 chosen by Chris 2026-10-18: a (instant, spec amended; MODE-03); open: live confirmation of the strip relocation (G-11, MODE-01), handed to the Phase 24 session
 **Success Criteria** (what must be TRUE):
 
   1. The Variant B records are current (UAT entry, GUI-DEFECTS item 2, GUI-07 box, `mode-descriptors.ts` comment, 14-UAT test 3), and Chris has confirmed the strip relocation live (G-11)

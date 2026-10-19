@@ -3,7 +3,7 @@ status: partial
 phase: 14-modes-windows-setups
 source: [14-01-SUMMARY.md, 14-02-SUMMARY.md, 14-03-SUMMARY.md, .planning/GUI-DEFECTS.md]
 started: 2026-09-06T21:05:00Z
-updated: 2026-10-19T06:20:00Z
+updated: 2026-10-19T17:02:32Z
 ---
 
 ## Current Test
@@ -32,6 +32,7 @@ reason: "Two independent causes, both proven statically. The shipped segments ne
 ### 2. Content tabs survive every mode switch, including a mode's second visit
 expected: No content tab unmounts, closes, moves windows, or detaches across a switch (14-UI-SPEC.md:232-233), and the status-bar chip re-asserts the count.
 expected_note: "2026-10-19 24-02: the clause 'the status-bar chip re-asserts the count' no longer matches the shipped contract: the tab-count chip was removed (commit b85b846, per the amended 14-UI-SPEC); the tab-survival half stands. Chris accepts or rewords this at the desk session."
+expected_note_ruling: "2026-10-19, Chris: D: ok (Recommended)"
 result: issue
 gap: G-14-1
 reason: "Stock restores the target mode's stale saved layout and Lumino unparents every widget absent from it. Conditional on a snapshot existing, so a first visit is safe and a second visit destroys — which is why every earlier check on this invariant, automated and human, could pass on a broken tree."
