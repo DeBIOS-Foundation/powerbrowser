@@ -27,7 +27,7 @@ SK-01). See ROADMAP.md Phase 23 success criteria. This phase executes after Phas
   mode) is adopted, all four items, into a named v1.5 milestone. The sketch is committed
   with a MANIFEST row and the verdict. The REQUIREMENTS future-work entry becomes a v1.5
   item. Nothing is built in v1.4, and Phase 24 UAT tests today's layout.
-- G-32 / MODE-03: **OPEN.** Chris answered "skip" on 2026-10-17. The options put to him
+- G-32 / MODE-03: **DECIDED 2026-10-18: "a"** (instant, spec amended), Chris's reply in chat; recorded on the ROADMAP Needs Chris line by 23-04. History: Chris answered "skip" on 2026-10-17. The options put to him
   were instant with the spec amended, a slide on open only through Theia's
   `expandDuration`, or a slide both ways. No recommendation exists. The plan must put
   this to Chris at a blocking decision checkpoint before any G-32 code or spec change,

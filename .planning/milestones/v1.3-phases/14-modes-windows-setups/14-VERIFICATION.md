@@ -46,7 +46,7 @@ covered_files:
   - theia/extensions/modes/src/browser/setups-service.ts
   - theia/extensions/tab-uris/src/browser/browser-window-command.ts
   - theia/extensions/tab-uris/src/node/tab-query-service.ts
-covered_digest: "v3:sha256:617b930e08ff4afc4e91cd8b43b25c8aed8955bb3f722c1698b499ac35e298eb"
+covered_digest: "v3:sha256:61ab77f5649a49846158efc06ee84863c4175fdf92864fec680c7bf28c5ca649"
 behavior_unverified: 8
 behavior_unverified_items:
   - truth: "User saves the current panel layout as a custom mode and picks it from the toggle menu beside shipped defaults (14-02)"
@@ -157,7 +157,7 @@ Their truths are scored on today's evidence like the rest.
 | 9 | 14-01 | Every tab persists across every mode switch with the status-bar chip re-asserting the count | PASSED (override) | Override: chip removed, accepted by Chris on 2026-09-08. Tabs persist: `gui07-mode-switch-tabs-live` PASS (switch-live-23-03.log); `gui07-mode-switch-tabs-invariant` PASS ("8 allowlisted switch calls and 2 mode commands match the declared contract") + self-test |
 | 10 | 14-01 | A live probe record proves whether dependent windows open through the stock secondary-window path or need the chrome-side fallback | ✓ VERIFIED | `14-PROBE-DEPENDENT-WINDOWS.md:24` "Verdict: GREEN — stock `moveWidgetToSecondaryWindow` hosts live terminal and editor widgets" (runs 1-4, 2026-09-06); `gui09-dependent-window-content` PASS ("stock-path timing match the declared contract") |
 | 11 | 14-02 | Organising shows the contracted placeholder slot with a working Back to Browsing control and no canvas surface | PASSED (override) | Override: replaced by the Phase 15 canvas, accepted by Chris (v1.3 ROADMAP Phase 15) on 2026-09-07 |
-| 12 | 14-02 | Mode switches slide panels within budget with tabs never unmounting and the chip re-asserting the count | PASSED (override) | Override: G-32 option a, accepted by Chris on 2026-10-18; `modes-panel-motion` PASS "kind=a" + self-test (8 plants red). Tabs never unmount: `gui07-mode-switch-tabs-live` PASS |
+| 12 | 14-02 | Mode switches slide panels within budget with tabs never unmounting and the chip re-asserting the count | PASSED (override) | Override: G-32 option a, accepted by Chris on 2026-10-18; `modes-panel-motion` PASS "kind=a" + self-test (9 plants red). Tabs never unmount: `gui07-mode-switch-tabs-live` PASS |
 | 13 | 14-04 | A mode's second visit leaves every main-area and bottom-area content tab attached, with no tab lost and none conjured | ✓ VERIFIED | `gui07-mode-switch-tabs-live` PASS (switch-live-23-03.log, every measured hop a second visit, set equality both directions, `isAttached` on the widget object); `main-area-exemption.ts` at HEAD |
 | 14 | 14-04 | The invariant is proven BEHAVIOURALLY by a check that drives a real frontend, because no text gate in this tree can see the defect | ✓ VERIFIED | `gui07-mode-switch-tabs-live` and its self-test are registered in the full tier (`verify-platform.sh:4908-4909`); the row drove the built browser on build-23-03 and passed |
 

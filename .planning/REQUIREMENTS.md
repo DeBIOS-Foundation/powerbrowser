@@ -74,18 +74,18 @@ Non-GUI first, then GUI (Chris, 2026-10-15). The v1.3 text is archived in
 
 ### Modes and windows (finishes GUI-07)
 
-- [ ] **MODE-01**: The Variant B records are current (UAT entry, GUI-DEFECTS
+- [x] **MODE-01**: The Variant B records are current (UAT entry, GUI-DEFECTS
       item 2, GUI-07 box, `mode-descriptors.ts` comment, 14-UAT test 3), and
       Chris confirms the strip relocation live (G-11).
-- [ ] **MODE-02**: The 60-character mode- and setup-name cap behaviour is decided by Chris
+- [x] **MODE-02**: The 60-character mode- and setup-name cap behaviour is decided by Chris
       and applied (G-23).
-- [ ] **MODE-03**: Side panels slide or switch instantly as Chris decides, and
+- [x] **MODE-03**: Side panels slide or switch instantly as Chris decides, and
       14-UI-SPEC matches (G-32).
-- [ ] **MODE-04**: 14-VERIFICATION is written.
+- [x] **MODE-04**: 14-VERIFICATION is written.
 
 ### Verification
 
-- [ ] **SK-01**: The sketch 005 (VS Code layout) verdict is recorded before UAT.
+- [x] **SK-01**: The sketch 005 (VS Code layout) verdict is recorded before UAT.
 - [ ] **UAT-01**: A Phase 15 UAT sheet exists; the 10, 13, 14, 14.1, 14.1.1 and
       15 sheets have no pending result, including a React 19 runtime line (NG-084).
 - [ ] **CI-01**: CI is green on the pushed `main` (NG-074).
@@ -150,11 +150,11 @@ the project's own planning record.
 | PAN-05 | Phase 22 | Pending |
 | PAN-06 | Phase 22 | Pending |
 | PAN-07 | Phase 21 | Complete |
-| MODE-01 | Phase 23 | Pending |
-| MODE-02 | Phase 23 | Pending |
-| MODE-03 | Phase 23 | Pending |
-| MODE-04 | Phase 23 | Pending |
-| SK-01 | Phase 23 | Pending |
+| MODE-01 | Phase 23 | Complete |
+| MODE-02 | Phase 23 | Complete |
+| MODE-03 | Phase 23 | Complete |
+| MODE-04 | Phase 23 | Complete |
+| SK-01 | Phase 23 | Complete |
 | UAT-01 | Phase 24 | Pending |
 | CI-01 | Phase 25 | Pending |
 

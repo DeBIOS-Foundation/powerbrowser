@@ -96,7 +96,7 @@ live UAT itself).
 - [x] **Phase 20: Non-GUI Gaps** - Clean-checkout build, group-channel check, schema ledger rows, `generate-check`, archived phase paths (completed 2026-10-17)
 - [x] **Phase 21: Panorama Spec and gui08 Checks** - 15-UI-SPEC re-pinned to the shipped Panorama; the commit gate is green (completed 2026-10-17)
 - [ ] **Phase 22: Panorama Worklist** - Strip filtered by the active group, Undo Close Group, per-card close, last group kept
-- [ ] **Phase 23: Modes Leftovers and Sketch 005 Verdict** - Variant B records, name cap, panel slide, 14-VERIFICATION, sketch 005 decided
+- [x] **Phase 23: Modes Leftovers and Sketch 005 Verdict** - Variant B records, name cap, panel slide, 14-VERIFICATION, sketch 005 decided (completed 2026-10-18)
 - [ ] **Phase 24: Live UAT Pass** - Every open UAT sheet run live with no pending result, React 19 line included (NG-084)
 - [ ] **Phase 25: CI Green on Main** - CI passes on the pushed `main` (NG-074)
 
@@ -321,7 +321,7 @@ Plans:
   4. `14-VERIFICATION.md` exists
   5. Sketch 005 is committed with a MANIFEST row, and Chris's verdict (adopt into a named later milestone, or reject) is recorded before Phase 24 starts
 
-**Plans**: 2/5 plans executed in 4 waves (wave 1 runs two file-disjoint plans in parallel; execution starts after Phase 22 completes)
+**Plans**: 5/5 plans complete in 4 waves (wave 1 runs two file-disjoint plans in parallel; execution starts after Phase 22 completes)
 **UI hint**: yes
 
 Plans:
@@ -333,15 +333,15 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 23-03-PLAN.md — MODE-03: Chris's G-32 choice applied to code and 14-UI-SPEC in one commit, `modes-panel-motion` with branch plants, a live motion row under a slide, wave-2 `--quick`
+- [x] 23-03-PLAN.md — MODE-03: Chris's G-32 choice applied to code and 14-UI-SPEC in one commit, `modes-panel-motion` with branch plants, a live motion row under a slide, wave-2 `--quick`
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 23-01-PLAN.md — MODE-01 (and the record halves of MODE-02, MODE-03): the five Variant B records current with the G-11 hand-off to Phase 24; G-23 and G-32 closed on the 23-02 and 23-03 commits; UAT summaries recounted; wave-3 `--quick`
+- [x] 23-01-PLAN.md — MODE-01 (and the record halves of MODE-02, MODE-03): the five Variant B records current with the G-11 hand-off to Phase 24; G-23 and G-32 closed on the 23-02 and 23-03 commits; UAT summaries recounted; wave-3 `--quick`
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 23-05-PLAN.md — MODE-04: retroactive 14-VERIFICATION with a seam digest; the phase's closing gate
+- [x] 23-05-PLAN.md — MODE-04: retroactive 14-VERIFICATION with a seam digest; the phase's closing gate
 
 ### Phase 24: Live UAT Pass
 
@@ -381,7 +381,7 @@ Plans:
 | 20. Non-GUI Gaps | 5/5 | Complete    | 2026-10-17 |
 | 21. Panorama Spec and gui08 Checks | 5/5 | Complete    | 2026-10-17 |
 | 22. Panorama Worklist | 7/7 | In Progress | - |
-| 23. Modes Leftovers and Sketch 005 Verdict | 2/5 | In Progress | - |
+| 23. Modes Leftovers and Sketch 005 Verdict | 5/5 | Complete    | 2026-10-18 |
 | 24. Live UAT Pass | 0/TBD | Not started | - |
 | 25. CI Green on Main | 0/TBD | Not started | - |
 

@@ -1,9 +1,9 @@
 ---
 phase: "23"
 slug: "modes-leftovers-and-sketch-005-verdict"
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-10-17"
 ---
 
@@ -47,25 +47,25 @@ created: "2026-10-17"
 
 | Criterion | Plan | Wave | Check / command | Failing direction (must go red when…) | File Exists | Status |
 |---|---|---|---|---|---|---|
-| SC2: save paths cap at the input | 23-02 | 1 | `node scripts/verify-name-cap-at-input.mjs` | A save path calls `quickInput.input(`; it passes a literal or the other constant; `MODE_NAME_MAX`, `SETUP_NAME_MAX`, `GROUP_TITLE_MAX_CHARS` and the 14-UI-SPEC `:316`/`:360` cap disagree; the helper lacks `createInputBox`, `onDidChangeValue` or `.slice(0, max)`; any derivation is ZERO | ❌ W0 | ⬜ pending |
-| SC2: name-cap plants | 23-02 | 1 | `node scripts/verify-name-cap-at-input.mjs --self-test` | The baseline is not green, or any of plants 1-8 is not red naming its drift: mode save reverted to `input(`, `60` literal at the setup call, `MODE_NAME_MAX` in setups, helper slice removed, `MODE_NAME_MAX = 61`, spec cap 80, `saveCurrentAsMode` renamed, extra `quickInput.input(` name prompt | ❌ W0 | ⬜ pending |
-| SC2: copy unchanged | 23-02 | 1 | `scripts/verify-platform.sh --only gui09-setups-copy`, `--only shell-error-copy-no-internals`, each with `-self-test` | A contracted literal leaves the call-site `{ prompt, placeHolder }` object, or surplus copy appears | ✅ | ⬜ pending |
-| SC2: commit backstop kept | 23-02 | 1 | `--only gui09-setup-roundtrip`, `--only gui09-setup-roundtrip-self-test` | `.slice(0, SETUP_NAME_MAX)` removed or the cap changed | ✅ | ⬜ pending |
-| SC2: cut while typing, live | 23-02 | 1 | new name-cap live row, `PB_VERIFY_PORT=3939`, output quoted in the SUMMARY | Setting 70 characters on the Save as Mode or Save Setup field leaves a length other than 60, or the stored name is not the first 60 characters | ❌ W0 | ⬜ pending |
-| SC2: save still works | 23-02 | 1 | `PB_VERIFY_PORT=3939 scripts/verify-platform.sh --only ng-035-custom-mode-saves-layout`, `--only ng-036-setup-records-dock-layout` | Probe timeout (stub still targets `input`) or the saved layout is lost | ✅ (stub edit) | ⬜ pending |
-| SC2: spec and planning wording | 23-02, 23-04 | 1 | `grep -n 'while typing' .planning/milestones/v1.3-phases/14-modes-windows-setups/14-UI-SPEC.md` matches; `grep -n 'group name\|group-name' .planning/ROADMAP.md .planning/REQUIREMENTS.md` has no MODE-02 / criterion 2 hit | A spec or planning line still says "before commit" only, or still says "group name" | — (command) | ⬜ pending |
-| SC3: decision taken | 23-03 | 1 | C1 checkpoint resume signal recorded in the 23-03 SUMMARY | Any motion code or 14-UI-SPEC motion line changed before C1 | — (checkpoint) | ⬜ pending |
-| SC3: spec motion equals code | 23-03 | 2 | `node scripts/verify-panel-motion.mjs` | Spec Motion (`:198-200`) and the rebind's per-panel `expandDuration` disagree; panel keys differ from stock `DEFAULT_OPTIONS`; more than one `rebind(ApplicationShellOptions)`; (b, c) no reduced-motion guard; (c) no shrink before a collapse; ZERO derivation | ❌ W0 | ⬜ pending |
-| SC3: motion plants | 23-03 | 2 | `node scripts/verify-panel-motion.mjs --self-test` | Any branch plant not red: (b, c) bottom `expandDuration` dropped, N=250 against a 200 spec, guard removed, second rebind, spec says instant while the code slides; (a) `expandDuration: 150` added; (c) left shrink removed; ZERO | ❌ W0 | ⬜ pending |
-| SC3: visible motion (b, c) | 23-03 | 2 | motion live row, `PB_VERIFY_PORT=3939` | Browsing → Coding shows no intermediate left width, or the end width arrives later than N ms plus one frame; Coding → Browsing shows an intermediate width under b, or none under c; any intermediate width under reduced motion | ❌ W0 | ⬜ pending |
-| SC3: switch invariant (c) | 23-03 | 2 | `--only gui07-mode-switch-tabs-invariant`, `--only gui07-mode-switch-tabs-invariant-self-test` | An unallowlisted `this.shell…` call on the switch path | ✅ | ⬜ pending |
-| SC3: core untouched | 23-02, 23-03 | 1-2 | `--only diff-theia-core`; `git -C upstream diff` empty | Any core or upstream diff | ✅ | ⬜ pending |
-| SC1: records current | 23-01 | 3 | `grep -n 'stays top' .planning/milestones/v1.3-phases/14-modes-windows-setups/14-UAT.md theia/extensions/modes/src/browser/mode-descriptors.ts` shows no current-claim line; `grep -n '^| 2 |' .planning/GUI-DEFECTS.md` shows `IN TREE`; `grep -n 'truth_correction' .planning/milestones/v1.3-phases/14.1.1-gui-conformance-sweep/14.1.1-UAT.md` includes G-14.1.1-11; the 14.1.1-UAT and 14-UAT Summary counts equal a recount of the entries | A strip-stays-top claim remains as current; item 2 still `OPEN`; G-11 truth rewritten in place; a Summary count disagrees with the entries | — (command) | ⬜ pending |
-| SC1: descriptor comment safe | 23-01 | 3 | `--only gui07-mode-toggle-commands`, `--only gui08-panorama-copy`, `--only gui07-mode-switch-tabs-invariant`, each with `-self-test` | The comment adds a `['…', 'left']` pair, an `id: '…'` literal or `textContent`, and a derivation or plant changes | ✅ | ⬜ pending |
-| SC1: G-11 hand-off recorded | 23-01 | 3 | `grep -n 'Phase 24' .planning/GUI-DEFECTS.md .planning/milestones/v1.3-phases/14.1.1-gui-conformance-sweep/14.1.1-UAT.md` matches item 2 and G-14.1.1-11 | No hand-off recorded | — (command) | ⬜ pending |
-| SC4: 14-VERIFICATION exists | 23-05 | 4 | `test -f .planning/milestones/v1.3-phases/14-modes-windows-setups/14-VERIFICATION.md`; `grep -q 'covered_digest: "v3:sha256:'` on it; its `status:` is one of `passed`, `gaps_found`, `human_needed` | Missing file, missing digest, or a hand-typed digest (no seam output quoted in the SUMMARY) | ❌ W0 | ⬜ pending |
-| SC5: sketch committed and decided | 23-04 | 1 | `git ls-files --error-unmatch .planning/sketches/005-vscode-layout/index.html`; `grep -c '^| 005 |' .planning/sketches/MANIFEST.md` = 1; `grep -n 'v1.5' .planning/ROADMAP.md .planning/REQUIREMENTS.md .planning/PROJECT.md` names the milestone and SK-01; `git show --stat HEAD` for the sketch commit lists no foreign untracked file | Untracked sketch, no or duplicate row, no named v1.5 entry, or a foreign file in the commit | — (command) | ⬜ pending |
-| Gate, every plan | all | — | `node scripts/scan-brand-residue.mjs` exits 0 after staging; `python3 scripts/phase-gate.py --root .` prints nothing; `--quick` 0 FAIL | Residue hit; `test file changed` (a locked check edited without re-lock); any FAIL row | ✅ | ⬜ pending |
+| SC2: save paths cap at the input | 23-02 | 1 | `node scripts/verify-name-cap-at-input.mjs` | A save path calls `quickInput.input(`; it passes a literal or the other constant; `MODE_NAME_MAX`, `SETUP_NAME_MAX`, `GROUP_TITLE_MAX_CHARS` and the 14-UI-SPEC `:316`/`:360` cap disagree; the helper lacks `createInputBox`, `onDidChangeValue` or `.slice(0, max)`; any derivation is ZERO | ❌ W0 | ✅ green |
+| SC2: name-cap plants | 23-02 | 1 | `node scripts/verify-name-cap-at-input.mjs --self-test` | The baseline is not green, or any of plants 1-8 is not red naming its drift: mode save reverted to `input(`, `60` literal at the setup call, `MODE_NAME_MAX` in setups, helper slice removed, `MODE_NAME_MAX = 61`, spec cap 80, `saveCurrentAsMode` renamed, extra `quickInput.input(` name prompt | ❌ W0 | ✅ green |
+| SC2: copy unchanged | 23-02 | 1 | `scripts/verify-platform.sh --only gui09-setups-copy`, `--only shell-error-copy-no-internals`, each with `-self-test` | A contracted literal leaves the call-site `{ prompt, placeHolder }` object, or surplus copy appears | ✅ | ✅ green |
+| SC2: commit backstop kept | 23-02 | 1 | `--only gui09-setup-roundtrip`, `--only gui09-setup-roundtrip-self-test` | `.slice(0, SETUP_NAME_MAX)` removed or the cap changed | ✅ | ✅ green |
+| SC2: cut while typing, live | 23-02 | 1 | new name-cap live row, `PB_VERIFY_PORT=3939`, output quoted in the SUMMARY | Setting 70 characters on the Save as Mode or Save Setup field leaves a length other than 60, or the stored name is not the first 60 characters | ❌ W0 | ✅ green |
+| SC2: save still works | 23-02 | 1 | `PB_VERIFY_PORT=3939 scripts/verify-platform.sh --only ng-035-custom-mode-saves-layout`, `--only ng-036-setup-records-dock-layout` | Probe timeout (stub still targets `input`) or the saved layout is lost | ✅ (stub edit) | ✅ green |
+| SC2: spec and planning wording | 23-02, 23-04 | 1 | `grep -n 'while typing' .planning/milestones/v1.3-phases/14-modes-windows-setups/14-UI-SPEC.md` matches; `grep -n 'group name\|group-name' .planning/ROADMAP.md .planning/REQUIREMENTS.md` has no MODE-02 / criterion 2 hit | A spec or planning line still says "before commit" only, or still says "group name" | — (command) | ✅ green |
+| SC3: decision taken | 23-03 | 1 | C1 checkpoint resume signal recorded in the 23-03 SUMMARY | Any motion code or 14-UI-SPEC motion line changed before C1 | — (checkpoint) | ✅ green |
+| SC3: spec motion equals code | 23-03 | 2 | `node scripts/verify-panel-motion.mjs` | Spec Motion (`:198-200`) and the rebind's per-panel `expandDuration` disagree; panel keys differ from stock `DEFAULT_OPTIONS`; more than one `rebind(ApplicationShellOptions)`; (b, c) no reduced-motion guard; (c) no shrink before a collapse; ZERO derivation | ❌ W0 | ✅ green |
+| SC3: motion plants | 23-03 | 2 | `node scripts/verify-panel-motion.mjs --self-test` | Any branch plant not red: (b, c) bottom `expandDuration` dropped, N=250 against a 200 spec, guard removed, second rebind, spec says instant while the code slides; (a) `expandDuration: 150` added; (c) left shrink removed; ZERO | ❌ W0 | ✅ green |
+| SC3: visible motion (b, c) | 23-03 | 2 | motion live row, `PB_VERIFY_PORT=3939` | Browsing → Coding shows no intermediate left width, or the end width arrives later than N ms plus one frame; Coding → Browsing shows an intermediate width under b, or none under c; any intermediate width under reduced motion | — (n/a, option a) | ✅ n/a (G-32 option a) |
+| SC3: switch invariant (c) | 23-03 | 2 | `--only gui07-mode-switch-tabs-invariant`, `--only gui07-mode-switch-tabs-invariant-self-test` | An unallowlisted `this.shell…` call on the switch path | ✅ | ✅ green |
+| SC3: core untouched | 23-02, 23-03 | 1-2 | `--only diff-theia-core`; `git -C upstream diff` empty | Any core or upstream diff | ✅ | ✅ green |
+| SC1: records current | 23-01 | 3 | `grep -n 'stays top' .planning/milestones/v1.3-phases/14-modes-windows-setups/14-UAT.md theia/extensions/modes/src/browser/mode-descriptors.ts` shows no current-claim line; `grep -n '^| 2 |' .planning/GUI-DEFECTS.md` shows `IN TREE`; `grep -n 'truth_correction' .planning/milestones/v1.3-phases/14.1.1-gui-conformance-sweep/14.1.1-UAT.md` includes G-14.1.1-11; the 14.1.1-UAT and 14-UAT Summary counts equal a recount of the entries | A strip-stays-top claim remains as current; item 2 still `OPEN`; G-11 truth rewritten in place; a Summary count disagrees with the entries | — (command) | ✅ green |
+| SC1: descriptor comment safe | 23-01 | 3 | `--only gui07-mode-toggle-commands`, `--only gui08-panorama-copy`, `--only gui07-mode-switch-tabs-invariant`, each with `-self-test` | The comment adds a `['…', 'left']` pair, an `id: '…'` literal or `textContent`, and a derivation or plant changes | ✅ | ✅ green |
+| SC1: G-11 hand-off recorded | 23-01 | 3 | `grep -n 'Phase 24' .planning/GUI-DEFECTS.md .planning/milestones/v1.3-phases/14.1.1-gui-conformance-sweep/14.1.1-UAT.md` matches item 2 and G-14.1.1-11 | No hand-off recorded | — (command) | ✅ green |
+| SC4: 14-VERIFICATION exists | 23-05 | 4 | `test -f .planning/milestones/v1.3-phases/14-modes-windows-setups/14-VERIFICATION.md`; `grep -q 'covered_digest: "v3:sha256:'` on it; its `status:` is one of `passed`, `gaps_found`, `human_needed` | Missing file, missing digest, or a hand-typed digest (no seam output quoted in the SUMMARY) | ❌ W0 | ✅ green |
+| SC5: sketch committed and decided | 23-04 | 1 | `git ls-files --error-unmatch .planning/sketches/005-vscode-layout/index.html`; `grep -c '^| 005 |' .planning/sketches/MANIFEST.md` = 1; `grep -n 'v1.5' .planning/ROADMAP.md .planning/REQUIREMENTS.md .planning/PROJECT.md` names the milestone and SK-01; `git show --stat HEAD` for the sketch commit lists no foreign untracked file | Untracked sketch, no or duplicate row, no named v1.5 entry, or a foreign file in the commit | — (command) | ✅ green |
+| Gate, every plan | all | — | `node scripts/scan-brand-residue.mjs` exits 0 after staging; `python3 scripts/phase-gate.py --root .` prints nothing; `--quick` 0 FAIL | Residue hit; `test file changed` (a locked check edited without re-lock); any FAIL row | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -73,11 +73,11 @@ created: "2026-10-17"
 
 ## Wave 0 Requirements
 
-- [ ] `scripts/verify-name-cap-at-input.mjs` plus the `<label>` / `<label>-self-test` `--quick` rows beside `gui09-setup-roundtrip` (23-02).
-- [ ] Name-cap live script plus 1 full-tier row (23-02). `git add` it before `scan-brand-residue`.
-- [ ] Update the ng-035 / ng-036 stubs from `input` to the capped input box (23-02). Establish lock status first; if locked, the C2 re-lock follows the edit.
-- [ ] `scripts/verify-panel-motion.mjs` plus 2 `--quick` rows (23-03, written after C1 for the chosen branch).
-- [ ] Motion live script plus 1 full-tier row (23-03, options b and c only).
+- [x] `scripts/verify-name-cap-at-input.mjs` plus the `<label>` / `<label>-self-test` `--quick` rows beside `gui09-setup-roundtrip` (23-02).
+- [x] Name-cap live script plus 1 full-tier row (23-02). `git add` it before `scan-brand-residue`.
+- [x] Update the ng-035 / ng-036 stubs from `input` to the capped input box (23-02). Establish lock status first; if locked, the C2 re-lock follows the edit.
+- [x] `scripts/verify-panel-motion.mjs` plus 2 `--quick` rows (23-03, written after C1 for the chosen branch).
+- [x] Motion live script plus 1 full-tier row (23-03, options b and c only). Not created: Chris chose G-32 option a, which has no motion to measure (23-03-SUMMARY).
 
 Any new script cites only tracked `.planning/milestones/…` paths, never `.planning/phases/23-…` (`planning-paths`).
 
@@ -99,11 +99,29 @@ Any new script cites only tracked `.planning/milestones/…` paths, never `.plan
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 60 s for static rows (live rows are full tier only)
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 60 s for static rows (live rows are full tier only)
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-10-18 (Nyquist audit, static only)
+
+---
+
+## Validation Audit 2026-10-18
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+Static checks re-run in this audit (all exit 0): `verify-name-cap-at-input.mjs` and `verify-panel-motion.mjs`, each with `--self-test`; `scan-brand-residue.mjs` (364 files); `phase-gate.py` prints nothing; `docs/non-gui/quick-baseline.txt` is 0 bytes; `git -C upstream diff --quiet` exits 0. Grep rows: `while typing` has 3 hits in 14-UI-SPEC; no MODE-02 / criterion 2 line in ROADMAP or REQUIREMENTS says "group name"; no `stays top` line in 14-UAT or `mode-descriptors.ts`; GUI-DEFECTS item 2 reads `IN TREE`; 14.1.1-UAT carries the G-11 `truth_correction` (line 686) and the G-32 one (line 939); `Phase 24` appears in GUI-DEFECTS and 14.1.1-UAT; 14-VERIFICATION.md exists with a `v3:sha256:` digest and `status: human_needed`; the sketch 005 `index.html` is tracked, MANIFEST has one `| 005 |` row, and `v1.5` / SK-01 appear in ROADMAP, REQUIREMENTS and PROJECT. Not re-run (static-only audit): `--quick`, the TS builds and the live rows. Their status cites `logs/`: `quick-23-01/02/03/05.log` (136 PASS, 0 FAIL at the closing gate), `name-cap-live-23-02.log`, `ng035-23-02.log`, `ng036-23-02.log`, `switch-live-23-03.log`, `diff-core-23-03.log`, each `PHASE23_EXIT=0`.
+
+Notes:
+- G-32 was settled as option a (Chris, 2026-10-18). The (b, c) rows do not apply: no motion live script or row exists, and `verify-panel-motion.mjs` runs as `kind=a`. The (c) switch-invariant row still passes in `--quick`.
+- The C2 re-lock of ng-035/036 is recorded at `5a5606c` (Chris's re-lock at `58fa9cb`). `phase-gate.py` is silent.
+- G-11 live confirmation (strip relocation, MODE-01) is handed to the Phase 24 session by design. It is recorded as a hand-off, not as a gap.
+- Open manual items for Chris: caret and Enter after a cut (the live row proves the 60-character cut and the stored name, not keyboard Enter); the v1.5 milestone name ("Coding Workbench Layout"), which is non-blocking.
