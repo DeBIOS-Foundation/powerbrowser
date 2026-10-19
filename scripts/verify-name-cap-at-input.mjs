@@ -227,7 +227,7 @@ function selfTest() {
         /derived ZERO: .* no saveCurrentAsMode body \(missing anchor\)/);
     plant('9 an extra quickInput.input( in another modes file', OTHER, 'export const GROUP_TITLE_MAX_CHARS',
         'void this.quickInput.input({});\nexport const GROUP_TITLE_MAX_CHARS', /quick-input \.input\( call remains .*group-model\.ts/);
-    plant('10 only the second cap on the custom-modes bullet set to 80', SPEC_REL, 'pasted text is cut to its first 60.', 'pasted text is cut to its first 80.',
+    plant('10 only the second cap on the custom-modes bullet set to 80', SPEC_REL, 'it keeps the first 60 characters of the result', 'it keeps the first 80 characters of the result',
         /caps disagree: .*the custom-modes bullet #2 = 80/);
     if (failed) {
         console.error(`${NAME} --self-test: FAIL -- ${failed} plant(s) misbehaved`);

@@ -270,7 +270,7 @@ above.
   tab-count chip re-asserts the invariant on every switch (carried pattern)"*.
 - Custom modes save the current panel visibility/layout as data with shipped
   defaults behind them; a custom mode never alters a shipped default in place.
-  Save as Mode uses the same quick input and the same rule: the name field holds at most 60 characters while typing, and pasted text is cut to its first 60.
+  Save as Mode uses the same quick input and the same rule: the name field holds at most 60 characters while typing; after any typed or pasted change it keeps the first 60 characters of the result, and the caret moves to the end.
   No `[features]`/`[modes]` manifest flag exists anywhere in this contract.
 - A mode switch is never destructive and never needs confirmation.
 
@@ -311,7 +311,7 @@ above.
 
 ### Named setups (geometry + tab placement + mode)
 
-- **Save:** a quick input with one name field, capped at 60 characters while typing; pasted text is cut to its first 60 characters. Enter saves, Esc cancels.
+- **Save:** a quick input with one name field, capped at 60 characters while typing; after any typed or pasted change it keeps the first 60 characters of the result, and the caret moves to the end. Enter saves, Esc cancels.
   Empty commits render the empty-name error; duplicates render the
   duplicate-name error; success flashes the saved confirmation and marks the
   new row current. Overwriting an existing name is not offered — delete first.
