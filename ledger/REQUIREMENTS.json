@@ -1,5 +1,5 @@
 {
-  "ledger_version": 393,
+  "ledger_version": 395,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -1152,7 +1152,7 @@
   "mockup_freeze": null,
   "scope_lock": null,
   "check_locks": {
-    "commit": "1171320e996321f78114fb72ba0c4b474a7c11bc",
+    "commit": "58fa9cb5a53d0961901f6bce82a7d3cb77f3b39c",
     "files": {
       "scripts/verify-ng-001-one-key-rule.mjs": "642d3d25ab836395e0137652c047e432cfc8e31a37c76191845694bd000242c4",
       "scripts/verify-ng-002-navigation-keeps-row.mjs": "d5fc1ec38c3503606a20716ecd0b12e1696f6ea552a479f3ac12e2cf740e74b4",
@@ -1188,8 +1188,8 @@
       "scripts/verify-ng-032-quit-restores-session.mjs": "ca562b02a53b71b6dd8d021693a36089416d3700fd3fc5f333bde6f7f3f99b20",
       "scripts/verify-ng-033-layout-survives-relaunch.mjs": "9a1772aa443c451381cf75eadb3b457847b8de8be91507c78da91ae8fa7c4d0d",
       "scripts/verify-ng-034-web-tab-history-restart.mjs": "624e5e948cc92af541cb300fba05e4696abaf968ca523e7c397b9c9cdf4735e3",
-      "scripts/verify-ng-035-custom-mode-layout.mjs": "a1ca6db500d36a1573ce286e9b671725189d40203f2f33fde8c3760a38740391",
-      "scripts/verify-ng-036-setup-dock-layout.mjs": "b1dacbce2dce574a401d2e74f2c066bf2c466d12370c4d29e41762fddc984c21",
+      "scripts/verify-ng-035-custom-mode-layout.mjs": "fe71e1fefb9108699b4a848e7240cd1ca690bac3cba46d3dfc16350248cc7712",
+      "scripts/verify-ng-036-setup-dock-layout.mjs": "2a01c4ca40939a0d47c6d917181364d31419d8d15cf8ee9a9f5b76ed24ddf45d",
       "scripts/verify-ng-037-core-close-quits.mjs": "d61b3e003e2bf1a0ad68f3e7ec88f620e8395c03d1fc93fc3d7682cf71442412",
       "scripts/verify-ng-038-actor-sender-wall.mjs": "28d3c8a4435d9785bb2b7dfe429b9bbe6915e5b7cd6e5c9cea28abfcb46b4ca8",
       "scripts/verify-ng-039-internals-waivers.mjs": "7dd82262742ea02d32dddd0c313e43e0d6e21397b44b8d1ece973aeacaa80c5d",
