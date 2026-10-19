@@ -1,5 +1,5 @@
 {
-  "ledger_version": 402,
+  "ledger_version": 404,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -954,11 +954,11 @@
     {
       "id": "NG-074",
       "text": "The CI verify workflow passes on main. Evidence: no passing run since 2026-09-04; run 34911771311 fails 15 rows.",
-      "status": "deferred-approved",
+      "status": "done",
       "spec_ref": "docs/non-gui/GAPS.md:101",
       "test_ref": "scripts/verify-ng-074-ci-main.mjs::ng074-ci-green-on-main",
       "code_ref": "",
-      "evidence": "",
+      "evidence": "CI verify run 39340825244 concluded success on pushed main head 0efb116 (2026-10-19): https://github.com/DeBIOS-Foundation/powerbrowser/actions/runs/39340825244",
       "owner": "chris",
       "phase": "15",
       "deferred_at": "2026-09-28",
