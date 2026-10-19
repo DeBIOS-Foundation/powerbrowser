@@ -1,5 +1,5 @@
 {
-  "ledger_version": 395,
+  "ledger_version": 396,
   "frozen_at": "2026-09-27",
   "items": [
     {
@@ -1084,7 +1084,7 @@
     {
       "id": "NG-084",
       "text": "The five v1.2 human UAT sheets are signed. Evidence: 10-UAT.md:57, 73, 94.",
-      "status": "deferred-approved",
+      "status": "dropped",
       "spec_ref": "docs/non-gui/GAPS.md:114",
       "test_ref": "",
       "code_ref": "",
@@ -1092,7 +1092,7 @@
       "owner": "chris",
       "phase": "15",
       "deferred_at": "2026-09-28",
-      "reason": "Chris 2026-09-28: the five v1.2 human UAT sheets (10-UAT.md) move to the human UAT of Phase 15"
+      "reason": "Superseded by NG-089: UAT sheets 10, 13, 14, 14.1, 14.1.1 and 15, each with a React 19 runtime line (UAT-01, Phase 24)"
     },
     {
       "id": "NG-085",
