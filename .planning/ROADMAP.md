@@ -356,7 +356,7 @@ Plans:
   3. The sheets carry a React 19 runtime line with a recorded result
   4. The widened NG-084 text is approved and recorded in the ledger
 
-**Plans**: 3/6 plans executed in 5 waves (wave 1 runs two file-disjoint plans in parallel; waves 2 to 5 each stop for Chris)
+**Plans**: 5/6 plans executed in 5 waves (wave 1 runs two file-disjoint plans in parallel; waves 2 to 5 each stop for Chris)
 
 Plans:
 
@@ -371,15 +371,15 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 24-04-PLAN.md — sidecar rebuilt and proven on PB_VERIFY_PORT 3939, build recorded on the six sheets, throwaway profile and fixtures; Launch A and B run by Chris (blocking-human); his results recorded verbatim with gaps
+- [x] 24-04-PLAN.md — sidecar rebuilt and proven on PB_VERIFY_PORT 3939, build recorded on the six sheets, throwaway profile and fixtures; Launch A and B run by Chris (blocking-human); his results recorded verbatim with gaps
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 24-05-PLAN.md — the GEN-05 fixture drill (10/4) and the 10/5 carry-test report (blocking-human); tree restored byte for byte, sidecar rebuilt, `--quick` green
+- [ ] 24-05-PLAN.md — the GEN-05 fixture drill (10/4) and the 10/5 carry-test report (blocking-human); tree restored byte for byte, sidecar rebuilt, `--quick` green — **deferred, not run** (Chris, 2026-10-19: GUI checks on his own time; C01 is in 24-CHRIS-CHECKLIST.md)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 24-06-PLAN.md — sheets closed and recounted, G-11 records if Chris passed it, NG-089 done on a green check, Chris's lock of the check hashes (blocking-human), gates clean
+- [x] 24-06-PLAN.md — sheets closed and recounted, G-11 records if Chris passed it, NG-089 done on a green check, Chris's lock of the check hashes (blocking-human), gates clean
 
 ### Phase 25: CI Green on Main
 
@@ -403,9 +403,9 @@ Plans:
 | 19. Node 24, React 19, Theia 1.76.0 | 8/8 | Complete    | 2026-10-17 |
 | 20. Non-GUI Gaps | 5/5 | Complete    | 2026-10-17 |
 | 21. Panorama Spec and gui08 Checks | 5/5 | Complete    | 2026-10-17 |
-| 22. Panorama Worklist | 7/7 | In Progress | - |
+| 22. Panorama Worklist | 7/7 | Executed; live checks deferred (NG-089, phase 26) | - |
 | 23. Modes Leftovers and Sketch 005 Verdict | 5/5 | Complete    | 2026-10-18 |
-| 24. Live UAT Pass | 3/6 | In Progress | - |
+| 24. Live UAT Pass | 5/6 | Closed with deferral: remaining GUI checks to Chris (NG-089 deferred-approved, phase 26) | 2026-10-19 |
 | 25. CI Green on Main | 0/TBD | Not started | - |
 
 ## Hard constraints (every phase)

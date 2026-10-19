@@ -2,13 +2,13 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Platform Updates and GUI Close-out
-current_phase: 22
-current_phase_name: Panorama Worklist
-status: verifying
-stopped_at: Phase 23 complete, ready to verify Phase 22
+current_phase: 25
+current_phase_name: CI Green on Main
+status: blocked
+stopped_at: Phase 24 closed with deferral; waiting for Chris to push main
 last_updated: "2026-10-19T05:14:16.045Z"
-last_activity: 2026-10-18
-last_activity_desc: Phase 23 complete, transitioned to Phase 22
+last_activity: 2026-10-19
+last_activity_desc: Phase 24 closed; NG-089 deferred to phase 26 with Chris approval; remaining GUI checks in 24-CHRIS-CHECKLIST.md
 state_head: bcdf102bbbc27c506adb85419f4f8edf0852b9eb
 progress:
   total_phases: 9
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-10-16)
 
 ## Current Position
 
-Phase: 22 — Panorama Worklist
-Plan: 7
-Status: Phase complete — ready for verification
-Last activity: 2026-10-18 — Phase 23 complete, transitioned to Phase 22
+Phase: 25 — CI Green on Main
+Plan: none (Chris pushes main; CI confirms)
+Status: Blocked on Chris pushing main
+Last activity: 2026-10-19 — Phase 24 closed with deferral. Phase 22 live checks and the rest of the UAT are deferred to Chris (24-CHRIS-CHECKLIST.md); 12 defects for v1.5 are in 24-GAPS.md
 
 ## Performance Metrics
 
