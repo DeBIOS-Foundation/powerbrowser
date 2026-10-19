@@ -3832,6 +3832,17 @@ run_own_checks() {
     "gui07-mode-switch-tabs-invariant|node $REPO_ROOT/scripts/verify-mode-switch-tabs-invariant.mjs"
     "gui07-mode-switch-tabs-invariant-self-test|node $REPO_ROOT/scripts/verify-mode-switch-tabs-invariant.mjs --self-test"
 
+    # NEW (Phase 23, G-32, MODE-03): side-panel motion. Derives the motion
+    # 14-UI-SPEC declares (the Motion "Side panels" sentence and the E4+E7
+    # loading row) and the motion the code ships (the one
+    # ApplicationShellOptions rebind, its per-panel expandDuration and
+    # expandThreshold 0, and any shrink before collapse in activateMode) and
+    # requires them equal to one of Chris's three kinds. The live half is
+    # modes-panel-motion-live under a slide; under option a (instant) there is
+    # no motion to measure and no live row. Honestly --quick: text reads only.
+    "modes-panel-motion|node $REPO_ROOT/scripts/verify-panel-motion.mjs"
+    "modes-panel-motion-self-test|node $REPO_ROOT/scripts/verify-panel-motion.mjs --self-test"
+
     # NEW (14-03): GUI-09's setup roundtrip gate. Derives the setups schema,
     # the four command ids, and the contracted labels and copy at check time
     # and runs a node JSON roundtrip over save, list, restore, and delete.

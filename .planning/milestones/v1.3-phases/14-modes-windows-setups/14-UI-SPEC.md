@@ -13,8 +13,8 @@ created: "2026-09-06"
 
 **Scope note.** This phase builds GUI-07 (modes) + GUI-09 (windows & setups):
 coding / browsing / organising modes switchable from shipped defaults,
-customizable, savable as data (never manifest flags); side panels slide per
-mode; named setups save/restore geometry + tab placement + mode; dependent
+customizable, savable as data (never manifest flags); side panels open and close
+instantly per mode; named setups save/restore geometry + tab placement + mode; dependent
 windows host tab content only, never a second IDE frame; core-close kills the
 session, relaunch restores. Never fork/patch Theia core; never modify Gecko
 outside the 2 hook-only patches.
@@ -122,7 +122,6 @@ Exceptions:
 |-----------|-------|---------------|
 | Dependent-window geometry (position, size) | OS pixels, not scale | Window frames are owned by the window manager; setups record the rect verbatim and restore it verbatim |
 | `radius-full: 9999px` | non-scale | Pill token from the locked sketch theme; unchanged from Phase 13 |
-| Panel slide distance | Theia region width (stock) | The slide animates the stock region's own width; the contract fixes duration/easing only (see Motion) |
 
 ---
 
@@ -195,9 +194,8 @@ shows a visible focus indicator:
 ### Motion
 
 Baseline `transition: all 0.15s ease` on every interactive element
-(sketch-locked, carried). Side panels **slide** per mode switch: duration
-≤200ms, same easing; `prefers-reduced-motion` renders the switch instantly
-with no slide. Mode-switch visual state (toggle segment) applies ≤150ms
+(sketch-locked, carried). Side panels switch instantly on a mode switch,
+with no animation (Chris, G-32, 2026-10-18). Mode-switch visual state (toggle segment) applies ≤150ms
 (carried). Tabs never unmount during a switch — there is no tab loading state
 on mode change. Dependent-window open/close uses the stock window-manager
 animation; no custom window animation is authored.
@@ -262,8 +260,7 @@ above.
 | Organising | The Panorama canvas (Phase 15; placeholder slot in Phase 14) | hidden | hidden | hidden | Organising placeholder slot (see below) | all three hidden |
 
 - Switching selects the toggle segment with immediate visual state (≤150ms);
-  panels slide and the strip changes home (≤200ms, instant under reduced
-  motion). Content tabs never unmount, close, move windows, or detach.
+  panels and the strip change at once. Content tabs never unmount, close, move windows, or detach.
 - **The tab-count chip is removed** (owner decision, 2026-09-08) — from the
   status bar and from the URL row alike. The invariant it asserted still
   holds and is still enforced, but by the switch-invariant gate rather than by
@@ -365,7 +362,7 @@ Elements probed: E1 mode toggle + custom-mode menu
 | zero-one-many | E3 setups list | ✅ covered | Zero → empty copy; one → single row, still restorable/deletable; many → capped scroll; wording fixed in contract (singular/plural exact, no count line) |
 | partial | E3 restore | ✅ covered | Gone tabs are dropped and the restore completes on geometry + mode with the contracted explanation; current windows/tabs are never left half-applied unexplained |
 | error | E3 restore | ✅ covered | Failed restore renders the contracted restore-failure error; current windows and tabs stay untouched |
-| loading | E4+E7 switch | ✅ covered | Panels slide ≤200ms (instant under reduced motion); tabs never unmount so there is no tab loading state on switch |
+| loading | E4+E7 switch | ✅ covered | Panels switch instantly; tabs never unmount so there is no tab loading state on switch |
 | error | E4 corrupt mode | ✅ covered | Unreadable custom-mode data falls back to shipped Browsing with the contracted fallback notice; never a blank shell |
 | populated | E6 dependent | ✅ covered | Single tab content fills the window; title area shows the tab title; no chrome bar, toggle, panels, status bar, or strip |
 | error | E6 tab closed | ✅ covered | Hosted tab closed elsewhere renders the contracted "This tab is closed" state with its "Close Window" button — never a blank frame |
