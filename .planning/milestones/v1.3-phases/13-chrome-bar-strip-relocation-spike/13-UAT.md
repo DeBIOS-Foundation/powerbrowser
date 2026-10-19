@@ -3,16 +3,12 @@ status: partial
 phase: 13-chrome-bar-strip-relocation-spike
 source: [13-01-SUMMARY.md, 13-02-SUMMARY.md, 13-03-SUMMARY.md]
 started: 2026-09-06T18:20:42Z
-updated: 2026-10-19T22:49:07Z
+updated: 2026-10-19T22:54:30Z
 ---
 
 ## Current Test
 
-number: 6
-name: Suggestions list plus activation behaviour
-expected: |
-  Typing suggests up to 8 rows; activating one (Enter or click) navigates; committing empty is a no-op; provider failure degrades to a plain address commit with the contracted error row.
-awaiting: user response
+[testing complete]
 build: |
   Sidecar rebuilt by 24-04 on 2026-10-19 (build log date 2026-10-19T17:26:17Z,
   .planning/phases/24-live-uat-pass/logs/build-24-04.log, untracked) from HEAD

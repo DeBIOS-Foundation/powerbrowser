@@ -1,18 +1,14 @@
 ---
-status: testing
+status: partial
 phase: 15-panorama-organising
 source: [15-UI-SPEC.md, 22-UI-SPEC.md, 22-VERIFICATION.md, 22-07-SUMMARY.md, 22-01-SUMMARY.md, 22-REVIEW-FIX.md]
 started: 2026-10-19T06:16:32Z
-updated: 2026-10-19T22:49:07Z
+updated: 2026-10-19T22:54:30Z
 ---
 
 ## Current Test
 
-number: 1
-name: React 19 runtime
-expected: |
-  This sheet's tests ran on the build named in Current Test build: (Theia 1.76.0, React 19.2.8, Node 24, Gecko 153.5.0esr), and no surface this sheet covers failed to paint or showed a runtime error.
-awaiting: the Phase 24 live session
+[testing complete]
 build: |
   Sidecar rebuilt by 24-04 on 2026-10-19 (build log date 2026-10-19T17:26:17Z,
   .planning/phases/24-live-uat-pass/logs/build-24-04.log, untracked) from HEAD

@@ -3,16 +3,12 @@ status: partial
 phase: 14-modes-windows-setups
 source: [14-01-SUMMARY.md, 14-02-SUMMARY.md, 14-03-SUMMARY.md, .planning/GUI-DEFECTS.md]
 started: 2026-09-06T21:05:00Z
-updated: 2026-10-19T22:49:07Z
+updated: 2026-10-19T22:54:30Z
 ---
 
 ## Current Test
 
-number: 2
-name: Content tabs survive every mode switch, including a mode's second visit
-expected: |
-  Switching modes never unmounts, closes, moves windows, or detaches a content tab — on the first visit to a mode and on every visit after it.
-awaiting: live confirmation in Chris's window
+[testing complete]
 build: |
   Sidecar rebuilt by 24-04 on 2026-10-19 (build log date 2026-10-19T17:26:17Z,
   .planning/phases/24-live-uat-pass/logs/build-24-04.log, untracked) from HEAD

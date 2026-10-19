@@ -1,9 +1,9 @@
 ---
-status: pending-human
+status: partial
 phase: 10-sign-off-closeout
 source: [10-01-SUMMARY.md]
 started: 2026-09-05T00:00:00Z
-updated: 2026-10-19T22:49:07Z
+updated: 2026-10-19T22:54:30Z
 executed_by: claude (static gates re-run live; all five perceptual drills reserved for human hands)
 audit_acknowledged:
   milestone: v1.2
@@ -13,7 +13,7 @@ audit_acknowledged:
 
 ## Current Test
 
-[awaiting human — sheets 1-5 below]
+[testing complete]
 build: |
   Sidecar rebuilt by 24-04 on 2026-10-19 (build log date 2026-10-19T17:26:17Z,
   .planning/phases/24-live-uat-pass/logs/build-24-04.log, untracked) from HEAD
