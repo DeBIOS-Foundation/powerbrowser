@@ -5,7 +5,7 @@
 // contracted cap while typing, through inputCappedName, and 14-UI-SPEC says so.
 // Everything compared is derived at check time:
 //   - MODE_NAME_MAX, SETUP_NAME_MAX and GROUP_TITLE_MAX_CHARS from source;
-//   - the cap number in the named-setups Save bullet, the custom-modes bullet
+//   - every cap number in the named-setups Save bullet, the custom-modes bullet
 //     and the E2 long-text row of 14-UI-SPEC, each of which must say
 //     "while typing";
 //   - the bodies of saveCurrentAsMode and saveCurrentAsSetup (brace matched),
@@ -108,12 +108,12 @@ function check(sources) {
             failures.push(`derived ZERO: ${SPEC_REL} has no ${label} (missing anchor), so the contract cannot be read`);
             continue;
         }
-        const m = /(\d+) characters/.exec(text);
-        if (!m) {
-            failures.push(`${label} in ${SPEC_REL} names no "N characters" cap`);
-        } else {
-            values.push([label, Number(m[1])]);
+        // Every cap number on the line, so a line that states the cap twice cannot contradict itself unseen.
+        const nums = [...text.matchAll(/\b(?:at most|more than|capped at|first)\s+(\d+)\b/g)].map(m => Number(m[1]));
+        if (!nums.length) {
+            failures.push(`${label} in ${SPEC_REL} names no cap ("at most N", "more than N", "capped at N" or "first N")`);
         }
+        nums.forEach((n, k) => values.push([`${label} #${k + 1}`, n]));
         if (!text.includes('while typing')) {
             failures.push(`${label} in ${SPEC_REL} does not say "while typing", so the contract no longer states the cut-while-typing rule`);
         }
@@ -220,18 +220,20 @@ function selfTest() {
     plant('4 the helper slice removed', HELPER_REL, 'value.slice(0, max)', 'value', /helper inputCappedName lacks \.slice\(0, max\)/);
     plant('5 MODE_NAME_MAX = 61', MODE_REL, 'export const MODE_NAME_MAX = 60', 'export const MODE_NAME_MAX = 61', /caps disagree: MODE_NAME_MAX = 61/);
     plant('6 the E2 row cap set to 80', SPEC_REL, '| long-text | E2 name input | ✅ covered | Input holds at most 60 characters',
-        '| long-text | E2 name input | ✅ covered | Input holds at most 80 characters', /caps disagree: .*the E2 long-text row = 80/);
+        '| long-text | E2 name input | ✅ covered | Input holds at most 80 characters', /caps disagree: .*the E2 long-text row #1 = 80/);
     plant('7 "while typing" removed from the Save bullet', SPEC_REL, 'capped at 60 characters while typing;', 'capped at 60 characters;',
         /named-setups Save bullet .* does not say "while typing"/);
     plant('8 saveCurrentAsMode renamed', MODE_REL, 'async saveCurrentAsMode(', 'async saveCurrentAsModeRenamed(',
         /derived ZERO: .* no saveCurrentAsMode body \(missing anchor\)/);
     plant('9 an extra quickInput.input( in another modes file', OTHER, 'export const GROUP_TITLE_MAX_CHARS',
         'void this.quickInput.input({});\nexport const GROUP_TITLE_MAX_CHARS', /quick-input \.input\( call remains .*group-model\.ts/);
+    plant('10 only the second cap on the custom-modes bullet set to 80', SPEC_REL, 'pasted text is cut to its first 60.', 'pasted text is cut to its first 80.',
+        /caps disagree: .*the custom-modes bullet #2 = 80/);
     if (failed) {
         console.error(`${NAME} --self-test: FAIL -- ${failed} plant(s) misbehaved`);
         process.exit(1);
     }
-    console.log(`${NAME} --self-test: PASS -- baseline green and all nine plants went red naming their drift`);
+    console.log(`${NAME} --self-test: PASS -- baseline green and all ten plants went red naming their drift`);
 }
 
 if (process.argv.includes('--self-test')) {
