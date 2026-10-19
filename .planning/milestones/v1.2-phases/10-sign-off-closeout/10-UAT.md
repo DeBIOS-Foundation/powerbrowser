@@ -3,7 +3,7 @@ status: pending-human
 phase: 10-sign-off-closeout
 source: [10-01-SUMMARY.md]
 started: 2026-09-05T00:00:00Z
-updated: 2026-09-05T00:00:00Z
+updated: 2026-10-19T06:20:00Z
 executed_by: claude (static gates re-run live; all five perceptual drills reserved for human hands)
 audit_acknowledged:
   milestone: v1.2
@@ -38,6 +38,7 @@ STAGED-awaiting-signature: no operator signature filled in; sign with name plus 
 ### 2. Customize Bridge Live Restyle (GUI-03)
 
 expected: With the dev flag on, editing customize.css restyles the shell without a rebuild. Deleting the file reverts the shell to stock styling. (The automatable halves are green; this perceptual claim is the outstanding half from 01-07/01-02 D7.)
+expected_note: "2026-10-19 24-02: the dev-flag clause ('With the dev flag on', step 1 'customize dev flag on') no longer matches the shipped contract: the customize.css layer needs no flag and is read whenever the file exists; `powerbrowserPrivilegedJs` gates only the customize.js layer (docs/CUSTOMIZE.md:3-5, :67-68). Chris accepts or rewords this at the desk session."
 result: pending
 steps:
 
@@ -54,6 +55,7 @@ STAGED-awaiting-signature: no operator signature filled in; sign with name plus 
 ### 3. Icon Pixel Look on Real Rasters (GEN-02)
 
 expected: The downstream mark renders at correct density in all three places and the title carries the suffixed display name (Power Browser Dev)
+expected_note: "2026-10-19 24-02: the suffixed display name, written with a space between the two words, no longer matches the shipped contract: the tree's display name is `PowerBrowser` (configuration.toml:38) with name_suffix ' Dev' (configuration.toml:59), so the title reads PowerBrowser Dev (powerbrowser/branding/dev/configure.sh:9). Chris accepts or rewords this at the desk session."
 result: pending
 steps:
 
@@ -104,6 +106,15 @@ source: human
 coverage_id: DOC-01/stranger-carry-test
 STAGED-awaiting-signature: no operator signature filled in; sign with name plus date after the stranger run is recorded
 
+### 6. React 19 runtime
+
+expected: This sheet's tests ran on the build named in Current Test build: (Theia 1.76.0, React 19.2.8, Node 24, Gecko 153.5.0esr), and no surface this sheet covers failed to paint or showed a runtime error.
+contract: 24-CONTEXT (every sheet gets a React 19 runtime line); ROADMAP Phase 24 criterion 3
+scope: "tests 1-3 only; tests 4 and 5 run in later sessions (24-RESEARCH, The React 19 runtime line)"
+result: pending
+source: human
+coverage_id: React-19/runtime
+
 ## Automatable-Half Outcomes (re-run 2026-09-05, beside the staged halves, never merged into a pass)
 
 | Sheet | Gate | Outcome |
@@ -118,10 +129,10 @@ STAGED-awaiting-signature: no operator signature filled in; sign with name plus 
 
 ## Summary
 
-total: 5
+total: 6
 passed: 0
 issues: 0
-pending: 5
+pending: 6
 skipped: 0
 blocked: 0
 automated: 0

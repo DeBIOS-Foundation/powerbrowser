@@ -3,7 +3,7 @@ status: partial
 phase: 13-chrome-bar-strip-relocation-spike
 source: [13-01-SUMMARY.md, 13-02-SUMMARY.md, 13-03-SUMMARY.md]
 started: 2026-09-06T18:20:42Z
-updated: 2026-09-06T20:32:00Z
+updated: 2026-10-19T06:20:00Z
 ---
 
 ## Current Test
@@ -43,6 +43,7 @@ verified: "Automated GUI loop 2026-09-06: clicking New Tab opened a new top-leve
 
 ### 6. Suggestions list plus activation behaviour
 expected: Typing suggests up to 8 rows; activating one (Enter or click) navigates; committing empty is a no-op; provider failure degrades to a plain address commit with the contracted error row.
+expected_note: "2026-10-19 24-02: the matching and provider-failure clauses no longer match the shipped contract: matching is by substring over address and title, not by prefix (theia/extensions/tab-uris/src/node/tab-query-service.ts:222-238); the error row appears only when the open-tab reader throws, while a history or bookmark failure only logs and the open tabs still show (theia/extensions/chrome-bar/src/browser/chrome-bar-places-suggestions.ts:24-28). Chris accepts or rewords this at the desk session."
 result: [pending]
 
 ### 7. Mode toggle immediate with tabs invariant
@@ -91,12 +92,17 @@ result: pass
 source: automated
 coverage_id: 13-03-D1
 
+### 15. React 19 runtime
+expected: This sheet's tests ran on the build named in Current Test build: (Theia 1.76.0, React 19.2.8, Node 24, Gecko 153.5.0esr), and no surface this sheet covers failed to paint or showed a runtime error.
+contract: 24-CONTEXT (every sheet gets a React 19 runtime line); ROADMAP Phase 24 criterion 3
+result: [pending]
+
 ## Summary
 
-total: 14
+total: 15
 passed: 11
 issues: 0
-pending: 1
+pending: 2
 skipped: 2
 blocked: 0
 

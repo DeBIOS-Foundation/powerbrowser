@@ -3,7 +3,7 @@ status: partial
 phase: 14-modes-windows-setups
 source: [14-01-SUMMARY.md, 14-02-SUMMARY.md, 14-03-SUMMARY.md, .planning/GUI-DEFECTS.md]
 started: 2026-09-06T21:05:00Z
-updated: 2026-09-06T21:05:00Z
+updated: 2026-10-19T06:20:00Z
 ---
 
 ## Current Test
@@ -31,6 +31,7 @@ reason: "Two independent causes, both proven statically. The shipped segments ne
 
 ### 2. Content tabs survive every mode switch, including a mode's second visit
 expected: No content tab unmounts, closes, moves windows, or detaches across a switch (14-UI-SPEC.md:232-233), and the status-bar chip re-asserts the count.
+expected_note: "2026-10-19 24-02: the clause 'the status-bar chip re-asserts the count' no longer matches the shipped contract: the tab-count chip was removed (commit b85b846, per the amended 14-UI-SPEC); the tab-survival half stands. Chris accepts or rewords this at the desk session."
 result: issue
 gap: G-14-1
 reason: "Stock restores the target mode's stale saved layout and Lumino unparents every widget absent from it. Conditional on a snapshot existing, so a first visit is safe and a second visit destroys — which is why every earlier check on this invariant, automated and human, could pass on a broken tree."
@@ -78,12 +79,18 @@ result: issue
 gap: G-14-6
 reason: "Every one of the three funnels into `window.open(url, '_blank')`, and the shell window carries no `nsIBrowserDOMWindow`, so each call mints a brand-new stock window. Requirement owner is GUI-06 / Phase 13 plus the GUI-02 deferral; recorded here because the fix rides in this wave."
 
+### 11. React 19 runtime
+expected: This sheet's tests ran on the build named in Current Test build: (Theia 1.76.0, React 19.2.8, Node 24, Gecko 153.5.0esr), and no surface this sheet covers failed to paint or showed a runtime error.
+contract: 24-CONTEXT (every sheet gets a React 19 runtime line); ROADMAP Phase 24 criterion 3
+result: pending
+reason: "Added 2026-10-19 by Phase 24 (24-02). Chris sets this result at the end of Launch B."
+
 ## Summary
 
-total: 10
+total: 11
 passed: 0
 issues: 5
-pending: 4
+pending: 5
 skipped: 0
 superseded: 1
 blocked: 0
