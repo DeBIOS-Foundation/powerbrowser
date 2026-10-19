@@ -2,12 +2,12 @@
 phase: 24-live-uat-pass
 plan: 06
 subsystem: uat-records
-status: partial
+status: complete
 tags: [uat, closeout, ledger, deferral]
 requires: [24-01, 24-04]
 provides:
   - "Six UAT sheets closed as records: [testing complete] with build blocks kept, status by the complete-session rule, Summaries equal to a recount"
-  - "NG-089 deferred-requested to phase 26 on Chris's own words; waiting on his approval"
+  - "NG-089 deferred-approved to phase 26: requested on Chris's own words, approved by Chris (history v402, quote \"APPROVE NG-089\")"
 affects: [24-CHRIS-CHECKLIST.md, ledger/REQUIREMENTS.json, scripts/verify-ng-089-uat-sheets.mjs]
 tech-stack:
   added: []
@@ -30,24 +30,24 @@ decisions:
   - "NG-089 deferral requested to phase 26 (the phase after the roadmap's last numbered phase, 25), on Chris's 2026-10-19 defer choice"
   - "24-05 (GEN-05 drill, Session C) was not run; 10/4 stays pending, at Chris's request"
 metrics:
-  duration: "about 25 min"
+  duration: "about 35 min of agent time, plus the wait for Chris's approval"
   completed: 2026-10-19
 estimate:
   tokens: 45000
   tasks: 3
 actuals:
-  tokens: 335
-  tasks: 2
-  commits: 2
+  tokens: 378
+  tasks: 3
+  commits: 4
 plan_head_before: 170a337c3977a66470dd5b30d01254d91e895001
-plan_head_after: f14b7a53b0ab49ef9600c646de0d66f6e242961c
+plan_head_after: cbb8df4d0ed83b5b2e291711010e192d990ca3b1
 ---
 
 # Phase 24 Plan 06: Close the six UAT sheets and request the NG-089 deferral Summary
 
-The six UAT sheets now read as closed records of Chris's 24-04 results. Each shows `[testing complete]`, keeps its build block, and has a Summary that matches a recount of its tests. NG-089's check is still red: 44 rows are pending, and no sheet has a recorded React 19 runtime result. Chris chose to defer the remaining GUI checks, so NG-089 is `deferred-requested` to phase 26. **Task 3 waits on Chris's approval.**
+The six UAT sheets now read as closed records of Chris's 24-04 results. Each shows `[testing complete]`, keeps its build block, and has a Summary that matches a recount of its tests. NG-089's check is still red: 44 rows are pending, and no sheet has a recorded React 19 runtime result. Chris chose to defer the remaining GUI checks. The agent requested the NG-089 deferral to phase 26, and Chris approved it himself, so NG-089 reads `deferred-approved`. phase-gate and check-ledger print nothing, plan-gate passes, and `--quick` is green.
 
-`actuals.tokens` is chars/4 over the lines this plan added before this SUMMARY (1,341 chars). `actuals.commits` is `git rev-list --count 170a337..f14b7a5`. `actuals.tasks` counts Tasks 1 and 2. Task 3 has not run.
+`actuals.tokens` is chars/4 over the lines this plan added outside this SUMMARY (1,510 chars). `actuals.commits` is `git rev-list --count 170a337..cbb8df4`, which includes the first SUMMARY commit a1e4c00.
 
 ## Tasks
 
@@ -55,7 +55,9 @@ The six UAT sheets now read as closed records of Chris's 24-04 results. Each sho
 |------|------|--------|-------|
 | 1 | Close the six sheets; G-11 records; NG-089 on the check | 1dc17f0 | six sheets |
 | 2 | Checkpoint: Chris chose `defer`; deferral requested | f14b7a5 | three ledger files |
-| 3 | Commit Chris's approval; prove the gates | **waiting on Chris's approval** | none yet |
+| 3 | Commit Chris's approval; prove the gates | cbb8df4 | three ledger files |
+
+a1e4c00 is the first version of this SUMMARY, written while Task 3 waited on Chris.
 
 ## Task 1: sheets
 
@@ -184,12 +186,30 @@ His list of remaining checks is in [24-CHRIS-CHECKLIST.md](24-CHRIS-CHECKLIST.md
 
 Reply `approved` once it has run, or paste the error it printed.
 
-## Task 3: waiting on Chris's approval
+**Chris's approval, verbatim.** He typed the following in chat on 2026-10-19:
 
-Task 3 has not run. Once Chris replies `approved`:
-1. commit his ledger change: `chore(24-06): record Chris's approval of the NG-089 deferral (UAT-01)`;
-2. run `phase-gate.py` and `check-ledger.py`, then `plan-gate --phase 24`;
-3. run the final `--quick` into `logs/quick-24-06.log`.
+> APPROVE NG-089
+
+The ledger hook recorded the approval from that line as history entry v402: `{"op": "approve", "id": "NG-089", "quote": "APPROVE NG-089", "changes": {"status": ["deferred-requested", "deferred-approved"]}}` at 2026-10-19T23:09:04Z. The agent ran no user-only ledger command.
+
+## Task 3: Chris's approval committed, gates proven
+
+1. `git status --porcelain -- ledger`, run alone, listed the three ledger files as modified by his approval:
+   - ` M ledger/REQUIREMENTS.json`
+   - ` M ledger/checksums.sha256`
+   - ` M ledger/history/log.jsonl`
+2. **Ledger commit cbb8df4**, `chore(24-06): record Chris's approval of the NG-089 deferral (UAT-01)`:
+   - `git add` of the three ledger files, alone;
+   - `git diff --cached --name-only`, alone, listed exactly those three;
+   - `git commit -F` with a message file and no pathspec.
+
+   After the commit, `git status --porcelain -- ledger` printed nothing.
+3. **Gates:**
+   - `python3 scripts/phase-gate.py --root .` printed nothing (rc 0).
+   - `python3 scripts/check-ledger.py --root .` printed nothing (rc 0).
+   - `python3 scripts/plan-gate.py --root . --phase 24 --plans .planning/phases/24-live-uat-pass` printed `plan gate passed: 1/1 IDs cited (phase 24)` (rc 0).
+4. **NG-089 now reads** `NG-089  deferred-approved ... owner=chris phase=26 age=0d`. The report line reads `89 rows: done=55, deferred-approved=9, dropped=25 | phase=unset due=0`.
+5. **Final `--quick`:** `logs/quick-24-06.log`, run after this SUMMARY was staged. Its counts are in the next section.
 
 ## Quick gate runs (untracked logs)
 
@@ -197,14 +217,18 @@ Task 3 has not run. Once Chris replies `approved`:
 |-----|--------|--------|
 | logs/quick-24-06-t1.log | commit 1dc17f0 | 137 PASS rows, no FAIL, `PHASE24_EXIT=0`, 54 s |
 | logs/quick-24-06-t2.log | commit f14b7a5 | 137 PASS rows, no FAIL, `PHASE24_EXIT=0`, 69 s |
+| logs/quick-24-06-t3.log | commit a1e4c00 | 137 PASS rows, no FAIL, `PHASE24_EXIT=0`, 58 s |
+| logs/quick-24-06-t4.log | commit cbb8df4 | 137 PASS rows, no FAIL, `PHASE24_EXIT=0`, 60 s |
+| logs/quick-24-06.log | this SUMMARY's commit (final) | 137 PASS rows, no FAIL, `ng089-uat-sheets-self-test: PASS`, `PHASE24_EXIT=0`, 56 s; repeated after the commit so the log postdates it |
 
 `docs/non-gui/quick-baseline.txt` is empty. Port 3000 was never used, and no product code was changed.
 
 ## Deviations from Plan
 
 - **24-05 not run.** The plan's precondition (24-05 complete) is not met. Chris deferred every remaining GUI check, C01 included, so 10/4 stays pending. Task 1 ran anyway, as the orchestrator directed.
-- **Quick log names.** The two pre-commit `--quick` runs wrote `quick-24-06-t1.log` and `quick-24-06-t2.log`. `quick-24-06.log` is kept for Task 3's final run, which its `<verify>` reads.
-- **STATE.md and ROADMAP.md were not advanced.** The plan is not complete: Task 3 waits on Chris.
+- **Quick log names.** The pre-commit `--quick` runs wrote `quick-24-06-t1.log` to `-t4.log`. `quick-24-06.log` holds Task 3's final run, which its `<verify>` reads. That run is repeated after the SUMMARY commit, so the log postdates the last commit.
+- **How Chris's approval was recorded.** He did not run the approval command from his terminal. He typed "APPROVE NG-089" in chat, and the project's ledger hook wrote the approval from that line. Either way, the approval is his own.
+- **STATE.md and ROADMAP.md were left to the orchestrator.** 24-05 has not run, so Phase 24 is not complete.
 
 ## Known Stubs
 
@@ -212,6 +236,6 @@ None.
 
 ## Self-Check: PASSED
 
-- 1dc17f0 and f14b7a5 are ancestors of HEAD.
-- The six sheets and the three ledger files are committed.
-- The NG-089 report line reads deferred-requested.
+- 1dc17f0, f14b7a5, a1e4c00 and cbb8df4 are ancestors of HEAD.
+- The six sheets and the three ledger files are committed, and `git status --porcelain -- ledger` prints nothing.
+- The NG-089 report line reads deferred-approved, phase 26.
