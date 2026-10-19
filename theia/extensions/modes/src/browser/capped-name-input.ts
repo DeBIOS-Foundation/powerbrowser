@@ -1,8 +1,9 @@
 // G-23 (Chris, 2026-10-17): a name field that never holds more than `max` characters, typed or
-// pasted -- the same rule as group rename. Stock public API only: QuickInputController.input()'s shape plus the cut.
-import { InputOptions, QuickInputService } from '@theia/core/lib/common/quick-pick-service';
+// pasted -- the same rule as group rename. Stock public API only: createInputBox() with prompt and placeHolder plus the cut.
+import { QuickInputService } from '@theia/core/lib/common/quick-pick-service';
 
-export function inputCappedName(quickInput: QuickInputService, options: InputOptions, max: number): Promise<string | undefined> {
+// The type admits only the two options the body forwards; a caller needing value, title or validateInput must extend the helper.
+export function inputCappedName(quickInput: QuickInputService, options: { prompt?: string; placeHolder?: string }, max: number): Promise<string | undefined> {
     return new Promise(resolve => {
         const box = quickInput.createInputBox();
         let accepted: string | undefined;
