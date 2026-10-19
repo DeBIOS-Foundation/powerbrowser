@@ -4,8 +4,8 @@ milestone: v1.4
 milestone_name: Platform Updates and GUI Close-out
 current_phase: 25
 current_phase_name: CI Green on Main
-status: blocked
-stopped_at: Phase 24 closed with deferral; waiting for Chris to push main
+status: milestone-audit
+stopped_at: Phase 25 complete (CI green on 0efb116); milestone audit next
 last_updated: "2026-10-19T05:14:16.045Z"
 last_activity: 2026-10-19
 last_activity_desc: Phase 24 closed; NG-089 deferred to phase 26 with Chris approval; remaining GUI checks in 24-CHRIS-CHECKLIST.md
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-10-16)
 
 Phase: 25 — CI Green on Main
 Plan: none (Chris pushes main; CI confirms)
-Status: Blocked on Chris pushing main
+Status: Complete. main pushed, CI run 39340825244 green, NG-074 done; milestone audit next
 Last activity: 2026-10-19 — Phase 24 closed with deferral. Phase 22 live checks and the rest of the UAT are deferred to Chris (24-CHRIS-CHECKLIST.md); 12 defects for v1.5 are in 24-GAPS.md
 
 ## Performance Metrics

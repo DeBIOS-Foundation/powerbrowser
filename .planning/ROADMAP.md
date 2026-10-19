@@ -406,7 +406,7 @@ Plans:
 | 22. Panorama Worklist | 7/7 | Executed; live checks deferred (NG-089, phase 26) | - |
 | 23. Modes Leftovers and Sketch 005 Verdict | 5/5 | Complete    | 2026-10-18 |
 | 24. Live UAT Pass | 5/6 | Closed with deferral: remaining GUI checks to Chris (NG-089 deferred-approved, phase 26) | 2026-10-19 |
-| 25. CI Green on Main | 0/TBD | Not started | - |
+| 25. CI Green on Main | n/a (no plans) | Complete: run 39340825244 green on 0efb116; NG-074 done | 2026-10-19 |
 
 ## Hard constraints (every phase)
 
