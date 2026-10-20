@@ -205,7 +205,9 @@ export class OrganisingWidget extends Widget {
             this.shell.onDidAddWidget(widget => this.holdTheMainArea(widget));
             this.shell.onDidChangeCurrentWidget(() => this.scheduleShellCapture());
         }
-        this.placeToolbar(this.isVisible);
+        // Its own flag, not isVisible: a restored widget attaches before the
+        // shell does, so isVisible reads false and no onAfterShow follows.
+        this.placeToolbar(!this.isHidden);
         this.scheduleReload();
     }
 
