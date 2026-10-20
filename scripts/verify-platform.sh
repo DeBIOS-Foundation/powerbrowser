@@ -3457,6 +3457,10 @@ fi
 # two reasons side05's own comment gives: gfxPlatform::IsHeadless() disables
 # Firefox's native remoting protocol outright, and nsRemoteService keys
 # remoting on the profile path.
+check_plan_gate_streams_self_test() {
+  python3 "$REPO_ROOT/scripts/plan-gate.py" --self-test
+}
+
 check_gui01_single_shell_window() {
   local bin profile result=0
   bin="$REPO_ROOT/objdir/dist/bin/powerbrowser"
@@ -4623,6 +4627,11 @@ run_own_checks() {
     # into a live phase dir.
     "planning-paths|node $REPO_ROOT/scripts/verify-planning-paths.mjs"
     "planning-paths-self-test|node $REPO_ROOT/scripts/verify-planning-paths.mjs --self-test"
+    # NEW (v1.6 workstream deploy): plan-gate.py --stream scopes due rows to one planning
+    # stream, because a GSD workstream numbers its phases independently of main. Honestly
+    # --quick: temp-dir plants only. Red when a stream-less row stops counting in the default
+    # stream, or a row leaks across streams.
+    "plan-gate-streams-self-test|check_plan_gate_streams_self_test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
