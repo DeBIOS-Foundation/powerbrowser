@@ -523,22 +523,27 @@ The dispatch accepts only `bash */*` or `node */*` commands (`verify-platform.sh
 | A7 | The Theia node-walk closure equals what the bundle ships | Pattern 7 | It over-includes, never under-includes, if the walk follows `dependencies` only |
 | A8 | Tightening layer 4 (ng069) to fail `deny` hosts does not break an existing green run | Pattern 5 | ng069 is full tier and was not run here; if it goes red, a real denied host was being contacted after an extension install |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Who makes the DIST-06 commit?**
    - What we know: ROADMAP's external gate says "Owner commits the pin bump". CONTEXT.md (same date, later) limits owner gates to push and dispatch.
    - Recommendation: the executor commits locally, and the owner pushes and dispatches. The planner should put a `checkpoint:human-verify` before the push.
+   - RESOLVED: the executor commits locally in 40-01; push and first dispatch are the owner's `checkpoint:human-action` in 40-08 Task 3.
 2. **Should `app.update.url.manual` point at a download page rather than the site root?**
    - What we know: UPD-13 says it derives from `[urls].homepage`. SEED §7 plans a `/download` page.
    - Recommendation: follow the requirement and use the homepage. A `urls.download` key is a later decision; adding it now is scope creep.
+   - RESOLVED: homepage, per UPD-13 (40-05, 40-08).
 3. **Layer 4 strictness (A8).**
    - Recommendation: adopt the shared verdict function with `userAction: true`, and run ng069 at the end-of-phase build if time allows. Otherwise record it as unverified.
+   - RESOLVED: the shared verdict function (40-05) is the UPD-33 mechanism; tightening ng069 layer 4 is out of scope (40-08 Deferred).
 4. **The `app-license.html` attribution.**
    - What we know: about:license prints "Binaries of this product have been made available to you by the Mozilla Project", read verbatim from `browser/base/content/overrides/app-license.html`. That is false for PowerBrowser binaries.
    - Recommendation: out of Phase 40 scope (PKG-05 and trademark work). Note it in LICENSING.md, and raise it for Phase 45/46. Fixing it needs either a patch (an `APP_LICENSE_BLOCK` override) or a branding define.
+   - RESOLVED: deferred to Phase 45/46 (40-08 Deferred).
 5. **Ledger entries.**
    - What we know: `ledger/REQUIREMENTS.json` holds only NG-001..NG-089.
    - Recommendation: the v1.6 IDs need no ledger rows unless the phase gate demands them; check `scripts/phase-gate.py` at plan time.
+   - RESOLVED: `scripts/phase-gate.py` checks only due rows in the ledger's current phase (unset); no v1.6 ledger rows are created (40-08 Deferred).
 
 ## Environment Availability
 

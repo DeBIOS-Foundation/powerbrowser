@@ -39,17 +39,24 @@ created: "2026-10-20"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 40-TBD | TBD | TBD | DIST-06 | — | Manifest pin = workflow default = fragment; upstream at 6cd88e7d | quick | `scripts/verify-platform.sh --only verify-upstream-pins` | ✅ | ⬜ pending |
-| 40-TBD | TBD | TBD | AUTO-08 | template injection via `inputs.tag` | No `tag` default; generate inside Nix; tag passed via `env:` | quick + self-test | `--only verify-upstream-pins` / `--only verify-upstream-pins-self-test` | ✅ (extend) | ⬜ pending |
-| 40-TBD | TBD | TBD | REL-01 | release tag not matching version | Version files and tag agree with derivation | quick + self-test | `--only release-identity` / `-self-test` | ❌ W0 | ⬜ pending |
-| 40-TBD | TBD | TBD | UPD-11 | — | One channel across consumers | quick + self-test | `--only update-channel` / `-self-test` | ❌ W0 | ⬜ pending |
-| 40-TBD | TBD | TBD | UPD-12 | two update URL sources | No `AppUpdateURL` | quick + full | `--only update-channel`; `--only ng064-update-url-from-manifest` | ❌ / ✅ (edit) | ⬜ pending |
-| 40-TBD | TBD | TBD | UPD-13 | — | Link prefs derived and parse as URLs | quick | `--only update-prefs`, `--only generated-byte-identity` | ❌ W0 / ✅ | ⬜ pending |
-| 40-TBD | TBD | TBD | UPD-33 | user-initiated host fetched unattended | `user-initiated` accepted; unattended request red naming host | quick + self-test | `--only allowlist-schema`, `--only endpoint-dispositions-self-test` | ✅ (edit) / ❌ W0 | ⬜ pending |
-| 40-TBD | TBD | TBD | UPD-25 | — | langpack false; five update prefs absent | quick + self-test | `--only update-prefs` / `-self-test` | ❌ W0 | ⬜ pending |
-| 40-TBD | TBD | TBD | PKG-08 | incomplete third-party notices | Notices equal re-derivation | quick + self-test | `--only licensing` / `-self-test` | ❌ W0 | ⬜ pending |
-| 40-TBD | TBD | TBD | PKG-09 | — | en-US scope stated | grep | `grep -n 'en-US' README.md .planning/PROJECT.md` | ✅ (edit) | ⬜ pending |
-| 40-TBD | TBD | TBD | AUTO-10 | hand-edited hunk silently no-ops | Patches equal regeneration; hand edit red | quick + self-test | `--only patches-regenerated` / `-self-test` | ❌ W0 | ⬜ pending |
+| 40-01-T1 | 01 | 1 | DIST-06 | T-40-03 | Manifest pin = workflow default = fragment; upstream at 6cd88e7d | quick | `test "$(git -C upstream rev-parse HEAD)" = 6cd88e7d45fe7a5b0b87b984fb32a8779151860e && scripts/verify-platform.sh --only verify-upstream-pins` | ✅ | ⬜ pending |
+| 40-01-T2 | 01 | 1 | AUTO-08 | T-40-01, T-40-02 | No `tag` default under either trigger; generator steps inside Nix; tag via `env:` | quick + self-test | `scripts/verify-platform.sh --only verify-upstream-pins && scripts/verify-platform.sh --only verify-upstream-pins-self-test` | ✅ (extend) | ⬜ pending |
+| 40-02-T1 | 02 | 2 | AUTO-10 | T-40-05 | Every patch equals its regeneration; replay runs the gate | quick | `scripts/verify-platform.sh --only patches-regenerated` | ❌ created in task | ⬜ pending |
+| 40-02-T2 | 02 | 2 | AUTO-10 | T-40-06, T-40-07 | Hand-edited hunk red naming the patch; write mode never truncates | self-test | `scripts/verify-platform.sh --only patches-regenerated-self-test` | ❌ created in task | ⬜ pending |
+| 40-03-T1 | 03 | 3 | REL-01 | T-40-09, T-40-10 | revision → release.txt byte-identical (staged; committed with T2) | quick | `scripts/verify-platform.sh --only generated-byte-identity && scripts/verify-platform.sh --only generate-self-test` | ✅ (EXPECTED +2) | ⬜ pending |
+| 40-03-T2 | 03 | 3 | REL-01 | T-40-09 | Every fixture manifest states product.revision; key and fixtures in one commit | quick | `scripts/verify-platform.sh --only verify-downstream-fixtures && scripts/verify-platform.sh --quick` | ✅ (fixtures +1 line) | ⬜ pending |
+| 40-03-T3 | 03 | 3 | REL-01 | T-40-08 | Version files, descriptors and tags agree with the derivation | quick + self-test | `scripts/verify-platform.sh --only release-identity && scripts/verify-platform.sh --only release-identity-self-test` | ❌ created in task | ⬜ pending |
+| 40-04-T1 | 04 | 4 | UPD-11 | T-40-12 | One channel across consumers | quick | `scripts/verify-platform.sh --only update-channel` | ❌ created in task | ⬜ pending |
+| 40-04-T2 | 04 | 4 | UPD-12, UPD-11 | T-40-11 | No update-URL policy; channel plants red | quick + self-test | `scripts/verify-platform.sh --only update-channel-self-test && scripts/verify-platform.sh --only mar-update-hop-self-test` | ❌ / ✅ (edit) | ⬜ pending |
+| 40-05-T1 | 05 | 5 | UPD-33 | T-40-14 | `user-initiated` accepted; unattended request red naming host | quick + self-test | `scripts/verify-platform.sh --only endpoint-dispositions-self-test && scripts/verify-platform.sh --only allowlist-schema` | ❌ / ✅ (edit) | ⬜ pending |
+| 40-05-T2 | 05 | 5 | UPD-13 | T-40-15, T-40-16 | Link prefs derived; powerbrowser.org and github.com user-initiated | quick | `scripts/verify-platform.sh --only generated-byte-identity && scripts/verify-platform.sh --only theia-endpoints` | ✅ | ⬜ pending |
+| 40-06-T1 | 06 | 6 | UPD-25 | T-40-17 | langpack false; five cadence prefs absent; link prefs parse | quick | `scripts/verify-platform.sh --only update-prefs` | ❌ created in task | ⬜ pending |
+| 40-06-T2 | 06 | 6 | UPD-25 | T-40-17 | Planted app.update.auto red; exact-name control green | self-test | `scripts/verify-platform.sh --only update-prefs-self-test` | ❌ created in task | ⬜ pending |
+| 40-07-T1 | 07 | 7 | PKG-08 | T-40-19, T-40-20 | about:license notices equal re-derivation | quick | `scripts/verify-platform.sh --only licensing` | ❌ created in task | ⬜ pending |
+| 40-07-T2 | 07 | 7 | PKG-08, PKG-09 | T-40-18 | Theia and Node sections; add/remove red; en-US stated | quick + self-test + grep | `scripts/verify-platform.sh --only licensing-self-test && grep -n 'en-US only' README.md .planning/PROJECT.md` | ❌ created in task / ✅ (edit) | ⬜ pending |
+| 40-08-T1 | 08 | 8 | DIST-06, UPD-11 | — | 153.5.1esr builds; config.status channel default | full (build) | `test "$(cat .mozbuild/phase40-smoke.exit)" = 0 && objdir/dist/bin/powerbrowser --version` | ✅ | ⬜ pending |
+| 40-08-T2 | 08 | 8 | UPD-12, UPD-33, PKG-08 | T-40-11, T-40-22 | One update URL source on the built tree; notices match built about:license; layer 3 resolves neither powerbrowser.org nor github.com unattended | full | `scripts/verify-platform.sh --only ng064-update-url-from-manifest && node scripts/generate-licensing.mjs --check && bash scripts/verify-endpoints.sh --layer 3` (host-list red on other hosts only is the known-open item) | ✅ | ⬜ pending |
+| 40-08-T3 | 08 | 8 | UPD-13, DIST-06, AUTO-08 | T-40-21, T-40-22 | About links open the [urls] pages without a console error; first real rebase-upstream.yml run green, owner-dispatched | manual (owner, blocking resume signal) | `gh run watch <id> --exit-status` | — | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky* — task IDs are filled in once plans exist.
 
@@ -70,8 +77,8 @@ created: "2026-10-20"
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| First real `rebase-upstream.yml` run green | DIST-06, AUTO-08 | Owner push and `workflow_dispatch` on GitHub | Owner pushes, dispatches with `tag=FIREFOX_153_5_1esr_RELEASE`, `gh run watch <id>` |
-| About dialog release-notes and fallback links open without throwing | UPD-13 | Needs a rebuilt dev objdir and a display | Build dev objdir, open About, click each link |
+| First real `rebase-upstream.yml` run green | DIST-06, AUTO-08 | Owner push and `workflow_dispatch` on GitHub | 40-08-T3: owner pushes, dispatches with `tag=FIREFOX_153_5_1esr_RELEASE`, `gh run watch <id>` |
+| About dialog release-notes and fallback links open without throwing | UPD-13 | Needs a rebuilt dev objdir and a display | 40-08-T3 blocking resume signal, before the push: Open Browser Window, Help > About PowerBrowser, click each link, check the Browser Console |
 
 ---
 

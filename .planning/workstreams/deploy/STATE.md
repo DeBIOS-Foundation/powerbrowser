@@ -1,16 +1,21 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.6
-milestone_name: Deployment setup
-status: planning
-last_updated: "2026-10-20T21:00:00.000Z"
+current_phase: 40
+current_phase_name: Release identity, ESR pin and patch regeneration (A)
+current_plan: N/A
+status: executing
+stopped_at: Roadmap created; next is `/gsd-plan-phase 40`
+last_updated: "2026-10-20T23:25:38.302Z"
 last_activity: 2026-10-20
+last_activity_desc: Roadmap created (19 phases, 152/152 requirements mapped)
+state_head: 8d9a429d886687a3e3a31e14c65b354af887d7dd
 progress:
   total_phases: 19
   completed_phases: 0
-  total_plans: 0
+  total_plans: 8
   completed_plans: 0
-  percent: 0
+milestone_name: Deployment setup
 ---
 
 # Project State
@@ -24,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-10-20)
 
 ## Current Position
 
-Phase: 40 (1 of 19: Phases 40–58) — Release identity, ESR pin and patch regeneration (A)
+Phase: 40 (Release identity, ESR pin and patch regeneration (A)) — READY TO EXECUTE
 Plan: — (not planned yet)
-Status: Ready to plan
+Status: Ready to execute
 Last activity: 2026-10-20 — Roadmap created (19 phases, 152/152 requirements mapped)
 
 Progress: [░░░░░░░░░░] 0%
@@ -54,6 +59,8 @@ Owner decisions 1–22 of 2026-10-20 are recorded in `.planning/workstreams/depl
 - AUTO-08 (generate inside `nix develop .#theia`, no `tag` default) is in Phase 40 after DIST-06, so the first dispatched `rebase-upstream.yml` run can go green (ARCHITECTURE R1; SUMMARY A1).
 - GH-10: Phase 41 creates `powerbrowser-updates` and the Homebrew tap repo empty, so `repo-controls` can read back the bot App installation; Phases 47 and 56 fill them.
 - Live observations that need a real GitHub Release (UPD-15 asset hosts; sweep runner, channel and download rows) are Phase 50 criterion 5.
+- The kit plan gate runs as `python3 scripts/plan-gate.py --root . --phase N --plans <dir> --stream deploy` in this workstream (owner choice 2026-10-20, commit 8d9a429): main's ledger rows (e.g. NG-089, phase 26) use main's phase numbers and are not due against phases 40+. Any v1.6 ledger row must carry `"stream": "deploy"`.
+- Phase 40: update channel stays `default` / `powerbrowser-default`; `product.revision` is a TOML integer; push and first `rebase-upstream.yml` dispatch are the owner's 40-08 Task 3 checkpoint, which also carries the About-dialog result.
 
 ### Pending Todos
 

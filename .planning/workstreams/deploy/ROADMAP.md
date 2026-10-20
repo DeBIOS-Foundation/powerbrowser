@@ -56,6 +56,7 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
 ## Phase Details
 
 ### Phase 40: Release identity, ESR pin and patch regeneration (A)
+
 **Goal**: The tree is on the current ESR security release, every release identity fact (release key, update channel, version files, update and release-notes URLs, licence notices) derives from `configuration.toml`, a patch can change only through regeneration, and `rebase-upstream.yml` replays the pin green inside Nix as a callable workflow.
 **Depends on**: Nothing (first phase of the milestone)
 **Requirements**: DIST-06, AUTO-08, REL-01, UPD-11, UPD-12, UPD-13, UPD-33, UPD-25, PKG-08, PKG-09, AUTO-10
@@ -65,11 +66,38 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   3. The shipped `policies.json` carries no `AppUpdateURL`; the About dialog's release-notes and fallback links open the pages derived from `[urls]` without throwing; `endpoint-allowlist.json` accepts the `user-initiated` disposition, and a planted unattended prefetch to powerbrowser.org goes red naming the host.
   4. The quick row `patches-regenerated` passes on every tracked patch and goes red naming the patch when a hunk body is hand-edited; the update-prefs row goes red when a planted `app.update.auto` appears in generator output.
   5. `LICENSING.md` and `THIRD-PARTY-NOTICES.txt` are generated with a drift row green, and the README and PROJECT.md state the en-US-only scope.
-**External gate**: Owner commits the pin bump (DIST-06) and, after AUTO-08 lands, dispatches the first `rebase-upstream.yml` run with an explicit `tag`.
+
+**External gate**: The executor commits the pin bump (DIST-06) locally; the owner pushes and, after AUTO-08 lands, dispatches the first `rebase-upstream.yml` run with an explicit `tag`.
 **Research flag**: None (SUMMARY: A1/A2 generator work is a standard pattern).
-**Plans**: TBD
+**Plans**: 8 plans
+
+Plans:
+**Wave 1**
+- [ ] 40-01-PLAN.md — DIST-06 pin bump to FIREFOX_153_5_1esr_RELEASE (own commit), then AUTO-08 callable Nix workflow with no tag default
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 40-02-PLAN.md — AUTO-10 regenerate-patches.sh with --check and --self-test; rows patches-regenerated(-self-test); wired into rebase-upstream.sh
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 40-03-PLAN.md — REL-01 [product] revision, releaseIdentity(), tracked version files, release-identity row and self-test
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 40-04-PLAN.md — UPD-11 one channel constant and update-channel row; UPD-12 update-URL policy removed with ng064/mar-update-hop/allowlist changed together
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 40-05-PLAN.md — UPD-33 user-initiated disposition with a shared verdict and fixture self-test; UPD-13 About-dialog link prefs from [urls]
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 40-06-PLAN.md — UPD-25 langpack updates off; update-prefs row and self-test
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 40-07-PLAN.md — PKG-08 generated LICENSING.md and THIRD-PARTY-NOTICES.txt with drift row; PKG-09 en-US scope in README and PROJECT.md
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 40-08-PLAN.md — End-of-phase dev build, full-tier evidence, About-dialog human check, owner push and first rebase-upstream.yml dispatch
 
 ### Phase 41: Repository controls and GitHub Apps (A)
+
 **Goal**: Before any App token, bot workflow or self-hosted runner exists, the org and repo enforce every control the pipeline relies on, and each setting is declared in the tree and read back by a row.
 **Depends on**: Phase 40
 **Requirements**: GH-02, SEC-06, SEC-11, GH-05, GH-06, GH-07, GH-08, GH-09, GH-10, GH-11, GH-12, AUTO-09, GH-18
@@ -79,11 +107,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   3. The quick rows `workflows` and `zizmor --offline` are green on the tree, and the `workflows` self-test goes red on each planted fault (a `schedule:` key, the legion label outside `release.yml` `build-*`/`matrix-*` jobs, an unadmitted or non-SHA `uses:`, an unguarded `workflow_run`, event text inside `run:` or `prompt:`).
   4. The org requires 2FA, a second owner account exists with offline recovery codes for both, and the runner-group "selected workflows" probe result is recorded in `docs/RELEASING.md`.
   5. One test assignment and one test pending deployment reach the owner's phone, recorded in `docs/RELEASING.md`.
+
 **External gate**: Owner creates the `powerbrowser-updates` and Homebrew tap repos empty in this phase (GH-10 needs both for the bot App installation that `repo-controls` reads back; Phases 47 and 56 fill them), creates and installs both GitHub Apps (bot App on `powerbrowser`, `powerbrowser-updates` and the tap repo; clock App on `powerbrowser`), adds the second org owner and stores recovery codes offline, and runs the runner-group probe as org admin.
 **Research flag**: Yes (A3): whether runner-group "selected workflows" exists on the Free plan; whether the App's missing Workflows permission blocks pushes that touch workflow files.
 **Plans**: TBD
 
 ### Phase 42: Community surface and release documentation (A)
+
 **Goal**: A user who wants to report a bug, ask a question or disclose a vulnerability finds the right channel, and the release documentation matches the pipeline being built.
 **Depends on**: Phase 41
 **Requirements**: GH-13, GH-01, GH-14, DOC-03, DOC-04, DOC-05, DOC-06
@@ -93,11 +123,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   3. `SECURITY.md`, `SUPPORT.md` and `docs/KNOWN-ISSUES.md` exist in the product repo, and `SECURITY.md`, `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` exist in the org `.github` repo.
   4. `docs/RENEWALS.md` lists every renewable item with a date and an owner action, and the quick row `renewals` is green; `docs/RELEASING.md` states the two-week cadence, the current ESR 175 dates, the 24-hour queued-job cancellation, the rewritten secrets inventory, the non-ephemeral runner shape and the legion-rebuild runbook.
   5. Drafts S2, S3 and S8 under `.planning/drafts/distribution/` are reconciled with NG-065 and NG-067 or marked superseded.
+
 **External gate**: None.
 **Research flag**: None (SUMMARY: A7 is a standard pattern).
 **Plans**: TBD
 
 ### Phase 43: Release train skeleton and upstream bump automation (A)
+
 **Goal**: A new ESR point release or Node 24 release arrives as a green bot PR with one tracking issue, started by the hourly clock, with no owner dispatch.
 **Depends on**: Phase 40 (pin, callable `rebase-upstream.yml`, regeneration script), Phase 41 (Apps, `bot` environment, `workflows` row), Phase 42 (labels)
 **Requirements**: INF-03, TRAIN-01, TRAIN-02, TRAIN-03, TRAIN-08, TRAIN-09, AUTO-01, AUTO-06, AUTO-07, AUTO-04
@@ -107,11 +139,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   3. The quick rows `detect-upstreams-self-test` (including the `175.0esr` fixture that must yield a 153.23 detection) and `release-train-logic-self-test` (one fixture per state in the state table, compared as set equality, plus the five named fault plants) are green and go red on their plants.
   4. A replay failure opens or updates exactly one "ESR <tag>: patch <NNN> did not apply" issue assigned to the owner with the apply log and diff, and a `dry-run` run of each stage commits, opens, comments and dispatches nothing.
   5. A new Node 24 release opens a `chore/node-v24.x` PR with SHASUMS and their signature verified in the job.
+
 **External gate**: Cloudflare account (owner step now); clock App key stored as a Worker secret; ESR 153 calendar for the exit test (the first point release after the train lands: 153.7 on 2026-11-10, else 153.8 on 2026-11-24, and so on).
 **Research flag**: Partial. SUMMARY marks the A5 report protocol and A6 as standard; open item: whether the RS256 JWT mint fits the Workers Free 10 ms CPU limit (INF-03 measures it).
 **Plans**: TBD
 
 ### Phase 44: Trust path (B)
+
 **Goal**: Losing or rotating the primary MAR key no longer strands users, and every descriptor the pipeline writes is per build target and can never offer an older build.
 **Depends on**: Phase 40 (regeneration script, channel name)
 **Requirements**: SEC-05, UPD-14, UPD-26, SEC-09
@@ -120,11 +154,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   2. `scripts/build-update-xml.mjs` writes one descriptor per BUILD_TARGET with `detailsURL` from the built artifacts, and a second run produces byte-identical output.
   3. The full-tier row `descriptor-monotonic` is green, and its self-test rejects a same-version descriptor with an older buildID.
   4. `docs/RELEASING.md` documents the secondary-key ceremony and rotation (machine, NSS database, DER path to patch 030, primary `.p12` path to `MAR_SIGNING_P12_B64`) and makes two offline `.p12` copies mandatory.
+
 **External gate**: Secondary MAR key ceremony (owner, offline).
 **Research flag**: None (SUMMARY: B is a standard pattern).
 **Plans**: TBD
 
 ### Phase 45: Portable Linux release build (C)
+
 **Goal**: The release build produces a Linux tarball and complete MAR that run on mainstream Linux with no Nix installed, and the packaged app keeps its state in the profile.
 **Depends on**: Phase 40 (version files, channel, licence notices)
 **Requirements**: PKG-17, PKG-22, PKG-18, PKG-23, PKG-04, PKG-05, PKG-06, PKG-07, PKG-21, UPD-29
@@ -134,11 +170,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   3. Theia state lives under the Gecko profile directory, and the matrix no-residue checks inspect those real paths.
   4. The release build reads the Safe Browsing key from a keyfile outside the repo mounted into the container, a `docs/RENEWALS.md` row exists for it, and a live check shows the Safe Browsing lists updating.
   5. The complete MAR size is measured and the partial-MAR decision (complete MARs only unless measured too large) is recorded.
+
 **External gate**: Google Safe Browsing API key, keyfile stored on legion.
 **Research flag**: Yes (C, PKG-17): the first container bootstrap build; whether the jessie-built `signmar` runs on `ubuntu-latest`; what `toolchain-baseline.txt` means under a container build.
 **Plans**: TBD
 
 ### Phase 46: In-app update experience and egress pass (C)
+
 **Goal**: A user sees when an update is ready, restarts into it with one click, is told in plain words when this copy cannot update or a check failed, and the browser reaches no host the allowlist has not dispositioned.
 **Depends on**: Phase 40 (`user-initiated` disposition, branding emitter); Phase 45 for the packaged `mar-update-hop` run (UPD-24)
 **Requirements**: UPD-18, UPD-19, UPD-20, UPD-21, UPD-22, UPD-23, UPD-32, UPD-24, UPD-27, UPD-15, UPD-28
@@ -148,12 +186,14 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   3. The quick row `shell-request-kinds` and the update-copy shape row are green, and their self-tests go red on a stray request kind and on a pref key planted in one string; `check-internals-boundary.sh` is green with every new touchpoint catalogued in `INTERNAL-APIS.md`.
   4. `endpoint-allowlist.json` carries `github.com` and `release-assets.githubusercontent.com` rows (their layer-3 observation of a real update is Phase 50 criterion 5), a `crash-reports.mozilla.com` deny row, a corrected geolocation row and corrected stale texts; `allowlist-doc-consistency` is green and its self-test goes red on a planted undocumented Mozilla allow host; the partner-search-code status is recorded.
   5. A verify-endpoints run contacts no Firefox Accounts or Sync host, and the Nimbus `recordExposureEvent` check passes with no throw and no network request.
+
 **External gate**: None.
 **Research flag**: None in SUMMARY. Carried open items: sidecar egress against verify-endpoints layer 3; Mozilla partner search codes under `org.debios`.
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 47: Hosting, website and mail (D)
+
 **Goal**: powerbrowser.org serves a static site with download, privacy and legal pages, updates.powerbrowser.org serves the descriptors, and mail to security@, contact@ and privacy@ reaches the owner.
 **Depends on**: Phase 41 (repo controls, Apps, empty `powerbrowser-updates` repo); WEB-02's MAR-size line uses Phase 45's PKG-21 measurement
 **Requirements**: INF-01, INF-06, DIST-03, INF-02, WEB-01, WEB-02, WEB-03, WEB-04, WEB-05, TEL-08
@@ -163,12 +203,14 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   3. /download offers the stable-name Release links, `SHA256SUMS`, `gh attestation verify` with the login note and the offline `--bundle` alternative, per-OS signing status, system requirements, the en-US scope and the MAR size; /privacy and /legal state the payload, retention, processor, licence and trademark lines.
   4. A live probe of a real 11-segment update URL against updates.powerbrowser.org returns the descriptor, and the full-tier row `updates-repo-static` is green with its self-test red on a planted `functions/` and `_worker.js`.
   5. Every Cloudflare credential has one named holder and a `docs/RENEWALS.md` row, and the maintenance sweep holds no Cloudflare token.
+
 **External gate**: Namecheap nameserver change (up to 24 hours to propagate, DNSSEC off during the move); Cloudflare account with 2FA; R2 enablement for the R2 token (a payment method may be required). This phase's live site unblocks the Apple fee-waiver application (D-U-N-S/Apple gate, Phase 55).
 **Research flag**: None (SUMMARY: the D site and Email Routing are standard). Open: one live `_redirects` probe on the 11-segment path; zone-level security.txt avoids the Pages `.well-known` question.
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 48: Error telemetry, maintenance sweep and watchdog (D)
+
 **Goal**: Error reports from users who opted in land in a 30-day store, and the owner learns from one pinned issue, or from an external watchdog, when any part of the release machinery stops.
 **Depends on**: Phase 43 (train report job), Phase 47 (Cloudflare zone)
 **Requirements**: TEL-06, TEL-10, TEL-11, TRAIN-07, MON-01
@@ -177,11 +219,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   2. The telemetry Worker's `POST /events` rejects an invalid payload, stores a valid one in D1, deletes rows older than 30 days, and is protected by one rate-limiting rule.
   3. The pinned `release-train: maintenance` issue is re-rendered daily with the initial rows (runner online, ESR pin age, channel liveness, watchdog age, synthetic `/events` POST) plus the download-count row; the runner-online, channel-liveness and download-count rows exist and render their no-data state; the issue comments only when a row turns red, and the sweep's self-test plants a red row and requires exactly one comment; the authenticated download-count route rejects an unauthenticated POST.
   4. Stopping the Worker cron for 26 hours opens an issue in `powerbrowser-updates`.
+
 **External gate**: None beyond Phase 47's Cloudflare setup. The runner-online, channel-liveness and download-count rows have nothing to observe until Phases 49 and 50; their live values are Phase 50 criterion 5.
 **Research flag**: Open item (SUMMARY): whether bot commits count as activity for GitHub's 60-day scheduled-workflow rule, which matters to the watchdog repo.
 **Plans**: TBD
 
 ### Phase 49: Release pipeline and legion runner (E)
+
 **Goal**: An owner-approved dispatch of `release.yml` builds on legion with no secrets, signs and publishes on a hosted runner, and releases the descriptor after the canary wait, with no credential stored on legion.
 **Depends on**: Phase 41 (fork approval, environments), Phase 44 (descriptor builder, `descriptor-monotonic`), Phase 45 (container build), Phase 47 (updates host)
 **Requirements**: SEC-08, SEC-10, DIST-02, AUTO-05, SEC-07, DIST-07, DIST-08, DIST-09, UPD-17, INF-04
@@ -191,11 +235,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   3. `sign-publish` refuses a MAR whose embedded channel differs from `ACCEPTED_MAR_CHANNEL_IDS`, signs and verifies with `signmar -v`, checks the draft's asset set against the manifest before the single publish, creates tag `v<ESR>-<revision>` with the bot App token, and copies the MAR to R2.
   4. After the 24-hour wait timer and owner approval, the `descriptor` job commits one `update.xml` per BUILD_TARGET to `powerbrowser-updates`, and `channel-live` is green (public descriptor byte-equals the repo copy, MAR URLs answer HEAD 200, offered version equals the latest Release).
   5. One cold hosted fallback Linux build is measured with duration and disk use in `docs/BUILD.md`, and artifact storage per release is measured against the 500 MB cap.
+
 **External gate**: legion NixOS changes (runner user, `ACTIONS_RUNNER_HOOK_JOB_STARTED` hook) finished with `nrs`; runner registration after SEC-11, SEC-10 and GH-07; Cloudflare R2 enabled.
 **Research flag**: Yes (E): the Actions artifact storage cap; the environment approval timeout; the github-runner 30-day update rule against nixpkgs lag.
 **Plans**: TBD
 
 ### Phase 50: Release train stages and first public Linux release (E)
+
 **Goal**: The train carries a release from a merged bump PR to a live descriptor by itself, a bad release can be withdrawn without deleting it, and the first public Linux release is live.
 **Depends on**: Phase 43 (train), Phase 46 (update experience), Phase 48 (maintenance sweep), Phase 49 (release pipeline)
 **Requirements**: TRAIN-10, REL-02, GH-15, UPD-16, REL-03
@@ -205,11 +251,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   3. The withdraw job commits the no-update descriptor for every target (or repoints at the R2 copy), reruns `channel-live`, and marks the Release per the recorded immutable-release probe; no Release is deleted.
   4. The first public Linux release is published: bump PR merged, `release` approved, hop drill passed, /download live, descriptor released after the owner's `descriptor` approval, and `docs/KNOWN-ISSUES.md` copied into one pinned issue.
   5. At the first public release, the UPD-15 `github.com` and `release-assets.githubusercontent.com` allowlist rows are observed at layer 3, and the sweep's runner-online, channel-liveness and download-count rows report live values.
+
 **External gate**: Per-release owner approvals (`release`; `descriptor` after the owner's own N-1 to N hop); the ESR 153 calendar decides which point release becomes the first public release.
 **Research flag**: Shares Phase 49's E flags.
 **Plans**: TBD
 
 ### Phase 51: Dependency flow and train supersede (F)
+
 **Goal**: Theia, GitHub Actions and npm security updates arrive as grouped PRs on a fixed rhythm, a newer ESR supersedes an open train cleanly, and the maintenance issue reports every renewal, alert and mirror drift.
 **Depends on**: Phase 48 (maintenance sweep), Phase 50 (release states)
 **Requirements**: AUTO-02, AUTO-03, DIST-05, UPS-02, TRAIN-04, TRAIN-11
@@ -218,11 +266,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   2. Dependabot opens one weekly grouped github-actions PR that keeps SHA pins with plain version comments and applies npm security-only updates to `theia/yarn.lock`; CodeQL default setup covers `theia/extensions` and `scripts/`.
   3. A newer ESR detected while a train is open moves the old train to SUPERSEDED, cancels its pending `release` deployment and starts the new train; a chemspill revision takes priority; the sign job exits when a newer Release exists; supersede fixtures are in `release-train-logic-self-test`.
   4. The maintenance issue carries the renewals-due, repo-controls, Dependabot PR count, Dependabot and CodeQL alert counts, CodeQL push age and Codeberg-versus-GitHub `main` rows; `docs/RELEASING.md` states the release cadence and the npm-advisory response time; `docs/RENEWALS.md` carries the Node 24 Maintenance-end row (2028-04-30).
+
 **External gate**: Theia release calendar (last Thursday of each month). The Codeberg row has no mirror to compare until Phase 53.
 **Research flag**: Yes (F): whether a Theia `yarn.lock` regeneration fits the self-hosted Renovate run.
 **Plans**: TBD
 
 ### Phase 52: Claude fixer (F)
+
 **Goal**: When a bump PR goes red, a patch fails to replay or `main` goes red, a Claude-written fix arrives as a gated PR for the owner to review, and the fixer can never merge, approve, sign or weaken a gate.
 **Depends on**: Phase 50 (release states), Phase 51 (Renovate Theia branch is a fixer class)
 **Requirements**: FIX-01, FIX-02, FIX-03, FIX-04, FIX-05, FIX-06, FIX-07, FIX-08, FIX-09, FIX-10, FIX-11, FIX-12, TRAIN-06
@@ -232,11 +282,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   3. The quick row `fix-gate-self-test`, after a green control, rejects one planted diff per entry of `.github/fix-gate-deny.json` plus a hand-edited patch hunk, each naming the path.
   4. A third failure for the same (release key, class) moves the release to NEEDS_OWNER, attempts rejected by `fix-gate` are counted, the spend limits are in place, and the authentication outcome (OIDC federation or `fixer`-only API key) is recorded in `docs/RELEASING.md`.
   5. Before 2027-05-27 a fixer PR for a real red PR (expected: the Theia 1.77 bump needing TypeScript 6.0) passes `fix-gate` and is reviewed and merged by the owner.
+
 **External gate**: Anthropic Console fixer workspace with a monthly limit; OIDC federation or the `fixer` environment key; FIX-10 deadline 2027-05-27 (ESR 175 nightly).
 **Research flag**: Yes (F): whether passing `github_token` suppresses the action's own OIDC App-token exchange, which decides OIDC versus `ANTHROPIC_API_KEY`.
 **Plans**: TBD
 
 ### Phase 53: Support operations (G)
+
 **Goal**: Bug reports arrive prefilled from inside the browser, every new issue gets a template triage reply, security reports reach the owner's phone, and code and status stay reachable during a GitHub outage.
 **Depends on**: Phase 47 (mail), Phase 51 (Codeberg sweep row), Phase 52 (FIX-08 pinning rules apply to `triage.yml`)
 **Requirements**: TEL-05, GH-03, GH-16, GH-17, GH-04, MON-02, DOC-07
@@ -246,12 +298,14 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   3. A private vulnerability report and a security@ message each reach the owner as phone notifications within the acknowledgement window `SECURITY.md` states.
   4. A legion timer pushes git and tags to Codeberg daily and the sweep's Codeberg row goes red when the mirror lags; status.powerbrowser.org shows the updates host, the website and `/events`, and the sweep reports the Upptime workflows' state and last-run age.
   5. `docs/RELEASING.md` has a support-operations section covering triage, Discussions moderation, private vulnerability reports, CodeQL alerts after each rebase and the fork-PR approval rule.
+
 **External gate**: Anthropic triage workspace; Codeberg account, mirror repo and deploy token on legion; legion NixOS timer finished with `nrs`; Upptime repo and `status` CNAME.
 **Research flag**: None (SUMMARY: G is standard). Carried unresearched: the private vulnerability reporting route.
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 54: Windows (H)
+
 **Goal**: Windows users install PowerBrowser from a `setup.exe` on GitHub Releases and it updates itself, first unsigned with a stated warning, then Authenticode-signed.
 **Depends on**: Phase 50 (release pipeline and train)
 **Requirements**: PKG-10, PKG-11, PKG-12, PKG-13, LEG-01, MTX-01, UPD-30, UPD-31, SEC-03, SEC-12, DIST-10
@@ -261,11 +315,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   3. The Windows 11 libvirt matrix installs, launches, updates and uninstalls with a clean registry no-residue diff, the update applies with the sidecar reaped before the rename, and the background-task path is verified or deferred with the reason recorded.
   4. The first Windows release ships unsigned with the maintenance service disabled, per-target descriptors and the stated /download warning text.
   5. After Azure validation, jsign signs the inner PE files, then the installer, then the MAR is produced, and /download shows the updated signing status.
+
 **External gate**: Azure Artifact Signing identity validation (1 to 20 business days; create the account 3 to 4 weeks before the matrix is ready; billed from creation); legion NixOS libvirt access for the runner user, finished with `nrs`; Windows VM licence.
 **Research flag**: Yes (H): the Windows updater rename with a live `node.exe`; the background-task path; the MTX-01 libvirt design.
 **Plans**: TBD
 
 ### Phase 55: macOS (I)
+
 **Goal**: macOS users install a signed, notarized universal DMG that updates itself.
 **Depends on**: Phase 47 (live site for the fee waiver), Phase 50 (release pipeline)
 **Requirements**: SEC-13, PKG-24, PKG-14, PKG-15, PKG-16, SEC-04
@@ -274,11 +330,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   2. A `release.yml` `build-macos` job produces a universal DMG and complete MAR through `unify.sh` (cross-built on legion, with the hosted `macos-26` fallback recorded), the sidecar natives, `rg` and `node` are `lipo`-merged, and `package-target-natives` passes on the DMG.
   3. The quick row `mac-entitlements` is green, and its self-test goes red on a planted `43AQ936H96`, `org.mozilla` and restricted entitlement key.
   4. The bundle is signed inside-out with a Developer ID and notarized, the hosted macOS matrix row passes on the draft DMG, and one real Mac session records the Gatekeeper copy.
+
 **External gate**: D-U-N-S number, then Apple Developer Program enrolment with the nonprofit fee-waiver application (after the Phase 47 site is live); App Store Connect API key as a `release` secret.
 **Research flag**: Yes (I): the Apple SDK licence; whether rcodesign is still viable; the Developer ID CA date.
 **Plans**: TBD
 
 ### Phase 56: Package channels (J)
+
 **Goal**: Users install and update PowerBrowser through Nix, Flathub, winget and Homebrew, and each channel's manifest follows every release without an owner edit.
 **Depends on**: Phase 50 (Linux release), Phase 54 (Windows release for winget), Phase 55 (notarized DMG for the cask and aarch64-darwin)
 **Requirements**: PKG-19, INF-05, PKG-20, DIST-04, DIST-11, DIST-12
@@ -286,11 +344,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   1. The flake package repacks the Release tarball with `fetchurl` and autoPatchelf, uses `pkgs.nodejs_24` and exports an overlay; a row asserts the release tarball's `policies.json` has no `DisableAppUpdate`; a clean machine's `nix build` substitutes from the binary cache.
   2. PowerBrowser is listed on Flathub (DNS TXT verified, with the build-from-source exception in writing or a from-source manifest), on winget, and in the own Homebrew tap with a cask after notarization; /download gains Nix and Flatpak rows when those channels are live.
   3. For each release the train opens a bot PR with the flake hash, the bot App commits the tap update, `wingetcreate` submits the winget PR, and Flathub's external-data-checker opens its own PR.
+
 **External gate**: Tap repo exists (created in Phase 41); winget submission credential decision (likely a PAT on a fork-owning account, against the Apps-only rule; record holder and RENEWALS row); Flathub account and build-from-source exception request; Cachix open-source licence (R2 S3 cache fallback); Apple notarization for the cask and aarch64-darwin.
 **Research flag**: None in SUMMARY (the J flake follows the floorp-bin template). Open: Cachix eligibility under PolyForm Noncommercial.
 **Plans**: TBD
 
 ### Phase 57: Native crash reporting (K)
+
 **Goal**: Native crashes are reported only after consent, to PowerBrowser's own store, with the symbols needed to read them, and the crash reporter is switched on.
 **Depends on**: Phase 48 (telemetry Worker), Phase 54 (first Windows release shipped)
 **Requirements**: TEL-09, TEL-07, TEL-12, TEL-13
@@ -299,11 +359,13 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   2. The Worker's `POST /submit` stores minidumps in R2 under a 30-day lifecycle, the collector's self-test passes a Gecko-shaped `extra` plant, and the submit URL key is reconciled with `[urls].crash_report`.
   3. `mach buildsymbols` output is attached to each Release as part of the DIST-07 manifest asset set, a stackwalk runbook exists, and `docs/CRASH-POLICY.md` is rewritten.
   4. `--disable-crashreporter` is removed only after criteria 1 to 3 pass and the first Windows release has shipped.
+
 **External gate**: Cloudflare R2 enabled; the first Windows release (Phase 54) shipped (owner decision 9).
 **Research flag**: None in SUMMARY.
 **Plans**: TBD
 
 ### Phase 58: ESR 175 (L)
+
 **Goal**: PowerBrowser moves to ESR 175 before ESR 153 ends, with 153.x security releases continuing in parallel through the overlap.
 **Depends on**: Phase 43 (tag-based detector), Phase 49 (hosted fallback build), Phase 52 (fixer proven)
 **Requirements**: UPS-01, TRAIN-05, UPS-03
@@ -312,6 +374,7 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
   2. A 175 train runs with its own release keys and tracking issues while the 153.x security trains continue.
   3. The hook-only patches are rebased onto 175, the toolchain baseline is updated, and PowerBrowser ships on 175.x before 153.27 (2027-09-07).
   4. The dual-build window fits legion's disk (two objdirs of about 14 GB each), the measured disk use is recorded, and the hosted fallback build is available.
+
 **External gate**: ESR 175 calendar: nightly 2027-05-27, beta 2027-06-10, release 2027-06-29; ESR 153 ends with 153.27 on 2027-09-07.
 **Research flag**: Yes (L): 175 patch drift; whether product-details adds a `FIREFOX_ESR153` key after the flip.
 **Plans**: TBD
