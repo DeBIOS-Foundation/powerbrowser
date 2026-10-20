@@ -4638,6 +4638,11 @@ run_own_checks() {
     # browser, display or network. upstream/ is required: CI's verify.yml provides an applied
     # checkout.
     "patches-regenerated|bash $REPO_ROOT/scripts/regenerate-patches.sh --check"
+    # patches-regenerated-self-test rides alongside for the reason every other self-test row
+    # in this array gives: a hermetic fixture repo, green control first, then a hand-edited
+    # hunk, a pristine upstream, two patches naming one path and an unsafe write -- each red,
+    # naming the patch.
+    "patches-regenerated-self-test|bash $REPO_ROOT/scripts/regenerate-patches.sh --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then

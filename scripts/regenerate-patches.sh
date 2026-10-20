@@ -8,6 +8,10 @@
 #
 # The diff is taken against HEAD, not the worktree alone: apply-patches.sh's
 # --3way stages its result into the index, so a worktree-only diff is empty.
+# Modes: no flag regenerates every patch in place (write); --check compares;
+# --self-test runs the hermetic fixture. --upstream/--patches override the
+# default directories.
+#
 # Output bytes are pinned: user/system git config off, abbrev 10, myers, no
 # external diff, no textconv, no color. Never --full-index (the tracked
 # patches carry 10-character abbreviations).
@@ -16,9 +20,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UPSTREAM_DIR="$REPO_ROOT/upstream"
 PATCHES_DIR="$REPO_ROOT/patches"
+SELF="$REPO_ROOT/scripts/regenerate-patches.sh"
 
 usage() {
-  echo "usage: regenerate-patches.sh --check [--upstream <dir>] [--patches <dir>]" >&2
+  echo "usage: regenerate-patches.sh [--check | --self-test] [--upstream <dir>] [--patches <dir>]" >&2
 }
 
 fail() {
@@ -88,10 +93,139 @@ run_check() {
   echo "regenerate-patches: PASS -- ${#patch_files[@]} patch(es) equal their regeneration from upstream/"
 }
 
+# Write mode: the only sanctioned way a patch changes. Every patch is
+# regenerated into a temp file beside it and validated before any is replaced,
+# and a replacement is a rename, so a refusal leaves every tracked patch's
+# bytes unchanged (never written in place, never truncated first).
+run_write() {
+  preflight
+  local p name t
+  declare -A regen=()
+  regen_tmps=() # global: read by the EXIT trap
+  trap 'rm -f "${regen_tmps[@]}"' EXIT
+  for p in "${patch_files[@]}"; do
+    name="$(basename "$p")"
+    t="$(mktemp "$PATCHES_DIR/.regenerate.XXXXXX")"
+    regen_tmps+=("$t")
+    regen[$p]="$t"
+    regenerate_one "$p" > "$t"
+    [ -s "$t" ] || fail "regenerating $name produced nothing: upstream/ is pristine or unpatched; $name was left unchanged" \
+      "bash scripts/apply-patches.sh"
+    [ "$(head -c 13 "$t")" = "diff --git a/" ] || fail "regenerating $name did not produce a git diff; $name was left unchanged"
+  done
+  for p in "${patch_files[@]}"; do
+    name="$(basename "$p")"
+    if cmp -s "${regen[$p]}" "$p"; then
+      echo "regenerate-patches: unchanged $name"
+    else
+      chmod --reference="$p" "${regen[$p]}"
+      mv -f "${regen[$p]}" "$p"
+      echo "regenerate-patches: rewrote $name"
+    fi
+  done
+}
+
+# Hermetic: a throwaway fixture repo whose change is staged the way --3way
+# leaves upstream/, and fixture patches produced by regenerate_one itself.
+# Every case invokes this script as a child, as the real gate does.
+run_self_test() {
+  local fx failed=0 out rc
+  fx="$(mktemp -d)"
+  tmp="$fx" # global: read by the EXIT trap
+  trap 'rm -rf "$tmp"' EXIT
+  export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+
+  mkdir -p "$fx/up" "$fx/seed" "$fx/p"
+  printf 'alpha\nbeta\ngamma\ndelta\n' > "$fx/up/one.txt"
+  printf 'red\ngreen\nblue\n' > "$fx/up/two.txt"
+  git -C "$fx/up" init -q
+  git -C "$fx/up" add one.txt two.txt
+  git -C "$fx/up" -c user.name=self-test -c user.email=self-test@invalid commit -q -m fixture
+  printf 'alpha\nbeta changed\ngamma\ndelta\nepsilon\n' > "$fx/up/one.txt"
+  printf 'red\ngreen\ncyan\n' > "$fx/up/two.txt"
+  git -C "$fx/up" add one.txt two.txt
+  cp -r "$fx/up" "$fx/pristine"
+  git -C "$fx/pristine" reset -q --hard
+
+  echo '+++ b/one.txt' > "$fx/seed/A.patch"
+  echo '+++ b/two.txt' > "$fx/seed/B.patch"
+  (UPSTREAM_DIR="$fx/up"; regenerate_one "$fx/seed/A.patch") > "$fx/p/010-a.patch"
+  (UPSTREAM_DIR="$fx/up"; regenerate_one "$fx/seed/B.patch") > "$fx/p/020-b.patch"
+
+  # Runs the script as a child into $out / $rc without tripping set -e.
+  run_child() { if out="$(bash "$SELF" "$@" 2>&1)"; then rc=0; else rc=$?; fi; }
+  pass() { echo "regenerate-patches: --self-test PASS -- $1"; }
+  red() { echo "regenerate-patches: --self-test FAIL -- $1" >&2; echo "$out" | sed 's/^/    /' >&2; failed=1; }
+
+  # 1. control
+  run_child --check --upstream "$fx/up" --patches "$fx/p"
+  if [ "$rc" -eq 0 ]; then
+    pass "control: two fixture patches regenerated from the staged fixture pass --check"
+  else
+    red "control: fixture patches do not pass --check, so planted-fault results would mean nothing"
+    return 1
+  fi
+
+  # 2. hand-edited hunk body
+  cp -r "$fx/p" "$fx/edited"
+  sed -i 's/^+epsilon$/+epsilon edited by hand/' "$fx/edited/010-a.patch"
+  run_child --check --upstream "$fx/up" --patches "$fx/edited"
+  if [ "$rc" -ne 0 ] && [[ "$out" == *010-a.patch* ]] && [[ "$out" != *020-b.patch* ]]; then
+    pass "a hand-edited + line in 010-a.patch goes red naming 010-a.patch only"
+  else
+    red "a hand-edited + line in 010-a.patch did not go red naming 010-a.patch only (rc=$rc)"
+  fi
+
+  # 3. pristine upstream
+  run_child --check --upstream "$fx/pristine" --patches "$fx/p"
+  if [ "$rc" -ne 0 ] && [[ "$out" == *010-a.patch* ]] && [[ "$out" == *apply-patches.sh* ]]; then
+    pass "a pristine upstream fails naming 010-a.patch with the apply-patches.sh next step"
+  else
+    red "a pristine upstream did not fail naming 010-a.patch with the apply-patches.sh next step (rc=$rc)"
+  fi
+
+  # 4. adjacency
+  cp -r "$fx/p" "$fx/adjacent"
+  cp "$fx/p/010-a.patch" "$fx/adjacent/030-c.patch"
+  run_child --check --upstream "$fx/up" --patches "$fx/adjacent"
+  if [ "$rc" -ne 0 ] && [[ "$out" == *010-a.patch* ]] && [[ "$out" == *030-c.patch* ]]; then
+    pass "two patches naming one.txt fail naming 010-a.patch and 030-c.patch"
+  else
+    red "two patches naming one.txt did not fail naming both patches (rc=$rc)"
+  fi
+
+  # 5. write mode refuses on a pristine upstream and leaves the patch bytes alone
+  cp -r "$fx/p" "$fx/refuse"
+  local before after
+  before="$(sha256sum < "$fx/refuse/010-a.patch")"
+  run_child --upstream "$fx/pristine" --patches "$fx/refuse"
+  after="$(sha256sum < "$fx/refuse/010-a.patch")"
+  if [ "$rc" -ne 0 ] && [ "$before" = "$after" ] && [ -z "$(find "$fx/refuse" -name '.regenerate.*')" ]; then
+    pass "write mode on a pristine upstream refuses and 010-a.patch's sha256 is unchanged"
+  else
+    red "write mode on a pristine upstream did not refuse cleanly (rc=$rc, sha256 changed: $([ "$before" = "$after" ] && echo no || echo yes))"
+  fi
+
+  # 6. write mode rewrites a stale patch so --check passes
+  cp -r "$fx/edited" "$fx/stale"
+  run_child --upstream "$fx/up" --patches "$fx/stale"
+  local wrote="$out" wrc="$rc"
+  run_child --check --upstream "$fx/up" --patches "$fx/stale"
+  if [ "$wrc" -eq 0 ] && [[ "$wrote" == *"rewrote 010-a.patch"* ]] && [[ "$wrote" == *"unchanged 020-b.patch"* ]] && [ "$rc" -eq 0 ]; then
+    pass "write mode rewrites the stale 010-a.patch and --check then passes"
+  else
+    out="$wrote"$'\n'"$out"
+    red "write mode did not rewrite the stale 010-a.patch into a passing state (write rc=$wrc, check rc=$rc)"
+  fi
+
+  return "$failed"
+}
+
 MODE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --check) MODE=check; shift ;;
+    --self-test) MODE=self-test; shift ;;
     --upstream) [ $# -ge 2 ] || { usage; exit 2; }; UPSTREAM_DIR="$2"; shift 2 ;;
     --patches) [ $# -ge 2 ] || { usage; exit 2; }; PATCHES_DIR="$2"; shift 2 ;;
     *) usage; exit 2 ;;
@@ -100,5 +234,6 @@ done
 
 case "$MODE" in
   check) run_check ;;
-  *) usage; exit 2 ;;
+  self-test) run_self_test ;;
+  "") run_write ;;
 esac
