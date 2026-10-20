@@ -113,7 +113,7 @@ the project's own planning record. This section must survive when this file repl
 - [ ] **INF-03**: The `powerbrowser-scheduler` Worker (own repo, workers.dev first) is a clock only. Each hour it mints a clock-App installation token from a PKCS#8 key, sends a `User-Agent`, issues one `workflow_dispatch` of `release-train.yml` with `reason=tick` and `return_run_details: true`, and emails the owner through Email Routing if the dispatch fails. It contains no detection, liveness or descriptor logic. The CPU time of the RS256 JWT mint is measured against the Workers Free 10 ms per-invocation limit and recorded in `docs/RELEASING.md`. (A)
 - [ ] **TRAIN-01**: `release-train.yml` starts only from `workflow_dispatch` (`reason` tick, owner or self) and from single-level `workflow_run` on `verify.yml` and `release.yml` completion. It runs in one `release-train` concurrency group with no `cancel-in-progress` and no `queue: max`, and it validates every dispatched input (tag regex, release key strictly greater than the latest Release tag) before acting. (A)
 - [ ] **TRAIN-02**: Each release key has exactly one tracking issue, found by label and title on every run and rendered from GitHub facts by the report job. The body is PATCHed only when the rendered bytes differ and is never read back as state. Tracking issues are locked to collaborators, closed on DONE and reopened on withdraw. The owner gets an @-mention comment and an assignment only on entering a state that needs them. (A)
-- [ ] **TRAIN-03**: The train derives its states from GitHub facts with no stored state, from one state table in `scripts/release-train.mjs`. Phase A delivers DETECTED, BUMPING, CONFLICT, BUMP_RED and BUMP_PR_GREEN. The train makes at most one transition per release per run and ends the run at the owner's merge gate. Exit test: 153.6 (2026-10-27) or 153.7 (2026-11-10) arrives as a bot PR with a tracking issue and no owner dispatch. (A)
+- [ ] **TRAIN-03**: The train derives its states from GitHub facts with no stored state, from one state table in `scripts/release-train.mjs`. Phase A delivers DETECTED, BUMPING, CONFLICT, BUMP_RED and BUMP_PR_GREEN. The train makes at most one transition per release per run and ends the run at the owner's merge gate. Exit test: the first ESR 153 point release after the Phase 43 train lands (153.7 on 2026-11-10, else 153.8 on 2026-11-24, and so on) arrives as a bot PR with a tracking issue and no owner dispatch. (A)
 - [ ] **TRAIN-08**: Every train stage takes a `dry-run` input that validates and renders but commits, opens, comments and dispatches nothing; the `workflows` row asserts that every write step is gated by it. (A)
 - [ ] **TRAIN-09**: The quick row `release-train-logic-self-test` runs `scripts/release-train.mjs` `derive`, `next` and `render` over fixture API JSON. It plants one fixture per state, with the state list derived from `release-train.mjs`'s state table and compared as set equality, so a state without a fixture, or a fixture without a state, goes red. Additional fault plants: a merged PR with an unchanged pin, a draft Release, a fork-head `workflow_run`, a duplicate tracking issue and a 175.x ESR under the 153 guard; each must go red naming the drift. The release-stage fixtures land with E and the fixer and supersede fixtures with F, as those states are added. (A)
 - [ ] **TRAIN-07**: One pinned `release-train: maintenance` issue is re-rendered by the train's report job from a daily sweep (first tick after 06:00 UTC) on a GitHub-hosted runner. It comments only when a row turns red. Initial rows: legion runner online; ESR pin age (red when a `FIREFOX_153_*esr_RELEASE` tag newer than the pin is more than 3 days old with no matching Release); channel liveness; watchdog last-run age; and one synthetic POST to `events.powerbrowser.org/events` that returns 2xx and whose row is deleted or marked synthetic (red otherwise). Later requirements add their own rows. (D)
@@ -321,7 +321,7 @@ All recorded 2026-10-20 by the owner. "§12 n" is SEED-002 section 12, decision 
 | Google Safe Browsing API key | UPD-29 | Phase C | Obtain the key; store the keyfile on legion |
 | Codeberg account and deploy token | GH-04 | Phase G | Create the account and the mirror repo; issue a push token; store it on legion |
 | Upptime repo and status CNAME | MON-02 | Phase G | Create the repo from the Upptime template; add the `status` CNAME in Cloudflare |
-| Homebrew tap repo | DIST-11, DIST-12 | Phase J | Create the tap repo in the org; install the bot App on it |
+| Homebrew tap repo | DIST-11, DIST-12 | Phase 41 (created empty with GH-10) | Create the tap repo in the org; install the bot App on it |
 | winget submission credential | DIST-04, DIST-12 | Phase J | Decide the credential: `wingetcreate` submits from a fork of microsoft/winget-pkgs, which an org App installation token cannot do, so this likely needs a PAT on an account that owns the fork, against the Apps-only rule. Record the choice, its holder environment and a RENEWALS row |
 | Flathub submission account | PKG-20 | Phase J | Create the account and open the submission PR |
 | Cachix open-source licence | INF-05 | Phase J | Send the licence email; fall back to R2 if refused |
@@ -378,160 +378,160 @@ The roadmapper fills the Phase column.
 
 | Requirement | Phase | Status |
 |---|---|---|
-| REL-01 | TBD | Pending |
-| UPD-11 | TBD | Pending |
-| DIST-06 | TBD | Pending |
-| UPD-12 | TBD | Pending |
-| UPD-13 | TBD | Pending |
-| UPD-25 | TBD | Pending |
-| PKG-08 | TBD | Pending |
-| PKG-09 | TBD | Pending |
-| GH-02 | TBD | Pending |
-| SEC-06 | TBD | Pending |
-| SEC-11 | TBD | Pending |
-| GH-05 | TBD | Pending |
-| GH-06 | TBD | Pending |
-| GH-07 | TBD | Pending |
-| GH-08 | TBD | Pending |
-| GH-09 | TBD | Pending |
-| GH-10 | TBD | Pending |
-| GH-11 | TBD | Pending |
-| GH-12 | TBD | Pending |
-| AUTO-09 | TBD | Pending |
-| GH-18 | TBD | Pending |
-| GH-13 | TBD | Pending |
-| GH-01 | TBD | Pending |
-| GH-14 | TBD | Pending |
-| AUTO-10 | TBD | Pending |
-| AUTO-08 | TBD | Pending |
-| AUTO-01 | TBD | Pending |
-| AUTO-06 | TBD | Pending |
-| AUTO-07 | TBD | Pending |
-| AUTO-04 | TBD | Pending |
-| AUTO-02 | TBD | Pending |
-| AUTO-03 | TBD | Pending |
-| DIST-05 | TBD | Pending |
-| UPS-02 | TBD | Pending |
-| INF-03 | TBD | Pending |
-| TRAIN-01 | TBD | Pending |
-| TRAIN-02 | TBD | Pending |
-| TRAIN-03 | TBD | Pending |
-| TRAIN-08 | TBD | Pending |
-| TRAIN-09 | TBD | Pending |
-| TRAIN-07 | TBD | Pending |
-| MON-01 | TBD | Pending |
-| TRAIN-10 | TBD | Pending |
-| TRAIN-04 | TBD | Pending |
-| TRAIN-06 | TBD | Pending |
-| TRAIN-11 | TBD | Pending |
-| TRAIN-05 | TBD | Pending |
-| FIX-01 | TBD | Pending |
-| FIX-03 | TBD | Pending |
-| FIX-02 | TBD | Pending |
-| FIX-11 | TBD | Pending |
-| FIX-04 | TBD | Pending |
-| FIX-05 | TBD | Pending |
-| FIX-06 | TBD | Pending |
-| FIX-12 | TBD | Pending |
-| FIX-08 | TBD | Pending |
-| FIX-09 | TBD | Pending |
-| FIX-07 | TBD | Pending |
-| FIX-10 | TBD | Pending |
-| SEC-05 | TBD | Pending |
-| UPD-14 | TBD | Pending |
-| UPD-26 | TBD | Pending |
-| SEC-07 | TBD | Pending |
-| PKG-06 | TBD | Pending |
-| PKG-17 | TBD | Pending |
-| PKG-22 | TBD | Pending |
-| PKG-18 | TBD | Pending |
-| PKG-23 | TBD | Pending |
-| PKG-04 | TBD | Pending |
-| PKG-05 | TBD | Pending |
-| PKG-07 | TBD | Pending |
-| PKG-21 | TBD | Pending |
-| AUTO-05 | TBD | Pending |
-| UPD-18 | TBD | Pending |
-| UPD-19 | TBD | Pending |
-| UPD-20 | TBD | Pending |
-| UPD-21 | TBD | Pending |
-| UPD-22 | TBD | Pending |
-| UPD-23 | TBD | Pending |
-| UPD-32 | TBD | Pending |
-| UPD-33 | TBD | Pending |
-| UPD-24 | TBD | Pending |
-| UPD-27 | TBD | Pending |
-| UPD-15 | TBD | Pending |
-| UPD-28 | TBD | Pending |
-| UPD-29 | TBD | Pending |
-| INF-01 | TBD | Pending |
-| INF-06 | TBD | Pending |
-| DIST-03 | TBD | Pending |
-| INF-02 | TBD | Pending |
-| WEB-01 | TBD | Pending |
-| WEB-02 | TBD | Pending |
-| WEB-03 | TBD | Pending |
-| WEB-04 | TBD | Pending |
-| WEB-05 | TBD | Pending |
-| TEL-08 | TBD | Pending |
-| TEL-06 | TBD | Pending |
-| TEL-10 | TBD | Pending |
-| TEL-11 | TBD | Pending |
-| TEL-05 | TBD | Pending |
-| SEC-08 | TBD | Pending |
-| SEC-10 | TBD | Pending |
-| DIST-02 | TBD | Pending |
-| DIST-07 | TBD | Pending |
-| DIST-08 | TBD | Pending |
-| DIST-09 | TBD | Pending |
-| UPD-17 | TBD | Pending |
-| REL-02 | TBD | Pending |
-| GH-15 | TBD | Pending |
-| INF-04 | TBD | Pending |
-| UPD-16 | TBD | Pending |
-| REL-03 | TBD | Pending |
-| DOC-03 | TBD | Pending |
-| DOC-04 | TBD | Pending |
-| DOC-05 | TBD | Pending |
-| DOC-06 | TBD | Pending |
-| SEC-09 | TBD | Pending |
-| GH-03 | TBD | Pending |
-| GH-16 | TBD | Pending |
-| GH-17 | TBD | Pending |
-| GH-04 | TBD | Pending |
-| MON-02 | TBD | Pending |
-| DOC-07 | TBD | Pending |
-| PKG-10 | TBD | Pending |
-| PKG-11 | TBD | Pending |
-| PKG-12 | TBD | Pending |
-| PKG-13 | TBD | Pending |
-| MTX-01 | TBD | Pending |
-| UPD-30 | TBD | Pending |
-| UPD-31 | TBD | Pending |
-| LEG-01 | TBD | Pending |
-| SEC-03 | TBD | Pending |
-| SEC-12 | TBD | Pending |
-| DIST-10 | TBD | Pending |
-| PKG-14 | TBD | Pending |
-| PKG-15 | TBD | Pending |
-| PKG-16 | TBD | Pending |
-| PKG-24 | TBD | Pending |
-| SEC-04 | TBD | Pending |
-| SEC-13 | TBD | Pending |
-| PKG-19 | TBD | Pending |
-| INF-05 | TBD | Pending |
-| PKG-20 | TBD | Pending |
-| DIST-04 | TBD | Pending |
-| DIST-11 | TBD | Pending |
-| DIST-12 | TBD | Pending |
-| TEL-09 | TBD | Pending |
-| TEL-07 | TBD | Pending |
-| TEL-12 | TBD | Pending |
-| TEL-13 | TBD | Pending |
-| UPS-01 | TBD | Pending |
-| UPS-03 | TBD | Pending |
+| REL-01 | Phase 40 | Pending |
+| UPD-11 | Phase 40 | Pending |
+| DIST-06 | Phase 40 | Pending |
+| UPD-12 | Phase 40 | Pending |
+| UPD-13 | Phase 40 | Pending |
+| UPD-25 | Phase 40 | Pending |
+| PKG-08 | Phase 40 | Pending |
+| PKG-09 | Phase 40 | Pending |
+| GH-02 | Phase 41 | Pending |
+| SEC-06 | Phase 41 | Pending |
+| SEC-11 | Phase 41 | Pending |
+| GH-05 | Phase 41 | Pending |
+| GH-06 | Phase 41 | Pending |
+| GH-07 | Phase 41 | Pending |
+| GH-08 | Phase 41 | Pending |
+| GH-09 | Phase 41 | Pending |
+| GH-10 | Phase 41 | Pending |
+| GH-11 | Phase 41 | Pending |
+| GH-12 | Phase 41 | Pending |
+| AUTO-09 | Phase 41 | Pending |
+| GH-18 | Phase 41 | Pending |
+| GH-13 | Phase 42 | Pending |
+| GH-01 | Phase 42 | Pending |
+| GH-14 | Phase 42 | Pending |
+| AUTO-10 | Phase 40 | Pending |
+| AUTO-08 | Phase 40 | Pending |
+| AUTO-01 | Phase 43 | Pending |
+| AUTO-06 | Phase 43 | Pending |
+| AUTO-07 | Phase 43 | Pending |
+| AUTO-04 | Phase 43 | Pending |
+| AUTO-02 | Phase 51 | Pending |
+| AUTO-03 | Phase 51 | Pending |
+| DIST-05 | Phase 51 | Pending |
+| UPS-02 | Phase 51 | Pending |
+| INF-03 | Phase 43 | Pending |
+| TRAIN-01 | Phase 43 | Pending |
+| TRAIN-02 | Phase 43 | Pending |
+| TRAIN-03 | Phase 43 | Pending |
+| TRAIN-08 | Phase 43 | Pending |
+| TRAIN-09 | Phase 43 | Pending |
+| TRAIN-07 | Phase 48 | Pending |
+| MON-01 | Phase 48 | Pending |
+| TRAIN-10 | Phase 50 | Pending |
+| TRAIN-04 | Phase 51 | Pending |
+| TRAIN-06 | Phase 52 | Pending |
+| TRAIN-11 | Phase 51 | Pending |
+| TRAIN-05 | Phase 58 | Pending |
+| FIX-01 | Phase 52 | Pending |
+| FIX-03 | Phase 52 | Pending |
+| FIX-02 | Phase 52 | Pending |
+| FIX-11 | Phase 52 | Pending |
+| FIX-04 | Phase 52 | Pending |
+| FIX-05 | Phase 52 | Pending |
+| FIX-06 | Phase 52 | Pending |
+| FIX-12 | Phase 52 | Pending |
+| FIX-08 | Phase 52 | Pending |
+| FIX-09 | Phase 52 | Pending |
+| FIX-07 | Phase 52 | Pending |
+| FIX-10 | Phase 52 | Pending |
+| SEC-05 | Phase 44 | Pending |
+| UPD-14 | Phase 44 | Pending |
+| UPD-26 | Phase 44 | Pending |
+| SEC-07 | Phase 49 | Pending |
+| PKG-06 | Phase 45 | Pending |
+| PKG-17 | Phase 45 | Pending |
+| PKG-22 | Phase 45 | Pending |
+| PKG-18 | Phase 45 | Pending |
+| PKG-23 | Phase 45 | Pending |
+| PKG-04 | Phase 45 | Pending |
+| PKG-05 | Phase 45 | Pending |
+| PKG-07 | Phase 45 | Pending |
+| PKG-21 | Phase 45 | Pending |
+| AUTO-05 | Phase 49 | Pending |
+| UPD-18 | Phase 46 | Pending |
+| UPD-19 | Phase 46 | Pending |
+| UPD-20 | Phase 46 | Pending |
+| UPD-21 | Phase 46 | Pending |
+| UPD-22 | Phase 46 | Pending |
+| UPD-23 | Phase 46 | Pending |
+| UPD-32 | Phase 46 | Pending |
+| UPD-33 | Phase 40 | Pending |
+| UPD-24 | Phase 46 | Pending |
+| UPD-27 | Phase 46 | Pending |
+| UPD-15 | Phase 46 | Pending |
+| UPD-28 | Phase 46 | Pending |
+| UPD-29 | Phase 45 | Pending |
+| INF-01 | Phase 47 | Pending |
+| INF-06 | Phase 47 | Pending |
+| DIST-03 | Phase 47 | Pending |
+| INF-02 | Phase 47 | Pending |
+| WEB-01 | Phase 47 | Pending |
+| WEB-02 | Phase 47 | Pending |
+| WEB-03 | Phase 47 | Pending |
+| WEB-04 | Phase 47 | Pending |
+| WEB-05 | Phase 47 | Pending |
+| TEL-08 | Phase 47 | Pending |
+| TEL-06 | Phase 48 | Pending |
+| TEL-10 | Phase 48 | Pending |
+| TEL-11 | Phase 48 | Pending |
+| TEL-05 | Phase 53 | Pending |
+| SEC-08 | Phase 49 | Pending |
+| SEC-10 | Phase 49 | Pending |
+| DIST-02 | Phase 49 | Pending |
+| DIST-07 | Phase 49 | Pending |
+| DIST-08 | Phase 49 | Pending |
+| DIST-09 | Phase 49 | Pending |
+| UPD-17 | Phase 49 | Pending |
+| REL-02 | Phase 50 | Pending |
+| GH-15 | Phase 50 | Pending |
+| INF-04 | Phase 49 | Pending |
+| UPD-16 | Phase 50 | Pending |
+| REL-03 | Phase 50 | Pending |
+| DOC-03 | Phase 42 | Pending |
+| DOC-04 | Phase 42 | Pending |
+| DOC-05 | Phase 42 | Pending |
+| DOC-06 | Phase 42 | Pending |
+| SEC-09 | Phase 44 | Pending |
+| GH-03 | Phase 53 | Pending |
+| GH-16 | Phase 53 | Pending |
+| GH-17 | Phase 53 | Pending |
+| GH-04 | Phase 53 | Pending |
+| MON-02 | Phase 53 | Pending |
+| DOC-07 | Phase 53 | Pending |
+| PKG-10 | Phase 54 | Pending |
+| PKG-11 | Phase 54 | Pending |
+| PKG-12 | Phase 54 | Pending |
+| PKG-13 | Phase 54 | Pending |
+| MTX-01 | Phase 54 | Pending |
+| UPD-30 | Phase 54 | Pending |
+| UPD-31 | Phase 54 | Pending |
+| LEG-01 | Phase 54 | Pending |
+| SEC-03 | Phase 54 | Pending |
+| SEC-12 | Phase 54 | Pending |
+| DIST-10 | Phase 54 | Pending |
+| PKG-14 | Phase 55 | Pending |
+| PKG-15 | Phase 55 | Pending |
+| PKG-16 | Phase 55 | Pending |
+| PKG-24 | Phase 55 | Pending |
+| SEC-04 | Phase 55 | Pending |
+| SEC-13 | Phase 55 | Pending |
+| PKG-19 | Phase 56 | Pending |
+| INF-05 | Phase 56 | Pending |
+| PKG-20 | Phase 56 | Pending |
+| DIST-04 | Phase 56 | Pending |
+| DIST-11 | Phase 56 | Pending |
+| DIST-12 | Phase 56 | Pending |
+| TEL-09 | Phase 57 | Pending |
+| TEL-07 | Phase 57 | Pending |
+| TEL-12 | Phase 57 | Pending |
+| TEL-13 | Phase 57 | Pending |
+| UPS-01 | Phase 58 | Pending |
+| UPS-03 | Phase 58 | Pending |
 
-**Coverage:** v1.6 requirements: 152 total. Listed in Traceability: 152. Mapped to phases: 0 (Phase column TBD until the roadmapper runs). Unmapped by omission: 0.
+**Coverage:** v1.6 requirements: 152 total. Listed in Traceability: 152. Mapped to phases: 152 (Phases 40–58, each requirement to exactly one phase). Unmapped: 0.
 
 ---
 *Requirements defined: 2026-10-20*
