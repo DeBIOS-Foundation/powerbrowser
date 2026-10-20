@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.6
 current_phase: 40
 current_phase_name: Release identity, ESR pin and patch regeneration (A)
-current_plan: N/A
+current_plan: 2
 status: executing
-stopped_at: Roadmap created; next is `/gsd-plan-phase 40`
-last_updated: "2026-10-20T23:25:38.302Z"
+stopped_at: Completed 40-01-PLAN.md
+last_updated: "2026-10-20T23:43:49.224Z"
 last_activity: 2026-10-20
-last_activity_desc: Roadmap created (19 phases, 152/152 requirements mapped)
-state_head: 8d9a429d886687a3e3a31e14c65b354af887d7dd
+last_activity_desc: Phase 40 execution started
+state_head: a7daaff3bef4a7a260bde76633c2785aa9f231b4
 progress:
   total_phases: 19
   completed_phases: 0
   total_plans: 8
-  completed_plans: 0
+  completed_plans: 1
 milestone_name: Deployment setup
 ---
 
@@ -25,21 +25,21 @@ milestone_name: Deployment setup
 See: .planning/PROJECT.md (updated 2026-10-20)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file, then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 40: Release identity, ESR pin and patch regeneration (A)
+**Current focus:** Phase 40 — Release identity, ESR pin and patch regeneration (A)
 
 ## Current Position
 
-Phase: 40 (Release identity, ESR pin and patch regeneration (A)) — READY TO EXECUTE
-Plan: — (not planned yet)
+Phase: 40 (Release identity, ESR pin and patch regeneration (A)) — EXECUTING
+Plan: 2 of 8
 Status: Ready to execute
-Last activity: 2026-10-20 — Roadmap created (19 phases, 152/152 requirements mapped)
+Last activity: 2026-10-20 — Phase 40 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
 ## Progress
 
 **Phases Complete:** 0 of 19
-**Current Plan:** N/A
+**Current Plan:** 2
 
 ## Performance Metrics
 
@@ -47,6 +47,11 @@ Progress: [░░░░░░░░░░] 0%
 - Total plans completed: 0
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 40 P01 | 15min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -61,6 +66,7 @@ Owner decisions 1–22 of 2026-10-20 are recorded in `.planning/workstreams/depl
 - Live observations that need a real GitHub Release (UPD-15 asset hosts; sweep runner, channel and download rows) are Phase 50 criterion 5.
 - The kit plan gate runs as `python3 scripts/plan-gate.py --root . --phase N --plans <dir> --stream deploy` in this workstream (owner choice 2026-10-20, commit 8d9a429): main's ledger rows (e.g. NG-089, phase 26) use main's phase numbers and are not due against phases 40+. Any v1.6 ledger row must carry `"stream": "deploy"`.
 - Phase 40: update channel stays `default` / `powerbrowser-default`; `product.revision` is a TOML integer; push and first `rebase-upstream.yml` dispatch are the owner's 40-08 Task 3 checkpoint, which also carries the About-dialog result.
+- [Phase 40]: 40-01: rebase-upstream.yml carries no tag at all (no input default); verify-upstream-pins sweeps it like any other file and asserts both triggers, no default, and Nix-wrapped generator steps
 
 ### Pending Todos
 
@@ -73,7 +79,9 @@ Owner decisions 1–22 of 2026-10-20 are recorded in `.planning/workstreams/depl
 
 ## Session Continuity
 
-**Stopped At:** Roadmap created; next is `/gsd-plan-phase 40`
+**Last session:** 2026-10-20T23:43:49.202Z
+
+**Stopped At:** Completed 40-01-PLAN.md
 **Resume File:** None
 
 ## Milestone Context
