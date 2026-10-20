@@ -94,7 +94,7 @@ the project's own planning record. This section must survive when this file repl
 
 ### Patch regeneration
 
-- [ ] **AUTO-10**: `scripts/regenerate-patches.sh` rewrites each `patches/NNN-*.patch` from `git -C upstream diff --abbrev=10` (no `--full-index`) over the paths that patch's own `+++ b/` headers name; `--check` re-derives and byte-compares. The quick row `patches-regenerated` passes on all tracked patches, and its self-test plants a hand-edited hunk body that must go red naming the patch. (A)
+- [x] **AUTO-10**: `scripts/regenerate-patches.sh` rewrites each `patches/NNN-*.patch` from `git -C upstream diff --abbrev=10` (no `--full-index`) over the paths that patch's own `+++ b/` headers name; `--check` re-derives and byte-compares. The quick row `patches-regenerated` passes on all tracked patches, and its self-test plants a hand-edited hunk body that must go red naming the patch. (A)
 
 ### Upstream automation
 
@@ -402,7 +402,7 @@ The roadmapper fills the Phase column.
 | GH-13 | Phase 42 | Pending |
 | GH-01 | Phase 42 | Pending |
 | GH-14 | Phase 42 | Pending |
-| AUTO-10 | Phase 40 | Pending |
+| AUTO-10 | Phase 40 | Complete |
 | AUTO-08 | Phase 40 | Pending |
 | AUTO-01 | Phase 43 | Pending |
 | AUTO-06 | Phase 43 | Pending |

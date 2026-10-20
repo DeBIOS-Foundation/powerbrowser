@@ -6,7 +6,7 @@
     {
       "number": "40",
       "name": "Release identity, ESR pin and patch regeneration (A)",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "number": "41",
@@ -104,5 +104,5 @@
     "label": "Advance to the next step",
     "reason": "Phase 1 of 19 · executing"
   },
-  "updated_at": "2026-10-20T23:43:48.597Z"
+  "updated_at": "2026-10-20T23:52:31.672Z"
 }
