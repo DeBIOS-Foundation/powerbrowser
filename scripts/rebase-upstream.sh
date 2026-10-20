@@ -92,6 +92,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   echo "  2. rm -rf '$UPSTREAM_DIR' && TAG=$NEW_TAG '$REPO_ROOT/scripts/fetch-upstream.sh'"
   echo "  3. '$REPO_ROOT/scripts/apply-patches.sh'"
   echo "  4. '$REPO_ROOT/scripts/check-patch-surface.sh'"
+  echo '  4a. "'"$REPO_ROOT"'/scripts/regenerate-patches.sh" --check  # AUTO-10: every tracked patch equals its regeneration from the replayed tree'
   # WR-08 (plan 01-18): expanded, like every neighbouring line. It used to print
   # the literal `--extra-root "$UPSTREAM_DIR"`, which pasted into a shell where
   # that variable is unset becomes `--extra-root ""` and the scanner exits 2.
@@ -120,6 +121,14 @@ fi
 echo "rebase-upstream: checking patch surface"
 if ! "$REPO_ROOT/scripts/check-patch-surface.sh"; then
   echo "rebase-upstream: FAIL -- check-patch-surface.sh rejected the replayed stack" >&2
+  exit 1
+fi
+
+# AUTO-10: a hand-edited hunk replays as a silent no-op under --3way, so the
+# replayed tree is re-diffed and every tracked patch byte-compared with it.
+echo "rebase-upstream: checking every patch equals its regeneration"
+if ! "$REPO_ROOT/scripts/regenerate-patches.sh" --check; then
+  echo "rebase-upstream: FAIL -- a tracked patch does not equal its regeneration from the replayed upstream/" >&2
   exit 1
 fi
 

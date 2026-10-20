@@ -4632,6 +4632,12 @@ run_own_checks() {
     # --quick: temp-dir plants only. Red when a stream-less row stops counting in the default
     # stream, or a row leaks across streams.
     "plan-gate-streams-self-test|check_plan_gate_streams_self_test"
+    # NEW (Phase 40, AUTO-10): every tracked patch equals its regeneration from the applied
+    # upstream/ (git diff HEAD --abbrev=10 over the patch's own +++ b/ paths, user git config
+    # off). Honestly --quick: git plumbing over the existing upstream/ checkout, no build,
+    # browser, display or network. upstream/ is required: CI's verify.yml provides an applied
+    # checkout.
+    "patches-regenerated|bash $REPO_ROOT/scripts/regenerate-patches.sh --check"
   )
 
   if [ "$QUICK" -eq 0 ]; then
