@@ -983,8 +983,8 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
     /**
      * Custom title bar. The shell window draws no OS title bar, so the
      * window moves by the empty parts of its top rows: the strip and the
-     * URL row in Browsing, the menubar and the URL row in Coding, the URL
-     * row and the toolbar in Organising -- as a Firefox toolbar does, every
+     * URL row in Browsing, the menubar and the URL row in Coding, the
+     * toolbar and the URL row in Organising -- as a Firefox toolbar does, every
      * pixel that is not a control. Dragging is
      * chrome-only in Gecko, so this measures the rects and chrome lays
      * invisible handles over them. Chrome's own window buttons overlay the
@@ -1022,12 +1022,11 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
             rows.push({ row: this.tabStrip.node, items: Array.from(this.tabStrip.node.querySelectorAll('.pb-tab')) });
         } else if (mode === 'coding' && menubar) {
             rows.push({ row: menubar, items: Array.from(menubar.querySelectorAll('.lm-MenuBar-item')) });
+        } else if (mode === 'organising' && toolbar) {
+            rows.push({ row: toolbar, items: Array.from(toolbar.children) });
         }
         if (bar) {
             rows.push({ row: bar, items: Array.from(bar.children) });
-        }
-        if (mode === 'organising' && toolbar) {
-            rows.push({ row: toolbar, items: Array.from(toolbar.children) });
         }
         // Chrome's window buttons overlay the first row's right end only.
         const limit = this.shell.topPanel.node.getBoundingClientRect().right - controls;

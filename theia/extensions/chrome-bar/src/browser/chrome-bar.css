@@ -271,7 +271,7 @@
 
      browsing    strip + URL row
      coding      menubar + URL row
-     organising  URL row alone
+     organising  toolbar + URL row
 
    Before this was per-mode the height was pinned at the two-row value for
    every mode, and that single number caused three separate problems: the
@@ -286,7 +286,8 @@ body[data-pb-mode="coding"] #theia-top-panel {
     min-height: calc(var(--theia-private-menubar-height) + 40px);
 }
 
-body[data-pb-mode="browsing"] #theia-top-panel {
+body[data-pb-mode="browsing"] #theia-top-panel,
+body[data-pb-mode="organising"] #theia-top-panel {
     min-height: calc(33px + 40px);
 }
 
@@ -298,10 +299,6 @@ body[data-pb-mode="browsing"] #theia-top-panel {
 body[data-pb-mode="browsing"] .pb-tab-strip {
     box-sizing: border-box;
     padding-right: var(--pb-window-controls, 0px);
-}
-
-body[data-pb-mode="organising"] .pb-chrome-bar {
-    padding-right: calc(8px + var(--pb-window-controls, 0px));
 }
 
 #theia-top-panel > [id="powerbrowser.chrome-bar"] {

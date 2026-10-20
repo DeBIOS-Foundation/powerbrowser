@@ -472,3 +472,9 @@ Resume file: None
 ## Operator Next Steps
 
 - Start the next milestone with /gsd-new-milestone
+
+## Quick Tasks Completed
+
+| Date | Task | Directory |
+|------|------|-----------|
+| 2026-10-20 | Organising toolbar above the URL row | [20261020-org-toolbar-above-url-row](quick/20261020-org-toolbar-above-url-row/) |

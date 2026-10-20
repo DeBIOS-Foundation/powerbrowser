@@ -130,6 +130,8 @@ export class OrganisingWidget extends Widget {
     protected readonly debouncedResize = pDebounce((id: string, w: number, h: number, seq: number) => this.persistResize(id, w, h, seq), 150);
 
     protected toolbar!: HTMLElement;
+    /** The toolbar as a top-panel row; see `placeToolbar`. */
+    protected toolbarRow!: Widget;
     protected canvasToggle!: HTMLButtonElement;
     protected treeToggle!: HTMLButtonElement;
     protected zoomCluster!: HTMLElement;
@@ -203,7 +205,33 @@ export class OrganisingWidget extends Widget {
             this.shell.onDidAddWidget(widget => this.holdTheMainArea(widget));
             this.shell.onDidChangeCurrentWidget(() => this.scheduleShellCapture());
         }
+        this.placeToolbar(this.isVisible);
         this.scheduleReload();
+    }
+
+    protected override onBeforeDetach(msg: Message): void {
+        this.placeToolbar(false);
+        super.onBeforeDetach(msg);
+    }
+
+    protected override onBeforeHide(msg: Message): void {
+        this.placeToolbar(false);
+        super.onBeforeHide(msg);
+    }
+
+    /**
+     * The toolbar is the first top-panel row while the canvas shows, above the
+     * URL row, so the URL row sits second in every mode -- under the strip in
+     * Browsing, the menubar in Coding, this in Organising -- and does not move
+     * on a switch. Index 0 puts it above the chrome bar; the top panel stacks
+     * its children in order.
+     */
+    protected placeToolbar(show: boolean): void {
+        if (show && this.toolbarRow.parent !== this.shell.topPanel) {
+            this.shell.topPanel.insertWidget(0, this.toolbarRow);
+        } else if (!show && this.toolbarRow.parent) {
+            this.toolbarRow.parent = null;
+        }
     }
 
     /**
@@ -212,6 +240,7 @@ export class OrganisingWidget extends Widget {
      */
     protected override onAfterShow(msg: Message): void {
         super.onAfterShow(msg);
+        this.placeToolbar(true);
         this.scheduleReload();
     }
 
@@ -456,7 +485,7 @@ export class OrganisingWidget extends Widget {
             if (this.model.isClosing(undoFocus)) {
                 this.focusUndo(undoFocus);
             } else {
-                (this.node.querySelector('.pb-org-new') as HTMLElement | null)?.focus();
+                (this.toolbar.querySelector('.pb-org-new') as HTMLElement | null)?.focus();
             }
         }
     }
@@ -1057,7 +1086,7 @@ export class OrganisingWidget extends Widget {
         }
         const fallback = groupId !== null
             ? this.canvasRoot.querySelector(`[data-g="${CSS.escape(groupId)}"] .pb-org-box-title`)
-            : this.node.querySelector('.pb-org-new');
+            : this.toolbar.querySelector('.pb-org-new');
         (fallback as HTMLElement | null)?.focus();
     }
 
@@ -2179,6 +2208,8 @@ export class OrganisingWidget extends Widget {
         });
         this.zoomCluster.append(zoomOut, this.zoomReadout, zoomIn, zoomReset);
         this.toolbar.append(toggle, fresh, this.zoomCluster);
+        this.toolbarRow = new Widget({ node: this.toolbar });
+        this.toolbarRow.id = 'powerbrowser.modes.organising-toolbar';
 
         this.loadBar = this.buildBar(
             'PowerBrowser couldn\u2019t load your tab groups. Your tabs are unchanged \u2014 choose Retry.',
@@ -2212,7 +2243,7 @@ export class OrganisingWidget extends Widget {
         this.expandRoot.className = 'pb-org-expand';
         this.expandRoot.hidden = true;
 
-        this.node.append(this.toolbar, this.loadBar, this.saveBar, this.canvasHost, this.treeRoot, this.expandRoot);
+        this.node.append(this.loadBar, this.saveBar, this.canvasHost, this.treeRoot, this.expandRoot);
     }
 
     protected buildBar(text: string, onRetry: () => void): HTMLElement {

@@ -126,13 +126,28 @@
    12px URI captions, tiled and loose card titles, and the zoom readout.
    600 rides exactly the active toggle segment and the active-group title --
    card titles and inactive group titles never set it. */
+/* The toolbar is the top panel's first row in Organising (placeToolbar), at
+   the strip's 33px so the URL row under it sits where it does in Browsing.
+   Its right end keeps clear of chrome's window buttons, as the strip does. */
 .pb-org-toolbar {
     display: flex;
+    flex: 0 0 100%;
+    box-sizing: border-box;
+    height: 33px;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
+    padding: 0 calc(16px + var(--pb-window-controls, 0px)) 0 16px;
     background: var(--color-surface, #2b2a33);
     border-bottom: 1px solid var(--color-border, #3f3e4a);
+}
+
+.pb-org-toolbar .pb-org-toggle-segment,
+.pb-org-toolbar .pb-org-new,
+.pb-org-toolbar .pb-org-zoom-step {
+    min-height: 26px;
+    margin: 0;
+    padding-top: 0;
+    padding-bottom: 0;
 }
 
 .pb-org-toggle {
