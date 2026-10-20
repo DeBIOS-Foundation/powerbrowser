@@ -57,8 +57,13 @@ const EXPECTED_ORDER = Object.freeze([
  */
 const EXPECTED_AREA = 'top';
 
-/** Contributions expected in the top panel, for the message on drift. */
-const EXPECTED_TOP_CONTRIBUTIONS = 2;
+/**
+ * Contributions expected in the top panel, for the message on drift: the URL
+ * row, the tab strip, and (2026-10-20, Chris asked for VS Code's title-bar
+ * controls) the layout controls on Coding's menubar row. The third shares the
+ * menubar's row and is hidden outside Coding, so the strip's row is untouched.
+ */
+const EXPECTED_TOP_CONTRIBUTIONS = 3;
 
 /** Every `area: '...'` value carried by an `addWidget` call, in source order. */
 function derivedAreasOf(source) {
@@ -120,7 +125,7 @@ function checkPlacement(sources) {
     } else if (strays.length) {
         failures.push(`${WIDGET_REL}: contribution area drifted -- derived [${areas.join(', ')}], every one must be '${EXPECTED_AREA}' (the contracted order [${expectedRun}] keeps both the URL row and the strip's Browsing home in the top panel)`);
     } else if (areas.length !== EXPECTED_TOP_CONTRIBUTIONS) {
-        failures.push(`${WIDGET_REL}: derived ${areas.length} top-panel contribution(s), expected ${EXPECTED_TOP_CONTRIBUTIONS} (the URL row and the tab strip). A third would be an unreviewed addition to the panel the strip's geometry depends on; edit EXPECTED_TOP_CONTRIBUTIONS with the reason.`);
+        failures.push(`${WIDGET_REL}: derived ${areas.length} top-panel contribution(s), expected ${EXPECTED_TOP_CONTRIBUTIONS} (the URL row, the tab strip and the layout controls). Another would be an unreviewed addition to the panel the strip's geometry depends on; edit EXPECTED_TOP_CONTRIBUTIONS with the reason.`);
     }
     if (derivedRun !== expectedRun) {
         failures.push(`${SPEC_REL}: contracted order drifted -- derived [${derivedRun}], expected [${expectedRun}] (the contribution area derives as [${areas.join(', ')}])`);

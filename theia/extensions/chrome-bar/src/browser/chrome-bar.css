@@ -51,6 +51,44 @@
     font-size: 14px;
 }
 
+/* VS Code's layout controls, at the right end of Coding's menubar row and
+   clear of chrome's window buttons (LayoutControlsWidget). */
+.pb-layout-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+    padding-right: calc(8px + var(--pb-window-controls, 0px));
+}
+
+.pb-layout-control {
+    width: 26px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--color-text-muted, #9a99a8);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.pb-layout-control:hover {
+    color: var(--color-text, #fbfbfe);
+    background: var(--color-surface, #2b2a33);
+}
+
+.pb-layout-control.is-active {
+    color: var(--color-text, #fbfbfe);
+}
+
+.pb-layout-control:focus-visible {
+    outline: 2px solid var(--color-primary, #00a6f5);
+    outline-offset: -2px;
+}
+
 .pb-chrome-bar-button:hover {
     background: var(--color-surface-raised, #35343f);
 }

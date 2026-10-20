@@ -36,6 +36,7 @@ import { ModeService } from '@powerbrowser/modes/lib/browser/mode-service';
 // widget renames.
 import { OrganisingWidget } from '@powerbrowser/modes/lib/browser/organising-widget';
 import { TabStripWidget } from './tab-strip-widget';
+import { LayoutControlsWidget } from './layout-controls-widget';
 import { MODE_ATTRIBUTE } from '@powerbrowser/modes/lib/browser/mode-attribute';
 import '../../src/browser/chrome-bar.css';
 
@@ -742,6 +743,9 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
     @inject(TabStripWidget)
     protected readonly tabStrip: TabStripWidget;
 
+    @inject(LayoutControlsWidget)
+    protected readonly layoutControls: LayoutControlsWidget;
+
     /**
      * Top-panel widgets that belong to the IDE dress and not the browser one,
      * by their stock ids. Browsing hides them; the strip takes the space.
@@ -858,6 +862,9 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         // which the per-mode top-panel height in chrome-bar.css now removes
         // the need for.
         this.tabStrip.setHidden(modeId !== 'browsing');
+        this.layoutControls.setHidden(!ideDress);
+        // The mode just opened or closed panels; the toggles show that state.
+        this.layoutControls.update();
         for (const widget of this.shell.topPanel.widgets) {
             if (ChromeBarContribution.IDE_TOP_FURNITURE.includes(widget.id)) {
                 widget.setHidden(!ideDress);
@@ -1021,7 +1028,10 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         if (mode === 'browsing') {
             rows.push({ row: this.tabStrip.node, items: Array.from(this.tabStrip.node.querySelectorAll('.pb-tab')) });
         } else if (mode === 'coding' && menubar) {
-            rows.push({ row: menubar, items: Array.from(menubar.querySelectorAll('.lm-MenuBar-item')) });
+            rows.push({
+                row: menubar,
+                items: [...Array.from(menubar.querySelectorAll('.lm-MenuBar-item')), ...Array.from(this.layoutControls.node.children)],
+            });
         } else if (mode === 'organising' && toolbar) {
             rows.push({ row: toolbar, items: Array.from(toolbar.children) });
         }
@@ -1094,6 +1104,15 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         if (!this.shell.getWidgetById(TabStripWidget.ID)) {
             await this.shell.addWidget(this.tabStrip, { area: 'top' });
             this.shell.topPanel.insertWidget(0, this.tabStrip);
+        }
+        // Right after the menubar, so it shares the menubar's row and the
+        // chrome bar (full basis) still wraps below both.
+        if (!this.shell.getWidgetById(LayoutControlsWidget.ID)) {
+            await this.shell.addWidget(this.layoutControls, { area: 'top' });
+            const menubar = this.shell.topPanel.widgets.findIndex(w => w.id === 'theia:menubar');
+            if (menubar >= 0) {
+                this.shell.topPanel.insertWidget(menubar + 1, this.layoutControls);
+            }
         }
         this.perspectives.onDidChangePerspective(id => {
             this.barWidget.syncModeFromPerspective(id);

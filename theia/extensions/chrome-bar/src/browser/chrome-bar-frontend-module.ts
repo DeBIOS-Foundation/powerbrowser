@@ -25,6 +25,7 @@ import { ChromeBarCommandContribution } from './chrome-bar-commands';
 import { ChromeBarKeybindingContribution } from './chrome-bar-keybindings';
 import { ChromeBarContribution, ChromeBarWidget } from './chrome-bar-widget';
 import { TabStripWidget } from './tab-strip-widget';
+import { LayoutControlsWidget } from './layout-controls-widget';
 
 export default new ContainerModule((bind, _unbind, _isBound, rebind) => {
     // Dragging a tab must not summon the IDE.
@@ -67,6 +68,7 @@ export default new ContainerModule((bind, _unbind, _isBound, rebind) => {
     bind(KeybindingContribution).toService(ChromeBarKeybindingContribution);
     bind(ChromeBarWidget).toSelf().inSingletonScope();
     bind(TabStripWidget).toSelf().inSingletonScope();
+    bind(LayoutControlsWidget).toSelf().inSingletonScope();
     bind(ChromeBarContribution).toSelf().inSingletonScope();
     bind(FrontendApplicationContribution).toService(ChromeBarContribution);
 });
