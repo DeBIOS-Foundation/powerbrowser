@@ -111,6 +111,55 @@ Canonical PowerBrowser rename with re-pinned gates; self-hosted MAR updates with
 
 ---
 
+## Milestone: v1.4 — Platform Updates and GUI Close-out
+
+**Shipped:** 2026-10-19
+**Phases:** 9 (17–25) | **Plans:** 43 (17: 4, 18: 3, 19: 8, 20: 5, 21: 5, 22: 7, 23: 5, 24: 6, 25: 0); 42 executed, 24-05 (GEN-05 drill) not run | **Commits:** 261 (2026-10-16 → 2026-10-19) | **Closeout:** override chosen by Chris (audit `gaps_found`)
+
+### What Was Built
+- OpenCode removed: extension, `[ai]` table, schema key, emitter, verify scripts, registry rows and docs; generator at 53 targets; Theia's AI framework left stock
+- Gecko re-pinned to `FIREFOX_153_5_0esr_BUILD1`; four patches replayed byte-unchanged; dev and release builds at 153.5; every full-run red owned by the recorded 153.1 set
+- Node 24 dev shell, React 19.2.8 and Theia 1.76.0 in three commits, each with new checks (first-boot surface live check, single-copy row, NG-086 agreement row); packaged Node runtime moved to v24.19.0
+- Non-GUI gaps: generator concurrency fix, `planning-paths`, `group-channel` (12 plants), schema v3/v4 ledger rows NG-087/088, `theia-fresh-clone-build`
+- 15-UI-SPEC re-pinned to the shipped Panorama; gui08 checks derive from it; tray code removed; quick baseline empty
+- Panorama worklist: strip filtered by active group, Undo Close Group, card close, last group kept
+- Modes leftovers: name cap 60 while typing, instant panels, Variant B records current, retroactive 14-VERIFICATION; sketch 005 adopted for v1.5
+- CI green on pushed `main` (run 39340825244, NG-074 done)
+- Not achieved: UAT-01 (A18 failed its Organising half, G-11 not earned; 44 rows deferred to phase 26 under NG-089), PAN-03..06 live checks; 12 defects listed for v1.5 in 24-GAPS.md
+
+### What Worked
+- Recording the 153.1 FAIL set before the re-pin made the 153.5 comparison a set check: every red after the move was already owned
+- One substrate move per commit (Node, React, Theia) let each commit be gated on its own, with only the 4 baseline gui08 reds after each
+- Deriving the gui08 checks from 15-UI-SPEC removed the hand-kept lists and emptied the R33 baseline
+- Scripted headless passes over items Chris had not yet run found 11 defects that the static gates and live rows did not; a second agent re-checked each one and could not show it was a script mistake
+
+### What Was Inefficient
+- The live UAT phase (24) was planned as one pass over six sheets and did not finish: Chris ran A01–A20, then deferred the rest
+- Run 1 of the UAT session was discarded: the reply ("A: ok", "B: ok") contradicted Chris's terminal log, and the session was redone on a fresh profile and config directory
+- The permission classifier refused approvals that an agent relayed on Chris's behalf; ledger approvals and re-locks had to be run by Chris in his own terminal
+- A compound Bash call in 24-03 was denied by the classifier and had to be split into single commands
+- SUMMARY frontmatter bookkeeping drifted again (`requirements-completed` missing in phases 19–23, 22-01 unparseable), leaving 13 requirements reading partial in the audit
+
+### Patterns Established
+- Pre-move FAIL baseline file per substrate move (`18-FAILSET-153.1.txt`, `19-FAILSET-1.76.txt`)
+- Scripted headless pass as a defect finder, with independent re-check, and never recorded as a UAT result
+- UAT results recorded only from Chris's own words; a reply that contradicts the log is held, not used
+- Spec-derived checks through a shared parse module (`scripts/lib/ui-spec.mjs`) with planted-drift self-tests
+
+### Key Lessons
+1. Static gates do not cover interaction defects. A scripted headless pass over the UAT script found 11 that `--quick` and the live rows missed; run one before a human UAT session.
+2. Headless runs have fixed limits: no window focus, Monaco quick-input does not accept Enter, and overlays do not appear in screenshots. Items that depend on these need a human or a different driver.
+3. Check a UAT reply against the terminal log before recording it. Run 1 read "ok" while the log showed otherwise.
+4. Approvals relayed through an agent are refused by the permission classifier. Plan ledger amends and check re-locks as steps Chris runs himself.
+5. A milestone that ends in a human UAT pass needs that pass scheduled with the human, or it closes with the UAT deferred.
+
+### Cost Observations
+- Model mix: orchestrator plus planner/executor/verifier/reviewer subagents; human turns for decisions, re-locks, ledger approvals and the A01–A20 live run
+- Sessions: autonomous runs over 4 days (2026-10-16 → 2026-10-19)
+- Notable: two tier-3 Gecko builds (dev clobber and a 2620 s release build); the rest of the milestone ran on static gates and sidecar live rows
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -120,13 +169,17 @@ Canonical PowerBrowser rename with re-pinned gates; self-hosted MAR updates with
 | v1.0 | batch + drill session | 7 | baseline: generator-core + two-layer verification pattern established |
 | v1.1 | 1 continuous autonomous | 2 | nonstop defaults + falsification-branch planning for host work |
 | v1.2 | 1 continuous autonomous (single day) | 3 | closeout discipline: re-run-beats-re-cite sweep + design-before-code store |
+| v1.4 | autonomous runs over 4 days + one human live UAT session | 9 | pre-move FAIL baselines per upstream move; scripted headless passes as defect finders; UAT deferred by Chris |
 
 ### Cumulative Quality
 
 | Milestone | Tests | Coverage | Zero-Dep Additions |
 |-----------|-------|----------|-------------------|
 | v1.0 | --quick 95 rows + per-gate self-tests | static green; human/tier-3 staged | vendored TOML parser, pure-Node ICO/ICNS writers |
+| v1.4 | --quick 0 FAIL, empty baseline; full run 237 PASS / 2 FAIL at 22-07 (one owned red, NG-074, closed in Phase 25) | static and live rows green; 44 UAT rows deferred, 12 defects open | none (dependency moves only: Node 24, React 19.2.8, Theia 1.76.0) |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. (seed) Derive expectations from the tree; compare as set equality.
+2. Doc-sync bookkeeping (summary frontmatter, box flips) drifts unless it is written in the plan-complete commit (v1.2, v1.4).
+3. Human verification deferred to the end of a milestone stays unfinished (v1.0, v1.2, v1.4).

@@ -2,37 +2,37 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Platform Updates and GUI Close-out
-current_phase: 25
-current_phase_name: CI Green on Main
-status: milestone-audit
-stopped_at: Phase 25 complete (CI green on 0efb116); milestone audit next
-last_updated: "2026-10-19T05:14:16.045Z"
+status: Awaiting next milestone
+stopped_at: v1.4 archived (override closeout); next is /gsd-new-milestone for v1.5
+last_updated: "2026-10-20T00:21:29.451Z"
 last_activity: 2026-10-19
-last_activity_desc: Phase 24 closed; NG-089 deferred to phase 26 with Chris approval; remaining GUI checks in 24-CHRIS-CHECKLIST.md
-state_head: bcdf102bbbc27c506adb85419f4f8edf0852b9eb
+last_activity_desc: Milestone v1.4 completed and archived
+state_head: d93c40226b0a1fb3080b127f15bae4aa427c43cf
 progress:
   total_phases: 9
-  completed_phases: 6
-  total_plans: 37
-  completed_plans: 37
-  percent: 67
+  completed_phases: 7
+  total_plans: 43
+  completed_plans: 42
+  percent: 78
+current_phase: 25
+current_phase_name: CI Green on Main
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-16)
+See: .planning/PROJECT.md (updated 2026-10-19)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Phase 17 — OpenCode Removal
+**Current focus:** Planning v1.5 Coding Workbench Layout; carried in: 24-GAPS.md defects and Chris's deferred GUI checks (NG-089, phase 26)
 
 ## Current Position
 
-Phase: 25 — CI Green on Main
-Plan: none (Chris pushes main; CI confirms)
-Status: Complete. main pushed, CI run 39340825244 green, NG-074 done; milestone audit next
-Last activity: 2026-10-19 — Phase 24 closed with deferral. Phase 22 live checks and the rest of the UAT are deferred to Chris (24-CHRIS-CHECKLIST.md); 12 defects for v1.5 are in 24-GAPS.md
+Phase: Milestone v1.4 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-10-19 — Milestone v1.4 completed and archived
 
 ## Performance Metrics
 
@@ -471,4 +471,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Plan Phase 17 with /gsd-plan-phase 17 (Chris approves the NG-051 amend before the removal commit)
+- Start the next milestone with /gsd-new-milestone

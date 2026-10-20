@@ -46,6 +46,13 @@ platform. If a rebrand ever requires editing a second file, that is a bug.
   build and ship with Sourcerer absent from the tree.
 - Mozilla trademark rules make rebranding mandatory for any distributed
   Firefox fork, so the single-file rebrand is load-bearing for downstreams.
+- Current state (2026-10-19, after v1.4): Gecko `FIREFOX_153_5_0esr_BUILD1`,
+  Theia 1.76.0 with stock AI framework, React 19.2.8, Node 24 in the dev shell
+  and the Linux package; seven `@powerbrowser/*` extensions, no AI adapter;
+  `--quick` green with an empty baseline; CI green on pushed `main`. Known
+  issues: 12 GUI defects in v1.4's 24-GAPS.md, custom modes keyed on
+  hard-coded mode ids in `chrome-bar-widget.tsx`, and 44 UAT rows deferred to
+  Chris (NG-089, phase 26).
 
 ## Key Decisions
 
@@ -70,6 +77,19 @@ platform. If a rebrand ever requires editing a second file, that is a bug.
 | v1.2 closeout accepted as override with doc-sync debt carried | 20/20 requirements implemented with evidence; 3 boxes unchecked + 3 summaries absent are doc-sync, not missing code; verifications 10/11/12 deferred per standing nonstop rule | — Decided 2026-09-05 |
 | v1.3 scope: Theia-hosted browser GUI only (chrome bar + modes + Panorama organising) | Everything explored 2026-09-05/06: chrome bar (001-A), relocating strip modes (002-B), Panorama canvas + tree toggle, core+dependent windows, custom modes as data; bookmarks/mute/menu, DnD rearrange, cross-window tear-off seeded later; all other tree areas untouched | — Decided 2026-09-06 |
 | Tabs invariant across modes; modes are data with shipped defaults | Mode switches move/filter/relocate everything except tabs; coding/browsing/organising ship as defaults, users may save layouts as modes; organising copies Panorama (freeform canvas first, tree second, SQL groups table, never sessionstore-coupled) | — Decided 2026-09-06 |
+| v1.4 order: non-GUI work first, then GUI one step at a time | Upstream moves and static gaps are cheap to prove before live GUI work (Chris, 2026-10-15) | ✓ Good — phases 17–23 and 25 closed in order; only the live UAT phase stalled |
+| Remove OpenCode entirely; leave Theia's AI framework stock (RM-01/02) | DSH is a separate project; Chris: "Theia AI should remain as stock, and we will work with it later" | ✓ Good — generator at 53 targets, 12 `@theia/ai-*` packages composed unmodified |
+| Record the 153.1 full-run FAIL set before re-pinning to 153.5 | Every red after the move must be owned by a pre-existing label | ✓ Good — 153.5 reds were all in the 153.1 set; 17 version-sensitive rows PASS |
+| Node 24, React 19, Theia 1.76 as three separate commits | A regression is attributable to one substrate move | ✓ Good — each commit left only the 4 baseline gui08 reds |
+| Replace the Theia ledger row (NG-082 dropped, NG-086 added) | Chris, 2026-10-17: "Drop it, add a new row" | ✓ Good — NG-086 done, check hashes re-locked by Chris |
+| Move the packaged Node runtime to v24.19.0 in v1.4 | Chris chose the move now over deferral; Theia 1.76 requires Node 24 | ✓ Good — `node-major-agreement` row keeps packaged, flake and engines majors equal |
+| Telemetry text registered in `initSchema`; Welcome held off by `workbench.startupEditor: "none"` | Wins in any module order without patching Theia core | ✓ Good — first-boot check passes on fresh and carried config dirs |
+| gui08 checks derive from 15-UI-SPEC through `scripts/lib/ui-spec.mjs` | Hand-kept expectation lists can only agree with the tree they were copied from | ✓ Good — R33 quick baseline is 0 bytes |
+| Undo Close Group (15 s window on GroupModel) replaces the close confirmation; the last group cannot be closed | One-step close with recovery; never leaves zero groups | — Pending — statically verified, live rows deferred under NG-089 |
+| Name cap 60 enforced while typing (stock `createInputBox`); side panels switch instantly (G-32 option a) | Chris's choices; spec changed to match code for G-32 | ✓ Good |
+| Sketch 005 adopted into v1.5 Coding Workbench Layout, all four changes | Chris, 2026-10-17 | — Pending — v1.5 |
+| Scripted headless passes count as evidence, never as UAT results | Only Chris records a sheet result; each scripted defect re-checked by a second agent | ✓ Good — 11 defects found that static gates missed |
+| v1.4 closed as override with UAT-01 deferred (NG-089 → phase 26) | Chris: "I want to do the GUI checks when everthing is done on my own time" | ⚠️ Revisit — audit `gaps_found`; MODE-01 live half failed (A18) |
 
 ## configuration.toml planned sections
 
@@ -153,25 +173,60 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 - [x] Window model: core + dependents, named setups, core-close-full-kill
       — shipped Phase 14
 
-### Active (v1.4 Platform Updates and GUI Close-out)
+### Validated (v1.4 — shipped 2026-10-19, override closeout, live GUI checks deferred)
 
-Non-GUI first, then GUI one step at a time (Chris, 2026-10-15).
+- ✓ OpenCode removed from the tree (extension, `[ai]` key, emitter, scripts,
+      registry rows, docs); AI-01..05 removed; generator at 53 targets — RM-01 — v1.4
+- ✓ Theia's AI framework runs stock: both D-22 overrides removed, the 12
+      `@theia/ai-*` packages composed unmodified — RM-02 — v1.4
+- ✓ Gecko on `FIREFOX_153_5_0esr_BUILD1`; four patches replay byte-unchanged;
+      dev and release builds at 153.5; full run reds all owned — UPD-05, UPD-06 — v1.4
+- ✓ Dev shell on Node 24 (`flake.lock` untouched), React 19.2.8 with one
+      installed copy of each React/inversify package, every `@theia/*` on 1.76.0,
+      first-boot surface checked live on fresh and carried config dirs; packaged
+      Node runtime moved to v24.19.0 — UPD-07..10 — v1.4
+- ✓ Non-GUI gaps closed: fresh-clone Theia build row (G-14.1.1-9), `group-channel`
+      row with 12-plant self-test (G-14.1.1-10), schema v3/v4 ledger rows NG-087/088,
+      generator concurrency fix (inkscape), `planning-paths` row — PLAT-01..05 — v1.4
+- ✓ 15-UI-SPEC re-pinned to the shipped Panorama; both gui08 checks derive from
+      it; stale tray code removed; `quick-baseline.txt` empty — PAN-01, PAN-07 — v1.4
+- ✓ Panorama decisions 1 (ungrouped tabs as loose cards) and 2 (strip filter
+      scope) made by Chris and recorded — PAN-02 — v1.4
+- ✓ Variant B records current; 60-character mode/setup name cap applied while
+      typing (G-23); side panels switch instantly (G-32); 14-VERIFICATION written —
+      MODE-01 (records half), MODE-02..04 — v1.4
+- ✓ Sketch 005 verdict recorded: adopted into v1.5 Coding Workbench Layout,
+      all four changes (Chris, 2026-10-17) — SK-01 — v1.4
+- ✓ CI green on pushed `main` (run 39340825244); NG-074 done — CI-01 — v1.4
 
-- [ ] OpenCode removed from the tree (extension, `[ai]` key, scripts,
-      registry rows, docs, Phase 16); AI-01..05 removed
-- [ ] Firefox on 153.5.0esr `BUILD1`, full build and full `verify-platform` green
-- [ ] Theia on 1.76.0 with React 19; dev shell on Node 24; sidecar checked live
-- [ ] Non-GUI gaps closed: group-channel checks (G-14.1.1-10), clean-checkout
-      build (G-14.1.1-9), schema v3/v4 ledger rows, `quick-baseline.txt`,
-      local `generate-check` (inkscape)
-- [ ] Panorama redesign in 15-UI-SPEC and the two `gui08` checks (commit gate green),
-      then the remaining Panorama worklist
-- [ ] Phase 14 / 14.1.1 leftovers: name cap (G-23), Variant B (G-11),
-      panel slide (G-32), 14-VERIFICATION
-- [ ] One live UAT pass over 13, 14, 14.1, 15 and the v1.2 sheets (NG-084),
-      including the React 19 runtime check
-- [x] Decision on sketch 005 (VS Code layout): adopted into v1.5 Coding Workbench Layout, all four changes (Chris, 2026-10-17)
-- [ ] CI green on main (NG-074)
+### Active
+
+**Carried from v1.4 (unmet, deferred by Chris to phase 26):**
+
+- [ ] UAT-01: the 10, 13, 14, 14.1, 14.1.1 and 15 UAT sheets have no pending
+      result, including a React 19 runtime line. Chris ran A01–A20 live; 44 rows
+      remain. NG-089 deferred-approved to phase 26 (Chris: "I want to do the GUI
+      checks when everthing is done on my own time"). Checklist:
+      `.planning/milestones/v1.4-phases/24-live-uat-pass/24-CHRIS-CHECKLIST.md`
+- [ ] MODE-01 live half: Chris confirms the strip relocation live (G-11). A18
+      failed on its Organising step (14/3 and 14.1.1/11 read issue); G-11 not earned
+- [ ] PAN-03..06 live checks: strip filter by active group, Undo Close Group,
+      card close, last group kept. Implemented and statically verified (14/14);
+      the live rows are 15-UAT pending rows under NG-089
+
+**v1.5 Coding Workbench Layout:**
+
+- [ ] Sketch 005's VS Code layout for Coding mode, all four changes (one title
+      row, centred address box, right cluster of layout toggles, activity icons
+      across the top of the sidebar); mode-toggle placement still open
+- [ ] The 12 defects in `.planning/milestones/v1.4-phases/24-live-uat-pass/24-GAPS.md`
+      (A18 split-area Organising, chrome-side launch errors, A21 custom mode
+      layout, B01 corrupt-mode notice, A25 drop slot, A27 stack/Esc, A31/A42
+      header click, A40 focus, A44 dependent-window closed state, A45/B03 Restore
+      Setup, B02 restore order, B07 loose-card overlap)
+- [ ] Custom modes driven by mode data instead of the hard-coded mode ids in
+      `chrome-bar-widget.tsx` (854, 863, 918, 1021-1023); custom modes get
+      window-drag rows
 
 ### Validated (v1.2 — shipped 2026-09-05, override closeout, verifications deferred)
 
@@ -181,38 +236,45 @@ Non-GUI first, then GUI one step at a time (Chris, 2026-10-15).
 
 ### Out of Scope
 
-- Bookmarks strip, per-tab close/mute, browser menu, drag-anywhere
+- Bookmarks strip, per-tab mute, browser menu, drag-anywhere
       GUI rearrange, cross-window tab tear-off — seeded for later
-      milestones (v1.3 is tab feel + navigation + organising only)
-- GUI-05 unified tab strip stays deferred; the mirror/proxy bridge
-      stays a later milestone (GUI-02 in-Theia web tabs shipped in Phase 14.1)
+      milestones (deferred-browser-chrome, gui-component-dnd, firefox-parity-tabs)
 - DSH (DeepSeek Harness) and any AI assistant integration — DSH is a
-      separate project (Chris, 2026-10-16); OpenCode was retired 2026-09-28
+      separate project (Chris, 2026-10-16); OpenCode was removed from the tree in v1.4
+- Customising Theia's AI framework — stays stock until a later milestone
+      takes it up (RM-02, Chris 2026-10-16)
 - Release and distribution (MSIX, DMG, update host, release pipeline) —
       held in backlog 999.2 until a milestone scopes a first public release
-- Unified tab strip where web pages and editors are peers — the mirror/proxy
-  bridge stays a later milestone, as in the upstream plan; current browser
-  access is the toggle + browsing inside Theia
+- Unified tab strip where web pages and editors are peers (GUI-05) — the
+      mirror/proxy bridge stays a later milestone, as in the upstream plan;
+      current browser access is the toggle + in-Theia web tabs (GUI-02, Phase 14.1)
 - Databasise and the curated addon set — composed in downstream, never in the
   platform tree
 - Moving every conceivable setting into `configuration.toml` in milestone 1 —
   the file grows toward "everything configurable" incrementally
 
-## Current Milestone: v1.4 Platform Updates and GUI Close-out
+## Current State (v1.4 shipped 2026-10-19)
 
-**Goal:** Remove OpenCode, move Firefox and Theia to current upstream, close the
-remaining non-GUI gaps, then finish the v1.3 GUI leftovers one step at a time
-until the commit gate and CI are green.
+v1.4 Platform Updates and GUI Close-out is archived as an override closeout
+chosen by Chris:
+`.planning/milestones/v1.4-ROADMAP.md`,
+`.planning/milestones/v1.4-REQUIREMENTS.md`,
+`.planning/milestones/v1.4-MILESTONE-AUDIT.md` (status `gaps_found`),
+phases under `.planning/milestones/v1.4-phases/`. Phases 17–25 (42 of 43
+plans executed; 24-05, the GEN-05 drill, not run; 261 commits,
+2026-10-16 → 2026-10-19) delivered: OpenCode removed; Gecko 153.5.0esr;
+Node 24 / React 19.2.8 / Theia 1.76.0; non-GUI gaps closed; Panorama spec
+re-pinned with an empty quick baseline; the Panorama worklist (strip filter
+by active group, Undo Close Group, card close, last group kept); modes
+leftovers (name cap 60, instant panels); sketch 005 adopted for v1.5; CI
+green on pushed `main`. Not achieved: UAT-01 (A18 failed its Organising
+half, the rest deferred to phase 26 under NG-089), the live half of
+MODE-01, and the live checks of PAN-03..06. Twelve defects are listed for
+v1.5 in 24-GAPS.md; eleven came from scripted headless passes and were
+confirmed on an independent re-check.
 
-**Target features:**
-- OpenCode removal (AI-01..05 removed; DSH is a separate project)
-- Firefox 153.5.0esr `BUILD1` with a full build
-- Theia 1.76.0 with React 19, dev shell on Node 24
-- Remaining non-GUI gaps closed
-- GUI, one step at a time: Panorama spec and checks, Phase 14 / 14.1.1
-  leftovers, one live UAT pass, sketch 005 decision, CI green
-
-## Current State (v1.3 shipped 2026-09-06)
+<details>
+<summary>Previous state (v1.3 shipped 2026-09-06)</summary>
 
 v1.3 Browser GUI is archived:
 `.planning/milestones/v1.3-ROADMAP.md`,
@@ -226,6 +288,8 @@ SQL groups with snapshot thumbnails. Spike verdict RED → Variant-A
 fallback recorded (strip stays top). No GUI-02/GUI-05 bridge work this
 cycle. Carried forward: `/gsd-verify-work 13/14/15`, GUI-07/GUI-08 box
 flips, piles + search, v1.4 candidates below.
+
+</details>
 
 <details>
 <summary>Previous state (v1.2 shipped 2026-09-05)</summary>
@@ -245,6 +309,8 @@ ESR rebase drill. No GUI surface this cycle. Carried forward:
 (SQL-01/SQL-03/SQL-04), and the three missing plan summaries
 (11-02, 11-03, 12-01).
 
+</details>
+
 <details>
 <summary>Previous state (v1.1 shipped 2026-09-05)</summary>
 
@@ -261,16 +327,32 @@ requirements still staged (human/tier-3 halves).
 
 </details>
 
-## Next Milestone Goals (v1.5+ candidates)
+## Next Milestone Goals (v1.5 Coding Workbench Layout)
 
-- v1.5 Coding Workbench Layout: sketch 005's VS Code layout for Coding mode (SK-01)
-- GUI-05 unified tab strip (order and scope defined by a later
-  milestone intake)
-- Release and distribution (backlog 999.2, SEED-001)
-- Seeds whose triggers are now met: deferred-browser-chrome,
-  gui-component-dnd, firefox-parity-tabs (scope per seed trigger review)
-- Piles + type-anywhere search for the canvas;
-  doc-sync flips and deferred verifications listed above
+- Sketch 005's VS Code layout for Coding mode, all four changes (SK-01);
+  Browsing and Organising keep today's layout
+- The 12 defects in v1.4's 24-GAPS.md, and custom modes driven by mode
+  data instead of hard-coded ids in `chrome-bar-widget.tsx`
+- Chris's deferred GUI checks (phase 26, NG-089): the 44 pending UAT rows,
+  the React 19 runtime lines, G-11, and the PAN-03..06 live rows
+- Later candidates: W6 type-anywhere canvas search, W11 group-cycling keys,
+  GUI-05 unified tab strip, release and distribution (backlog 999.2,
+  SEED-001), seeds deferred-browser-chrome / gui-component-dnd /
+  firefox-parity-tabs
+
+## Retired Milestone Section (v1.4 active scope, superseded by Current State above)
+
+**Goal (was):** Remove OpenCode, move Firefox and Theia to current upstream, close the
+remaining non-GUI gaps, then finish the v1.3 GUI leftovers one step at a time
+until the commit gate and CI are green.
+
+**Target features:**
+- OpenCode removal (AI-01..05 removed; DSH is a separate project)
+- Firefox 153.5.0esr `BUILD1` with a full build
+- Theia 1.76.0 with React 19, dev shell on Node 24
+- Remaining non-GUI gaps closed
+- GUI, one step at a time: Panorama spec and checks, Phase 14 / 14.1.1
+  leftovers, one live UAT pass, sketch 005 decision, CI green
 
 ## Retired Milestone Section (v1.3 active scope, superseded by Current State above)
 
@@ -319,4 +401,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-16 at v1.4 start (Platform Updates and GUI Close-out)*
+*Last updated: 2026-10-19 after v1.4 milestone*

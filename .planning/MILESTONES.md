@@ -1,5 +1,33 @@
 # Milestones
 
+## v1.4 Platform Updates and GUI Close-out (Shipped: 2026-10-19)
+
+**Phases completed:** 8 phases, 43 plans, 44 tasks
+
+**Key accomplishments:**
+- One commit (B, `02fffb6210fda013fe22c0794c3bad92b1daa2c5`) removes the `[ai]` manifest table, the `ai.backend` schema key, `emitAiBackend` with its TARGETS row (generator now 53 targets), `powerbrowserAiBackend`, the REBRANDING `[ai]` section, the three verify-opencode scripts, the NG-051 check, the adapter doc, and every registry row and helper that named them.
+- The 153.1 full-run FAIL baseline (218 rows, 188 PASS, 30 FAIL, every red row owned) is committed before the substrate moves. The fetch-upstream `_RELEASE`/`_BUILD<n>` comment and `configuration.toml:104` are corrected without a gate changing state.
+- Gecko is pinned to `FIREFOX_153_5_0esr_BUILD1` (`223014c6b9299ac9b035b4c50ea481e5c6de282c`). The four patches replayed byte-unchanged. A clobbered dev build reports `DeBIOS powerbrowser 153.5.0esr`, a 153.5.0 package exists, and smoke-firefox now compares against `version_display.txt` instead of a literal.
+- The release objdir is rebuilt at 153.5.0esr with release branding (2620 s). The full 153.5 run has 218 rows, 206 PASS and 12 FAIL. Every FAIL label is in the 153.1 set B, and all 17 version-sensitive rows PASS. Seven of the 12 reds are unmeasured because port 3000 is still held.
+- GroupModel loads itself at layout init. The Browsing strip paints only the active group's tabs, the loose tabs and the current tab. "+" writes the new tab into the active group. pan03 proves all of this live, on a rebuilt sidecar, with two probe controls shown able to go red.
+- The copy check now reads every single-quoted and template literal at every text sink, including the ARIA text attributes. The empty-canvas body ships in Chris's C1 item 4a wording. The grip value, card tooltip and zoom readout (21-REVIEW WR-05) are contracted in 15-UI-SPEC.
+- A closed group is hidden for UNDO_CLOSE_MS (15000 ms) on GroupModel, writing nothing. Undo restores it exactly. The close is written through the unchanged closeGroupRows when the timer ends or when PowerBrowser quits, and never by a mode switch. During the window its tabs show in no tab bar in any mode. pan04 proves this live with three probe controls.
+- × closes a group at once, with no dialog. An Undo Close Group control appears in the group's bounds on the canvas, or in its section's place in the tree, and takes focus. Undo restores the group. When the window ends, the close commits. The 15-UI-SPEC and the three gui08 checks changed in the same commit as the code (SC3), and each passed there. ng-006 now proves the tabs close when the window ends.
+- The last visible group has no x on the canvas or in the tree, and the close-group command does nothing for it: no undo window, no Undo control, no status-bar notice. A pending group does not count as remaining. GroupModel.canCloseGroup implements the rule, and the guard is the first statement of `closeGroup`. close-exactness derives the guard in the model, the canvas and the tree, and pan04 shows it live.
+- Each card that takes the pointer has a 24 × 24 round × at its top right, labelled "Close tab", and Delete on a focused card does the same. An open tab closes through Theia's own close, so a dirty editor shows the stock save prompt and Cancel keeps it. A card whose tab is not open marks its row closed. A group emptied this way stays. pan05 shows all of this live, with both probe controls turning red.
+
+**Closeout:** override closeout, chosen by Chris on 2026-10-19 after the audit (status gaps_found). CI run 39340825244 is green on the pushed 0efb116, and NG-074 is done.
+
+### Known Gaps
+
+- **UAT-01**: Chris ran A01–A20 live. The rest of the live UAT is deferred by Chris (NG-089 deferred-approved to phase 26: "I want to do the GUI checks when everthing is done on my own time"). His list is `milestones/v1.4-phases/24-live-uat-pass/24-CHRIS-CHECKLIST.md`.
+- **MODE-01 (live half)**: A18 failed. Organising opens inside one pane of a split main area, and G-11 is not earned.
+- **PAN-03..06 (live)**: Phase 22 is verified statically (14/14). Its live checks are among the deferred UAT rows.
+- **12 defects for v1.5**: listed in `milestones/v1.4-phases/24-live-uat-pass/24-GAPS.md`. They are A18, chrome-side errors, A21, B01, A25, A27, A31/A42, A40, A44, A45/B03, B02 and B07.
+- Known verification overrides: Phase 22 (human_needed), Phase 24 (no VERIFICATION.md; 24-05 not run), Phase 25 (no phase directory; CI run is the evidence).
+
+---
+
 ## v1.3 Browser GUI (Shipped: 2026-09-06)
 
 **Phases completed:** 3 phases, 10 plans (13: 3, 14: 3, 15: 3 + 1 revision), ~30 tasks
