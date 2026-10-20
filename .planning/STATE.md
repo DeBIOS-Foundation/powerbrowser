@@ -1,38 +1,33 @@
 ---
 gsd_state_version: "1.0"
-milestone: v1.4
-milestone_name: Platform Updates and GUI Close-out
-status: Awaiting next milestone
-stopped_at: v1.4 archived (override closeout); next is /gsd-new-milestone for v1.5
-last_updated: "2026-10-20T00:21:29.451Z"
-last_activity: 2026-10-19
-last_activity_desc: Milestone v1.4 completed and archived
-state_head: d93c40226b0a1fb3080b127f15bae4aa427c43cf
+milestone: v1.5
+milestone_name: Chrome Bar Firefox Parity
+status: planning
+last_updated: "2026-10-20T20:04:06.936Z"
+last_activity: 2026-10-20
 progress:
-  total_phases: 9
-  completed_phases: 7
-  total_plans: 43
-  completed_plans: 42
-  percent: 78
-current_phase: 25
-current_phase_name: CI Green on Main
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-19)
+See: .planning/PROJECT.md (updated 2026-10-20)
 
 **Core value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
-**Current focus:** Planning v1.5 Coding Workbench Layout; carried in: 24-GAPS.md defects and Chris's deferred GUI checks (NG-089, phase 26)
+**Current focus:** v1.5 Chrome Bar Firefox Parity — defining requirements
 
 ## Current Position
 
-Phase: Milestone v1.4 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-10-19 — Milestone v1.4 completed and archived
+Status: Defining requirements
+Last activity: 2026-10-20 — Milestone v1.5 started
 
 ## Performance Metrics
 

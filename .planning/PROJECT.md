@@ -87,7 +87,10 @@ platform. If a rebrand ever requires editing a second file, that is a bug.
 | gui08 checks derive from 15-UI-SPEC through `scripts/lib/ui-spec.mjs` | Hand-kept expectation lists can only agree with the tree they were copied from | ✓ Good — R33 quick baseline is 0 bytes |
 | Undo Close Group (15 s window on GroupModel) replaces the close confirmation; the last group cannot be closed | One-step close with recovery; never leaves zero groups | — Pending — statically verified, live rows deferred under NG-089 |
 | Name cap 60 enforced while typing (stock `createInputBox`); side panels switch instantly (G-32 option a) | Chris's choices; spec changed to match code for G-32 | ✓ Good |
-| Sketch 005 adopted into v1.5 Coding Workbench Layout, all four changes | Chris, 2026-10-17 | — Pending — v1.5 |
+| Sketch 005 adopted into v1.5 Coding Workbench Layout, all four changes | Chris, 2026-10-17 | ⚠️ Revisit — items 3-4 built as quick tasks 2026-10-20; items 1-2 deferred when v1.5 became the chrome bar |
+| v1.5 is the chrome bar only: Firefox parity, including extensions and page prompts | Chris, 2026-10-20, from the 9-agent gap list | — Pending — v1.5 |
+| Address bar gets a modes dropdown; the Theia command centre is one mode and the Coding default | Chris, 2026-10-20 | — Pending — v1.5 |
+| Lift "no new addressability scheme" for search, and allow chrome-bar Places writes | Needed for search fallback, bookmarks and history removal (Chris, 2026-10-20) | — Pending — v1.5 |
 | Scripted headless passes count as evidence, never as UAT results | Only Chris records a sheet result; each scripted defect re-checked by a second agent | ✓ Good — 11 defects found that static gates missed |
 | v1.4 closed as override with UAT-01 deferred (NG-089 → phase 26) | Chris: "I want to do the GUI checks when everthing is done on my own time" | ⚠️ Revisit — audit `gaps_found`; MODE-01 live half failed (A18) |
 
@@ -214,19 +217,33 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
       card close, last group kept. Implemented and statically verified (14/14);
       the live rows are 15-UAT pending rows under NG-089
 
-**v1.5 Coding Workbench Layout:**
+**v1.5 Chrome Bar Firefox Parity** (scope: `.planning/research/chrome-bar-firefox-gap.md`):
 
-- [ ] Sketch 005's VS Code layout for Coding mode, all four changes (one title
-      row, centred address box, right cluster of layout toggles, activity icons
-      across the top of the sidebar); mode-toggle placement still open
-- [ ] The 12 defects in `.planning/milestones/v1.4-phases/24-live-uat-pass/24-GAPS.md`
-      (A18 split-area Organising, chrome-side launch errors, A21 custom mode
-      layout, B01 corrupt-mode notice, A25 drop slot, A27 stack/Esc, A31/A42
-      header click, A40 focus, A44 dependent-window closed state, A45/B03 Restore
-      Setup, B02 restore order, B07 loose-card overlap)
-- [ ] Custom modes driven by mode data instead of the hard-coded mode ids in
-      `chrome-bar-widget.tsx` (854, 863, 918, 1021-1023); custom modes get
-      window-drag rows
+- [ ] Address bar modes dropdown: search engines, Bookmarks, Tabs, History,
+      Actions, and a Theia command-centre mode (files, `>` commands, `@`
+      symbols) that is the default in Coding
+- [ ] Address bar and search: search fallback, localhost/host:port fixup,
+      real switch-to-tab, engine suggestions, inline autofill, engine picker,
+      one-off engines, paste & go, Alt+Enter, Shift+Del row removal
+- [ ] Navigation buttons and keys: Stop, hard reload, back/forward history
+      menu, Home; Ctrl+T/W/R, Alt+Left/Right, F6, Alt+1-9, working with the
+      page focused
+- [ ] Site identity and app menu: real security state with "Not Secure",
+      site information and permissions panel, clear cookies, tracking shield;
+      hamburger menu with Settings, Passwords, Add-ons
+- [ ] Page tools and bookmarks: find in page, zoom, print, favicons, mute,
+      downloads, fullscreen; bookmark star, reopen closed tab, bookmarks
+      toolbar, clear history
+- [ ] Extensions: WebExtension toolbar buttons and the extensions (puzzle) menu
+- [ ] Page prompts: permission requests, alert/confirm/auth dialogs, page
+      context menu, window.open/target=_blank as web tabs, password and form
+      autofill
+
+**Deferred from the earlier v1.5 plan (Chris, 2026-10-20: "we want to work on
+the chrome bar for this milestone, that's it"):** sketch 005 items 1-2 (one
+title row, centred address box; items 3-4 were built as quick tasks
+2026-10-20), the 12 defects in `.planning/milestones/v1.4-phases/24-live-uat-pass/24-GAPS.md`,
+custom modes driven by mode data, and the NG-089 live checks above.
 
 ### Validated (v1.2 — shipped 2026-09-05, override closeout, verifications deferred)
 
@@ -236,9 +253,9 @@ branches, `PowerBrowserAPI`) are fixed and never configurable.
 
 ### Out of Scope
 
-- Bookmarks strip, per-tab mute, browser menu, drag-anywhere
-      GUI rearrange, cross-window tab tear-off — seeded for later
-      milestones (deferred-browser-chrome, gui-component-dnd, firefox-parity-tabs)
+- Drag-anywhere GUI rearrange, cross-window tab tear-off — seeded for
+      later milestones (gui-component-dnd, firefox-parity-tabs). The
+      bookmarks strip, per-tab mute and browser menu moved into v1.5
 - DSH (DeepSeek Harness) and any AI assistant integration — DSH is a
       separate project (Chris, 2026-10-16); OpenCode was removed from the tree in v1.4
 - Customising Theia's AI framework — stays stock until a later milestone
@@ -327,18 +344,32 @@ requirements still staged (human/tier-3 halves).
 
 </details>
 
-## Next Milestone Goals (v1.5 Coding Workbench Layout)
+## Current Milestone: v1.5 Chrome Bar Firefox Parity
 
-- Sketch 005's VS Code layout for Coding mode, all four changes (SK-01);
-  Browsing and Organising keep today's layout
-- The 12 defects in v1.4's 24-GAPS.md, and custom modes driven by mode
-  data instead of hard-coded ids in `chrome-bar-widget.tsx`
-- Chris's deferred GUI checks (phase 26, NG-089): the 44 pending UAT rows,
-  the React 19 runtime lines, G-11, and the PAN-03..06 live rows
-- Later candidates: W6 type-anywhere canvas search, W11 group-cycling keys,
-  GUI-05 unified tab strip, release and distribution (backlog 999.2,
-  SEED-001), seeds deferred-browser-chrome / gui-component-dnd /
-  firefox-parity-tabs
+**Goal:** The chrome bar does what Firefox's toolbar does, measured against
+the 2026-10-20 gap list (`.planning/research/chrome-bar-firefox-gap.md`).
+
+**Target features:**
+- Address bar modes dropdown (engines, Bookmarks, Tabs, History, Actions,
+  Theia command centre as the Coding default)
+- Address bar and search (search fallback, fixup, switch-to-tab,
+  suggestions, autofill, engines)
+- Navigation buttons and keyboard shortcuts that work with the page focused
+- Site identity, permissions and the app menu
+- Page tools and bookmarks
+- WebExtension toolbar buttons and menu
+- Page prompts (permissions, dialogs, context menu, new-window links as tabs,
+  autofill)
+
+**Rule changes for this milestone:** typed non-URL text may search (lifts
+13-UI-SPEC's "no new addressability scheme"); the chrome bar may write to
+Places (lifts the read-only Places row in `powerbrowser/INTERNAL-APIS.md`).
+Firefox internals still go only through PowerBrowserAPI, and Theia core is
+still never patched.
+
+**Not in this milestone:** sketch 005 items 1-2, the 24-GAPS defects,
+data-driven custom modes, NG-089 live checks, private browsing, containers,
+Sync.
 
 ## Retired Milestone Section (v1.4 active scope, superseded by Current State above)
 
@@ -401,4 +432,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-19 after v1.4 milestone*
+*Last updated: 2026-10-20 after starting v1.5 Chrome Bar Firefox Parity*
