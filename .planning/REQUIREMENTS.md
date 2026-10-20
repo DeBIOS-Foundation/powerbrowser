@@ -1,5 +1,7 @@
 # Requirements — Power Browser v1.4 Platform Updates and GUI Close-out
 
+> Archived 2026-10-19 to `.planning/milestones/v1.4-REQUIREMENTS.md`. This copy stays until `/gsd-new-milestone` writes the v1.5 requirements, because `allowlist-doc-consistency` reads this file for the three Mozilla hosts; the v1.5 file must carry that section forward.
+
 **Defined:** 2026-10-16
 **Core Value:** A stranger can clone Power Browser, edit `configuration.toml`, drop in a logo, and build their own branded, working web browser without touching any other file — then reshape its GUI through Theia extensions without forking the platform.
 
