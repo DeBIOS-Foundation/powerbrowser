@@ -1,0 +1,72 @@
+/* VS Code's activity bar at the top, for both side panels
+   (TopTabsSidePanelHandler). One header row: the view icons left to right,
+   the view's own actions at the right end, and no title text.
+
+   Unlayered on purpose, unlike chrome-bar.css: every rule here overrides
+   Theia's own unlayered sidepanel.css, and a layered rule loses to an
+   unlayered one whatever its specificity. Each selector is scoped by
+   .pb-side-header, which only TopTabsSidePanelHandler adds, so nothing else
+   in the shell is touched. */
+
+.pb-side-header {
+    display: flex;
+    align-items: center;
+    min-height: 35px;
+    max-height: 35px;
+    background: var(--theia-sideBar-background);
+    border-bottom: var(--theia-panel-border-width) solid var(--theia-sideBarSectionHeader-border, transparent);
+}
+
+.pb-side-header .lm-TabBar.theia-app-sides {
+    flex: 1 1 auto;
+    align-self: stretch;
+    min-width: 0;
+    max-width: none;
+    background: transparent;
+}
+
+/* The renderer writes each tab's height inline from the padding and icon
+   size measured here, so these set the row's 32px tab height. */
+.pb-side-header .lm-TabBar.theia-app-sides .lm-TabBar-tab {
+    flex-direction: row;
+    padding: 0;
+    min-width: 32px;
+    max-width: 32px;
+    margin-right: 2px;
+}
+
+.pb-side-header .lm-TabBar.theia-app-sides .lm-TabBar-tab.lm-mod-current,
+.pb-side-header .lm-TabBar.theia-app-sides .lm-TabBar-tab:hover {
+    background-color: transparent;
+}
+
+.pb-side-header .lm-TabBar.theia-app-sides .lm-TabBar-tabIcon {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+    mask-size: 16px;
+    -webkit-mask-size: 16px;
+}
+
+/* The current view is underlined, as VS Code does in a top activity bar,
+   instead of Theia's inset bar on the rail's outer edge. */
+.pb-side-header .lm-TabBar.theia-app-left .lm-TabBar-tab.lm-mod-current,
+.pb-side-header .lm-TabBar.theia-app-right .lm-TabBar-tab.lm-mod-current {
+    box-shadow: 0 -2px 0 var(--theia-activityBar-activeBorder) inset;
+}
+
+.pb-side-header .theia-sidepanel-toolbar {
+    flex: 0 0 auto;
+    min-height: 35px;
+}
+
+.pb-side-header .theia-sidepanel-toolbar .theia-sidepanel-title {
+    display: none;
+}
+
+/* Stock caps a collapsed side at the rail's width; this side is hidden when
+   collapsed instead, so the cap must not clip it while it expands. */
+#theia-left-content-panel.pb-side-top-tabs.theia-mod-collapsed,
+#theia-right-content-panel.pb-side-top-tabs.theia-mod-collapsed {
+    max-width: none;
+}

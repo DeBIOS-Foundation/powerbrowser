@@ -383,10 +383,12 @@ export class ModeService implements FrontendApplicationContribution {
         // area at y=72 with 32px of dead space above it. It is solved by the
         // strip relocation, which moves the bar out of the top panel anyway.
         this.statusBarWidget.setHidden(!rules.furniture);
-        this.shell.leftPanelHandler.container.setHidden(!rules.furniture);
+        // A collapsed side stays hidden: with the icons across its top there
+        // is no rail to show (TopTabsSidePanelHandler).
+        this.shell.leftPanelHandler.container.setHidden(!rules.furniture || this.shell.leftPanelHandler.dockPanel.isHidden);
         // Both rails, not just the left: the right one is the same 48px of
         // IDE dress on the other edge.
-        this.shell.rightPanelHandler.container.setHidden(!rules.furniture);
+        this.shell.rightPanelHandler.container.setHidden(!rules.furniture || this.shell.rightPanelHandler.dockPanel.isHidden);
 
         publishModeAttribute(target);
     }

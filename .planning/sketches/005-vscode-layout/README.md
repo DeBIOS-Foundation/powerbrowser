@@ -33,6 +33,18 @@ The four adopted changes, by the labels of the legend items the sketch marks as 
 Item 3's own text leaves the mode toggle's placement open ("The mode toggle sits beside
 the address box; placement open."). That question carries into v1.5 unresolved.
 
+## Built ahead of v1.5 (2026-10-20, quick tasks)
+
+- Item 3, right cluster: layout toggles (left, bottom, right), account and the Manage
+  gear sit at the right end of Coding's menubar row
+  (`theia/extensions/chrome-bar/src/browser/layout-controls-widget.tsx`). Not built:
+  the "customize layout" toggle, and the mode toggle placement, which stays open.
+- Item 4, activity icons across the top: both side panels, not only the left
+  (`side-panel-top-tabs.ts`). The rail and its foot menus are gone; a collapsed side
+  is hidden.
+
+Items 1 and 2 (one title row, centred address box) are not built.
+
 ## Already true today
 
 Sidebar columns, Tabs inside the editor group, Status bar, Window buttons (legend items 5-8).

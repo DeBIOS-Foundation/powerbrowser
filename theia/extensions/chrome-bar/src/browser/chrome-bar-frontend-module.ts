@@ -26,6 +26,9 @@ import { ChromeBarKeybindingContribution } from './chrome-bar-keybindings';
 import { ChromeBarContribution, ChromeBarWidget } from './chrome-bar-widget';
 import { TabStripWidget } from './tab-strip-widget';
 import { LayoutControlsWidget } from './layout-controls-widget';
+import { TopTabsSidePanelHandler } from './side-panel-top-tabs';
+import { SidePanelHandler } from '@theia/core/lib/browser/shell/side-panel-handler';
+import '../../src/browser/side-panel-top-tabs.css';
 
 export default new ContainerModule((bind, _unbind, _isBound, rebind) => {
     // Dragging a tab must not summon the IDE.
@@ -51,6 +54,9 @@ export default new ContainerModule((bind, _unbind, _isBound, rebind) => {
     // Partial by design: the shell spreads this over its own defaults per
     // panel, so `emptySize`, `expandDuration` and `initialSizeRatio` keep
     // their framework values.
+    // Both side panels carry their view icons across the top (VS Code's
+    // activity bar at the top); see side-panel-top-tabs.ts.
+    rebind(SidePanelHandler).to(TopTabsSidePanelHandler);
     rebind(ApplicationShellOptions).toConstantValue({
         leftPanel: { expandThreshold: 0 },
         rightPanel: { expandThreshold: 0 },

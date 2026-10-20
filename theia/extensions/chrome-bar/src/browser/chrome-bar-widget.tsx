@@ -922,8 +922,10 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
         // shell behaviour reached through stock APIs, and this widget already
         // owns "what furniture does this mode keep". A drop fires
         // onDidAddWidget, which is what runs this.
-        this.shell.leftPanelHandler.container.setHidden(!ideDress);
-        this.shell.rightPanelHandler.container.setHidden(!ideDress);
+        // A collapsed side stays hidden even in Coding: its icons are across
+        // its own top, so there is no rail to leave standing.
+        this.shell.leftPanelHandler.container.setHidden(!ideDress || this.shell.leftPanelHandler.dockPanel.isHidden);
+        this.shell.rightPanelHandler.container.setHidden(!ideDress || this.shell.rightPanelHandler.dockPanel.isHidden);
         // Showing a tab bar changes its class; it does not, on its own, make
         // the dock re-run its layout. Without this the dock kept allocating
         // the content as if the bar were still hidden, so the page was drawn
