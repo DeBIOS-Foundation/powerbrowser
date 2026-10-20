@@ -207,9 +207,13 @@ milestone is created. The dependency order below is what matters.
 
 Independent of the release pipeline and startable at any time: TEL-05, TEL-06, the collector extra-part fix, TEL-08, PKG-07, PKG-09.
 
+## Update 2026-10-20: superseded in part by SEED-002
+
+`.planning/seeds/SEED-002-deployment-setup.md` ("Deployment setup") carries the owner-approved per-OS format plan (Firefox packaging for Mac, Windows and Linux; a Nix flake repack of the Linux tarball; Flatpak later; MSI, MSIX, PKG and Snap skipped), the production and maintenance plan, and replaces this seed's proposed phases and user decisions. Facts here that SEED-002 corrects: the tarball now stages the sidecar and Node (NG-063); --enable-unverified-updates is gone and patch 030 holds the MAR key on channel powerbrowser-default (NG-065); policies.json is now staged and MOZ_APPUPDATE_HOST is baked (NG-064); the allowlist has 28 hosts; ESR 153 point releases ship every two weeks; the Linux tarball is linked against /nix/store glibc and runs only where Nix is installed; drafts S2, S3 and S8 are stale against NG-065 and NG-067.
+
 ## Open questions
 
-- Does the update prompt render anywhere in the Theia shell? (AppMenuNotifications has no consumer outside browser.xhtml; unverified.)
+- Does the update prompt render anywhere in the Theia shell? (AppMenuNotifications has no consumer outside browser.xhtml. Answered 2026-10-20 in SEED-002 section 5: no.)
 - Does verify-endpoints.sh layer 3 miss the Node sidecar's resolutions (open-vsx.org, AI provider hosts)? Unverified; if so, a backend-pid capture layer is needed.
 - Windows and macOS BUILD_TARGET strings are derived from configure source, not observed; record them from the first real builds before fixing descriptor directory names.
 - Does FINAL_TARGET_FILES accept a `../` path from powerbrowser/shell/moz.build for staging the sidecar (no upstream precedent)? Confirm with one build; otherwise a scripted pre-package step.
