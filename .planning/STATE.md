@@ -478,3 +478,4 @@ Resume file: None
 | Date | Task | Directory |
 |------|------|-----------|
 | 2026-10-20 | Organising toolbar above the URL row | [20261020-org-toolbar-above-url-row](quick/20261020-org-toolbar-above-url-row/) |
+| 2026-10-20 | Empty menubar row drags the window | [20261020-menubar-row-drags-window](quick/20261020-menubar-row-drags-window/) |
