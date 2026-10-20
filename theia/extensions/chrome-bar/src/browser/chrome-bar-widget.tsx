@@ -1029,16 +1029,21 @@ export class ChromeBarContribution implements FrontendApplicationContribution {
             rows.push({ row: bar, items: Array.from(bar.children) });
         }
         // Chrome's window buttons overlay the first row's right end only.
-        const limit = this.shell.topPanel.node.getBoundingClientRect().right - controls;
+        // The first row spans the whole panel, not just its element: the
+        // menubar is only as wide as its menus, so measured alone everything
+        // right of "Help" (and the logo's margin left of "File") was not a
+        // handle (reported 2026-10-20).
+        const panel = this.shell.topPanel.node.getBoundingClientRect();
+        const limit = panel.right - controls;
         const rects = rows.flatMap(({ row, items }, index) => {
             const r = row.getBoundingClientRect();
             if (r.height === 0) {
                 return [];
             }
-            const right = index === 0 ? Math.min(r.right, limit) : r.right;
+            const right = index === 0 ? limit : r.right;
             const spans = items.map(el => el.getBoundingClientRect()).filter(s => s.width > 0).sort((a, b) => a.left - b.left);
             const out: { x: number; y: number; w: number; h: number }[] = [];
-            let x = r.left;
+            let x = index === 0 ? panel.left : r.left;
             for (const s of spans) {
                 if (s.left - x > 4) {
                     out.push({ x, y: r.top, w: s.left - x, h: r.height });
