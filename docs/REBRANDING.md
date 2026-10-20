@@ -304,7 +304,7 @@ with the OpenCode adapter. A manifest that still carries it now fails with
 
 | Setting | Required? | If omitted | Reaches |
 |---|---|---|---|
-| `upstreams.firefox_esr_tag` | Required | Hard failure | `generated/upstream-pins.env`, the fetch script default, the rebase workflow mirror |
+| `upstreams.firefox_esr_tag` | Required | Hard failure | `generated/upstream-pins.env`, the fetch script default |
 | `upstreams.theia_release` | Required | Hard failure | Exact triple enforced across every `@theia/*` pin and the lockfile by `verify-upstream-pins`; the generator emits no fragment for it |
 
 ### `[[variants]]` — build variants (every key required per element)

@@ -103,14 +103,14 @@ level = "off"
 
 # Upstream pins (UPD-01, UPD-02). firefox_esr_tag is the one ESR tag this
 # project builds against: scripts/fetch-upstream.sh clones it,
-# scripts/rebase-upstream.sh moves to it, and the rebase workflow mirrors
-# it. theia_release is the one Theia release this project composes: every
-# @theia/* pin in theia/package.json resolutions, every member
-# applications/*/package.json and extensions/*/package.json, and the
-# resolved @theia tarballs in theia/yarn.lock agree with it (the
-# @theia/monaco-editor-core exception carries upstream's own monaco line).
-# Edit one value, run `node scripts/generate.mjs`, and every consumer
-# follows -- no second copy lives anywhere else in the tree.
+# scripts/rebase-upstream.sh moves to it, and the rebase workflow receives
+# it as an explicit tag input (it carries no copy). theia_release is the one
+# Theia release this project composes: every @theia/* pin in theia/package.json
+# resolutions, every member applications/*/package.json and
+# extensions/*/package.json, and the resolved @theia tarballs in theia/yarn.lock
+# agree with it (the @theia/monaco-editor-core exception carries upstream's own
+# monaco line). Edit one value, run `node scripts/generate.mjs`, and every
+# consumer follows -- no second copy lives anywhere else in the tree.
 [upstreams]
 firefox_esr_tag = "FIREFOX_153_5_1esr_RELEASE"
 theia_release = "1.76.0"
