@@ -112,5 +112,5 @@ level = "off"
 # Edit one value, run `node scripts/generate.mjs`, and every consumer
 # follows -- no second copy lives anywhere else in the tree.
 [upstreams]
-firefox_esr_tag = "FIREFOX_153_5_0esr_BUILD1"
+firefox_esr_tag = "FIREFOX_153_5_1esr_RELEASE"
 theia_release = "1.76.0"

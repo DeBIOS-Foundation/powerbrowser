@@ -1136,20 +1136,19 @@ pin, the tree, and every phase proof agree: drills rehearse, pins decide.
 Adopting 153.2.0esr is a future rebase-adoption task (pin move plus full
 tier-3 rebuilds), not part of this drill.
 
-**Pinned ESR (Phase 18).** The pin is `FIREFOX_153_5_0esr_BUILD1` at commit
-`223014c6b9299ac9b035b4c50ea481e5c6de282c`. On 2026-10-16, `git ls-remote`
-resolved both `FIREFOX_153_5_0esr_BUILD1` and `FIREFOX_153_5_0esr_RELEASE` to
+**Pinned ESR (Phase 40, DIST-06).** The pin is `FIREFOX_153_5_1esr_RELEASE` at
+commit `6cd88e7d45fe7a5b0b87b984fb32a8779151860e`. On 2026-10-20, `git ls-remote`
+resolved both `FIREFOX_153_5_1esr_RELEASE` and `FIREFOX_153_5_1esr_BUILD1` to
 that commit. Tag names alone are not identity: at 153.4, `_RELEASE` resolved to
 `508788b6f8314edb3c33905f6d56c3fe6b087670` (the `_BUILD3` commit) while
 `_BUILD1` resolved to `f92008fc60401bb78216ce83704f6f58be94cc20`. The SHA
 above is the identity recorded at adoption, and no gate checks it:
 `configuration.toml` pins only the tag, and `fetch-upstream.sh` and
 `rebase-upstream.sh` resolve the tag name. If the mirror re-pointed the tag, a
-fresh clone would get the new commit and every gate would pass. The four patches replayed unchanged. The rebase ran
-locally through `scripts/rebase-upstream.sh --tag FIREFOX_153_5_0esr_BUILD1`
-(340 s wall, clone 279 s). The clobbered dev build through
-`scripts/smoke-firefox.sh` took 2388 s wall (mach reported 2376 s) on the
-reference host.
+fresh clone would get the new commit and every gate would pass. The rebase ran
+locally through `scripts/rebase-upstream.sh --tag FIREFOX_153_5_1esr_RELEASE`
+on 2026-10-20 (474 s wall, clone 370 s), and the four patches replayed
+unchanged.
 
 **CI story:** `.github/workflows/rebase-upstream.yml` is `workflow_dispatch`-only
 (no `schedule:` — the ~4-weekly ESR cadence is a standing post-v4.0 operational

@@ -30,7 +30,7 @@ on:
         # workflow_dispatch input default cannot read TOML. Drift between
         # the two fails scripts/verify-upstream-pins.mjs -- bump the
         # manifest first, then mirror it here.
-        default: FIREFOX_153_5_0esr_BUILD1
+        default: FIREFOX_153_5_1esr_RELEASE
 
 jobs:
   rebase:
