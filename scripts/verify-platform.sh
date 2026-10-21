@@ -4652,6 +4652,11 @@ run_own_checks() {
     # literals, an off-pin milestone, two descriptor versions, two tags) and keeps three
     # controls green; it writes nothing in the repository.
     "release-identity-self-test|node $REPO_ROOT/scripts/verify-release-identity.mjs --self-test"
+    # NEW (Phase 40, UPD-11): the update channel and the MAR channel id derive from
+    # UPDATE_CHANNEL through the .mozconfig emission, and every structured channel mention in
+    # the tracked tree equals the value of its own kind. Honestly --quick: git ls-files and text
+    # reads plus an in-memory emit, no build, browser, display or network.
+    "update-channel|node $REPO_ROOT/scripts/verify-update-channel.mjs"
   )
 
   if [ "$QUICK" -eq 0 ]; then

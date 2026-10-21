@@ -93,6 +93,7 @@ platform. If a rebrand ever requires editing a second file, that is a bug.
 | Lift "no new addressability scheme" for search, and allow chrome-bar Places writes | Needed for search fallback, bookmarks and history removal (Chris, 2026-10-20) | — Pending — v1.5 |
 | Scripted headless passes count as evidence, never as UAT results | Only Chris records a sheet result; each scripted defect re-checked by a second agent | ✓ Good — 11 defects found that static gates missed |
 | v1.4 closed as override with UAT-01 deferred (NG-089 → phase 26) | Chris: "I want to do the GUI checks when everthing is done on my own time" | ⚠️ Revisit — audit `gaps_found`; MODE-01 live half failed (A18) |
+| Update channel `default`; MAR channel id `<app_basename>-default` (`powerbrowser-default`); one exported generator constant (UPD-11, Phase 40) | The built tree, NG-065 and the 08-04 hop drill use it; `release` would need a tier-3 rebuild and re-proof and buys nothing | Adopted 2026-10-20 |
 
 ## configuration.toml planned sections
 

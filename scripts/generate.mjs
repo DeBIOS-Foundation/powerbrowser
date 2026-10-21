@@ -1367,11 +1367,31 @@ function emitBrandProperties(config, variant) {
 }
 
 /**
+ * The update channel (UPD-11): the %CHANNEL% segment of every descriptor path and
+ * the suffix of the MAR channel id. Platform policy, not a manifest key -- the
+ * telemetry-policy precedent below: one channel for every downstream. Patch 030
+ * removed channel-dependent certificate selection, and AppConstants.IS_ESR already
+ * overrides the channel for Remote Settings and search, so nothing else keys on it.
+ * Changing it costs a tier-3 rebuild and re-proof of ng065 and mar-update-hop, and
+ * after a release has shipped it needs a channel-transition release.
+ */
+export const UPDATE_CHANNEL = 'default';
+
+/**
+ * The two channel values every consumer must agree with, derived from one constant:
+ * the update channel, and the MAR channel id `<app_basename>-<channel>`.
+ */
+export function updateChannel(config) {
+    const appBasename = assertEmittable('identity.app_basename', config.identity.app_basename);
+    return { channel: UPDATE_CHANNEL, marChannelId: `${appBasename}-${UPDATE_CHANNEL}` };
+}
+
+/**
  * The root .mozconfig: the shared generated-from banner, a blank line, then
- * twelve lines against the file Phase 1 wrote by hand.
+ * thirteen lines against the file Phase 1 wrote by hand.
  *
  * FIVE VALUES come from the manifest: the MAR channel id and accepted MAR
- * channel ids (both `<app_basename>-default`, NG-065), the
+ * channel ids (both `<app_basename>-<UPDATE_CHANNEL>`, NG-065), the
  * --with-app-basename argument, the --with-distribution-id argument, the
  * exported MOZ_APP_REMOTINGNAME, and -- inside the MOZ_OBJDIR shell-default
  * expansion on line 1 -- the variant's objdir.
@@ -1407,7 +1427,7 @@ function emitBrandProperties(config, variant) {
  * part of the build's interface.
  *
  * WHY SIX LINES ARE LITERAL TEXT (research assumption A3, and a recorded
- * decision rather than an oversight). Lines 2, 5, 6 and 9-11 are platform
+ * decision rather than an oversight). Lines 2, 6, 7 and 10-12 are platform
  * policy and toolchain flags -- the application selection, the wasm sandbox,
  * the libclang path, the crash reporter, the compiler cache, and the
  * branding default. None of them is a
@@ -1416,26 +1436,29 @@ function emitBrandProperties(config, variant) {
  * entry and one emitter line -- so the cheap direction is to leave them literal
  * until a downstream actually needs to differ.
  *
-  * THE MAR CHANNEL LINES ARE FORK POLICY, NOT BRAND DEFAULTS (non-GUI
-  * NG-065). --enable-unverified-updates compiled every MAR check out of
+  * THE CHANNEL LINES ARE FORK POLICY, NOT BRAND DEFAULTS (non-GUI NG-065,
+  * UPD-11). --enable-unverified-updates compiled every MAR check out of
   * every build (the MAR signature and MAR-channel checks sit inside #ifdef
   * MOZ_VERIFY_MAR_SIGNATURE, updater.cpp:3063, 3329); removing it turns
   * verification on, and MAR_CHANNEL_ID plus ACCEPTED_MAR_CHANNEL_IDS bake
-  * one fixed channel, `<app_basename>-default`, into the build and into
-  * update-settings.ini. The `-default` suffix is fork policy and stays
-  * literal, so no [build] table; the prefix is the manifest's app_basename.
+  * one fixed MAR channel into the build and into update-settings.ini. Line 3
+  * names the update channel explicitly (configure's own default is the same
+  * value, so the line changes no build). Both derive from updateChannel():
+  * the update channel is UPDATE_CHANNEL, and the MAR channel id is
+  * `<app_basename>-<UPDATE_CHANNEL>`. No [build] table: the channel is fork
+  * policy; the MAR id's prefix is the manifest's app_basename.
  *
  * Built by concatenation rather than by template interpolation on the two
  * expansion lines: `${...}` inside a JS template literal is JS interpolation,
  * and the shell-default syntax has to survive to the emitted bytes intact.
  */
 function emitMozconfig(config, variant) {
-    // NG-065: one MAR channel for every build of this manifest, <app_basename>-<update channel>
-    // (the build's MOZ_UPDATE_CHANNEL is "default"). It is baked into MAR_CHANNEL_ID
-    // and into update-settings.ini's ACCEPTED_MAR_CHANNEL_IDS, so a MAR made for another
-    // product or channel is refused (updater error MAR_CHANNEL_MISMATCH_ERROR).
-    const marChannel = `${assertEmittable('identity.app_basename', config.identity.app_basename)}-default`;
-    // Every manifest value on these twelve lines lands in a file the Gecko
+    // NG-065: one MAR channel for every build of this manifest, <app_basename>-<update channel>.
+    // It is baked into MAR_CHANNEL_ID and into update-settings.ini's ACCEPTED_MAR_CHANNEL_IDS,
+    // so a MAR made for another product or channel is refused (updater error
+    // MAR_CHANNEL_MISMATCH_ERROR).
+    const { channel, marChannelId: marChannel } = updateChannel(config);
+    // Every manifest value on these thirteen lines lands in a file the Gecko
     // build sources, so each passes the sink guard on its way in. The
     // --with-branding default is the one line that carries no manifest value
     // at all -- see above -- so branding_dir is neither read nor guarded
@@ -1447,6 +1470,7 @@ function emitMozconfig(config, variant) {
         '',
         'mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/../${POWERBROWSER_OBJDIR:-' + objdir + '}',
         'ac_add_options --enable-application=browser',
+        `ac_add_options --enable-update-channel=${channel}`,
         `ac_add_options MAR_CHANNEL_ID=${marChannel}`,
         `ac_add_options ACCEPTED_MAR_CHANNEL_IDS=${marChannel}`,
         'ac_add_options --without-wasm-sandboxed-libraries',

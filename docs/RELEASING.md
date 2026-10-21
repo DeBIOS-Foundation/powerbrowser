@@ -200,7 +200,7 @@ here owns.
 | `linux-release-pipeline-and-update-channel` | Add the `services.github-runners` block to `/etc/nixos/configuration.nix` and apply it | Root on `legion` |
 | `linux-release-pipeline-and-update-channel` | Set fork pull request workflows from outside collaborators to **Require approval for all external contributors**; read back `fork-pr-approval.json` rather than re-applying | Repository settings UI |
 | `linux-release-pipeline-and-update-channel` | Confirm the `release` environment still carries a required reviewer and that the MAR key is an **environment** secret; create no repository-level Actions secret (`repo-controls` asserts that count stays zero) | Read-back of a control the owner owns |
-| `linux-release-pipeline-and-update-channel` | Create the public repository `DeBIOS-Foundation/powerbrowser-updates` with a root `_redirects` and a placeholder no-update descriptor at `release/Linux_x86_64-gcc3/update.xml`; create the Cloudflare Pages project (empty build command, output `/`); add `updates.powerbrowser.org` as a custom domain | Cloudflare account and DNS |
+| `linux-release-pipeline-and-update-channel` | Create the public repository `DeBIOS-Foundation/powerbrowser-updates` with a root `_redirects` and a placeholder no-update descriptor at `default/Linux_x86_64-gcc3/update.xml`; create the Cloudflare Pages project (empty build command, output `/`); add `updates.powerbrowser.org` as a custom domain | Cloudflare account and DNS |
 | `linux-release-pipeline-and-update-channel` | Probe the eleven-segment path live with real client segment shapes, then switch to a minimal `_worker.js` if the placeholder rule does not match, and record which mechanism shipped | Live infrastructure; the branch cannot be decided from documentation |
 | `linux-release-pipeline-and-update-channel` | Create a fine-grained PAT with Contents write on `powerbrowser-updates` only; store it as a `release` environment secret | Secret custody |
 | `linux-release-pipeline-and-update-channel` | Fill the website `#download` section and add `/download /#download 302`; deploy `powerbrowser.org` | Site repository and Pages |
@@ -358,7 +358,7 @@ Two Pages projects, both on the Free plan.
 **`updates.powerbrowser.org`** serves `DeBIOS-Foundation/powerbrowser-updates` with
 an empty build command and output `/`. Its tree is
 `<channel>/<BUILD_TARGET>/update.xml`, with a placeholder at
-`release/Linux_x86_64-gcc3/update.xml` whose body is the two-line no-update document.
+`default/Linux_x86_64-gcc3/update.xml` whose body is the two-line no-update document.
 The placeholder is not decoration: git cannot commit an empty directory, and an empty
 `updates` element is exactly what an update origin returns when it has nothing to
 offer. One `_redirects` rule maps the baked eleven-segment path onto that tree, with
@@ -884,9 +884,10 @@ client's `ACCEPTED_MAR_CHANNEL_IDS`. The update channel (`default`, the
 `%CHANNEL%` path segment) and the MAR channel id (`powerbrowser-default`,
 `<app_basename>-default` emitted by `emitMozconfig` as `MAR_CHANNEL_ID` and
 `ACCEPTED_MAR_CHANNEL_IDS`) are two different values and are the most common
-thing to conflate. A future `--enable-update-channel=release` switch must also
-change `emitMozconfig`'s `-default` suffix if the pipeline wants the id to follow
-the update channel. The emitter takes the side that cannot be guessed:
+thing to conflate. Both derive from one constant, `UPDATE_CHANNEL` in
+`scripts/generate.mjs`: changing the update channel also changes `emitMozconfig`'s
+MAR id suffix, and the `update-channel` check holds every consumer to both values.
+The emitter takes the side that cannot be guessed:
 `scripts/build-update-xml.mjs --channel` is the update channel, it is
 cross-checked against `MOZ_UPDATE_CHANNEL` in the given `config.status`, and a
 disagreement fails naming both values, so no descriptor can be emitted under the
