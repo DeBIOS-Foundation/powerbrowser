@@ -4679,6 +4679,11 @@ run_own_checks() {
     # releaseLinkPrefs derives. Honestly --quick: in-memory emission and text parsing only; it
     # writes no file and runs no build, browser, display or network.
     "update-prefs|node $REPO_ROOT/scripts/verify-update-prefs.mjs"
+    # update-prefs-self-test plants each of the five forbidden prefs, a langpack line flipped to
+    # true, an unparseable app.update.url.manual, no emitter rows and no release row in emitted
+    # text, each red naming the pref and variant; an added extensions.update.autoUpdateDefault
+    # line stays green (exact-name match). It writes nothing.
+    "update-prefs-self-test|node $REPO_ROOT/scripts/verify-update-prefs.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then

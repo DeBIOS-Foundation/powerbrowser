@@ -30,6 +30,15 @@
 // Usage:
 //   node scripts/verify-update-prefs.mjs
 //   node scripts/verify-update-prefs.mjs --self-test
+//
+// The self-test requires a green baseline, then plants each forbidden pref
+// (app.update.auto in dev, app.update.staging.enabled in release, the other
+// three alternating), a langpack line flipped to true, an unparseable
+// app.update.url.manual, no emitter rows and no release row -- each must go
+// red naming the pref or instrument and the variant, without the checkout
+// path. An added extensions.update.autoUpdateDefault line is the control and
+// must stay green. Every plant edits emitted text in memory through the
+// runChecks overrides; no tracked file is touched.
 
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -162,6 +171,7 @@ function printSets(sets) {
 }
 
 function main() {
+    if (args.includes('--self-test')) return selfTest();
     const { failures, sets } = runChecks(REPO_ROOT);
     printSets(sets);
     if (failures.length > 0) {
@@ -170,6 +180,68 @@ function main() {
         return 1;
     }
     console.log(`${NAME}: PASS -- ${sets.length} variant(s) set none of ${FORBIDDEN_UPDATE_PREFS.join(', ')}; ${LANGPACK_PREF} is false and the About-dialog links equal releaseLinkPrefs in each`);
+    return 0;
+}
+
+function selfTest() {
+    const baseline = runChecks(REPO_ROOT);
+    if (baseline.failures.length > 0 || baseline.sets.length === 0) {
+        console.error(`${NAME}: --self-test FAIL -- the unmodified tree is already red, so the planted-fault results below would mean nothing:`);
+        baseline.failures.forEach(f => console.error(`  ${f}`));
+        return 1;
+    }
+    console.log(`  ok  baseline -> green`);
+
+    // Edit the emitted text of one variant in memory; the other variant emits as-is.
+    const edit = (variantId, fn) => ({
+        textFor: (row, config, variant) => {
+            const text = row.emit(config, variant);
+            return row.variant === variantId ? fn(text) : text;
+        },
+    });
+    const append = (variantId, line) => edit(variantId, text => `${text}${line}\n`);
+    const replaced = (variantId, from, to) => edit(variantId, text => text.replace(from, to));
+    const prefRows = TARGETS.filter(t => t.generated.endsWith(EMITTER_SUFFIX));
+
+    const plants = [
+        ...FORBIDDEN_UPDATE_PREFS.map((pref, i) => {
+            const variant = i % 2 === 0 ? 'dev' : 'release';
+            return [`${pref} planted in ${variant}`, append(variant, `pref("${pref}", true);`), pref, variant];
+        }),
+        ['langpack flipped to true in release', replaced('release', `pref("${LANGPACK_PREF}", false);`, `pref("${LANGPACK_PREF}", true);`), LANGPACK_PREF, 'release'],
+        ['app.update.url.manual is not a url in dev', replaced('dev', /pref\("app\.update\.url\.manual", "[^"]*"\);/, 'pref("app.update.url.manual", "not a url");'), 'app.update.url.manual to "not a url", which does not parse as a URL', 'dev'],
+        ['no firefox-branding emitter rows', { rows: [] }, SELF_REL, NAME],
+        ['no release emitter row', { rows: prefRows.filter(r => r.variant !== 'release') }, SELF_REL, 'release'],
+    ];
+
+    let failed = 0;
+    for (const [name, overrides, marker, variant] of plants) {
+        const { failures } = runChecks(REPO_ROOT, overrides);
+        const hit = failures.find(f => f.includes(marker) && f.includes(variant === NAME ? NAME : `'${variant}'`));
+        if (hit === undefined) {
+            console.error(`${NAME}: --self-test FAIL -- '${name}' did not go red naming '${marker}' and '${variant}'; got: ${failures.join(' | ') || '(no failures at all)'}`);
+            failed += 1;
+        } else if (failures.some(f => f.includes(REPO_ROOT))) {
+            console.error(`${NAME}: --self-test FAIL -- '${name}' leaked this checkout's path into its output: ${failures.join(' | ')}`);
+            failed += 1;
+        } else {
+            console.log(`  ok  ${name} -> red, naming '${marker}' and '${variant}'`);
+        }
+    }
+
+    // Control: exact-name matching -- extensions.update.autoUpdateDefault is not app.update.auto.
+    {
+        const { failures } = runChecks(REPO_ROOT, append('dev', 'pref("extensions.update.autoUpdateDefault", false);'));
+        if (failures.length === 0) {
+            console.log(`  ok  control: added extensions.update.autoUpdateDefault in dev -> green`);
+        } else {
+            console.error(`${NAME}: --self-test FAIL -- the extensions.update.autoUpdateDefault control went red: ${failures.join(' | ')}`);
+            failed += 1;
+        }
+    }
+
+    if (failed > 0) return 1;
+    console.log(`${NAME}: --self-test PASS -- ${plants.length} planted faults went red naming the pref or instrument and the variant, and the control stayed green`);
     return 0;
 }
 
