@@ -64,8 +64,8 @@ the project's own planning record. This section must survive when this file repl
 - [ ] **UPD-11**: One update channel name is used everywhere. The quick row `update-channel` derives the channel from the generated `.mozconfig` (`MOZ_UPDATE_CHANNEL`, `MAR_CHANNEL_ID`, `ACCEPTED_MAR_CHANNEL_IDS`) and compares it with every consumer (`build-update-xml.mjs`, `docs/RELEASING.md`, `release-manifest.json`, the descriptor path); the self-test plants `release`/`powerbrowser-release` in one consumer. The chosen name is recorded in PROJECT.md Key Decisions. (A)
 - [ ] **DIST-06**: The owner commits the pin bump to `FIREFOX_153_5_1esr_RELEASE` (6cd88e7d), changing `configuration.toml:115` and the `rebase-upstream.yml:33` `tag` default together, with `configuration.toml` regenerated and `--quick` green. A dispatched run of `rebase-upstream.yml` against that tag is then green; it is the first real run of that workflow. DIST-06 lands before AUTO-08, which deletes the `tag` default and changes `verify-upstream-pins.mjs` to assert its absence. (A)
 - [ ] **UPD-12**: The shipped `distribution/policies.json` carries no `AppUpdateURL`; `MOZ_APPUPDATE_HOST` from `[urls].update` is the only update URL source. The `ng064` comparand and the reason text at `endpoint-allowlist.json:22` change in the same commit. (A)
-- [ ] **UPD-13**: `app.releaseNotesURL`, `app.releaseNotesURL.aboutDialog`, `app.update.url.manual` and `app.update.url.details` are generated from `[urls].release_notes` and `[urls].homepage`. The About dialog's release-notes and fallback links open the stated pages, and the fallback link no longer throws on an empty URL. In the same commit, the `powerbrowser.org` entry in `endpoint-allowlist.json` (now `deny`, about lines 85-87) is re-dispositioned to `user-initiated` (UPD-33), and the commit records how `verify-theia-endpoints` treats the stated homepage (SEED-002 §7). (A)
-- [ ] **UPD-33**: `endpoint-allowlist.json` gains a third disposition, `user-initiated`, for hosts the browser may reach only after a user click (powerbrowser.org, github.com). The endpoint checks treat an unattended request to a `user-initiated` host as a failure, exactly as for a `deny` host, and pass only requests that follow a user action in the same probe; the self-test plants an unattended prefetch to a `user-initiated` host and requires it to go red naming the host. `allowlist-doc-consistency` and the generator accept the new disposition. (A)
+- [x] **UPD-13**: `app.releaseNotesURL`, `app.releaseNotesURL.aboutDialog`, `app.update.url.manual` and `app.update.url.details` are generated from `[urls].release_notes` and `[urls].homepage`. The About dialog's release-notes and fallback links open the stated pages, and the fallback link no longer throws on an empty URL. In the same commit, the `powerbrowser.org` entry in `endpoint-allowlist.json` (now `deny`, about lines 85-87) is re-dispositioned to `user-initiated` (UPD-33), and the commit records how `verify-theia-endpoints` treats the stated homepage (SEED-002 §7). (A)
+- [x] **UPD-33**: `endpoint-allowlist.json` gains a third disposition, `user-initiated`, for hosts the browser may reach only after a user click (powerbrowser.org, github.com). The endpoint checks treat an unattended request to a `user-initiated` host as a failure, exactly as for a `deny` host, and pass only requests that follow a user action in the same probe; the self-test plants an unattended prefetch to a `user-initiated` host and requires it to go red naming the host. `allowlist-doc-consistency` and the generator accept the new disposition. (A)
 - [ ] **UPD-25**: The generator's firefox-branding emitter writes `app.update.langpack.enabled=false` for both variants, and both tracked branding files are regenerated and byte-compared. A row derives the set of update prefs from the generator output and asserts it sets none of `app.update.auto`, the staging pref, the check interval, `app.update.promptWaitTime` or `app.update.badgeWaitTime`; its self-test plants one of them. (A)
 - [ ] **PKG-08**: A script generates `LICENSING.md` and `THIRD-PARTY-NOTICES.txt` from the about:license output, the Theia dependency licences and the Node licence. A row derives both files and fails on drift. Both ship as assets of every Release. (A)
 - [ ] **PKG-09**: The release scope is en-US only, stated in the README, on /download and in the release notes, and recorded in PROJECT.md. (A)
@@ -382,7 +382,7 @@ The roadmapper fills the Phase column.
 | UPD-11 | Phase 40 | Pending |
 | DIST-06 | Phase 40 | Pending |
 | UPD-12 | Phase 40 | Pending |
-| UPD-13 | Phase 40 | Pending |
+| UPD-13 | Phase 40 | Complete |
 | UPD-25 | Phase 40 | Pending |
 | PKG-08 | Phase 40 | Pending |
 | PKG-09 | Phase 40 | Pending |
@@ -458,7 +458,7 @@ The roadmapper fills the Phase column.
 | UPD-22 | Phase 46 | Pending |
 | UPD-23 | Phase 46 | Pending |
 | UPD-32 | Phase 46 | Pending |
-| UPD-33 | Phase 40 | Pending |
+| UPD-33 | Phase 40 | Complete |
 | UPD-24 | Phase 46 | Pending |
 | UPD-27 | Phase 46 | Pending |
 | UPD-15 | Phase 46 | Pending |
