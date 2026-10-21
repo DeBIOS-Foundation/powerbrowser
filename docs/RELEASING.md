@@ -562,11 +562,20 @@ scripts/verify-platform.sh --quick
 ```
 
 `release-identity` compares `powerbrowser/packaging/version/version.txt` against the
-ESR version and `version_display.txt` against the display version, requires every
-tracked `update.xml` to parse with matching versions, requires every prior release
-tag not at HEAD to compare strictly lower than the derivation, and, when HEAD does
-carry a release tag, requires that tag to equal the derived tag. On a checkout with
-no release tags it prints a named line saying so rather than passing silently.
+ESR version and `powerbrowser/packaging/version/release.txt` against the release key,
+compares the upstream checkout's `config/milestone.txt` against the ESR version when
+`upstream/` exists, requires every tracked `update.xml` to carry `appVersion` equal to
+the ESR version and any `displayVersion` equal to the release key without its leading
+`v`, requires every prior release tag not at HEAD to compare strictly lower than the
+derivation, and, when HEAD does carry a release tag, requires that tag to equal the
+derived tag. On a checkout with no descriptors or no release tags it prints a named
+count line saying so rather than passing silently.
+
+No `version_display.txt` is ever created in `powerbrowser/packaging/version/`. That
+name is Gecko's `--with-version-file-path` layout (as `version-nplus1/` uses it), and
+a revisioned display value there would not end in `esr`, which clears
+`AppConstants.IS_ESR` and moves Remote Settings and search to the `default` channel.
+The version files are release metadata, never a Gecko build input.
 
 **3. Create and push the signed tag.** The pattern is `v<ESR>-<revision>`, for
 example `v153.2.0-1`. Milestone tags `v1.x` never release and never match this
@@ -867,8 +876,8 @@ scripts/generate.mjs`) and read the diff before accepting it.
 **The tag and the version files disagree.** `release-identity` names which one
 drifted. The tag is derived, not typed: it is `v<ESR>-<revision>` from
 `[upstreams].firefox_esr_tag` and `[product].revision`. Fix the manifest and
-regenerate; do not hand-edit `powerbrowser/packaging/version/version_display.txt`,
-which is a generated comparand.
+regenerate; do not hand-edit `powerbrowser/packaging/version/release.txt` or
+`version.txt`, which are generated comparands.
 
 **`update.status` reads `failed: 22`.** The MAR's channel is absent from the
 client's `ACCEPTED_MAR_CHANNEL_IDS`. The update channel (`default`, the

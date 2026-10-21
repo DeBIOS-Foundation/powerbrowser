@@ -4643,6 +4643,15 @@ run_own_checks() {
     # hunk, a pristine upstream, two patches naming one path and an unsafe write -- each red,
     # naming the patch.
     "patches-regenerated-self-test|bash $REPO_ROOT/scripts/regenerate-patches.sh --self-test"
+    # NEW (Phase 40, REL-01): the release key v<ESR>-<revision> derived by releaseIdentity()
+    # agrees with both version files, the upstream milestone, every tracked update.xml
+    # descriptor and every release-shaped git tag. Honestly --quick: git plumbing and text
+    # reads only, no build, browser, display or network.
+    "release-identity|node $REPO_ROOT/scripts/verify-release-identity.mjs"
+    # release-identity-self-test plants seven faults in one mkdtemp git repo (two version
+    # literals, an off-pin milestone, two descriptor versions, two tags) and keeps three
+    # controls green; it writes nothing in the repository.
+    "release-identity-self-test|node $REPO_ROOT/scripts/verify-release-identity.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
