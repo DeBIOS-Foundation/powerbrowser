@@ -30,6 +30,7 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
 ## Phases
 
 **Phase Numbering:**
+
 - Integer phases (40, 41, ...): planned milestone work
 - Decimal phases (40.1, ...): urgent insertions (marked INSERTED)
 
@@ -61,6 +62,7 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
 **Depends on**: Nothing (first phase of the milestone)
 **Requirements**: DIST-06, AUTO-08, REL-01, UPD-11, UPD-12, UPD-13, UPD-33, UPD-25, PKG-08, PKG-09, AUTO-10
 **Success Criteria** (what must be TRUE):
+
   1. `configuration.toml` pins `FIREFOX_153_5_1esr_RELEASE` with `--quick` green (DIST-06 first); then `rebase-upstream.yml` gains `on: workflow_call`, runs `node scripts/generate.mjs` inside `nix develop .#theia`, and its `tag` input has no default, which `verify-upstream-pins.mjs` asserts (AUTO-08); a dispatched run against that tag is green (the workflow's first real run).
   2. The quick rows `release-identity` and `update-channel` are green, and their self-tests go red naming a planted hand-written version literal, a descriptor version that disagrees with the release key, and a `powerbrowser-release` channel in one consumer.
   3. The shipped `policies.json` carries no `AppUpdateURL`; the About dialog's release-notes and fallback links open the pages derived from `[urls]` without throwing; `endpoint-allowlist.json` accepts the `user-initiated` disposition, and a planted unattended prefetch to powerbrowser.org goes red naming the host.
@@ -69,31 +71,39 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
 
 **External gate**: The executor commits the pin bump (DIST-06) locally; the owner pushes and, after AUTO-08 lands, dispatches the first `rebase-upstream.yml` run with an explicit `tag`.
 **Research flag**: None (SUMMARY: A1/A2 generator work is a standard pattern).
-**Plans**: 3/8 plans executed
+**Plans**: 4/8 plans executed
 
 Plans:
 **Wave 1**
+
 - [x] 40-01-PLAN.md — DIST-06 pin bump to FIREFOX_153_5_1esr_RELEASE (own commit), then AUTO-08 callable Nix workflow with no tag default
 
 **Wave 2** *(blocked on Wave 1 completion)*
+
 - [x] 40-02-PLAN.md — AUTO-10 regenerate-patches.sh with --check and --self-test; rows patches-regenerated(-self-test); wired into rebase-upstream.sh
 
 **Wave 3** *(blocked on Wave 2 completion)*
+
 - [x] 40-03-PLAN.md — REL-01 [product] revision, releaseIdentity(), tracked version files, release-identity row and self-test
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 40-04-PLAN.md — UPD-11 one channel constant and update-channel row; UPD-12 update-URL policy removed with ng064/mar-update-hop/allowlist changed together
+
+- [x] 40-04-PLAN.md — UPD-11 one channel constant and update-channel row; UPD-12 update-URL policy removed with ng064/mar-update-hop/allowlist changed together
 
 **Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 40-05-PLAN.md — UPD-33 user-initiated disposition with a shared verdict and fixture self-test; UPD-13 About-dialog link prefs from [urls]
 
 **Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 40-06-PLAN.md — UPD-25 langpack updates off; update-prefs row and self-test
 
 **Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 40-07-PLAN.md — PKG-08 generated LICENSING.md and THIRD-PARTY-NOTICES.txt with drift row; PKG-09 en-US scope in README and PROJECT.md
 
 **Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 40-08-PLAN.md — End-of-phase dev build, full-tier evidence, About-dialog human check, owner push and first rebase-upstream.yml dispatch
 
 ### Phase 41: Repository controls and GitHub Apps (A)
@@ -102,6 +112,7 @@ Plans:
 **Depends on**: Phase 40
 **Requirements**: GH-02, SEC-06, SEC-11, GH-05, GH-06, GH-07, GH-08, GH-09, GH-10, GH-11, GH-12, AUTO-09, GH-18
 **Success Criteria** (what must be TRUE):
+
   1. The full-tier row `repo-controls` is green against the live org and repo (rulesets, the five environments with branch policy `main`, selected actions with `sha_pinning_required`, fork approval for all external contributors, both Apps' permission sets and installation lists), and its self-test goes red on a missing ruleset, a `null` environment branch policy and an App holding Workflows.
   2. A force-push or deletion on `main` is refused, a tag created by anyone but `powerbrowser-bot` is refused, and immutable releases, Discussions, private vulnerability reporting and auto-merge are on while the repo has zero Releases.
   3. The quick rows `workflows` and `zizmor --offline` are green on the tree, and the `workflows` self-test goes red on each planted fault (a `schedule:` key, the legion label outside `release.yml` `build-*`/`matrix-*` jobs, an unadmitted or non-SHA `uses:`, an unguarded `workflow_run`, event text inside `run:` or `prompt:`).
@@ -118,6 +129,7 @@ Plans:
 **Depends on**: Phase 41
 **Requirements**: GH-13, GH-01, GH-14, DOC-03, DOC-04, DOC-05, DOC-06
 **Success Criteria** (what must be TRUE):
+
   1. New issue offers only the bug and feature forms, with blank issues off and links to Discussions and the security policy; a URL carrying `version`, `os` and `install_format` prefills the bug form.
   2. The live label set equals `labels.json` as read by `repo-controls`, and the quick label row goes red naming a planted undeclared label in an issue form or workflow.
   3. `SECURITY.md`, `SUPPORT.md` and `docs/KNOWN-ISSUES.md` exist in the product repo, and `SECURITY.md`, `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` exist in the org `.github` repo.
@@ -134,6 +146,7 @@ Plans:
 **Depends on**: Phase 40 (pin, callable `rebase-upstream.yml`, regeneration script), Phase 41 (Apps, `bot` environment, `workflows` row), Phase 42 (labels)
 **Requirements**: INF-03, TRAIN-01, TRAIN-02, TRAIN-03, TRAIN-08, TRAIN-09, AUTO-01, AUTO-06, AUTO-07, AUTO-04
 **Success Criteria** (what must be TRUE):
+
   1. Exit test: the first ESR 153 point release after the Phase 43 train lands (153.7 on 2026-11-10, else 153.8 on 2026-11-24, and so on) arrives as a `chore/esr-<tag>` bot PR on which `verify.yml` runs without an approval click, with exactly one tracking issue for its release key, and the owner dispatched nothing.
   2. The `powerbrowser-scheduler` Worker on workers.dev dispatches `release-train.yml` every hour with `reason=tick`, a failed dispatch emails the owner, and the measured JWT-mint CPU time is recorded in `docs/RELEASING.md`.
   3. The quick rows `detect-upstreams-self-test` (including the `175.0esr` fixture that must yield a 153.23 detection) and `release-train-logic-self-test` (one fixture per state in the state table, compared as set equality, plus the five named fault plants) are green and go red on their plants.
@@ -150,6 +163,7 @@ Plans:
 **Depends on**: Phase 40 (regeneration script, channel name)
 **Requirements**: SEC-05, UPD-14, UPD-26, SEC-09
 **Success Criteria** (what must be TRUE):
+
   1. Patch 030, regenerated with `regenerate-patches.sh`, carries the primary DER in one slot and a distinct secondary DER in the other; `patches-regenerated` stays green, and `ng065` accepts a MAR signed by the secondary key only.
   2. `scripts/build-update-xml.mjs` writes one descriptor per BUILD_TARGET with `detailsURL` from the built artifacts, and a second run produces byte-identical output.
   3. The full-tier row `descriptor-monotonic` is green, and its self-test rejects a same-version descriptor with an older buildID.
@@ -165,6 +179,7 @@ Plans:
 **Depends on**: Phase 40 (version files, channel, licence notices)
 **Requirements**: PKG-17, PKG-22, PKG-18, PKG-23, PKG-04, PKG-05, PKG-06, PKG-07, PKG-21, UPD-29
 **Success Criteria** (what must be TRUE):
+
   1. A Debian bookworm container build under podman on legion with `--enable-bootstrap` produces the Linux tar.xz and the complete MAR, and the full-tier rows `portable-elf`, `sidecar-no-symlinks` and `package-target-natives` are green with each self-test red on its plant.
   2. The packaged-launch and packaged-identity rows pass on the container-built tarball; its Theia About dialog shows the release-variant legal notices; a URL given on the command line opens in the stock browser window.
   3. Theia state lives under the Gecko profile directory, and the matrix no-residue checks inspect those real paths.
@@ -181,6 +196,7 @@ Plans:
 **Depends on**: Phase 40 (`user-initiated` disposition, branding emitter); Phase 45 for the packaged `mar-update-hop` run (UPD-24)
 **Requirements**: UPD-18, UPD-19, UPD-20, UPD-21, UPD-22, UPD-23, UPD-32, UPD-24, UPD-27, UPD-15, UPD-28
 **Success Criteria** (what must be TRUE):
+
   1. With an update staged, the user sees "PowerBrowser <version> is ready to install..." with Restart now and Later plus a status-bar item, and Restart now brings up version N+1 with the layout restored, asserted by the full-tier `mar-update-hop` row.
   2. A read-only app directory produces the cannot-update message (with the macOS variant text present), a failed check shows the could-not-check message with Check again at most once per session, and the command palette offers "PowerBrowser: Restart to Update" and "PowerBrowser: Check for Updates".
   3. The quick row `shell-request-kinds` and the update-copy shape row are green, and their self-tests go red on a stray request kind and on a pref key planted in one string; `check-internals-boundary.sh` is green with every new touchpoint catalogued in `INTERNAL-APIS.md`.
@@ -198,6 +214,7 @@ Plans:
 **Depends on**: Phase 41 (repo controls, Apps, empty `powerbrowser-updates` repo); WEB-02's MAR-size line uses Phase 45's PKG-21 measurement
 **Requirements**: INF-01, INF-06, DIST-03, INF-02, WEB-01, WEB-02, WEB-03, WEB-04, WEB-05, TEL-08
 **Success Criteria** (what must be TRUE):
+
   1. DNS for powerbrowser.org is served by Cloudflare, every inventoried Namecheap record resolves after the move, and one test message each to security@, contact@ and privacy@ reaches the owner.
   2. A live GET of `/`, `/download`, `/privacy` and `/legal` returns 200 with zero third-party requests, `/.well-known/security.txt` is served, and the home page spells "PowerBrowser" and carries the Mozilla non-association footer sentence.
   3. /download offers the stable-name Release links, `SHA256SUMS`, `gh attestation verify` with the login note and the offline `--bundle` alternative, per-OS signing status, system requirements, the en-US scope and the MAR size; /privacy and /legal state the payload, retention, processor, licence and trademark lines.
@@ -215,6 +232,7 @@ Plans:
 **Depends on**: Phase 43 (train report job), Phase 47 (Cloudflare zone)
 **Requirements**: TEL-06, TEL-10, TEL-11, TRAIN-07, MON-01
 **Success Criteria** (what must be TRUE):
+
   1. With the preference raised, a loopback live-delivery row observes one POST from a running sidecar carrying type, basename, line, column, version, buildID and OS and no message or stack, and the preference description reads exactly as TEL-06 states.
   2. The telemetry Worker's `POST /events` rejects an invalid payload, stores a valid one in D1, deletes rows older than 30 days, and is protected by one rate-limiting rule.
   3. The pinned `release-train: maintenance` issue is re-rendered daily with the initial rows (runner online, ESR pin age, channel liveness, watchdog age, synthetic `/events` POST) plus the download-count row; the runner-online, channel-liveness and download-count rows exist and render their no-data state; the issue comments only when a row turns red, and the sweep's self-test plants a red row and requires exactly one comment; the authenticated download-count route rejects an unauthenticated POST.
@@ -230,6 +248,7 @@ Plans:
 **Depends on**: Phase 41 (fork approval, environments), Phase 44 (descriptor builder, `descriptor-monotonic`), Phase 45 (container build), Phase 47 (updates host)
 **Requirements**: SEC-08, SEC-10, DIST-02, AUTO-05, SEC-07, DIST-07, DIST-08, DIST-09, UPD-17, INF-04
 **Success Criteria** (what must be TRUE):
+
   1. The legion runner is registered once, non-ephemeral, only after SEC-11, SEC-10 and GH-07 are in place, and a planted job from another branch is rejected by the pre-job hook before any step runs.
   2. A dispatched `release.yml` run builds on legion with `contents: read` and no secrets, passes `toolchain-baseline.sh`, the packaged-launch and install-matrix rows, and exits without building when the release key is not greater than the latest Release tag.
   3. `sign-publish` refuses a MAR whose embedded channel differs from `ACCEPTED_MAR_CHANNEL_IDS`, signs and verifies with `signmar -v`, checks the draft's asset set against the manifest before the single publish, creates tag `v<ESR>-<revision>` with the bot App token, and copies the MAR to R2.
@@ -246,6 +265,7 @@ Plans:
 **Depends on**: Phase 43 (train), Phase 46 (update experience), Phase 48 (maintenance sweep), Phase 49 (release pipeline)
 **Requirements**: TRAIN-10, REL-02, GH-15, UPD-16, REL-03
 **Success Criteria** (what must be TRUE):
+
   1. After the bump PR merges, the train dispatches `release.yml` with the merge SHA, links the exact run, and the tracking issue moves through BUILDING to DONE as derived from GitHub facts; `release.yml` refuses a SHA that is neither `main`'s tip nor a `configuration.toml`-changing ancestor; `release-train-logic-self-test` covers every new state.
   2. The real-release hop drill (`served: release`) runs N to N+1 from a clean non-Nix container or VM on legion and proves hosts, hash, version, signature, allowed channels and attestation, with each fault plant red.
   3. The withdraw job commits the no-update descriptor for every target (or repoints at the R2 copy), reruns `channel-live`, and marks the Release per the recorded immutable-release probe; no Release is deleted.
@@ -262,6 +282,7 @@ Plans:
 **Depends on**: Phase 48 (maintenance sweep), Phase 50 (release states)
 **Requirements**: AUTO-02, AUTO-03, DIST-05, UPS-02, TRAIN-04, TRAIN-11
 **Success Criteria** (what must be TRUE):
+
   1. On the first tick after a last-Thursday Theia release, self-hosted Renovate opens one grouped `@theia/**` PR (with `@theia/monaco-editor-core` separate), pinned, rewriting `theia_release` in `configuration.toml` and updating `flake.lock`, with automerge off.
   2. Dependabot opens one weekly grouped github-actions PR that keeps SHA pins with plain version comments and applies npm security-only updates to `theia/yarn.lock`; CodeQL default setup covers `theia/extensions` and `scripts/`.
   3. A newer ESR detected while a train is open moves the old train to SUPERSEDED, cancels its pending `release` deployment and starts the new train; a chemspill revision takes priority; the sign job exits when a newer Release exists; supersede fixtures are in `release-train-logic-self-test`.
@@ -277,6 +298,7 @@ Plans:
 **Depends on**: Phase 50 (release states), Phase 51 (Renovate Theia branch is a fixer class)
 **Requirements**: FIX-01, FIX-02, FIX-03, FIX-04, FIX-05, FIX-06, FIX-07, FIX-08, FIX-09, FIX-10, FIX-11, FIX-12, TRAIN-06
 **Success Criteria** (what must be TRUE):
+
   1. A red stage labels its tracking issue `train:blocked`, assigns the owner and links the failing log; for the three fixable classes the train dispatches the fixer, and a `release.yml` failure opens an issue only.
   2. The fixer runs as `fix`, `fix-gate` and `fix-pr` on GitHub-hosted runners; only `fix-pr` mints an App token; its PR is labelled `claude-fix` and `release:<key>`, carries the templated body and is assigned to the owner; the `workflows` row asserts the pinned action commit, the pinned Claude Code version, `show_full_output` and `display_report` off and no bare `Bash`.
   3. The quick row `fix-gate-self-test`, after a green control, rejects one planted diff per entry of `.github/fix-gate-deny.json` plus a hand-edited patch hunk, each naming the path.
@@ -293,6 +315,7 @@ Plans:
 **Depends on**: Phase 47 (mail), Phase 51 (Codeberg sweep row), Phase 52 (FIX-08 pinning rules apply to `triage.yml`)
 **Requirements**: TEL-05, GH-03, GH-16, GH-17, GH-04, MON-02, DOC-07
 **Success Criteria** (what must be TRUE):
+
   1. "PowerBrowser: Report a Bug" opens the prefilled bug form in the stock window, the diagnostics layer's Copy button copies diagnostics that never appear in a URL, and the `github.com` allowlist row is `user-initiated`.
   2. A new issue receives labels and a fixed template comment from `triage.yml`; a planted issue carrying instructions produces only a template comment; triage never closes an issue and runs under its own Anthropic workspace spend limit.
   3. A private vulnerability report and a security@ message each reach the owner as phone notifications within the acknowledgement window `SECURITY.md` states.
@@ -310,6 +333,7 @@ Plans:
 **Depends on**: Phase 50 (release pipeline and train)
 **Requirements**: PKG-10, PKG-11, PKG-12, PKG-13, LEG-01, MTX-01, UPD-30, UPD-31, SEC-03, SEC-12, DIST-10
 **Success Criteria** (what must be TRUE):
+
   1. A `release.yml` `build-windows` job cross-builds Gecko on legion in the release container and `mach repackage installer` produces the NSIS `setup.exe` and a complete MAR; the generated Windows mozconfig disables the maintenance service; `package-target-natives` passes on the Windows package with a sidecar built on `windows-latest`.
   2. The installer carries PowerBrowser artwork, its own registry namespace and no install or uninstall ping, and the `verify-trademark-surface.mjs` self-test goes red on a Mozilla mark planted in each NSIS, application.ini, Info.plist and `MOZ_LAUNCHER_SUBKEY` surface.
   3. The Windows 11 libvirt matrix installs, launches, updates and uninstalls with a clean registry no-residue diff, the update applies with the sidecar reaped before the rename, and the background-task path is verified or deferred with the reason recorded.
@@ -326,6 +350,7 @@ Plans:
 **Depends on**: Phase 47 (live site for the fee waiver), Phase 50 (release pipeline)
 **Requirements**: SEC-13, PKG-24, PKG-14, PKG-15, PKG-16, SEC-04
 **Success Criteria** (what must be TRUE):
+
   1. Before any macOS build, the Apple SDK licence position for cross builds, rcodesign's maintenance status and the Developer ID CA expiry date are checked and recorded.
   2. A `release.yml` `build-macos` job produces a universal DMG and complete MAR through `unify.sh` (cross-built on legion, with the hosted `macos-26` fallback recorded), the sidecar natives, `rg` and `node` are `lipo`-merged, and `package-target-natives` passes on the DMG.
   3. The quick row `mac-entitlements` is green, and its self-test goes red on a planted `43AQ936H96`, `org.mozilla` and restricted entitlement key.
@@ -341,6 +366,7 @@ Plans:
 **Depends on**: Phase 50 (Linux release), Phase 54 (Windows release for winget), Phase 55 (notarized DMG for the cask and aarch64-darwin)
 **Requirements**: PKG-19, INF-05, PKG-20, DIST-04, DIST-11, DIST-12
 **Success Criteria** (what must be TRUE):
+
   1. The flake package repacks the Release tarball with `fetchurl` and autoPatchelf, uses `pkgs.nodejs_24` and exports an overlay; a row asserts the release tarball's `policies.json` has no `DisableAppUpdate`; a clean machine's `nix build` substitutes from the binary cache.
   2. PowerBrowser is listed on Flathub (DNS TXT verified, with the build-from-source exception in writing or a from-source manifest), on winget, and in the own Homebrew tap with a cask after notarization; /download gains Nix and Flatpak rows when those channels are live.
   3. For each release the train opens a bot PR with the flake hash, the bot App commits the tap update, `wingetcreate` submits the winget PR, and Flathub's external-data-checker opens its own PR.
@@ -355,6 +381,7 @@ Plans:
 **Depends on**: Phase 48 (telemetry Worker), Phase 54 (first Windows release shipped)
 **Requirements**: TEL-09, TEL-07, TEL-12, TEL-13
 **Success Criteria** (what must be TRUE):
+
   1. A verify-endpoints run with the crash reporter enabled shows no request to `incoming.telemetry.mozilla.org` before consent.
   2. The Worker's `POST /submit` stores minidumps in R2 under a 30-day lifecycle, the collector's self-test passes a Gecko-shaped `extra` plant, and the submit URL key is reconciled with `[urls].crash_report`.
   3. `mach buildsymbols` output is attached to each Release as part of the DIST-07 manifest asset set, a stackwalk runbook exists, and `docs/CRASH-POLICY.md` is rewritten.
@@ -370,6 +397,7 @@ Plans:
 **Depends on**: Phase 43 (tag-based detector), Phase 49 (hosted fallback build), Phase 52 (fixer proven)
 **Requirements**: UPS-01, TRAIN-05, UPS-03
 **Success Criteria** (what must be TRUE):
+
   1. From the 175 beta (2027-06-10) the bump job runs replay-only against 175 tags, so patch conflicts surface as issues before the 175 release.
   2. A 175 train runs with its own release keys and tracking issues while the 153.x security trains continue.
   3. The hook-only patches are rebased onto 175, the toolchain baseline is updated, and PowerBrowser ships on 175.x before 153.27 (2027-09-07).
@@ -386,7 +414,7 @@ Phases execute in numeric order. Phase 42 depends only on 41. Phases 44 and 45 c
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 40. Release identity, ESR pin and patch regeneration (A) | 3/8 | In Progress | - |
+| 40. Release identity, ESR pin and patch regeneration (A) | 4/8 | In Progress|  |
 | 41. Repository controls and GitHub Apps (A) | 0/TBD | Not started | - |
 | 42. Community surface and release documentation (A) | 0/TBD | Not started | - |
 | 43. Release train skeleton and upstream bump automation (A) | 0/TBD | Not started | - |
