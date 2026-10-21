@@ -18,10 +18,11 @@ pref("startup.homepage_override_url", "");
 pref("startup.homepage_welcome_url", "");
 pref("startup.homepage_welcome_url.additional", "");
 
-// The Mozilla update-wizard URLs must not be carried forward from the
-// unofficial/ template (both pointed at nightly.mozilla.org).
-pref("app.update.url.manual", "");
-pref("app.update.url.details", "");
+// UPD-13: About-dialog release-notes and manual-update links, derived from configuration.toml [urls].
+pref("app.releaseNotesURL", "https://github.com/DeBIOS-Foundation/powerbrowser/releases");
+pref("app.releaseNotesURL.aboutDialog", "https://github.com/DeBIOS-Foundation/powerbrowser/releases");
+pref("app.update.url.manual", "https://powerbrowser.org");
+pref("app.update.url.details", "https://github.com/DeBIOS-Foundation/powerbrowser/releases");
 
 // --- D-86: GMP manager -- Widevine stays working, no Mozilla host involved ---
 // Blanked so the GMP manager never contacts aus5.mozilla.org for a plugin
@@ -125,11 +126,12 @@ pref("network.connectivity-service.enabled", false);
 // network.dns.disablePrefetchFromHTTPS also defaults false (:15161), so
 // the origin scheme is irrelevant. Root cause traced to
 // theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx:13's
-// POWERBROWSER_REPO_URL link to github.com. Disabled rather than removing
-// the link -- the link is a real, wanted affordance, and an explicit
-// click is a user request this pref does not block, only the
-// speculative prefetch. github.com stays a `deny` entry in
-// endpoint-allowlist.json so a regression fails the check. ---
+// POWERBROWSER_REPO_URL link. Disabled rather than removing the link --
+// the link is a real, wanted affordance, and an explicit click is a user
+// request this pref does not block, only the speculative prefetch.
+// powerbrowser.org and github.com are `user-initiated` entries in
+// endpoint-allowlist.json: reachable by an explicit click, never
+// unattended, so a prefetch regression still fails layer 3. ---
 pref("network.dns.disablePrefetch", true);
 
 // --- BRAND-04 ledger entry 5 fix (2026-08-29): media.gmp-gmpopenh264.enabled

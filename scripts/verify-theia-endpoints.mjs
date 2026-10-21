@@ -17,9 +17,9 @@
 //     that is the state of every fresh clone, and a gate red on it would
 //     be a gate its readers skip (generate-check's own rule).
 //  2. Every derived host is PRESENT in the allowlist's `hosts` array --
-//     any disposition counts as present (the shipped support host is a
-//     `deny`: prefetch is disabled, so an observation is a failure either
-//     way, yet the host is tracked). A missing host fails NAMING it: the
+//     any disposition counts as present (the shipped support and release-notes
+//     hosts are `user-initiated`: prefetch is disabled, so an unattended
+//     observation is a failure, yet the host is tracked). A missing host fails NAMING it: the
 //     fix is to add an entry, not to edit the manifest down.
 //  3. Stale marked entries fail NAMING them. An allowlist host carrying a
 //     `manifest` field (the dotted manifest key it was added for, e.g.
@@ -27,8 +27,8 @@
 //     since unset, or repointed elsewhere, makes the entry stale. Entries
 //     WITHOUT the field are out of this check's scope -- they are owned by
 //     the BRAND-04 product decisions (D-83..D-88) and layer 3, not by the
-//     manifest. The shipped allowlist carries no marked entries, so this
-//     direction is vacuous until a downstream adds its first host.
+//     manifest. The shipped allowlist marks github.com with
+//     "urls.release_notes" (UPD-13).
 //  4. The allowlist's `expect` entries for the two manifest-driven prefs
 //     (toolkit.telemetry.server, breakpad.reportURL) equal what the
 //     manifest derives right now. This is the single-source agreement the

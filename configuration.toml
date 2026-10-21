@@ -84,8 +84,14 @@ support_url = "https://powerbrowser.org"
 # only update URL source (UPD-12): ng064-update-url-from-manifest asserts that
 # application.ini and the binaries carry it, and that
 # powerbrowser/distribution/policies.json carries no update URL.
+#
+# release_notes and homepage feed the About dialog's release-notes link and its
+# manual-update fallback link. They are click destinations, never contacted
+# unattended (endpoint-allowlist disposition user-initiated).
 [urls]
 update = "https://updates.powerbrowser.org/update.xml"
+release_notes = "https://github.com/DeBIOS-Foundation/powerbrowser/releases"
+homepage = "https://powerbrowser.org"
 
 # Product telemetry (TEL-01/TEL-02). level is one of off, crash, error, all
 # and defaults to off: an unset level resolves to off with the standard

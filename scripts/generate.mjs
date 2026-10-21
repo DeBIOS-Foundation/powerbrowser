@@ -2378,7 +2378,12 @@ function emitBrandingAboutDialogCss() {
  * [urls].crash_report), and emitFirefoxBrandingJs splices them in at the
  * anchor. Everything else in this const interpolates no manifest value
  * and is a literal like the layout files.
+ *
+ * THE SECOND SPLICE (UPD-13). The four About-dialog link prefs follow
+ * RELEASE_LINK_ANCHOR; releaseLinkPrefs owns their values from [urls].
  */
+const RELEASE_LINK_ANCHOR = '// UPD-13: About-dialog release-notes and manual-update links, derived from configuration.toml [urls].';
+
 const FIREFOX_BRANDING_BASE_LINES = Object.freeze([
     '/* This Source Code Form is subject to the terms of the Mozilla Public',
     ' * License, v. 2.0. If a copy of the MPL was not distributed with this',
@@ -2400,10 +2405,7 @@ const FIREFOX_BRANDING_BASE_LINES = Object.freeze([
     'pref("startup.homepage_welcome_url", "");',
     'pref("startup.homepage_welcome_url.additional", "");',
     '',
-    '// The Mozilla update-wizard URLs must not be carried forward from the',
-    '// unofficial/ template (both pointed at nightly.mozilla.org).',
-    'pref("app.update.url.manual", "");',
-    'pref("app.update.url.details", "");',
+    RELEASE_LINK_ANCHOR,
     '',
     '// --- D-86: GMP manager -- Widevine stays working, no Mozilla host involved ---',
     '// Blanked so the GMP manager never contacts aus5.mozilla.org for a plugin',
@@ -2505,11 +2507,12 @@ const FIREFOX_BRANDING_BASE_LINES = Object.freeze([
     '// network.dns.disablePrefetchFromHTTPS also defaults false (:15161), so',
     '// the origin scheme is irrelevant. Root cause traced to',
     '// theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx:13\'s',
-    '// POWERBROWSER_REPO_URL link to github.com. Disabled rather than removing',
-    '// the link -- the link is a real, wanted affordance, and an explicit',
-    '// click is a user request this pref does not block, only the',
-    '// speculative prefetch. github.com stays a `deny` entry in',
-    '// endpoint-allowlist.json so a regression fails the check. ---',
+    '// POWERBROWSER_REPO_URL link. Disabled rather than removing the link --',
+    '// the link is a real, wanted affordance, and an explicit click is a user',
+    '// request this pref does not block, only the speculative prefetch.',
+    '// powerbrowser.org and github.com are `user-initiated` entries in',
+    '// endpoint-allowlist.json: reachable by an explicit click, never',
+    '// unattended, so a prefetch regression still fails layer 3. ---',
     'pref("network.dns.disablePrefetch", true);',
     '',
     '// --- BRAND-04 ledger entry 5 fix (2026-08-29): media.gmp-gmpopenh264.enabled',
@@ -2636,6 +2639,28 @@ export function mozillaEndpointPrefs(config) {
     return [
         { name: 'toolkit.telemetry.server', value: server },
         { name: 'breakpad.reportURL', value: reportURL },
+    ];
+}
+
+/**
+ * The About dialog's release-notes and manual-update links (UPD-13), spliced
+ * after RELEASE_LINK_ANCHOR in file order. app.releaseNotesURL{,.aboutDialog}
+ * fall back to about:blank, which aboutDialog.js reads as "hide the link";
+ * the update-wizard URLs fall back to "". These are click destinations, NOT
+ * unattended callouts: they deliberately stay out of mozillaEndpointPrefs
+ * (the unattended gate set, which verify-theia-endpoints check 4 pairs with
+ * allowlist `prefs` rows), and their hosts are `user-initiated` allowlist
+ * entries. Each stated value passes the same sink guard. Returns [{name, value}].
+ */
+export function releaseLinkPrefs(config) {
+    const url = key => (isUnset(config.urls?.[key]) ? null : assertEmittable(`urls.${key}`, config.urls[key]));
+    const notes = url('release_notes');
+    const home = url('homepage');
+    return [
+        { name: 'app.releaseNotesURL', value: notes ?? 'about:blank' },
+        { name: 'app.releaseNotesURL.aboutDialog', value: notes ?? 'about:blank' },
+        { name: 'app.update.url.manual', value: home ?? '' },
+        { name: 'app.update.url.details', value: notes ?? '' },
     ];
 }
 
@@ -2798,6 +2823,12 @@ function emitFirefoxBrandingJs(config, variant) {
     const base = variant.id === 'dev'
         ? [...FIREFOX_BRANDING_BASE_LINES, ...FIREFOX_BRANDING_DEV_TAIL_LINES]
         : FIREFOX_BRANDING_BASE_LINES;
+    if (!base.includes(RELEASE_LINK_ANCHOR)) {
+        report([
+            `the branding pref emitter lost its anchor line ${JSON.stringify(RELEASE_LINK_ANCHOR)} -- the About dialog's `
+            + `release-notes and manual-update links would ship nowhere. Next step: report this; ${MANIFEST_NAME} is not the cause and editing it will not help.`,
+        ]);
+    }
     if (!base.includes(DYNAMIC_PREF_ANCHOR)) {
         report([
             `the branding pref emitter lost its anchor line ${JSON.stringify(DYNAMIC_PREF_ANCHOR)} -- the manifest-driven `
@@ -2805,10 +2836,12 @@ function emitFirefoxBrandingJs(config, variant) {
         ]);
     }
     const dynamic = mozillaEndpointPrefs(config).map(({ name, value }) => `pref("${name}", ${JSON.stringify(value)});`);
+    const links = releaseLinkPrefs(config).map(({ name, value }) => `pref("${name}", ${JSON.stringify(value)});`);
     const lines = [];
     for (const line of base) {
         lines.push(line);
         if (line === DYNAMIC_PREF_ANCHOR) lines.push(...dynamic);
+        if (line === RELEASE_LINK_ANCHOR) lines.push(...links);
     }
     return lines.join('\n') + '\n';
 }
@@ -5335,17 +5368,28 @@ function selfTest() {
             };
             return [
                 ...checkOne(
-                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "all"\nendpoint = "https://collector.example.org/v1/events"\n[urls]\ncrash_report = "https://crash.example.org/report"\nupdate = "https://updates.example.org/update.xml"\n[installer]\nsupport_url = "https://example.org/support"\n`,
-                    ['collector.example.org', 'crash.example.org', 'example.org', 'updates.example.org'],
+                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[telemetry]\nlevel = "all"\nendpoint = "https://collector.example.org/v1/events"\n[urls]\ncrash_report = "https://crash.example.org/report"\nupdate = "https://updates.example.org/update.xml"\nrelease_notes = "https://notes.example.org/releases"\nhomepage = "https://example.org"\n[installer]\nsupport_url = "https://example.org/support"\n`,
+                    ['collector.example.org', 'crash.example.org', 'example.org', 'notes.example.org', 'updates.example.org'],
                     'https://collector.example.org/v1/events',
                     'https://crash.example.org/report',
                 ),
                 ...checkOne(
                     `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[urls]\nupdate = "https://updates.example.org/update.xml"\n`,
-                    ['powerbrowser.org', 'updates.example.org'],
+                    // urls.release_notes and urls.homepage are inherited here (D-08 echoes them).
+                    ['github.com', 'powerbrowser.org', 'updates.example.org'],
                     '',
                     '',
                 ),
+                // UPD-13: unstated links fall back to about:blank (hidden) and "", stated ones map verbatim.
+                ...[
+                    [{}, ['about:blank', 'about:blank', '', '']],
+                    [{ release_notes: 'https://notes.example.org/r', homepage: 'https://example.org' },
+                        ['https://notes.example.org/r', 'https://notes.example.org/r', 'https://example.org', 'https://notes.example.org/r']],
+                ].flatMap(([urls, want]) => {
+                    const got = releaseLinkPrefs({ urls }).map(p => p.value);
+                    return JSON.stringify(got) === JSON.stringify(want)
+                        ? [] : [`the About-dialog link prefs for ${JSON.stringify(urls)} are not ${JSON.stringify(want)}: ${JSON.stringify(got)}`];
+                }),
             ];
         } finally {
             rmSync(fixtureDir, { recursive: true, force: true });

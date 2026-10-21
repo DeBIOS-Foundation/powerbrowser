@@ -83,8 +83,14 @@
     },
     {
       "host": "powerbrowser.org",
-      "disposition": "deny",
-      "reason": "Root cause: theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx exports POWERBROWSER_REPO_URL = 'https://powerbrowser.org/' and renders it as a link; Gecko speculatively DNS-prefetches link targets (network.dns.disablePrefetch defaults false, modules/libpref/init/StaticPrefList.yaml:15308; network.dns.disablePrefetchFromHTTPS also defaults false, :15161, so the http-vs-https origin of the Theia frontend does not matter). Closed by network.dns.disablePrefetch = true, not by removing the link -- the link is a real, wanted affordance and a user who clicks it is making an explicit request, the same allow-the-capability/deny-the-unattended-callout distinction the geo.provider.network.url and dom.push.enabled entries already draw. Kept as `deny` rather than absent so the file stays the single source of truth: an observation of this host is a failure either way, and this reason records why it is not expected."
+      "disposition": "user-initiated",
+      "reason": "UPD-33: click destinations only. The welcome widget's link (theia/extensions/branding/src/browser/powerbrowser-welcome-widget.tsx POWERBROWSER_REPO_URL), the About dialog's manual-update link (app.update.url.manual from configuration.toml [urls] homepage, UPD-13) and the installer support URL ([installer] support_url) all name this host, and each is reached only by an explicit click. Gecko speculatively DNS-prefetches link targets (network.dns.disablePrefetch defaults false, modules/libpref/init/StaticPrefList.yaml:15308; network.dns.disablePrefetchFromHTTPS also defaults false, :15161); that unattended path is closed by network.dns.disablePrefetch = true, not by removing the links. An unattended resolution of this host is a failure exactly as for a `deny` entry; previously dispositioned `deny`, re-dispositioned when the About-dialog links became real pages."
+    },
+    {
+      "host": "github.com",
+      "disposition": "user-initiated",
+      "manifest": "urls.release_notes",
+      "reason": "UPD-33: the About dialog's release-notes link (app.releaseNotesURL, app.releaseNotesURL.aboutDialog and app.update.url.details from configuration.toml [urls] release_notes, UPD-13) points at the GitHub Releases page (SEED-002 section 7), reached only by an explicit click. network.dns.disablePrefetch = true closes the speculative prefetch; an unattended resolution of this host is a failure exactly as for a `deny` entry."
     },
     {
       "host": "cloudflare-dns.com",
