@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.6
 current_phase: 40
 current_phase_name: Release identity, ESR pin and patch regeneration (A)
-current_plan: 3
+current_plan: 4
 status: executing
-stopped_at: Completed 40-02-PLAN.md
-last_updated: "2026-10-20T23:52:32.296Z"
+stopped_at: Completed 40-03-PLAN.md
+last_updated: "2026-10-21T00:04:15.452Z"
 last_activity: 2026-10-20
 last_activity_desc: Phase 40 execution started
-state_head: 0949e3da63aab76f5a7deb7e1066fc7edbfa23fd
+state_head: e6885c5df2250d8f4c227a4a700683949699a631
 progress:
   total_phases: 19
   completed_phases: 0
   total_plans: 8
-  completed_plans: 2
+  completed_plans: 3
 milestone_name: Deployment setup
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-20)
 ## Current Position
 
 Phase: 40 (Release identity, ESR pin and patch regeneration (A)) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 Last activity: 2026-10-20 — Phase 40 execution started
 
@@ -39,7 +39,7 @@ Progress: [░░░░░░░░░░] 0%
 ## Progress
 
 **Phases Complete:** 0 of 19
-**Current Plan:** 3
+**Current Plan:** 4
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 |------|----------|-------|-------|
 | Phase 40 P01 | 15min | 2 tasks | 6 files |
 | Phase 40 P02 | 15min | 2 tasks | 3 files |
+| Phase 40 P03 | 25min | 3 tasks | 23 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,7 @@ Owner decisions 1–22 of 2026-10-20 are recorded in `.planning/workstreams/depl
 - Phase 40: update channel stays `default` / `powerbrowser-default`; `product.revision` is a TOML integer; push and first `rebase-upstream.yml` dispatch are the owner's 40-08 Task 3 checkpoint, which also carries the About-dialog result.
 - [Phase 40]: 40-01: rebase-upstream.yml carries no tag at all (no input default); verify-upstream-pins sweeps it like any other file and asserts both triggers, no default, and Nix-wrapped generator steps
 - [Phase 40]: 40-02: regenerate-patches.sh write mode validates every regeneration before any rename, so a refusal leaves the whole stack byte-identical
+- [Phase 40]: product.revision is a TOML integer (required, >=1); release key v<ESR>-<revision> via releaseIdentity(); version files are release metadata, never a Gecko build input
 
 ### Pending Todos
 
@@ -81,9 +83,9 @@ Owner decisions 1–22 of 2026-10-20 are recorded in `.planning/workstreams/depl
 
 ## Session Continuity
 
-**Last session:** 2026-10-20T23:52:32.272Z
+**Last session:** 2026-10-21T00:04:15.426Z
 
-**Stopped At:** Completed 40-02-PLAN.md
+**Stopped At:** Completed 40-03-PLAN.md
 **Resume File:** None
 
 ## Milestone Context

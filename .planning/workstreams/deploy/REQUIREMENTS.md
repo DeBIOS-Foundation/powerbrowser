@@ -60,7 +60,7 @@ the project's own planning record. This section must survive when this file repl
 
 ### Release identity
 
-- [ ] **REL-01**: `configuration.toml [product]` gains a `revision` field. The generator derives the version files and the release key `v<ESR>-<revision>` from it and the ESR pin. The quick row `release-identity` derives the tag, the version files and the descriptor version from the tree and requires them to agree; its self-test plants a hand-written version literal and a descriptor version that disagrees with the key. The network check that the key is strictly greater than the latest Release tag runs in `release.yml` (DIST-02) and in the train's dispatch validation (TRAIN-01), not in this row. (A)
+- [x] **REL-01**: `configuration.toml [product]` gains a `revision` field. The generator derives the version files and the release key `v<ESR>-<revision>` from it and the ESR pin. The quick row `release-identity` derives the tag, the version files and the descriptor version from the tree and requires them to agree; its self-test plants a hand-written version literal and a descriptor version that disagrees with the key. The network check that the key is strictly greater than the latest Release tag runs in `release.yml` (DIST-02) and in the train's dispatch validation (TRAIN-01), not in this row. (A)
 - [ ] **UPD-11**: One update channel name is used everywhere. The quick row `update-channel` derives the channel from the generated `.mozconfig` (`MOZ_UPDATE_CHANNEL`, `MAR_CHANNEL_ID`, `ACCEPTED_MAR_CHANNEL_IDS`) and compares it with every consumer (`build-update-xml.mjs`, `docs/RELEASING.md`, `release-manifest.json`, the descriptor path); the self-test plants `release`/`powerbrowser-release` in one consumer. The chosen name is recorded in PROJECT.md Key Decisions. (A)
 - [ ] **DIST-06**: The owner commits the pin bump to `FIREFOX_153_5_1esr_RELEASE` (6cd88e7d), changing `configuration.toml:115` and the `rebase-upstream.yml:33` `tag` default together, with `configuration.toml` regenerated and `--quick` green. A dispatched run of `rebase-upstream.yml` against that tag is then green; it is the first real run of that workflow. DIST-06 lands before AUTO-08, which deletes the `tag` default and changes `verify-upstream-pins.mjs` to assert its absence. (A)
 - [ ] **UPD-12**: The shipped `distribution/policies.json` carries no `AppUpdateURL`; `MOZ_APPUPDATE_HOST` from `[urls].update` is the only update URL source. The `ng064` comparand and the reason text at `endpoint-allowlist.json:22` change in the same commit. (A)
@@ -378,7 +378,7 @@ The roadmapper fills the Phase column.
 
 | Requirement | Phase | Status |
 |---|---|---|
-| REL-01 | Phase 40 | Pending |
+| REL-01 | Phase 40 | Complete |
 | UPD-11 | Phase 40 | Pending |
 | DIST-06 | Phase 40 | Pending |
 | UPD-12 | Phase 40 | Pending |
