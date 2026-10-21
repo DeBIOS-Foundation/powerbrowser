@@ -4657,6 +4657,12 @@ run_own_checks() {
     # the tracked tree equals the value of its own kind. Honestly --quick: git ls-files and text
     # reads plus an in-memory emit, no build, browser, display or network.
     "update-channel|node $REPO_ROOT/scripts/verify-update-channel.mjs"
+    # update-channel-self-test plants each mismatch kind in memory (a release descriptor path, a
+    # backticked <app_basename>-release, the tracked .mozconfig channel, a doc MAR_CHANNEL_ID, the
+    # MAR id under the channel kind, letter case, the emitter, zero mentions, and the update-URL
+    # policy key with an https and an empty value) and keeps the MAR key store and runner unit
+    # names green; it writes nothing.
+    "update-channel-self-test|node $REPO_ROOT/scripts/verify-update-channel.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
@@ -4748,8 +4754,8 @@ run_own_checks() {
       "verify-endpoints-interrupt-self-test|bash $REPO_ROOT/scripts/verify-endpoints.sh --interrupt-self-test"
 
       # NEW (08-04): the self-hosted MAR-hop proof (PKG-02, T-08-04a). Reads
-      # the effective update URL from powerbrowser/distribution/policies.json
-      # (never user-branch prefs) and re-verifies the .mozbuild/mar-hop/
+      # the effective update URL from configuration.toml [urls] update
+      # (UPD-12; never user-branch prefs) and re-verifies the .mozbuild/mar-hop/
       # evidence of one real Linux N to N-plus-1 hop: two distinct versions
       # and build IDs, a hash-pinned descriptor byte-identical to a fresh
       # emission from the MAR bytes, fork-server access-log entries, and a

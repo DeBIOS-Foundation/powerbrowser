@@ -5,11 +5,13 @@
 // MAR hop from the fork update descriptor with zero Mozilla update hosts
 // contacted.
 //
-// WHY IT EXISTS. The updater enablement (--enable-unverified-updates) and the
-// AppUpdateURL policy are configuration, and configuration that is never
-// exercised is a story, not a proof. This script gates the story in two
-// halves: a static half that reads the tracked policy (the effective update
-// URL lives there, never in user-branch prefs -- Bug 1468948 silently ignores
+// WHY IT EXISTS. The enabled updater and the update URL are configuration,
+// and configuration that is never exercised is a story, not a proof. This
+// script gates the story in two halves: a static half that reads the
+// effective update URL from configuration.toml [urls] update (the build bakes
+// it into application.ini [AppUpdate] as MOZ_APPUPDATE_HOST, and no
+// enterprise policy overrides it, UPD-12 -- never user-branch prefs:
+// Bug 1468948 silently ignores
 // user-branch app.update.url edits, and app.update.url itself was removed in
 // Bug 1468948's follow-up Bug 1568994, so a pref file cannot carry it at
 // all), and an evidence half that re-verifies a completed proof run from the
@@ -52,10 +54,13 @@ import { tmpdir } from 'node:os';
 import { isIP } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
+import { resolveConfig } from './generate.mjs';
+
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const NAME = 'verify-mar-update-hop';
 const EVIDENCE_DIR = join(REPO_ROOT, '.mozbuild', 'mar-hop');
-const POLICY_REL = 'powerbrowser/distribution/policies.json';
+const MANIFEST_REL = 'configuration.toml';
+const URL_KEY = `${MANIFEST_REL} [urls] update`;
 
 const args = process.argv.slice(2);
 const SELF_TEST = args.includes('--self-test');
@@ -173,19 +178,22 @@ function servedHost(servedUrl) {
     }
 }
 
-/** The tracked policy's effective update URL -- read from the file, never from prefs. */
-function readPolicyUrl(root) {
-    const p = join(root, POLICY_REL);
-    if (!existsSync(p)) return { error: `${POLICY_REL} is absent, so no effective update URL is configured. Next step: restore the file per docs/BUILD.md packaging procedure` };
-    let doc;
+/** The effective update URL: the manifest's [urls] update, which the build bakes as MOZ_APPUPDATE_HOST. */
+function readManifestUpdateUrl(root) {
+    const p = join(root, MANIFEST_REL);
+    if (!existsSync(p)) return { error: `${MANIFEST_REL} is absent, so no effective update URL is configured. Next step: restore it at the top of the project` };
+    let resolved;
     try {
-        doc = JSON.parse(readFileSync(p, 'utf8'));
-    } catch {
-        return { error: `${POLICY_REL} is not valid JSON. Next step: fix the file; it must carry policies.AppUpdateURL` };
+        resolved = resolveConfig(p);
+    } catch (e) {
+        return { error: `${MANIFEST_REL} could not be read (${e.message}). Next step: run node scripts/generate.mjs -- it reports the faulty line` };
     }
-    const url = doc?.policies?.AppUpdateURL;
+    if (resolved.failures.length > 0 || resolved.config === undefined) {
+        return { error: `${MANIFEST_REL} does not resolve, so no effective update URL is configured. Next step: run node scripts/generate.mjs -- it reports the faulty key` };
+    }
+    const url = resolved.config.urls?.update;
     if (typeof url !== 'string' || url.trim() === '') {
-        return { error: `${POLICY_REL} carries no policies.AppUpdateURL, so a self-updating client is impossible. Next step: point it at the fork update descriptor` };
+        return { error: `${URL_KEY} is not set, so a self-updating client is impossible. Next step: point it at the fork update descriptor` };
     }
     return { url };
 }
@@ -194,22 +202,22 @@ function runChecks(root) {
     const r = makeReporter();
     const evDir = root === REPO_ROOT ? EVIDENCE_DIR : join(root, '.mozbuild', 'mar-hop');
 
-    // Static half: the tracked policy must carry a shippable fork URL. An
+    // Static half: the manifest must carry a shippable fork URL. An
     // http URL would ship MARs over cleartext (T-08-04a tampering vector);
     // a Mozilla host would point the fork's clients at Mozilla's AUS
     // (Pitfall 1). Both fail naming the file and the value.
-    const policy = readPolicyUrl(root);
-    if (policy.error) {
-        r.fail(policy.error);
+    const update = readManifestUpdateUrl(root);
+    if (update.error) {
+        r.fail(update.error);
     } else {
         let u = null;
-        try { u = new URL(policy.url); } catch { /* falls through */ }
+        try { u = new URL(update.url); } catch { /* falls through */ }
         if (!u) {
-            r.fail(`${POLICY_REL} AppUpdateURL ${JSON.stringify(policy.url)} is not a URL. Next step: set it to the fork update descriptor`);
+            r.fail(`${URL_KEY} ${JSON.stringify(update.url)} is not a URL. Next step: set it to the fork update descriptor`);
         } else {
-            r.eq('AppUpdateURL scheme', u.protocol, 'https:', POLICY_REL);
+            r.eq('update URL scheme', u.protocol, 'https:', URL_KEY);
             if (isMozillaHost(u.hostname)) {
-                r.fail(`${POLICY_REL} AppUpdateURL points at Mozilla host ${JSON.stringify(u.hostname)} -- the fork's clients must never update from Mozilla (Pitfall 1). Next step: point it at the fork update descriptor`);
+                r.fail(`${URL_KEY} points at Mozilla host ${JSON.stringify(u.hostname)} -- the fork's clients must never update from Mozilla (Pitfall 1). Next step: point it at the fork update descriptor`);
             }
         }
     }
@@ -340,8 +348,7 @@ function selfTest() {
         const evDir = join(dir, '.mozbuild', 'mar-hop');
         const mirror = ({ version = '153.1.1', buildID = '20260905010000', servedHost = 'updates.powerbrowser.org', staleMar = false, mozillaHost = false } = {}) => {
             mkdirSync(evDir, { recursive: true });
-            mkdirSync(join(dir, 'powerbrowser', 'distribution'), { recursive: true });
-            writeFileSync(join(dir, POLICY_REL), JSON.stringify({ policies: { AppUpdateURL: 'https://updates.powerbrowser.org/update.xml' } }));
+            writeFileSync(join(dir, MANIFEST_REL), readFileSync(join(REPO_ROOT, MANIFEST_REL)));
             const marBytes = randomBytes(65536);
             writeFileSync(join(evDir, 'nplus1.mar'), staleMar ? Buffer.concat([marBytes, Buffer.from('x')]) : marBytes);
             const servedUrl = `http://${servedHost}:8000/update.xml`;
@@ -511,5 +518,5 @@ if (result.failures.length > 0) {
     for (const f of result.failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log(`${NAME}: PASS -- policy carries the fork update URL and the N to N-plus-1 hop evidence verifies end to end`);
+console.log(`${NAME}: PASS -- configuration.toml [urls] update carries the fork update URL and the N to N-plus-1 hop evidence verifies end to end`);
 }

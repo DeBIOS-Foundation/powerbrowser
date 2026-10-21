@@ -28,6 +28,12 @@
 //     the MAR key store directory and the release runner unit.
 //  3. Zero mentions outside .mozconfig is a FAIL: an agreement over nothing
 //     is vacuous.
+//  4. One update URL source (UPD-12). powerbrowser/distribution/policies.json
+//     must carry no AppUpdateURL key at all, whatever its value (an empty
+//     string included): the enterprise policy beats application.ini, so a
+//     second source could disagree with MOZ_APPUPDATE_HOST from
+//     configuration.toml [urls] update. Same fact as the channel: where
+//     updates come from.
 //
 // The consumer list prints sorted by path, then line, so two runs over one
 // tree print identical output. This script and its --self-test only read
@@ -57,6 +63,8 @@ const MANIFEST_REL = 'configuration.toml';
 const MOZCONFIG_REL = '.mozconfig';
 const GENERATOR_REL = 'scripts/generate.mjs';
 const RERUN_GENERATE = 'node scripts/generate.mjs';
+const POLICIES_REL = 'powerbrowser/distribution/policies.json';
+const POLICY_KEY = 'AppUpdateURL';
 
 // Paths the sweep does not read. Every entry carries its reason; an entry
 // without one is refused at startup, so the table cannot grow silently.
@@ -211,6 +219,22 @@ function runChecks(root, overrides = {}) {
         failures.push(`${NAME} found no channel mention outside ${MOZCONFIG_REL} -- an agreement over nothing proves nothing. Next step: check the instrument (${SELF_REL}: its exclusion table and mention patterns) and that git ls-files lists the tree.`);
     }
 
+    // --- 4. one update URL source (UPD-12) ---------------------------------
+    const policiesText = read(POLICIES_REL);
+    if (policiesText === null) {
+        failures.push(`${POLICIES_REL} could not be read, so the update URL source is unproven. Next step: restore it.`);
+    } else {
+        let policies = null;
+        try {
+            policies = JSON.parse(policiesText)?.policies ?? {};
+        } catch {
+            failures.push(`${POLICIES_REL} is not valid JSON. Next step: fix the file.`);
+        }
+        if (policies !== null && Object.hasOwn(policies, POLICY_KEY)) {
+            failures.push(`${POLICIES_REL} carries the ${POLICY_KEY} policy (value ${JSON.stringify(policies[POLICY_KEY])}); MOZ_APPUPDATE_HOST from configuration.toml [urls] update must be the only update URL source (UPD-12). Next step: delete the key.`);
+        }
+    }
+
     return { failures, consumers, expected, appBasename };
 }
 
@@ -228,7 +252,7 @@ function main() {
         failures.forEach(f => console.error(`  ${f}`));
         return 1;
     }
-    console.log(`${NAME}: PASS -- update channel '${expected.channel}' and MAR channel id '${expected.mar}' derive from UPDATE_CHANNEL and every structured mention agrees with the value of its own kind`);
+    console.log(`${NAME}: PASS -- update channel '${expected.channel}' and MAR channel id '${expected.mar}' derive from UPDATE_CHANNEL and every structured mention agrees with the value of its own kind; ${POLICIES_REL} carries no update URL`);
     return 0;
 }
 
@@ -250,6 +274,13 @@ function selfTest() {
     const withLine = (target, line) => (rel) => (rel === target ? `${realRead(rel)}\n${line}\n` : realRead(rel));
     const replaced = (target, from, to) => (rel) => (rel === target ? realRead(rel).replace(from, to) : realRead(rel));
 
+    // Key presence is the fault, so the value is free: an https URL and an empty string.
+    const withPolicy = (value) => (rel) => {
+        if (rel !== POLICIES_REL) return realRead(rel);
+        const doc = JSON.parse(realRead(rel));
+        doc.policies = { [POLICY_KEY]: value, ...doc.policies };
+        return JSON.stringify(doc, null, 2);
+    };
     const RELEASING = 'docs/RELEASING.md';
     const BUILD = 'docs/BUILD.md';
     // The plant channel is a literal: `release` is the realistic wrong value.
@@ -262,13 +293,15 @@ function selfTest() {
         ['letter case: Default is a mismatch', { read: withLine(RELEASING, '`Default/Linux_x86_64-gcc3/update.xml`') }, RELEASING, 'Default'],
         ['emitter names channel release', { read: realRead, mozconfig: realRead(MOZCONFIG_REL).replace('--enable-update-channel=default', '--enable-update-channel=release') }, GENERATOR_REL, 'release'],
         ['no mention outside .mozconfig', { read: realRead, files: [MOZCONFIG_REL] }, NAME, 'no channel mention'],
+        ['update-URL policy with an https value', { read: withPolicy(`https://updates.${app}.org/update.xml`) }, POLICIES_REL, POLICY_KEY],
+        ['update-URL policy with an empty value', { read: withPolicy('') }, POLICIES_REL, POLICY_KEY],
     ];
 
     let failed = 0;
     for (const [name, overrides, file, value] of plants) {
         const { failures } = runChecks(REPO_ROOT, { files, ...overrides });
-        // A value is named in quotes; the vacuity plant names the instrument in prose.
-        const needle = name === 'no mention outside .mozconfig' ? value : `'${value}'`;
+        // A value is named in quotes; the vacuity and policy plants name it in prose.
+        const needle = (name === 'no mention outside .mozconfig' || file === POLICIES_REL) ? value : `'${value}'`;
         const hit = failures.some(f => f.includes(file) && f.includes(needle));
         if (hit) {
             console.log(`  ok  ${name} -> red, naming '${file}' and '${value}'`);

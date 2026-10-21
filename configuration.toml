@@ -80,9 +80,10 @@ support_url = "https://powerbrowser.org"
 
 # Update endpoint (NG-064). update is the update-descriptor URL the client asks.
 # Its host becomes MOZ_APPUPDATE_HOST through generated/identity.configure, so
-# application.ini's [AppUpdate] URL names this host rather than Mozilla's, and
-# powerbrowser/distribution/policies.json AppUpdateURL must equal it (the policy
-# wins over application.ini; ng064-update-url-from-manifest pins both).
+# application.ini's [AppUpdate] URL names this host rather than Mozilla's. It is the
+# only update URL source (UPD-12): ng064-update-url-from-manifest asserts that
+# application.ini and the binaries carry it, and that
+# powerbrowser/distribution/policies.json carries no update URL.
 [urls]
 update = "https://updates.powerbrowser.org/update.xml"
 

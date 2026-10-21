@@ -799,7 +799,7 @@ grep -q "'MOZ_VERIFY_MAR_SIGNATURE'" objdir/config.status && echo VERIFY_ON
 
 Two facts about where the update URL lives:
 
-- `application.ini`'s `[AppUpdate]` URL host comes from `configuration.toml` `[urls] update` (NG-064). `generated/identity.configure` emits `set_config("MOZ_APPUPDATE_HOST", …)`, which `upstream/build/moz.build:96` prefers over its `aus5.mozilla.org` default. It is a compiled value, so a change needs a tier-3 rebuild. The `AppUpdateURL` enterprise policy still wins when present (`UpdateService.sys.mjs:5466`), and `powerbrowser/distribution/policies.json` carries the same URL.
+- `application.ini`'s `[AppUpdate]` URL host comes from `configuration.toml` `[urls] update` (NG-064). `generated/identity.configure` emits `set_config("MOZ_APPUPDATE_HOST", …)`, which `upstream/build/moz.build:96` prefers over its `aus5.mozilla.org` default. It is a compiled value, so a change needs a tier-3 rebuild. The `AppUpdateURL` enterprise policy would win when present (`UpdateService.sys.mjs:5466`), so `powerbrowser/distribution/policies.json` carries none: the manifest is the only update URL source (UPD-12).
 - `app.update.url` as a pref does not exist (removed in Bug 1568994; the
   removal is noted in `upstream/browser/app/profile/firefox.js:156`), so
   no pref file can carry the fork URL. The policy file and the compiled

@@ -1980,9 +1980,9 @@ export function emitTheiaPlugins(config, variant) {
  * updates from.
  *
  * FRAGMENT, NOT THE WHOLE POLICY FILE. The tracked
- * powerbrowser/distribution/policies.json carries sibling keys the
- * manifest does not own (AppUpdateURL, DisableTelemetry,
- * DisableFirefoxStudies); whole-file byte-identity would wed those keys
+ * powerbrowser/distribution/policies.json carries two sibling keys the
+ * manifest does not own (DisableTelemetry, DisableFirefoxStudies; it
+ * carries no update URL, UPD-12); whole-file byte-identity would wed those keys
  * to this emitter. The copy-over sets ONLY the ExtensionSettings key from
  * this fragment and leaves every sibling byte-identical. No tracked
  * comparand row -- the byte-identity gate skips rows without one, --check
