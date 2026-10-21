@@ -4684,6 +4684,12 @@ run_own_checks() {
     # text, each red naming the pref and variant; an added extensions.update.autoUpdateDefault
     # line stays green (exact-name match). It writes nothing.
     "update-prefs-self-test|node $REPO_ROOT/scripts/verify-update-prefs.mjs --self-test"
+    # NEW (Phase 40, PKG-08): LICENSING.md and THIRD-PARTY-NOTICES.txt equal their re-derivation
+    # from configuration.toml and about:license, preprocessed from the applied upstream/ checkout
+    # with Mozilla's own mozbuild preprocessor. Honestly --quick: python over upstream/ plus file
+    # reads; no build, browser, display or network. The byte comparison with the built
+    # license.html runs only where an objdir exists, otherwise one named SKIP line.
+    "licensing|node $REPO_ROOT/scripts/generate-licensing.mjs --check"
   )
 
   if [ "$QUICK" -eq 0 ]; then

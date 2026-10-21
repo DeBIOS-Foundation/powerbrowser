@@ -115,6 +115,8 @@ const EXCLUDED_FILES = [
   { path: 'configuration.toml', reason: 'the value source itself; literals here are the derivation input, not a leak' },
   { path: 'inventory/brand-tokens.json', reason: 'the one file allowed to name the originating product; its target strings carry the display form' },
   { path: 'docs/REBRANDING.md', reason: 'the documenting surface; it must show the values to explain them' },
+  { path: 'LICENSING.md', reason: 'derived output of scripts/generate-licensing.mjs from configuration.toml and upstream sources; pinned by the licensing row' },
+  { path: 'THIRD-PARTY-NOTICES.txt', reason: 'derived output of scripts/generate-licensing.mjs from configuration.toml and upstream sources; pinned by the licensing row' },
 ];
 
 const EXCLUDED_LINES = [

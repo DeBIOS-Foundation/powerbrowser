@@ -1,0 +1,228 @@
+#!/usr/bin/env node
+// scripts/generate-licensing.mjs
+//
+// The licence-notice generator (Phase 40, PKG-08). Release builds carry
+// LICENSING.md and THIRD-PARTY-NOTICES.txt at the repo root. Both are
+// generator output: notices typed by hand drift on every ESR bump.
+//
+// Inputs:
+//  - configuration.toml, through resolveConfig() from ./generate.mjs: the
+//    product licence, copyright holder, trademark notice and the ESR tag.
+//  - about:license, preprocessed from the applied upstream/ checkout with
+//    Mozilla's own mozbuild preprocessor and the Linux define set
+//    LINUX_LICENSE_DEFINES. This reproduces the built license.html byte for
+//    byte; --check compares the two whenever an objdir exists.
+//
+// Modes:
+//   node scripts/generate-licensing.mjs           write both files (temp file + rename each)
+//   node scripts/generate-licensing.mjs --check   re-derive both in memory; fail on any drift
+//
+// --check runs python over upstream/ and reads files. It runs no build, no
+// browser, no display and no network.
+
+import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { resolveConfig } from './generate.mjs';
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const NAME = 'licensing';
+const RERUN = 'node scripts/generate-licensing.mjs';
+
+// The condition names in toolkit/content/license.html that the Linux build defines
+// (objdir/config.status). With exactly these the preprocessed file equals the built one.
+export const LINUX_LICENSE_DEFINES = ['MOZ_JXL', 'MOZ_ZUCCHINI', 'XP_LINUX'];
+
+const NOTICES_REL = 'THIRD-PARTY-NOTICES.txt';
+const LICENSING_REL = 'LICENSING.md';
+const BUILT_LICENSE_REL = 'objdir/dist/bin/browser/chrome/browser/content/browser/license.html';
+const FETCH_UPSTREAM = 'bash scripts/fetch-upstream.sh && bash scripts/apply-patches.sh';
+
+class Fail extends Error {}
+
+// --- Gecko: about:license through Mozilla's preprocessor ---------------------
+
+// Run with cwd = upstream/ and `python3 -I`, so no user site or PYTHONPATH is consulted.
+const PREPROCESS_PY = `
+import io, os, sys
+sys.path.insert(0, 'python/mozbuild')
+from mozbuild.preprocessor import Preprocessor
+pp = Preprocessor()
+pp.context.update({name: '1' for name in sys.argv[1].split(',')})
+pp.context['APP_LICENSE_BLOCK'] = os.path.abspath('browser/base/content/overrides/app-license.html')
+out = io.StringIO()
+pp.out = out
+pp.do_include('toolkit/content/license.html')
+sys.stdout.buffer.write(out.getvalue().encode('utf-8'))
+`;
+
+/** Preprocessed about:license HTML as a Buffer. Throws Fail. */
+function preprocessGecko(upstreamDir) {
+    if (!existsSync(join(upstreamDir, 'toolkit/content/license.html'))
+        || !existsSync(join(upstreamDir, 'python/mozbuild/mozbuild/preprocessor.py'))) {
+        throw new Fail(`upstream/ has no applied Gecko checkout, so about:license cannot be preprocessed. Next step: run: ${FETCH_UPSTREAM}`);
+    }
+    const r = spawnSync('python3', ['-I', '-c', PREPROCESS_PY, LINUX_LICENSE_DEFINES.join(',')], {
+        cwd: upstreamDir,
+        maxBuffer: 64 * 1024 * 1024,
+    });
+    if (r.error) throw new Fail(`python3 could not be started (${r.error.code ?? r.error.message}). Next step: run this inside nix develop .#theia, which provides python3.`);
+    if (r.status !== 0) {
+        const last = r.stderr.toString().trim().split('\n').pop() ?? '';
+        throw new Fail(`Mozilla's preprocessor exited ${r.status} on toolkit/content/license.html: ${last}. Next step: run: ${FETCH_UPSTREAM}, then ${RERUN}`);
+    }
+    return r.stdout;
+}
+
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', copy: '©', ldquo: '“', rdquo: '”' };
+
+/** Deterministic HTML-to-text conversion for the notices file. */
+export function htmlToText(html) {
+    const text = html
+        .replace(/\r\n?/g, '\n')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<(head|script|style)\b[\s\S]*?<\/\1\s*>/gi, '')
+        .replace(/<\/(p|h[1-6]|li|pre|div|tr)\s*>/gi, '\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (m, e) => {
+            if (e[0] === '#') return String.fromCodePoint(e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10));
+            return ENTITIES[e] ?? m;
+        });
+    return text
+        .split('\n').map((l) => l.replace(/[ \t]+$/, '')).join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/^\n+/, '')
+        .replace(/\n*$/, '\n');
+}
+
+// --- rendering ----------------------------------------------------------------
+
+/** THIRD-PARTY-NOTICES.txt text. gecko: { tag, defines, text }. */
+export function renderNotices({ gecko }) {
+    return [
+        'THIRD-PARTY NOTICES',
+        '',
+        `Generated by node scripts/generate-licensing.mjs; do not edit.`,
+        `Gecko source: Mozilla tag ${gecko.tag}; about:license preprocessed with ${gecko.defines.join(', ')}.`,
+        '',
+        '== Gecko (about:license) ==',
+        '',
+        gecko.text,
+    ].join('\n');
+}
+
+function renderLicensing(config) {
+    const product = config.identity.display_name;
+    const { license, copyright_holder: holder, trademark_notice: trademark } = config.legal;
+    return [
+        '# Licensing',
+        '',
+        `Generated by \`${RERUN}\` from \`configuration.toml\`; do not edit.`,
+        '',
+        `## ${product}`,
+        '',
+        `${product} is licensed under the ${license} license. The full text is in [LICENSE](LICENSE).`,
+        '',
+        `Copyright holder: ${holder}.`,
+        '',
+        trademark,
+        '',
+        '## Gecko',
+        '',
+        `The browser engine is Mozilla Gecko, used under the Mozilla Public License 2.0 (MPL-2.0) and the other licences listed in the Gecko section of [${NOTICES_REL}](${NOTICES_REL}). Its source is the Mozilla tag \`${config.upstreams.firefox_esr_tag}\` plus the patches in \`patches/\` in this repository.`,
+        '',
+        `The about:license text in that section opens with Mozilla's statement that the Mozilla Project made the binaries available. That statement does not describe ${product} binaries; replacing it is packaging work for a later phase.`,
+        '',
+    ].join('\n');
+}
+
+/** Name the first differing line, or return [] when equal. */
+export function checkAgainst(trackedText, derivedText, rel) {
+    if (trackedText === derivedText) return [];
+    const t = trackedText.split('\n');
+    const d = derivedText.split('\n');
+    let i = 0;
+    while (i < t.length && i < d.length && t[i] === d[i]) i++;
+    const show = (l) => (l === undefined ? '(end of file)' : JSON.stringify(l.length > 160 ? `${l.slice(0, 160)}...` : l));
+    return [`${rel} line ${i + 1} differs from its re-derivation: tracked ${show(t[i])}, derived ${show(d[i])}. Next step: run: ${RERUN}, then commit ${rel}.`];
+}
+
+// --- the run --------------------------------------------------------------------
+
+function derive(config) {
+    const html = preprocessGecko(join(REPO_ROOT, 'upstream'));
+    const notices = renderNotices({
+        gecko: { tag: config.upstreams.firefox_esr_tag, defines: LINUX_LICENSE_DEFINES, text: htmlToText(html.toString('utf8')) },
+    });
+    return { html, files: [[LICENSING_REL, renderLicensing(config)], [NOTICES_REL, notices]] };
+}
+
+// Both texts are complete before either file is touched; each lands by rename.
+function writeAtomic(rel, text) {
+    const abs = join(REPO_ROOT, rel);
+    const tmp = `${abs}.tmp-${process.pid}`;
+    try {
+        writeFileSync(tmp, text);
+        renameSync(tmp, abs);
+    } finally {
+        rmSync(tmp, { force: true });
+    }
+}
+
+function run(check) {
+    const { failures, config } = resolveConfig();
+    if (failures.length > 0) throw new Fail(`configuration.toml does not resolve: ${failures.join('; ')}`);
+    const { html, files } = derive(config);
+    if (!check) {
+        for (const [rel, text] of files) writeAtomic(rel, text);
+        console.log(`${NAME}: wrote ${files.map(([rel]) => rel).join(' and ')}`);
+        return [];
+    }
+    const out = [];
+    const built = join(REPO_ROOT, BUILT_LICENSE_REL);
+    if (existsSync(built)) {
+        if (!html.equals(readFileSync(built))) {
+            out.push(`about:license preprocessed with ${LINUX_LICENSE_DEFINES.join(', ')} differs from the built ${BUILT_LICENSE_REL}: the Linux define set or the patch stack changed. Next step: compare the #ifdef names in upstream/toolkit/content/license.html with objdir/config.status and update LINUX_LICENSE_DEFINES in scripts/generate-licensing.mjs.`);
+        }
+    } else {
+        console.log(`${NAME}: SKIP -- built about:license comparison: no objdir in this checkout`);
+    }
+    for (const [rel, text] of files) {
+        const abs = join(REPO_ROOT, rel);
+        if (!existsSync(abs)) out.push(`${rel} is absent. Next step: run: ${RERUN}, then commit ${rel}.`);
+        else out.push(...checkAgainst(readFileSync(abs, 'utf8'), text, rel));
+    }
+    if (out.length === 0) console.log(`${NAME}: PASS -- ${files.map(([rel]) => rel).join(' and ')} equal their re-derivation`);
+    return out;
+}
+
+// Exported functions are importable without running the CLI (same guard as generate.mjs).
+function isEntryPoint() {
+    try {
+        return realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url));
+    } catch {
+        return false;
+    }
+}
+
+if (isEntryPoint()) {
+    const args = process.argv.slice(2);
+    for (const a of args) {
+        if (a !== '--check') {
+            console.error(`${NAME}: FAIL -- unknown argument '${a}'. Next step: run: ${RERUN}, or add --check.`);
+            process.exit(2);
+        }
+    }
+    try {
+        const failures = run(args.includes('--check'));
+        for (const f of failures) console.error(`${NAME}: FAIL -- ${f}`);
+        process.exit(failures.length > 0 ? 1 : 0);
+    } catch (e) {
+        if (!(e instanceof Fail)) throw e;
+        console.error(`${NAME}: FAIL -- ${e.message}`);
+        process.exit(1);
+    }
+}
