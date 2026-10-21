@@ -23,6 +23,12 @@
       "type": "string",
       "required": false
     },
+    "product.revision": {
+      "type": "integer",
+      "required": true,
+      "minimum": 1,
+      "type_help": "a whole number of at least 1 written without quotes; reset to 1 when the ESR pin moves, increased for a rebuild on the same ESR"
+    },
     "identity.display_name": {
       "type": "string",
       "required": true,

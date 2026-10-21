@@ -33,6 +33,9 @@ vendor_machine = "DeBIOS"
 vendor_display = "DeBIOS Foundation"
 description = "A rebrandable browser platform: a Gecko shell hosting an Eclipse Theia sidecar as its default GUI."
 homepage = "https://powerbrowser.org"
+# The release key is v<ESR>-<revision> (REL-01). Reset to 1 when the ESR pin
+# moves; increase it for an out-of-band rebuild on the same ESR.
+revision = 1
 
 [identity]
 display_name = "PowerBrowser"

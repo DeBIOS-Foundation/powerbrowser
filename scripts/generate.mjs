@@ -1027,6 +1027,14 @@ function validate(doc, leaves) {    const failures = [];
             );
             continue;
         }
+        // REL-01 (40-03). A quoted "1" or a fractional 1.5 is refused here, never coerced.
+        if (spec.type === 'integer' && (!Number.isInteger(value) || value < spec.minimum)) {
+            failures.push(
+                `${path} is ${JSON.stringify(value)}, but this setting has to be ${spec.type_help}. `
+                + `Correct it in ${MANIFEST_NAME}, then run: ${RERUN}`,
+            );
+            continue;
+        }
         if (spec.regex && typeof value === 'string' && !new RegExp(spec.regex).test(value)) {
             failures.push(
                 `${path} is ${JSON.stringify(value)}, which is not allowed here. Write it as ${spec.regex_help}. `
@@ -2717,6 +2725,44 @@ export function emitUpstreamPins(config, variant) {
 }
 
 /**
+ * REL-01 (40-03). The release identity: one key, v<ESR>-<revision>, derived
+ * from the ESR pin and [product] revision. A _BUILDn candidate tag is refused:
+ * a release is only ever cut from an esr_RELEASE tag. esrVersion is the
+ * numeric groups joined by dots -- two parts for an x.0 release, three for a
+ * point release -- which is the string upstream writes in config/milestone.txt.
+ */
+const ESR_RELEASE_TAG = /^[A-Za-z]+_(\d+)_(\d+)(?:_(\d+))?esr_RELEASE$/;
+export function releaseIdentity(config) {
+    const tag = config.upstreams?.firefox_esr_tag;
+    const m = typeof tag === 'string' ? ESR_RELEASE_TAG.exec(tag) : null;
+    if (m === null) {
+        report([
+            `upstreams.firefox_esr_tag is ${JSON.stringify(tag)}, which is not an ESR release tag. `
+            + `It must be an *esr_RELEASE tag, never a _BUILD candidate. Correct it in ${MANIFEST_NAME}, then run: ${RERUN}`,
+        ]);
+    }
+    const esrVersion = m.slice(1).filter(g => g !== undefined).join('.');
+    const revision = config.product.revision;
+    return Object.freeze({ esrVersion, revision, releaseKey: `v${esrVersion}-${revision}` });
+}
+
+/**
+ * The two version files (REL-01): release metadata read by release tooling
+ * (release key, descriptor appVersion, asset names), never a Gecko build input.
+ * WHY NO GENERATED_BANNER. Same reason as the JSON fragments: each is a
+ * one-value file its reader takes whole, so a comment line would be read as
+ * the value.
+ */
+export function emitVersionTxt(config, variant) {
+    void variant;
+    return `${releaseIdentity(config).esrVersion}\n`;
+}
+export function emitReleaseTxt(config, variant) {
+    void variant;
+    return `${releaseIdentity(config).releaseKey}\n`;
+}
+
+/**
  * The one emitter both pref rows share. The dev-only tail is a property of
  * the VARIANT, not of the brand: no manifest value selects it, so the branch
  * is on the variant id, the two values this project builds. The
@@ -3442,6 +3488,23 @@ export const TARGETS = Object.freeze([
         variant: 'dev',
         emit: emitIdentityConfigure,
     }),
+    // NEW (Phase 40, REL-01): the release identity, byte-identity gated
+    // through tracked comparands authored once from the emitter. Release
+    // metadata (release key, descriptor appVersion, asset names), never a
+    // Gecko build input: nothing passes these to --with-version-file-path,
+    // because a display version not ending in `esr` clears AppConstants.IS_ESR.
+    Object.freeze({
+        generated: 'packaging/version/version.txt',
+        tracked: 'powerbrowser/packaging/version/version.txt',
+        variant: 'dev',
+        emit: emitVersionTxt,
+    }),
+    Object.freeze({
+        generated: 'packaging/version/release.txt',
+        tracked: 'powerbrowser/packaging/version/release.txt',
+        variant: 'dev',
+        emit: emitReleaseTxt,
+    }),
     // NEW (04-01): GEN-05's Theia frontend-config fragment. No tracked
     // comparand -- the tracked theia/applications/browser/package.json is
     // yarn-managed, so whole-file byte-identity is brittle there; the
@@ -4129,6 +4192,7 @@ const FIXTURE_BASE = [
     '[product]',
     'vendor_machine = "AcmeWorks"',
     'vendor_display = "Acme Works"',
+    'revision = 1',
     '',
     '[identity]',
     'display_name = "Acme Browser"',

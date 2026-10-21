@@ -10,6 +10,7 @@
 # naming the asset and the square-artwork rule, with generated/ untouched.
 
 [product]
+revision = 1
 vendor_machine = "Northlight"
 vendor_display = "Northlight Collective"
 

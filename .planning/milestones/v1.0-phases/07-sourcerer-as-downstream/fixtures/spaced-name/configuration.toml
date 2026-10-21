@@ -19,6 +19,7 @@
 # fixture's.
 
 [product]
+revision = 1
 vendor_machine = "CedarFalls"
 vendor_display = "Cedar Falls Collective"
 

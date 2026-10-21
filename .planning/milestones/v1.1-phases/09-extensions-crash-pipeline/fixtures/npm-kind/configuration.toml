@@ -15,6 +15,7 @@
 # inherits the platform's two, exercising the default-echo path.
 
 [product]
+revision = 1
 vendor_machine = "Acme"
 vendor_display = "Acme Collective"
 

@@ -20,6 +20,7 @@
 # fixture's.
 
 [product]
+revision = 1
 vendor_machine = "Zebraworks"
 vendor_display = "Zebra Works"
 

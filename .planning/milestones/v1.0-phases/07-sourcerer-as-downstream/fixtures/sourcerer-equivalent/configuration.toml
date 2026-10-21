@@ -17,6 +17,7 @@
 # extensions) are likewise omitted to exercise that path.
 
 [product]
+revision = 1
 vendor_machine = "Northlight"
 vendor_display = "Northlight Collective"
 

@@ -249,6 +249,7 @@ with the OpenCode adapter. A manifest that still carries it now fails with
 | `product.vendor_display` | Required | Hard failure | `brand.ftl` vendor name, installer `CompanyName` |
 | `product.description` | Optional | Nothing emitted; no surface consumes it today — kept as the human-readable summary of the product | None (declared and validated only) |
 | `product.homepage` | Optional | Falls back per consumer; product metadata, never a contacted surface | In-app repo link and Eclipse sentence home clause when no `installer.support_url` is stated; installer defines require one of the two |
+| `product.revision` | Required | Hard failure; a quoted or fractional value is refused | `powerbrowser/packaging/version/release.txt` as the release key `v<ESR>-<revision>`. A whole number of at least 1, unquoted; reset to 1 when the ESR pin moves, increased for a rebuild on the same ESR |
 
 ### `[identity]` — the application identity (all required)
 
@@ -304,7 +305,7 @@ with the OpenCode adapter. A manifest that still carries it now fails with
 
 | Setting | Required? | If omitted | Reaches |
 |---|---|---|---|
-| `upstreams.firefox_esr_tag` | Required | Hard failure | `generated/upstream-pins.env`, the fetch script default |
+| `upstreams.firefox_esr_tag` | Required | Hard failure; must be an `*esr_RELEASE` tag, never a `_BUILDn` candidate | `generated/upstream-pins.env`, the fetch script default; the ESR version in `powerbrowser/packaging/version/version.txt` and the release key in `powerbrowser/packaging/version/release.txt` |
 | `upstreams.theia_release` | Required | Hard failure | Exact triple enforced across every `@theia/*` pin and the lockfile by `verify-upstream-pins`; the generator emits no fragment for it |
 
 ### `[[variants]]` — build variants (every key required per element)

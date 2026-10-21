@@ -2,9 +2,10 @@
 /**
  * GEN-04's byte-identity gate: what the generator emits from
  * configuration.toml is byte-for-byte the thirty-three build surfaces Phase 1
- * wrote by hand -- plus the one declared exception EXPECTED marks MIG-05:
- * the identity carrier never had a hand-written original, so its comparand
- * is a frozen copy of the emission rather than an independent original.
+ * wrote by hand -- plus three declared exceptions: the identity carrier
+ * (MIG-05) and the two release-identity version files (REL-01) never had a
+ * hand-written original, so their comparands are frozen copies of the
+ * emission rather than independent originals.
  *
  * This is the phase's acceptance test made mechanical. Phase 1 deliberately
  * wrote every branding value as a hand-written literal -- CLAUDE.md says so in
@@ -40,7 +41,7 @@
  * The freshness of `generated/` itself is a DIFFERENT question with a different
  * answer, and it has its own instrument: `node scripts/generate.mjs --check`.
  *
- * Honestly --quick: it reads the manifest and thirty-three tracked files --
+ * Honestly --quick: it reads the manifest and thirty-six tracked files --
  * ten of them PNG rasters -- and writes into the OS temp directory. No
  * build, no browser, no display, no network.
  *
@@ -125,6 +126,11 @@ const EXPECTED = Object.freeze([
     // build input: the build reads generated/identity.configure through the
     // upstream/identity.configure symlink, never this path.
     'powerbrowser/identity.configure.comparand',
+    // NEW (Phase 40, REL-01): the release-identity version files. Frozen
+    // copies of the emission, authored once from the emitter, same contract
+    // as the carrier above. Release metadata, never a Gecko build input.
+    'powerbrowser/packaging/version/version.txt',
+    'powerbrowser/packaging/version/release.txt',
 ]);
 
 /** Set difference reported by name, so a failure says WHICH path drifted. */

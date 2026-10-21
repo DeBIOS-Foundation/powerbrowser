@@ -21,6 +21,7 @@
 # fixture's.
 
 [product]
+revision = 1
 vendor_machine = "Ironwood"
 vendor_display = "Ironwood Collective"
 
