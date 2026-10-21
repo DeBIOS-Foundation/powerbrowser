@@ -67,8 +67,8 @@ the project's own planning record. This section must survive when this file repl
 - [x] **UPD-13**: `app.releaseNotesURL`, `app.releaseNotesURL.aboutDialog`, `app.update.url.manual` and `app.update.url.details` are generated from `[urls].release_notes` and `[urls].homepage`. The About dialog's release-notes and fallback links open the stated pages, and the fallback link no longer throws on an empty URL. In the same commit, the `powerbrowser.org` entry in `endpoint-allowlist.json` (now `deny`, about lines 85-87) is re-dispositioned to `user-initiated` (UPD-33), and the commit records how `verify-theia-endpoints` treats the stated homepage (SEED-002 §7). (A)
 - [x] **UPD-33**: `endpoint-allowlist.json` gains a third disposition, `user-initiated`, for hosts the browser may reach only after a user click (powerbrowser.org, github.com). The endpoint checks treat an unattended request to a `user-initiated` host as a failure, exactly as for a `deny` host, and pass only requests that follow a user action in the same probe; the self-test plants an unattended prefetch to a `user-initiated` host and requires it to go red naming the host. `allowlist-doc-consistency` and the generator accept the new disposition. (A)
 - [x] **UPD-25**: The generator's firefox-branding emitter writes `app.update.langpack.enabled=false` for both variants, and both tracked branding files are regenerated and byte-compared. A row derives the set of update prefs from the generator output and asserts it sets none of `app.update.auto`, the staging pref, the check interval, `app.update.promptWaitTime` or `app.update.badgeWaitTime`; its self-test plants one of them. (A)
-- [ ] **PKG-08**: A script generates `LICENSING.md` and `THIRD-PARTY-NOTICES.txt` from the about:license output, the Theia dependency licences and the Node licence. A row derives both files and fails on drift. Both ship as assets of every Release. (A)
-- [ ] **PKG-09**: The release scope is en-US only, stated in the README, on /download and in the release notes, and recorded in PROJECT.md. (A)
+- [x] **PKG-08**: A script generates `LICENSING.md` and `THIRD-PARTY-NOTICES.txt` from the about:license output, the Theia dependency licences and the Node licence. A row derives both files and fails on drift. Both ship as assets of every Release. (A)
+- [x] **PKG-09**: The release scope is en-US only, stated in the README, on /download and in the release notes, and recorded in PROJECT.md. (A)
 
 ### Repo controls
 
@@ -384,8 +384,8 @@ The roadmapper fills the Phase column.
 | UPD-12 | Phase 40 | Pending |
 | UPD-13 | Phase 40 | Complete |
 | UPD-25 | Phase 40 | Complete |
-| PKG-08 | Phase 40 | Pending |
-| PKG-09 | Phase 40 | Pending |
+| PKG-08 | Phase 40 | Complete |
+| PKG-09 | Phase 40 | Complete |
 | GH-02 | Phase 41 | Pending |
 | SEC-06 | Phase 41 | Pending |
 | SEC-11 | Phase 41 | Pending |
