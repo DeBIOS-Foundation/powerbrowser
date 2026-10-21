@@ -558,19 +558,19 @@ Locate by content; Phase 40 shifted the line numbers [VERIFIED: Read and grep th
 | A7 | GitHub-owned actions (`github_owned_allowed: true`) cover `actions/*` and `github/*` only | Settings bodies | An action from another GitHub org would need a pattern |
 | A8 | `GET /orgs/{org}/installations` returns installed Apps with the `read:org` scope (OpenAPI says `admin:read`; the call returned 200 with zero installations) | Pattern 2 | Row red until the scope is added; it fails closed, never false-green |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Can the owner's gh token read an installation's repository list?**
    - What we know: `/user/installations` rejects the OAuth token; `/user/installations/{id}/repositories` returned 404 (not 403) for a fake id; every other route needs an App JWT or an installation token.
    - Recommendation: probe at the checkpoint (step 5).
      - If it returns 200, the row uses it.
      - If not, the row's App half asserts `repository_selection == "selected"` and permissions now. The repository-list set equality then moves to the Phase 43 `bot` job (`GET /installation/repositories` with the minted token). The fallback alternative is a device-flow App user token, which needs only the client id, no key and no stored secret. Record whichever path is taken.
-   - Status: OPEN, owner probe.
+   - RESOLVED: deferred to the 41-04 owner probe with stated branches (200 → row reads the list; refused → the owner chooses the device-flow App user token, or FALLBACK with a ledger deferral request for GH-10's list half).
 2. **Runner-group "selected workflows" on Free (GH-11).**
-   - Status: OPEN. The docs cannot settle it. Probe step 4 records the result, and Pitfall 3 states the consequence for Phase 49.
+   - RESOLVED: deferred to the 41-04 owner probe (step 4 records the result; Pitfall 3 states the Phase 49 consequence).
 3. **Homebrew tap repo name.**
    - Recommendation: `homebrew-tap`, so that `brew tap DeBIOS-Foundation/tap` resolves to it, following the Homebrew `homebrew-<name>` convention [ASSUMED]. `homebrew-powerbrowser` is the alternative.
-   - Status: owner confirms at the checkpoint. The name appears once, in `app-powerbrowser-bot.json`.
+   - RESOLVED: `homebrew-tap` (orchestrator, recommended option); the 41-04 resume reply confirms the created name. The name appears once, in `app-powerbrowser-bot.json`.
 4. **Keep or delete the notification drill workflow after GH-18?**
    - RESOLVED (recommendation): keep it. It is harmless (no secrets, needs approval, `main` only), it lets GH-18 be re-run after a phone change, and the `workflows` row covers it.
 5. **One `main` ruleset (GH-05 wording) or two?**

@@ -121,7 +121,24 @@ Plans:
 
 **External gate**: Owner creates the `powerbrowser-updates` and Homebrew tap repos empty in this phase (GH-10 needs both for the bot App installation that `repo-controls` reads back; Phases 47 and 56 fill them), creates and installs both GitHub Apps (bot App on `powerbrowser`, `powerbrowser-updates` and the tap repo; clock App on `powerbrowser`), adds the second org owner and stores recovery codes offline, and runs the runner-group probe as org admin.
 **Research flag**: Yes (A3): whether runner-group "selected workflows" exists on the Free plan; whether the App's missing Workflows permission blocks pushes that touch workflow files.
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 41-01-PLAN.md — GH-02 controls table, apply script (dry-run default, --yes from the owner's terminal only) and repo-controls rows; Actions policy, fork approval, repo flags, zero secrets; main-integrity, main-review and release-tags rulesets
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 41-02-PLAN.md — GH-07 five environments with branch policy main; GH-10 both Apps and SEC-06 org facts declared and read back; RELEASING.md controls rewrite with the signed-tag claim removed (GH-06)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 41-03-PLAN.md — GH-12 workflows row and AUTO-09 zizmor row with self-tests; zizmor in the theia shell; GH-18 drill workflow
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 41-04-PLAN.md — Owner checkpoint (repos, Apps, second owner, 2FA, apply, tag/runner-group/App-list probes, notification drills), then repo-controls green live and the results recorded
 
 ### Phase 42: Community surface and release documentation (A)
 
