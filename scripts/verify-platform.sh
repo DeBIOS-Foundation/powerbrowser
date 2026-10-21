@@ -2604,9 +2604,13 @@ check_desktop_entry_quick() {
 
 # --- the allowlist schema check ---
 check_allowlist_schema() {
-  node -e '
-    const fs = require("fs");
-    const allowlistPath = process.argv[1];
+  # The accepted disposition set is derived from scripts/lib/endpoint-verdict.mjs DISPOSITIONS,
+  # the one verdict rule, never a literal list here (UPD-33).
+  node --input-type=module -e '
+    import fs from "node:fs";
+    import { pathToFileURL } from "node:url";
+    const [allowlistPath, libPath] = process.argv.slice(1);
+    const { DISPOSITIONS } = await import(pathToFileURL(libPath).href);
     if (!fs.existsSync(allowlistPath)) {
       console.error(`allowlist-schema: FAIL -- ${allowlistPath} does not exist`);
       process.exit(1);
@@ -2617,8 +2621,8 @@ check_allowlist_schema() {
       process.exit(1);
     }
     for (const h of a.hosts) {
-      if (!h.host || !["allow", "deny"].includes(h.disposition) || !h.reason) {
-        console.error(`allowlist-schema: FAIL -- malformed host entry: ${JSON.stringify(h)}`);
+      if (!h.host || !DISPOSITIONS.includes(h.disposition) || !h.reason) {
+        console.error(`allowlist-schema: FAIL -- malformed host entry (disposition must be one of ${DISPOSITIONS.join(", ")}): ${JSON.stringify(h)}`);
         process.exit(1);
       }
     }
@@ -2629,7 +2633,7 @@ check_allowlist_schema() {
       }
     }
     console.log(`allowlist-schema: PASS -- ${a.hosts.length} host(s), ${a.prefs.length} pref(s)`);
-  ' "$REPO_ROOT/powerbrowser/endpoint-allowlist.json"
+  ' "$REPO_ROOT/powerbrowser/endpoint-allowlist.json" "$REPO_ROOT/scripts/lib/endpoint-verdict.mjs"
 }
 
 # --- allowlist-to-document consistency (03-VERIFICATION.md Gap 2) ---
@@ -4663,6 +4667,12 @@ run_own_checks() {
     # policy key with an https and an empty value) and keeps the MAR key store and runner unit
     # names green; it writes nothing.
     "update-channel-self-test|node $REPO_ROOT/scripts/verify-update-channel.mjs --self-test"
+    # NEW (Phase 40, UPD-33): layer 3's real `Resolving host [...]` extraction and the shared
+    # verdict (scripts/lib/endpoint-verdict.mjs) over fixture logs. An unattended user-initiated
+    # host goes red naming it, passes after a user action; deny fails in both modes; allow passes;
+    # every real user-initiated host is planted unattended. Honestly --quick: bash and node over
+    # fixture logs, no build, browser, display or network.
+    "endpoint-dispositions-self-test|bash $REPO_ROOT/scripts/verify-endpoints.sh --disposition-self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
