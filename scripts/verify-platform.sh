@@ -4673,6 +4673,12 @@ run_own_checks() {
     # every real user-initiated host is planted unattended. Honestly --quick: bash and node over
     # fixture logs, no build, browser, display or network.
     "endpoint-dispositions-self-test|bash $REPO_ROOT/scripts/verify-endpoints.sh --disposition-self-test"
+    # NEW (Phase 40, UPD-25): both variants' firefox-branding.js, emitted in memory from the
+    # generator's TARGETS rows, set none of the five update cadence/prompting prefs (exact
+    # name), keep app.update.langpack.enabled false, and carry the About-dialog links
+    # releaseLinkPrefs derives. Honestly --quick: in-memory emission and text parsing only; it
+    # writes no file and runs no build, browser, display or network.
+    "update-prefs|node $REPO_ROOT/scripts/verify-update-prefs.mjs"
   )
 
   if [ "$QUICK" -eq 0 ]; then

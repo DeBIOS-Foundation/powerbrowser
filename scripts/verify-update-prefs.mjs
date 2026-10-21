@@ -1,0 +1,176 @@
+#!/usr/bin/env node
+// scripts/verify-update-prefs.mjs
+//
+// The update-prefs gate (Phase 40, UPD-25). The branding pref file loads
+// after browser/app/profile/firefox.js, so any update pref it sets overrides
+// upstream's tested behaviour. Update cadence and prompting stay at upstream's
+// defaults; language-pack updates are off because the release is en-US only
+// (PKG-09).
+//
+//  1. Derivation. Select every TARGETS row whose generated path ends in
+//     pref/firefox-branding.js and emit it in memory with the resolved
+//     manifest and its variant. No row at all, or no row for a variant the
+//     manifest declares, fails naming this instrument: a check over nothing
+//     proves nothing.
+//  2. Parse every pref("<name>", <value>); line (the same PREF shape
+//     verify-ng-064-update-url.mjs uses) and print each variant's update-pref
+//     set (names starting app.update. or app.releaseNotesURL) in emission
+//     order, so two runs over one tree print identical output.
+//  3. No variant may set a name in FORBIDDEN_UPDATE_PREFS. The match is exact
+//     equality, never a prefix: the shipped extensions.update.autoUpdateDefault
+//     line is a different pref and must not trip the app.update.auto rule.
+//  4. app.update.langpack.enabled is false in every variant.
+//  5. The four About-dialog link prefs equal releaseLinkPrefs(config), and
+//     every value other than "" and about:blank parses with new URL() -- the
+//     call aboutDialog-appUpdater.js makes on them.
+//
+// Honestly --quick: an in-memory emit and text parsing. It writes no file
+// (generated/ included), and runs no build, browser, display or network.
+//
+// Usage:
+//   node scripts/verify-update-prefs.mjs
+//   node scripts/verify-update-prefs.mjs --self-test
+
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { TARGETS, releaseLinkPrefs, resolveConfig } from './generate.mjs';
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const NAME = 'update-prefs';
+const SELF_REL = 'scripts/verify-update-prefs.mjs';
+
+const args = process.argv.slice(2);
+for (const a of args) {
+    if (a !== '--self-test') {
+        console.error(`${NAME}: FAIL -- unknown argument '${a}'`);
+        console.error(`  Next step: run: node ${SELF_REL}, or add --self-test to prove the gate discriminates.`);
+        process.exit(2);
+    }
+}
+
+const MANIFEST_REL = 'configuration.toml';
+const GENERATOR_REL = 'scripts/generate.mjs';
+const RERUN_GENERATE = 'node scripts/generate.mjs';
+const EMITTER_SUFFIX = 'pref/firefox-branding.js';
+const LANGPACK_PREF = 'app.update.langpack.enabled';
+
+// UPD-25's five cadence and prompting prefs; upstream sets them at
+// browser/app/profile/firefox.js:148 and :153 or leaves them to its timer.
+export const FORBIDDEN_UPDATE_PREFS = Object.freeze([
+    'app.update.auto',
+    'app.update.staging.enabled',
+    'app.update.interval',
+    'app.update.promptWaitTime',
+    'app.update.badgeWaitTime',
+]);
+
+// Same shape as verify-ng-064-update-url.mjs's PREF.
+const PREF = /(?:^|\n)\s*(?:sticky_)?pref\(\s*"([^"]+)"\s*,\s*("(?:[^"\\]|\\.)*"|[^)]*?)\s*\)\s*;/g;
+const isUpdatePref = (name) => name.startsWith('app.update.') || name.startsWith('app.releaseNotesURL');
+
+function parsePrefs(text) {
+    return [...text.matchAll(PREF)].map(([, name, raw]) => {
+        let value = raw;
+        try {
+            value = JSON.parse(raw);
+        } catch {
+            // Not a JSON literal; compare as written.
+        }
+        return { name, value };
+    });
+}
+
+// Gecko keeps the last pref() for a name, so the effective value is the last one.
+const lastValue = (prefs, name) => prefs.findLast(p => p.name === name);
+
+function runChecks(root, overrides = {}) {
+    const failures = [];
+    const sets = [];
+
+    const resolved = resolveConfig(join(root, MANIFEST_REL));
+    if (resolved.config === undefined || resolved.failures.length > 0) {
+        failures.push(`${MANIFEST_REL} does not resolve, so no branding pref file can be emitted. Next step: run ${RERUN_GENERATE} -- it reports the faulty key.`);
+        return { failures, sets };
+    }
+    const config = resolved.config;
+    const textFor = overrides.textFor ?? ((row, cfg, variant) => row.emit(cfg, variant));
+
+    // --- 1. derivation -----------------------------------------------------
+    const rows = (overrides.rows ?? TARGETS).filter(t => t.generated.endsWith(EMITTER_SUFFIX));
+    if (rows.length === 0) {
+        failures.push(`${NAME} found no TARGETS row emitting ${EMITTER_SUFFIX}, so no update pref was checked. Next step: check the instrument (${SELF_REL}: its emitter selection) against the TARGETS table in ${GENERATOR_REL}.`);
+        return { failures, sets };
+    }
+    for (const v of config.variants ?? []) {
+        if (!rows.some(r => r.variant === v.id)) {
+            failures.push(`${NAME} found no ${EMITTER_SUFFIX} emitter for variant '${v.id}', which ${MANIFEST_REL} declares, so that variant's update prefs are unchecked. Next step: check the instrument (${SELF_REL}) and the TARGETS table in ${GENERATOR_REL}.`);
+        }
+    }
+
+    const expectedLinks = releaseLinkPrefs(config);
+    for (const row of rows) {
+        const variant = (config.variants ?? []).find(v => v.id === row.variant);
+        if (variant === undefined) {
+            failures.push(`${GENERATOR_REL} has a ${row.generated} emitter for variant '${row.variant}', which ${MANIFEST_REL} does not declare. Next step: declare the variant or remove the row.`);
+            continue;
+        }
+        const prefs = parsePrefs(String(textFor(row, config, variant)));
+        sets.push({ variant: variant.id, prefs: prefs.filter(p => isUpdatePref(p.name)) });
+
+        // --- 3. forbidden cadence prefs, exact name ---------------------------
+        for (const p of prefs) {
+            if (FORBIDDEN_UPDATE_PREFS.includes(p.name)) {
+                failures.push(`variant '${variant.id}' sets ${p.name} to ${JSON.stringify(p.value)} in ${row.generated}; update cadence and prompting stay at upstream's defaults (UPD-25). Next step: remove that line from the emitter in ${GENERATOR_REL}.`);
+            }
+        }
+
+        // --- 4. language-pack updates off -----------------------------------
+        const langpack = lastValue(prefs, LANGPACK_PREF);
+        if (langpack?.value !== false) {
+            failures.push(`variant '${variant.id}' sets ${LANGPACK_PREF} to ${langpack === undefined ? '(unset, upstream default true)' : JSON.stringify(langpack.value)} in ${row.generated}; it must be false because the release is en-US only (PKG-09). Next step: restore pref("${LANGPACK_PREF}", false); in FIREFOX_BRANDING_BASE_LINES.`);
+        }
+
+        // --- 5. About-dialog links -------------------------------------------
+        for (const { name, value } of expectedLinks) {
+            const got = lastValue(prefs, name);
+            if (got === undefined || got.value !== value) {
+                failures.push(`variant '${variant.id}' sets ${name} to ${got === undefined ? '(unset)' : JSON.stringify(got.value)} in ${row.generated} but releaseLinkPrefs derives ${JSON.stringify(value)} from ${MANIFEST_REL} [urls]. Next step: let the RELEASE_LINK_ANCHOR splice in ${GENERATOR_REL} emit it.`);
+            }
+            if (got === undefined || got.value === '' || got.value === 'about:blank') continue;
+            let parses = typeof got.value === 'string';
+            if (parses) {
+                try {
+                    new URL(got.value);
+                } catch {
+                    parses = false;
+                }
+            }
+            if (!parses) {
+                failures.push(`variant '${variant.id}' sets ${name} to ${JSON.stringify(got.value)}, which does not parse as a URL, so the About dialog cannot open it. Next step: write a full https address in ${MANIFEST_REL} [urls].`);
+            }
+        }
+    }
+    return { failures, sets };
+}
+
+function printSets(sets) {
+    for (const { variant, prefs } of sets) {
+        console.log(`${NAME}: variant '${variant}', ${prefs.length} update pref(s) in emission order:`);
+        for (const p of prefs) console.log(`  ${p.name} = ${JSON.stringify(p.value)}`);
+    }
+}
+
+function main() {
+    const { failures, sets } = runChecks(REPO_ROOT);
+    printSets(sets);
+    if (failures.length > 0) {
+        console.error(`${NAME}: FAIL -- ${failures.length} problem(s) with the branding update prefs.`);
+        failures.forEach(f => console.error(`  ${f}`));
+        return 1;
+    }
+    console.log(`${NAME}: PASS -- ${sets.length} variant(s) set none of ${FORBIDDEN_UPDATE_PREFS.join(', ')}; ${LANGPACK_PREF} is false and the About-dialog links equal releaseLinkPrefs in each`);
+    return 0;
+}
+
+process.exit(main());

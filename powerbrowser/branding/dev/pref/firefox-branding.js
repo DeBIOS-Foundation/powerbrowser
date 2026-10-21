@@ -24,6 +24,9 @@ pref("app.releaseNotesURL.aboutDialog", "https://github.com/DeBIOS-Foundation/po
 pref("app.update.url.manual", "https://powerbrowser.org");
 pref("app.update.url.details", "https://github.com/DeBIOS-Foundation/powerbrowser/releases");
 
+// UPD-25: language packs are not updated with the app; release scope is en-US only (PKG-09). Upstream default true at browser/app/profile/firefox.js:175.
+pref("app.update.langpack.enabled", false);
+
 // --- D-86: GMP manager -- Widevine stays working, no Mozilla host involved ---
 // Blanked so the GMP manager never contacts aus5.mozilla.org for a plugin
 // manifest. Widevine's own CDM fetch (widevinecdm.json's fileUrl,
