@@ -4690,6 +4690,12 @@ run_own_checks() {
     # reads; no build, browser, display or network. The byte comparison with the built
     # license.html runs only where an objdir exists, otherwise one named SKIP line.
     "licensing|node $REPO_ROOT/scripts/generate-licensing.mjs --check"
+    # licensing-self-test builds a fixture node_modules and node-runtime.json in a temp dir: two
+    # byte-identical MIT texts render as one block, a licence-less package is listed with its
+    # marker, and a tampered line, an added package, a removed package, a Node header version off
+    # the pin and an unresolvable dependency each go red naming the file, package or versions.
+    # It writes nothing in the tree.
+    "licensing-self-test|node $REPO_ROOT/scripts/generate-licensing.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then

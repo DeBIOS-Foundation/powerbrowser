@@ -87,6 +87,7 @@ Alpha. Both halves build and run on the reference host. Pinned to Firefox ESR
 153 (`FIREFOX_153_5_1esr_RELEASE`) and Theia 1.76.0, Linux first. The rebrand
 manifest and generator are complete; the remaining verification is live-build
 drills that need a human at a screen.
+Release builds are en-US only: no other locale or language pack ships.
 
 ## License
 
