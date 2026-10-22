@@ -381,6 +381,88 @@ function planRuleset(c, declared, ctx) {
     };
 }
 
+// --- the org and the GitHub Apps (SEC-06, GH-10) ------------------------------
+// Neither has a write endpoint: App creation and installation, org 2FA and
+// org ownership are owner UI steps, which planWrites lists instead of writing.
+
+const ADMINS_PATH = 'orgs/{org}/members?role=admin&per_page=100';
+const APP_REPOS_PATH = 'user/installations/{id}/repositories?per_page=100';
+const OWNER_STEP = 'the owner does this in the GitHub UI at plan 41-04 (node scripts/apply-repo-controls.mjs prints the step)';
+const setDiff = (want, got) => ({ missing: want.filter(x => !got.includes(x)), extra: got.filter(x => !want.includes(x)) });
+
+function compareOrg(c, declared, live, ctx) {
+    const f = [];
+    if (live?.two_factor_requirement_enabled !== declared.two_factor_requirement_enabled) {
+        f.push(`${where(c)}: two_factor_requirement_enabled is ${show(live?.two_factor_requirement_enabled)} live but ${show(declared.two_factor_requirement_enabled)} declared (SEC-06). Next step: ${OWNER_STEP}.`);
+    }
+    const r = ctx.get(ctx.fill(ADMINS_PATH));
+    if (!r.ok) return [...f, `${c.id}: ${r.why}`];
+    if (!Array.isArray(r.body)) return [...f, `${where(c)}: GET ${ctx.fill(ADMINS_PATH)} returned ${show(r.body)}, not a list. Next step: check the endpoint in ${SELF_REL}.`];
+    const { missing, extra } = setDiff(declared.owners, r.body.map(m => m.login));
+    for (const l of extra) f.push(`${where(c)}: ${l} is an org owner live but not in the declared owners ${show(declared.owners)}. Next step: remove the owner role in the org settings, or declare the login in a reviewed commit.`);
+    for (const l of missing) f.push(`${where(c)}: declared owner ${l} is not an org owner live. Next step: ${OWNER_STEP}.`);
+    return f;
+}
+
+function compareApps(c, declared, live, ctx) {
+    const list = live?.installations;
+    if (!Array.isArray(list)) return [`${c.id}: the live installation list is ${show(live)}, not { installations: [...] }. Next step: check the endpoint in ${SELF_REL}.`];
+    const f = [];
+    // Over every installation in the org, declared or not.
+    for (const i of list.filter(x => isObj(x.permissions) && Object.hasOwn(x.permissions, 'workflows'))) {
+        f.push(`${c.id}: App ${i.app_slug} holds the Workflows permission (${show(i.permissions.workflows)}), so it could rewrite .github/workflows/ (GH-10). Next step: remove the Workflows permission in the App's settings.`);
+    }
+    const apps = c.files.map(file => ({ file, ...declared[file] }));
+    for (const s of setDiff(apps.map(a => a.slug), list.map(i => i.app_slug)).extra) {
+        f.push(`${c.id}: App ${s} is installed on the org but undeclared: no ${SETTINGS_REL}/app-*.json declares it (GH-10). Next step: uninstall it in the org settings, or declare it in a reviewed commit.`);
+    }
+    for (const a of apps) {
+        const w = `${c.id} (${SETTINGS_REL}/${a.file})`;
+        const inst = list.find(i => i.app_slug === a.slug);
+        if (inst === undefined) {
+            f.push(`${w}: App ${a.slug} is missing: it is not installed on the org. Next step: ${OWNER_STEP}.`);
+            continue;
+        }
+        // Exact, not projected: an extra permission, even read, is drift.
+        if (canon(inst.permissions) !== canon(a.permissions)) {
+            f.push(`${w}: App ${a.slug} permissions are ${show(inst.permissions)} live but exactly ${show(a.permissions)} declared. Next step: set exactly the declared permissions in the App's settings and accept them on the installation.`);
+        }
+        if (inst.repository_selection !== a.repository_selection) {
+            f.push(`${w}: App ${a.slug} repository_selection is ${show(inst.repository_selection)} live but ${show(a.repository_selection)} declared. Next step: ${OWNER_STEP}.`);
+        }
+        const path = APP_REPOS_PATH.replace('{id}', inst.id);
+        const r = ctx.get(path);
+        if (!r.ok) {
+            f.push(`${w}: ${r.why} Next step: plan 41-04 Task 2 step 9 probes whether the owner token can read installation repository lists.`);
+            continue;
+        }
+        if (!Array.isArray(r.body?.repositories)) {
+            f.push(`${w}: GET ${path} returned ${show(r.body)}, not { repositories: [...] }. Next step: check the endpoint in ${SELF_REL}.`);
+            continue;
+        }
+        const { missing, extra } = setDiff(a.repositories, r.body.repositories.map(x => x.name));
+        for (const n of missing) f.push(`${w}: App ${a.slug} is not installed on declared repository ${n}. Next step: ${OWNER_STEP}.`);
+        for (const n of extra) f.push(`${w}: App ${a.slug} is installed on undeclared repository ${n}. Next step: remove it from the installation in the org settings.`);
+    }
+    return f;
+}
+
+const fmtPermissions = (p) => Object.entries(p).map(([k, v]) => `${k} ${v}`).join(', ');
+
+function appOwnerSteps(c, declared) {
+    return c.files.map(f => declared[f]).flatMap(a => [
+        `Create GitHub App ${a.slug} under the org with exactly these permissions: ${fmtPermissions(a.permissions)}; webhook inactive; installable only on this account; do not generate a private key`,
+        `Install ${a.slug} on: ${a.repositories.join(', ')}`,
+    ]);
+}
+
+function orgOwnerSteps(c, declared) {
+    return [
+        ...(declared.two_factor_requirement_enabled ? ['Require two-factor authentication for the org'] : []),
+        `Org owners must be exactly: ${declared.owners.join(', ')}`,
+    ];
+}
+
 // --- the static tag-pattern check (no network) -------------------------------
 
 // Ruleset ref patterns are fnmatch: ** crosses '/', * and ? stay within one
@@ -545,6 +627,22 @@ export const CONTROLS = Object.freeze([
         read: 'repos/{owner}/{repo}/actions/secrets?per_page=100',
         compare: secretCount,
     },
+    {
+        id: 'org',
+        file: 'org.json',
+        write: null,
+        ownerSteps: orgOwnerSteps,
+        read: 'orgs/{org}',
+        compare: compareOrg,
+    },
+    {
+        id: 'apps',
+        files: ['app-powerbrowser-bot.json', 'app-powerbrowser-clock.json'],
+        write: null,
+        ownerSteps: appOwnerSteps,
+        read: INSTALLATIONS_PATH,
+        compare: compareApps,
+    },
 ].map(Object.freeze));
 
 const ownedFiles = (c) => c.files ?? (c.file ? [c.file] : []);
@@ -642,11 +740,13 @@ export function planWrites(root, get = ghGet, overrides = {}) {
     const ctx = context(root, { ...overrides, get }, errors);
     const writes = [];
     const blocked = [];
-    if (ctx.slug === null) return { writes, blocked, errors };
+    const ownerSteps = [];
+    if (ctx.slug === null) return { writes, blocked, errors, ownerSteps };
     for (const c of CONTROLS) {
-        if (c.write === null) continue;
         const declared = declaredOf(c, ctx.bodies);
         if (declared === undefined) continue; // already in errors
+        if (c.ownerSteps) ownerSteps.push(...c.ownerSteps(c, declared));
+        if (c.write === null) continue;
         const step = c.plan
             ? c.plan(c, declared, ctx)
             : { write: { method: c.write.method, path: ctx.fill(c.write.path), body: c.bodiless ? null : declared } };
@@ -655,7 +755,7 @@ export function planWrites(root, get = ghGet, overrides = {}) {
         if (step.write) writes.push({ id: c.id, file: c.file, ...step.write });
         for (const w of step.writes ?? []) writes.push({ id: c.id, ...w });
     }
-    return { writes, blocked, errors };
+    return { writes, blocked, errors, ownerSteps };
 }
 
 // --- main -------------------------------------------------------------------
@@ -755,12 +855,25 @@ function fakeRulesets(ctx) {
     const p = ctx.fill;
     const { owner, repo } = ctx.slug;
     const rs = CONTROLS.filter(c => c.compare === compareRuleset).map(c => ctx.bodies[c.file]);
-    const slugs = [...new Set(rs.flatMap(b => b.bypass_actors.map(appRef)).filter(Boolean))];
-    const installations = slugs.map((app_slug, i) => ({
-        id: FAKE_INSTALLATION_ID + i, app_id: FAKE_APP_ID + i, app_slug, target_type: 'Organization',
-        repository_selection: 'selected', permissions: { metadata: 'read' }, events: [],
+    // One installation per declared App, in file order, so the bot (first) is
+    // installation 800001 of App 900001.
+    const apps = CONTROLS.find(c => c.compare === compareApps).files.map(f => ctx.bodies[f]);
+    const stamp = { created_at: '2026-10-22T00:00:00Z', updated_at: '2026-10-22T00:00:00Z' };
+    const installations = apps.map((a, i) => ({
+        id: FAKE_INSTALLATION_ID + i, app_id: FAKE_APP_ID + i, app_slug: a.slug, client_id: `Iv1.fixture${i}`,
+        account: { login: owner, id: 1, type: 'Organization' }, target_type: 'Organization', target_id: 1,
+        repository_selection: a.repository_selection, permissions: { ...a.permissions }, events: [], suspended_at: null, ...stamp,
     }));
     const state = { [p(INSTALLATIONS_PATH)]: { total_count: installations.length, installations } };
+    apps.forEach((a, i) => {
+        state[APP_REPOS_PATH.replace('{id}', installations[i].id)] = {
+            total_count: a.repositories.length, repository_selection: a.repository_selection,
+            repositories: a.repositories.map((name, j) => ({ id: 5000 + 10 * i + j, name, full_name: `${owner}/${name}`, private: false })),
+        };
+    });
+    const org = ctx.bodies['org.json'];
+    state[p('orgs/{org}')] = { login: owner, id: 1, type: 'Organization', two_factor_requirement_enabled: org.two_factor_requirement_enabled, plan: { name: 'free' } };
+    state[p(ADMINS_PATH)] = org.owners.map((login, i) => ({ login, id: 51835244 + i, type: 'User', site_admin: false }));
     const list = rs.map((b, i) => ({
         id: 1001 + i, name: b.name, target: b.target, source_type: 'Repository', source: `${owner}/${repo}`,
         enforcement: b.enforcement, node_id: `RRS_fixture${i}`, created_at: '2026-10-22T00:00:00Z', updated_at: '2026-10-22T00:00:00Z',
@@ -831,6 +944,13 @@ function selfTest() {
         l.environments.push({ id: 1999, node_id: 'EN_copilot', name: 'copilot', protection_rules: [], deployment_branch_policy: null, can_admins_bypass: true });
         l.total_count = l.environments.length;
     });
+    const instMut = (slug, mutate) => mutated((s, p) => mutate(s[p(INSTALLATIONS_PATH)].installations.find(i => i.app_slug === slug)));
+    const reposMut = (i, mutate) => mutated((s) => mutate(s[APP_REPOS_PATH.replace('{id}', FAKE_INSTALLATION_ID + i)]));
+    const withInstallation = (extra) => mutated((s, p) => {
+        const l = s[p(INSTALLATIONS_PATH)];
+        l.installations.push({ id: 899999, app_id: 999999, repository_selection: 'selected', ...extra });
+        l.total_count = l.installations.length;
+    });
     const plants = [
         ['bot environment with a null branch policy', envMut('bot', (e) => { e.deployment_branch_policy = null; }), ['environment bot', 'null deployment branch policy']],
         ['an auto-created copilot environment (extra)', withCopilot, ['copilot', 'extra']],
@@ -845,6 +965,24 @@ function selfTest() {
         ['release reviewer id changed', envMut('release', (e) => { e.protection_rules.find(x => x.type === 'required_reviewers').reviewers[0].reviewer.id = 1; }), ['environment release', 'reviewers']],
         ['triage holding an extra release/* policy', policiesMut('triage', (l) => { l.branch_policies.push({ id: 3999, name: 'release/*', type: 'branch' }); l.total_count = 2; }), ['environment triage', 'release/*']],
         ['bot with no branch policy', policiesMut('bot', (l) => { l.branch_policies = []; l.total_count = 0; }), ['environment bot', 'branch policies']],
+        ['workflows write on the bot installation', instMut('powerbrowser-bot', (i) => { i.permissions.workflows = 'write'; }), ['powerbrowser-bot', 'Workflows']],
+        ['an undeclared installation other-app', withInstallation({ app_slug: 'other-app', permissions: { metadata: 'read' } }), ['other-app', 'undeclared']],
+        ['an undeclared other-app holding workflows', withInstallation({ app_slug: 'other-app', permissions: { metadata: 'read', workflows: 'write' } }), ['other-app', 'Workflows']],
+        ['a neighbouring slug powerbrowser-bot-dev', withInstallation({ app_slug: 'powerbrowser-bot-dev', permissions: { metadata: 'read' } }), ['powerbrowser-bot-dev', 'undeclared']],
+        ['the clock installation removed', mutated((s, p) => {
+            const l = s[p(INSTALLATIONS_PATH)];
+            l.installations = l.installations.filter(i => i.app_slug !== 'powerbrowser-clock');
+            l.total_count = l.installations.length;
+        }), ['App powerbrowser-clock is missing']],
+        ['an empty installation list', mutated((s, p) => { s[p(INSTALLATIONS_PATH)] = { total_count: 0, installations: [] }; }), ['App powerbrowser-bot is missing']],
+        ['bot repository_selection all', instMut('powerbrowser-bot', (i) => { i.repository_selection = 'all'; }), ['powerbrowser-bot', 'repository_selection is "all"']],
+        ['a bot repository list without homebrew-tap', reposMut(0, (l) => { l.repositories = l.repositories.filter(r => r.name !== 'homebrew-tap'); l.total_count -= 1; }), ['powerbrowser-bot', 'declared repository homebrew-tap']],
+        ['an empty clock repository list', reposMut(1, (l) => { l.repositories = []; l.total_count = 0; }), ['powerbrowser-clock', 'declared repository powerbrowser']],
+        ['clock permissions gaining checks read', instMut('powerbrowser-clock', (i) => { i.permissions.checks = 'read'; }), ['powerbrowser-clock', 'permissions']],
+        ['a refused bot repository-list read', mutated((s) => { delete s[APP_REPOS_PATH.replace('{id}', FAKE_INSTALLATION_ID)]; }), [`user/installations/${FAKE_INSTALLATION_ID}/repositories`, 'could not be read']],
+        ['org 2FA not required', set('orgs/{org}', 'two_factor_requirement_enabled', false), ['org (', 'two_factor_requirement_enabled']],
+        ['an extra org owner', mutated((s, p) => { s[p(ADMINS_PATH)].push({ login: 'planted-owner', id: 7, type: 'User' }); }), ['org (', 'planted-owner']],
+        ['a declared owner missing', mutated((s, p) => { s[p(ADMINS_PATH)] = []; }), ['org (', `declared owner ${ctx.bodies['org.json'].owners[0]}`]],
         ['an unreadable branch-policy list', mutated((s) => { delete s[`${envPath(ctx, BRANCH_POLICIES_PATH, 'fixer')}?per_page=100`]; }), ['environments/fixer/deployment-branch-policies', 'could not be read']],
         ['allowed_actions all', set(PERMS, 'allowed_actions', 'all'), ['actions-permissions', '"all"']],
         ['allowed_actions all leaves the admission list unapplied', set(PERMS, 'allowed_actions', 'all'), ['actions-selected', 'does not apply']],
@@ -891,6 +1029,11 @@ function selfTest() {
     const controls = [
         ['immutable releases enforced_by_owner true', set('repos/{owner}/{repo}/immutable-releases', 'enforced_by_owner', true)],
         ['an OrganizationAdmin actor returned with actor_id 1', ruleMut('main-review', (r) => { r.bypass_actors[0].actor_id = 1; })],
+        ['the bot repository list and permission keys in reversed order', mutated((s, p) => {
+            s[APP_REPOS_PATH.replace('{id}', FAKE_INSTALLATION_ID)].repositories.reverse();
+            const i = s[p(INSTALLATIONS_PATH)].installations[0];
+            i.permissions = Object.fromEntries(Object.entries(i.permissions).reverse());
+        })],
     ];
     for (const [name, extra] of controls) {
         const { failures } = run(extra);
@@ -946,6 +1089,22 @@ function selfTest() {
         }
     }
 
+    {
+        // Owner UI steps come from the bodies: create and install each App, 2FA, the owner set.
+        const { ownerSteps, writes } = plan(base);
+        const apps = CONTROLS.find(c => c.compare === compareApps).files.map(f => ctx.bodies[f]);
+        const ok = apps.every(a => ownerSteps.some(s => s.startsWith(`Create GitHub App ${a.slug} `) && !s.includes('workflows'))
+                && ownerSteps.some(s => s.startsWith(`Install ${a.slug} on: ${a.repositories.join(', ')}`)))
+            && ownerSteps.includes('Require two-factor authentication for the org')
+            && ownerSteps.some(s => s.startsWith('Org owners must be exactly: '))
+            && !writes.some(w => w.id === 'apps' || w.id === 'org');
+        if (ok) {
+            console.log(`  ok  planWrites lists ${ownerSteps.length} owner UI step(s) and no write for org or apps`);
+        } else {
+            console.error(`${NAME}: --self-test FAIL -- owner UI steps: ${ownerSteps.join(' | ') || '(none)'}`);
+            failed += 1;
+        }
+    }
     {
         // bot absent: its PUT and its policy POST. The others hold main: PUT only.
         const s = clone(base);

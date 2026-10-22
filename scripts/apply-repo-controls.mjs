@@ -41,7 +41,13 @@ if (apply && process.stdin.isTTY !== true) {
 
 const { API_VERSION_HEADER, SETTINGS_REL, ghGet, planWrites } = await import('./verify-repo-controls.mjs');
 
-const { writes, blocked, errors } = planWrites(REPO_ROOT, ghGet);
+const { writes, blocked, errors, ownerSteps } = planWrites(REPO_ROOT, ghGet);
+// No API exists for these; --yes never acts on them.
+if (ownerSteps.length > 0) {
+    console.log('Owner UI steps (no API):');
+    ownerSteps.forEach(s => console.log(`  - ${s}`));
+    console.log('Writes:');
+}
 writes.forEach((w, i) => {
     const body = w.body === null ? '(no body)' : `(body: ${SETTINGS_REL}/${w.file})`;
     console.log(`${i + 1}. ${w.method} ${w.path} ${body}`);
