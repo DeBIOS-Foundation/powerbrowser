@@ -20,7 +20,7 @@ parts of this document with values they derive from a built tree rather than fro
 prose, and each of those sections says so where it stands:
 
 - stage `prerequisites-and-hardening` writes the repository-controls register,
-  the actions policy, the secrets inventory, the signing setup, the known-red-run
+  the actions policy, the secrets inventory, the rulesets and environments, the known-red-run
   list, the immutable-release consequence, the toolchain pins, and the seven
   numbered deferred signing items;
 - stage `linux-release-pipeline-and-update-channel` writes the release-asset-name
@@ -40,9 +40,11 @@ A number written here that no stage measured is a defect, not a placeholder.
 
 ### Architecture in one paragraph
 
-A signed tag matching `v<ESR>-<revision>` is pushed to
-`DeBIOS-Foundation/powerbrowser`. That tag triggers `.github/workflows/release.yml`.
-Its `build-linux` job runs on `legion` as an ephemeral self-hosted runner holding
+The release tag `v<ESR>-<revision>` on `DeBIOS-Foundation/powerbrowser` is created
+by `release.yml`'s `sign-publish` job with the `powerbrowser-bot` App token, after
+the `release` approval (DIST-07, Phase 49), and the `release-tags` ruleset refuses
+that tag pattern from every other actor, the owner included (GH-06).
+The `build-linux` job of `.github/workflows/release.yml` runs on `legion` as an ephemeral self-hosted runner holding
 `contents: read`, no environment and no secret; it builds Gecko, stages the Theia
 sidecar and the pinned Node runtime into the application directory, packages,
 emits the MAR, and writes `release-manifest.json` out of the built tree (baked
@@ -190,8 +192,7 @@ here owns.
 |---|---|---|
 | `prerequisites-and-hardening` | Confirm `git rev-list --count main..origin/main` is 0, `git push origin main`, watch `verify.yml` to success, then push every `v1.*` milestone tag | Push authority; the milestone tags' own tag-triggered runs are red by design on trees predating `fb90e73` |
 | `prerequisites-and-hardening` | Enable 2FA on the owner account; confirm the committer email is listed and **verified**; enable organisation-wide 2FA in `DeBIOS-Foundation` settings | UI-only settings; the organisation PATCH endpoint does not expose the 2FA requirement |
-| `prerequisites-and-hardening` | Register the SSH key as a **Signing Key** (an authentication-key registration does not count); set `gpg.format ssh`, `user.signingkey`, `tag.gpgsign true`, `gpg.ssh.allowedSignersFile`; push a signed `signing-probe` tag outside the release pattern and confirm the API reports `verified true` / reason `valid` | Account identity and private key custody |
-| `prerequisites-and-hardening` | Push an unsigned `v0.0.0-0` tag and confirm the remote **rejects** it. If it is accepted, delete it remotely, stop and report; never widen a rule to get past it. Delete the local tag either way | Proves the bypass-free signature ruleset binds the owner too |
+| `prerequisites-and-hardening` | Create and install both GitHub Apps, require org 2FA, add the second owner, store both recovery-code sets offline, run the apply script, and run the runner-group probe and the notification drills (Phase 41 plan 41-04) | App creation, org 2FA and ownership are UI-only; `--yes` writes to the live org and runs only from the owner's terminal |
 | `mar-signing-and-update-integrity` | Confirm `gh auth status` shows the owner and the `release` environment exists | Account |
 | `mar-signing-and-update-integrity` | The MAR key ceremony (below) | Private key custody |
 | `mar-signing-and-update-integrity` | The MAR key ceremony (key store lives on `legion` at `~/.config/powerbrowser-release/mar-key/`; optional `.p12` backup to the offline medium) and one MAR signed with that store's key for the loopback proof | Private key custody |
@@ -204,7 +205,7 @@ here owns.
 | `linux-release-pipeline-and-update-channel` | Probe the eleven-segment path live with real client segment shapes, then switch to a minimal `_worker.js` if the placeholder rule does not match, and record which mechanism shipped | Live infrastructure; the branch cannot be decided from documentation |
 | `linux-release-pipeline-and-update-channel` | Create a fine-grained PAT with Contents write on `powerbrowser-updates` only; store it as a `release` environment secret | Secret custody |
 | `linux-release-pipeline-and-update-channel` | Fill the website `#download` section and add `/download /#download 302`; deploy `powerbrowser.org` | Site repository and Pages |
-| `linux-release-pipeline-and-update-channel` | Create and push the signed release tag; approve the `release` environment gate after reviewing the artifact list and the descriptor commit diff; hold any announcement until the release-mode hop drill is green | The approval is the only point at which the MAR key is used |
+| `linux-release-pipeline-and-update-channel` | Approve the `release` environment gate after reviewing the artifact list and the descriptor commit diff; hold any announcement until the release-mode hop drill is green | The approval is the only point at which the MAR key is used |
 | `windows-unsigned` | Provision the `pkg-win11` guest: confirm the media, create or start the libvirt NAT network, create a **new** `pkg-win11` disk (leave the pre-existing shut-off `win11` domain alone), define the domain with qcow2 nvram, install Windows 11, install the QEMU guest agent and stock Firefox, take the `clean-baseline` snapshot | `sudo` for `qemu:///system` |
 | `windows-unsigned` | Run the five-cell Windows matrix from the snapshot and write the record | Guest interaction and verbatim dialog capture |
 | `macos-adhoc-signed` | Borrow or rent a Mac for one session; record hardware, chip family and macOS version | No Apple hardware is owned |
@@ -302,24 +303,63 @@ same attributes against the lock gives `nsis` 3.12, `inkscape` 1.4.4,
 `nsis` 3.12 is also what `docs/BUILD.md` records observed live on `legion`, and
 `inkscape` 1.4.4 is the version the tracked PNGs were rasterised with.
 
-### The `release` environment and the rulesets
+### Rulesets and environments
 
-Three rulesets and one environment are applied from tracked JSON bodies under
-`.github/settings/`, and a registered check compares the live state against those
-bodies afterwards, so a widened policy or a deleted ruleset reddens after the
-stage is archived.
+Three rulesets and five environments are applied from tracked JSON bodies under
+`.github/settings/`, and the `repo-controls` row compares the live state against
+those bodies afterwards, so a widened policy or a deleted ruleset reddens after the
+phase is archived. Bypass applies per ruleset, to every rule in it, which is why
+`main` is split in two.
 
-- `release-tags` restricts creation, update, deletion and non-fast-forward on the
-  release tag pattern, with the organisation owner as the only bypass actor.
-- `release-tag-signatures` is a **separate** ruleset carrying only
-  `required_signatures`, with an empty `bypass_actors` list. The split exists
-  because ruleset bypass is per-ruleset: a bypassed signature rule requires
-  signatures of nobody. The empty bypass is what makes the rule bind the owner.
-- `main` blocks deletion and non-fast-forward, with no bypass actors.
-- The `release` environment carries the owner as a required reviewer, with
-  `prevent_self_review` false (the owner is the sole tag creator and the sole
-  reviewer today), and a deployment branch policy restricted to the release tag
-  pattern.
+- `main-integrity` (`ruleset-main-integrity.json`) blocks deletion and
+  non-fast-forward on `main`. It has no bypass actor, so it binds the owner too;
+  `repo-controls` asserts the owner token's `current_user_can_bypass` is `never`.
+- `main-review` (`ruleset-main-review.json`) requires the `verify` check from
+  GitHub Actions (integration 15368) and one approving review, with stale reviews
+  dismissed on push. Its only bypass actor is the org-owner role
+  (`OrganizationAdmin`), mode `always`, so the owner's direct commits to `main`
+  still land. No App may bypass a `main` ruleset, and the approving-review count is
+  exactly 1; `repo-controls` asserts both.
+- `release-tags` (`ruleset-release-tags.json`) restricts creation, update,
+  deletion and non-fast-forward on the release tag pattern. The `powerbrowser-bot`
+  App is its only bypass actor; the owner's `current_user_can_bypass` is `never`.
+  There is no required-signatures rule: release tags are not signed by a human.
+- Five environments, each restricted by a custom branch policy to `main` only
+  (`environment-branch-policy-main.json`):
+  - `release` (`environment-release.json`): the owner as required reviewer, admin
+    bypass disabled (`can_admins_bypass` false).
+  - `descriptor` (`environment-descriptor.json`): the owner as required reviewer
+    plus a 1440-minute wait timer, with admin bypass enabled so the owner can skip
+    the timer after the own-install hop (Owner Decision 18).
+  - `bot`, `fixer` and `triage`: the branch policy only.
+
+  `repo-controls` is red on any live environment with a `null` branch policy,
+  declared or created by GitHub itself, and on any undeclared environment.
+
+The identity model. After Phase 41 the org has two owner accounts, both org
+owners. Ruleset bypass names the org-owner role, never a single user id.
+Environment reviewers name the primary owner account. The second owner account
+exists for recovery (SEC-06) and is the actor for the GH-18 notification drills,
+because GitHub may not notify a user about their own actions. Both accounts'
+recovery codes are stored offline; this document records only that they are and
+the date, never where.
+
+### GitHub Apps and the Workflows permission
+
+- `powerbrowser-bot` (`app-powerbrowser-bot.json`) holds no Workflows permission,
+  and `repo-controls` asserts that no App installed in the org holds it. GitHub
+  therefore refuses the bot's git push, contents API write, ref update or Release
+  creation whenever the target adds or modifies a file under `.github/workflows/`
+  relative to the default branch (docs.github.com, REST API, releases).
+- Consequence for Phase 49: `sign-publish` releases only from the tip of `main`, or
+  from a commit whose `.github/workflows/` is identical to `main`'s.
+- `powerbrowser-clock` (`app-powerbrowser-clock.json`) holds Actions write and
+  metadata read, and is installed on `powerbrowser` only. `powerbrowser-bot` is
+  installed on `powerbrowser`, `powerbrowser-updates` and `homebrew-tap`.
+  `repo-controls` compares each App's permission map exactly and its repository
+  list as a set.
+- No App private key exists before Phase 43, which is the first consumer. Both Apps
+  are created with no key generated.
 
 ### The MAR key ceremony and custody
 
@@ -413,41 +453,58 @@ Release only after that record exists and its gate is green.
 ## Release tag pattern
 
 A release tag is `v<ESR>-<revision>`, for example `v153.2.0-1`. The literal pattern
-is quoted once, here:
+is quoted once, here, in the ruleset form:
 
 ```
-v[0-9]*.[0-9]*.[0-9]*-[0-9]*
+v[0-9]*.[0-9]*-[0-9]*
 ```
 
-Both tag rulesets carry it under `ref_name.include` as
-`refs/tags/v[0-9]*.[0-9]*.[0-9]*-[0-9]*`, the `release` environment's deployment
-branch policy carries the bare form, and `release.yml`'s push trigger matches the
-same string. Milestone tags `v1.x` never match it and never release. Every later
-reference in this document to "the release tag pattern" means this string.
+The `release-tags` ruleset carries it under `ref_name.include` as
+`refs/tags/v[0-9]*.[0-9]*-[0-9]*`. It covers both the three-part `v153.5.1-1` and
+the two-part `v175.0-1`, and `repo-controls` proves it against the release key
+`releaseIdentity()` derives from `configuration.toml`. Milestone tags `v1.x` never
+match it and never release. Every later reference in this document to "the release
+tag pattern" means this string.
 
 ## Repository controls
 
-Every control is declared in a tracked JSON body under `.github/settings/` and
-compared against live GitHub state by `scripts/verify-repo-controls.mjs`, which is
-registered as the `repo-controls` row. The read-back column is the manual form of
-what that row does permanently.
+Every control is declared in a tracked JSON body under `.github/settings/`. One
+table, `CONTROLS` in `scripts/verify-repo-controls.mjs`, names each body's write
+and its read, and drives both the apply and the read-back. The `repo-controls` row
+compares the declared keys only (projection), compares every list and every named
+set (rulesets, environments, bypass actors, owners, Apps, repositories) by set
+equality, and fails closed: an unreadable endpoint is a FAIL naming it, never a
+SKIP or a PASS.
 
-`R=DeBIOS-Foundation/powerbrowser` in every command below.
+`node scripts/apply-repo-controls.mjs` prints the owner UI steps, then the ordered
+writes and any `BLOCKED` line, and writes nothing. `--yes` executes the writes and
+runs only from the owner's terminal; it never acts on an owner UI step.
 
-| Control | Tracked body | Apply | Read back | Applied |
-|---|---|---|---|---|
-| Release-tag restriction | `ruleset-release-tags.json` | `gh api -X POST /repos/$R/rulesets --input .github/settings/ruleset-release-tags.json` | `gh api /repos/$R/rulesets` | pending stage `prerequisites-and-hardening` |
-| Release-tag signatures (bypass-free) | `ruleset-release-tag-signatures.json` | `gh api -X POST /repos/$R/rulesets --input .github/settings/ruleset-release-tag-signatures.json` | `gh api /repos/$R/rulesets` | pending |
-| `main` force-push and deletion block | `ruleset-main.json` | `gh api -X POST /repos/$R/rulesets --input .github/settings/ruleset-main.json` | `gh api /repos/$R/rulesets` | pending |
-| `release` environment reviewer | `environment-release.json` | `gh api -X PUT /repos/$R/environments/release --input .github/settings/environment-release.json` | `gh api /repos/$R/environments/release` | pending |
-| `release` deployment tag policy | `environment-release-tag-policy.json` | `gh api -X POST /repos/$R/environments/release/deployment-branch-policies --input .github/settings/environment-release-tag-policy.json` | `gh api /repos/$R/environments/release/deployment-branch-policies` | pending |
-| Actions permissions (`selected`, SHA pinning) | `actions-permissions.json` | `gh api -X PUT /repos/$R/actions/permissions --input .github/settings/actions-permissions.json` | `gh api /repos/$R/actions/permissions` | pending |
-| Selected actions list | `actions-selected.json` | `gh api -X PUT /repos/$R/actions/permissions/selected-actions --input .github/settings/actions-selected.json` | `gh api /repos/$R/actions/permissions/selected-actions` | pending |
-| Default token read-only | `workflow-permissions.json` | `gh api -X PUT /repos/$R/actions/permissions/workflow --input .github/settings/workflow-permissions.json` | `gh api /repos/$R/actions/permissions/workflow` | pending |
-| Fork PR approval | `fork-pr-approval.json` | `gh api -X PUT /repos/$R/actions/permissions/fork-pr-contributor-approval --input .github/settings/fork-pr-approval.json` | `gh api /repos/$R/actions/permissions/fork-pr-contributor-approval` | pending |
-| Immutable releases | (no body; a bare PUT) | `gh api -X PUT /repos/$R/immutable-releases` | `gh api /repos/$R/immutable-releases` | pending |
-| Organisation 2FA requirement | (no body; UI only) | Organisation Settings, Authentication security | `gh api /orgs/DeBIOS-Foundation --jq .two_factor_requirement_enabled` | pending |
-| `pull_request` rule on `main` | (none) | deferred until a second contributor exists | n/a | deferred |
+Paths below are relative to `repos/{owner}/{repo}` unless they start with `orgs/`
+or `user/`, in apply order.
+
+| Control | Tracked body | Write | Read back |
+|---|---|---|---|
+| Actions permissions (`selected`, SHA pinning) | `actions-permissions.json` | `PUT actions/permissions` | `actions/permissions` |
+| Selected actions list | `actions-selected.json` | `PUT actions/permissions/selected-actions` | `actions/permissions/selected-actions` |
+| Default token read-only | `workflow-permissions.json` | `PUT actions/permissions/workflow` | `actions/permissions/workflow` |
+| Fork PR approval | `fork-pr-approval.json` | `PUT actions/permissions/fork-pr-contributor-approval` | `actions/permissions/fork-pr-contributor-approval` |
+| Environment `bot` | `environment-bot.json` | `PUT environments/bot` | `environments` |
+| Environment `descriptor` | `environment-descriptor.json` | `PUT environments/descriptor` | `environments` |
+| Environment `fixer` | `environment-fixer.json` | `PUT environments/fixer` | `environments` |
+| Environment `release` | `environment-release.json` | `PUT environments/release` | `environments` |
+| Environment `triage` | `environment-triage.json` | `PUT environments/triage` | `environments` |
+| Branch policy `main`, per environment | `environment-branch-policy-main.json` | `POST environments/<name>/deployment-branch-policies`, only when `main` is absent | `environments/<name>/deployment-branch-policies` |
+| `main-integrity` ruleset | `ruleset-main-integrity.json` | `PUT rulesets/<id>`, or `POST rulesets` when absent by name | `rulesets`, `rulesets/<id>` |
+| `main-review` ruleset | `ruleset-main-review.json` | as above | as above |
+| `release-tags` ruleset | `ruleset-release-tags.json` | as above, blocked until `powerbrowser-bot` is installed | as above |
+| Immutable releases | `immutable-releases.json` | `PUT immutable-releases` (no body), only while zero Releases exist | `immutable-releases` |
+| Private vulnerability reporting | `private-vulnerability-reporting.json` | `PUT private-vulnerability-reporting` (no body) | `private-vulnerability-reporting` |
+| Discussions and auto-merge | `repo.json` | `PATCH` the repository | the repository |
+| Repository Actions secrets: zero | (none) | none | `actions/secrets` |
+| Org 2FA requirement and the owner set | `org.json` | owner UI step | `orgs/{org}`, `orgs/{org}/members?role=admin` |
+| GitHub App `powerbrowser-bot` | `app-powerbrowser-bot.json` | owner UI step | `orgs/{org}/installations`, `user/installations/<id>/repositories` |
+| GitHub App `powerbrowser-clock` | `app-powerbrowser-clock.json` | owner UI step | as above |
 
 The `actions-permissions` PUT must precede the `selected-actions` PUT, which 409s
 while `allowed_actions` is still `all`.
@@ -466,6 +523,11 @@ re-applying that body, and committing. A red at an Install Nix step names an act
 the policy excludes and is fixed that way, never by widening `allowed_actions` back
 to `all`.
 
+`scripts/verify-workflows.mjs` (the `workflows` row, plan 41-03) requires the
+`owner/repo` set in `patterns_allowed` to equal the set of non-GitHub-owned actions
+the workflows use, so an admission no workflow uses goes red as well as an action
+that is not admitted.
+
 ## Secrets inventory
 
 | Scope | Name | Arrives in | Holder |
@@ -481,27 +543,6 @@ to `all`.
 No secret reaches `legion` through Actions. The build job holds `contents: read`,
 no `environment:` and no `secrets.` reference; the static release-workflow gate
 asserts all three.
-
-## Signing setup
-
-Release tags are SSH-signed by the owner. GitHub reports a signature as valid only
-when the tagger address is verified on the account as well as the key being
-registered as a **Signing Key**, which is a different registration from an
-authentication key.
-
-```
-git config gpg.format ssh
-git config user.signingkey /home/chris/.ssh/id_ed25519.pub
-git config tag.gpgsign true
-git config gpg.ssh.allowedSignersFile /home/chris/.config/git/allowed_signers
-```
-
-Every release tag is created with `git tag -s`. The `signing-probe` tag is a
-deliberately named probe outside the release pattern, so no ruleset and no
-environment policy fires on it; it is deleted with
-`git push origin :refs/tags/signing-probe` after the first release tag verifies.
-The fingerprint, tagger address, probe result and the planted `v0.0.0-0` rejection
-message are recorded here by the stage.
 
 ## Immutable releases consequence
 
@@ -580,17 +621,11 @@ a revisioned display value there would not end in `esr`, which clears
 `AppConstants.IS_ESR` and moves Remote Settings and search to the `default` channel.
 The version files are release metadata, never a Gecko build input.
 
-**3. Create and push the signed tag.** The pattern is `v<ESR>-<revision>`, for
-example `v153.2.0-1`. Milestone tags `v1.x` never release and never match this
-pattern.
-
-```
-git tag -s v153.2.0-1 -m "Power Browser 153.2.0 revision 1"
-git push origin v153.2.0-1
-```
-
-The bypass-free signature ruleset refuses an unsigned tag on this pattern, including
-one pushed by the owner.
+**3. The release tag.** No human creates it. `sign-publish` creates the
+`v<ESR>-<revision>` tag with the `powerbrowser-bot` App token (DIST-07, Phase 49).
+The `release-tags` ruleset refuses a release-pattern tag from any other actor, and
+`repo-controls` asserts that the owner's `current_user_can_bypass` on that ruleset
+is `never`. Milestone tags `v1.x` never release and never match the pattern.
 
 **4. Watch `build-linux` on legion.** Budget the wall time rather than assuming a
 fast run:
@@ -932,10 +967,10 @@ the next start, so a brief absence between jobs is normal. A persistent absence 
 usually the PAT: it is root-owned mode 0600 at `/var/lib/secrets/github-runner-pat`
 and it expires. Renew it, rewrite the file through `pkexec`, and restart the unit.
 
-**Nothing runs at all after tagging.** Check that the tag matches the release
-pattern and that the tag was signed. An unsigned release-pattern tag is refused at
-push time by the bypass-free ruleset, so the tag never reaches the remote and no
-workflow can fire.
+**Nothing runs at all after tagging.** A release-pattern tag pushed by any actor
+other than the `powerbrowser-bot` App, the owner included, is refused at push time
+by the `release-tags` ruleset, so the tag never reaches the remote and no workflow
+can fire. Release tags come from `sign-publish` only.
 
 ---
 
@@ -947,7 +982,7 @@ placeholders; the dependency order below is what matters. Waves: 1, 2, 3, 3, 4, 
 
 | Stage | Requirements | Operator gates | Deferred here |
 |---|---|---|---|
-| 1 `prerequisites-and-hardening` | DIST-01, SEC-01 | Push main and milestone tags; 2FA, signing identity and the unsigned-tag plant; the ESR rebase push | The `pull_request` rule on `main`; the seven unsigned-posture consequences; `signing-probe` deletion after the first release |
+| 1 `prerequisites-and-hardening` | DIST-01, SEC-01 | Push main and milestone tags; 2FA, the second owner, the Apps and the repository controls; the ESR rebase push | The seven unsigned-posture consequences |
 | 2 `release-identity` | REL-01, UPD-01, UPD-02, UPD-03 | none (autonomous) | none |
 | 3 `mar-signing-and-update-integrity` | SEC-02, UPD-04 | The key ceremony (key store on `legion`); one MAR signed for the loopback proof | The key-rotation runbook |
 | 4 `packaged-product-correctness-linux` | PKG-04 to PKG-09, UPD-08 | Node provenance and the licence position | The update-ready rows are gated on the probe verdict about whether the stock prompt can render |
