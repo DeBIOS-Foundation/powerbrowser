@@ -16,9 +16,11 @@
 //     verify-ng-064-update-url.mjs uses) and print each variant's update-pref
 //     set (names starting app.update. or app.releaseNotesURL) in emission
 //     order, so two runs over one tree print identical output.
-//  3. No variant may set a name in FORBIDDEN_UPDATE_PREFS. The match is exact
-//     equality, never a prefix: the shipped extensions.update.autoUpdateDefault
-//     line is a different pref and must not trip the app.update.auto rule.
+//  3. No variant may set an update pref the generator does not own. The owned
+//     set is derived, never hand-kept (WR-05): the names releaseLinkPrefs(config)
+//     returns plus app.update.langpack.enabled (step 4). Any other app.update.*
+//     or app.releaseNotesURL* name fails naming it. extensions.update.* is a
+//     different family and is not read.
 //  4. app.update.langpack.enabled is false in every variant.
 //  5. The four About-dialog link prefs equal releaseLinkPrefs(config), and
 //     every value other than "" and about:blank parses with new URL() -- the
@@ -31,9 +33,9 @@
 //   node scripts/verify-update-prefs.mjs
 //   node scripts/verify-update-prefs.mjs --self-test
 //
-// The self-test requires a green baseline, then plants each forbidden pref
-// (app.update.auto in dev, app.update.staging.enabled in release, the other
-// three alternating), a langpack line flipped to true, an unparseable
+// The self-test requires a green baseline, then plants update prefs the
+// generator does not own (UPD-25's five cadence prefs alternating dev and
+// release, plus app.update.background.enabled), a langpack line flipped to true, an unparseable
 // app.update.url.manual, no emitter rows and no release row -- each must go
 // red naming the pref or instrument and the variant, without the checkout
 // path. An added extensions.update.autoUpdateDefault line is the control and
@@ -64,15 +66,6 @@ const RERUN_GENERATE = 'node scripts/generate.mjs';
 const EMITTER_SUFFIX = 'pref/firefox-branding.js';
 const LANGPACK_PREF = 'app.update.langpack.enabled';
 
-// UPD-25's five cadence and prompting prefs; upstream sets them at
-// browser/app/profile/firefox.js:148 and :153 or leaves them to its timer.
-export const FORBIDDEN_UPDATE_PREFS = Object.freeze([
-    'app.update.auto',
-    'app.update.staging.enabled',
-    'app.update.interval',
-    'app.update.promptWaitTime',
-    'app.update.badgeWaitTime',
-]);
 
 // Same shape as verify-ng-064-update-url.mjs's PREF.
 const PREF = /(?:^|\n)\s*(?:sticky_)?pref\(\s*"([^"]+)"\s*,\s*("(?:[^"\\]|\\.)*"|[^)]*?)\s*\)\s*;/g;
@@ -118,6 +111,7 @@ function runChecks(root, overrides = {}) {
     }
 
     const expectedLinks = releaseLinkPrefs(config);
+    const owned = new Set([...expectedLinks.map(p => p.name), LANGPACK_PREF]);
     for (const row of rows) {
         const variant = (config.variants ?? []).find(v => v.id === row.variant);
         if (variant === undefined) {
@@ -127,10 +121,10 @@ function runChecks(root, overrides = {}) {
         const prefs = parsePrefs(String(textFor(row, config, variant)));
         sets.push({ variant: variant.id, prefs: prefs.filter(p => isUpdatePref(p.name)) });
 
-        // --- 3. forbidden cadence prefs, exact name ---------------------------
+        // --- 3. no update pref the generator does not own ----------------------
         for (const p of prefs) {
-            if (FORBIDDEN_UPDATE_PREFS.includes(p.name)) {
-                failures.push(`variant '${variant.id}' sets ${p.name} to ${JSON.stringify(p.value)} in ${row.generated}; update cadence and prompting stay at upstream's defaults (UPD-25). Next step: remove that line from the emitter in ${GENERATOR_REL}.`);
+            if (isUpdatePref(p.name) && !owned.has(p.name)) {
+                failures.push(`variant '${variant.id}' sets ${p.name} to ${JSON.stringify(p.value)} in ${row.generated}; only the generator's own update prefs (${[...owned].join(', ')}) may be set, and everything else stays at upstream's defaults (UPD-25). Next step: remove that line from the emitter in ${GENERATOR_REL}.`);
             }
         }
 
@@ -179,7 +173,7 @@ function main() {
         failures.forEach(f => console.error(`  ${f}`));
         return 1;
     }
-    console.log(`${NAME}: PASS -- ${sets.length} variant(s) set none of ${FORBIDDEN_UPDATE_PREFS.join(', ')}; ${LANGPACK_PREF} is false and the About-dialog links equal releaseLinkPrefs in each`);
+    console.log(`${NAME}: PASS -- ${sets.length} variant(s) set no update pref outside the generator's own; ${LANGPACK_PREF} is false and the About-dialog links equal releaseLinkPrefs in each`);
     return 0;
 }
 
@@ -204,7 +198,8 @@ function selfTest() {
     const prefRows = TARGETS.filter(t => t.generated.endsWith(EMITTER_SUFFIX));
 
     const plants = [
-        ...FORBIDDEN_UPDATE_PREFS.map((pref, i) => {
+        // Not owned by the generator: UPD-25's five cadence prefs and one the old hand list missed.
+        ...['app.update.auto', 'app.update.staging.enabled', 'app.update.interval', 'app.update.promptWaitTime', 'app.update.badgeWaitTime', 'app.update.background.enabled'].map((pref, i) => {
             const variant = i % 2 === 0 ? 'dev' : 'release';
             return [`${pref} planted in ${variant}`, append(variant, `pref("${pref}", true);`), pref, variant];
         }),

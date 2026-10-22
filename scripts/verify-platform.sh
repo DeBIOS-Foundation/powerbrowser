@@ -4679,15 +4679,17 @@ run_own_checks() {
     # fixture logs, no build, browser, display or network.
     "endpoint-dispositions-self-test|bash $REPO_ROOT/scripts/verify-endpoints.sh --disposition-self-test"
     # NEW (Phase 40, UPD-25): both variants' firefox-branding.js, emitted in memory from the
-    # generator's TARGETS rows, set none of the five update cadence/prompting prefs (exact
-    # name), keep app.update.langpack.enabled false, and carry the About-dialog links
+    # generator's TARGETS rows, set no app.update.* pref outside the set the generator owns
+    # (releaseLinkPrefs names plus app.update.langpack.enabled, derived; WR-05), keep
+    # app.update.langpack.enabled false, and carry the About-dialog links
     # releaseLinkPrefs derives. Honestly --quick: in-memory emission and text parsing only; it
     # writes no file and runs no build, browser, display or network.
     "update-prefs|node $REPO_ROOT/scripts/verify-update-prefs.mjs"
-    # update-prefs-self-test plants each of the five forbidden prefs, a langpack line flipped to
+    # update-prefs-self-test plants six update prefs the generator does not own (the five
+    # UPD-25 cadence prefs and app.update.background.enabled), a langpack line flipped to
     # true, an unparseable app.update.url.manual, no emitter rows and no release row in emitted
     # text, each red naming the pref and variant; an added extensions.update.autoUpdateDefault
-    # line stays green (exact-name match). It writes nothing.
+    # line stays green (a different pref family). It writes nothing.
     "update-prefs-self-test|node $REPO_ROOT/scripts/verify-update-prefs.mjs --self-test"
     # NEW (Phase 40, PKG-08): LICENSING.md and THIRD-PARTY-NOTICES.txt equal their re-derivation
     # from configuration.toml and about:license, preprocessed from the applied upstream/ checkout
