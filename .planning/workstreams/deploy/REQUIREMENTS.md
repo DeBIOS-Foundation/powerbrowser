@@ -94,7 +94,7 @@ the project's own planning record. This section must survive when this file repl
 
 ### Patch regeneration
 
-- [x] **AUTO-10**: `scripts/regenerate-patches.sh` rewrites each `patches/NNN-*.patch` from `git -C upstream diff --abbrev=10` (no `--full-index`) over the paths that patch's own `+++ b/` headers name; `--check` re-derives and byte-compares. The quick row `patches-regenerated` passes on all tracked patches, and its self-test plants a hand-edited hunk body that must go red naming the patch. (A)
+- [x] **AUTO-10**: `scripts/regenerate-patches.sh` rewrites each `patches/NNN-*.patch` from `git -C upstream diff --abbrev=10` (no `--full-index`) over the paths that patch's own `diff --git` headers name (both sides, so deletions and renames are kept; a regeneration that drops a file is refused); `--check` re-derives and byte-compares each file whose upstream base is unchanged, and for a file upstream moved compares only the `+`/`-` lines (owner ruling 2026-10-22, CR-01: a hand edit to context lines alone in a moved file is not caught). The quick row `patches-regenerated` passes on all tracked patches, and its self-test plants a hand-edited hunk body that must go red naming the patch. (A)
 
 ### Upstream automation
 
