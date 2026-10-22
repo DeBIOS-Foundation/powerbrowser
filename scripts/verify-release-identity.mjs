@@ -18,14 +18,19 @@
 //     element's appVersion is the ESR version, and its displayVersion, when
 //     present, is the release key without its leading v. The descriptor count
 //     is printed by name, even when it is 0.
-//  4. Every git tag shaped v<ESR>-<revision> whose commit is not HEAD compares
-//     strictly lower than the derived (major, minor, patch, revision). Red
-//     names the tag. Milestone tags such as v1.4 never match the shape.
+//  4. Every git tag shaped v<ESR>-<revision> that HEAD contains (git tag
+//     --merged HEAD) and whose commit is not HEAD compares lower than or equal
+//     to the derived (major, minor, patch, revision): a tree never goes
+//     backwards from a release it descends from. Equal is green, so an
+//     ordinary commit after a release tag stays green (WR-02). A tag on a
+//     commit HEAD does not contain -- another branch or worktree -- is not
+//     read. Red names the tag. Milestone tags such as v1.4 never match the
+//     shape.
 //  5. A release-shaped tag that points at HEAD equals the release key.
 //
-// NOT HERE: that the key exceeds the latest published GitHub Release needs the
-// network, so it belongs to release.yml (DIST-02) and the release train
-// (TRAIN-01), never to --quick.
+// NOT HERE: that the key is new -- above every earlier release tag and the
+// latest published GitHub Release -- is checked where a tag is created, in
+// release.yml (DIST-02) and the release train (TRAIN-01), never in --quick.
 //
 // Honestly --quick: git plumbing and text reads only. No build, no browser, no
 // display, no network. It writes nothing in the repository: the self-test's
@@ -125,7 +130,7 @@ function runChecks(root, overrides = {}) {
     try {
         tracked = files();
         head = git(['rev-parse', 'HEAD']).trim();
-        tags = git(['tag', '--list']).split('\n').map(t => t.trim()).filter(Boolean);
+        tags = git(['tag', '--merged', 'HEAD']).split('\n').map(t => t.trim()).filter(Boolean);
     } catch {
         failures.push('git could not list the tracked files, HEAD or the tags, so the descriptors and release tags prove nothing. Next step: run this from a working copy of the project, with git available.');
         return { failures, skipped, notes, identity };
@@ -170,11 +175,11 @@ function runChecks(root, overrides = {}) {
             if (tag !== releaseKey) {
                 failures.push(`release tag ${tag} points at HEAD but ${MANIFEST_REL} derives ${releaseKey}. Next step: delete the tag and tag HEAD as ${releaseKey}, or correct [product] revision and regenerate.`);
             }
-        } else if (!lower(tuple, derived)) {
-            failures.push(`release tag ${tag} is on an earlier commit but is not lower than the derived ${releaseKey}, so this tree would reuse or go backwards from a released name. Next step: increase [product] revision in ${MANIFEST_REL}, then run ${RERUN}.`);
+        } else if (lower(derived, tuple)) {
+            failures.push(`release tag ${tag} is on an earlier commit of this branch but is higher than the derived ${releaseKey}, so this tree goes backwards from a released name. Next step: set [product] revision in ${MANIFEST_REL} so the key is at least ${tag}, then run ${RERUN}.`);
         }
     }
-    notes.push(`${releaseTags.length} release tag(s) matching v<ESR>-<revision>`);
+    notes.push(`${releaseTags.length} release tag(s) on this branch matching v<ESR>-<revision>`);
 
     return { failures, skipped, notes, identity };
 }
@@ -256,8 +261,19 @@ function selfTest() {
                 plant: () => g('tag', `v${esrVersion}-${revision + 1}`), undo: () => g('tag', '-d', `v${esrVersion}-${revision + 1}`),
             },
             {
-                name: 'older commit tagged at the key', expect: releaseKey,
+                name: 'older commit tagged one revision above the key', expect: `v${esrVersion}-${revision + 1}`,
+                plant: () => g('tag', `v${esrVersion}-${revision + 1}`, older), undo: () => g('tag', '-d', `v${esrVersion}-${revision + 1}`),
+            },
+            {
+                // WR-02: a commit after a release tag, manifest unchanged.
+                name: 'control: older commit tagged at the key', expect: null,
                 plant: () => g('tag', releaseKey, older), undo: () => g('tag', '-d', releaseKey),
+            },
+            {
+                // WR-02: tags are shared across worktrees; one HEAD does not contain is not read.
+                name: 'control: higher release tag on a commit HEAD does not contain', expect: null,
+                plant: () => g('tag', `v${esrVersion}-${revision + 1}`, g('commit-tree', 'HEAD^{tree}', '-p', older, '-m', 'side').trim()),
+                undo: () => g('tag', '-d', `v${esrVersion}-${revision + 1}`),
             },
             {
                 name: 'control: HEAD tagged as the key', expect: null,
@@ -305,7 +321,7 @@ function selfTest() {
         console.error(`${NAME}: --self-test FAIL -- ${failed} case(s) did not behave as required`);
         return 1;
     }
-    console.log(`${NAME}: --self-test PASS -- all seven planted faults went red naming the file or tag, and the three controls stayed green`);
+    console.log(`${NAME}: --self-test PASS -- all seven planted faults went red naming the file or tag, and the five controls stayed green`);
     return 0;
 }
 

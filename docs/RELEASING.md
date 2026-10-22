@@ -566,9 +566,12 @@ ESR version and `powerbrowser/packaging/version/release.txt` against the release
 compares the upstream checkout's `config/milestone.txt` against the ESR version when
 `upstream/` exists, requires every tracked `update.xml` to carry `appVersion` equal to
 the ESR version and any `displayVersion` equal to the release key without its leading
-`v`, requires every prior release tag not at HEAD to compare strictly lower than the
-derivation, and, when HEAD does carry a release tag, requires that tag to equal the
-derived tag. On a checkout with no descriptors or no release tags it prints a named
+`v`, requires every release tag HEAD contains (`git tag --merged HEAD`) that is not at
+HEAD to compare lower than or equal to the derivation, and, when HEAD does carry a
+release tag, requires that tag to equal the derived tag. Equal is allowed so an
+ordinary commit after a release stays green, and a tag on a commit HEAD does not
+contain (another branch or worktree) is not read. That the key is new is checked
+where the tag is created, not here. On a checkout with no descriptors or no release tags it prints a named
 count line saying so rather than passing silently.
 
 No `version_display.txt` is ever created in `powerbrowser/packaging/version/`. That
@@ -789,7 +792,7 @@ on the absence of a log line.
 | Row | Stage | Proves | Self-test plants |
 |---|---|---|---|
 | `repo-controls` | 1 | Live GitHub state matches every tracked body under `.github/settings/` by derivation | Network-free self-test over fixture bodies |
-| `release-identity` | 2 | Tag, version files and any committed descriptor cannot disagree | Display version off by one revision; a different ESR in `version.txt`; HEAD tagged one revision above the derivation; a prior release tag equal to the derivation on an older commit; a tracked `update.xml` with a differing appVersion; plus an untagged-HEAD case that must stay green and print its skip line by name |
+| `release-identity` | 2 | Tag, version files and any committed descriptor cannot disagree | Display version off by one revision; a different ESR in `version.txt`; HEAD tagged one revision above the derivation; a prior release tag above the derivation on an older commit; plus a prior tag equal to the derivation and a higher tag on a commit HEAD does not contain, both of which must stay green; a tracked `update.xml` with a differing appVersion; plus an untagged-HEAD case that must stay green and print its skip line by name |
 | `mar-sign-self-test` | 3 | MARs are signed with the signing command in `docs/BUILD.md` "Key-custody rung" and verified with the tree's own `signmar` against the tracked certificate imported into a scratch NSS database (`signmar -d <db> -n powerbrowser-mar -v`), and each planted fault goes red naming the file. The live signing evidence rides on the existing `mar-update-hop` row rather than on a second full row | Verify the unsigned MAR; verify a foreign-key MAR against the fork certificate; sign an already-signed MAR; sign with a nickname absent from the database |
 | `build-update-xml-self-test` | 3 | One descriptor per BUILD_TARGET emitted from `application.ini` and the MAR bytes, byte-identical on re-emission, carrying `detailsURL`, over synthetic fixtures | An unknown target token; an `application.ini` with no BuildID; a `TARGET_XPCOM_ABI` disagreeing with the table; `--channel` given the MAR channel id while the fixture `config.status` carries the update channel |
 | `packaged-launch` | 4 | An extracted package launches on a fresh profile and reaches the Theia shell with both product markers, resolving in-prefix | Remove the staged backend |
