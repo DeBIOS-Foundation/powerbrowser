@@ -156,14 +156,102 @@ function projection(c, declared, live) {
 
 // --- the table --------------------------------------------------------------
 
-// RESEARCH Pattern 1's apply order; planWrites follows this order.
+const PERMISSIONS_PATH = 'repos/{owner}/{repo}/actions/permissions';
+const RELEASES_PATH = 'repos/{owner}/{repo}/releases?per_page=1';
+
+// GET selected-actions answers 409 while allowed_actions is not 'selected'.
+// That is a readable state, and drift: report it as such instead of reading.
+function requiresSelected(c, ctx) {
+    const r = ctx.get(ctx.fill(PERMISSIONS_PATH));
+    if (!r.ok) return `${c.id}: ${r.why}`;
+    if (r.body?.allowed_actions === 'selected') return null;
+    return `${where(c)}: the admission list does not apply, because allowed_actions is ${show(r.body?.allowed_actions)} live, not "selected" (GitHub answers 409 for this list until then). Next step: ${APPLY}.`;
+}
+
+// GH-09: immutable releases may be enabled only while no Release exists.
+function planImmutableReleases(c, declared, ctx) {
+    const r = ctx.get(ctx.fill(RELEASES_PATH));
+    if (!r.ok) return { blocked: `immutable releases are not enabled because the zero-Releases check could not run (GH-09): ${r.why}`, error: r.why };
+    if (!Array.isArray(r.body)) {
+        const why = `GET ${ctx.fill(RELEASES_PATH)} returned ${show(r.body)}, not a list`;
+        return { blocked: `immutable releases are not enabled because the zero-Releases check could not run (GH-09): ${why}`, error: why };
+    }
+    if (r.body.length > 0) {
+        // per_page=1: one item means at least one Release.
+        return { blocked: `immutable releases may be enabled only while the repository has zero Releases (GH-09); at least ${r.body.length} Release(s) exist` };
+    }
+    return { write: { method: c.write.method, path: ctx.fill(c.write.path), body: null } };
+}
+
+function secretCount(c, declared, live) {
+    if (live?.total_count === 0) return [];
+    return [`${c.id}: the repository holds ${show(live?.total_count)} Actions secret(s) (${(live?.secrets ?? []).map(s => s.name).join(', ') || 'names unread'}); the count must be 0, because every secret lives in a branch-restricted environment (GH-08). Next step: move each one to its environment and delete the repository secret.`];
+}
+
+// RESEARCH Pattern 1's apply order; planWrites follows this order. Plan 41-01
+// Task 3 inserts the rulesets, and plan 41-02 the environments, between
+// fork-pr-approval and immutable-releases. The repo PATCH stays last, so a
+// refused has_discussions key cannot stop any other write.
 export const CONTROLS = Object.freeze([
     {
         id: 'actions-permissions',
         file: 'actions-permissions.json',
-        write: { method: 'PUT', path: 'repos/{owner}/{repo}/actions/permissions' },
-        read: 'repos/{owner}/{repo}/actions/permissions',
+        write: { method: 'PUT', path: PERMISSIONS_PATH },
+        read: PERMISSIONS_PATH,
         compare: projection,
+    },
+    {
+        id: 'actions-selected',
+        file: 'actions-selected.json',
+        write: { method: 'PUT', path: 'repos/{owner}/{repo}/actions/permissions/selected-actions' },
+        read: 'repos/{owner}/{repo}/actions/permissions/selected-actions',
+        gate: requiresSelected,
+        compare: projection,
+    },
+    {
+        id: 'workflow-permissions',
+        file: 'workflow-permissions.json',
+        write: { method: 'PUT', path: 'repos/{owner}/{repo}/actions/permissions/workflow' },
+        read: 'repos/{owner}/{repo}/actions/permissions/workflow',
+        compare: projection,
+    },
+    {
+        id: 'fork-pr-approval',
+        file: 'fork-pr-approval.json',
+        write: { method: 'PUT', path: 'repos/{owner}/{repo}/actions/permissions/fork-pr-contributor-approval' },
+        read: 'repos/{owner}/{repo}/actions/permissions/fork-pr-contributor-approval',
+        compare: projection,
+    },
+    {
+        id: 'immutable-releases',
+        file: 'immutable-releases.json',
+        write: { method: 'PUT', path: 'repos/{owner}/{repo}/immutable-releases' },
+        bodiless: true,
+        plan: planImmutableReleases,
+        read: 'repos/{owner}/{repo}/immutable-releases',
+        compare: projection, // enabled only; enforced_by_owner is GitHub's and never decides
+    },
+    {
+        id: 'private-vulnerability-reporting',
+        file: 'private-vulnerability-reporting.json',
+        write: { method: 'PUT', path: 'repos/{owner}/{repo}/private-vulnerability-reporting' },
+        bodiless: true,
+        read: 'repos/{owner}/{repo}/private-vulnerability-reporting',
+        compare: projection,
+    },
+    {
+        id: 'repo',
+        file: 'repo.json',
+        write: { method: 'PATCH', path: 'repos/{owner}/{repo}' },
+        read: 'repos/{owner}/{repo}',
+        compare: projection,
+    },
+    {
+        id: 'repository-secrets',
+        file: null,
+        write: null,
+        read: 'repos/{owner}/{repo}/actions/secrets?per_page=100',
+        compare: secretCount,
     },
 ].map(Object.freeze));
 
@@ -228,6 +316,11 @@ export function runChecks(root, overrides = {}) {
     for (const c of CONTROLS) {
         const declared = c.file ? ctx.bodies[c.file] : null;
         if (c.file && declared === undefined) continue; // already red: missing or unparseable
+        const gated = c.gate ? c.gate(c, ctx) : null;
+        if (gated !== null) {
+            failures.push(gated);
+            continue;
+        }
         const r = ctx.get(ctx.fill(c.read));
         if (!r.ok) {
             failures.push(`${c.id}: ${r.why}`);
@@ -293,11 +386,24 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 function fakeState(ctx) {
     const p = ctx.fill;
     const b = ctx.bodies;
+    const { owner, repo } = ctx.slug;
     return {
-        [p('repos/{owner}/{repo}/actions/permissions')]: {
+        [p(PERMISSIONS_PATH)]: {
             ...b['actions-permissions.json'],
             selected_actions_url: `https://api.github.com/${p('repos/{owner}/{repo}/actions/permissions/selected-actions')}`,
         },
+        [p('repos/{owner}/{repo}/actions/permissions/selected-actions')]: { ...b['actions-selected.json'] },
+        [p('repos/{owner}/{repo}/actions/permissions/workflow')]: { ...b['workflow-permissions.json'] },
+        [p('repos/{owner}/{repo}/actions/permissions/fork-pr-contributor-approval')]: { ...b['fork-pr-approval.json'] },
+        [p('repos/{owner}/{repo}/immutable-releases')]: { ...b['immutable-releases.json'], enforced_by_owner: false },
+        [p('repos/{owner}/{repo}/private-vulnerability-reporting')]: { ...b['private-vulnerability-reporting.json'] },
+        [p('repos/{owner}/{repo}')]: {
+            id: 1, node_id: 'R_fixture', name: repo, full_name: `${owner}/${repo}`, private: false,
+            visibility: 'public', default_branch: 'main', has_issues: true, allow_squash_merge: true,
+            ...b['repo.json'],
+        },
+        [p('repos/{owner}/{repo}/actions/secrets?per_page=100')]: { total_count: 0, secrets: [] },
+        [p(RELEASES_PATH)]: [],
     };
 }
 
@@ -331,10 +437,22 @@ function selfTest() {
     }
     console.log(`  ok  baseline: the declared state served back -> green (${baseline.compared.length} control(s))`);
 
-    const PERMS = 'repos/{owner}/{repo}/actions/permissions';
+    const PERMS = PERMISSIONS_PATH;
+    const set = (path, key, value) => mutated((s, p) => { s[p(path)][key] = value; });
     const plants = [
-        ['allowed_actions all', mutated((s, p) => { s[p(PERMS)].allowed_actions = 'all'; }), ['actions-permissions', '"all"']],
-        ['sha_pinning_required false', mutated((s, p) => { s[p(PERMS)].sha_pinning_required = false; }), ['actions-permissions', 'sha_pinning_required']],
+        ['allowed_actions all', set(PERMS, 'allowed_actions', 'all'), ['actions-permissions', '"all"']],
+        ['allowed_actions all leaves the admission list unapplied', set(PERMS, 'allowed_actions', 'all'), ['actions-selected', 'does not apply']],
+        ['sha_pinning_required false', set(PERMS, 'sha_pinning_required', false), ['actions-permissions', 'sha_pinning_required']],
+        ['patterns_allowed without cachix/install-nix-action@*', set(`${PERMS}/selected-actions`, 'patterns_allowed', []), ['actions-selected', 'cachix/install-nix-action@*']],
+        ['can_approve_pull_request_reviews true', set(`${PERMS}/workflow`, 'can_approve_pull_request_reviews', true), ['workflow-permissions', 'can_approve_pull_request_reviews']],
+        ['fork approval first_time_contributors', set(`${PERMS}/fork-pr-contributor-approval`, 'approval_policy', 'first_time_contributors'), ['fork-pr-approval', '"first_time_contributors"']],
+        ['fork approval first_time_contributors_new_to_github', set(`${PERMS}/fork-pr-contributor-approval`, 'approval_policy', 'first_time_contributors_new_to_github'), ['fork-pr-approval', 'first_time_contributors_new_to_github']],
+        ['an unreadable fork approval endpoint', mutated((s, p) => { delete s[p(`${PERMS}/fork-pr-contributor-approval`)]; }), ['fork-pr-approval', 'could not be read']],
+        ['has_discussions false', set('repos/{owner}/{repo}', 'has_discussions', false), ['repo (', 'has_discussions']],
+        ['allow_auto_merge false', set('repos/{owner}/{repo}', 'allow_auto_merge', false), ['repo (', 'allow_auto_merge']],
+        ['immutable releases disabled', set('repos/{owner}/{repo}/immutable-releases', 'enabled', false), ['immutable-releases', 'enabled']],
+        ['private vulnerability reporting disabled', set('repos/{owner}/{repo}/private-vulnerability-reporting', 'enabled', false), ['private-vulnerability-reporting', 'enabled']],
+        ['a repository secret count of 1', mutated((s, p) => { s[p('repos/{owner}/{repo}/actions/secrets?per_page=100')] = { total_count: 1, secrets: [{ name: 'PLANTED' }] }; }), ['repository-secrets', 'holds 1']],
         ['an orphan settings file', { listSettings: () => [...listed, 'orphan.json'] }, ['orphan.json', 'orphan']],
         ['a missing settings file', { listSettings: () => listed.filter(f => f !== 'actions-permissions.json') }, ['actions-permissions.json', 'missing']],
         ['an empty settings directory', { listSettings: () => [] }, [SETTINGS_REL, 'empty']],
@@ -352,8 +470,49 @@ function selfTest() {
         }
     }
 
+    // Controls: keys GitHub owns never decide.
+    const controls = [
+        ['immutable releases enforced_by_owner true', set('repos/{owner}/{repo}/immutable-releases', 'enforced_by_owner', true)],
+    ];
+    for (const [name, extra] of controls) {
+        const { failures } = run(extra);
+        if (failures.length === 0) {
+            console.log(`  ok  control: ${name} -> green`);
+        } else {
+            console.error(`${NAME}: --self-test FAIL -- the control '${name}' went red: ${failures.join(' | ')}`);
+            failed += 1;
+        }
+    }
+
+    // planWrites: the apply order, and the zero-Releases guard (GH-09).
+    const plan = (state) => planWrites(REPO_ROOT, getterOf(state), fixed);
+    {
+        const { writes, blocked, errors } = plan(base);
+        const at = (id) => writes.findIndex(w => w.id === id);
+        const order = CONTROLS.filter(c => c.write !== null).map(c => c.id);
+        const inOrder = writes.length === order.length && writes.every((w, i) => w.id === order[i]);
+        if (errors.length === 0 && blocked.length === 0 && inOrder && at('actions-permissions') < at('actions-selected') && at('immutable-releases') >= 0
+            && writes[at('immutable-releases')].body === null && writes.at(-1).id === 'repo') {
+            console.log(`  ok  planWrites with zero Releases -> ${writes.map(w => w.id).join(', ')}`);
+        } else {
+            console.error(`${NAME}: --self-test FAIL -- planWrites order or content is wrong: ${writes.map(w => `${w.id}:${w.method}`).join(', ')} | blocked: ${blocked.join(' | ')} | errors: ${errors.join(' | ')}`);
+            failed += 1;
+        }
+    }
+    {
+        const s = clone(base);
+        s[ctx.fill(RELEASES_PATH)] = [{ id: 1 }];
+        const { writes, blocked } = plan(s);
+        if (!writes.some(w => w.id === 'immutable-releases') && blocked.some(b => b.includes('GH-09'))) {
+            console.log(`  ok  planWrites with one Release -> no immutable-releases write, BLOCKED naming 'GH-09'`);
+        } else {
+            console.error(`${NAME}: --self-test FAIL -- planWrites with one Release did not block immutable releases: ${writes.map(w => w.id).join(', ')} | blocked: ${blocked.join(' | ') || '(none)'}`);
+            failed += 1;
+        }
+    }
+
     if (failed > 0) return 1;
-    console.log(`${NAME}: --self-test PASS -- ${plants.length} planted faults went red naming the control, and the declared state stayed green`);
+    console.log(`${NAME}: --self-test PASS -- ${plants.length} planted faults went red naming the control, ${controls.length} control(s) and the declared state stayed green, and planWrites kept its order and its guard`);
     return 0;
 }
 
