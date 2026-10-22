@@ -121,7 +121,7 @@ Plans:
 
 **External gate**: Owner creates the `powerbrowser-updates` and Homebrew tap repos empty in this phase (GH-10 needs both for the bot App installation that `repo-controls` reads back; Phases 47 and 56 fill them), creates and installs both GitHub Apps (bot App on `powerbrowser`, `powerbrowser-updates` and the tap repo; clock App on `powerbrowser`), adds the second org owner and stores recovery codes offline, and runs the runner-group probe as org admin.
 **Research flag**: Yes (A3): whether runner-group "selected workflows" exists on the Free plan; whether the App's missing Workflows permission blocks pushes that touch workflow files.
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -134,7 +134,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 41-03-PLAN.md — GH-12 workflows row and AUTO-09 zizmor row with self-tests; zizmor in the theia shell; GH-18 drill workflow
+- [x] 41-03-PLAN.md — GH-12 workflows row and AUTO-09 zizmor row with self-tests; zizmor in the theia shell; GH-18 drill workflow
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -432,7 +432,7 @@ Phases execute in numeric order. Phase 42 depends only on 41. Phases 44 and 45 c
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 40. Release identity, ESR pin and patch regeneration (A) | 8/8 | Complete    | 2026-10-22 |
-| 41. Repository controls and GitHub Apps (A) | 2/4 | In Progress | - |
+| 41. Repository controls and GitHub Apps (A) | 3/4 | In Progress | - |
 | 42. Community surface and release documentation (A) | 0/TBD | Not started | - |
 | 43. Release train skeleton and upstream bump automation (A) | 0/TBD | Not started | - |
 | 44. Trust path (B) | 0/TBD | Not started | - |

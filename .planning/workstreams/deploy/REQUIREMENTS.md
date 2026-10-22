@@ -82,8 +82,8 @@ the project's own planning record. This section must survive when this file repl
 - [ ] **GH-09**: Immutable releases are enabled while the repository has zero Releases; Discussions, private vulnerability reporting and auto-merge are on. (A)
 - [ ] **GH-10**: Two GitHub Apps exist: `powerbrowser-bot` (Contents, Pull requests and Issues read/write; Administration read; Dependabot alerts read; no Workflows), installed on `powerbrowser`, `powerbrowser-updates` and the Homebrew tap repo; and a clock App (Actions read/write), installed on `powerbrowser` only. Their permission sets are tracked JSON bodies, and `repo-controls` reads back both permission sets and both installations' repository lists. (A)
 - [ ] **GH-11**: The runner-group "selected workflows" restriction is probed on the Free plan. If it is available, the legion runner's group is restricted to `release.yml@refs/heads/main`. The probe result is recorded in `docs/RELEASING.md`. (A)
-- [ ] **GH-12**: The quick row `workflows` (`scripts/verify-workflows.mjs`) parses every `.github/workflows/*.yml` and asserts: no `schedule:` key; the legion label appears only in `release.yml` jobs named `build-*` or `matrix-*`, none of which has a `secrets.` reference or an `environment:`; `claude-code-action` only on GitHub-hosted jobs, with no App-token step and no `contents: write`; `issues: write` only on the `release-train.yml` report job and on `triage.yml`; every `workflow_run` job guards `head_repository.full_name == github.repository`, and no `workflow_run`-triggered workflow is itself a `workflow_run` source; every `uses:` is a 40-hex SHA admitted by `actions-selected.json`; `contents: write`, `id-token: write` and `attestations: write` together only on `sign-publish`; no `pull_request` or `pull_request_target` trigger on `release.yml` or `release-train.yml`; no cache step in any release-path job; no `github.event.(issue|comment|pull_request|head_commit|review)` text inside `run:` or `prompt:`. The self-test plants each fault. (A)
-- [ ] **AUTO-09**: `zizmor --offline` runs as a quick row over `.github/workflows/`, green on the tree. (A)
+- [x] **GH-12**: The quick row `workflows` (`scripts/verify-workflows.mjs`) parses every `.github/workflows/*.yml` and asserts: no `schedule:` key; the legion label appears only in `release.yml` jobs named `build-*` or `matrix-*`, none of which has a `secrets.` reference or an `environment:`; `claude-code-action` only on GitHub-hosted jobs, with no App-token step and no `contents: write`; `issues: write` only on the `release-train.yml` report job and on `triage.yml`; every `workflow_run` job guards `head_repository.full_name == github.repository`, and no `workflow_run`-triggered workflow is itself a `workflow_run` source; every `uses:` is a 40-hex SHA admitted by `actions-selected.json`; `contents: write`, `id-token: write` and `attestations: write` together only on `sign-publish`; no `pull_request` or `pull_request_target` trigger on `release.yml` or `release-train.yml`; no cache step in any release-path job; no `github.event.(issue|comment|pull_request|head_commit|review)` text inside `run:` or `prompt:`. The self-test plants each fault. (A)
+- [x] **AUTO-09**: `zizmor --offline` runs as a quick row over `.github/workflows/`, green on the tree. (A)
 - [ ] **GH-18**: Actions email is set to failed runs only, and GitHub Mobile push is on for deployment approvals, assignments and mentions. One test assignment and one test pending deployment each reach the owner's phone, and the result is recorded in `docs/RELEASING.md`. (A)
 
 ### Community surface
@@ -396,8 +396,8 @@ The roadmapper fills the Phase column.
 | GH-09 | Phase 41 | Pending |
 | GH-10 | Phase 41 | Pending |
 | GH-11 | Phase 41 | Pending |
-| GH-12 | Phase 41 | Pending |
-| AUTO-09 | Phase 41 | Pending |
+| GH-12 | Phase 41 | Complete |
+| AUTO-09 | Phase 41 | Complete |
 | GH-18 | Phase 41 | Pending |
 | GH-13 | Phase 42 | Pending |
 | GH-01 | Phase 42 | Pending |
