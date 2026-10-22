@@ -43,9 +43,25 @@ fail() {
   exit 1
 }
 
-# Prints the patch's own '+++ b/' target paths, in file order.
+# Prints the patch's own paths, in file order, once each: both sides of every
+# 'diff --git a/X b/Y' header, so a deletion (+++ /dev/null) and a rename are
+# covered (WR-01).
 patch_paths() {
-  grep -E '^\+\+\+ b/' "$1" | sed 's#^+++ b/##' || true
+  awk '/^diff --git /{a=$3; b=$4; sub(/^a\//,"",a); sub(/^b\//,"",b)
+    if (!(a in seen)) {seen[a]=1; print a}; if (!(b in seen)) {seen[b]=1; print b}}' "$1"
+}
+
+# WR-01: refuses a regeneration ($2) that lost a path of the tracked patch
+# ($1) -- the path has no change in upstream/, so its hunks would vanish
+# without a word. $3 is appended to the failure.
+check_kept() {
+  local path name
+  name="$(basename "$1")"
+  while IFS= read -r path; do
+    patch_paths "$2" | grep -qxF -- "$path" \
+      || fail "regenerating $name dropped $path: $path is unchanged in upstream/ (a hunk was resolved away during --3way, or apply-patches.sh missed that file)$3" \
+        "restore the change to $path in upstream/ (bash scripts/apply-patches.sh), then re-run"
+  done < <(patch_paths "$1")
 }
 
 # Prints "<path> <pre-image blob>" for each file section of a patch.
@@ -90,7 +106,7 @@ preflight() {
   declare -A owner=()
   for p in "${patch_files[@]}"; do
     name="$(basename "$p")"
-    [ -n "$(patch_paths "$p")" ] || fail "$name has no '+++ b/' target path"
+    [ -n "$(patch_paths "$p")" ] || fail "$name has no 'diff --git' file header, so it names no path to regenerate"
     while IFS= read -r path; do
       if [ -n "${owner[$path]:-}" ]; then
         fail "${owner[$path]} and $name both name $path; regeneration cannot split one file's hunks between two patches" \
@@ -111,6 +127,7 @@ run_check() {
     regenerate_one "$p" > "$tmp/$name"
     [ -s "$tmp/$name" ] || fail "regenerating $name produced nothing: upstream/ is pristine or unpatched" \
       "bash scripts/apply-patches.sh"
+    check_kept "$p" "$tmp/$name" ""
     cmp -s "$tmp/$name" "$p" && continue
     # The files whose pre-image blob differs: upstream moved them under the patch.
     moved="$(awk 'NR==FNR{t[$1]=$2; next} t[$1]!=$2{print $1}' <(preimages "$p") <(preimages "$tmp/$name") | tr '\n' ' ')"
@@ -148,6 +165,7 @@ run_write() {
     [ -s "$t" ] || fail "regenerating $name produced nothing: upstream/ is pristine or unpatched; $name was left unchanged" \
       "bash scripts/apply-patches.sh"
     [ "$(head -c 13 "$t")" = "diff --git a/" ] || fail "regenerating $name did not produce a git diff; $name was left unchanged"
+    check_kept "$p" "$t" "; $name was left unchanged"
   done
   for p in "${patch_files[@]}"; do
     name="$(basename "$p")"
@@ -183,8 +201,8 @@ run_self_test() {
   cp -r "$fx/up" "$fx/pristine"
   git -C "$fx/pristine" reset -q --hard
 
-  echo '+++ b/one.txt' > "$fx/seed/A.patch"
-  echo '+++ b/two.txt' > "$fx/seed/B.patch"
+  echo 'diff --git a/one.txt b/one.txt' > "$fx/seed/A.patch"
+  echo 'diff --git a/two.txt b/two.txt' > "$fx/seed/B.patch"
   (UPSTREAM_DIR="$fx/up"; regenerate_one "$fx/seed/A.patch") > "$fx/p/010-a.patch"
   (UPSTREAM_DIR="$fx/up"; regenerate_one "$fx/seed/B.patch") > "$fx/p/020-b.patch"
 
@@ -274,6 +292,46 @@ run_self_test() {
     pass "a hand-edited + line in 010-a.patch still goes red on the moved upstream"
   else
     red "a hand-edited + line in 010-a.patch did not go red on the moved upstream (rc=$rc)"
+  fi
+
+  # 9. WR-01: a two-file patch whose second file is unchanged upstream is
+  # refused by write mode (bytes unchanged) and by --check, naming that file.
+  mkdir -p "$fx/two-file"
+  cat "$fx/seed/A.patch" "$fx/seed/B.patch" > "$fx/seed/AB.patch"
+  (UPSTREAM_DIR="$fx/up"; regenerate_one "$fx/seed/AB.patch") > "$fx/two-file/050-ab.patch"
+  cp -r "$fx/pristine" "$fx/half"
+  cp "$fx/up/one.txt" "$fx/half/one.txt"
+  git -C "$fx/half" add one.txt
+  before="$(sha256sum < "$fx/two-file/050-ab.patch")"
+  run_child --upstream "$fx/half" --patches "$fx/two-file"
+  local half_out="$out" half_rc="$rc"
+  after="$(sha256sum < "$fx/two-file/050-ab.patch")"
+  run_child --check --upstream "$fx/half" --patches "$fx/two-file"
+  if [ "$half_rc" -ne 0 ] && [[ "$half_out" == *"dropped two.txt"* ]] && [ "$before" = "$after" ] \
+    && [ "$rc" -ne 0 ] && [[ "$out" == *"dropped two.txt"* ]]; then
+    pass "a two-file patch with two.txt unchanged upstream is refused by write mode (bytes unchanged) and --check, naming two.txt"
+  else
+    out="$half_out"$'\n'"$out"
+    red "a two-file patch with two.txt unchanged upstream was not refused naming two.txt (write rc=$half_rc, check rc=$rc)"
+  fi
+
+  # 10. WR-01: a patch that changes one file and deletes another keeps the
+  # deletion through --check and write mode.
+  mkdir -p "$fx/del-p"
+  cp -r "$fx/pristine" "$fx/del"
+  cp "$fx/up/one.txt" "$fx/del/one.txt"
+  git -C "$fx/del" add one.txt
+  git -C "$fx/del" rm -q two.txt
+  (UPSTREAM_DIR="$fx/del"; regenerate_one "$fx/seed/AB.patch") > "$fx/del-p/060-del.patch"
+  run_child --upstream "$fx/del" --patches "$fx/del-p"
+  local del_out="$out" del_rc="$rc"
+  run_child --check --upstream "$fx/del" --patches "$fx/del-p"
+  if [ "$del_rc" -eq 0 ] && [[ "$del_out" == *"unchanged 060-del.patch"* ]] && [ "$rc" -eq 0 ] \
+    && grep -qx '+++ /dev/null' "$fx/del-p/060-del.patch"; then
+    pass "a patch that deletes two.txt keeps the deletion through write mode and --check"
+  else
+    out="$del_out"$'\n'"$out"
+    red "a patch that deletes two.txt did not keep the deletion (write rc=$del_rc, check rc=$rc)"
   fi
 
   return "$failed"

@@ -4637,8 +4637,8 @@ run_own_checks() {
     # stream, or a row leaks across streams.
     "plan-gate-streams-self-test|check_plan_gate_streams_self_test"
     # NEW (Phase 40, AUTO-10): every tracked patch equals its regeneration from the applied
-    # upstream/ (git diff HEAD --abbrev=10 over the patch's own +++ b/ paths, user git config
-    # off). A file upstream moved since the patch was generated (an ESR bump) is compared on
+    # upstream/ (git diff HEAD --abbrev=10 over the paths of the patch's own diff --git
+    # headers, user git config off; a path the regeneration drops is refused, WR-01). A file upstream moved since the patch was generated (an ESR bump) is compared on
     # its added and removed lines only, with a regenerate NOTE (CR-01, phase 40 review).
     # Honestly --quick: git plumbing over the existing upstream/ checkout, no build,
     # browser, display or network. upstream/ is required: CI's verify.yml provides an applied
@@ -4648,7 +4648,8 @@ run_own_checks() {
     # in this array gives: a hermetic fixture repo, green control first, then a hand-edited
     # hunk, a pristine upstream, two patches naming one path and an unsafe write -- each red,
     # naming the patch -- plus a clean replay onto a moved upstream (green) and a hand-edited
-    # hunk on that moved upstream (red).
+    # hunk on that moved upstream (red), a two-file patch with one file unchanged upstream
+    # (red, naming it) and a patch deleting a file (green, deletion kept).
     "patches-regenerated-self-test|bash $REPO_ROOT/scripts/regenerate-patches.sh --self-test"
     # NEW (Phase 40, REL-01): the release key v<ESR>-<revision> derived by releaseIdentity()
     # agrees with both version files, the upstream milestone, every tracked update.xml
