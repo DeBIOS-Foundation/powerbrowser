@@ -188,6 +188,93 @@ function secretCount(c, declared, live) {
     return [`${c.id}: the repository holds ${show(live?.total_count)} Actions secret(s) (${(live?.secrets ?? []).map(s => s.name).join(', ') || 'names unread'}); the count must be 0, because every secret lives in a branch-restricted environment (GH-08). Next step: move each one to its environment and delete the repository secret.`];
 }
 
+// --- environments (GH-07) ---------------------------------------------------
+
+const ENVIRONMENTS_PATH = 'repos/{owner}/{repo}/environments?per_page=100';
+const ENVIRONMENT_PATH = 'repos/{owner}/{repo}/environments/{env}';
+const BRANCH_POLICIES_PATH = 'repos/{owner}/{repo}/environments/{env}/deployment-branch-policies';
+const BRANCH_POLICY_FILE = 'environment-branch-policy-main.json';
+const envFile = (name) => `environment-${name}.json`;
+// The declared names come from the control's file names, minus the policy body.
+const envNames = (c) => c.files.filter(f => f !== BRANCH_POLICY_FILE).map(f => /^environment-(.+)\.json$/.exec(f)[1]);
+const envPath = (ctx, tpl, name) => ctx.fill(tpl).replace('{env}', encodeURIComponent(name));
+const envWhere = (c, name) => `${c.id} (${SETTINGS_REL}/${envFile(name)})`;
+const policyKey = (p) => `${p?.name}/${p?.type}`;
+
+// GET environments/{env} reports reviewers and the timer as protection rules;
+// this maps them onto the PUT body's keys so the declaration compares directly.
+function envProjection(live) {
+    const rules = Array.isArray(live?.protection_rules) ? live.protection_rules : [];
+    const rev = rules.find(x => x.type === 'required_reviewers');
+    return {
+        wait_timer: rules.find(x => x.type === 'wait_timer')?.wait_timer ?? 0,
+        prevent_self_review: rev?.prevent_self_review ?? false,
+        reviewers: (rev?.reviewers ?? []).map(x => ({ type: x.type, id: x.reviewer?.id })),
+        deployment_branch_policy: live?.deployment_branch_policy ?? null,
+        can_admins_bypass: live?.can_admins_bypass,
+    };
+}
+
+function compareEnvironments(c, declared, live, ctx) {
+    const list = live?.environments;
+    if (!Array.isArray(list)) return [`${c.id}: the live environment list is ${show(live)}, not { environments: [...] }. Next step: check the endpoint in ${SELF_REL}.`];
+    const f = [];
+    const names = envNames(c);
+    const liveNames = list.map(e => e.name);
+    for (const n of names.filter(n => !liveNames.includes(n))) {
+        f.push(`${envWhere(c, n)}: environment ${n} is missing from the live repo. Next step: ${APPLY}.`);
+    }
+    for (const n of liveNames.filter(n => !names.includes(n))) {
+        f.push(`${c.id}: live environment ${n} is extra: no ${SETTINGS_REL}/${envFile(n)} declares it. Next step: declare it in a reviewed commit, or delete it in the repository settings.`);
+    }
+    // Over every live environment, declared or not (GitHub creates some itself).
+    for (const e of list.filter(x => x.deployment_branch_policy === null)) {
+        f.push(`${c.id}: environment ${e.name} has a null deployment branch policy, so any branch can take its secrets (GH-07). Next step: declare it under ${SETTINGS_REL}/ or delete it.`);
+    }
+    const want = [policyKey(declared[BRANCH_POLICY_FILE])];
+    for (const e of list.filter(x => names.includes(x.name))) {
+        const d = declared[envFile(e.name)];
+        const p = envProjection(e);
+        for (const k of Object.keys(d).filter(k => !same(d[k], p[k]))) {
+            f.push(`${envWhere(c, e.name)}: environment ${e.name} ${k} is ${show(p[k])} live but ${show(d[k])} declared. Next step: ${APPLY}.`);
+        }
+        const r = ctx.get(`${envPath(ctx, BRANCH_POLICIES_PATH, e.name)}?per_page=100`);
+        if (!r.ok) {
+            f.push(`${c.id}: ${r.why}`);
+            continue;
+        }
+        const got = Array.isArray(r.body?.branch_policies) ? r.body.branch_policies.map(policyKey).sort() : null;
+        if (got === null || canon(got) !== canon(want)) {
+            f.push(`${envWhere(c, e.name)}: environment ${e.name} branch policies (name/type) are ${show(got)} live but exactly ${show(want)} declared (${SETTINGS_REL}/${BRANCH_POLICY_FILE}). Next step: delete the extra policies in the repository settings, then ${APPLY}.`);
+        }
+    }
+    return f;
+}
+
+// PUT every declared environment, each followed by its main policy POST when
+// the environment is absent or lacks it: the POST is not idempotent, so a
+// second apply plans none.
+function planEnvironments(c, declared, ctx) {
+    const r = ctx.get(ctx.fill(ENVIRONMENTS_PATH));
+    const refuse = (why) => ({ blocked: `environments are not written: ${why}`, error: why });
+    if (!r.ok) return refuse(r.why);
+    if (!Array.isArray(r.body?.environments)) return refuse(`GET ${ctx.fill(ENVIRONMENTS_PATH)} returned ${show(r.body)}, not { environments: [...] }`);
+    const liveNames = r.body.environments.map(e => e.name);
+    const main = policyKey(declared[BRANCH_POLICY_FILE]);
+    const writes = [];
+    for (const n of envNames(c)) {
+        writes.push({ method: 'PUT', path: envPath(ctx, ENVIRONMENT_PATH, n), file: envFile(n), body: declared[envFile(n)] });
+        let post = !liveNames.includes(n);
+        if (!post) {
+            const p = ctx.get(`${envPath(ctx, BRANCH_POLICIES_PATH, n)}?per_page=100`);
+            if (!p.ok) return refuse(p.why);
+            post = !(Array.isArray(p.body?.branch_policies) && p.body.branch_policies.some(x => policyKey(x) === main));
+        }
+        if (post) writes.push({ method: 'POST', path: envPath(ctx, BRANCH_POLICIES_PATH, n), file: BRANCH_POLICY_FILE, body: declared[BRANCH_POLICY_FILE] });
+    }
+    return { writes };
+}
+
 // --- rulesets ---------------------------------------------------------------
 
 const RULESETS_PATH = 'repos/{owner}/{repo}/rulesets?per_page=100';
@@ -375,9 +462,10 @@ const ruleset = (id) => ({
     compare: compareRuleset,
 });
 
-// RESEARCH Pattern 1's apply order; planWrites follows this order. Plan 41-02
-// inserts the environments directly before the rulesets. The repo PATCH stays
-// last, so a refused has_discussions key cannot stop any other write.
+// RESEARCH Pattern 1's apply order; planWrites follows this order. The
+// environments sit directly before the rulesets. The repo PATCH stays last, so
+// a refused has_discussions key cannot stop any other write. A control owns one
+// body (file) or several (files); a body no control owns is an orphan.
 export const CONTROLS = Object.freeze([
     {
         id: 'actions-permissions',
@@ -407,6 +495,14 @@ export const CONTROLS = Object.freeze([
         write: { method: 'PUT', path: 'repos/{owner}/{repo}/actions/permissions/fork-pr-contributor-approval' },
         read: 'repos/{owner}/{repo}/actions/permissions/fork-pr-contributor-approval',
         compare: projection,
+    },
+    {
+        id: 'environments',
+        files: [...['bot', 'descriptor', 'fixer', 'release', 'triage'].map(envFile), BRANCH_POLICY_FILE],
+        write: { method: 'PUT', path: ENVIRONMENT_PATH },
+        plan: planEnvironments,
+        read: ENVIRONMENTS_PATH,
+        compare: compareEnvironments,
     },
     ruleset('main-integrity'),
     ruleset('main-review'),
@@ -451,7 +547,17 @@ export const CONTROLS = Object.freeze([
     },
 ].map(Object.freeze));
 
-const referencedFiles = () => [...new Set(CONTROLS.map(c => c.file).filter(Boolean))].sort();
+const ownedFiles = (c) => c.files ?? (c.file ? [c.file] : []);
+const referencedFiles = () => [...new Set(CONTROLS.flatMap(ownedFiles))].sort();
+
+// A one-file control gets its body, a several-file control a map of file to
+// body, a control with no file null; undefined when a body is missing or
+// unparseable, which loadBodies has already reported.
+function declaredOf(c, bodies) {
+    if (ownedFiles(c).some(f => bodies[f] === undefined)) return undefined;
+    if (c.files) return Object.fromEntries(c.files.map(f => [f, bodies[f]]));
+    return c.file ? bodies[c.file] : null;
+}
 
 function listSettingsDir(root) {
     try {
@@ -511,8 +617,8 @@ export function runChecks(root, overrides = {}) {
     if (ctx.slug === null) return { failures, compared, slug: null };
     failures.push(...tagPatternFailures(ctx, overrides.tags !== undefined ? overrides.tags : gitTags(root)));
     for (const c of CONTROLS) {
-        const declared = c.file ? ctx.bodies[c.file] : null;
-        if (c.file && declared === undefined) continue; // already red: missing or unparseable
+        const declared = declaredOf(c, ctx.bodies);
+        if (declared === undefined) continue; // already red: missing or unparseable
         const gated = c.gate ? c.gate(c, ctx) : null;
         if (gated !== null) {
             failures.push(gated);
@@ -539,14 +645,15 @@ export function planWrites(root, get = ghGet, overrides = {}) {
     if (ctx.slug === null) return { writes, blocked, errors };
     for (const c of CONTROLS) {
         if (c.write === null) continue;
-        const declared = c.file ? ctx.bodies[c.file] : null;
-        if (c.file && declared === undefined) continue; // already in errors
+        const declared = declaredOf(c, ctx.bodies);
+        if (declared === undefined) continue; // already in errors
         const step = c.plan
             ? c.plan(c, declared, ctx)
             : { write: { method: c.write.method, path: ctx.fill(c.write.path), body: c.bodiless ? null : declared } };
         if (step.blocked) blocked.push(step.blocked);
         if (step.error) errors.push(step.error);
         if (step.write) writes.push({ id: c.id, file: c.file, ...step.write });
+        for (const w of step.writes ?? []) writes.push({ id: c.id, ...w });
     }
     return { writes, blocked, errors };
 }
@@ -601,8 +708,42 @@ function fakeState(ctx) {
         },
         [p('repos/{owner}/{repo}/actions/secrets?per_page=100')]: { total_count: 0, secrets: [] },
         [p(RELEASES_PATH)]: [],
+        ...fakeEnvironments(ctx),
         ...fakeRulesets(ctx),
     };
+}
+
+// GET environments in GitHub's shape: reviewers and the timer as protection
+// rules, GitHub's default can_admins_bypass true where a body does not say.
+function fakeEnvironments(ctx) {
+    const b = ctx.bodies;
+    const c = CONTROLS.find(x => x.compare === compareEnvironments);
+    const state = {};
+    const stamp = { created_at: '2026-10-22T00:00:00Z', updated_at: '2026-10-22T00:00:00Z' };
+    const environments = envNames(c).map((name, i) => {
+        const d = b[envFile(name)];
+        const rules = [];
+        if (d.reviewers) {
+            rules.push({
+                id: 2000 + i, node_id: `GA_rev${i}`, type: 'required_reviewers', prevent_self_review: d.prevent_self_review ?? false,
+                reviewers: d.reviewers.map(x => ({ type: x.type, reviewer: { id: x.id, login: 'fixture-owner', type: x.type } })),
+            });
+        }
+        if (d.wait_timer) rules.push({ id: 2100 + i, node_id: `GA_wait${i}`, type: 'wait_timer', wait_timer: d.wait_timer });
+        if (d.deployment_branch_policy) rules.push({ id: 2200 + i, node_id: `GA_bp${i}`, type: 'branch_policy' });
+        const policy = b[BRANCH_POLICY_FILE];
+        state[`${envPath(ctx, BRANCH_POLICIES_PATH, name)}?per_page=100`] = {
+            total_count: 1, branch_policies: [{ id: 3000 + i, node_id: `MDE2_fixture${i}`, name: policy.name, type: policy.type }],
+        };
+        return {
+            id: 1000 + i, node_id: `EN_fixture${i}`, name, url: `https://api.github.com/${envPath(ctx, ENVIRONMENT_PATH, name)}`,
+            html_url: `https://github.com/${ctx.slug.owner}/${ctx.slug.repo}/deployments/activity_log?environments_filter=${name}`,
+            ...stamp, can_admins_bypass: d.can_admins_bypass ?? true, protection_rules: rules,
+            deployment_branch_policy: d.deployment_branch_policy ?? null,
+        };
+    });
+    state[ctx.fill(ENVIRONMENTS_PATH)] = { total_count: environments.length, environments };
+    return state;
 }
 
 // Fixture ids: an installation id and an app_id that differ, so a resolver
@@ -682,7 +823,29 @@ function selfTest() {
     });
     const twoPartKey = releaseIdentity(twoPartConfig(ctx.config)).releaseKey;
     const set = (path, key, value) => mutated((s, p) => { s[p(path)][key] = value; });
+    const envList = (s, p) => s[p(ENVIRONMENTS_PATH)];
+    const envMut = (name, mutate) => mutated((s, p) => mutate(envList(s, p).environments.find(e => e.name === name)));
+    const policiesMut = (name, mutate) => mutated((s) => mutate(s[`${envPath(ctx, BRANCH_POLICIES_PATH, name)}?per_page=100`]));
+    const withCopilot = mutated((s, p) => {
+        const l = envList(s, p);
+        l.environments.push({ id: 1999, node_id: 'EN_copilot', name: 'copilot', protection_rules: [], deployment_branch_policy: null, can_admins_bypass: true });
+        l.total_count = l.environments.length;
+    });
     const plants = [
+        ['bot environment with a null branch policy', envMut('bot', (e) => { e.deployment_branch_policy = null; }), ['environment bot', 'null deployment branch policy']],
+        ['an auto-created copilot environment (extra)', withCopilot, ['copilot', 'extra']],
+        ['an auto-created copilot environment (null policy)', withCopilot, ['environment copilot', 'null deployment branch policy']],
+        ['fixer environment removed', mutated((s, p) => {
+            const l = envList(s, p);
+            l.environments = l.environments.filter(e => e.name !== 'fixer');
+            l.total_count = l.environments.length;
+        }), ['environment fixer', 'missing']],
+        ['descriptor wait_timer 0', envMut('descriptor', (e) => { e.protection_rules.find(x => x.type === 'wait_timer').wait_timer = 0; }), ['environment descriptor', 'wait_timer is 0']],
+        ['release can_admins_bypass true', envMut('release', (e) => { e.can_admins_bypass = true; }), ['environment release', 'can_admins_bypass is true']],
+        ['release reviewer id changed', envMut('release', (e) => { e.protection_rules.find(x => x.type === 'required_reviewers').reviewers[0].reviewer.id = 1; }), ['environment release', 'reviewers']],
+        ['triage holding an extra release/* policy', policiesMut('triage', (l) => { l.branch_policies.push({ id: 3999, name: 'release/*', type: 'branch' }); l.total_count = 2; }), ['environment triage', 'release/*']],
+        ['bot with no branch policy', policiesMut('bot', (l) => { l.branch_policies = []; l.total_count = 0; }), ['environment bot', 'branch policies']],
+        ['an unreadable branch-policy list', mutated((s) => { delete s[`${envPath(ctx, BRANCH_POLICIES_PATH, 'fixer')}?per_page=100`]; }), ['environments/fixer/deployment-branch-policies', 'could not be read']],
         ['allowed_actions all', set(PERMS, 'allowed_actions', 'all'), ['actions-permissions', '"all"']],
         ['allowed_actions all leaves the admission list unapplied', set(PERMS, 'allowed_actions', 'all'), ['actions-selected', 'does not apply']],
         ['sha_pinning_required false', set(PERMS, 'sha_pinning_required', false), ['actions-permissions', 'sha_pinning_required']],
@@ -745,7 +908,8 @@ function selfTest() {
         const { writes, blocked, errors } = plan(base);
         const at = (id) => writes.findIndex(w => w.id === id);
         const order = CONTROLS.filter(c => c.write !== null).map(c => c.id);
-        const inOrder = writes.length === order.length && writes.every((w, i) => w.id === order[i]);
+        const runs = writes.map(w => w.id).filter((id, i, a) => a[i - 1] !== id); // one entry per control
+        const inOrder = runs.length === order.length && runs.every((id, i) => id === order[i]);
         if (errors.length === 0 && blocked.length === 0 && inOrder && at('actions-permissions') < at('actions-selected') && at('immutable-releases') >= 0
             && writes[at('immutable-releases')].body === null && writes.at(-1).id === 'repo'
             && writes.filter(w => w.file?.startsWith('ruleset-')).every(w => w.method === 'PUT' && /\/rulesets\/\d+$/.test(w.path))
@@ -778,6 +942,22 @@ function selfTest() {
             console.log(`  ok  planWrites with no live ruleset and no bot App -> POST main-integrity and main-review, BLOCKED naming 'release-tags'`);
         } else {
             console.error(`${NAME}: --self-test FAIL -- planWrites over an empty ruleset list: ${rs.map(w => `${w.id}:${w.method}`).join(', ')} | blocked: ${blocked.join(' | ') || '(none)'}`);
+            failed += 1;
+        }
+    }
+
+    {
+        // bot absent: its PUT and its policy POST. The others hold main: PUT only.
+        const s = clone(base);
+        const l = s[ctx.fill(ENVIRONMENTS_PATH)];
+        l.environments = l.environments.filter(e => e.name !== 'bot');
+        l.total_count = l.environments.length;
+        const env = plan(s).writes.filter(w => w.id === 'environments').map(w => `${w.method} ${w.path.replace(/^.*\/environments\//, '')}`);
+        const want = ['PUT bot', 'POST bot/deployment-branch-policies', 'PUT descriptor', 'PUT fixer', 'PUT release', 'PUT triage'];
+        if (env.join('|') === want.join('|')) {
+            console.log(`  ok  planWrites with bot absent and main present elsewhere -> ${env.join(', ')}`);
+        } else {
+            console.error(`${NAME}: --self-test FAIL -- planWrites environments: ${env.join(', ')}; expected ${want.join(', ')}`);
             failed += 1;
         }
     }
