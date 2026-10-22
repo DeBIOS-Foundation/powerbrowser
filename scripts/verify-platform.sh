@@ -4709,6 +4709,16 @@ run_own_checks() {
     # that throws -- each red naming the control. Honestly --quick: in-memory, with no network
     # and no gh; it writes nothing. The live read-back is the full-tier repo-controls row.
     "repo-controls-self-test|node $REPO_ROOT/scripts/verify-repo-controls.mjs --self-test"
+    # NEW (Phase 41, GH-12 and GH-08): the trust-boundary rules over every workflow --
+    # SHA-pinned and admitted uses:, set equality with actions-selected.json, and the GH-12
+    # runner, permission, trigger, cache and event-text rules. Honestly --quick: YAML parsing
+    # (js-yaml from theia/) and file reads only; no build, browser, display or network.
+    "workflows|node $REPO_ROOT/scripts/verify-workflows.mjs"
+    # workflows-self-test plants, in memory, unpinned, short, uppercase and docker:// uses:, an
+    # unadmitted foo/bar, an unused admission, an empty patterns_allowed, a duplicate on:, zero
+    # workflows, and each GH-12 fault over a good release.yml fixture; each red naming file and
+    # job. It writes nothing.
+    "workflows-self-test|node $REPO_ROOT/scripts/verify-workflows.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
