@@ -5,17 +5,16 @@ current_phase: 41
 current_phase_name: Repository controls and GitHub Apps (A)
 current_plan: 8
 status: executing
-stopped_at: Phase 40 complete, ready to execute Phase 41
-last_updated: "2026-10-22T16:22:33.960Z"
+stopped_at: Completed 41-01-PLAN.md
+last_updated: "2026-10-22T16:38:32.117Z"
 last_activity: 2026-10-22
-last_activity_desc: Phase 40 complete, transitioned to Phase 41
-state_head: b179d7f50a33fade432fdd2b527fdd3e2bf563c0
+last_activity_desc: 41-01 complete, repo-controls table, read-back row and apply script
+state_head: b506245aefd4b05f543cb96cc51c1a093a5cb663
 progress:
   total_phases: 19
   completed_phases: 1
   total_plans: 12
-  completed_plans: 8
-  percent: 5
+  completed_plans: 9
 milestone_name: Deployment setup
 ---
 
@@ -31,9 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-20)
 ## Current Position
 
 Phase: 41 — Repository controls and GitHub Apps (A)
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-10-22 — Phase 40 complete, transitioned to Phase 41
+Current Plan: 2
+Total Plans in Phase: 4
+Status: Executing (41-01 complete)
+Last activity: 2026-10-22 — 41-01 complete: repo-controls table, read-back row and apply script
 
 Progress: [█░░░░░░░░░] 5%
 
@@ -61,6 +61,7 @@ Progress: [█░░░░░░░░░] 5%
 | Phase 40 P06 | 8min | 2 tasks | 6 files |
 | Phase 40 P07 | 10min | 2 tasks | 7 files |
 | Phase 40 P08 | 2824s build + owner checkpoint | 3 tasks | 0 files |
+| Phase 41 P01 | 17min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -99,9 +100,9 @@ Owner decisions 1–22 of 2026-10-20 are recorded in `.planning/workstreams/depl
 
 ## Session Continuity
 
-**Last session:** 2026-10-22T05:02:12.486Z
+**Last session:** 2026-10-22T16:38:32.015Z
 
-**Stopped At:** Phase 40 complete, ready to execute Phase 41
+**Stopped At:** Completed 41-01-PLAN.md
 **Resume File:** None
 
 ## Milestone Context
