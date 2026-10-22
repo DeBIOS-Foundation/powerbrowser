@@ -802,8 +802,9 @@ Two facts about where the update URL lives:
 - `application.ini`'s `[AppUpdate]` URL host comes from `configuration.toml` `[urls] update` (NG-064). `generated/identity.configure` emits `set_config("MOZ_APPUPDATE_HOST", …)`, which `upstream/build/moz.build:96` prefers over its `aus5.mozilla.org` default. It is a compiled value, so a change needs a tier-3 rebuild. The `AppUpdateURL` enterprise policy would win when present (`UpdateService.sys.mjs:5466`), so `powerbrowser/distribution/policies.json` carries none: the manifest is the only update URL source (UPD-12).
 - `app.update.url` as a pref does not exist (removed in Bug 1568994; the
   removal is noted in `upstream/browser/app/profile/firefox.js:156`), so
-  no pref file can carry the fork URL. The policy file and the compiled
-  `application.ini` URL above are the only mechanisms.
+  no pref file can carry the fork URL. The compiled `MOZ_APPUPDATE_HOST`
+  in `application.ini` above is the only mechanism: `policies.json`
+  carries no `AppUpdateURL` (UPD-12).
 
 ### Policy install (dev runs only)
 
@@ -815,9 +816,12 @@ cp powerbrowser/distribution/policies.json objdir/dist/bin/distribution/policies
 ```
 
 (This extends the 03-03 command with the `mkdir -p` the original assumed.)
-Layer 3 passes with the fork policy installed (the fork host is an
-allowlisted `allow`: the project's own update service) and fails without
-it — both directions observed live in 08-04.
+The policy disables telemetry and studies; it carries no update URL. The
+08-04 live run, which saw layer 3 fail without the policy, predates UPD-12,
+when the policy still set the update URL. A layer-3 failure on an update host
+now points at the compiled `MOZ_APPUPDATE_HOST` (the fork host is an
+allowlisted `allow`: the project's own update service), not at a missing
+policy file.
 
 ### MAR build and serve loop (the N to N-plus-1 proof)
 
