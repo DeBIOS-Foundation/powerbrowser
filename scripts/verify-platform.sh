@@ -4703,6 +4703,12 @@ run_own_checks() {
     # the pin and an unresolvable dependency each go red naming the file, package or versions.
     # It writes nothing in the tree.
     "licensing-self-test|node $REPO_ROOT/scripts/generate-licensing.mjs --self-test"
+    # NEW (Phase 41, GH-02): repo-controls-self-test serves the declared .github/settings/
+    # bodies back in GitHub's live response shape and plants each widening -- allowed_actions
+    # all, sha_pinning_required false, an orphan, missing or empty settings set, and a getter
+    # that throws -- each red naming the control. Honestly --quick: in-memory, with no network
+    # and no gh; it writes nothing. The live read-back is the full-tier repo-controls row.
+    "repo-controls-self-test|node $REPO_ROOT/scripts/verify-repo-controls.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
@@ -5059,6 +5065,12 @@ run_own_checks() {
       # see P2 (a lib-only import) or P3 (the web-tab.css path); the self-test plants both.
       "theia-fresh-clone-build|bash $REPO_ROOT/scripts/verify-theia-fresh-clone-build.sh"
       "theia-fresh-clone-build-self-test|bash $REPO_ROOT/scripts/verify-theia-fresh-clone-build.sh --self-test"
+
+      # NEW (Phase 41, GH-02): the live org and repo equal the declared .github/settings/
+      # bodies, by projection and set equality, failing closed on any unreadable endpoint.
+      # Full tier: read-only gh api against the live org and repo (network, gh auth with repo
+      # and read:org); green only after the owner applies the settings at plan 41-04.
+      "repo-controls|node $REPO_ROOT/scripts/verify-repo-controls.mjs"
     )
   fi
 
