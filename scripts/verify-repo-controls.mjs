@@ -32,7 +32,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { resolveConfig } from './generate.mjs';
+import { releaseIdentity, resolveConfig } from './generate.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const NAME = 'repo-controls';
@@ -188,10 +188,196 @@ function secretCount(c, declared, live) {
     return [`${c.id}: the repository holds ${show(live?.total_count)} Actions secret(s) (${(live?.secrets ?? []).map(s => s.name).join(', ') || 'names unread'}); the count must be 0, because every secret lives in a branch-restricted environment (GH-08). Next step: move each one to its environment and delete the repository secret.`];
 }
 
-// RESEARCH Pattern 1's apply order; planWrites follows this order. Plan 41-01
-// Task 3 inserts the rulesets, and plan 41-02 the environments, between
-// fork-pr-approval and immutable-releases. The repo PATCH stays last, so a
-// refused has_discussions key cannot stop any other write.
+// --- rulesets ---------------------------------------------------------------
+
+const RULESETS_PATH = 'repos/{owner}/{repo}/rulesets?per_page=100';
+const RULESET_PATH = 'repos/{owner}/{repo}/rulesets/{id}';
+const INSTALLATIONS_PATH = 'orgs/{org}/installations?per_page=100';
+// An actor that is a person or the owner role: the owner can bypass such a ruleset.
+const HUMAN_ACTORS = new Set(['OrganizationAdmin', 'User', 'Team', 'RepositoryRole']);
+const appRef = (a) => (typeof a?.actor_id === 'string' ? /^app:(.+)$/.exec(a.actor_id)?.[1] ?? null : null);
+
+// "app:<slug>" becomes the App's app_id from the org's installations, never
+// the installation id; the tree cannot carry an id that does not exist yet.
+export function resolveActors(body, installations) {
+    const out = clone(body);
+    for (const a of out.bypass_actors ?? []) {
+        const slug = appRef(a);
+        if (slug === null) continue;
+        const inst = (installations ?? []).find(i => i.app_slug === slug);
+        if (inst === undefined) throw new Error(`${slug} is not installed on the org; the owner creates and installs it at plan 41-04`);
+        a.actor_id = inst.app_id;
+    }
+    return out;
+}
+
+function resolvedBody(c, declared, ctx) {
+    if (!(declared.bypass_actors ?? []).some(a => appRef(a) !== null)) return { body: declared };
+    const r = ctx.get(ctx.fill(INSTALLATIONS_PATH));
+    if (!r.ok) return { why: `${c.id}: ${r.why}`, unreadable: true };
+    try {
+        return { body: resolveActors(declared, r.body?.installations) };
+    } catch (e) {
+        return { why: `${where(c)}: ${e.message}. Next step: install it, then re-run.` };
+    }
+}
+
+// OrganizationAdmin compares on type and mode only, whatever id GitHub
+// returns for it; an Integration id compares as an integer.
+const actorKey = (a) => `${a.actor_type}|${a.actor_type === 'OrganizationAdmin' ? '*' : Number(a.actor_id)}|${a.bypass_mode}`;
+const onMain = (body) => (body.conditions?.ref_name?.include ?? []).includes('refs/heads/main');
+
+function compareRuleset(c, declared, list, ctx) {
+    if (!Array.isArray(list)) return [`${where(c)}: the live ruleset list is ${show(list)}, not a list. Next step: check the endpoint in ${SELF_REL}.`];
+    const found = list.filter(r => r.name === declared.name);
+    if (found.length === 0) return [`${where(c)}: ruleset ${declared.name} is missing from the live repo. Next step: ${APPLY}.`];
+    if (found.length > 1) return [`${where(c)}: ${found.length} live rulesets are named ${declared.name} (ids ${found.map(r => r.id).join(', ')}). Next step: delete the duplicates in the repository settings.`];
+    const r = ctx.get(ctx.fill(RULESET_PATH).replace('{id}', found[0].id));
+    if (!r.ok) return [`${c.id}: ${r.why}`];
+    const live = r.body;
+    const f = [];
+    const drift = (what, l, d) => f.push(`${where(c)}: ${what} is ${show(l)} live but ${show(d)} declared. Next step: ${APPLY}.`);
+    for (const k of ['target', 'enforcement']) if (live?.[k] !== declared[k]) drift(k, live?.[k], declared[k]);
+    if (!same(declared.conditions, live?.conditions)) drift('conditions', live?.conditions, declared.conditions);
+    const liveRules = Array.isArray(live?.rules) ? live.rules : [];
+    const types = (rules) => rules.map(x => x.type);
+    if (canon(types(declared.rules)) !== canon(types(liveRules))) drift('the rule type set', types(liveRules).sort(), types(declared.rules).sort());
+    for (const rule of declared.rules.filter(x => x.parameters !== undefined)) {
+        const lr = liveRules.find(x => x.type === rule.type);
+        if (lr !== undefined && !same(rule.parameters, lr.parameters)) drift(`rule ${rule.type} parameters`, project(rule.parameters, lr.parameters), rule.parameters);
+    }
+    const liveActors = Array.isArray(live?.bypass_actors) ? live.bypass_actors : [];
+    const res = resolvedBody(c, declared, ctx);
+    if (res.why !== undefined) {
+        f.push(res.why);
+    } else {
+        const want = res.body.bypass_actors.map(actorKey).sort();
+        const got = liveActors.map(actorKey).sort();
+        if (want.join(',') !== got.join(',')) drift('the bypass actor set (actor_type|actor_id|bypass_mode)', got, want);
+    }
+    // Named assertions: these hold whatever the declaration says.
+    if (onMain(declared)) {
+        for (const a of liveActors.filter(x => x.actor_type === 'Integration')) {
+            f.push(`${where(c)}: Integration ${a.actor_id} is a bypass actor, and no App may bypass a main ruleset (GH-05). Next step: remove it in the repository settings.`);
+        }
+    }
+    for (const lr of liveRules.filter(x => x.type === 'pull_request')) {
+        const n = lr.parameters?.required_approving_review_count;
+        if (n !== 1) f.push(`${where(c)}: required_approving_review_count is ${show(n)} live; it must equal exactly 1 (GH-05). Next step: ${APPLY}.`);
+    }
+    if (!(declared.bypass_actors ?? []).some(a => HUMAN_ACTORS.has(a.actor_type)) && live?.current_user_can_bypass !== 'never') {
+        f.push(`${where(c)}: current_user_can_bypass is ${show(live?.current_user_can_bypass)} for the owner's token, not "never", so the owner could bypass a ruleset that names no person. Next step: remove the owner's bypass in the repository settings.`);
+    }
+    return f;
+}
+
+// The live ruleset name set must equal the declared one; each ruleset entry
+// names its own absence, so this names the extras.
+function rulesetSet(c, declared, list, ctx) {
+    if (!Array.isArray(list)) return [`${c.id}: the live ruleset list is ${show(list)}, not a list. Next step: check the endpoint in ${SELF_REL}.`];
+    const names = new Set(CONTROLS.filter(x => x.compare === compareRuleset).map(x => ctx.bodies[x.file]?.name));
+    return list.filter(r => !names.has(r.name)).map(r => `${c.id}: live ruleset ${r.name} (id ${r.id}) is extra: no ${SETTINGS_REL}/ruleset-*.json declares it. Next step: declare it in a reviewed commit, or delete it in the repository settings.`);
+}
+
+// Found by name means PUT by id; absent means POST. A second run never
+// creates a duplicate.
+function planRuleset(c, declared, ctx) {
+    const lr = ctx.get(ctx.fill(RULESETS_PATH));
+    if (!lr.ok) return { blocked: `ruleset ${declared.name} is not written: ${lr.why}`, error: lr.why };
+    const res = resolvedBody(c, declared, ctx);
+    if (res.why !== undefined) return { blocked: res.why, error: res.unreadable ? res.why : undefined };
+    const found = Array.isArray(lr.body) ? lr.body.find(r => r.name === declared.name) : undefined;
+    return {
+        write: found
+            ? { method: 'PUT', path: ctx.fill(RULESET_PATH).replace('{id}', found.id), body: res.body }
+            : { method: c.write.create.method, path: ctx.fill(c.write.create.path), body: res.body },
+    };
+}
+
+// --- the static tag-pattern check (no network) -------------------------------
+
+// Ruleset ref patterns are fnmatch: ** crosses '/', * and ? stay within one
+// segment, [...] classes pass through, everything else is literal.
+export function fnmatchRegex(pattern) {
+    let re = '';
+    for (let i = 0; i < pattern.length; i += 1) {
+        const ch = pattern[i];
+        if (ch === '*' && pattern[i + 1] === '*') {
+            re += '.*';
+            i += 1;
+        } else if (ch === '*') {
+            re += '[^/]*';
+        } else if (ch === '?') {
+            re += '[^/]';
+        } else if (ch === '[' && pattern.indexOf(']', i + 2) > 0) {
+            const end = pattern.indexOf(']', i + 2);
+            const cls = pattern.slice(i + 1, end);
+            re += `[${cls.startsWith('!') ? `^${cls.slice(1)}` : cls}]`.replace(/\\/g, '\\\\');
+            i = end;
+        } else {
+            re += ch.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+        }
+    }
+    return new RegExp(`^${re}$`);
+}
+
+// The release-tag shape; the same regex as RELEASE_TAG in scripts/verify-release-identity.mjs.
+const RELEASE_TAG = /^v(\d+)\.(\d+)(?:\.(\d+))?-(\d+)$/;
+// The x.0 release of the pinned ESR major, so the two-part key comes from
+// releaseIdentity itself. Derived from the pin: verify-upstream-pins refuses a
+// tag literal outside configuration.toml.
+const twoPartConfig = (config) => ({
+    ...config,
+    upstreams: {
+        ...config.upstreams,
+        firefox_esr_tag: String(config.upstreams?.firefox_esr_tag).replace(/^([A-Za-z]+_\d+)_\d+(?:_\d+)?(esr_RELEASE)$/, '$1_0$2'),
+    },
+});
+
+function gitTags(root) {
+    try {
+        return execFileSync('git', ['tag', '-l'], { cwd: root, encoding: 'utf8' }).split('\n').filter(Boolean);
+    } catch {
+        return null;
+    }
+}
+
+function tagPatternFailures(ctx, tags) {
+    const f = [];
+    for (const c of CONTROLS.filter(x => x.compare === compareRuleset)) {
+        const body = ctx.bodies[c.file];
+        if (body?.target !== 'tag') continue;
+        const inc = (body.conditions?.ref_name?.include ?? []).map(fnmatchRegex);
+        const exc = (body.conditions?.ref_name?.exclude ?? []).map(fnmatchRegex);
+        const hits = (ref) => inc.some(re => re.test(ref)) && !exc.some(re => re.test(ref));
+        const pat = show(body.conditions?.ref_name?.include);
+        const twoPart = twoPartConfig(ctx.config);
+        for (const [key, from] of [[releaseIdentity(ctx.config).releaseKey, MANIFEST_REL], [releaseIdentity(twoPart).releaseKey, `the x.0 ESR tag ${twoPart.upstreams.firefox_esr_tag}`]]) {
+            if (!hits(`refs/tags/${key}`)) f.push(`${where(c)}: the include pattern ${pat} does not match release key ${key} (refs/tags/${key}), derived by releaseIdentity() from ${from}. Next step: widen the pattern.`);
+        }
+        if (tags === null) {
+            f.push(`${where(c)}: git tag -l failed, so the pattern cannot be checked against milestone tags. Next step: run this check inside the repository.`);
+        } else {
+            const milestone = tags.filter(t => !RELEASE_TAG.test(t) && hits(`refs/tags/${t}`));
+            if (milestone.length > 0) f.push(`${where(c)}: the include pattern ${pat} matches milestone tag(s) ${milestone.join(', ')}, which are not release-shaped; only the bot App could then create them. Next step: narrow the pattern.`);
+        }
+        if (hits('refs/heads/main')) f.push(`${where(c)}: the include pattern ${pat} matches refs/heads/main. Next step: narrow the pattern to refs/tags/.`);
+    }
+    return f;
+}
+
+const ruleset = (id) => ({
+    id,
+    file: `ruleset-${id}.json`,
+    write: { method: 'PUT', path: RULESET_PATH, create: { method: 'POST', path: 'repos/{owner}/{repo}/rulesets' } },
+    plan: planRuleset,
+    read: RULESETS_PATH,
+    compare: compareRuleset,
+});
+
+// RESEARCH Pattern 1's apply order; planWrites follows this order. Plan 41-02
+// inserts the environments directly before the rulesets. The repo PATCH stays
+// last, so a refused has_discussions key cannot stop any other write.
 export const CONTROLS = Object.freeze([
     {
         id: 'actions-permissions',
@@ -221,6 +407,16 @@ export const CONTROLS = Object.freeze([
         write: { method: 'PUT', path: 'repos/{owner}/{repo}/actions/permissions/fork-pr-contributor-approval' },
         read: 'repos/{owner}/{repo}/actions/permissions/fork-pr-contributor-approval',
         compare: projection,
+    },
+    ruleset('main-integrity'),
+    ruleset('main-review'),
+    ruleset('release-tags'),
+    {
+        id: 'rulesets',
+        file: null,
+        write: null,
+        read: RULESETS_PATH,
+        compare: rulesetSet,
     },
     {
         id: 'immutable-releases',
@@ -313,6 +509,7 @@ export function runChecks(root, overrides = {}) {
     const compared = [];
     const ctx = context(root, overrides, failures);
     if (ctx.slug === null) return { failures, compared, slug: null };
+    failures.push(...tagPatternFailures(ctx, overrides.tags !== undefined ? overrides.tags : gitTags(root)));
     for (const c of CONTROLS) {
         const declared = c.file ? ctx.bodies[c.file] : null;
         if (c.file && declared === undefined) continue; // already red: missing or unparseable
@@ -404,7 +601,41 @@ function fakeState(ctx) {
         },
         [p('repos/{owner}/{repo}/actions/secrets?per_page=100')]: { total_count: 0, secrets: [] },
         [p(RELEASES_PATH)]: [],
+        ...fakeRulesets(ctx),
     };
+}
+
+// Fixture ids: an installation id and an app_id that differ, so a resolver
+// taking the wrong one goes red.
+const FAKE_INSTALLATION_ID = 800001;
+const FAKE_APP_ID = 900001;
+
+function fakeRulesets(ctx) {
+    const p = ctx.fill;
+    const { owner, repo } = ctx.slug;
+    const rs = CONTROLS.filter(c => c.compare === compareRuleset).map(c => ctx.bodies[c.file]);
+    const slugs = [...new Set(rs.flatMap(b => b.bypass_actors.map(appRef)).filter(Boolean))];
+    const installations = slugs.map((app_slug, i) => ({
+        id: FAKE_INSTALLATION_ID + i, app_id: FAKE_APP_ID + i, app_slug, target_type: 'Organization',
+        repository_selection: 'selected', permissions: { metadata: 'read' }, events: [],
+    }));
+    const state = { [p(INSTALLATIONS_PATH)]: { total_count: installations.length, installations } };
+    const list = rs.map((b, i) => ({
+        id: 1001 + i, name: b.name, target: b.target, source_type: 'Repository', source: `${owner}/${repo}`,
+        enforcement: b.enforcement, node_id: `RRS_fixture${i}`, created_at: '2026-10-22T00:00:00Z', updated_at: '2026-10-22T00:00:00Z',
+        _links: { self: { href: `https://api.github.com/${p('repos/{owner}/{repo}/rulesets')}/${1001 + i}` } },
+    }));
+    state[p(RULESETS_PATH)] = list;
+    rs.forEach((b, i) => {
+        const live = resolveActors(b, installations);
+        live.rules = live.rules.map(r => (r.type === 'pull_request'
+            ? { ...r, parameters: { ...r.parameters, automatic_copilot_code_review_enabled: false } }
+            : r));
+        live.conditions.ref_name.exclude = [...live.conditions.ref_name.exclude];
+        live.current_user_can_bypass = b.bypass_actors.some(a => HUMAN_ACTORS.has(a.actor_type)) ? 'always' : 'never';
+        state[p(RULESET_PATH).replace('{id}', 1001 + i)] = { ...list[i], ...live };
+    });
+    return state;
 }
 
 const getterOf = (state) => (path) => (Object.hasOwn(state, path)
@@ -421,7 +652,7 @@ function selfTest() {
     }
     const base = fakeState(ctx);
     const listed = listSettingsDir(REPO_ROOT);
-    const fixed = { config: ctx.config, listSettings: () => listed };
+    const fixed = { config: ctx.config, listSettings: () => listed, tags: ['v1.0', 'v1.4'] };
     const run = (extra) => runChecks(REPO_ROOT, { ...fixed, get: getterOf(base), ...extra });
     const mutated = (mutate) => {
         const s = clone(base);
@@ -438,6 +669,18 @@ function selfTest() {
     console.log(`  ok  baseline: the declared state served back -> green (${baseline.compared.length} control(s))`);
 
     const PERMS = PERMISSIONS_PATH;
+    const rulesetId = (name) => base[ctx.fill(RULESETS_PATH)].find(r => r.name === name).id;
+    const ruleMut = (name, mutate) => mutated((s, p) => mutate(s[p(RULESET_PATH).replace('{id}', rulesetId(name))]));
+    const pr = (r) => r.rules.find(x => x.type === 'pull_request').parameters;
+    const readBody = readSettingsBody(REPO_ROOT);
+    const withTagPattern = (include) => ({
+        readBody: (f) => {
+            const b = readBody(f);
+            if (f === 'ruleset-release-tags.json') b.conditions.ref_name.include = include;
+            return b;
+        },
+    });
+    const twoPartKey = releaseIdentity(twoPartConfig(ctx.config)).releaseKey;
     const set = (path, key, value) => mutated((s, p) => { s[p(path)][key] = value; });
     const plants = [
         ['allowed_actions all', set(PERMS, 'allowed_actions', 'all'), ['actions-permissions', '"all"']],
@@ -452,6 +695,17 @@ function selfTest() {
         ['allow_auto_merge false', set('repos/{owner}/{repo}', 'allow_auto_merge', false), ['repo (', 'allow_auto_merge']],
         ['immutable releases disabled', set('repos/{owner}/{repo}/immutable-releases', 'enabled', false), ['immutable-releases', 'enabled']],
         ['private vulnerability reporting disabled', set('repos/{owner}/{repo}/private-vulnerability-reporting', 'enabled', false), ['private-vulnerability-reporting', 'enabled']],
+        ['main-review missing from the live list', mutated((s, p) => { s[p(RULESETS_PATH)] = s[p(RULESETS_PATH)].filter(r => r.name !== 'main-review'); }), ['main-review', 'missing']],
+        ['an approving-review count of 2', ruleMut('main-review', (r) => { pr(r).required_approving_review_count = 2; }), ['main-review', 'required_approving_review_count is 2']],
+        ['an approving-review count of 0', ruleMut('main-review', (r) => { pr(r).required_approving_review_count = 0; }), ['main-review', 'required_approving_review_count is 0']],
+        ['an Integration bypass actor on main-review', ruleMut('main-review', (r) => { r.bypass_actors.push({ actor_id: FAKE_APP_ID, actor_type: 'Integration', bypass_mode: 'always' }); }), ['main-review', 'no App may bypass a main ruleset']],
+        ['current_user_can_bypass always on main-integrity', ruleMut('main-integrity', (r) => { r.current_user_can_bypass = 'always'; }), ['main-integrity', 'current_user_can_bypass is "always"']],
+        ['a release-tags bypass actor holding the installation id', ruleMut('release-tags', (r) => { r.bypass_actors[0].actor_id = FAKE_INSTALLATION_ID; }), ['release-tags', String(FAKE_INSTALLATION_ID)]],
+        ['the bot App not installed', mutated((s, p) => { s[p(INSTALLATIONS_PATH)] = { total_count: 0, installations: [] }; }), ['release-tags', 'is not installed on the org']],
+        ['an extra live ruleset', mutated((s, p) => { s[p(RULESETS_PATH)].push({ id: 1999, name: 'stray-ruleset', target: 'branch', enforcement: 'active' }); }), ['stray-ruleset', 'extra']],
+        ['release-tags pattern refs/tags/v*', withTagPattern(['refs/tags/v*']), ['release-tags', 'milestone tag(s) v1.0, v1.4']],
+        ['release-tags pattern missing the two-part key', withTagPattern(['refs/tags/v[0-9]*.[0-9]*.[0-9]*-[0-9]*']), ['release-tags', `release key ${twoPartKey}`]],
+        ['release-tags pattern refs/** reaching main', withTagPattern(['refs/**']), ['release-tags', 'matches refs/heads/main']],
         ['a repository secret count of 1', mutated((s, p) => { s[p('repos/{owner}/{repo}/actions/secrets?per_page=100')] = { total_count: 1, secrets: [{ name: 'PLANTED' }] }; }), ['repository-secrets', 'holds 1']],
         ['an orphan settings file', { listSettings: () => [...listed, 'orphan.json'] }, ['orphan.json', 'orphan']],
         ['a missing settings file', { listSettings: () => listed.filter(f => f !== 'actions-permissions.json') }, ['actions-permissions.json', 'missing']],
@@ -473,6 +727,7 @@ function selfTest() {
     // Controls: keys GitHub owns never decide.
     const controls = [
         ['immutable releases enforced_by_owner true', set('repos/{owner}/{repo}/immutable-releases', 'enforced_by_owner', true)],
+        ['an OrganizationAdmin actor returned with actor_id 1', ruleMut('main-review', (r) => { r.bypass_actors[0].actor_id = 1; })],
     ];
     for (const [name, extra] of controls) {
         const { failures } = run(extra);
@@ -492,7 +747,9 @@ function selfTest() {
         const order = CONTROLS.filter(c => c.write !== null).map(c => c.id);
         const inOrder = writes.length === order.length && writes.every((w, i) => w.id === order[i]);
         if (errors.length === 0 && blocked.length === 0 && inOrder && at('actions-permissions') < at('actions-selected') && at('immutable-releases') >= 0
-            && writes[at('immutable-releases')].body === null && writes.at(-1).id === 'repo') {
+            && writes[at('immutable-releases')].body === null && writes.at(-1).id === 'repo'
+            && writes.filter(w => w.file?.startsWith('ruleset-')).every(w => w.method === 'PUT' && /\/rulesets\/\d+$/.test(w.path))
+            && writes[at('release-tags')].body.bypass_actors[0].actor_id === FAKE_APP_ID) {
             console.log(`  ok  planWrites with zero Releases -> ${writes.map(w => w.id).join(', ')}`);
         } else {
             console.error(`${NAME}: --self-test FAIL -- planWrites order or content is wrong: ${writes.map(w => `${w.id}:${w.method}`).join(', ')} | blocked: ${blocked.join(' | ')} | errors: ${errors.join(' | ')}`);
@@ -507,6 +764,20 @@ function selfTest() {
             console.log(`  ok  planWrites with one Release -> no immutable-releases write, BLOCKED naming 'GH-09'`);
         } else {
             console.error(`${NAME}: --self-test FAIL -- planWrites with one Release did not block immutable releases: ${writes.map(w => w.id).join(', ')} | blocked: ${blocked.join(' | ') || '(none)'}`);
+            failed += 1;
+        }
+    }
+
+    {
+        const s = clone(base);
+        s[ctx.fill(RULESETS_PATH)] = [];
+        s[ctx.fill(INSTALLATIONS_PATH)] = { total_count: 0, installations: [] };
+        const { writes, blocked } = plan(s);
+        const rs = writes.filter(w => w.file?.startsWith('ruleset-'));
+        if (rs.length === 2 && rs.every(w => w.method === 'POST') && blocked.some(b => b.includes('release-tags') && b.includes('is not installed on the org'))) {
+            console.log(`  ok  planWrites with no live ruleset and no bot App -> POST main-integrity and main-review, BLOCKED naming 'release-tags'`);
+        } else {
+            console.error(`${NAME}: --self-test FAIL -- planWrites over an empty ruleset list: ${rs.map(w => `${w.id}:${w.method}`).join(', ')} | blocked: ${blocked.join(' | ') || '(none)'}`);
             failed += 1;
         }
     }
