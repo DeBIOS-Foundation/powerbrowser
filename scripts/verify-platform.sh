@@ -4719,6 +4719,15 @@ run_own_checks() {
     # workflows, and each GH-12 fault over a good release.yml fixture; each red naming file and
     # job. It writes nothing.
     "workflows-self-test|node $REPO_ROOT/scripts/verify-workflows.mjs --self-test"
+    # NEW (Phase 41, AUTO-09): zizmor --offline over .github/workflows/ at its default persona,
+    # green only on exit 0. Honestly --quick, offline audit; the zizmor binary comes from the
+    # theia shell or is self-provided through nix develop on first use, and absent tooling fails
+    # naming the shell, never skips.
+    "zizmor|node $REPO_ROOT/scripts/verify-zizmor.mjs"
+    # zizmor-self-test audits the mkdtemp bad and clean fixtures: bad (event text in run:,
+    # actions/checkout@v4) must exit non-zero naming template-injection and unpinned-uses, clean
+    # must exit 0. It writes nothing in the tree.
+    "zizmor-self-test|node $REPO_ROOT/scripts/verify-zizmor.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then

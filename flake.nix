@@ -45,6 +45,8 @@
             # produced them) reproduces those bytes. A distro package of a
             # different version passes the raster step and fails byte identity.
             pkgs.inkscape
+            # zizmor for the AUTO-09 quick row (scripts/verify-zizmor.mjs), 1.29.0 from the locked nixpkgs.
+            pkgs.zizmor
           ];
           buildInputs = [
             pkgs.libx11
