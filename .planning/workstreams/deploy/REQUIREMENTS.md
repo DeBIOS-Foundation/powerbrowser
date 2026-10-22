@@ -61,9 +61,9 @@ the project's own planning record. This section must survive when this file repl
 ### Release identity
 
 - [x] **REL-01**: `configuration.toml [product]` gains a `revision` field. The generator derives the version files and the release key `v<ESR>-<revision>` from it and the ESR pin. The quick row `release-identity` derives the tag, the version files and the descriptor version from the tree and requires them to agree; its self-test plants a hand-written version literal and a descriptor version that disagrees with the key. The network check that the key is strictly greater than the latest Release tag runs in `release.yml` (DIST-02) and in the train's dispatch validation (TRAIN-01), not in this row. (A)
-- [ ] **UPD-11**: One update channel name is used everywhere. The quick row `update-channel` derives the channel from the generated `.mozconfig` (`MOZ_UPDATE_CHANNEL`, `MAR_CHANNEL_ID`, `ACCEPTED_MAR_CHANNEL_IDS`) and compares it with every consumer (`build-update-xml.mjs`, `docs/RELEASING.md`, `release-manifest.json`, the descriptor path); the self-test plants `release`/`powerbrowser-release` in one consumer. The chosen name is recorded in PROJECT.md Key Decisions. (A)
-- [ ] **DIST-06**: The owner commits the pin bump to `FIREFOX_153_5_1esr_RELEASE` (6cd88e7d), changing `configuration.toml:115` and the `rebase-upstream.yml:33` `tag` default together, with `configuration.toml` regenerated and `--quick` green. A dispatched run of `rebase-upstream.yml` against that tag is then green; it is the first real run of that workflow. DIST-06 lands before AUTO-08, which deletes the `tag` default and changes `verify-upstream-pins.mjs` to assert its absence. (A)
-- [ ] **UPD-12**: The shipped `distribution/policies.json` carries no `AppUpdateURL`; `MOZ_APPUPDATE_HOST` from `[urls].update` is the only update URL source. The `ng064` comparand and the reason text at `endpoint-allowlist.json:22` change in the same commit. (A)
+- [x] **UPD-11**: One update channel name is used everywhere. The quick row `update-channel` derives the channel from the generated `.mozconfig` (`MOZ_UPDATE_CHANNEL`, `MAR_CHANNEL_ID`, `ACCEPTED_MAR_CHANNEL_IDS`) and compares it with every consumer (`build-update-xml.mjs`, `docs/RELEASING.md`, `release-manifest.json`, the descriptor path); the self-test plants `release`/`powerbrowser-release` in one consumer. The chosen name is recorded in PROJECT.md Key Decisions. (A)
+- [x] **DIST-06**: The owner commits the pin bump to `FIREFOX_153_5_1esr_RELEASE` (6cd88e7d), changing `configuration.toml:115` and the `rebase-upstream.yml:33` `tag` default together, with `configuration.toml` regenerated and `--quick` green. A dispatched run of `rebase-upstream.yml` against that tag is then green; it is the first real run of that workflow. DIST-06 lands before AUTO-08, which deletes the `tag` default and changes `verify-upstream-pins.mjs` to assert its absence. (A)
+- [x] **UPD-12**: The shipped `distribution/policies.json` carries no `AppUpdateURL`; `MOZ_APPUPDATE_HOST` from `[urls].update` is the only update URL source. The `ng064` comparand and the reason text at `endpoint-allowlist.json:22` change in the same commit. (A)
 - [x] **UPD-13**: `app.releaseNotesURL`, `app.releaseNotesURL.aboutDialog`, `app.update.url.manual` and `app.update.url.details` are generated from `[urls].release_notes` and `[urls].homepage`. The About dialog's release-notes and fallback links open the stated pages, and the fallback link no longer throws on an empty URL. In the same commit, the `powerbrowser.org` entry in `endpoint-allowlist.json` (now `deny`, about lines 85-87) is re-dispositioned to `user-initiated` (UPD-33), and the commit records how `verify-theia-endpoints` treats the stated homepage (SEED-002 §7). (A)
 - [x] **UPD-33**: `endpoint-allowlist.json` gains a third disposition, `user-initiated`, for hosts the browser may reach only after a user click (powerbrowser.org, github.com). The endpoint checks treat an unattended request to a `user-initiated` host as a failure, exactly as for a `deny` host, and pass only requests that follow a user action in the same probe; the self-test plants an unattended prefetch to a `user-initiated` host and requires it to go red naming the host. `allowlist-doc-consistency` and the generator accept the new disposition. (A)
 - [x] **UPD-25**: The generator's firefox-branding emitter writes `app.update.langpack.enabled=false` for both variants, and both tracked branding files are regenerated and byte-compared. A row derives the set of update prefs from the generator output and asserts it sets none of `app.update.auto`, the staging pref, the check interval, `app.update.promptWaitTime` or `app.update.badgeWaitTime`; its self-test plants one of them. (A)
@@ -98,7 +98,7 @@ the project's own planning record. This section must survive when this file repl
 
 ### Upstream automation
 
-- [ ] **AUTO-08**: After DIST-06, `rebase-upstream.yml` gains `on: workflow_call` with a `tag` input that has no default, and runs `node scripts/generate.mjs` inside `nix develop .#theia`. `verify-upstream-pins.mjs` asserts that the input has no default, so an ESR bump never edits a workflow file. (A)
+- [x] **AUTO-08**: After DIST-06, `rebase-upstream.yml` gains `on: workflow_call` with a `tag` input that has no default, and runs `node scripts/generate.mjs` inside `nix develop .#theia`. `verify-upstream-pins.mjs` asserts that the input has no default, so an ESR bump never edits a workflow file. (A)
 - [ ] **AUTO-01**: `scripts/detect-upstreams.mjs` detects a new ESR point release by listing `FIREFOX_<pinned major>_*esr_RELEASE` tags (never `_BUILDn`), with product-details `FIREFOX_ESR` used only as a cross-check. The quick row `detect-upstreams-self-test` covers the tag mapping and the major guard from fixtures, including one where `FIREFOX_ESR` is `175.0esr` and a `FIREFOX_153_23_0esr_RELEASE` tag exists, which must yield a 153.23 detection. (A)
 - [ ] **AUTO-06**: On detection the train's `bump` job (rebase-upstream.yml through `workflow_call`, `contents: read`, `persist-credentials: false`) moves the pin, regenerates, replays the patches and runs check-patch-surface, scan-brand-residue, the generated byte-identity check and `--quick`. The `bump-pr` job (env `bot`) then opens or updates `chore/esr-<tag>` with the App token, so `verify.yml` runs on it without an approval click. (A)
 - [ ] **AUTO-07**: A replay failure causes the train's report job to open or update exactly one issue titled "ESR <tag>: patch <NNN> did not apply", carrying the apply log and `git -C upstream diff` and assigned to the owner. The automation never edits a patch by hand. (A)
@@ -379,9 +379,9 @@ The roadmapper fills the Phase column.
 | Requirement | Phase | Status |
 |---|---|---|
 | REL-01 | Phase 40 | Complete |
-| UPD-11 | Phase 40 | Pending |
-| DIST-06 | Phase 40 | Pending |
-| UPD-12 | Phase 40 | Pending |
+| UPD-11 | Phase 40 | Complete |
+| DIST-06 | Phase 40 | Complete |
+| UPD-12 | Phase 40 | Complete |
 | UPD-13 | Phase 40 | Complete |
 | UPD-25 | Phase 40 | Complete |
 | PKG-08 | Phase 40 | Complete |
@@ -403,7 +403,7 @@ The roadmapper fills the Phase column.
 | GH-01 | Phase 42 | Pending |
 | GH-14 | Phase 42 | Pending |
 | AUTO-10 | Phase 40 | Complete |
-| AUTO-08 | Phase 40 | Pending |
+| AUTO-08 | Phase 40 | Complete |
 | AUTO-01 | Phase 43 | Pending |
 | AUTO-06 | Phase 43 | Pending |
 | AUTO-07 | Phase 43 | Pending |

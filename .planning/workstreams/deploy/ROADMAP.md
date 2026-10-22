@@ -71,7 +71,7 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
 
 **External gate**: The executor commits the pin bump (DIST-06) locally; the owner pushes and, after AUTO-08 lands, dispatches the first `rebase-upstream.yml` run with an explicit `tag`.
 **Research flag**: None (SUMMARY: A1/A2 generator work is a standard pattern).
-**Plans**: 7/8 plans executed
+**Plans**: 8/8 plans executed
 
 Plans:
 **Wave 1**
@@ -104,7 +104,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 40-08-PLAN.md — End-of-phase dev build, full-tier evidence, About-dialog human check, owner push and first rebase-upstream.yml dispatch
+- [x] 40-08-PLAN.md — End-of-phase dev build, full-tier evidence, About-dialog human check, owner push and first rebase-upstream.yml dispatch
 
 ### Phase 41: Repository controls and GitHub Apps (A)
 
@@ -431,7 +431,7 @@ Phases execute in numeric order. Phase 42 depends only on 41. Phases 44 and 45 c
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 40. Release identity, ESR pin and patch regeneration (A) | 7/8 | In Progress|  |
+| 40. Release identity, ESR pin and patch regeneration (A) | 8/8 | In Progress|  |
 | 41. Repository controls and GitHub Apps (A) | 0/TBD | Not started | - |
 | 42. Community surface and release documentation (A) | 0/TBD | Not started | - |
 | 43. Release train skeleton and upstream bump automation (A) | 0/TBD | Not started | - |
