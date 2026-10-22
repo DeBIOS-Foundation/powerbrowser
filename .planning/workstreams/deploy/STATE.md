@@ -1,20 +1,21 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.6
-current_phase: 40
-current_phase_name: Release identity, ESR pin and patch regeneration (A)
+current_phase: 41
+current_phase_name: Repository controls and GitHub Apps (A)
 current_plan: 8
 status: executing
-stopped_at: Completed 40-08-PLAN.md
-last_updated: "2026-10-22T05:02:12.513Z"
-last_activity: 2026-10-20
-last_activity_desc: Phase 40 execution started
-state_head: 2d4225a2de420519ef51a0dd0f213b49dbf1e579
+stopped_at: Phase 40 complete, ready to execute Phase 41
+last_updated: "2026-10-22T16:22:33.960Z"
+last_activity: 2026-10-22
+last_activity_desc: Phase 40 complete, transitioned to Phase 41
+state_head: b179d7f50a33fade432fdd2b527fdd3e2bf563c0
 progress:
   total_phases: 19
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 12
   completed_plans: 8
+  percent: 5
 milestone_name: Deployment setup
 ---
 
@@ -29,12 +30,12 @@ See: .planning/PROJECT.md (updated 2026-10-20)
 
 ## Current Position
 
-Phase: 40 (Release identity, ESR pin and patch regeneration (A)) — all 8 plans complete, ready for verification
-Plan: 8 of 8
-Status: 40-08 complete (owner About-dialog pass; first rebase-upstream.yml run success). Phase 40 ready for verification. Phase 41 planned (4 plans), not started.
-Last activity: 2026-10-21 — 40-08 complete
+Phase: 41 — Repository controls and GitHub Apps (A)
+Plan: Not started
+Status: Ready to execute
+Last activity: 2026-10-22 — Phase 40 complete, transitioned to Phase 41
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 5%
 
 ## Progress
 
@@ -100,7 +101,7 @@ Owner decisions 1–22 of 2026-10-20 are recorded in `.planning/workstreams/depl
 
 **Last session:** 2026-10-22T05:02:12.486Z
 
-**Stopped At:** Completed 40-08-PLAN.md
+**Stopped At:** Phase 40 complete, ready to execute Phase 41
 **Resume File:** None
 
 ## Milestone Context

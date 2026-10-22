@@ -34,7 +34,7 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
 - Integer phases (40, 41, ...): planned milestone work
 - Decimal phases (40.1, ...): urgent insertions (marked INSERTED)
 
-- [ ] **Phase 40: Release identity, ESR pin and patch regeneration (A)** - Pin 153.5.1esr; derive release key, channel, update URLs and notices from configuration.toml; patches change only by regeneration
+- [x] **Phase 40: Release identity, ESR pin and patch regeneration (A)** - Pin 153.5.1esr; derive release key, channel, update URLs and notices from configuration.toml; patches change only by regeneration (completed 2026-10-22)
 - [ ] **Phase 41: Repository controls and GitHub Apps (A)** - Rulesets, environments, Actions policy, Apps and the workflows trust-boundary row, all declared in the tree and read back
 - [ ] **Phase 42: Community surface and release documentation (A)** - Labels, issue forms, security and support files, RENEWALS.md and corrected release docs
 - [ ] **Phase 43: Release train skeleton and upstream bump automation (A)** - Hourly clock, tag-based ESR and Node detectors, bot bump PRs, one tracking issue per release
@@ -71,7 +71,7 @@ The imported platform allows exactly three Mozilla hosts, all one feature, Remot
 
 **External gate**: The executor commits the pin bump (DIST-06) locally; the owner pushes and, after AUTO-08 lands, dispatches the first `rebase-upstream.yml` run with an explicit `tag`.
 **Research flag**: None (SUMMARY: A1/A2 generator work is a standard pattern).
-**Plans**: 8/8 plans executed
+**Plans**: 8/8 plans complete
 
 Plans:
 **Wave 1**
@@ -431,7 +431,7 @@ Phases execute in numeric order. Phase 42 depends only on 41. Phases 44 and 45 c
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 40. Release identity, ESR pin and patch regeneration (A) | 8/8 | In Progress|  |
+| 40. Release identity, ESR pin and patch regeneration (A) | 8/8 | Complete    | 2026-10-22 |
 | 41. Repository controls and GitHub Apps (A) | 0/TBD | Not started | - |
 | 42. Community surface and release documentation (A) | 0/TBD | Not started | - |
 | 43. Release train skeleton and upstream bump automation (A) | 0/TBD | Not started | - |
