@@ -6,6 +6,17 @@
 # patch from the applied upstream/ and byte-compares it, so a hand edit goes
 # red naming the patch.
 #
+# CR-01 (phase 40 review): an ESR bump moves upstream/ under the patches. A
+# clean --3way replay onto a moved file changes the patch's `index` line, its
+# @@ ranges and its context lines on its own, so a byte compare there would
+# call a clean replay a hand edit. --check therefore compares per file:
+#  - a file whose pre-image blob in the tracked patch equals the replayed
+#    tree's (upstream did not move it) is compared byte for byte;
+#  - a file upstream moved is compared on its +/- lines only, with the index
+#    line, the @@ lines and the context lines stripped -- what a hand edit or a
+#    silent no-op replay changes and a clean replay does not. A match is a
+#    NOTE naming the file: regenerate and commit the patch with the pin bump.
+#
 # The diff is taken against HEAD, not the worktree alone: apply-patches.sh's
 # --3way stages its result into the index, so a worktree-only diff is empty.
 # Modes: no flag regenerates every patch in place (write); --check compares;
@@ -35,6 +46,20 @@ fail() {
 # Prints the patch's own '+++ b/' target paths, in file order.
 patch_paths() {
   grep -E '^\+\+\+ b/' "$1" | sed 's#^+++ b/##' || true
+}
+
+# Prints "<path> <pre-image blob>" for each file section of a patch.
+preimages() {
+  awk '/^diff --git /{p=$4; sub(/^b\//,"",p)} /^index /{split($2,h,/\.\./); print p, h[1]}' "$1"
+}
+
+# Prints a patch with the index, @@ and context lines removed from the file
+# sections named in $2 (space-separated paths); every +/- line and every file
+# header stays. Those three are what a clean --3way replay onto a moved file
+# rewrites by itself.
+normalise() {
+  awk -v moved=" $2 " '/^diff --git /{p=$4; sub(/^b\//,"",p); strip=index(moved, " " p " ")>0; print; next}
+    strip && (/^index / || /^@@ / || /^ /) {next} {print}' "$1"
 }
 
 # Prints the regeneration of one tracked patch on stdout. Shared by every mode
@@ -78,7 +103,7 @@ preflight() {
 
 run_check() {
   preflight
-  local p name
+  local p name moved drifted=0
   tmp="$(mktemp -d)" # global: the EXIT trap runs after this function's locals are gone
   trap 'rm -rf "$tmp"' EXIT
   for p in "${patch_files[@]}"; do
@@ -86,11 +111,22 @@ run_check() {
     regenerate_one "$p" > "$tmp/$name"
     [ -s "$tmp/$name" ] || fail "regenerating $name produced nothing: upstream/ is pristine or unpatched" \
       "bash scripts/apply-patches.sh"
-    if ! cmp -s "$tmp/$name" "$p"; then
-      fail "$name differs from its regeneration from upstream/: a hunk was edited by hand, or upstream/ is not the applied pin. Next step: regenerate it with bash scripts/regenerate-patches.sh from a correctly patched upstream/."
+    cmp -s "$tmp/$name" "$p" && continue
+    # The files whose pre-image blob differs: upstream moved them under the patch.
+    moved="$(awk 'NR==FNR{t[$1]=$2; next} t[$1]!=$2{print $1}' <(preimages "$p") <(preimages "$tmp/$name") | tr '\n' ' ')"
+    moved="${moved% }"
+    if [ -z "$moved" ]; then
+      fail "$name differs from its regeneration from upstream/, and upstream/ has the same files it was generated from: a hunk was edited by hand, or upstream/ was not replayed with apply-patches.sh" \
+        "regenerate it with bash scripts/regenerate-patches.sh from a correctly patched upstream/"
     fi
+    if ! cmp -s <(normalise "$tmp/$name" "$moved") <(normalise "$p" "$moved"); then
+      fail "$name's added or removed lines differ from its regeneration from upstream/: a hunk was edited by hand, or the replay onto the moved upstream file(s) $moved changed what the patch does" \
+        "inspect the replayed upstream/, then regenerate it with bash scripts/regenerate-patches.sh"
+    fi
+    echo "regenerate-patches: NOTE -- $name replays onto upstream file(s) that moved since it was generated ($moved); its added and removed lines match. Next step: run bash scripts/regenerate-patches.sh and commit the result with the pin bump."
+    drifted=$((drifted + 1))
   done
-  echo "regenerate-patches: PASS -- ${#patch_files[@]} patch(es) equal their regeneration from upstream/"
+  echo "regenerate-patches: PASS -- ${#patch_files[@]} patch(es) equal their regeneration from upstream/ ($drifted on moved upstream files, compared on their added and removed lines)"
 }
 
 # Write mode: the only sanctioned way a patch changes. Every patch is
@@ -216,6 +252,28 @@ run_self_test() {
   else
     out="$wrote"$'\n'"$out"
     red "write mode did not rewrite the stale 010-a.patch into a passing state (write rc=$wrc, check rc=$rc)"
+  fi
+
+  # 7. CR-01: a clean --3way replay onto a moved upstream passes. "moved" is
+  # the pristine fixture with one upstream commit that shifts one.txt's @@
+  # range and context; two.txt is unmoved and stays byte-compared.
+  cp -r "$fx/pristine" "$fx/moved"
+  printf 'zero\nalpha\nbeta\ngamma\ndelta\n' > "$fx/moved/one.txt"
+  git -C "$fx/moved" -c user.name=self-test -c user.email=self-test@invalid commit -q -am "upstream moves one.txt"
+  git -C "$fx/moved" apply --3way "$fx/p/010-a.patch" "$fx/p/020-b.patch" 2>/dev/null
+  run_child --check --upstream "$fx/moved" --patches "$fx/p"
+  if [ "$rc" -eq 0 ] && [[ "$out" == *"NOTE -- 010-a.patch"* ]] && [[ "$out" != *"NOTE -- 020-b.patch"* ]]; then
+    pass "a clean --3way replay onto a moved upstream passes, with a regenerate NOTE naming 010-a.patch only"
+  else
+    red "a clean --3way replay onto a moved upstream did not pass with a NOTE naming 010-a.patch only (rc=$rc)"
+  fi
+
+  # 8. CR-01: a hand-edited hunk still fails on the moved upstream
+  run_child --check --upstream "$fx/moved" --patches "$fx/edited"
+  if [ "$rc" -ne 0 ] && [[ "$out" == *010-a.patch* ]] && [[ "$out" == *"edited by hand"* ]]; then
+    pass "a hand-edited + line in 010-a.patch still goes red on the moved upstream"
+  else
+    red "a hand-edited + line in 010-a.patch did not go red on the moved upstream (rc=$rc)"
   fi
 
   return "$failed"
