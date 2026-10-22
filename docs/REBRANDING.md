@@ -249,7 +249,7 @@ with the OpenCode adapter. A manifest that still carries it now fails with
 | `product.vendor_display` | Required | Hard failure | `brand.ftl` vendor name, installer `CompanyName` |
 | `product.description` | Optional | Nothing emitted; no surface consumes it today — kept as the human-readable summary of the product | None (declared and validated only) |
 | `product.homepage` | Optional | Falls back per consumer; product metadata, never a contacted surface | In-app repo link and Eclipse sentence home clause when no `installer.support_url` is stated; installer defines require one of the two |
-| `product.revision` | Required | Hard failure; a quoted or fractional value is refused | `powerbrowser/packaging/version/release.txt` as the release key `v<ESR>-<revision>`. A whole number of at least 1, unquoted; reset to 1 when the ESR pin moves, increased for a rebuild on the same ESR |
+| `product.revision` | Required | Hard failure; a quoted value, or a number written with a decimal point (`1.5`, and also `1.0`), is refused | `powerbrowser/packaging/version/release.txt` as the release key `v<ESR>-<revision>`. A whole number of at least 1, unquoted; reset to 1 when the ESR pin moves, increased for a rebuild on the same ESR |
 
 ### `[identity]` — the application identity (all required)
 

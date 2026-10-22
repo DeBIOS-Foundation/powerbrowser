@@ -230,6 +230,11 @@ function settingOf(path) {
  * caller: it is the merge's only Phase-2 coverage, and deleting it would
  * delete the merge's tests along with it.
  */
+// IN-07: TOML `1.0` and `1` both parse to the number 1, so an integer setting written with a
+// decimal point is visible only to a second parse that returns integers as BigInt. Maps each
+// loaded layer to the integer-typed paths it writes that way; resolveConfig refuses them.
+const DECIMAL_INTEGERS = new WeakMap();
+
 function loadLayer(path) {
     let text;
     try {
@@ -241,7 +246,11 @@ function loadLayer(path) {
         process.exit(1);
     }
     try {
-        return parse(text);
+        const layer = parse(text);
+        const probe = parse(text, { integersAsBigInt: true });
+        DECIMAL_INTEGERS.set(layer, Object.keys(SCHEMA_KEYS).filter(k => SCHEMA_KEYS[k].type === 'integer'
+            && typeof readPath(probe, k) === 'number' && Number.isInteger(readPath(probe, k))));
+        return layer;
     } catch (err) {
         if (!(err instanceof TomlError)) throw err;
         // Only the structured line and column are used. The caught error's own
@@ -4177,6 +4186,14 @@ export function resolveConfig(defaultsPath = MANIFEST_PATH, downstreamPath) {
     const mergedLeaves = [];
     collectLeaves(config, '', mergedLeaves, []);
     const failures = validate(config, mergedLeaves);
+    for (const layer of [defaultsLayer, downstreamLayer]) {
+        for (const path of DECIMAL_INTEGERS.get(layer) ?? []) {
+            failures.push(
+                `${path} is written with a decimal point, but this setting has to be ${SCHEMA_KEYS[path].type_help}. `
+                + `Correct it in ${MANIFEST_NAME}, then run: ${RERUN}`,
+            );
+        }
+    }
 
     // R11 (NG-064): a downstream build (PB_CONFIG_DIR) must state its own update address.
     // Otherwise it inherits the platform's host and its users are offered the platform's
@@ -5524,6 +5541,12 @@ function selfTest() {
             name: 'variant with an id nothing builds',
             toml: `${FIXTURE_DOWNSTREAM.replace('id = "dev"', 'id = "relase"')}`,
             expect: 'is never used',
+        },
+        {
+            // IN-07. TOML 1.0 parses to the number 1; a whole number with a decimal point is still refused.
+            name: 'revision written with a decimal point',
+            toml: (FIXTURE_BASE + FIXTURE_URLS).replace('revision = 1\n', 'revision = 1.0\n'),
+            expect: 'product.revision is written with a decimal point',
         },
         {
             // CFG-02's core. A required setting is one a downstream must state
