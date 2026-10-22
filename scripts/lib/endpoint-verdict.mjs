@@ -3,8 +3,9 @@
 // The one host-matching and verdict rule for powerbrowser/endpoint-allowlist.json (UPD-33).
 // Pure: no I/O. scripts/verify-endpoints.sh layer 3 is an unattended capture and calls
 // violations() with `userAction: false`; its --disposition-self-test calls both modes over
-// fixture logs. Layer 4 (scripts/verify-ng-069-sidecar-egress.mjs) keeps its own presence rule
-// for now (orchestrator resolution 3).
+// fixture logs. Layer 4 (scripts/verify-ng-069-sidecar-egress.mjs) calls violations() with
+// `userAction: false` over the hosts the sidecar resolved; its static check of derived hosts
+// stays a presence rule.
 
 // allow: may be contacted unattended. deny: must never be contacted. user-initiated: reachable
 // only after a user action such as a click; an unattended request fails exactly like deny.

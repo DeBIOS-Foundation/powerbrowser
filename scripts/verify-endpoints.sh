@@ -38,7 +38,8 @@
 #   Layer 4 -- the sidecar's egress (NG-069). The Theia backend is a Node process that
 #   Gecko's MOZ_LOG never sees. A NODE_OPTIONS preload records every hostname any
 #   sidecar Node process resolves during a session that installs one extension, and each
-#   one must be covered by an allowlist row. scripts/verify-ng-069-sidecar-egress.mjs.
+#   one must pass the same unattended verdict as layer 3 (an `allow` row).
+#   scripts/verify-ng-069-sidecar-egress.mjs.
 #
 # `--layer 1|2|3|4` runs one layer; no flag runs all four. `--positive-control`
 # runs each selected layer's control instead of its assertion and exits 0
