@@ -563,6 +563,8 @@ const SELFTEST_MANIFEST = [
     '',
     '[urls]',
     'update = "https://updates.example.org/update.xml"',
+    'release_notes = "https://selftest.example.org/releases"',
+    'homepage = "https://selftest.example.org"',
     '',
 ].join('\n');
 

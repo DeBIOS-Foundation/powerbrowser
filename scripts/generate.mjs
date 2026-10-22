@@ -4182,7 +4182,8 @@ export function resolveConfig(defaultsPath = MANIFEST_PATH, downstreamPath) {
     // Otherwise it inherits the platform's host and its users are offered the platform's
     // updates. The platform host is derived from the platform manifest, never typed here.
     if (downstreamPath !== undefined) {
-        const platformUpdate = resolveConfig(defaultsPath, undefined).config?.urls?.update;
+        const platform = resolveConfig(defaultsPath, undefined).config;
+        const platformUpdate = platform?.urls?.update;
         const update = config?.urls?.update;
         // M-2: parse inside try so a mistyped address returns the named R11
         // failure instead of throwing TypeError: Invalid URL.
@@ -4198,6 +4199,21 @@ export function resolveConfig(defaultsPath = MANIFEST_PATH, downstreamPath) {
                 `urls.update is ${JSON.stringify(update)}, the platform's own update address, and a downstream build must not ship it. `
                 + `Write your own https update address as [urls] update in ${MANIFEST_NAME}, then run: ${RERUN}`,
             );
+        }
+        // WR-04: the same for the About dialog's release-notes and manual-download links when the
+        // downstream ships under a different name: an omitted key inherits the platform's page and
+        // sends the downstream's users there. A copy that keeps the platform identity is exempt.
+        const identityOf = c => JSON.stringify([c?.identity, c?.product?.vendor_machine, c?.product?.vendor_display]);
+        if (platform !== undefined && identityOf(config) !== identityOf(platform)) {
+            for (const [key, what] of [['release_notes', 'release-notes page'], ['homepage', 'download page']]) {
+                const value = config?.urls?.[key];
+                if (!isUnset(value) && value === platform.urls?.[key]) {
+                    failures.push(
+                        `urls.${key} is ${JSON.stringify(value)}, the platform's own ${what}, so the About dialog of a build under your name would send its users there. `
+                        + `Write your own https address as [urls] ${key} in ${MANIFEST_NAME}, then run: ${RERUN}`,
+                    );
+                }
+            }
         }
     }
 
@@ -4297,6 +4313,8 @@ const FIXTURE_VARIANT = [
 const FIXTURE_URLS = [
     '[urls]',
     'update = "https://updates.example.org/update.xml"',
+    'release_notes = "https://example.org/releases"',
+    'homepage = "https://example.org"',
     '',
 ].join('\n');
 
@@ -5376,13 +5394,24 @@ function selfTest() {
                     'https://collector.example.org/v1/events',
                     'https://crash.example.org/report',
                 ),
-                ...checkOne(
-                    `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[urls]\nupdate = "https://updates.example.org/update.xml"\n`,
-                    // urls.release_notes and urls.homepage are inherited here (D-08 echoes them).
-                    ['github.com', 'powerbrowser.org', 'updates.example.org'],
-                    '',
-                    '',
-                ),
+                // WR-04: a downstream under a new name that states no urls.release_notes or
+                // urls.homepage inherits the platform's pages, and is refused naming both.
+                ...(() => {
+                    const fixturePath = join(fixtureDir, 'endpoints-inherited.toml');
+                    writeFileSync(fixturePath, `${FIXTURE_BASE}\n${FIXTURE_VARIANT}\n[urls]\nupdate = "https://updates.example.org/update.xml"\n`, 'utf8');
+                    const text = resolveConfig(MANIFEST_PATH, fixturePath).failures.join(' | ');
+                    return text.includes('urls.release_notes') && text.includes('urls.homepage')
+                        ? [] : [`a downstream inheriting the platform's About-dialog links was not refused naming urls.release_notes and urls.homepage: ${text || '(no failure)'}`];
+                })(),
+                // ...while a copy of the platform manifest that keeps its identity and states only
+                // its own update address still resolves (the ng071/ng073 fixtures' shape).
+                ...(() => {
+                    const fixturePath = join(fixtureDir, 'endpoints-same-identity.toml');
+                    const copy = readFileSync(MANIFEST_PATH, 'utf8').replace(/^\[urls\][\s\S]*?(?=^\[|(?![\s\S]))/m, '');
+                    writeFileSync(fixturePath, `${copy}\n[urls]\nupdate = "https://updates.example.org/update.xml"\n`, 'utf8');
+                    const { failures } = resolveConfig(MANIFEST_PATH, fixturePath);
+                    return failures.length === 0 ? [] : [`a same-identity downstream copy was refused: ${failures.join(' | ')}`];
+                })(),
                 // UPD-13: unstated links fall back to about:blank (hidden) and "", stated ones map verbatim.
                 ...[
                     [{}, ['about:blank', 'about:blank', '', '']],
