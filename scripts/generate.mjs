@@ -1462,6 +1462,22 @@ export function updateChannel(config) {
  * and the shell-default syntax has to survive to the emitted bytes intact.
  */
 function emitMozconfig(config, variant) {
+    return emitMozconfigFor(config, variant, { bootstrap: false, sbKeyfile: null });
+}
+
+/**
+ * PKG-17 (Phase 45): the release .mozconfig variant. Same shape as the dev
+ * row, parameterised rather than forked: drops the two Nix-only lines
+ * (--without-wasm-sandboxed-libraries, --with-libclang-path), adds
+ * --enable-bootstrap (Mozilla clang/rust/cbindgen plus the jessie sysroot
+ * flow from the container), and -- with the UPD-29 line only when
+ * sbKeyfile is non-null -- the release SB keyfile mount path. The dev row
+ * keeps the unbaked default (never carries the keyfile line). MAR_CHANNEL_ID
+ * and ACCEPTED_MAR_CHANNEL_IDS stay equal to powerbrowser-default on both
+ * rows, so a foreign-channel MAR still fails with updater error 22.
+ */
+const SB_KEYFILE_MOUNT = '/keys/sb-gapi.data';
+function emitMozconfigFor(config, variant, { bootstrap, sbKeyfile }) {
     // NG-065: one MAR channel for every build of this manifest, <app_basename>-<update channel>.
     // It is baked into MAR_CHANNEL_ID and into update-settings.ini's ACCEPTED_MAR_CHANNEL_IDS,
     // so a MAR made for another product or channel is refused (updater error
@@ -1474,6 +1490,9 @@ function emitMozconfig(config, variant) {
     // here. (It is still read and guarded where it IS emitted as content:
     // the desktop entry's Icon line.)
     const objdir = assertEmittable(variantPath(variant, 'objdir'), variant.objdir);
+    const brandingDefault = bootstrap
+        ? 'powerbrowser/branding-generated/release'
+        : 'powerbrowser/branding-generated/dev';
     const lines = [
         ...GENERATED_BANNER,
         '',
@@ -1482,16 +1501,29 @@ function emitMozconfig(config, variant) {
         `ac_add_options --enable-update-channel=${channel}`,
         `ac_add_options MAR_CHANNEL_ID=${marChannel}`,
         `ac_add_options ACCEPTED_MAR_CHANNEL_IDS=${marChannel}`,
-        'ac_add_options --without-wasm-sandboxed-libraries',
-        'ac_add_options --with-libclang-path="$LIBCLANG_PATH"',
+        ...(bootstrap ? [] : ['ac_add_options --without-wasm-sandboxed-libraries']),
+        ...(bootstrap ? [] : ['ac_add_options --with-libclang-path="$LIBCLANG_PATH"']),
+        ...(bootstrap ? ['ac_add_options --enable-bootstrap'] : []),
+        ...(sbKeyfile ? [`ac_add_options --with-google-safebrowsing-api-keyfile=${sbKeyfile}`] : []),
         `ac_add_options --with-app-basename=${assertEmittable('identity.app_basename', config.identity.app_basename)}`,
         `ac_add_options --with-distribution-id=${assertEmittable('identity.distribution_id', config.identity.distribution_id)}`,
         'ac_add_options --disable-crashreporter',
         'ac_add_options --with-ccache=sccache',
-        'ac_add_options --with-branding=${POWERBROWSER_BRANDING:-powerbrowser/branding-generated/dev}',
+        'ac_add_options --with-branding=${POWERBROWSER_BRANDING:-' + brandingDefault + '}',
         `mk_add_options "export MOZ_APP_REMOTINGNAME=${assertEmittable('identity.remoting_name', config.identity.remoting_name)}"`,
     ];
     return lines.join('\n') + '\n';
+}
+
+/**
+ * UPD-29 (Phase 45): the release-variant SB keyfile line joins the release
+ * branch only. The mount path is a platform constant (the legion keydir is
+ * bind-mounted read-only at /keys inside the container, per the mount
+ * discipline in powerbrowser/packaging/Containerfile's neighbours), never a
+ * manifest key and never the key value -- only the path travels in the tree.
+ */
+function emitMozconfigRelease(config, variant) {
+    return emitMozconfigFor(config, variant, { bootstrap: true, sbKeyfile: SB_KEYFILE_MOUNT });
 }
 
 /**
@@ -3543,6 +3575,18 @@ export const TARGETS = Object.freeze([
         tracked: '.mozconfig',
         variant: 'dev',
         emit: emitMozconfig,
+    }),
+    // NEW (Phase 45, PKG-17): the release .mozconfig variant. A frozen copy
+    // of the release emission, authored once from the emitter and committed,
+    // same contract as the hand-written files: on a red, the emitter is what
+    // changes; this file is never edited to make the gate green. The release
+    // build configures with MOZCONFIG pointing at the generated copy of
+    // these bytes (objdir-release, --enable-bootstrap, SB keyfile mount).
+    Object.freeze({
+        generated: 'packaging/mozconfig.release',
+        tracked: 'powerbrowser/packaging/mozconfig.release',
+        variant: 'release',
+        emit: emitMozconfigRelease,
     }),
     // 03-04: the GEN-01 identity carrier. 05-01: the relocated
     // telemetry-policy lines are byte-identity gated through the tracked

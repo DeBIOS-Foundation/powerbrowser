@@ -4525,6 +4525,33 @@ run_own_checks() {
     # NG-089 (Phase 24, UAT-01): the UAT-sheet check's plant self-test; quick.
     "ng089-uat-sheets-self-test|node $REPO_ROOT/scripts/verify-ng-089-uat-sheets.mjs --self-test"
 
+    # NEW (Phase 45, PKG-22/PKG-18/PKG-23): the portability self-test twins.
+    # Each twin is honestly --quick (node plus text/bytes in mkdtemp only: no
+    # build, no browser, no display, no network); the full rows live in the
+    # full set below beside ng063 and FAIL naming the container-build
+    # procedure when the container tarball is absent, never skip green.
+    # NEW (Phase 45, PKG-04/PKG-05): the packaged-identity self-test twin.
+    # Honestly --quick for the same reason (mkdtemp fixtures, derivation
+    # reads only); the full row lives beside ng063 below.
+    "portable-elf-self-test|node $REPO_ROOT/scripts/verify-portable-elf.mjs --self-test"
+    "sidecar-no-symlinks-self-test|node $REPO_ROOT/scripts/verify-sidecar-no-symlinks.mjs --self-test"
+    "package-target-natives-self-test|node $REPO_ROOT/scripts/verify-package-target-natives.mjs --self-test"
+    "packaged-identity-self-test|node $REPO_ROOT/scripts/verify-packaged-identity.mjs --self-test"
+    # NEW (Phase 45, CR-05): the drift comparator behind the container baseline.
+    # Planted mismatched sysroot and UNMEASURED lines must go red; no host state read.
+    "toolchain-baseline-self-test|bash $REPO_ROOT/scripts/toolchain-baseline.sh --self-test"
+    # NEW (Phase 45, CR-03): the release objdir name is read from mozconfig.release,
+    # so the packager and the release rows share one value. Planted mozconfig text only.
+    "release-objdir-self-test|node $REPO_ROOT/scripts/lib/release-objdir.mjs --self-test"
+    # NEW (Phase 45, WR-04): the CLI URL admission predicate, read from the shell
+    # module and probed with planted refusal shapes; the self-test plants two mutants.
+    "cli-url-admission|node $REPO_ROOT/scripts/verify-cli-url.mjs"
+    "cli-url-admission-self-test|node $REPO_ROOT/scripts/verify-cli-url.mjs --self-test"
+    # NEW (Phase 45, WR-03): the pre-45 sidecar state file moves once into ProfD and a
+    # failed move keeps it findable; read from TheiaService and run against a fake store.
+    "sidecar-state-migration|node $REPO_ROOT/scripts/verify-sidecar-state-migration.mjs"
+    "sidecar-state-migration-self-test|node $REPO_ROOT/scripts/verify-sidecar-state-migration.mjs --self-test"
+
     # NEW (09-03): the WebExtensions declaration rows -- the manifest's
     # [[webextensions]] table reaches the policy engine as the tracked
     # ExtensionSettings key.
@@ -4843,6 +4870,19 @@ run_own_checks() {
       # Gecko build, the packaged tree, the built sidecar, a browser, or the network.
       # Commands and live-main/live-clone markers: docs/non-gui/checks-wave-e.tsv.
       "ng063-packaged-launch|node $REPO_ROOT/scripts/verify-ng-063-packaged-launch.mjs"
+      # NEW (Phase 45, PKG-22/PKG-18/PKG-23): the portability gates. Each needs
+      # the container-built tarball (full tier, beside ng063): the Nix-built
+      # tree is red-by-design here, which is exactly what the container build
+      # fixes. Each FAILs naming the container-build procedure when the
+      # tarball is absent; full green waits on the plan 45-04 owner gate.
+      "portable-elf|node $REPO_ROOT/scripts/verify-portable-elf.mjs"
+      "sidecar-no-symlinks|node $REPO_ROOT/scripts/verify-sidecar-no-symlinks.mjs"
+      "package-target-natives|node $REPO_ROOT/scripts/verify-package-target-natives.mjs"
+      # NEW (Phase 45, PKG-04/PKG-05): the packaged-identity gate. Derives the
+      # release-variant identity at check time and compares field-by-field
+      # against the staged package; FAILs naming the container-build procedure
+      # when the tarball is absent, like its three neighbours above.
+      "packaged-identity|node $REPO_ROOT/scripts/verify-packaged-identity.mjs"
       "ng064-update-url-from-manifest|node $REPO_ROOT/scripts/verify-ng-064-update-url.mjs"
       "ng065-mar-signature-enforced|node $REPO_ROOT/scripts/verify-ng-065-mar-signature.mjs"
       "ng066-nsis-branding-no-ping|node $REPO_ROOT/scripts/verify-ng-066-nsis-branding.mjs"

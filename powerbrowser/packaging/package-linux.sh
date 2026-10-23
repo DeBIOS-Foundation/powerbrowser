@@ -5,13 +5,15 @@
 #     distribution/policies.json into the packaged app dir;
 #   - refreshes precomplete, because full MARs are made from this dir;
 #   - rewrites the tarball mach wrote.
-# objdir/dist/bin is not touched, so dev runs keep the dev tree.
-# Run from the repo root inside `nix develop .#firefox`, after a Gecko build and a Theia
-# `yarn build`:
-#   nix develop .#firefox --command bash powerbrowser/packaging/package-linux.sh
+# It packages the RELEASE objdir: the one the release mozconfig builds into
+# (MOZ_OBJDIR default, read by scripts/lib/release-objdir.mjs), and it passes the
+# release mozconfig to mach, so `mach package` cannot reach the dev objdir/.
+# The dev tree is never touched.
+# Run from the repo root after a release Gecko build and a Theia `yarn build`:
+#   bash powerbrowser/packaging/package-linux.sh   (inside pb-gecko-build, DSH-BLOCKED.md step 4)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-OBJ="$ROOT/${POWERBROWSER_OBJDIR:-objdir}"
+OBJ="$ROOT/$(node "$ROOT/scripts/lib/release-objdir.mjs")"
 APP="$ROOT/theia/applications/browser"
 fail() { echo "package-linux: FAIL -- $*" >&2; exit 1; }
 test -f "$APP/lib/backend/main.js" || fail "$APP/lib/backend/main.js is absent; run yarn build in theia/ first"
@@ -37,7 +39,7 @@ if [ ! -f "$ARCHIVE" ]; then
 fi
 echo "$NODE_SHA  $ARCHIVE" | sha256sum -c --quiet - || { rm -f "$ARCHIVE"; fail "$ARCHIVE does not hash to the pin in powerbrowser/packaging/node-runtime.json"; }
 
-( cd "$ROOT/upstream" && MOZCONFIG=../.mozconfig ./mach package )
+( cd "$ROOT/upstream" && MOZCONFIG="$ROOT/powerbrowser/packaging/mozconfig.release" ./mach package )
 
 VERSION="$(sed -n 's/^Version=//p' "$OBJ/dist/bin/application.ini")"
 STAGE="$(find "$OBJ/dist" -mindepth 1 -maxdepth 1 -type d -newer "$OBJ/dist/bin/application.ini" -exec test -f '{}/precomplete' \; -print | head -n 1)"
@@ -70,10 +72,17 @@ cp "$ROOT/powerbrowser/distribution/policies.json" "$STAGE/distribution/policies
 # builder's checkout path. The keys are bundle map keys the runtime reads by
 # exact string, so the whole key is rewritten -- never a partial prefix that
 # could collide -- and the comments are inert.
-# patchelf is in the firefox dev shell this script runs in.
-for native in "$STAGE/theia/lib/backend/native"/*.node; do
-    patchelf --remove-rpath "$native" 2>/dev/null || true
-done
+# patchelf is in the firefox dev shell this script runs in (and in the
+# release container). PKG-22 (Phase 45): the strip covers the row's full ELF
+# universe, not only the natives glob -- every staged ELF under theia/ and
+# node/ (Gecko libs included once the container build stages them) -- because
+# the portable-elf row walks the whole extracted tarball. Per-file `|| true`
+# keeps one unreadable file from failing staging; the row (not the loop's
+# silence) is the verdict. Idempotent: --remove-rpath on an already-clean ELF
+# is a no-op, so re-running staging prints the same tree.
+while IFS= read -r staged_elf; do
+    patchelf --remove-rpath "$staged_elf" 2>/dev/null || true
+done < <(find "$STAGE/theia" "$STAGE/node" -type f 2>/dev/null || true)
 perl -pi -e 's{//\s*node-file:\S+}{// node-file:<buildhost>}; s{"node-file:[^"]+"}{"node-file:<buildhost>"}g' \
     "$STAGE/theia/lib/backend/main.js" "$STAGE/theia/lib/backend/parcel-watcher.js"
 # ng063-style assertion: no staged file under theia/ or node/ may still carry
@@ -85,6 +94,29 @@ while IFS= read -r hit; do
     fail "the staged sidecar still carries a checkout path: $hit"
 done < <(grep -rlF "$ROOT/" "$STAGE/theia" "$STAGE/node" 2>/dev/null || true)
 ( cd "$STAGE" && python3 "$ROOT/upstream/config/createprecomplete.py" )
+
+# PKG-21 (Phase 45): the release manifest beside the rewritten tarball --
+# built version, release key, update and MAR channel ids, producing
+# tree/host/toolchain attribution per the BUILD.md rule -- so the MAR
+# measurement weighs an attributed artifact. Values derive at package time
+# (application.ini, configuration.toml via the generator); nothing typed.
+{
+    RELEASE_KEY="$(node --input-type=module -e "import { resolveConfig, releaseIdentity } from '$ROOT/scripts/generate.mjs'; const { config } = resolveConfig('$ROOT/configuration.toml'); console.log(releaseIdentity(config).releaseKey);")"
+    CHANNEL="$(node --input-type=module -e "import { resolveConfig, updateChannel } from '$ROOT/scripts/generate.mjs'; const { config } = resolveConfig('$ROOT/configuration.toml'); console.log(updateChannel(config).channel);")"
+    MAR_CHANNEL="$(node --input-type=module -e "import { resolveConfig, updateChannel } from '$ROOT/scripts/generate.mjs'; const { config } = resolveConfig('$ROOT/configuration.toml'); console.log(updateChannel(config).marChannelId);")"
+    # Beside the tarball only. A copy in $STAGE would be packed into the archive
+    # the end user installs, and its host field names the build machine.
+    # JSON.stringify escapes the values; printf did not.
+    node --input-type=module -e '
+        import { writeFileSync } from "node:fs";
+        const [out, version, releaseKey, channel, marChannel, tree, host] = process.argv.slice(1);
+        const manifest = { version, release_key: releaseKey, update_channel: channel, mar_channel_id: marChannel, tree, host,
+            toolchain: "container pb-gecko-build (--enable-bootstrap; see toolchain-baseline.txt)" };
+        writeFileSync(out, JSON.stringify(manifest, null, 2) + "\n");
+    ' "$OBJ/dist/release-manifest.json" "$VERSION" "$RELEASE_KEY" "$CHANNEL" "$MAR_CHANNEL" \
+        "$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)" "$(hostname 2>/dev/null || echo unknown)"
+    echo "package-linux: wrote $OBJ/dist/release-manifest.json (release $RELEASE_KEY, channel $CHANNEL)"
+}
 
 shopt -s nullglob
 TARBALLS=( "$OBJ/dist"/*-"$VERSION".en-US.linux-x86_64.tar.xz )

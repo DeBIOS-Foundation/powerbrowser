@@ -55,6 +55,32 @@ const USER_MESSAGE = {
   didNotFinishStarting: "PowerBrowser's interface didn't finish starting. Choose Retry, or open Details if this keeps happening.",
 };
 
+/**
+ * WR-03 (Phase 45): moves a pre-45 sidecar state file into the ProfD state
+ * directory, once. `store` is `{ read, write, remove }` over PowerBrowserAPI's
+ * never-throw read, the state writer and the remover. The repo check
+ * (scripts/verify-sidecar-state-migration.mjs) runs this exact source against a
+ * fake store. Order is the invariant: the copy is written before the old file
+ * is removed, so a failed write leaves the old file in place as a reap target.
+ * Returns true when a record moved.
+ */
+export async function migrateLegacyStateFile(store, legacyPath, newPath) {
+  if (!legacyPath || legacyPath === newPath) {
+    return false;
+  }
+  const record = await store.read(legacyPath);
+  if (!record) {
+    return false;
+  }
+  if (await store.read(newPath)) {
+    // A record already sits at the new location; both records stay reap targets.
+    return false;
+  }
+  await store.write(newPath, record);
+  await store.remove(legacyPath);
+  return true;
+}
+
 // Discretionary constants (plan 04-04 recorded_decisions) -- no pref exists
 // for these (04-03's powerbrowser-sidecar.js ships only the health/timeout/
 // grace/log-buffer prefs), so they stay literal here.
@@ -519,7 +545,23 @@ export const TheiaService = {
     return { ok: true, message: null, details: null };
   },
 
+  /**
+   * PKG-06 (Phase 45): the sidecar state directory lives under this launch's
+   * own Gecko profile directory (ProfD), never under XDG_CONFIG_HOME/HOME.
+   * _profileStateKey() already suffixes the state file name by profile (the
+   * CR-01 fix); this moves the BASE too, so the matrix no-residue rows can
+   * derive the inspected paths from the packaged application.ini plus ProfD
+   * at check time. Falls back to the pre-45 XDG behaviour only when
+   * getProfileDir() resolves "" (the same never-throw convention as
+   * _profileStateKey()'s "default" fallback), so a ProfD read failure
+   * degrades to the old single-location behaviour rather than crashing
+   * startup. No new pref, no new internal touchpoint.
+   */
   _resolveConfigDir() {
+    const profileDir = PowerBrowserAPI.getProfileDir();
+    if (profileDir) {
+      return `${profileDir}/powerbrowser-theia`;
+    }
     const xdg = PowerBrowserAPI.getEnv("XDG_CONFIG_HOME");
     const home = PowerBrowserAPI.getEnv("HOME");
     const base = xdg || `${home}/.config`;
@@ -551,6 +593,43 @@ export const TheiaService = {
   },
 
   /**
+   * WR-03 (Phase 45): the state file a pre-45 build wrote lives under the XDG
+   * config dir, at the same profile-keyed name. The path comes from the same
+   * inputs the old `_resolveConfigDir()` used, so it is exact.
+   */
+  _legacyStateFilePath() {
+    const xdg = PowerBrowserAPI.getEnv("XDG_CONFIG_HOME");
+    const home = PowerBrowserAPI.getEnv("HOME");
+    return `${xdg || `${home}/.config`}/powerbrowser/sidecar-state-${this._profileStateKey()}.json`;
+  },
+
+  /**
+   * WR-03: moves the legacy record into ProfD (once) and returns the paths the
+   * leftover reap must read: the ProfD path, plus the legacy path whenever the
+   * legacy file is still there (a failed move keeps it findable).
+   */
+  async _migrateLegacyStateFile() {
+    const legacy = this._legacyStateFilePath();
+    try {
+      const moved = await migrateLegacyStateFile(
+        {
+          read: (p) => PowerBrowserAPI.readStateFile(p),
+          write: (p, value) => PowerBrowserAPI.writeStateFile(p, value),
+          remove: (p) => PowerBrowserAPI.removeStateFile(p),
+        },
+        legacy,
+        this._stateFilePath
+      );
+      if (moved) {
+        this._reapLog(`Moved the pre-upgrade sidecar state file into the profile directory.`);
+      }
+    } catch (err) {
+      this._reapLog(`Pre-upgrade sidecar state file could not be moved (${err.message}); reaping it in place.`);
+    }
+    return legacy && legacy !== this._stateFilePath ? [this._stateFilePath, legacy] : [this._stateFilePath];
+  },
+
+  /**
    * SIDE-04's startup half: verified-identity reap of a leftover backend
    * from a previous crashed launch, called from start() before this
    * session's first spawn. D-111: signals a recorded pid ONLY when its
@@ -565,7 +644,15 @@ export const TheiaService = {
    * exactly as it does today.
    */
   async _reapLeftover() {
-    const record = await PowerBrowserAPI.readStateFile(this._stateFilePath);
+    // WR-03: a pre-45 state file moves into ProfD first; both paths are reaped.
+    for (const path of await this._migrateLegacyStateFile()) {
+      await this._reapLeftoverAt(path);
+    }
+  },
+
+  /** One leftover record: the reap body for a single state-file path. */
+  async _reapLeftoverAt(path) {
+    const record = await PowerBrowserAPI.readStateFile(path);
     if (!record || typeof record.pid !== "number") {
       return;
     }
@@ -573,7 +660,7 @@ export const TheiaService = {
     const alive = PowerBrowserAPI.signalBarePid(record.pid, /* signal 0: liveness only */ 0);
     if (!alive) {
       this._reapLog(`Leftover state file named pid ${record.pid}, already gone -- removing stale state file.`);
-      await this._removeStateFileQuietly();
+      await this._removeStateFileQuietly(path);
       return;
     }
 
@@ -585,7 +672,7 @@ export const TheiaService = {
         `Leftover state file's pid ${record.pid} is alive but its start-time ticks MISMATCH ` +
           `(recorded ${record.startTicks}, observed ${observedTicks}) -- the pid has been recycled by the OS onto an unrelated process; not signalling it.`
       );
-      await this._removeStateFileQuietly();
+      await this._removeStateFileQuietly(path);
       return;
     }
 
@@ -593,7 +680,7 @@ export const TheiaService = {
     const signalled = PowerBrowserAPI.signalBarePid(record.pid, SIGTERM);
     if (!signalled) {
       this._reapLog(`Leftover pid ${record.pid} (verified identity match) could not be signalled with SIGTERM.`);
-      await this._removeStateFileQuietly();
+      await this._removeStateFileQuietly(path);
       return;
     }
 
@@ -612,7 +699,7 @@ export const TheiaService = {
     } else {
       this._reapLog(`Leftover pid ${record.pid} (verified identity match) was signalled with SIGTERM and is gone.`);
     }
-    await this._removeStateFileQuietly();
+    await this._removeStateFileQuietly(path);
   },
 
   /**
@@ -627,9 +714,9 @@ export const TheiaService = {
     PowerBrowserAPI.log("log", `[TheiaService] ${message}`);
   },
 
-  async _removeStateFileQuietly() {
+  async _removeStateFileQuietly(path = this._stateFilePath) {
     try {
-      await PowerBrowserAPI.removeStateFile(this._stateFilePath);
+      await PowerBrowserAPI.removeStateFile(path);
     } catch {
       // Best-effort; removeStateFile already tolerates an absent file.
     }
