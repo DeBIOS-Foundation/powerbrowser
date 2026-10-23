@@ -3,16 +3,17 @@
 // portable. Every ELF in the extracted package -- Gecko binaries AND the
 // sidecar natives (theia/**/native/*.node, node/bin/node, rg when staged) --
 // must carry no /nix/store interpreter or RUNPATH, and the maximum required
-// symbol version must be <= the ceiling derived from the
-// release sysroot at check time (never a hand-kept literal).
+// GLIBC_* symbol version must be <= the shipped glibc floor.
 //
-// The ceiling source: upstream's linux64 sysroot is built from jessie
-// (upstream/taskcluster/scripts/misc/build-sysroot.sh: dist=jessie for amd64;
-// sysroot.yml sysroot-x86_64-linux-gnu local-toolchain:true). The row reads
-// that floor from the tree -- the checked-in
-// toolchain-baseline.txt sysroot line plus the sysroot task definition --
-// and compares symbol versions as dotted-triple tuples, exact, never floats.
-// Equal-to-ceiling passes; ceiling-plus-one goes red.
+// The floor is one declared value the packaging owns:
+// powerbrowser/packaging/portability-floor.json ("glibc"). Owner ruling
+// 2026-10-22 (WR-09) set it to 2.28, because the pinned official Node needs
+// GLIBC_2.28. The release sysroot is still measured (toolchain-baseline.txt,
+// the glibc-<v> token on the sysroot line), and the check fails if the measured
+// sysroot glibc is above the declared floor: the build must not out-run the
+// promise. GLIBCXX_* is bounded separately by the measured sysroot-glibcxx line.
+// Versions compare as dotted-triple tuples, exact, never floats. Equal-to-floor
+// passes; floor-plus-one goes red.
 //
 // This row is red-by-design on the Nix-built tree (INTERP/RUNPATH on
 // /nix/store, libxul needing symbols past the sysroot floor) and green only
@@ -35,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const NAME = 'verify-portable-elf';
+const FLOOR_REL = 'powerbrowser/packaging/portability-floor.json';
 const BUILD_CMD = 'podman run --rm -v "$PWD:/src:rw" -w /src pb-gecko-build bash powerbrowser/packaging/package-linux.sh (after the plan 45-01 container build)';
 
 const args = process.argv.slice(2);
@@ -78,23 +80,24 @@ function listElfs(root) {
     return out.sort();
 }
 
-// The ceiling, derived from the tree at check time: the sysroot dist line in
-// toolchain-baseline.txt (decision 19 pins the release container's toolchain
-// there) cross-checked against the sysroot task's jessie dist. The floor
-// for a dist is read from the mapping below, which is keyed on the
-// tree-read dist name -- the words name Debian releases, never a bare version
-// compared against. A sysroot bump that changes the dist without updating this
-// row's source read is visible because the baseline line is printed on every
-// run and on every red.
-const DIST_GLIBC = Object.freeze({ jessie: [2, 19], stretch: [2, 24], buster: [2, 28], bullseye: [2, 31], bookworm: [2, 36] });
+// The shipped glibc floor: powerbrowser/packaging/portability-floor.json.
+// Parsed strictly; a missing or non-dotted value is a red, never a default.
+function parseFloor(text) {
+    let floor = null;
+    try { floor = JSON.parse(text).glibc; } catch { floor = null; }
+    const m = /^(\d+)\.(\d+)(?:\.(\d+))?$/.exec(typeof floor === 'string' ? floor : '');
+    if (!m) throw new Error(`${FLOOR_REL} must declare "glibc" as a dotted version (got ${JSON.stringify(floor ?? null)})`);
+    return [Number(m[1]), Number(m[2]), Number(m[3] ?? 0)];
+}
 
-// Two namespaces, two ceilings. GLIBC_* tokens are bounded by the sysroot's
-// glibc floor (DIST_GLIBC). GLIBCXX_* tokens are bounded by the libstdc++ the
-// sysroot ships, measured in the container and recorded as a
-// "sysroot-glibcxx GLIBCXX_<v>" baseline line. Neither namespace is compared
-// against the other's ceiling.
-function ceilingFromTree() {
-    const baseline = readFileSync(join(REPO_ROOT, 'toolchain-baseline.txt'), 'utf8');
+// Pure: toolchain-baseline.txt text and the floor-file text in, the GLIBC
+// floor and GLIBCXX ceiling out. Two namespaces, two bounds. GLIBC_* tokens
+// are bounded by the declared floor. GLIBCXX_* tokens are bounded by the
+// libstdc++ the sysroot ships, measured in the container ("sysroot-glibcxx
+// GLIBCXX_<v>" line). The measured sysroot glibc ("sysroot <dist> glibc-<v>")
+// must not exceed the declared floor, so the build cannot out-run the promise.
+function resolveCeiling(baseline, floorText) {
+    const floor = parseFloor(floorText);
     const lineFor = (key) => baseline.split('\n').find(l => l.startsWith(`${key} `)) ?? '';
     const sysrootLine = lineFor('sysroot');
     const cxxLine = lineFor('sysroot-glibcxx');
@@ -102,16 +105,31 @@ function ceilingFromTree() {
     if (!sysrootLine || /UNMEASURED/.test(sysrootLine)) throw new Error(`toolchain-baseline.txt sysroot line is missing or UNMEASURED -- ${measure}`);
     if (!cxxLine || /UNMEASURED/.test(cxxLine)) throw new Error(`toolchain-baseline.txt sysroot-glibcxx line is missing or UNMEASURED -- ${measure}`);
     const dist = sysrootLine.split(/\s+/)[1];
-    const glibc = DIST_GLIBC[dist];
-    if (!glibc) throw new Error(`toolchain-baseline.txt sysroot dist is "${dist}", which names no glibc floor -- update DIST_GLIBC in ${NAME} beside the baseline`);
+    const sg = /\bglibc-(\d+)\.(\d+)(?:\.(\d+))?\b/.exec(sysrootLine);
+    if (!sg) throw new Error(`toolchain-baseline.txt sysroot line names no glibc-<v> token: "${sysrootLine}"`);
+    const sysrootGlibc = [Number(sg[1]), Number(sg[2]), Number(sg[3] ?? 0)];
+    if (cmpVer(sysrootGlibc, floor) > 0) {
+        throw new Error(`measured sysroot glibc ${fmtVer(sysrootGlibc)} (dist ${dist}, toolchain-baseline.txt) is above the declared shipped floor ${fmtVer(floor)} (${FLOOR_REL}) -- the build must not out-run the promise: lower the sysroot, or raise the floor only by owner ruling`);
+    }
     const cxx = /GLIBCXX_(\d+)\.(\d+)\.(\d+)/.exec(cxxLine);
     if (!cxx) throw new Error(`toolchain-baseline.txt sysroot-glibcxx line names no GLIBCXX_<v> token: "${cxxLine}"`);
     return {
         dist,
-        glibc,
+        sysrootGlibc,
+        glibc: floor,
         glibcxx: [Number(cxx[1]), Number(cxx[2]), Number(cxx[3])],
-        source: 'toolchain-baseline.txt sysroot lines',
+        source: `${FLOOR_REL} (GLIBC floor); toolchain-baseline.txt (GLIBCXX, sysroot ${dist})`,
     };
+}
+
+function ceilingFromTree() {
+    let floorText;
+    try {
+        floorText = readFileSync(join(REPO_ROOT, FLOOR_REL), 'utf8');
+    } catch {
+        throw new Error(`${FLOOR_REL} is missing -- the shipped glibc floor is declared there (owner ruling 2026-10-22)`);
+    }
+    return resolveCeiling(readFileSync(join(REPO_ROOT, 'toolchain-baseline.txt'), 'utf8'), floorText);
 }
 
 function cmpVer(a, b) {
@@ -122,7 +140,7 @@ function cmpVer(a, b) {
     return 0;
 }
 
-function fmtVer(v) { return v.join('.'); }
+function fmtVer(v) { return (v.length > 2 && v[2] === 0 ? v.slice(0, 2) : v).join('.'); }
 
 const SYMBOL_VERSION = /(GLIBCXX|GLIBC)_(\d+)\.(\d+)(?:\.(\d+))?/g;
 
@@ -179,9 +197,18 @@ function checkTree(root, fixedCeiling) {
     return { failures, ceiling, elfs: elfs.length };
 }
 
-// The self-test's own ceiling. Fixed here so the twin never depends on the
+// The self-test's own ceiling: the declared floor read from the tree (so a
+// floor change flows into the plants) and a fixed GLIBCXX fixture. Never the
 // measured baseline, which stays UNMEASURED until the container build runs.
-const FIXTURE_CEILING = Object.freeze({ dist: 'self-test', glibc: [2, 19, 0], glibcxx: [3, 4, 20], source: 'self-test fixture ceiling' });
+function fixtureCeiling() {
+    return Object.freeze({
+        dist: 'self-test',
+        sysrootGlibc: null,
+        glibc: parseFloor(readFileSync(join(REPO_ROOT, FLOOR_REL), 'utf8')),
+        glibcxx: [3, 4, 20],
+        source: `self-test fixture ceiling (GLIBC floor from ${FLOOR_REL})`,
+    });
+}
 
 function elfHash(name) {
     let h = 0;
@@ -258,6 +285,10 @@ function writeVersionedElf(path, tokens) {
 
 function selfTest() {
     let ok = true;
+    const FIXTURE_CEILING = fixtureCeiling();
+    const [fMaj, fMin] = FIXTURE_CEILING.glibc;
+    const AT_FLOOR = `GLIBC_${fMaj}.${fMin}`;
+    const OVER_FLOOR = `GLIBC_${fMaj}.${fMin + 1}`;
     const dir = mkdtempSync(join(tmpdir(), 'verify-portable-elf-selftest-'));
     try {
         // Control: an empty dir is red (never green-by-absence), and each
@@ -333,11 +364,46 @@ function selfTest() {
         // ceilings and must stay green (regression for the old single-namespace
         // comparison, which made every GLIBCXX token look like a glibc 3.x).
         expectRed(
-            'GLIBC above-ceiling plant',
-            (fix) => writeVersionedElf(join(fix, 'planted-glibc.so'), ['GLIBC_2.2.5', 'GLIBC_2.99']),
+            'GLIBC above-floor plant (floor+1)',
+            (fix) => writeVersionedElf(join(fix, 'planted-glibc.so'), ['GLIBC_2.2.5', OVER_FLOOR]),
             'planted-glibc.so',
-            'GLIBC_2.99',
+            OVER_FLOOR,
         );
+
+        // Sysroot-versus-floor: the measured sysroot glibc may equal or sit below
+        // the declared floor, never above it. Pure: synthetic baseline text
+        // against the real floor file, so no measurement is needed.
+        {
+            const floorText = readFileSync(join(REPO_ROOT, FLOOR_REL), 'utf8');
+            const baselineFor = (glibc) => `clang clang 17.0.1\nsysroot jessie glibc-${glibc}\nsysroot-glibcxx GLIBCXX_3.4.20\nimage pb-gecko-build bookworm\n`;
+            const probes = [
+                { label: 'sysroot below the floor (jessie glibc-2.19)', glibc: '2.19', expectOk: true },
+                { label: 'sysroot at the floor', glibc: `${fMaj}.${fMin}`, expectOk: true },
+                { label: 'sysroot above the floor', glibc: `${fMaj}.${fMin + 1}`, expectOk: false },
+            ];
+            for (const p of probes) {
+                let verdict;
+                try {
+                    resolveCeiling(baselineFor(p.glibc), floorText);
+                    verdict = true;
+                } catch (err) {
+                    verdict = err.message;
+                }
+                if (p.expectOk) {
+                    if (verdict !== true) {
+                        console.error(`${NAME}: --self-test FAIL -- ${p.label} was rejected: ${verdict}`);
+                        ok = false;
+                    } else {
+                        console.log(`${NAME}: --self-test -- ${p.label} accepted`);
+                    }
+                } else if (verdict === true || !/above the declared shipped floor/.test(verdict)) {
+                    console.error(`${NAME}: --self-test FAIL -- ${p.label} was NOT rejected naming the declared floor`);
+                    ok = false;
+                } else {
+                    console.log(`${NAME}: --self-test -- ${p.label} REJECTED: ${verdict}`);
+                }
+            }
+        }
         expectRed(
             'GLIBCXX above-ceiling plant',
             (fix) => writeVersionedElf(join(fix, 'planted-cxx.so'), ['GLIBCXX_3.4.20', 'GLIBCXX_3.4.99']),
@@ -347,13 +413,13 @@ function selfTest() {
         {
             const fix = mkdtempSync(join(tmpdir(), 'verify-portable-elf-control-'));
             try {
-                writeVersionedElf(join(fix, 'control.so'), ['GLIBC_2.2.5', 'GLIBC_2.19', 'GLIBCXX_3.4.20']);
+                writeVersionedElf(join(fix, 'control.so'), ['GLIBC_2.2.5', AT_FLOOR, 'GLIBCXX_3.4.20']);
                 const res = checkTree(fix, FIXTURE_CEILING);
                 if (res.failures.length) {
-                    console.error(`${NAME}: --self-test FAIL -- the at-ceiling control was rejected (namespaces must not cross): ${res.failures[0]}`);
+                    console.error(`${NAME}: --self-test FAIL -- the at-floor control was rejected (namespaces must not cross): ${res.failures[0]}`);
                     ok = false;
                 } else {
-                    console.log(`${NAME}: --self-test -- at-ceiling control green (GLIBC 2.19 and GLIBCXX 3.4.20 pass in their own namespaces)`);
+                    console.log(`${NAME}: --self-test -- at-floor control green (${AT_FLOOR} and GLIBCXX 3.4.20 pass in their own namespaces)`);
                 }
             } finally {
                 rmSync(fix, { recursive: true, force: true });
@@ -421,7 +487,7 @@ if (SELF_TEST) {
             console.error(`${NAME}: FAIL -- ${failures.length} failure(s) over ${elfs} ELFs (ceiling ${ceiling ? `GLIBC ${fmtVer(ceiling.glibc)}, GLIBCXX ${fmtVer(ceiling.glibcxx)} from ${ceiling.source}` : 'unresolved'}):\n  ${failures.join('\n  ')}`);
             process.exit(1);
         }
-        console.log(`${NAME}: PASS -- ${elfs} ELFs carry no /nix/store INTERP/RUNPATH and need at most GLIBC ${fmtVer(ceiling.glibc)} and GLIBCXX ${fmtVer(ceiling.glibcxx)} (ceiling from ${ceiling.source}, dist ${ceiling.dist})`);
+        console.log(`${NAME}: PASS -- ${elfs} ELFs carry no /nix/store INTERP/RUNPATH and need at most GLIBC ${fmtVer(ceiling.glibc)} (declared floor) and GLIBCXX ${fmtVer(ceiling.glibcxx)}; measured sysroot ${ceiling.dist} glibc ${fmtVer(ceiling.sysrootGlibc)} is within the floor (${ceiling.source})`);
     }).catch((err) => {
         console.error(`${NAME}: FAIL -- ${err.message}. Next step: run: ${BUILD_CMD}`);
         process.exit(1);

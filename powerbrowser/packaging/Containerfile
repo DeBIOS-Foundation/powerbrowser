@@ -4,8 +4,10 @@
 # `debian-build` image (upstream/taskcluster/docker/debian-build/Dockerfile),
 # which is the image shape Gecko 153 ESR release builds expect. The release
 # build configures with --enable-bootstrap inside this container, so Mozilla
-# clang/rust/cbindgen plus the jessie sysroot (glibc 2.19 portability floor)
-# come from the bootstrap flow rather than from any host or Nix toolchain.
+# clang/rust/cbindgen plus the jessie sysroot (glibc 2.19 build baseline) come
+# from the bootstrap flow rather than from any host or Nix toolchain. The
+# shipped Linux floor is glibc 2.28 (packaging/portability-floor.json, owner
+# ruling 2026-10-22: the pinned official Node needs it).
 #
 # Build (on legion, from the repo root):
 #   podman build -t pb-gecko-build -f powerbrowser/packaging/Containerfile .
