@@ -43,3 +43,40 @@ into the tree, the SUMMARY, or the reply — path only.
 - `scripts/verify-platform.sh --quick` PASS (commit gate green after every
   commit). Full-tier rows FAIL naming the missing container tarball by
   design; full green waits on this gate.
+
+## Blocker: pinned Node runtime exceeds the 2.19 glibc ceiling (WR-09)
+
+Measured 2026-10-22 with `readelf -V` on the Node binaries (the official
+tarball is the sha256-verified cache at `.mozbuild/node-dist/`, matching the
+pin in `powerbrowser/packaging/node-runtime.json`):
+
+| Binary | Max GLIBC_ | Max GLIBCXX_ | libstdc++ NEEDED |
+|---|---|---|---|
+| Official `node-v24.19.0-linux-x64.tar.xz` (the pin) | GLIBC_2.28 | GLIBCXX_3.4.21 | yes |
+| Official v18.20.8 (not pinned, measured for options) | GLIBC_2.28 | GLIBCXX_3.4.21 | yes |
+| Official v20.20.2 (not pinned, measured for options) | GLIBC_2.28 | GLIBCXX_3.4.21 | yes |
+| Unofficial `node-v24.19.0-linux-x64-glibc-217.tar.xz` (unofficial-builds.nodejs.org, not pinned) | GLIBC_2.17 | none | no |
+
+The sysroot ceiling is glibc 2.19 (jessie). `portable-elf` applies it to
+`node/bin/node`, so the full row is red by design for the official pin, and
+it stays red until the owner picks an option. The check is not weakened.
+
+Options (owner decision):
+
+1. Pin the unofficial glibc-2.17 build of v24.19.0. Measured: GLIBC_2.17,
+   no libstdc++ dependency, sha256
+   `0f4d977d7e0b25266f7bfe1fbfa3940aeb328fcb25e3d9a19fdbaac56669047a`
+   (not yet pinned, not verified against any signed SHASUMS). It fits the
+   ceiling as built. The cost is provenance: it is not the nodejs.org release
+   that RELEASING.md "Node provenance" names. Needs owner acceptance of that
+   source and a release-key check of its SHASUMS.
+2. Raise the portability floor for the whole package to glibc 2.28 (Debian
+   buster, RHEL 8, Ubuntu 18.10). Official Node cannot be built against the
+   jessie sysroot, so this is the only way to keep the official binary. It
+   changes the claim in PKG-22 and the DIST_GLIBC ceiling source.
+3. Build Node from source on a newer sysroot. Not feasible here: Node 24
+   needs a C++20 compiler the jessie sysroot does not carry, and a newer
+   sysroot changes the floor (see option 2).
+
+Until the owner picks one, the `portable-elf` full row fails naming
+`node/bin/node`, and `package-linux.sh` still stages the official pin.
