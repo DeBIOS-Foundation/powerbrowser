@@ -104,10 +104,17 @@ done < <(grep -rlF "$ROOT/" "$STAGE/theia" "$STAGE/node" 2>/dev/null || true)
     RELEASE_KEY="$(node --input-type=module -e "import { resolveConfig, releaseIdentity } from '$ROOT/scripts/generate.mjs'; const { config } = resolveConfig('$ROOT/configuration.toml'); console.log(releaseIdentity(config).releaseKey);")"
     CHANNEL="$(node --input-type=module -e "import { resolveConfig, updateChannel } from '$ROOT/scripts/generate.mjs'; const { config } = resolveConfig('$ROOT/configuration.toml'); console.log(updateChannel(config).channel);")"
     MAR_CHANNEL="$(node --input-type=module -e "import { resolveConfig, updateChannel } from '$ROOT/scripts/generate.mjs'; const { config } = resolveConfig('$ROOT/configuration.toml'); console.log(updateChannel(config).marChannelId);")"
-    printf '{\n  "version": "%s",\n  "release_key": "%s",\n  "update_channel": "%s",\n  "mar_channel_id": "%s",\n  "tree": "%s",\n  "host": "%s",\n  "toolchain": "container pb-gecko-build (--enable-bootstrap; see toolchain-baseline.txt)"\n}\n' \
-        "$VERSION" "$RELEASE_KEY" "$CHANNEL" "$MAR_CHANNEL" "$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)" "$(hostname 2>/dev/null || echo unknown)" \
-        > "$OBJ/dist/release-manifest.json"
-    cp "$OBJ/dist/release-manifest.json" "$STAGE/release-manifest.json"
+    # Beside the tarball only. A copy in $STAGE would be packed into the archive
+    # the end user installs, and its host field names the build machine.
+    # JSON.stringify escapes the values; printf did not.
+    node --input-type=module -e '
+        import { writeFileSync } from "node:fs";
+        const [out, version, releaseKey, channel, marChannel, tree, host] = process.argv.slice(1);
+        const manifest = { version, release_key: releaseKey, update_channel: channel, mar_channel_id: marChannel, tree, host,
+            toolchain: "container pb-gecko-build (--enable-bootstrap; see toolchain-baseline.txt)" };
+        writeFileSync(out, JSON.stringify(manifest, null, 2) + "\n");
+    ' "$OBJ/dist/release-manifest.json" "$VERSION" "$RELEASE_KEY" "$CHANNEL" "$MAR_CHANNEL" \
+        "$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)" "$(hostname 2>/dev/null || echo unknown)"
     echo "package-linux: wrote $OBJ/dist/release-manifest.json (release $RELEASE_KEY, channel $CHANNEL)"
 }
 
