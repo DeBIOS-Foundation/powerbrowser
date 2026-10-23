@@ -155,7 +155,24 @@ Plans:
 
 **External gate**: None.
 **Research flag**: None (SUMMARY: A7 is a standard pattern).
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 42-01-PLAN.md — GH-13 live half: labels.json plus the labels control in repo-controls with self-test plants (tracer)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 42-02-PLAN.md — GH-13 static agreement plus GH-01: labels quick row with self-test and the three issue-form files
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 42-03-PLAN.md — GH-14 health files, DOC-04 RENEWALS.md with renewals row and self-test, DOC-06 S2/S3/S8 reconciliation record
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 42-04-PLAN.md — DOC-03/DOC-05 RELEASING.md and README corrections plus the single owner checkpoint (label apply, repos, Discussions, live read-back, form previews)
 
 ### Phase 43: Release train skeleton and upstream bump automation (A)
 
@@ -240,7 +257,22 @@ Plans:
 
 **External gate**: Namecheap nameserver change (up to 24 hours to propagate, DNSSEC off during the move); Cloudflare account with 2FA; R2 enablement for the R2 token (a payment method may be required). This phase's live site unblocks the Apple fee-waiver application (D-U-N-S/Apple gate, Phase 55).
 **Research flag**: None (SUMMARY: the D site and Email Routing are standard). Open: one live `_redirects` probe on the 11-segment path; zone-level security.txt avoids the Pages `.well-known` question.
-**Plans**: TBD
+**Plans**: 4/4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 47-01-PLAN.md — updates-repo-static row end to end (absence property, fail-closed read-back, in-memory self-test with functions/ and _worker.js plants, both registry rows)
+
+- [ ] 47-02-PLAN.md — Four static site pages with the locked copy (PowerBrowser spelling, footer sentence, attestation/login/bundle lines, payload/licence/trademark lines, zero external requests, MAR size pending-flagged for Phase 45)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 47-03-PLAN.md — Updates staging tree (one 11-segment 200 rule + placeholder descriptor) plus RELEASING.md multi-page correction and RENEWALS.md Cloudflare rows
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 47-04-PLAN.md — Blocking owner checkpoint (DNS inventory/move/verify, Pages projects + domains, security.txt, Email Routing + 3 test messages, 4 page GETs, 11-segment escaped probes + unknown-target 404), then the live record and green rows
 **UI hint**: yes
 
 ### Phase 48: Error telemetry, maintenance sweep and watchdog (D)
@@ -324,7 +356,28 @@ Plans:
 
 **External gate**: Anthropic Console fixer workspace with a monthly limit; OIDC federation or the `fixer` environment key; FIX-10 deadline 2027-05-27 (ESR 175 nightly).
 **Research flag**: Yes (F): whether passing `github_token` suppresses the action's own OIDC App-token exchange, which decides OIDC versus `ANTHROPIC_API_KEY`.
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 52-01-PLAN.md — FIX-11/FIX-07/FIX-02 tracer: `.github/fix-gate-deny.json`, `scripts/verify-fix-gate.mjs`, `fix-gate-self-test` row, deny→gate→row slice green via --only + --quick
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 52-02-PLAN.md — FIX-08/FIX-09/FIX-04: additive `workflows` rules + plants, `actions-selected.json` admissions (claude-code-action + create-github-app-token), hosted-only assertion
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 52-03-PLAN.md — TRAIN-06/FIX-01/FIX-05/FIX-12: `release-train.mjs` contract + fixtures (NEEDS_OWNER, dispatch guards, run-name counting), `fixer-prepare.sh`, spend/auth rules, RELEASING.md auth outcome
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 52-04-PLAN.md — FIX-03/FIX-06/TRAIN-06/FIX-09: `fix`/`fix-gate`/`fix-pr` skeleton in release-train.yml, `fix-open-pr.mjs`, staged red-branch drill, RELEASING.md spend/routing + RENEWALS.md rows
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 52-05-PLAN.md — FIX-10/FIX-05/FIX-12 owner checkpoint (autonomous:false): workspace + credential, drill sign-off, live red-PR dispatch + fix-gate pass + owner merge before 2027-05-27
 
 ### Phase 53: Support operations (G)
 
@@ -390,7 +443,28 @@ Plans:
 
 **External gate**: Tap repo exists (created in Phase 41); winget submission credential decision (likely a PAT on a fork-owning account, against the Apps-only rule; record holder and RENEWALS row); Flathub account and build-from-source exception request; Cachix open-source licence (R2 S3 cache fallback); Apple notarization for the cask and aarch64-darwin.
 **Research flag**: None in SUMMARY (the J flake follows the floorp-bin template). Open: Cachix eligibility under PolyForm Noncommercial.
-**Plans**: TBD
+**Plans**: 0/5 plans planned
+
+Plans:
+**Wave 1**
+
+- [ ] 56-01-PLAN.md — PKG-19 flake repack (fetchurl + autoPatchelf, nodejs_24, overlay) + Flatpak x86_64-linux manifest shape; flake-repack + policies-update-split rows
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 56-02-PLAN.md — INF-05 binary-cache config (Cachix + R2) + PKG-20 Flathub verification half; binary-cache + flathub-manifest rows; cache-token RENEWALS row
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 56-03-PLAN.md — DIST-04 winget set + DIST-11 staged cask (darwin deferred); winget-manifest + homebrew-cask rows; WINGET_TOKEN custody row
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 56-04-PLAN.md — DIST-12 four-leg channel-manifests train stage; channel-release-jobs row; train-interface mapping
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 56-05-PLAN.md — Owner checkpoint (accounts, exception, submissions, substitute proof, /download rows), then the live record
 
 ### Phase 57: Native crash reporting (K)
 
@@ -407,6 +481,23 @@ Plans:
 **External gate**: Cloudflare R2 enabled; the first Windows release (Phase 54) shipped (owner decision 9).
 **Research flag**: None in SUMMARY.
 **Plans**: TBD
+
+Plans:
+**Wave 1**
+
+- [ ] 57-01-PLAN.md — TEL-09 hook-only Glean crash-ping consent patch (regenerated) with static consent gate + self-test; layer-3 reporter-enabled no-request assertion with positive-control twin
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 57-02-PLAN.md — TEL-07 single-key submit-URL derivation (inert while unset) + crash-host allowlist row + expect flip; Worker POST /submit to R2 with 30-day lifecycle + contract gate; Gecko-shaped extra plant in collector self-test; owner deploy checkpoint
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 57-03-PLAN.md — TEL-12 mach buildsymbols per-BUILD_TARGET into the DIST-07 asset seam (manifest entry + equality extension + SHA256SUMS) with symbols gate; docs/CRASH-POLICY.md rewritten with stackwalk runbook
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 57-04-PLAN.md — TEL-13 retirement flip staged on scratch, proven green, restored unexecuted; DSH-BLOCKED.md owner unblock steps; plan ends at checkpoint:human-action (no flip, no build, no push)
 
 ### Phase 58: ESR 175 (L)
 
