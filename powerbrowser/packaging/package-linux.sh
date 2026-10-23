@@ -5,13 +5,15 @@
 #     distribution/policies.json into the packaged app dir;
 #   - refreshes precomplete, because full MARs are made from this dir;
 #   - rewrites the tarball mach wrote.
-# objdir/dist/bin is not touched, so dev runs keep the dev tree.
-# Run from the repo root inside `nix develop .#firefox`, after a Gecko build and a Theia
-# `yarn build`:
-#   nix develop .#firefox --command bash powerbrowser/packaging/package-linux.sh
+# It packages the RELEASE objdir: the one the release mozconfig builds into
+# (MOZ_OBJDIR default, read by scripts/lib/release-objdir.mjs), and it passes the
+# release mozconfig to mach, so `mach package` cannot reach the dev objdir/.
+# The dev tree is never touched.
+# Run from the repo root after a release Gecko build and a Theia `yarn build`:
+#   bash powerbrowser/packaging/package-linux.sh   (inside pb-gecko-build, DSH-BLOCKED.md step 4)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-OBJ="$ROOT/${POWERBROWSER_OBJDIR:-objdir}"
+OBJ="$ROOT/$(node "$ROOT/scripts/lib/release-objdir.mjs")"
 APP="$ROOT/theia/applications/browser"
 fail() { echo "package-linux: FAIL -- $*" >&2; exit 1; }
 test -f "$APP/lib/backend/main.js" || fail "$APP/lib/backend/main.js is absent; run yarn build in theia/ first"
@@ -37,7 +39,7 @@ if [ ! -f "$ARCHIVE" ]; then
 fi
 echo "$NODE_SHA  $ARCHIVE" | sha256sum -c --quiet - || { rm -f "$ARCHIVE"; fail "$ARCHIVE does not hash to the pin in powerbrowser/packaging/node-runtime.json"; }
 
-( cd "$ROOT/upstream" && MOZCONFIG=../.mozconfig ./mach package )
+( cd "$ROOT/upstream" && MOZCONFIG="$ROOT/powerbrowser/packaging/mozconfig.release" ./mach package )
 
 VERSION="$(sed -n 's/^Version=//p' "$OBJ/dist/bin/application.ini")"
 STAGE="$(find "$OBJ/dist" -mindepth 1 -maxdepth 1 -type d -newer "$OBJ/dist/bin/application.ini" -exec test -f '{}/precomplete' \; -print | head -n 1)"

@@ -4540,6 +4540,9 @@ run_own_checks() {
     # NEW (Phase 45, CR-05): the drift comparator behind the container baseline.
     # Planted mismatched sysroot and UNMEASURED lines must go red; no host state read.
     "toolchain-baseline-self-test|bash $REPO_ROOT/scripts/toolchain-baseline.sh --self-test"
+    # NEW (Phase 45, CR-03): the release objdir name is read from mozconfig.release,
+    # so the packager and the release rows share one value. Planted mozconfig text only.
+    "release-objdir-self-test|node $REPO_ROOT/scripts/lib/release-objdir.mjs --self-test"
 
     # NEW (09-03): the WebExtensions declaration rows -- the manifest's
     # [[webextensions]] table reaches the policy engine as the tracked
