@@ -22,7 +22,7 @@
 # paths only, never key material.
 # The key VALUE never appears in the repo, the image, a scan, or a log;
 # only the /keys/sb-gapi.data mount path travels in the tree.
-FROM debian:bookworm
+FROM debian:bookworm@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61
 
 # Adapted from upstream/taskcluster/docker/debian-build/Dockerfile:19-50.
 # Kept: the build toolchain, VCS/fetch tools, and archive/compression tools
@@ -33,8 +33,17 @@ FROM debian:bookworm
 # patchelf (staging RUNPATH strip), nodejs (mach build-system JS; the shipped
 # sidecar still stages the pinned official node from node-runtime.json, never
 # apt node).
-RUN apt-get update && \
-    apt-get dist-upgrade -y && \
+# Reproducible package set: the base is pinned by digest above, and apt reads a
+# snapshot.debian.org timestamp rather than the floating mirror, so two builds
+# of this file fetch the same packages. dist-upgrade is gone; it pulled whatever
+# the mirror held that day. The snapshot date is verified to exist (both suites
+# return 200 on 2026-10-22); bump it deliberately, never implicitly.
+RUN rm -f /etc/apt/sources.list.d/debian.sources && \
+    printf '%s\n' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261019T000000Z bookworm main' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20261019T000000Z bookworm-security main' \
+      > /etc/apt/sources.list && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
       bash \
       binutils \

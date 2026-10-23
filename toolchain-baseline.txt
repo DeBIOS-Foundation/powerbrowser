@@ -10,6 +10,9 @@
 # output after the bootstrap build (DSH-BLOCKED.md step 3). Do not type values.
 # rustc/cargo/cbindgen below are the Nix firefox dev shell measurements; the
 # container's bootstrap values replace them when measured.
+# Image pins (host-measured with podman, not compared by the drift diff):
+#   base debian:bookworm@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61
+#   apt snapshot 20261019T000000Z (debian and debian-security)
 clang UNMEASURED
 rustc 1.97.1
 cargo 1.97.0
