@@ -1,11 +1,19 @@
+# Phase 45 (PKG-17, decision 19): the release container's toolchain baseline.
+# Line order matches `scripts/toolchain-baseline.sh --container`, which the
+# Phase 49 (AUTO-05) drift diff compares against this file.
+#
+# UNMEASURED lines are deliberate: no container build has run yet, so no value
+# in this file is a measurement of the release container. An UNMEASURED line
+# never matches the container output, so the drift diff fails, and the
+# portability ceiling (scripts/verify-portable-elf.mjs) refuses to resolve.
+# Fill each UNMEASURED line by copying the matching line from the container
+# output after the bootstrap build (DSH-BLOCKED.md step 3). Do not type values.
+# rustc/cargo/cbindgen below are the Nix firefox dev shell measurements; the
+# container's bootstrap values replace them when measured.
+clang UNMEASURED
 rustc 1.97.1
 cargo 1.97.0
 cbindgen 0.29.4
-# Phase 45 (PKG-17, decision 19): the release container's Mozilla bootstrap
-# toolchain seed. The clang/sysroot/image lines are filled from the
-# --container output of the first pb-gecko-build run (plan 45-04 owner gate);
-# until then they name the intended toolchain, and Phase 49 AUTO-05 diffs the
-# committed file against the container output with drift failing the build.
-clang bootstrap
-sysroot jessie glibc-2.19
-image pb-gecko-build debian:bookworm
+sysroot UNMEASURED
+sysroot-glibcxx UNMEASURED
+image pb-gecko-build UNMEASURED

@@ -98,7 +98,7 @@ function ceilingFromTree() {
     const lineFor = (key) => baseline.split('\n').find(l => l.startsWith(`${key} `)) ?? '';
     const sysrootLine = lineFor('sysroot');
     const cxxLine = lineFor('sysroot-glibcxx');
-    const measure = `measure it in the release container: podman run --rm -v "$PWD:/src:rw" -w /src pb-gecko-build bash /src/scripts/toolchain-baseline.sh --container`;
+    const measure = 'measure it in the release container: scripts/toolchain-baseline.sh --container runs after the bootstrap build (DSH-BLOCKED.md step 3)';
     if (!sysrootLine || /UNMEASURED/.test(sysrootLine)) throw new Error(`toolchain-baseline.txt sysroot line is missing or UNMEASURED -- ${measure}`);
     if (!cxxLine || /UNMEASURED/.test(cxxLine)) throw new Error(`toolchain-baseline.txt sysroot-glibcxx line is missing or UNMEASURED -- ${measure}`);
     const dist = sysrootLine.split(/\s+/)[1];

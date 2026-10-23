@@ -4537,6 +4537,9 @@ run_own_checks() {
     "sidecar-no-symlinks-self-test|node $REPO_ROOT/scripts/verify-sidecar-no-symlinks.mjs --self-test"
     "package-target-natives-self-test|node $REPO_ROOT/scripts/verify-package-target-natives.mjs --self-test"
     "packaged-identity-self-test|node $REPO_ROOT/scripts/verify-packaged-identity.mjs --self-test"
+    # NEW (Phase 45, CR-05): the drift comparator behind the container baseline.
+    # Planted mismatched sysroot and UNMEASURED lines must go red; no host state read.
+    "toolchain-baseline-self-test|bash $REPO_ROOT/scripts/toolchain-baseline.sh --self-test"
 
     # NEW (09-03): the WebExtensions declaration rows -- the manifest's
     # [[webextensions]] table reaches the policy engine as the tracked
