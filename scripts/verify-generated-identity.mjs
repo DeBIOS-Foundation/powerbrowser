@@ -136,6 +136,10 @@ const EXPECTED = Object.freeze([
     // mount), authored once from the emitter, same contract as the carrier
     // above: on a red, the emitter is what changes. The container release
     // build configures against the generated copy of these bytes.
+    // Deliberately written here as well as in TARGETS (IN-03, Phase 45): the
+    // TARGETS row is the emitter side, this line is the declared contract. Deriving
+    // it from TARGETS would compare the generator with itself, so a dropped or
+    // renamed release target would never go red.
     'powerbrowser/packaging/mozconfig.release',
 ]);
 
