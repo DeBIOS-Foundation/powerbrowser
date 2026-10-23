@@ -12,8 +12,10 @@
 # Then configure and build with the release mozconfig variant generated from
 # configuration.toml (powerbrowser/packaging/mozconfig.release, emitted by
 # scripts/generate.mjs, never hand-edited):
-#   podman run --rm -v "$PWD:/src:rw" -v <legion-keydir>:/keys:ro -w /src \
-#     pb-gecko-build bash -c 'MOZCONFIG=/src/powerbrowser/packaging/mozconfig.release ./mach build'
+#   podman run --rm -v "$PWD:/src:rw" -v <legion-keydir>:/keys:ro -w /src/upstream \
+#     pb-gecko-build bash -c 'MOZCONFIG=/src/powerbrowser/packaging/mozconfig.release ./mach build && bash /src/scripts/toolchain-baseline.sh --container'
+# ./mach lives in upstream/, so the build runs from /src/upstream; the release
+# objdir is objdir-release/ at the repo root (the mozconfig's @TOPSRCDIR@/..).
 #
 # UPD-29 mount discipline: the Safe Browsing keyfile is bind-mounted
 # read-only at /keys (see -v above); this image definition carries mount

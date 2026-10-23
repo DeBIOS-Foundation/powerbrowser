@@ -52,8 +52,8 @@ Owner, from a space-free work dir on legion with the keyfile outside the repo:
    legion path OUTSIDE any repo. Reply with the directory path only, never
    the value.
 2. `podman build -t pb-gecko-build -f powerbrowser/packaging/Containerfile .`
-3. `podman run --rm -v "$PWD:/src:rw" -v <legion-keydir>:/keys:ro -w /src pb-gecko-build bash -c 'MOZCONFIG=/src/powerbrowser/packaging/mozconfig.release ./mach build'`
-4. `podman run --rm -v "$PWD:/src:rw" -w /src pb-gecko-build bash powerbrowser/packaging/package-linux.sh`
+3. `podman run --rm -v "$PWD:/src:rw" -v <legion-keydir>:/keys:ro -w /src/upstream pb-gecko-build bash -c 'MOZCONFIG=/src/powerbrowser/packaging/mozconfig.release ./mach build && bash /src/scripts/toolchain-baseline.sh --container'` (`./mach` is in `upstream/`; the release objdir is `objdir-release/` at the repo root)
+4. `podman run --rm -v "$PWD:/src:rw" -v <legion-keydir>:/keys:ro -w /src pb-gecko-build bash powerbrowser/packaging/package-linux.sh`
 5. `MAR=objdir-release/dist/host/bin/mar MOZ_PRODUCT_VERSION=<built-ver> MAR_CHANNEL_ID=powerbrowser-default bash upstream/tools/update-packaging/make_full_update.sh <out>.mar <stage-dir>` then `LD_LIBRARY_PATH=objdir-release/dist/bin objdir-release/dist/bin/signmar -T`
 6. `scripts/verify-platform.sh --only portable-elf`, `--only sidecar-no-symlinks`, `--only package-target-natives`, `--only ng063-packaged-launch`, `--only packaged-identity` (all currently FAIL naming the missing tarball; see 45-02/45-03 SUMMARies for the exact red lines).
 
