@@ -93,6 +93,22 @@ while IFS= read -r hit; do
 done < <(grep -rlF "$ROOT/" "$STAGE/theia" "$STAGE/node" 2>/dev/null || true)
 ( cd "$STAGE" && python3 "$ROOT/upstream/config/createprecomplete.py" )
 
+# PKG-21 (Phase 45): the release manifest beside the rewritten tarball --
+# built version, release key, update and MAR channel ids, producing
+# tree/host/toolchain attribution per the BUILD.md rule -- so the MAR
+# measurement weighs an attributed artifact. Values derive at package time
+# (application.ini, configuration.toml via the generator); nothing typed.
+{
+    RELEASE_KEY="$(node --input-type=module -e "import { resolveConfig, releaseIdentity } from '$ROOT/scripts/generate.mjs'; const { config } = resolveConfig('$ROOT/configuration.toml'); console.log(releaseIdentity(config).releaseKey);")"
+    CHANNEL="$(node --input-type=module -e "import { resolveConfig, updateChannel } from '$ROOT/scripts/generate.mjs'; const { config } = resolveConfig('$ROOT/configuration.toml'); console.log(updateChannel(config).channel);")"
+    MAR_CHANNEL="$(node --input-type=module -e "import { resolveConfig, updateChannel } from '$ROOT/scripts/generate.mjs'; const { config } = resolveConfig('$ROOT/configuration.toml'); console.log(updateChannel(config).marChannelId);")"
+    printf '{\n  "version": "%s",\n  "release_key": "%s",\n  "update_channel": "%s",\n  "mar_channel_id": "%s",\n  "tree": "%s",\n  "host": "%s",\n  "toolchain": "container pb-gecko-build (--enable-bootstrap; see toolchain-baseline.txt)"\n}\n' \
+        "$VERSION" "$RELEASE_KEY" "$CHANNEL" "$MAR_CHANNEL" "$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)" "$(hostname 2>/dev/null || echo unknown)" \
+        > "$OBJ/dist/release-manifest.json"
+    cp "$OBJ/dist/release-manifest.json" "$STAGE/release-manifest.json"
+    echo "package-linux: wrote $OBJ/dist/release-manifest.json (release $RELEASE_KEY, channel $CHANNEL)"
+}
+
 shopt -s nullglob
 TARBALLS=( "$OBJ/dist"/*-"$VERSION".en-US.linux-x86_64.tar.xz )
 shopt -u nullglob
