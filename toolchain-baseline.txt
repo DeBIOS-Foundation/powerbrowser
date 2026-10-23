@@ -1,3 +1,11 @@
 rustc 1.97.1
 cargo 1.97.0
 cbindgen 0.29.4
+# Phase 45 (PKG-17, decision 19): the release container's Mozilla bootstrap
+# toolchain seed. The clang/sysroot/image lines are filled from the
+# --container output of the first pb-gecko-build run (plan 45-04 owner gate);
+# until then they name the intended toolchain, and Phase 49 AUTO-05 diffs the
+# committed file against the container output with drift failing the build.
+clang bootstrap
+sysroot jessie glibc-2.19
+image pb-gecko-build debian:bookworm

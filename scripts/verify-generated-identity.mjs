@@ -131,6 +131,12 @@ const EXPECTED = Object.freeze([
     // as the carrier above. Release metadata, never a Gecko build input.
     'powerbrowser/packaging/version/version.txt',
     'powerbrowser/packaging/version/release.txt',
+    // NEW (Phase 45, PKG-17): the release .mozconfig variant. Frozen copy of
+    // the release emission (objdir-release, --enable-bootstrap, SB keyfile
+    // mount), authored once from the emitter, same contract as the carrier
+    // above: on a red, the emitter is what changes. The container release
+    // build configures against the generated copy of these bytes.
+    'powerbrowser/packaging/mozconfig.release',
 ]);
 
 /** Set difference reported by name, so a failure says WHICH path drifted. */
