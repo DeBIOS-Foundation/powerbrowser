@@ -4530,9 +4530,13 @@ run_own_checks() {
     # build, no browser, no display, no network); the full rows live in the
     # full set below beside ng063 and FAIL naming the container-build
     # procedure when the container tarball is absent, never skip green.
+    # NEW (Phase 45, PKG-04/PKG-05): the packaged-identity self-test twin.
+    # Honestly --quick for the same reason (mkdtemp fixtures, derivation
+    # reads only); the full row lives beside ng063 below.
     "portable-elf-self-test|node $REPO_ROOT/scripts/verify-portable-elf.mjs --self-test"
     "sidecar-no-symlinks-self-test|node $REPO_ROOT/scripts/verify-sidecar-no-symlinks.mjs --self-test"
     "package-target-natives-self-test|node $REPO_ROOT/scripts/verify-package-target-natives.mjs --self-test"
+    "packaged-identity-self-test|node $REPO_ROOT/scripts/verify-packaged-identity.mjs --self-test"
 
     # NEW (09-03): the WebExtensions declaration rows -- the manifest's
     # [[webextensions]] table reaches the policy engine as the tracked
@@ -4860,6 +4864,11 @@ run_own_checks() {
       "portable-elf|node $REPO_ROOT/scripts/verify-portable-elf.mjs"
       "sidecar-no-symlinks|node $REPO_ROOT/scripts/verify-sidecar-no-symlinks.mjs"
       "package-target-natives|node $REPO_ROOT/scripts/verify-package-target-natives.mjs"
+      # NEW (Phase 45, PKG-04/PKG-05): the packaged-identity gate. Derives the
+      # release-variant identity at check time and compares field-by-field
+      # against the staged package; FAILs naming the container-build procedure
+      # when the tarball is absent, like its three neighbours above.
+      "packaged-identity|node $REPO_ROOT/scripts/verify-packaged-identity.mjs"
       "ng064-update-url-from-manifest|node $REPO_ROOT/scripts/verify-ng-064-update-url.mjs"
       "ng065-mar-signature-enforced|node $REPO_ROOT/scripts/verify-ng-065-mar-signature.mjs"
       "ng066-nsis-branding-no-ping|node $REPO_ROOT/scripts/verify-ng-066-nsis-branding.mjs"
