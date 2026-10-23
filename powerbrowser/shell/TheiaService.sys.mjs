@@ -298,10 +298,7 @@ export const TheiaService = {
     // and the process's own stdout -- so a failed reap is attributable after
     // the fact rather than invisible.
     try {
-      // WR-03: a pre-45 state file moves into ProfD first; the reap covers both paths.
-      for (const leftoverPath of await this._migrateLegacyStateFile()) {
-        await this._reapLeftover(leftoverPath);
-      }
+      await this._reapLeftover();
     } catch (err) {
       this._reapLog(`Leftover reap failed: ${err.message} -- best-effort cleanup of a previous launch, continuing to this launch's own spawn.`);
     }
@@ -596,20 +593,6 @@ export const TheiaService = {
   },
 
   /**
-   * SIDE-04's startup half: verified-identity reap of a leftover backend
-   * from a previous crashed launch, called from start() before this
-   * session's first spawn. D-111: signals a recorded pid ONLY when its
-   * live `/proc/<pid>/stat` start-time ticks match the state file's
-   * recorded value EXACTLY (string equality) -- a mismatch means the
-   * operating system has recycled that pid onto an unrelated process, and
-   * this returns without ever calling signalBarePid, no escalation.
-   *
-   * SIDE-04 empty edge: an absent, zero-byte, or malformed state file
-   * resolves via `PowerBrowserAPI.readStateFile` to `null` (never throws) --
-   * this returns silently and start()'s normal spawn sequence proceeds
-   * exactly as it does today.
-   */
-  /**
    * WR-03 (Phase 45): the state file a pre-45 build wrote lives under the XDG
    * config dir, at the same profile-keyed name. The path comes from the same
    * inputs the old `_resolveConfigDir()` used, so it is exact.
@@ -646,7 +629,29 @@ export const TheiaService = {
     return legacy && legacy !== this._stateFilePath ? [this._stateFilePath, legacy] : [this._stateFilePath];
   },
 
-  async _reapLeftover(path = this._stateFilePath) {
+  /**
+   * SIDE-04's startup half: verified-identity reap of a leftover backend
+   * from a previous crashed launch, called from start() before this
+   * session's first spawn. D-111: signals a recorded pid ONLY when its
+   * live `/proc/<pid>/stat` start-time ticks match the state file's
+   * recorded value EXACTLY (string equality) -- a mismatch means the
+   * operating system has recycled that pid onto an unrelated process, and
+   * this returns without ever calling signalBarePid, no escalation.
+   *
+   * SIDE-04 empty edge: an absent, zero-byte, or malformed state file
+   * resolves via `PowerBrowserAPI.readStateFile` to `null` (never throws) --
+   * this returns silently and start()'s normal spawn sequence proceeds
+   * exactly as it does today.
+   */
+  async _reapLeftover() {
+    // WR-03: a pre-45 state file moves into ProfD first; both paths are reaped.
+    for (const path of await this._migrateLegacyStateFile()) {
+      await this._reapLeftoverAt(path);
+    }
+  },
+
+  /** One leftover record: the reap body for a single state-file path. */
+  async _reapLeftoverAt(path) {
     const record = await PowerBrowserAPI.readStateFile(path);
     if (!record || typeof record.pid !== "number") {
       return;
