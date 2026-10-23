@@ -88,14 +88,30 @@ function listElfs(root) {
 // run and on every red.
 const DIST_GLIBC = Object.freeze({ jessie: [2, 19], stretch: [2, 24], buster: [2, 28], bullseye: [2, 31], bookworm: [2, 36] });
 
+// Two namespaces, two ceilings. GLIBC_* tokens are bounded by the sysroot's
+// glibc floor (DIST_GLIBC). GLIBCXX_* tokens are bounded by the libstdc++ the
+// sysroot ships, measured in the container and recorded as a
+// "sysroot-glibcxx GLIBCXX_<v>" baseline line. Neither namespace is compared
+// against the other's ceiling.
 function ceilingFromTree() {
     const baseline = readFileSync(join(REPO_ROOT, 'toolchain-baseline.txt'), 'utf8');
-    const sysrootLine = baseline.split('\n').find(l => l.startsWith('sysroot '));
-    if (!sysrootLine) throw new Error('toolchain-baseline.txt carries no "sysroot <dist> ..." line -- fill it from the first container build (plan 45-04 owner gate)');
+    const lineFor = (key) => baseline.split('\n').find(l => l.startsWith(`${key} `)) ?? '';
+    const sysrootLine = lineFor('sysroot');
+    const cxxLine = lineFor('sysroot-glibcxx');
+    const measure = `measure it in the release container: podman run --rm -v "$PWD:/src:rw" -w /src pb-gecko-build bash /src/scripts/toolchain-baseline.sh --container`;
+    if (!sysrootLine || /UNMEASURED/.test(sysrootLine)) throw new Error(`toolchain-baseline.txt sysroot line is missing or UNMEASURED -- ${measure}`);
+    if (!cxxLine || /UNMEASURED/.test(cxxLine)) throw new Error(`toolchain-baseline.txt sysroot-glibcxx line is missing or UNMEASURED -- ${measure}`);
     const dist = sysrootLine.split(/\s+/)[1];
-    const floor = DIST_GLIBC[dist];
-    if (!floor) throw new Error(`toolchain-baseline.txt sysroot dist is "${dist}", which names no floor -- update DIST_GLIBC in ${NAME} beside the baseline`);
-    return { dist, floor, source: 'toolchain-baseline.txt sysroot line' };
+    const glibc = DIST_GLIBC[dist];
+    if (!glibc) throw new Error(`toolchain-baseline.txt sysroot dist is "${dist}", which names no glibc floor -- update DIST_GLIBC in ${NAME} beside the baseline`);
+    const cxx = /GLIBCXX_(\d+)\.(\d+)\.(\d+)/.exec(cxxLine);
+    if (!cxx) throw new Error(`toolchain-baseline.txt sysroot-glibcxx line names no GLIBCXX_<v> token: "${cxxLine}"`);
+    return {
+        dist,
+        glibc,
+        glibcxx: [Number(cxx[1]), Number(cxx[2]), Number(cxx[3])],
+        source: 'toolchain-baseline.txt sysroot lines',
+    };
 }
 
 function cmpVer(a, b) {
@@ -108,33 +124,32 @@ function cmpVer(a, b) {
 
 function fmtVer(v) { return v.join('.'); }
 
-function maxRequiredSymbols(elfPath) {
-    // Gathers versioned symbol requirement tokens from the dynamic
-    // symbol table. Exact dotted triples compared as tuples, never floats.
-    const vers = [];
-    const dump = readelf(elfPath, '--version-info');
-    if (!dump) return vers;
-    for (const m of dump.matchAll(/(GLIBC|GLIBCXX)_(\d+)\.(\d+)(?:\.(\d+))?/g)) {
-        vers.push([Number(m[2]), Number(m[3]), Number(m[4] ?? 0)]);
+const SYMBOL_VERSION = /(GLIBCXX|GLIBC)_(\d+)\.(\d+)(?:\.(\d+))?/g;
+
+function requiredSymbolVersions(elfPath) {
+    // Versioned symbol requirement tokens as { token, ns, v }. Exact dotted
+    // triples compared as tuples, never floats.
+    let text = readelf(elfPath, '--version-info') ?? '';
+    if (!/(GLIBCXX|GLIBC)_\d/.test(text)) {
+        // Fallback when version-info is silent: strings carry the same tokens.
+        try { text = execFileSync('strings', [elfPath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); } catch { text = ''; }
     }
-    // Fallback when version-info is silent: strings carry the same tokens.
-    if (vers.length === 0) {
-        let strings = '';
-        try { strings = execFileSync('strings', [elfPath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); } catch { /* keep empty */ }
-        for (const m of strings.matchAll(/(GLIBC|GLIBCXX)_(\d+)\.(\d+)(?:\.(\d+))?/g)) {
-            vers.push([Number(m[2]), Number(m[3]), Number(m[4] ?? 0)]);
-        }
-    }
-    return vers;
+    return [...text.matchAll(SYMBOL_VERSION)].map((m) => ({
+        token: m[0],
+        ns: m[1],
+        v: [Number(m[2]), Number(m[3]), Number(m[4] ?? 0)],
+    }));
 }
 
-function checkTree(root) {
+function checkTree(root, fixedCeiling) {
     const failures = [];
-    let ceiling;
-    try {
-        ceiling = ceilingFromTree();
-    } catch (err) {
-        return { failures: [err.message], ceiling: null, elfs: 0 };
+    let ceiling = fixedCeiling;
+    if (!ceiling) {
+        try {
+            ceiling = ceilingFromTree();
+        } catch (err) {
+            return { failures: [err.message], ceiling: null, elfs: 0 };
+        }
     }
     const elfs = listElfs(root);
     if (elfs.length === 0) {
@@ -153,14 +168,92 @@ function checkTree(root) {
                 failures.push(`${rel}: ${line.trim()} -- strip at staging (package-linux.sh) or rebuild in the container`);
             }
         }
-        for (const v of maxRequiredSymbols(elf)) {
-            if (cmpVer(v, ceiling.floor) > 0) {
-                failures.push(`${rel}: requires versioned symbol ${fmtVer(v)}, ceiling is ${fmtVer(ceiling.floor)} from ${ceiling.source} (dist ${ceiling.dist})`);
+        for (const req of requiredSymbolVersions(elf)) {
+            const floor = req.ns === 'GLIBCXX' ? ceiling.glibcxx : ceiling.glibc;
+            if (cmpVer(req.v, floor) > 0) {
+                failures.push(`${rel}: requires versioned symbol ${req.token}, above the ${req.ns} ceiling ${fmtVer(floor)} from ${ceiling.source} (dist ${ceiling.dist})`);
                 break;
             }
         }
     }
     return { failures, ceiling, elfs: elfs.length };
+}
+
+// The self-test's own ceiling. Fixed here so the twin never depends on the
+// measured baseline, which stays UNMEASURED until the container build runs.
+const FIXTURE_CEILING = Object.freeze({ dist: 'self-test', glibc: [2, 19, 0], glibcxx: [3, 4, 20], source: 'self-test fixture ceiling' });
+
+function elfHash(name) {
+    let h = 0;
+    for (const c of Buffer.from(name)) {
+        h = ((h << 4) + c) >>> 0;
+        const g = (h & 0xf0000000) >>> 0;
+        if (g) h = (h ^ (g >>> 24)) >>> 0;
+        h = (h & ~g) >>> 0;
+    }
+    return h;
+}
+
+// A minimal ELF64 shared object whose only content is a .gnu.version_r
+// section naming the given symbol-version tokens. readelf -V reads exactly
+// those requirements, so the plants need no compiler and no host binary.
+function writeVersionedElf(path, tokens) {
+    const align8 = (n) => (n + 7) & ~7;
+    const strs = ['', 'libc.so.6', ...tokens];
+    const offs = [];
+    let dynstr = Buffer.alloc(0);
+    for (const s of strs) {
+        offs.push(dynstr.length);
+        dynstr = Buffer.concat([dynstr, Buffer.from(`${s}\0`)]);
+    }
+    const n = tokens.length;
+    const verneed = Buffer.alloc(16 + 16 * n);
+    verneed.writeUInt16LE(1, 0);            // vn_version
+    verneed.writeUInt16LE(n, 2);            // vn_cnt
+    verneed.writeUInt32LE(offs[1], 4);      // vn_file: libc.so.6
+    verneed.writeUInt32LE(16, 8);           // vn_aux
+    verneed.writeUInt32LE(0, 12);           // vn_next
+    tokens.forEach((t, i) => {
+        const at = 16 + 16 * i;
+        verneed.writeUInt32LE(elfHash(t), at);          // vna_hash
+        verneed.writeUInt16LE(0, at + 4);               // vna_flags
+        verneed.writeUInt16LE(i + 2, at + 6);           // vna_other
+        verneed.writeUInt32LE(offs[2 + i], at + 8);     // vna_name
+        verneed.writeUInt32LE(i + 1 < n ? 16 : 0, at + 12); // vna_next
+    });
+    const shstr = Buffer.from('\0.dynstr\0.gnu.version_r\0.shstrtab\0');
+    const dynOff = 64;
+    const verOff = align8(dynOff + dynstr.length);
+    const shstrOff = align8(verOff + verneed.length);
+    const shOff = align8(shstrOff + shstr.length);
+    const file = Buffer.alloc(shOff + 4 * 64);
+    Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0]).copy(file, 0); // ELF64, LE, version 1
+    file.writeUInt16LE(3, 16);              // e_type ET_DYN
+    file.writeUInt16LE(62, 18);             // e_machine x86-64
+    file.writeUInt32LE(1, 20);              // e_version
+    file.writeBigUInt64LE(BigInt(shOff), 40); // e_shoff
+    file.writeUInt16LE(64, 52);             // e_ehsize
+    file.writeUInt16LE(64, 58);             // e_shentsize
+    file.writeUInt16LE(4, 60);              // e_shnum
+    file.writeUInt16LE(3, 62);              // e_shstrndx
+    dynstr.copy(file, dynOff);
+    verneed.copy(file, verOff);
+    shstr.copy(file, shstrOff);
+    const sh = (i, name, type, off, size, link = 0, info = 0, align = 1) => {
+        const at = shOff + 64 * i;
+        file.writeUInt32LE(name < 0 ? 0 : shstr.indexOf(`${name}\0`), at);
+        file.writeUInt32LE(type, at + 4);
+        file.writeBigUInt64LE(BigInt(off), at + 24);
+        file.writeBigUInt64LE(BigInt(size), at + 32);
+        file.writeUInt32LE(link, at + 40);
+        file.writeUInt32LE(info, at + 44);
+        file.writeBigUInt64LE(BigInt(align), at + 48);
+    };
+    sh(0, -1, 0, 0, 0);
+    sh(1, '.dynstr', 3, dynOff, dynstr.length, 0, 0, 1);
+    sh(2, '.gnu.version_r', 0x6ffffffe, verOff, verneed.length, 1, 1, 8); // SHT_GNU_verneed
+    sh(3, '.shstrtab', 3, shstrOff, shstr.length, 0, 0, 1);
+    writeFileSync(path, file);
 }
 
 function selfTest() {
@@ -182,7 +275,7 @@ function selfTest() {
                     ok = false;
                     return;
                 }
-                const res = checkTree(fix);
+                const res = checkTree(fix, FIXTURE_CEILING);
                 const msg = res.failures.find(f => f.includes(needleFile) && f.includes(needleValue));
                 if (!msg) {
                     console.error(`${NAME}: --self-test FAIL -- ${label} was NOT rejected naming ${needleFile} and ${needleValue}`);
@@ -229,39 +322,41 @@ function selfTest() {
                 '/nix/store',
             );
         } else {
-            console.log(`${NAME}: --self-test -- no patchelf candidate executable (store path nor PATH); nix-RUNPATH plant skipped`);
+            // A missing patchelf is a red self-test, never a skip that exits 0.
+            console.error(`${NAME}: --self-test FAIL -- no patchelf executable (store path nor PATH); the nix-RUNPATH plant cannot be built`);
+            ok = false;
         }
 
-        // Plant (b): a fixture binary requiring a newer versioned symbol than
-        // the derived ceiling. The checker only trusts readelf/strings over
-        // real ELFs, so the plant asserts the CURRENT tree's own verdict
-        // shape: run checkTree over the real objdir bin and require its
-        // failures (red-by-design on the Nix tree) to name /nix/store or a
-        // version above the ceiling. On a container tree this plant is
-        // vacuous, so it is conditional on the tree being Nix-built --
-        // detected, not assumed.
-        const probe = checkTree(join(REPO_ROOT, 'objdir', 'dist', 'bin'));
-        const nixBuilt = probe.failures.some(f => f.includes('/nix/store'));
-        if (nixBuilt) {
-            const symHit = probe.failures.find(f => /requires versioned symbol \d+\.\d+/.test(f));
-            if (symHit) console.log(`${NAME}: --self-test -- newer-symbol plant REJECTED (live tree evidence): ${symHit}`);
-            else console.log(`${NAME}: --self-test -- live tree is Nix-built (INTERP/RUNPATH red); no above-ceiling line today, ceiling plant recorded as INTERP/RUNPATH evidence`);
-        } else if (existsSync(join(REPO_ROOT, 'objdir', 'dist', 'bin'))) {
-            console.log(`${NAME}: --self-test -- tree is not Nix-built; newer-symbol plant verified against the ceiling tuple comparator instead`);
-            // Comparator unit probe: exact-triple compare, never floats.
-            if (!(cmpVer([2, 19], [2, 19]) === 0 && cmpVer([2, 42], [2, 19]) > 0 && cmpVer([2, 18], [2, 19]) < 0)) {
-                console.error(`${NAME}: --self-test FAIL -- the version tuple comparator misbehaves at the ceiling boundary`);
-                ok = false;
-            } else {
-                console.log(`${NAME}: --self-test -- ceiling boundary probe ok (equal passes, ceiling-plus-one red)`);
-            }
-        } else {
-            console.log(`${NAME}: --self-test -- no built tree; newer-symbol plant verified against the ceiling tuple comparator`);
-            if (!(cmpVer([2, 19], [2, 19]) === 0 && cmpVer([2, 42], [2, 19]) > 0)) {
-                console.error(`${NAME}: --self-test FAIL -- the version tuple comparator misbehaves at the ceiling boundary`);
-                ok = false;
-            } else {
-                console.log(`${NAME}: --self-test -- ceiling boundary probe ok (equal passes, ceiling-plus-one red)`);
+        // Plant (b) is split by namespace: a GLIBC token above the glibc
+        // ceiling, and a GLIBCXX token above the libstdc++ ceiling, each in its
+        // own synthetic ELF. A control carries both namespaces AT their
+        // ceilings and must stay green (regression for the old single-namespace
+        // comparison, which made every GLIBCXX token look like a glibc 3.x).
+        expectRed(
+            'GLIBC above-ceiling plant',
+            (fix) => writeVersionedElf(join(fix, 'planted-glibc.so'), ['GLIBC_2.2.5', 'GLIBC_2.99']),
+            'planted-glibc.so',
+            'GLIBC_2.99',
+        );
+        expectRed(
+            'GLIBCXX above-ceiling plant',
+            (fix) => writeVersionedElf(join(fix, 'planted-cxx.so'), ['GLIBCXX_3.4.20', 'GLIBCXX_3.4.99']),
+            'planted-cxx.so',
+            'GLIBCXX_3.4.99',
+        );
+        {
+            const fix = mkdtempSync(join(tmpdir(), 'verify-portable-elf-control-'));
+            try {
+                writeVersionedElf(join(fix, 'control.so'), ['GLIBC_2.2.5', 'GLIBC_2.19', 'GLIBCXX_3.4.20']);
+                const res = checkTree(fix, FIXTURE_CEILING);
+                if (res.failures.length) {
+                    console.error(`${NAME}: --self-test FAIL -- the at-ceiling control was rejected (namespaces must not cross): ${res.failures[0]}`);
+                    ok = false;
+                } else {
+                    console.log(`${NAME}: --self-test -- at-ceiling control green (GLIBC 2.19 and GLIBCXX 3.4.20 pass in their own namespaces)`);
+                }
+            } finally {
+                rmSync(fix, { recursive: true, force: true });
             }
         }
 
@@ -269,7 +364,7 @@ function selfTest() {
         {
             const fix = mkdtempSync(join(tmpdir(), 'verify-portable-elf-empty-'));
             try {
-                const res = checkTree(fix);
+                const res = checkTree(fix, FIXTURE_CEILING);
                 if (res.failures.length === 0) {
                     console.error(`${NAME}: --self-test FAIL -- an EMPTY stage was accepted; it must be red (never green-by-absence)`);
                     ok = false;
@@ -285,8 +380,8 @@ function selfTest() {
         {
             const fix = mkdtempSync(join(tmpdir(), 'verify-portable-elf-idem-'));
             try {
-                const a = checkTree(fix).failures.join('\n');
-                const b = checkTree(fix).failures.join('\n');
+                const a = checkTree(fix, FIXTURE_CEILING).failures.join('\n');
+                const b = checkTree(fix, FIXTURE_CEILING).failures.join('\n');
                 if (a !== b) {
                     console.error(`${NAME}: --self-test FAIL -- two runs over one input disagree`);
                     ok = false;
@@ -323,10 +418,10 @@ if (SELF_TEST) {
         const { failures, ceiling, elfs } = checkTree(root);
         rmSync(join(root, '..'), { recursive: true, force: true });
         if (failures.length) {
-            console.error(`${NAME}: FAIL -- ${failures.length} failure(s) over ${elfs} ELFs (ceiling ${ceiling ? `${fmtVer(ceiling.floor)} from ${ceiling.source}` : 'unresolved'}):\n  ${failures.join('\n  ')}`);
+            console.error(`${NAME}: FAIL -- ${failures.length} failure(s) over ${elfs} ELFs (ceiling ${ceiling ? `GLIBC ${fmtVer(ceiling.glibc)}, GLIBCXX ${fmtVer(ceiling.glibcxx)} from ${ceiling.source}` : 'unresolved'}):\n  ${failures.join('\n  ')}`);
             process.exit(1);
         }
-        console.log(`${NAME}: PASS -- ${elfs} ELFs carry no /nix/store INTERP/RUNPATH and need at most symbol ${fmtVer(ceiling.floor)} (ceiling from ${ceiling.source}, dist ${ceiling.dist})`);
+        console.log(`${NAME}: PASS -- ${elfs} ELFs carry no /nix/store INTERP/RUNPATH and need at most GLIBC ${fmtVer(ceiling.glibc)} and GLIBCXX ${fmtVer(ceiling.glibcxx)} (ceiling from ${ceiling.source}, dist ${ceiling.dist})`);
     }).catch((err) => {
         console.error(`${NAME}: FAIL -- ${err.message}. Next step: run: ${BUILD_CMD}`);
         process.exit(1);
