@@ -519,7 +519,23 @@ export const TheiaService = {
     return { ok: true, message: null, details: null };
   },
 
+  /**
+   * PKG-06 (Phase 45): the sidecar state directory lives under this launch's
+   * own Gecko profile directory (ProfD), never under XDG_CONFIG_HOME/HOME.
+   * _profileStateKey() already suffixes the state file name by profile (the
+   * CR-01 fix); this moves the BASE too, so the matrix no-residue rows can
+   * derive the inspected paths from the packaged application.ini plus ProfD
+   * at check time. Falls back to the pre-45 XDG behaviour only when
+   * getProfileDir() resolves "" (the same never-throw convention as
+   * _profileStateKey()'s "default" fallback), so a ProfD read failure
+   * degrades to the old single-location behaviour rather than crashing
+   * startup. No new pref, no new internal touchpoint.
+   */
   _resolveConfigDir() {
+    const profileDir = PowerBrowserAPI.getProfileDir();
+    if (profileDir) {
+      return `${profileDir}/powerbrowser-theia`;
+    }
     const xdg = PowerBrowserAPI.getEnv("XDG_CONFIG_HOME");
     const home = PowerBrowserAPI.getEnv("HOME");
     const base = xdg || `${home}/.config`;

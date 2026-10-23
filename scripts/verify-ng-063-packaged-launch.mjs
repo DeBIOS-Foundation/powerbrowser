@@ -39,7 +39,13 @@ console.log(`${NAME}: PASS -- the packaged tree reached a ready workbench on its
 
 async function launch() {
     delete process.env.PB_BACKEND_MAIN; // the launch must use the install's own resolution
-    process.env.XDG_CONFIG_HOME = mkdtempSync(join(tmpdir(), 'ng063-cfg-'));
+    // PKG-06 (Phase 45): sidecar state lives under the ProfD profile dir, not
+    // under XDG_CONFIG_HOME, so the fresh-prefix isolation is a temp HOME
+    // (which moves the fallback path) and the row asserts the profile-scoped
+    // state path it actually uses. A temp XDG_CONFIG_HOME alone no longer
+    // selects the state dir, so asserting about it would pass while checking
+    // a directory the product never writes.
+    process.env.HOME = mkdtempSync(join(tmpdir(), 'ng063-home-'));
     await withFirefoxPage('', async ({ waitFor }) => {
         await waitFor('window.theia && window.theia.container ? true : false', { timeoutMs: 90000 });
         await waitFor('!!document.querySelector("#theia-app-shell")', { timeoutMs: 60000 });
