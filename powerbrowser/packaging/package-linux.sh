@@ -70,10 +70,17 @@ cp "$ROOT/powerbrowser/distribution/policies.json" "$STAGE/distribution/policies
 # builder's checkout path. The keys are bundle map keys the runtime reads by
 # exact string, so the whole key is rewritten -- never a partial prefix that
 # could collide -- and the comments are inert.
-# patchelf is in the firefox dev shell this script runs in.
-for native in "$STAGE/theia/lib/backend/native"/*.node; do
-    patchelf --remove-rpath "$native" 2>/dev/null || true
-done
+# patchelf is in the firefox dev shell this script runs in (and in the
+# release container). PKG-22 (Phase 45): the strip covers the row's full ELF
+# universe, not only the natives glob -- every staged ELF under theia/ and
+# node/ (Gecko libs included once the container build stages them) -- because
+# the portable-elf row walks the whole extracted tarball. Per-file `|| true`
+# keeps one unreadable file from failing staging; the row (not the loop's
+# silence) is the verdict. Idempotent: --remove-rpath on an already-clean ELF
+# is a no-op, so re-running staging prints the same tree.
+while IFS= read -r staged_elf; do
+    patchelf --remove-rpath "$staged_elf" 2>/dev/null || true
+done < <(find "$STAGE/theia" "$STAGE/node" -type f 2>/dev/null || true)
 perl -pi -e 's{//\s*node-file:\S+}{// node-file:<buildhost>}; s{"node-file:[^"]+"}{"node-file:<buildhost>"}g' \
     "$STAGE/theia/lib/backend/main.js" "$STAGE/theia/lib/backend/parcel-watcher.js"
 # ng063-style assertion: no staged file under theia/ or node/ may still carry

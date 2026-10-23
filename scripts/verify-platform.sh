@@ -4525,6 +4525,15 @@ run_own_checks() {
     # NG-089 (Phase 24, UAT-01): the UAT-sheet check's plant self-test; quick.
     "ng089-uat-sheets-self-test|node $REPO_ROOT/scripts/verify-ng-089-uat-sheets.mjs --self-test"
 
+    # NEW (Phase 45, PKG-22/PKG-18/PKG-23): the portability self-test twins.
+    # Each twin is honestly --quick (node plus text/bytes in mkdtemp only: no
+    # build, no browser, no display, no network); the full rows live in the
+    # full set below beside ng063 and FAIL naming the container-build
+    # procedure when the container tarball is absent, never skip green.
+    "portable-elf-self-test|node $REPO_ROOT/scripts/verify-portable-elf.mjs --self-test"
+    "sidecar-no-symlinks-self-test|node $REPO_ROOT/scripts/verify-sidecar-no-symlinks.mjs --self-test"
+    "package-target-natives-self-test|node $REPO_ROOT/scripts/verify-package-target-natives.mjs --self-test"
+
     # NEW (09-03): the WebExtensions declaration rows -- the manifest's
     # [[webextensions]] table reaches the policy engine as the tracked
     # ExtensionSettings key.
@@ -4843,6 +4852,14 @@ run_own_checks() {
       # Gecko build, the packaged tree, the built sidecar, a browser, or the network.
       # Commands and live-main/live-clone markers: docs/non-gui/checks-wave-e.tsv.
       "ng063-packaged-launch|node $REPO_ROOT/scripts/verify-ng-063-packaged-launch.mjs"
+      # NEW (Phase 45, PKG-22/PKG-18/PKG-23): the portability gates. Each needs
+      # the container-built tarball (full tier, beside ng063): the Nix-built
+      # tree is red-by-design here, which is exactly what the container build
+      # fixes. Each FAILs naming the container-build procedure when the
+      # tarball is absent; full green waits on the plan 45-04 owner gate.
+      "portable-elf|node $REPO_ROOT/scripts/verify-portable-elf.mjs"
+      "sidecar-no-symlinks|node $REPO_ROOT/scripts/verify-sidecar-no-symlinks.mjs"
+      "package-target-natives|node $REPO_ROOT/scripts/verify-package-target-natives.mjs"
       "ng064-update-url-from-manifest|node $REPO_ROOT/scripts/verify-ng-064-update-url.mjs"
       "ng065-mar-signature-enforced|node $REPO_ROOT/scripts/verify-ng-065-mar-signature.mjs"
       "ng066-nsis-branding-no-ping|node $REPO_ROOT/scripts/verify-ng-066-nsis-branding.mjs"
