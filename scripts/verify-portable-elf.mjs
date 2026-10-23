@@ -28,7 +28,7 @@
 //   node scripts/verify-portable-elf.mjs --self-test
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -175,7 +175,13 @@ function selfTest() {
         const expectRed = (label, setup, needleFile, needleValue) => {
             const fix = mkdtempSync(join(tmpdir(), 'verify-portable-elf-plant-'));
             try {
-                setup(fix);
+                try {
+                    setup(fix);
+                } catch (err) {
+                    console.error(`${NAME}: --self-test FAIL -- ${label}: the plant could not be built: ${err.message.split('\n')[0]}`);
+                    ok = false;
+                    return;
+                }
                 const res = checkTree(fix);
                 const msg = res.failures.find(f => f.includes(needleFile) && f.includes(needleValue));
                 if (!msg) {
@@ -213,7 +219,10 @@ function selfTest() {
                 'nix RUNPATH plant',
                 (fix) => {
                     const dst = join(fix, 'planted.elf');
-                    execFileSync('cp', [srcElf, dst]);
+                    // copyFileSync + chmod, not `cp`: cp keeps the 0555 mode of a
+                    // store binary, and patchelf cannot write the copy.
+                    copyFileSync(srcElf, dst);
+                    chmodSync(dst, 0o755);
                     execFileSync(patchelfBin, ['--set-rpath', '/nix/store/planted-fake-lib', dst]);
                 },
                 'planted.elf',
