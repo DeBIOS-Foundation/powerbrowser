@@ -3622,12 +3622,26 @@ export const PowerBrowserAPI = Object.freeze({
     } catch {
       spec = raw;
     }
-    if (spec === "about:newtab" || /^https?:\/\//i.test(spec)) {
-      return spec;
-    }
-    return null;
+    return admitCliUrlSpec(spec);
   },
 });
+
+/**
+ * WR-04 (Phase 45): the CLI admission predicate, at module scope so the repo
+ * check runs this exact source (scripts/verify-cli-url.mjs reads the function
+ * out of this file and feeds it the planted refusal shapes). Admits only
+ * http/https URLs and the literal about:newtab. Every other value, including a
+ * non-string, returns null.
+ */
+export function admitCliUrlSpec(spec) {
+  if (typeof spec !== "string") {
+    return null;
+  }
+  if (spec === "about:newtab" || /^https?:\/\//i.test(spec)) {
+    return spec;
+  }
+  return null;
+}
 
 /**
  * D-121/D-123/D-124: the single-instance command-line handler, registered
@@ -3690,7 +3704,10 @@ export class PowerBrowserSingleInstanceHandler {
       if (win) {
         PowerBrowserAPI.focusWindow(win);
         if (url !== null) {
-          PowerBrowserAPI.openStockTab(url);
+          // WR-05: openStockTab is async; an unhandled rejection would drop the URL silently.
+          PowerBrowserAPI.openStockTab(url).catch((err) =>
+            PowerBrowserAPI.log("error", `[PowerBrowserSingleInstanceHandler] openStockTab: ${err}`)
+          );
         }
         cmdLine.preventDefault = true;
         return;

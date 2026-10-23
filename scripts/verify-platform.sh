@@ -4543,6 +4543,10 @@ run_own_checks() {
     # NEW (Phase 45, CR-03): the release objdir name is read from mozconfig.release,
     # so the packager and the release rows share one value. Planted mozconfig text only.
     "release-objdir-self-test|node $REPO_ROOT/scripts/lib/release-objdir.mjs --self-test"
+    # NEW (Phase 45, WR-04): the CLI URL admission predicate, read from the shell
+    # module and probed with planted refusal shapes; the self-test plants two mutants.
+    "cli-url-admission|node $REPO_ROOT/scripts/verify-cli-url.mjs"
+    "cli-url-admission-self-test|node $REPO_ROOT/scripts/verify-cli-url.mjs --self-test"
 
     # NEW (09-03): the WebExtensions declaration rows -- the manifest's
     # [[webextensions]] table reaches the policy engine as the tracked
