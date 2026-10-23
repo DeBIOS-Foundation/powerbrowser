@@ -3589,6 +3589,44 @@ export const PowerBrowserAPI = Object.freeze({
   isInitialLaunch(cmdLine) {
     return cmdLine.state === Ci.nsICommandLine.STATE_INITIAL_LAUNCH;
   },
+
+  /**
+   * PKG-07 (Phase 45): the one CLI URL argument the single-instance
+   * handler routes into the stock window. Reads the bare (flagless) argument
+   * through the platform command-line interface and admits only the
+   * scheme-walled shapes -- http/https URLs plus the single literal
+   * about:newtab, mirroring openStockTab -- resolving through
+   * cmdLine.resolveURI so a bare host still parses. Returns the admitted
+   * spec string, or null when no argument names a web page. Never throws:
+   * an unreadable command line behaves like no argument. The caller hands
+   * the result only to the scheme-walled stock-window path (openStockTab
+   * on handoff, openBrowserWindow on first launch); a refusal opens nothing
+   * and persists nothing outside the normal history path.
+   */
+  cliUrl(cmdLine) {
+    let raw = "";
+    try {
+      if (cmdLine.length === 0) {
+        return null;
+      }
+      raw = cmdLine.getArgument(0);
+    } catch {
+      return null;
+    }
+    if (typeof raw !== "string" || raw === "") {
+      return null;
+    }
+    let spec = raw;
+    try {
+      spec = cmdLine.resolveURI(raw).spec;
+    } catch {
+      spec = raw;
+    }
+    if (spec === "about:newtab" || /^https?:\/\//i.test(spec)) {
+      return spec;
+    }
+    return null;
+  },
 });
 
 /**
@@ -3602,14 +3640,15 @@ export const PowerBrowserAPI = Object.freeze({
  * touches the boundary guard forbids everywhere else under
  * `powerbrowser/shell/` (D-96/D-97).
  *
- * Behaviour (D-123/D-124, extended by 01-05 for GUI-01): look up the
- * existing shell window. If one is found -- a second launch of the same
- * binary against the same profile -- focus it and set `preventDefault`,
- * ignoring every command-line argument: never read one, never open a
- * window.
+ * Behaviour (D-123/D-124, extended by 01-05 for GUI-01, by Phase 45
+ * for PKG-07): look up the existing shell window. If one is found -- a
+ * second launch of the same binary against the same profile -- focus it,
+ * route a CLI URL argument (when one names a web page) into the
+ * stock-window path, and set `preventDefault`.
  *
  * If none is found AND this is the process's own initial launch, open the
- * shell document here and set `preventDefault`. This is startup-window
+ * shell document here, route a CLI URL argument the same way, and set
+ * `preventDefault`. This is startup-window
  * selection, and it lives here rather than in the compiled
  * BROWSER_CHROME_URL define patch 020 used to override (01-05, D-20): the
  * stock default handler
@@ -3619,6 +3658,13 @@ export const PowerBrowserAPI = Object.freeze({
  * then closes the early `navigator:blank` window, which is the brief
  * startup flicker upstream's own comment there calls acceptable and which
  * 01-UI-SPEC.md accepts and documents rather than fixes.
+ *
+ * The URL argument is UNTRUSTED input: it is handed only to the
+ * scheme-walled stock-window path (http/https plus about:newtab, the same
+ * wall openStockTab enforces), never evaled, never shelled, never persisted
+ * outside the normal history path. A launch naming a different profile never
+ * reaches this handler (nsRemoteService keys remoting on the profile path),
+ * so first-launch plus remote-handoff are the only two branches needing it.
  *
  * If none is found and this is NOT the initial launch -- a remote handoff
  * that arrived before or without a shell window -- do nothing at all;
@@ -3635,9 +3681,17 @@ export class PowerBrowserSingleInstanceHandler {
 
   handle(cmdLine) {
     try {
+      // PKG-07 (Phase 45): route a CLI URL argument into the stock window.
+      // The argument is untrusted: cliUrl() admits only the scheme-walled
+      // shapes (http/https/about:newtab) and returns null otherwise, so a
+      // refusal opens nothing and persists nothing.
+      const url = PowerBrowserAPI.cliUrl(cmdLine);
       const win = PowerBrowserAPI.findShellWindow();
       if (win) {
         PowerBrowserAPI.focusWindow(win);
+        if (url !== null) {
+          PowerBrowserAPI.openStockTab(url);
+        }
         cmdLine.preventDefault = true;
         return;
       }
@@ -3645,6 +3699,9 @@ export class PowerBrowserSingleInstanceHandler {
         return;
       }
       PowerBrowserAPI.openShellWindow();
+      if (url !== null) {
+        PowerBrowserAPI.openBrowserWindow(url);
+      }
       cmdLine.preventDefault = true;
     } catch (err) {
       PowerBrowserAPI.log("error", `[PowerBrowserSingleInstanceHandler] ${err}`);
