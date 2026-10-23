@@ -4547,6 +4547,10 @@ run_own_checks() {
     # module and probed with planted refusal shapes; the self-test plants two mutants.
     "cli-url-admission|node $REPO_ROOT/scripts/verify-cli-url.mjs"
     "cli-url-admission-self-test|node $REPO_ROOT/scripts/verify-cli-url.mjs --self-test"
+    # NEW (Phase 45, WR-03): the pre-45 sidecar state file moves once into ProfD and a
+    # failed move keeps it findable; read from TheiaService and run against a fake store.
+    "sidecar-state-migration|node $REPO_ROOT/scripts/verify-sidecar-state-migration.mjs"
+    "sidecar-state-migration-self-test|node $REPO_ROOT/scripts/verify-sidecar-state-migration.mjs --self-test"
 
     # NEW (09-03): the WebExtensions declaration rows -- the manifest's
     # [[webextensions]] table reaches the policy engine as the tracked
