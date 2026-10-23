@@ -46,6 +46,19 @@ into the tree, the SUMMARY, or the reply — path only.
 
 ## Blocker: pinned Node runtime exceeds the 2.19 glibc ceiling (WR-09)
 
+**RESOLVED 2026-10-22 by owner ruling (option 2).** The shipped Linux floor is
+raised from glibc 2.19 to glibc 2.28, declared once in
+`powerbrowser/packaging/portability-floor.json`. The pinned official Node
+v24.19.0 (GLIBC_2.28) now passes the floor. `portable-elf` reads the declared
+floor and also fails if the measured sysroot glibc is above it. The
+unofficial glibc-2.17 build (option 1) and the from-source build (option 3)
+are not taken. Commit: `940e880` (`fix(45): glibc floor 2.28 for the bundled
+official Node (owner ruling)`).
+
+This section is kept as the measurement record. The owner gate in the sections
+above (steps 1-6, the container bootstrap build) is still open and is not
+affected by this ruling.
+
 Measured 2026-10-22 with `readelf -V` on the Node binaries (the official
 tarball is the sha256-verified cache at `.mozbuild/node-dist/`, matching the
 pin in `powerbrowser/packaging/node-runtime.json`):
@@ -57,9 +70,11 @@ pin in `powerbrowser/packaging/node-runtime.json`):
 | Official v20.20.2 (not pinned, measured for options) | GLIBC_2.28 | GLIBCXX_3.4.21 | yes |
 | Unofficial `node-v24.19.0-linux-x64-glibc-217.tar.xz` (unofficial-builds.nodejs.org, not pinned) | GLIBC_2.17 | none | no |
 
-The sysroot ceiling is glibc 2.19 (jessie). `portable-elf` applies it to
-`node/bin/node`, so the full row is red by design for the official pin, and
-it stays red until the owner picks an option. The check is not weakened.
+Before the ruling, the GLIBC ceiling was the jessie sysroot glibc 2.19, and
+`portable-elf` applied it to `node/bin/node`, so the official pin failed. The
+ruling replaces that ceiling with the declared 2.28 floor. The check was not
+weakened by either change: the floor is a single declared value, and the
+sysroot must still measure at or below it.
 
 Options (owner decision):
 
@@ -78,5 +93,7 @@ Options (owner decision):
    needs a C++20 compiler the jessie sysroot does not carry, and a newer
    sysroot changes the floor (see option 2).
 
-Until the owner picks one, the `portable-elf` full row fails naming
-`node/bin/node`, and `package-linux.sh` still stages the official pin.
+Resolved by the 2026-10-22 ruling (option 2, commit `940e880`). `package-linux.sh`
+keeps staging the official pin. `portable-elf` no longer fails on `node/bin/node`
+for the GLIBC floor. It stays red only until the container build runs and
+measures the sysroot (owner steps 2-6 above).
