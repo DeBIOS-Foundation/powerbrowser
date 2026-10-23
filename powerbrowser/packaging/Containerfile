@@ -16,8 +16,8 @@
 #     pb-gecko-build bash -c 'MOZCONFIG=/src/powerbrowser/packaging/mozconfig.release ./mach build'
 #
 # UPD-29 mount discipline: the Safe Browsing keyfile is bind-mounted
-# read-only at /keys (see -v above) and is NEVER copied into the image --
-# no COPY or ADD line in this file may name sb-gapi.data or any keyfile.
+# read-only at /keys (see -v above); this image definition carries mount
+# paths only, never key material.
 # The key VALUE never appears in the repo, the image, a scan, or a log;
 # only the /keys/sb-gapi.data mount path travels in the tree.
 FROM debian:bookworm
