@@ -65,6 +65,8 @@ const GENERATOR_REL = 'scripts/generate.mjs';
 const RERUN_GENERATE = 'node scripts/generate.mjs';
 const EMITTER_SUFFIX = 'pref/firefox-branding.js';
 const LANGPACK_PREF = 'app.update.langpack.enabled';
+// UPD-28 (46-04, owner decision 6): fixed false in both variants, no manifest key.
+const FXA_PREF = 'identity.fxaccounts.enabled';
 
 
 // Same shape as verify-ng-064-update-url.mjs's PREF.
@@ -111,7 +113,7 @@ function runChecks(root, overrides = {}) {
     }
 
     const expectedLinks = releaseLinkPrefs(config);
-    const owned = new Set([...expectedLinks.map(p => p.name), LANGPACK_PREF]);
+    const owned = new Set([...expectedLinks.map(p => p.name), LANGPACK_PREF, FXA_PREF]);
     for (const row of rows) {
         const variant = (config.variants ?? []).find(v => v.id === row.variant);
         if (variant === undefined) {
@@ -132,6 +134,12 @@ function runChecks(root, overrides = {}) {
         const langpack = lastValue(prefs, LANGPACK_PREF);
         if (langpack?.value !== false) {
             failures.push(`variant '${variant.id}' sets ${LANGPACK_PREF} to ${langpack === undefined ? '(unset, upstream default true)' : JSON.stringify(langpack.value)} in ${row.generated}; it must be false because the release is en-US only (PKG-09). Next step: restore pref("${LANGPACK_PREF}", false); in FIREFOX_BRANDING_BASE_LINES.`);
+        }
+
+        // --- 4b. Firefox Accounts and Sync off (UPD-28) ----------------------
+        const fxa = lastValue(prefs, FXA_PREF);
+        if (fxa?.value !== false) {
+            failures.push(`variant '${variant.id}' sets ${FXA_PREF} to ${fxa === undefined ? '(unset, upstream default true)' : JSON.stringify(fxa.value)} in ${row.generated}; it must be false (owner decision 6: no Firefox Accounts or Sync). Next step: restore pref("${FXA_PREF}", false); in FIREFOX_BRANDING_BASE_LINES.`);
         }
 
         // --- 5. About-dialog links -------------------------------------------
@@ -173,7 +181,7 @@ function main() {
         failures.forEach(f => console.error(`  ${f}`));
         return 1;
     }
-    console.log(`${NAME}: PASS -- ${sets.length} variant(s) set no update pref outside the generator's own; ${LANGPACK_PREF} is false and the About-dialog links equal releaseLinkPrefs in each`);
+    console.log(`${NAME}: PASS -- ${sets.length} variant(s) set no update pref outside the generator's own; ${LANGPACK_PREF} and ${FXA_PREF} are false and the About-dialog links equal releaseLinkPrefs in each`);
     return 0;
 }
 
@@ -204,6 +212,8 @@ function selfTest() {
             return [`${pref} planted in ${variant}`, append(variant, `pref("${pref}", true);`), pref, variant];
         }),
         ['langpack flipped to true in release', replaced('release', `pref("${LANGPACK_PREF}", false);`, `pref("${LANGPACK_PREF}", true);`), LANGPACK_PREF, 'release'],
+        ['fxa flipped to true in dev', replaced('dev', `pref("${FXA_PREF}", false);`, `pref("${FXA_PREF}", true);`), FXA_PREF, 'dev'],
+        ['fxa line absent in release', replaced('release', `pref("${FXA_PREF}", false);\n`, ''), FXA_PREF, 'release'],
         ['app.update.url.manual is not a url in dev', replaced('dev', /pref\("app\.update\.url\.manual", "[^"]*"\);/, 'pref("app.update.url.manual", "not a url");'), 'app.update.url.manual to "not a url", which does not parse as a URL', 'dev'],
         ['no firefox-branding emitter rows', { rows: [] }, SELF_REL, NAME],
         ['no release emitter row', { rows: prefRows.filter(r => r.variant !== 'release') }, SELF_REL, 'release'],

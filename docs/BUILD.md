@@ -962,12 +962,48 @@ the version string). All commands below run inside `nix develop
    GETs, resolver log with zero `*.mozilla.org` / `*.mozilla.net`
    (only `update.googleapis.com`, Safe Browsing).
 
+   UPD-24 (46-03) extends the transcript `hop.json` carries (the Phase 44
+   `build-update-xml.mjs` import direction, if that script exists, is
+   recorded in the plan SUMMARY; this procedure uses the in-file
+   `buildUpdateXml` directly):
+
+   - `transcript.readyNotification`: the exact ready-notification text shown
+     (must equal the contracted UPD-20 string with the N+1 version
+     interpolated, derived at check time from
+     `theia/extensions/branding/src/browser/powerbrowser-update-copy.ts`).
+   - `transcript.restartClicked`: true (the Restart-now click event).
+   - `transcript.postVersion` / `transcript.postBuildID`: the version and
+     buildID read post-restart (must equal N+1; the buildID must be distinct
+     from N's).
+   - `transcript.layoutRestored`: true (shell layout + mode persisted across
+     the restart, seeded from the profile-storage map).
+   - `readOnly.cannotUpdate`: the exact string recorded by a second evidence
+     run with a read-only app directory (chmod plant on the staged app-dir
+     copy in mkdtemp for the self-test; the documented procedure for the
+     live run). Must equal the contracted UPD-21 cannot-update string,
+     never a ready string; `readOnly.recordedReady` must not be true.
+
+   UPD-27 probe-window capture (same procedure): drive the available +
+   manual UpdateListener paths in-Gecko with a fixture update carrying
+   `detailsURL`, capture the probe window with
+   `MOZ_LOG=nsHostResolver:5`, and sift `Resolving host [...]` lines. The
+   assertion is set-difference (derived contacted set must be empty for
+   the window), never the absence of an own-log line.
+
+   The Phase 45 packaged tarball + MAR re-run stays Phase 50's criterion,
+   not this procedure's; the Phase 44 `build-update-xml.mjs` import
+   direction is recorded in the plan output, not built here.
+
 6. Prove it: `node scripts/verify-mar-update-hop.mjs` (row
    `mar-update-hop`). It requires two distinct versions AND build IDs (a
    same-version loop fails as plumbing-only), the served descriptor
    byte-identical to a fresh emission, fork-server access entries for
-   descriptor and MAR, and zero `*.mozilla.org` / `*.mozilla.net` hosts
-   in the sifted resolver log.
+   descriptor and MAR, zero `*.mozilla.org` / `*.mozilla.net` hosts
+   in the sifted resolver log, plus the transcript fields above
+   (notification text, Restart-now click, N+1 landing with layout) and the
+   read-only cannot-update variant. `node scripts/verify-nimbus-exposure.mjs`
+   (row `nimbus-exposure`) asserts the exposure call neither threw nor
+   requested network; its `--self-test` twin runs the fixture doubles.
 
 ### NSIS-on-Nix path (PKG-01)
 

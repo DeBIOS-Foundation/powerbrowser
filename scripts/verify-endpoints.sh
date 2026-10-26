@@ -660,6 +660,10 @@ JSONEOF
   verdict "deny-after-click" "$fixture" 1 denied.example.test red
   verdict "allow-unattended" "$fixture" 0 allowed.example.test green
   verdict "unlisted-unattended" "$fixture" 0 unlisted.example.test red
+  # 46 WR-07 ruling (2026-10-25): github.com is user-initiated, so an unattended
+  # request to it (the update download must never reach it) fails against the real allowlist.
+  verdict "github-com-unattended-real-allowlist" "$ALLOWLIST" 0 github.com red
+  verdict "github-com-after-click-real-allowlist" "$ALLOWLIST" 1 github.com green
 
   # Every user-initiated host in the real allowlist, planted unattended, must go red naming it.
   local real_hosts host n=0

@@ -68,6 +68,14 @@ Start from `.planning/research/v1.6-deploy/SUMMARY.md` Phase E and Architecture 
 
 </specifics>
 
+<constraints>
+## Inherited constraint: update download host (Phase 46 owner ruling, 2026-10-25)
+
+- The descriptor's `patchURL` and `servedMarUrl` must name `release-assets.githubusercontent.com` or the updates host, never a `github.com/.../releases/download/` URL. The full rule and its conflicts with 49-04-PLAN.md are recorded in 49-CONTEXT.md.
+- 50-02-PLAN.md (the drill, its `servedMarUrl` assertion, and the `hop.json` `served: release` fixture in 50-RESEARCH.md) asserts the immutable github.com form. Revise those assertions to the release-assets or updates-host form before execution.
+- Guard: `scripts/verify-update-download-host.mjs` (quick row).
+</constraints>
+
 <deferred>
 ## Deferred Ideas
 

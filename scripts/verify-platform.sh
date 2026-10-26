@@ -4460,13 +4460,20 @@ run_own_checks() {
     # mar-update-hop-self-test rides alongside for the reason every other
     # self-test row in this array gives: it runs a mock proof through the
     # same runChecks (control green first), then requires red naming file
-    # and values for a same-version loop, a stale-hash descriptor, and a
-    # Mozilla host in the resolver log.
+    # and values for a same-version loop, a stale-hash descriptor, a
+    # Mozilla host in the resolver log, plus the 46-03 plants (notification
+    # absent, version not N+1, layout not restored, read-only ready string,
+    # read-only empty).
     #
     # Honestly --quick for the twin only: node:crypto plus text files in
     # mkdtemp. No build, no browser, no display, no network. The full row
     # is emphatically not --quick.
     "mar-update-hop-self-test|node $REPO_ROOT/scripts/verify-mar-update-hop.mjs --self-test"
+    # NEW (Phase 46, UPD-27): the exposure self-test twin. Fixture doubles
+    # only (silent/throwing/recording) plus the comparand-missing plant;
+    # each red naming its signal. Honestly --quick: node only, no build,
+    # browser, display or network.
+    "nimbus-exposure-self-test|node $REPO_ROOT/scripts/verify-nimbus-exposure.mjs --self-test"
 
     # NEW (08-04): the NSIS-on-Nix build-proof rows. The full row stages
     # the pinned installer inputs from the tree at check time (real
@@ -4755,6 +4762,47 @@ run_own_checks() {
     # actions/checkout@v4) must exit non-zero naming template-injection and unpinned-uses, clean
     # must exit 0. It writes nothing in the tree.
     "zizmor-self-test|node $REPO_ROOT/scripts/verify-zizmor.mjs --self-test"
+    # NEW (Phase 46, UPD-19): the chrome/frontend shell-request kind contract.
+    # Derives the accepted kinds from handleShellMessage cases plus
+    # SHELL_MESSAGE_KINDS and the dispatched kinds from the Theia shell-state
+    # channel clients plus the ShellStateMessage union, and compares as set
+    # equality; out-of-scope kinds (other dispatches, pushes) derive from
+    # their own unions. Honestly --quick: text reads only.
+    "shell-request-kinds|node $REPO_ROOT/scripts/verify-shell-request-kinds.mjs"
+    # shell-request-kinds-self-test plants, in memory only, a stray accepted
+    # kind, a stray dispatched kind, a removed kind on each side, and a
+    # throwing default case; each must go red naming the kind and the side.
+    "shell-request-kinds-self-test|node $REPO_ROOT/scripts/verify-shell-request-kinds.mjs --self-test"
+    # NEW (Phase 46, UPD-32): the update-copy shape gate. Derives the seven
+    # contracted strings from the @powerbrowser/branding contribution and
+    # applies the no-internal-identifier shape test (names PowerBrowser, no
+    # ALL-CAPS token or dotted key, body wired to its on-screen affordance in
+    # the client). Honestly --quick: text reads only.
+    "update-copy|node $REPO_ROOT/scripts/verify-update-copy.mjs"
+    # update-copy-self-test plants, in memory only, a pref key, an ALL-CAPS
+    # token, a missing product name, an unwired affordance, a status with no
+    # next step, an unclassified string, client literals (whitespace-bearing
+    # and single-word) and the two Check-again faults, each red naming its
+    # drift. The once-per-session rule is driven through the real client
+    # (prompts 1, 1, 2), not a constant stub (CR-06, WR-05, WR-06).
+    "update-copy-self-test|node $REPO_ROOT/scripts/verify-update-copy.mjs --self-test"
+    # NEW (Phase 46, review CR-01): the update observer is started from the real
+    # startup path (TheiaService._swap) and its stop function is invoked on
+    # shutdown. Derived from the tree; self-test plants a removed call site, a
+    # dropped stop call and a definer-only tree.
+    "update-observer-wired|node $REPO_ROOT/scripts/verify-update-observer-wired.mjs"
+    "update-observer-wired-self-test|node $REPO_ROOT/scripts/verify-update-observer-wired.mjs --self-test"
+    # NEW (Phase 46, review CR-02): currentState is a numeric long in the shipped
+    # IDL; the shell compares it to a named STATE_* constant, never a string or
+    # a bare number. Derived from the IDL and the shell at check time.
+    "update-state-contract|node $REPO_ROOT/scripts/verify-update-state-contract.mjs"
+    "update-state-contract-self-test|node $REPO_ROOT/scripts/verify-update-state-contract.mjs --self-test"
+    # NEW (Phase 46, WR-07 owner ruling 2026-10-25): no tracked descriptor template,
+    # generator output or fixture names a github.com /releases/download/ URL as an
+    # update download (github.com is user-initiated; the MAR fetch must not touch it).
+    # Derived from git ls-files; self-test plants three github forms and two controls.
+    "update-download-host|node $REPO_ROOT/scripts/verify-update-download-host.mjs"
+    "update-download-host-self-test|node $REPO_ROOT/scripts/verify-update-download-host.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
@@ -4845,16 +4893,29 @@ run_own_checks() {
       "verify-endpoints|bash $REPO_ROOT/scripts/verify-endpoints.sh"
       "verify-endpoints-interrupt-self-test|bash $REPO_ROOT/scripts/verify-endpoints.sh --interrupt-self-test"
 
-      # NEW (08-04): the self-hosted MAR-hop proof (PKG-02, T-08-04a). Reads
-      # the effective update URL from configuration.toml [urls] update
-      # (UPD-12; never user-branch prefs) and re-verifies the .mozbuild/mar-hop/
-      # evidence of one real Linux N to N-plus-1 hop: two distinct versions
-      # and build IDs, a hash-pinned descriptor byte-identical to a fresh
-      # emission from the MAR bytes, fork-server access-log entries, and a
-      # zero-Mozilla-host resolver log. Needs the proof run (tier-3 N and
-      # N-plus-1 builds plus the hop drive per docs/BUILD.md), so it lives
-      # in the full set and FAILS when the evidence is absent.
+      # NEW (08-04, extended 46-03 UPD-24): the self-hosted MAR-hop proof
+      # (PKG-02, T-08-04a). Reads the effective update URL from
+      # configuration.toml [urls] update (UPD-12; never user-branch prefs)
+      # and re-verifies the .mozbuild/mar-hop/ evidence of one real Linux N
+      # to N-plus-1 hop: two distinct versions and build IDs, a hash-pinned
+      # descriptor byte-identical to a fresh emission from the MAR bytes,
+      # fork-server access-log entries, a zero-Mozilla-host resolver log,
+      # plus the UI transcript (ready notification with N+1, Restart-now
+      # click, N+1 landing, layout restored) and the read-only
+      # cannot-update variant, both derived against the contracted copy.
+      # Needs the proof run (tier-3 N and N-plus-1 builds plus the hop drive
+      # per docs/BUILD.md), so it lives in the full set and FAILS when the
+      # evidence is absent. The Phase 45 packaged re-run stays Phase 50's
+      # criterion.
       "mar-update-hop|node $REPO_ROOT/scripts/verify-mar-update-hop.mjs"
+      # NEW (Phase 46, UPD-27): the Nimbus exposure probe. Full-tier: drives
+      # the available + manual UpdateListener paths in-Gecko with a fixture
+      # update carrying detailsURL and asserts recordExposureEvent returned
+      # plus the probe-window resolver observation is empty (set-difference
+      # over the derived contacted set, never an own-log absence). Needs a
+      # browser, so it lives in the full set and FAILs naming the evidence
+      # when none exists.
+      "nimbus-exposure|node $REPO_ROOT/scripts/verify-nimbus-exposure.mjs"
 
       # NEW (08-04): the NSIS-on-Nix build proof (PKG-01). Stages the
       # pinned installer inputs from the tree at check time and compiles

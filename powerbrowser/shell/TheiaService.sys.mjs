@@ -135,6 +135,11 @@ export const TheiaService = {
   // the writer below.
   _tabStoreTriggersOff: null,
 
+  // UPD-18 (46-01, review CR-01): the stop function PowerBrowserAPI.startUpdateObserver
+  // returns, retained so the four update observers detach on stop(). Null until
+  // _swap() attaches them to the live browser element.
+  _updateObserverOff: null,
+
   // SHELL-03 (05-02) give-up/error-state fields.
   // _errorShown guards _showError/_hideError the same way _swapped guards
   // _swap() -- repeated calls for the same state paint once and emit one
@@ -409,6 +414,16 @@ export const TheiaService = {
         // Listener removal is best-effort on teardown.
       }
       this._tabStoreTriggersOff = null;
+    }
+
+    // UPD-18 (46-01, review CR-01): detach the update observers wired in _swap().
+    if (this._updateObserverOff) {
+      try {
+        this._updateObserverOff();
+      } catch {
+        // Observer removal is best-effort on teardown.
+      }
+      this._updateObserverOff = null;
     }
 
     // D-110: a clean stop must leave nothing for the next startup's
@@ -1548,6 +1563,14 @@ export const TheiaService = {
     PowerBrowserAPI.setGroupSenderPort(this._port);
     this._browserElement.ownerDocument.defaultView.powerbrowserSwapToUrl(`http://127.0.0.1:${this._port}/`);
     this._swapped = true;
+    // UPD-18 (46-01, review CR-01): the update observer pushes appUpdate over
+    // the live browser element, so it attaches here, once the element carries
+    // the frontend. Best-effort like the tab-store triggers in start().
+    try {
+      this._updateObserverOff = PowerBrowserAPI.startUpdateObserver(this._browserElement);
+    } catch (err) {
+      this._pushLog(`Update observer not attached: ${err && err.message ? err.message : err}`);
+    }
   },
 
   _fatal(message) {

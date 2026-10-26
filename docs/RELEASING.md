@@ -719,6 +719,14 @@ A descriptor's patch URL is always the versioned immutable
 `/releases/download/<tag>/` form and never the latest-download form. The live
 channel gate reddens on a latest-download URL.
 
+### Partner search codes (UPD-15, recorded 46-04)
+
+Stock partner machinery stays untouched: `ConfigSearchEngine` partnerCode,
+`browser.partnerlink.*` prefs, no `distribution/` search config, no
+`org.debios` string, no custom code, no search-host allowlist change. If a
+live Suggest-traffic observation is wanted, it is Phase 50 criterion 5
+alongside the asset hosts -- not a new row here.
+
 ---
 
 ## Maintenance

@@ -72,6 +72,16 @@ Start from `.planning/research/v1.6-deploy/SUMMARY.md` ("Phase E" lines 282-294,
 
 </specifics>
 
+<constraints>
+## Inherited constraint: update download host (Phase 46 owner ruling, 2026-10-25)
+
+- The update descriptor's `patchURL` (and `servedMarUrl`) must point at `release-assets.githubusercontent.com` or the updates host, never at a `github.com/<org>/<repo>/releases/download/...` URL.
+- Reason: `github.com` is `user-initiated` in `powerbrowser/endpoint-allowlist.json`. An unattended MAR fetch that touches it fails the verdict model (`scripts/lib/endpoint-verdict.mjs`).
+- Guard: `scripts/verify-update-download-host.mjs` (quick row) fails on any tracked descriptor template, generator output or fixture that names the github.com download form as an update source.
+- Conflict to resolve in this phase: `49-04-PLAN.md` (T-49-14 and `verify-channel-live`) currently requires the immutable `/releases/download/<tag>/` github.com form as the descriptor's patch URL. That plan must be revised to the release-assets form before the descriptor builder ships. The release-assets URL is not a stable permalink, so the builder must resolve the asset URL at publish time or serve the MAR from the updates host; choose one and record it here.
+- Phase 50 (`50-02-PLAN.md`, `50-RESEARCH.md` servedMarUrl fixture) carries the same github.com form and inherits this constraint.
+</constraints>
+
 <deferred>
 ## Deferred Ideas
 
