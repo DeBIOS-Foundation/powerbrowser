@@ -4460,13 +4460,20 @@ run_own_checks() {
     # mar-update-hop-self-test rides alongside for the reason every other
     # self-test row in this array gives: it runs a mock proof through the
     # same runChecks (control green first), then requires red naming file
-    # and values for a same-version loop, a stale-hash descriptor, and a
-    # Mozilla host in the resolver log.
+    # and values for a same-version loop, a stale-hash descriptor, a
+    # Mozilla host in the resolver log, plus the 46-03 plants (notification
+    # absent, version not N+1, layout not restored, read-only ready string,
+    # read-only empty).
     #
     # Honestly --quick for the twin only: node:crypto plus text files in
     # mkdtemp. No build, no browser, no display, no network. The full row
     # is emphatically not --quick.
     "mar-update-hop-self-test|node $REPO_ROOT/scripts/verify-mar-update-hop.mjs --self-test"
+    # NEW (Phase 46, UPD-27): the exposure self-test twin. Fixture doubles
+    # only (silent/throwing/recording) plus the comparand-missing plant;
+    # each red naming its signal. Honestly --quick: node only, no build,
+    # browser, display or network.
+    "nimbus-exposure-self-test|node $REPO_ROOT/scripts/verify-nimbus-exposure.mjs --self-test"
 
     # NEW (08-04): the NSIS-on-Nix build-proof rows. The full row stages
     # the pinned installer inputs from the tree at check time (real
@@ -4868,16 +4875,29 @@ run_own_checks() {
       "verify-endpoints|bash $REPO_ROOT/scripts/verify-endpoints.sh"
       "verify-endpoints-interrupt-self-test|bash $REPO_ROOT/scripts/verify-endpoints.sh --interrupt-self-test"
 
-      # NEW (08-04): the self-hosted MAR-hop proof (PKG-02, T-08-04a). Reads
-      # the effective update URL from configuration.toml [urls] update
-      # (UPD-12; never user-branch prefs) and re-verifies the .mozbuild/mar-hop/
-      # evidence of one real Linux N to N-plus-1 hop: two distinct versions
-      # and build IDs, a hash-pinned descriptor byte-identical to a fresh
-      # emission from the MAR bytes, fork-server access-log entries, and a
-      # zero-Mozilla-host resolver log. Needs the proof run (tier-3 N and
-      # N-plus-1 builds plus the hop drive per docs/BUILD.md), so it lives
-      # in the full set and FAILS when the evidence is absent.
+      # NEW (08-04, extended 46-03 UPD-24): the self-hosted MAR-hop proof
+      # (PKG-02, T-08-04a). Reads the effective update URL from
+      # configuration.toml [urls] update (UPD-12; never user-branch prefs)
+      # and re-verifies the .mozbuild/mar-hop/ evidence of one real Linux N
+      # to N-plus-1 hop: two distinct versions and build IDs, a hash-pinned
+      # descriptor byte-identical to a fresh emission from the MAR bytes,
+      # fork-server access-log entries, a zero-Mozilla-host resolver log,
+      # plus the UI transcript (ready notification with N+1, Restart-now
+      # click, N+1 landing, layout restored) and the read-only
+      # cannot-update variant, both derived against the contracted copy.
+      # Needs the proof run (tier-3 N and N-plus-1 builds plus the hop drive
+      # per docs/BUILD.md), so it lives in the full set and FAILS when the
+      # evidence is absent. The Phase 45 packaged re-run stays Phase 50's
+      # criterion.
       "mar-update-hop|node $REPO_ROOT/scripts/verify-mar-update-hop.mjs"
+      # NEW (Phase 46, UPD-27): the Nimbus exposure probe. Full-tier: drives
+      # the available + manual UpdateListener paths in-Gecko with a fixture
+      # update carrying detailsURL and asserts recordExposureEvent returned
+      # plus the probe-window resolver observation is empty (set-difference
+      # over the derived contacted set, never an own-log absence). Needs a
+      # browser, so it lives in the full set and FAILs naming the evidence
+      # when none exists.
+      "nimbus-exposure|node $REPO_ROOT/scripts/verify-nimbus-exposure.mjs"
 
       # NEW (08-04): the NSIS-on-Nix build proof (PKG-01). Stages the
       # pinned installer inputs from the tree at check time and compiles

@@ -20,7 +20,13 @@
 // WHAT THE EVIDENCE HALF ASSERTS. The proof procedure (docs/BUILD.md,
 // packaging procedure) stages one N to N+1 hop and leaves hop.json,
 // update.xml, the N+1 MAR, a fork-server access log and a client resolver
-// log under .mozbuild/mar-hop/. This script asserts, from those files only:
+// log under .mozbuild/mar-hop/. UPD-24 (46-03) extends the contract:
+// hop.json also carries the observed UI transcript (the ready notification
+// text with the N+1 version interpolated, the Restart-now click event, the
+// post-restart version and the layout-restored flag) and the read-only
+// variant (a second run with a read-only app dir recording the contracted
+// cannot-update string instead of a ready string). This script asserts,
+// from those files only:
 // the two builds are two DISTINCT versions with two DISTINCT build IDs (a
 // same-version loop is plumbing, never the exit proof); the served
 // descriptor is byte-identical to what the in-file generator emits from the
@@ -164,6 +170,29 @@ export function siftResolverHosts(logText) {
     return [...new Set(out)];
 }
 
+/**
+ * UPD-24 (46-03): the contracted update strings, derived at check time from
+ * the @powerbrowser/branding contribution (theia/extensions/branding/...),
+ * never hand-kept here. The ready string interpolates <version> at render;
+ * the row below interpolates the N+1 version the same way the client does.
+ * Returns null when the contribution cannot be read or parsed.
+ */
+export function contractedUpdateStrings(copySrc) {
+    if (typeof copySrc !== 'string') return null;
+    const get = (key) => {
+        const m = copySrc.match(new RegExp(`${key}\\s*:\\s*'((?:[^'\\\\]|\\\\.)*)'`));
+        return m ? m[1].replace(/\\'/g, "'") : null;
+    };
+    const readyBody = get('readyBody');
+    const cannotUpdateBody = get('cannotUpdateBody');
+    if (readyBody === null || cannotUpdateBody === null) return null;
+    return { readyBody, cannotUpdateBody };
+}
+
+export function readyNotificationFor(version, contracted) {
+    return contracted.readyBody.replace('<version>', version);
+}
+
 function isMozillaHost(host) {
     const h = host.toLowerCase();
     return h === 'mozilla.org' || h === 'mozilla.net'
@@ -245,6 +274,44 @@ function runChecks(root) {
         if (hop[k] === undefined) r.fail(`hop.json is missing required key ${JSON.stringify(k)}. Next step: re-run the hop procedure; the file is written, never hand-edited`);
     }
     if (r.failures.length > 0) return { skipped: false, failures: r.failures };
+
+    // UPD-24 (46-03): the experience proof. The transcript is REQUIRED: a
+    // hop without one predates the experience proof and fails naming the
+    // re-run procedure, never passes on plumbing alone.
+    const contracted = (() => {
+        try {
+            const copySrc = readFileSync(join(root, 'theia/extensions/branding/src/browser/powerbrowser-update-copy.ts'), 'utf8');
+            return contractedUpdateStrings(copySrc);
+        } catch {
+            return null;
+        }
+    })();
+    if (contracted === null) {
+        r.fail(`the contracted update strings could not be derived from theia/extensions/branding/src/browser/powerbrowser-update-copy.ts, so the transcript assertions are unproven. Next step: restore the contribution.`);
+    }
+    const transcript = hop.transcript;
+    if (transcript === undefined || transcript === null || typeof transcript !== 'object') {
+        r.fail(`hop.json carries no transcript -- the ready notification, Restart-now click, N+1 landing and layout-restore proof are absent. The plumbing below still verifies, but the experience proof needs a re-run per docs/BUILD.md mar-hop procedure. Next step: re-run the hop with the UI transcript captured`);
+    } else if (contracted !== null) {
+        const wantReady = readyNotificationFor(hop.nplus1.version, contracted);
+        r.eq('ready notification text', transcript.readyNotification, wantReady, 'hop.json transcript (must equal the contracted UPD-20 string with the N+1 version interpolated)');
+        r.eq('Restart-now click', transcript.restartClicked, true, 'hop.json transcript');
+        r.eq('transcript post-restart version', transcript.postVersion, hop.nplus1.version, 'hop.json transcript (Restart now must land N+1)');
+        r.eq('transcript post-restart buildID', transcript.postBuildID, hop.nplus1.buildID, 'hop.json transcript (buildID must match the served MAR)');
+        r.eq('layout restored', transcript.layoutRestored, true, 'hop.json transcript (shell layout + mode must survive the restart)');
+    }
+    const readOnly = hop.readOnly;
+    if (readOnly === undefined || readOnly === null || typeof readOnly !== 'object') {
+        r.fail(`hop.json carries no readOnly variant -- the read-only app-dir plant (which must produce the cannot-update message instead of a ready string) was not run. Next step: re-run the hop read-only variant per docs/BUILD.md mar-hop procedure`);
+    } else if (contracted !== null) {
+        r.eq('read-only cannot-update text', readOnly.cannotUpdate, contracted.cannotUpdateBody, 'hop.json readOnly (must equal the contracted UPD-21 string, never a ready string)');
+        if (typeof readOnly.cannotUpdate === 'string' && typeof hop.nplus1.version === 'string' && readOnly.cannotUpdate.includes(hop.nplus1.version)) {
+            r.fail(`hop.json readOnly.cannotUpdate names version ${JSON.stringify(hop.nplus1.version)} -- a read-only run must record the cannot-update message, never a ready string. Next step: re-run the read-only variant per docs/BUILD.md mar-hop procedure`);
+        }
+        if (readOnly.recordedReady === true) {
+            r.fail(`hop.json readOnly.recordedReady is true -- the read-only run recorded a ready string instead of the cannot-update message. Next step: re-run the read-only variant per docs/BUILD.md mar-hop procedure`);
+        }
+    }
 
     // Two DISTINCT versions and build IDs. A same-version loop proves the
     // plumbing moves bytes, never that an upgrade happened -- presenting one
@@ -346,9 +413,13 @@ function selfTest() {
     let ok = true;
     try {
         const evDir = join(dir, '.mozbuild', 'mar-hop');
+        const CONTR = contractedUpdateStrings(readFileSync(join(REPO_ROOT, 'theia/extensions/branding/src/browser/powerbrowser-update-copy.ts'), 'utf8'));
         const mirror = ({ version = '153.1.1', buildID = '20260905010000', servedHost = 'updates.powerbrowser.org', staleMar = false, mozillaHost = false } = {}) => {
             mkdirSync(evDir, { recursive: true });
             writeFileSync(join(dir, MANIFEST_REL), readFileSync(join(REPO_ROOT, MANIFEST_REL)));
+            // The fixture tree needs the contribution the row derives from.
+            mkdirSync(join(dir, 'theia/extensions/branding/src/browser'), { recursive: true });
+            writeFileSync(join(dir, 'theia/extensions/branding/src/browser/powerbrowser-update-copy.ts'), readFileSync(join(REPO_ROOT, 'theia/extensions/branding/src/browser/powerbrowser-update-copy.ts')));
             const marBytes = randomBytes(65536);
             writeFileSync(join(evDir, 'nplus1.mar'), staleMar ? Buffer.concat([marBytes, Buffer.from('x')]) : marBytes);
             const servedUrl = `http://${servedHost}:8000/update.xml`;
@@ -370,6 +441,17 @@ function selfTest() {
                 servedMarUrl: `http://${servedHost}:8000/nplus1.mar`,
                 result: 'applied',
                 postHop: { version, buildID },
+                transcript: {
+                    readyNotification: readyNotificationFor(version, CONTR),
+                    restartClicked: true,
+                    postVersion: version,
+                    postBuildID: buildID,
+                    layoutRestored: true,
+                },
+                readOnly: {
+                    cannotUpdate: CONTR.cannotUpdateBody,
+                    recordedReady: false,
+                },
             }));
             const resolverLines = [
                 'Resolving host [firefox.settings.services.mozilla.com]',
@@ -461,6 +543,66 @@ function selfTest() {
                 console.log(`${NAME}: --self-test -- Mozilla host in resolver log REJECTED: ${msg}`);
             }
         }
+
+        // New plants (46-03 UPD-24): notification absent, version not
+        // N+1, layout not restored, read-only recording a ready string.
+        expectRed(
+            'notification absent from the transcript',
+            () => {
+                const hopPath = join(evDir, 'hop.json');
+                const hop = JSON.parse(readFileSync(hopPath, 'utf8'));
+                delete hop.transcript.readyNotification;
+                writeFileSync(hopPath, JSON.stringify(hop));
+            },
+            'transcript',
+            'ready notification',
+        );
+        expectRed(
+            'post-restart version not N+1',
+            () => {
+                const hopPath = join(evDir, 'hop.json');
+                const hop = JSON.parse(readFileSync(hopPath, 'utf8'));
+                hop.transcript.postVersion = hop.n.version;
+                hop.transcript.postBuildID = hop.n.buildID;
+                writeFileSync(hopPath, JSON.stringify(hop));
+            },
+            'transcript',
+            'N+1',
+        );
+        expectRed(
+            'layout not restored',
+            () => {
+                const hopPath = join(evDir, 'hop.json');
+                const hop = JSON.parse(readFileSync(hopPath, 'utf8'));
+                hop.transcript.layoutRestored = false;
+                writeFileSync(hopPath, JSON.stringify(hop));
+            },
+            'transcript',
+            'layout',
+        );
+        expectRed(
+            'read-only run recording a ready string',
+            () => {
+                const hopPath = join(evDir, 'hop.json');
+                const hop = JSON.parse(readFileSync(hopPath, 'utf8'));
+                hop.readOnly.cannotUpdate = hop.transcript.readyNotification;
+                hop.readOnly.recordedReady = true;
+                writeFileSync(hopPath, JSON.stringify(hop));
+            },
+            'readOnly',
+            'cannot-update',
+        );
+        expectRed(
+            'read-only run recording no string at all',
+            () => {
+                const hopPath = join(evDir, 'hop.json');
+                const hop = JSON.parse(readFileSync(hopPath, 'utf8'));
+                delete hop.readOnly.cannotUpdate;
+                writeFileSync(hopPath, JSON.stringify(hop));
+            },
+            'readOnly',
+            'cannot-update',
+        );
 
         // Literal-IP carve-out: serving from 127.0.0.1 needs no resolver
         // line for it, but a Mozilla host there must still go red.
