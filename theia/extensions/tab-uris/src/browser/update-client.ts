@@ -221,7 +221,17 @@ export class UpdateClientContribution implements FrontendApplicationContribution
         // Acceptance is not success: the reply only means the check started.
         // The once-per-session flag is cleared by an observed completed check
         // in onAppUpdatePush, never here (CR-06).
-        await this.request({ kind: 'checkForUpdates' });
+        const reply = await this.request({ kind: 'checkForUpdates' });
+        if (reply !== 'no-chrome' && !reply.ok && reply.reason === 'not-started') {
+            try {
+                const actions = await this.messages.warn(POWERBROWSER_UPDATE_COPY.checkNotStartedBody, POWERBROWSER_UPDATE_COPY.tryAgainLabel);
+                if (actions === POWERBROWSER_UPDATE_COPY.tryAgainLabel) {
+                    await this.checkForUpdates();
+                }
+            } catch {
+                // Message channel unavailable: nothing further to report through.
+            }
+        }
     }
 
     @postConstruct()

@@ -2279,7 +2279,7 @@ export const PowerBrowserAPI = Object.freeze({
         case "checkForUpdates": {
           const accepted = await PowerBrowserAPI.requestUpdateCheck();
           if (!accepted) {
-            return { ok: false, reason: "store", message: "handleShellMessage: update check not started" };
+            return { ok: false, reason: "not-started", message: "handleShellMessage: update check not started" };
           }
           return { ok: true, kind, accepted: true };
         }
@@ -2470,8 +2470,8 @@ export const PowerBrowserAPI = Object.freeze({
       if (!svc || typeof svc.checkForBackgroundUpdates !== "function") {
         return false;
       }
-      await svc.checkForBackgroundUpdates();
-      return true;
+      // Resolves false when the check did not start (policy, or manual-only updates).
+      return (await svc.checkForBackgroundUpdates()) === true;
     } catch {
       return false;
     }
