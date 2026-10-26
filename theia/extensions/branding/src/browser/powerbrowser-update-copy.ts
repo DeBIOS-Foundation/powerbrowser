@@ -22,7 +22,8 @@ export const POWERBROWSER_UPDATE_COPY = Object.freeze({
     cannotUpdateBody: 'PowerBrowser cannot update this copy because its folder is read-only. Unpack PowerBrowser somewhere you own, or install it with your package manager.',
     cannotUpdateMacBody: 'PowerBrowser cannot update itself from this location. Move PowerBrowser to your Applications folder, then open it again.',
     couldNotCheckBody: 'PowerBrowser could not check for updates. Check your internet connection, then choose Check again.',
-    restartUnavailableBody: 'PowerBrowser could not restart to update. Close PowerBrowser, open it again, then choose Try again.',
+    restartNothingStagedBody: 'PowerBrowser has no update ready to install. Choose Check now to look for one.',
+    restartUnavailableBody:'PowerBrowser could not restart to update. Close PowerBrowser, open it again, then choose Try again.',
     restartToUpdateTitle: 'PowerBrowser: Restart to Update',
     checkForUpdatesTitle: 'PowerBrowser: Check for Updates',
     checkingStatus: 'PowerBrowser: checking for updates…',
@@ -33,6 +34,7 @@ export const POWERBROWSER_UPDATE_COPY = Object.freeze({
     laterLabel: 'Later',
     openDownloadPageLabel: 'Open download page',
     checkAgainLabel: 'Check again',
+    checkNowLabel: 'Check now',
     tryAgainLabel: 'Try again',
 });
 

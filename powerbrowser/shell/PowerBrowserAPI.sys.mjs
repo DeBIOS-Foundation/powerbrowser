@@ -2284,6 +2284,11 @@ export const PowerBrowserAPI = Object.freeze({
           return { ok: true, kind, accepted: true };
         }
         case "restartToUpdate": {
+          // WR-01 (46 review): a restart with nothing staged would quit and
+          // relaunch with no update. Refuse first; the client shows plain copy.
+          if (!(await PowerBrowserAPI.readyUpdate())) {
+            return { ok: false, reason: "not-staged", message: "handleShellMessage: no update is staged" };
+          }
           const restarted = PowerBrowserAPI.restartToUpdate();
           if (!restarted) {
             return { ok: false, reason: "cancelled", message: "handleShellMessage: restart cancelled by an observer" };

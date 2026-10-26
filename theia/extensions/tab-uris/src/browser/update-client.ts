@@ -194,6 +194,17 @@ export class UpdateClientContribution implements FrontendApplicationContribution
 
     protected async restartToUpdate(): Promise<void> {
         const reply = await this.request({ kind: 'restartToUpdate' });
+        if (reply !== 'no-chrome' && !reply.ok && reply.reason === 'not-staged') {
+            try {
+                const actions = await this.messages.warn(POWERBROWSER_UPDATE_COPY.restartNothingStagedBody, POWERBROWSER_UPDATE_COPY.checkNowLabel);
+                if (actions === POWERBROWSER_UPDATE_COPY.checkNowLabel) {
+                    await this.checkForUpdates();
+                }
+            } catch {
+                // Message channel unavailable: nothing further to report through.
+            }
+            return;
+        }
         if (reply === 'no-chrome' || !reply.ok) {
             try {
                 const actions = await this.messages.warn(POWERBROWSER_UPDATE_COPY.restartUnavailableBody, POWERBROWSER_UPDATE_COPY.tryAgainLabel);
