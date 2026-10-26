@@ -74,14 +74,14 @@ Info findings (IN-01..IN-03) are outside the requested scope and were not addres
 **Files modified:** `theia/extensions/tab-uris/src/browser/update-client.ts`, `theia/extensions/branding/src/browser/powerbrowser-update-copy.ts`, `scripts/verify-update-copy.mjs`
 **Commit:** `fecc55d`
 **Applied fix:** the status-bar entry carries the command `powerbrowser.update.showReady`, which re-opens the ready prompt with the version it last showed. "Open download page" executes the stock `powerbrowser.open-browser-window` command with the download URL (the same path the palette entry takes, including its channel-gated double-window protection).
-**Deviation:** `POWERBROWSER_DOWNLOAD_URL` is `https://powerbrowser.org/`, the only public URL in the tree. No release or download page exists yet (the project's release-and-auto-update memory note records that no GitHub Releases exist at this date). Change the constant when a page exists.
+**Deviation:** `POWERBROWSER_DOWNLOAD_URL` is `https://powerbrowser.org/`, the only public URL in the tree. No release or download page exists yet (the project's release-and-auto-update memory note records that no GitHub Releases exist at this date). Change the constant when a page exists. Accepted by the owner on 2026-10-25.
 **Status:** fixed: requires human verification (live status-bar click and stock-window open).
 
 ### WR-04: Status mapping sends unknown statuses to "checking"
 **Files modified:** `powerbrowser/shell/PowerBrowserAPI.sys.mjs`, `theia/extensions/tab-uris/src/browser/update-client.ts`, `theia/extensions/branding/src/browser/powerbrowser-update-copy.ts`
 **Commit:** `75c799c`
 **Applied fix:** the mapping is an explicit table: `update-available/show-prompt` to `available`; `update-available` with `cant-apply` or `unsupported` to `cant-apply`; `update-staged` and `update-downloaded` to `ready`; everything else (`update-error`, unnamed statuses) to `error`. The client renders `available` as a download status line (`availableStatus`).
-**Deviation (judgement):** the review's table did not name `update-available/unsupported`. It maps to `cant-apply` (the copy cannot take the update), not to `error`. Owner to confirm.
+**Deviation (judgement):** the review's table did not name `update-available/unsupported`. It maps to `cant-apply` (the copy cannot take the update), not to `error`. Accepted by the owner on 2026-10-25.
 **Status:** fixed: requires human verification (mapping logic; no row checks the table).
 
 ### WR-05: Literal user-facing copy lives in the client
@@ -95,10 +95,10 @@ Info findings (IN-01..IN-03) are outside the requested scope and were not addres
 **Applied fix:** the hand-kept `EXPECTED_KEYS` and `BODY_AFFORDANCES` lists and the `'status'` affordance are removed. Keys are classified by suffix (Title, Body, Status, Label); the affordance set is derived from the Label and Title values; each Body must be rendered by a client method that also references one of those keys; each non-progress Status must end with one. Ten planted faults go red naming their drift, including a status with no next step and a single-word copy value in the client.
 
 ### WR-07: Allowlist rationale for release-assets contradicts the user-initiated disposition for github.com
-**Files modified:** `powerbrowser/endpoint-allowlist.json`
-**Commit:** `de1efd5`
-**Applied fix:** the descriptor's redirect chain was checked in `docs/RELEASING.md`: the installed client fetches the immutable Release asset URL on github.com, which 302s to release-assets. github.com is contacted unattended, so its disposition moves to `allow` with the stated reason (the verdict model in `scripts/lib/endpoint-verdict.mjs` would fail a user-initiated host contacted unattended). The release-assets reason now names github.com as the first hop. The release-notes link stays a click-only use of the host.
-**Status:** fixed: requires human verification (this is a disposition change; the owner should confirm allow is acceptable for github.com).
+**Files modified:** `powerbrowser/endpoint-allowlist.json`, `scripts/verify-endpoints.sh`, `scripts/verify-update-download-host.mjs` (new), `scripts/verify-platform.sh`, `49-CONTEXT.md`, `50-CONTEXT.md`, `46-VERIFICATION.md`
+**Commits:** `de1efd5` (first pass: github.com moved to allow, since reverted), `6a8b281` (owner ruling 2026-10-25), `94867df` (verification report)
+**Applied fix:** the owner ruling of 2026-10-25 supersedes the first pass. github.com stays `user-initiated` (UPD-33), so an unattended request to it fails the verdict model. The unattended MAR download must never touch github.com: the update descriptor's patchURL and servedMarUrl must name release-assets.githubusercontent.com or the updates host. The release-assets row stays `allow`, with that constraint as its stated reason. The endpoint disposition self-test now asserts github.com unattended red and after-click green against the real allowlist. The descriptor builder is in a later phase, so the constraint is recorded in 49-CONTEXT.md and 50-CONTEXT.md (with the conflicting 49-04 and 50-02 assertions noted for revision) and guarded by the `update-download-host` quick row. Its self-test plants three github.com download forms (descriptor template, generator output, fixture) and two controls (a release-assets URL and a release-notes URL), which stay green.
+**Status:** fixed: requires human verification. The descriptor URL source is a later-phase decision: release-assets asset URLs are not documented stable permalinks, so the publishing phase must choose publish-time resolution or serving from the updates host (46-VERIFICATION G4).
 
 ### WR-08: The mar-update-hop experience proof trusts a self-reported transcript
 **Files modified:** `scripts/verify-mar-update-hop.mjs`, `powerbrowser/shell/PowerBrowserAPI.sys.mjs`, `powerbrowser/INTERNAL-APIS.md`
@@ -127,6 +127,8 @@ None.
 
 Run in the clone `/home/chris/gsd-workspaces/deploy/dsh/phase-46` (not a separate worktree). Inside `nix develop .#theia` for the Theia checks.
 
+- `scripts/verify-endpoints.sh --disposition-self-test`: PASS, including unattended github.com red and after-click green against the real allowlist.
+- `scripts/verify-update-download-host.mjs` and `--self-test`: PASS (3 planted github.com download forms red, 2 controls green).
 - `scripts/verify-platform.sh --quick`: exit 0 at the final fix commit (`gui07-strip-spike-verdict` and its self-test PASS).
 - `npx tsc --noEmit -p .` in `theia/extensions/tab-uris`: exit 0. In `theia/extensions/branding`: exit 0.
 - `yarn check --integrity --ignore-scripts` in `theia/`: "Folder in sync" after the offline install.
