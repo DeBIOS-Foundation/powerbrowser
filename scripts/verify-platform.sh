@@ -4785,6 +4785,12 @@ run_own_checks() {
     # once-per-session double-failure fixture (exactly one Check-again prompt,
     # reset after success).
     "update-copy-self-test|node $REPO_ROOT/scripts/verify-update-copy.mjs --self-test"
+    # NEW (Phase 46, review CR-01): the update observer is started from the real
+    # startup path (TheiaService._swap) and its stop function is invoked on
+    # shutdown. Derived from the tree; self-test plants a removed call site, a
+    # dropped stop call and a definer-only tree.
+    "update-observer-wired|node $REPO_ROOT/scripts/verify-update-observer-wired.mjs"
+    "update-observer-wired-self-test|node $REPO_ROOT/scripts/verify-update-observer-wired.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
