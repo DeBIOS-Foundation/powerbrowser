@@ -5,33 +5,36 @@
 // out (powerbrowser/identity.configure.comparand carries
 // imply_option("MOZ_NORMANDY", False)), UpdateListener's two
 // NimbusFeatures.updatePrompt.recordExposureEvent({ once: true }) calls
-// (UpdateListener.sys.mjs:288,299, on the available and manual paths) must
-// neither throw nor make a network request.
+// (UpdateListener.sys.mjs, on the available and manual paths) must neither
+// throw nor make a network request.
 //
-// HOW IT ASSERTS. The full-tier main drives the two UpdateListener paths
-// (available + manual) in-Gecko with a fixture update object carrying
-// detailsURL (the unsupported-notification guard requires it) and asserts the
-// exposure call returned plus the probe-window resolver observation lists no
-// network request. The observation is the positive `Resolving host [...]`
-// capture (verify-endpoints.sh layer-3 shape), and the assertion is
-// set-difference (derived contacted set must equal the empty set for the
-// probe window), never the absence of an own-log line. Where no live browser
-// exists the row FAILs naming the evidence, never passes.
+// HOW IT ASSERTS. The full-tier run launches the built shell through the same
+// harness every other full row uses (scripts/lib/pb-relaunch.mjs withShell and
+// runCheck). Inside the shell's chrome document it calls the two
+// UpdateListener notification paths with a fixture update carrying detailsURL
+// (the unsupported-notification guard requires it), then reads the resolver
+// capture written during that probe window only. The window is bounded by a
+// byte snapshot of the MOZ_LOG files taken immediately before the probe call,
+// so browser startup traffic is not charged to the probe. Passing requires
+// both paths to return and the derived contacted set (the `Resolving host
+// [...]` lines in the window) to be empty.
 //
-// The quick --self-test drives the same assertion against fixture doubles
-// (silent/throwing/recording) plus the comparand-missing plant, all in
-// memory: honestly quick (node only, no build, browser, display or network).
+// Where no built browser exists the full row FAILs naming the missing
+// evidence. The quick static checks (comparand, the two call sites) and the
+// --self-test doubles run in memory with no build, browser or network.
 //
 // Usage:
-//   node scripts/verify-nimbus-exposure.mjs
-//   node scripts/verify-nimbus-exposure.mjs --self-test
+//   node scripts/verify-nimbus-exposure.mjs              (full: needs a built browser)
+//   node scripts/verify-nimbus-exposure.mjs --self-test  (quick, in memory)
 //
-// Exit 0 pass, 1 fail. --self-test plants every fault and requires each to
-// go red naming the drift; a check that can only go green is not a check.
+// Exit 0 pass, 1 fail. --self-test plants every fault and requires each to go
+// red naming the drift; a check that can only go green is not a check.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FIREFOX_BIN } from './lib/firefox-bidi.mjs';
+import { runCheck, withShell } from './lib/pb-relaunch.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 const REPO_ROOT = resolve(dirname(SELF), '..');
@@ -50,6 +53,29 @@ for (const a of args) {
 const COMPARAND_REL = 'powerbrowser/identity.configure.comparand';
 const LISTENER_REL = 'upstream/toolkit/mozapps/update/UpdateListener.sys.mjs';
 
+// The resolver capture: MOZ_LOG=nsHostResolver:5 with MOZ_LOG_FILE=<base>
+// writes <base>.moz_log (and <base>.child-N.moz_log per content process).
+const LOG_DIR = join(REPO_ROOT, '.mozbuild', 'nimbus-probe');
+const LOG_BASE = join(LOG_DIR, 'probe');
+const LOG_NAME_RE = /^probe(?:\.child-\d+)?\.moz_log$/;
+
+// Runs in the shell's chrome document. The fixture update is the minimum the
+// notification paths read; a throw is reported per path, never swallowed.
+const PROBE_EXPRESSION = `(async () => {
+    const { UpdateListener } = ChromeUtils.importESModule("resource://gre/modules/UpdateListener.sys.mjs");
+    const update = {
+        name: "nimbus-probe", displayVersion: "999.0", appVersion: "999.0", buildID: "20991231000000",
+        detailsURL: "https://example.invalid/release-notes", type: "minor", isOSUpdate: false,
+        showPrompt: true, promptWaitTime: 0, patchCount: 0, selectedPatch: null,
+    };
+    const out = {};
+    for (const [path, method] of [["available", "showUpdateAvailableNotification"], ["manual", "showManualUpdateNotification"]]) {
+        try { UpdateListener[method](update, true); out[path] = "returned"; }
+        catch (e) { out[path] = "threw: " + (e && e.name ? e.name : "error"); }
+    }
+    return JSON.stringify(out);
+})()`;
+
 /** The anchored resolver-log sift (verify-endpoints.sh layer-3 shape). */
 export function siftResolverHosts(logText) {
     const out = [];
@@ -61,9 +87,9 @@ export function siftResolverHosts(logText) {
 }
 
 /**
- * The probe: drive recordExposureEvent through a fixture double and sift
- * the probe-window resolver capture. Returns failures (empty when the call
- * returned silently and the derived contacted set is empty).
+ * The in-process probe over a fixture double (self-test): drive
+ * recordExposureEvent and sift the resolver capture. Returns failures (empty
+ * when the call returned silently and the derived contacted set is empty).
  */
 export function probeExposure(double, resolverLog) {
     const failures = [];
@@ -83,6 +109,29 @@ export function probeExposure(double, resolverLog) {
     return { failures, returned };
 }
 
+/**
+ * The live verdict (full tier): the in-shell outcome for both paths plus the
+ * probe-window resolver slice. Pure, so the self-test drives it directly.
+ */
+export function probeFailures(outcome, resolverSlice) {
+    const failures = [];
+    if (!outcome || typeof outcome !== 'object') {
+        failures.push('the in-Gecko probe returned no outcome. Next step: check that the shell chrome document runs the probe expression and that UpdateListener imports.');
+        return failures;
+    }
+    for (const path of ['available', 'manual']) {
+        const result = outcome[path];
+        if (result !== 'returned') {
+            failures.push(`recordExposureEvent on the ${path} path: ${result === undefined ? 'the path was not reached' : result}. Next step: check the NimbusFeatures wiring and the fixture update the probe passes.`);
+        }
+    }
+    const hosts = siftResolverHosts(resolverSlice ?? '');
+    if (hosts.length > 0) {
+        failures.push(`the probe window requested network: ${hosts.join(', ')} -- with MOZ_NORMANDY out the exposure call must make no request. Next step: check the NimbusFeatures wiring, then the capture for the host.`);
+    }
+    return failures;
+}
+
 function readText(root, rel) {
     try {
         return readFileSync(join(root, rel), 'utf8');
@@ -91,7 +140,7 @@ function readText(root, rel) {
     }
 }
 
-function runChecks(root, overrides = {}) {
+export function runChecks(root, overrides = {}) {
     const failures = [];
     const read = overrides.read ?? ((rel) => readText(root, rel));
 
@@ -113,14 +162,60 @@ function runChecks(root, overrides = {}) {
             failures.push(`${LISTENER_REL} carries ${hits} recordExposureEvent({ once: true }) calls but the probe covers 2 (available + manual paths); a moved call site is a call site this probe does not cover. Next step: check the instrument (${SELF_REL}) against UpdateListener.sys.mjs.`);
         }
     }
-
-    // --- 3. full-tier live probe: FAILs naming the evidence when no live
-    // browser exists (green-by-absence is prohibited) ---
-    failures.push(`no live probe window was captured -- this row drives the available + manual UpdateListener paths in-Gecko with a fixture update carrying detailsURL and sifts the probe-window resolver capture; on a tree with no live browser the evidence is absent. Next step: run the probe per docs/BUILD.md mar-hop procedure (probe-window capture with MOZ_LOG=nsHostResolver:5)`);
     return { failures };
 }
 
-function main() {
+/** Byte sizes of the probe's resolver logs, keyed by file name. */
+function snapshotLogs() {
+    const sizes = new Map();
+    if (!existsSync(LOG_DIR)) return sizes;
+    for (const name of readdirSync(LOG_DIR)) {
+        if (LOG_NAME_RE.test(name)) sizes.set(name, statSync(join(LOG_DIR, name)).size);
+    }
+    return sizes;
+}
+
+/** The resolver text appended to any probe log since `before`. */
+function sliceLogsSince(before) {
+    let text = '';
+    for (const name of readdirSync(LOG_DIR)) {
+        if (!LOG_NAME_RE.test(name)) continue;
+        const buf = readFileSync(join(LOG_DIR, name));
+        text += buf.subarray(before.get(name) ?? 0).toString('utf8');
+    }
+    return text;
+}
+
+async function runLive() {
+    if (!existsSync(FIREFOX_BIN)) {
+        console.error(`${NAME}: FAIL -- no built browser at ${FIREFOX_BIN}, so the probe window cannot be driven and no resolver capture exists. Next step: build the product (docs/BUILD.md, tier 3), then rerun node ${SELF_REL}.`);
+        process.exit(1);
+    }
+    rmSync(LOG_DIR, { recursive: true, force: true });
+    mkdirSync(LOG_DIR, { recursive: true });
+    // Children inherit the environment: the capture is written by the browser.
+    process.env.MOZ_LOG = 'nsHostResolver:5';
+    process.env.MOZ_LOG_FILE = LOG_BASE;
+    await runCheck(NAME, async ({ profile, fail }) => {
+        const slice = await withShell(profile, async app => {
+            const before = snapshotLogs();
+            const text = await app.evaluateIn(app.chrome, PROBE_EXPRESSION);
+            // The window is closed after the probe returns; the logs flush on
+            // the browser's own schedule, so the slice is read after a short settle.
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            let outcome = null;
+            try {
+                outcome = JSON.parse(text);
+            } catch {
+                outcome = null;
+            }
+            return { outcome, resolver: sliceLogsSince(before) };
+        });
+        for (const reason of probeFailures(slice.outcome, slice.resolver)) fail(reason);
+    });
+}
+
+async function main() {
     if (args.includes('--self-test')) return selfTest();
     const { failures } = runChecks(REPO_ROOT);
     if (failures.length > 0) {
@@ -128,7 +223,7 @@ function main() {
         failures.forEach(f => console.error(`  ${f}`));
         return 1;
     }
-    console.log(`${NAME}: PASS -- recordExposureEvent neither threw nor requested network with MOZ_NORMANDY out`);
+    await runLive();
     return 0;
 }
 
@@ -138,67 +233,55 @@ function selfTest() {
         if (!cache.has(rel)) cache.set(rel, readText(REPO_ROOT, rel));
         return cache.get(rel);
     };
-    // Control: the unmodified tree's comparand + listener are green; the
-    // fixture double is silent and the capture is empty.
     const baseline = runChecks(REPO_ROOT, { read: realRead });
-    // Baseline always carries the live-probe FAIL (no browser here); the
-    // control for the self-test is the fixture probe below, not runChecks.
-    const silent = { recordExposureEvent() {} };
-    const control = probeExposure(silent, '');
-    if (control.failures.length !== 0) {
-        console.error(`${NAME}: --self-test FAIL -- the silent double with an empty capture is already red:`);
-        control.failures.forEach(f => console.error(`  ${f}`));
+    if (baseline.failures.length > 0) {
+        console.error(`${NAME}: --self-test FAIL -- the unmodified tree is already red:`);
+        baseline.failures.forEach(f => console.error(`  ${f}`));
         return 1;
     }
-    console.log(`  ok  baseline -> silent double with empty capture green`);
+    // Control: a silent double with an empty capture, and a complete live
+    // outcome with an empty slice, are both green.
+    const silent = { recordExposureEvent() {} };
+    const control = probeExposure(silent, '');
+    const liveControl = probeFailures({ available: 'returned', manual: 'returned' }, '');
+    if (control.failures.length !== 0 || liveControl.length !== 0) {
+        console.error(`${NAME}: --self-test FAIL -- the control is already red: ${[...control.failures, ...liveControl].join(' | ')}`);
+        return 1;
+    }
+    console.log(`  ok  baseline -> static checks green; control -> silent double and complete live outcome green`);
 
     let failed = 0;
+    const expect = (name, failures, needle) => {
+        if (failures.some(f => f.includes(needle))) {
+            console.log(`  ok  ${name} -> red naming '${needle}'`);
+        } else {
+            console.error(`${NAME}: --self-test FAIL -- '${name}' did not go red naming '${needle}'; got: ${failures.join(' | ') || '(no failures)'}`);
+            failed += 1;
+        }
+    };
     // Plant 1: a throwing double is red naming the throw.
-    {
-        const throwing = { recordExposureEvent() { throw new Error('boom'); } };
-        const { failures } = probeExposure(throwing, '');
-        if (failures.some(f => f.includes('threw'))) {
-            console.log(`  ok  throwing double -> red naming the throw`);
-        } else {
-            console.error(`${NAME}: --self-test FAIL -- throwing double was NOT rejected naming the throw; got: ${failures.join(' | ') || '(no failures)'}`);
-            failed += 1;
-        }
-    }
+    expect('throwing double', probeExposure({ recordExposureEvent() { throw new Error('boom'); } }, '').failures, 'threw');
     // Plant 2: a recording double (resolver observation non-empty) is red naming the host.
-    {
-        const recording = { recordExposureEvent() {} };
-        const { failures } = probeExposure(recording, '[Parent 100: Socket Thread]: D/nsHostResolver Resolving host [telemetry.example.test] <Address family 0>.');
-        if (failures.some(f => f.includes('telemetry.example.test'))) {
-            console.log(`  ok  recording double -> red naming the host`);
-        } else {
-            console.error(`${NAME}: --self-test FAIL -- recording double was NOT rejected naming the host; got: ${failures.join(' | ') || '(no failures)'}`);
-            failed += 1;
-        }
-    }
+    expect('recording double', probeExposure({ recordExposureEvent() {} }, '[Parent 100: Socket Thread]: D/nsHostResolver Resolving host [telemetry.example.test] <Address family 0>.').failures, 'telemetry.example.test');
     // Plant 3: comparand without the imply_option line is red naming the comparand.
-    {
-        const { failures } = runChecks(REPO_ROOT, {
-            read: (rel) => (rel === COMPARAND_REL ? realRead(rel).replace('imply_option("MOZ_NORMANDY", False)', 'imply_option("MOZ_NORMANDY", True)') : realRead(rel)),
-        });
-        if (failures.some(f => f.includes(COMPARAND_REL) && f.includes('MOZ_NORMANDY'))) {
-            console.log(`  ok  comparand-missing plant -> red naming the comparand`);
-        } else {
-            console.error(`${NAME}: --self-test FAIL -- comparand plant was NOT rejected naming it; got: ${failures.join(' | ') || '(no failures)'}`);
-            failed += 1;
-        }
-    }
-    // Baseline sanity: runChecks on the unmodified tree must name the live
-    // evidence gap (never pass green-by-absence).
-    if (!baseline.failures.some(f => f.includes('no live probe window'))) {
-        console.error(`${NAME}: --self-test FAIL -- runChecks on the unmodified tree does not name the live-probe gap; got: ${baseline.failures.join(' | ') || '(no failures)'}`);
-        failed += 1;
-    } else {
-        console.log(`  ok  live-probe gap named (never green-by-absence)`);
-    }
+    expect('comparand-missing plant', runChecks(REPO_ROOT, {
+        read: (rel) => (rel === COMPARAND_REL ? realRead(rel).replace('imply_option("MOZ_NORMANDY", False)', 'imply_option("MOZ_NORMANDY", True)') : realRead(rel)),
+    }).failures, COMPARAND_REL);
+    // Plant 4: a moved call site (one of the two recordExposureEvent calls removed) is red.
+    expect('one probed call site removed', runChecks(REPO_ROOT, {
+        read: (rel) => (rel === LISTENER_REL ? realRead(rel).replace('recordExposureEvent({ once: true })', 'noop()') : realRead(rel)),
+    }).failures, 'recordExposureEvent({ once: true }) calls');
+    // Plant 5: the live manual path never returns -- red naming the path.
+    expect('live manual path threw', probeFailures({ available: 'returned', manual: 'threw: TypeError' }, ''), 'manual');
+    // Plant 6: the live outcome is missing entirely -- red naming the probe.
+    expect('no live outcome', probeFailures(null, ''), 'no outcome');
+    // Plant 7: a host inside the probe window is red naming the host.
+    expect('live window requested network', probeFailures({ available: 'returned', manual: 'returned' }, '[Parent 1: Socket Thread]: D/nsHostResolver Resolving host [telemetry.example.test] <Address family 0>.'), 'telemetry.example.test');
 
     if (failed > 0) return 1;
-    console.log(`${NAME}: --self-test PASS -- throwing, recording and comparand-missing plants went red naming their signals, and the control stayed green`);
+    console.log(`${NAME}: --self-test PASS -- seven planted faults went red naming their signal, and the control stayed green`);
     return 0;
 }
 
-process.exit(main());
+const exitCode = await main();
+if (exitCode !== undefined) process.exit(exitCode);
