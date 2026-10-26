@@ -4791,6 +4791,11 @@ run_own_checks() {
     # dropped stop call and a definer-only tree.
     "update-observer-wired|node $REPO_ROOT/scripts/verify-update-observer-wired.mjs"
     "update-observer-wired-self-test|node $REPO_ROOT/scripts/verify-update-observer-wired.mjs --self-test"
+    # NEW (Phase 46, review CR-02): currentState is a numeric long in the shipped
+    # IDL; the shell compares it to a named STATE_* constant, never a string or
+    # a bare number. Derived from the IDL and the shell at check time.
+    "update-state-contract|node $REPO_ROOT/scripts/verify-update-state-contract.mjs"
+    "update-state-contract-self-test|node $REPO_ROOT/scripts/verify-update-state-contract.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then

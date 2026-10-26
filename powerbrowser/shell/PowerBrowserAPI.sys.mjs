@@ -2331,7 +2331,10 @@ export const PowerBrowserAPI = Object.freeze({
       if (!svc) {
         return { ok: false };
       }
-      const state = svc.currentState;
+      // Gecko's currentState is a numeric nsIApplicationUpdateService constant.
+      // The boundary maps it to the contract string here, once, so no caller
+      // compares against a Gecko enum value.
+      const pending = svc.currentState === Ci.nsIApplicationUpdateService.STATE_PENDING;
       let version = "";
       try {
         const ready = svc.readyUpdate;
@@ -2339,7 +2342,7 @@ export const PowerBrowserAPI = Object.freeze({
       } catch {
         version = "";
       }
-      return { ok: true, state, version };
+      return { ok: true, state: pending ? "pending" : "idle", version };
     } catch {
       return { ok: false };
     }
