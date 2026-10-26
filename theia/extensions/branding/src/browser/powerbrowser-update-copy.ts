@@ -40,3 +40,10 @@ export const POWERBROWSER_UPDATE_COPY = Object.freeze({
 });
 
 export type PowerBrowserUpdateCopy = typeof POWERBROWSER_UPDATE_COPY;
+
+/**
+ * The page "Open download page" opens: the product site, the one public URL
+ * the tree names (no release page exists yet). Opened through the stock
+ * browser-window command, never a bespoke window.
+ */
+export const POWERBROWSER_DOWNLOAD_URL = 'https://powerbrowser.org/';

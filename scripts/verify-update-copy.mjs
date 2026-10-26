@@ -168,7 +168,9 @@ export async function onceSessionFailures(read) {
             case '@theia/core/shared/inversify':
                 return { inject: () => () => {}, injectable: () => () => {}, postConstruct: () => () => {} };
             case '@theia/core/lib/common':
-                return { MessageService: class {}, CommandRegistry: class {} };
+                return { MessageService: class {}, CommandRegistry: class {}, CommandService: class {} };
+            case './browser-window-command':
+                return { OPEN_BROWSER_WINDOW_COMMAND_ID: 'powerbrowser.open-browser-window' };
             case '@theia/core/lib/browser':
                 return { FrontendApplication: class {}, StatusBar: class {}, StatusBarAlignment: { LEFT: 0, RIGHT: 1 } };
             case './web-tab':

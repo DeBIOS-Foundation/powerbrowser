@@ -16,11 +16,12 @@
  * re-showing the prompt; a success resets the flag.
  */
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
-import { Command, CommandContribution, CommandRegistry, MessageService } from '@theia/core/lib/common';
+import { Command, CommandContribution, CommandRegistry, CommandService, MessageService } from '@theia/core/lib/common';
 import { FrontendApplication, FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { StatusBar, StatusBarAlignment } from '@theia/core/lib/browser';
-import { POWERBROWSER_UPDATE_COPY } from '@powerbrowser/branding/src/browser/powerbrowser-update-copy';
+import { POWERBROWSER_DOWNLOAD_URL, POWERBROWSER_UPDATE_COPY } from '@powerbrowser/branding/src/browser/powerbrowser-update-copy';
 import { WEB_TAB_STATE_EVENT } from './web-tab';
+import { OPEN_BROWSER_WINDOW_COMMAND_ID } from './browser-window-command';
 
 const SHELL_STATE_REQUEST_EVENT = 'PowerBrowserGroupRequest';
 const SHELL_STATE_RESPONSE_EVENT = 'PowerBrowserGroupResponse';
@@ -28,6 +29,13 @@ const SHELL_STATE_ACK_TIMEOUT_MS = 5000;
 
 export const RESTART_TO_UPDATE_COMMAND_ID = 'powerbrowser.update.restartToUpdate';
 export const CHECK_FOR_UPDATES_COMMAND_ID = 'powerbrowser.update.checkForUpdates';
+/** The status-bar item's action: re-opens the ready prompt (WR-03). Not a palette entry. */
+export const SHOW_READY_COMMAND_ID = 'powerbrowser.update.showReady';
+
+export const SHOW_READY_COMMAND: Command = {
+    id: SHOW_READY_COMMAND_ID,
+    label: POWERBROWSER_UPDATE_COPY.readyTitle,
+};
 
 export const RESTART_TO_UPDATE_COMMAND: Command = {
     id: RESTART_TO_UPDATE_COMMAND_ID,
@@ -78,8 +86,12 @@ export class UpdateClientContribution implements FrontendApplicationContribution
     @inject(FrontendApplication)
     protected readonly app: FrontendApplication;
 
+    @inject(CommandService)
+    protected readonly commands: CommandService;
+
     protected seq = 0;
     protected checkAgainShown = false;
+    protected readyVersion = '';
     protected statusBarId = 'powerbrowser.update.status';
 
     onStart(app: FrontendApplication): void {
@@ -98,6 +110,9 @@ export class UpdateClientContribution implements FrontendApplicationContribution
         });
         commands.registerCommand(CHECK_FOR_UPDATES_COMMAND, {
             execute: () => this.checkForUpdates(),
+        });
+        commands.registerCommand(SHOW_READY_COMMAND, {
+            execute: () => this.showReady(this.readyVersion),
         });
     }
 
@@ -145,7 +160,8 @@ export class UpdateClientContribution implements FrontendApplicationContribution
         const body = version
             ? POWERBROWSER_UPDATE_COPY.readyBody.replace(/<version>/, () => version)
             : POWERBROWSER_UPDATE_COPY.readyBody.replace(/<version>\s*/, '');
-        await this.setStatusBar(POWERBROWSER_UPDATE_COPY.readyStatus);
+        this.readyVersion = version;
+        await this.setStatusBar(POWERBROWSER_UPDATE_COPY.readyStatus, SHOW_READY_COMMAND_ID);
         try {
             const actions = await this.messages.info(body, POWERBROWSER_UPDATE_COPY.restartNowLabel, POWERBROWSER_UPDATE_COPY.laterLabel);
             if (actions === POWERBROWSER_UPDATE_COPY.restartNowLabel) {
@@ -161,7 +177,11 @@ export class UpdateClientContribution implements FrontendApplicationContribution
         const body = mac ? POWERBROWSER_UPDATE_COPY.cannotUpdateMacBody : POWERBROWSER_UPDATE_COPY.cannotUpdateBody;
         await this.setStatusBar(POWERBROWSER_UPDATE_COPY.cannotUpdateStatus);
         try {
-            await this.messages.warn(body, POWERBROWSER_UPDATE_COPY.openDownloadPageLabel);
+            const actions = await this.messages.warn(body, POWERBROWSER_UPDATE_COPY.openDownloadPageLabel);
+            if (actions === POWERBROWSER_UPDATE_COPY.openDownloadPageLabel) {
+                // The stock browser-window command: the same path the palette entry takes.
+                await this.commands.executeCommand(OPEN_BROWSER_WINDOW_COMMAND_ID, POWERBROWSER_DOWNLOAD_URL);
+            }
         } catch {
             // Off-host: status-bar state above still records the condition.
         }
@@ -184,9 +204,9 @@ export class UpdateClientContribution implements FrontendApplicationContribution
         }
     }
 
-    protected async setStatusBar(text: string): Promise<void> {
+    protected async setStatusBar(text: string, command?: string): Promise<void> {
         try {
-            await this.statusBar.setElement(this.statusBarId, { text, alignment: StatusBarAlignment.RIGHT });
+            await this.statusBar.setElement(this.statusBarId, { text, alignment: StatusBarAlignment.RIGHT, command });
         } catch {
             // Status bar unavailable: notifications above still carry the copy.
         }
