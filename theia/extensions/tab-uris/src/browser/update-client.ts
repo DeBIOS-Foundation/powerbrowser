@@ -58,8 +58,12 @@ export function shouldShowCheckAgain(alreadyShown: boolean): { show: boolean; ne
     return { show: true, next: true };
 }
 
-export function resetCheckAgainOnSuccess(): boolean {
-    return false;
+/** Statuses that prove a background check completed, not merely that it was accepted. */
+const CHECK_COMPLETED_STATUSES = new Set(['available', 'ready', 'cant-apply']);
+
+/** The once-per-session flag after an observed appUpdate push: only a completed check clears it (CR-06). */
+export function resetCheckAgainOnSuccess(alreadyShown: boolean, status: string): boolean {
+    return CHECK_COMPLETED_STATUSES.has(status) ? false : alreadyShown;
 }
 
 @injectable()
@@ -105,6 +109,7 @@ export class UpdateClientContribution implements FrontendApplicationContribution
             }
             const status = typeof detail.status === 'string' ? detail.status : '';
             const version = typeof detail.version === 'string' && detail.version ? detail.version : '';
+            this.checkAgainShown = resetCheckAgainOnSuccess(this.checkAgainShown, status);
             void this.render(status, version);
         } catch (error) {
             console.error('[@powerbrowser/tab-uris] update push dispatch failed:', error);
@@ -203,10 +208,10 @@ export class UpdateClientContribution implements FrontendApplicationContribution
     }
 
     protected async checkForUpdates(): Promise<void> {
-        const reply = await this.request({ kind: 'checkForUpdates' });
-        if (reply !== 'no-chrome' && reply.ok) {
-            this.checkAgainShown = resetCheckAgainOnSuccess();
-        }
+        // Acceptance is not success: the reply only means the check started.
+        // The once-per-session flag is cleared by an observed completed check
+        // in onAppUpdatePush, never here (CR-06).
+        await this.request({ kind: 'checkForUpdates' });
     }
 
     @postConstruct()

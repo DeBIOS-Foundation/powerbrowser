@@ -19,22 +19,25 @@
 // the tree it was written from; these comparisons go red on an ADDED leak,
 // an ad-hoc literal in the client, a STALE string, and a REMOVED string.
 //
-// Static on purpose: it reads the source, needs no build, no browser and no
-// display, and therefore belongs in --quick where a leak costs seconds
-// rather than a forty-minute rebuild.
+// The once-per-session rule (UPD-22, review CR-06) is checked BEHAVIOURALLY:
+// the real update client is transpiled from the tree and driven through its
+// push path, stubbed only at the Theia import boundary. No constant stands in
+// for the transition.
 //
 // Usage:
 //   node scripts/verify-update-copy.mjs
 //   node scripts/verify-update-copy.mjs --self-test
 //
 // Exit 0 pass, 1 fail. --self-test plants every fault in memory and requires
-// each to go red naming the string; a check that can only go green is not a
-// check.
+// each to go red naming the string or the prompt count; a check that can only
+// go green is not a check.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 
 const SELF = fileURLToPath(import.meta.url);
 const REPO_ROOT = resolve(dirname(SELF), '..');
@@ -52,6 +55,7 @@ for (const a of args) {
 
 const COPY_REL = 'theia/extensions/branding/src/browser/powerbrowser-update-copy.ts';
 const CLIENT_REL = 'theia/extensions/tab-uris/src/browser/update-client.ts';
+const THEIA_PKG_REL = 'theia/package.json';
 
 // An ALL-CAPS underscored token, four characters or more.
 const ALL_CAPS_TOKEN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
@@ -111,7 +115,93 @@ function lastSentence(text) {
     return parts[parts.length - 1] ?? text;
 }
 
-function runChecks(root, overrides = {}) {
+/** Transpiles one TypeScript source to CommonJS and evaluates it against `requireFn`. */
+function loadTsModule(ts, src, requireFn) {
+    const out = ts.transpileModule(src, {
+        compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2017,
+            experimentalDecorators: true,
+            esModuleInterop: true,
+        },
+    }).outputText;
+    const mod = { exports: {} };
+    runInNewContext(out, { require: requireFn, module: mod, exports: mod.exports }, { filename: 'transpiled-tree-source.js' });
+    return mod.exports;
+}
+
+const flush = () => new Promise(resolveFlush => setImmediate(resolveFlush));
+
+/**
+ * Behavioural once-per-session check (UPD-22, review CR-06). Loads the REAL
+ * update client from the tree and drives it through its push path: a failure
+ * prompts once, a Check-again click starts a check (the warn stub answers the
+ * click), a second failure in the same session does not prompt, a completed
+ * check clears the flag, and the next failure prompts again. The prompt
+ * counts must be 1, 1, 2. Returns failures; empty when the rule holds.
+ */
+export async function onceSessionFailures(read) {
+    let ts;
+    try {
+        ts = createRequire(join(REPO_ROOT, THEIA_PKG_REL))('typescript');
+    } catch {
+        return [`theia/node_modules/typescript is not installed, so the once-per-session behaviour is unproven. Next step: run yarn install in theia/ (nix develop .#theia).`];
+    }
+    const copySrc = read(COPY_REL);
+    const clientSrc = read(CLIENT_REL);
+    if (copySrc === null || clientSrc === null) {
+        return [`${COPY_REL} or ${CLIENT_REL} could not be read, so the once-per-session behaviour is unproven. Next step: restore them.`];
+    }
+    const copy = loadTsModule(ts, copySrc, () => ({}));
+    const client = loadTsModule(ts, clientSrc, (id) => {
+        switch (id) {
+            case 'inversify':
+            case '@theia/core/shared/inversify':
+                return { inject: () => () => {}, injectable: () => () => {}, postConstruct: () => () => {} };
+            case '@theia/core/lib/common':
+                return { MessageService: class {}, CommandRegistry: class {} };
+            case '@theia/core/lib/browser':
+                return { FrontendApplication: class {}, StatusBar: class {}, StatusBarAlignment: { LEFT: 0, RIGHT: 1 } };
+            case './web-tab':
+                return { WEB_TAB_STATE_EVENT: 'PowerBrowserWebTabState' };
+            case '@powerbrowser/branding/src/browser/powerbrowser-update-copy':
+                return copy;
+            default:
+                throw new Error(`unexpected import '${id}' in the update client`);
+        }
+    });
+
+    const instance = new client.UpdateClientContribution();
+    let prompts = 0;
+    instance.messages = {
+        info: async () => undefined,
+        warn: async (_body, action) => {
+            prompts += 1;
+            return action;
+        },
+    };
+    instance.statusBar = { setElement: async () => undefined };
+    instance.request = async () => ({ ok: true, accepted: true });
+    const push = async (status) => {
+        instance.onAppUpdatePush({ detail: { kind: 'appUpdate', status } });
+        await flush();
+        await flush();
+    };
+
+    await push('error');
+    const first = prompts;
+    await push('error');
+    const second = prompts;
+    await push('available');
+    await push('error');
+    const third = prompts;
+    if (first !== 1 || second !== 1 || third !== 2) {
+        return [`once-per-session: Check-again prompts were ${first}, ${second}, ${third} after failure, failure, completed check + failure; want 1, 1, 2. Next step: clear checkAgainShown only on an observed completed check in onAppUpdatePush, never on request acceptance (CR-06).`];
+    }
+    return [];
+}
+
+export function runChecks(root, overrides = {}) {
     const failures = [];
     const read = overrides.read ?? ((rel) => readText(root, rel));
 
@@ -200,32 +290,34 @@ function runChecks(root, overrides = {}) {
     return { failures, strings };
 }
 
-function main() {
+async function main() {
     if (args.includes('--self-test')) return selfTest();
     const { failures, strings } = runChecks(REPO_ROOT);
+    failures.push(...await onceSessionFailures((rel) => readText(REPO_ROOT, rel)));
     console.log(`${NAME}: ${strings.length} update string(s) derived from the branding contribution: ${strings.map(s => s.key).join(', ')}`);
     if (failures.length > 0) {
         console.error(`${NAME}: FAIL -- ${failures.length} problem(s) with the update copy contract.`);
         failures.forEach(f => console.error(`  ${f}`));
         return 1;
     }
-    console.log(`${NAME}: PASS -- every update string names PowerBrowser, carries no internal identifier, and ends with an on-screen affordance; the client imports the single site`);
+    console.log(`${NAME}: PASS -- every update string names PowerBrowser, carries no internal identifier, and ends with an on-screen affordance; the client imports the single site; the once-per-session rule holds in the real client`);
     return 0;
 }
 
-function selfTest() {
+async function selfTest() {
     const cache = new Map();
     const realRead = (rel) => {
         if (!cache.has(rel)) cache.set(rel, readText(REPO_ROOT, rel));
         return cache.get(rel);
     };
     const baseline = runChecks(REPO_ROOT, { read: realRead });
-    if (baseline.failures.length > 0 || baseline.strings.length === 0) {
+    const baselineOnce = await onceSessionFailures(realRead);
+    if (baseline.failures.length > 0 || baseline.strings.length === 0 || baselineOnce.length > 0) {
         console.error(`${NAME}: --self-test FAIL -- the unmodified tree is already red, so the planted-fault results below would mean nothing:`);
-        baseline.failures.forEach(f => console.error(`  ${f}`));
+        [...baseline.failures, ...baselineOnce].forEach(f => console.error(`  ${f}`));
         return 1;
     }
-    console.log(`  ok  baseline -> green (${baseline.strings.length} strings)`);
+    console.log(`  ok  baseline -> green (${baseline.strings.length} strings; once-per-session holds in the real client)`);
 
     const withCopy = (fn) => ({
         read: (rel) => (rel === COPY_REL ? fn(realRead(rel)) : realRead(rel)),
@@ -245,7 +337,7 @@ function selfTest() {
     ];
 
     let failed = 0;
-    for (const [name, overrides, needle, kind] of plants) {
+    for (const [name, overrides, needle] of plants) {
         const { failures } = runChecks(REPO_ROOT, overrides);
         const hit = failures.some(f => f.includes(needle));
         if (hit) {
@@ -256,67 +348,31 @@ function selfTest() {
         }
     }
 
-    // Once-per-session double-failure fixture: two update-error pushes
-    // require exactly one Check-again prompt; a third push after success
-    // resets and prompts again. Drives the pure transition the client
-    // exports (no Theia imports, no browser).
-    try {
-        const transitionSrc = realRead('theia/extensions/tab-uris/src/browser/update-client.ts');
-        if (transitionSrc === null || !transitionSrc.includes('shouldShowCheckAgain')) {
-            console.error(`${NAME}: --self-test FAIL -- the once-per-session transition is not exported from the client.`);
+    // CR-06 plants, driven through the real client. Each must change the
+    // client text first, or it proves nothing.
+    const clientPlants = [
+        ['Check-again flag reset on request acceptance', (t) => t.replace("await this.request({ kind: 'checkForUpdates' });", "await this.request({ kind: 'checkForUpdates' }); this.checkAgainShown = false;")],
+        ['flag never cleared by a completed check', (t) => t.replace('CHECK_COMPLETED_STATUSES.has(status) ? false : alreadyShown', 'alreadyShown')],
+    ];
+    for (const [name, mutate] of clientPlants) {
+        const planted = withClient(mutate);
+        if (planted.read(CLIENT_REL) === realRead(CLIENT_REL)) {
+            console.error(`${NAME}: --self-test FAIL -- '${name}' did not apply (its search text is gone); the plant proves nothing.`);
             failed += 1;
-        } else {
-            // Inline the two pure functions (no imports) and replay.
-            // Brace-matched: the non-greedy regex stops at the first inner
-            // close brace and yields an unbalanced body.
-            const fnBody = (name) => {
-                // The signature carries a return-type literal (`: { show... }`),
-                // so `[^{]*` stops at the type's own brace. Anchor on the
-                // declaration line end: the body opens at the last `{` of the
-                // `export function ...` header, which ends at the first newline
-                // carrying `{`.
-                const decl = transitionSrc.match(new RegExp(`export function ${name}[^\\n]*\\{`));
-                if (!decl || decl.index === undefined) return null;
-                let depth = 0;
-                const open = decl.index + decl[0].length - 1;
-                for (let i = open; i < transitionSrc.length; i += 1) {
-                    if (transitionSrc[i] === '{') depth += 1;
-                    else if (transitionSrc[i] === '}') {
-                        depth -= 1;
-                        if (depth === 0) return transitionSrc.slice(open + 1, i);
-                    }
-                }
-                return null;
-            };
-            const showSrc = fnBody('shouldShowCheckAgain');
-            const resetSrc = fnBody('resetCheckAgainOnSuccess');
-            if (!showSrc || resetSrc === null) {
-                console.error(`${NAME}: --self-test FAIL -- could not extract the once-per-session transition.`);
-                failed += 1;
-            } else {
-                const shouldShowCheckAgain = new Function('alreadyShown', `${showSrc}`);
-                const resetCheckAgainOnSuccess = new Function(`${resetSrc}`);
-                let flag = false;
-                const first = shouldShowCheckAgain(flag); flag = first.next;
-                const second = shouldShowCheckAgain(flag); flag = second.next;
-                flag = resetCheckAgainOnSuccess();
-                const third = shouldShowCheckAgain(flag);
-                if (first.show === true && second.show === false && third.show === true) {
-                    console.log(`  ok  once-per-session double-failure fixture -> exactly one Check-again prompt, reset after success`);
-                } else {
-                    console.error(`${NAME}: --self-test FAIL -- once-per-session fixture gave first=${first.show} second=${second.show} third=${third.show}, want true/false/true.`);
-                    failed += 1;
-                }
-            }
+            continue;
         }
-    } catch (e) {
-        console.error(`${NAME}: --self-test FAIL -- once-per-session fixture threw: ${e.message}`);
-        failed += 1;
+        const failures = await onceSessionFailures(planted.read);
+        if (failures.some(f => f.includes('Check-again prompts'))) {
+            console.log(`  ok  ${name} -> red naming the Check-again prompt count`);
+        } else {
+            console.error(`${NAME}: --self-test FAIL -- '${name}' did not go red naming the Check-again prompt count; got: ${failures.join(' | ') || '(no failures at all)'}`);
+            failed += 1;
+        }
     }
 
     if (failed > 0) return 1;
-    console.log(`${NAME}: --self-test PASS -- ${plants.length + 1} planted faults went red naming the string, and the control stayed green`);
+    console.log(`${NAME}: --self-test PASS -- ${plants.length + clientPlants.length} planted faults went red naming their drift, and the control stayed green`);
     return 0;
 }
 
-process.exit(main());
+process.exit(await main());
