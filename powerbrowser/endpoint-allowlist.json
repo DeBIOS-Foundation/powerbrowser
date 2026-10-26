@@ -93,14 +93,14 @@
     },
     {
       "host": "github.com",
-      "disposition": "user-initiated",
+      "disposition": "allow",
       "manifest": "urls.release_notes",
-      "reason": "UPD-33: the About dialog's release-notes link (app.releaseNotesURL, app.releaseNotesURL.aboutDialog and app.update.url.details from configuration.toml [urls] release_notes, UPD-13) points at the GitHub Releases page (SEED-002 section 7), reached only by an explicit click. network.dns.disablePrefetch = true closes the speculative prefetch; an unattended resolution of this host is a failure exactly as for a `deny` entry."
+      "reason": "UPD-15 and UPD-33 (46 review WR-07): github.com is contacted unattended on every MAR download. The installed client fetches the immutable Release asset URL on github.com, which 302s to release-assets.githubusercontent.com (docs/RELEASING.md, the update path), so under the verdict model (scripts/lib/endpoint-verdict.mjs) a user-initiated disposition would fail the unattended update capture. The About dialog's release-notes link (app.releaseNotesURL, app.releaseNotesURL.aboutDialog and app.update.url.details from configuration.toml [urls] release_notes, UPD-13) is a second, click-only use of the same host. network.dns.disablePrefetch = true still closes the speculative prefetch of the link. The layer-3 observation is Phase 50 criterion 5."
     },
     {
       "host": "release-assets.githubusercontent.com",
       "disposition": "allow",
-      "reason": "UPD-15: the updater fetches MAR bytes unattended after staging (not a click destination, so not user-initiated). The Release asset URL (github.com) 302s here at download time. Layer-3 observation of a real update's asset download is Phase 50 criterion 5; this row lands now with the stated reason and the Phase 50 observation reference. github.com stays user-initiated (release-notes click destinations only)."
+      "reason": "UPD-15: the updater fetches MAR bytes unattended after staging (not a click destination, so not user-initiated). The Release asset URL on github.com 302s here at download time (docs/RELEASING.md); this host is the second hop of that unattended fetch, so it carries the same allow disposition as the github.com row (46 review WR-07). Layer-3 observation of a real update's asset download is Phase 50 criterion 5; this row lands now with the stated reason and the Phase 50 observation reference. github.com stays user-initiated (release-notes click destinations only)."
     },
     {
       "host": "cloudflare-dns.com",
