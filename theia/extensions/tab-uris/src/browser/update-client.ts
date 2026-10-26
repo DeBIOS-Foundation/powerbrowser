@@ -150,6 +150,8 @@ export class UpdateClientContribution implements FrontendApplicationContribution
             await this.showCannotUpdate();
         } else if (status === 'error') {
             await this.showCouldNotCheck();
+        } else if (status === 'available') {
+            await this.setStatusBar(POWERBROWSER_UPDATE_COPY.availableStatus);
         } else {
             await this.setStatusBar(POWERBROWSER_UPDATE_COPY.checkingStatus);
         }

@@ -2372,24 +2372,24 @@ export const PowerBrowserAPI = Object.freeze({
 
   /**
    * UPD-18 (46-01): one update topic notification mapped to the contracted
-   * appUpdate status. The mapping is total over the four observed topics:
-   * staged/downloaded to ready, cant-apply to cant-apply, error to error,
-   * and show-prompt (plus download-equivalents and any unknown status) to
-   * available/checking. The subject may be null (cant-apply notifies with a
+   * appUpdate status. An explicit table (46 review WR-04): update-available
+   * with show-prompt to available, with cant-apply or unsupported to
+   * cant-apply; staged and downloaded to ready; everything else, update-error
+   * and any unnamed status included, to error. The subject may be null (cant-apply notifies with a
    * null subject): the null guard runs before any QueryInterface, and the
    * version read never throws. The returned triple is primitives only.
    */
   mapUpdateNotification(topic, status) {
+    if (topic === "update-available") {
+      if (status === "show-prompt") {
+        return "available";
+      }
+      return status === "cant-apply" || status === "unsupported" ? "cant-apply" : "error";
+    }
     if (topic === "update-staged" || topic === "update-downloaded") {
       return "ready";
     }
-    if (topic === "update-available" && status === "cant-apply") {
-      return "cant-apply";
-    }
-    if (topic === "update-error") {
-      return "error";
-    }
-    return "checking";
+    return "error";
   },
 
   /**
