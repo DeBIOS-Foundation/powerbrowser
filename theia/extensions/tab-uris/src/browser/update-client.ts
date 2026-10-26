@@ -136,23 +136,19 @@ export class UpdateClientContribution implements FrontendApplicationContribution
         } else if (status === 'error') {
             await this.showCouldNotCheck();
         } else {
-            await this.setStatusBar(`PowerBrowser: checking for updates…`);
+            await this.setStatusBar(POWERBROWSER_UPDATE_COPY.checkingStatus);
         }
-    }
-
-    protected interpolateReady(version: string): string {
-        if (version) {
-            return POWERBROWSER_UPDATE_COPY.readyBody.replace('<version>', version);
-        }
-        return POWERBROWSER_UPDATE_COPY.readyBody.replace('<version> ', '');
     }
 
     protected async showReady(version: string): Promise<void> {
-        const body = this.interpolateReady(version);
-        await this.setStatusBar(`${POWERBROWSER_UPDATE_COPY.readyTitle}: Restart now`);
+        // The version is a replacer function, so a `$` in it stays literal (IN-02).
+        const body = version
+            ? POWERBROWSER_UPDATE_COPY.readyBody.replace(/<version>/, () => version)
+            : POWERBROWSER_UPDATE_COPY.readyBody.replace(/<version>\s*/, '');
+        await this.setStatusBar(POWERBROWSER_UPDATE_COPY.readyStatus);
         try {
-            const actions = await this.messages.info(body, 'Restart now', 'Later');
-            if (actions === 'Restart now') {
+            const actions = await this.messages.info(body, POWERBROWSER_UPDATE_COPY.restartNowLabel, POWERBROWSER_UPDATE_COPY.laterLabel);
+            if (actions === POWERBROWSER_UPDATE_COPY.restartNowLabel) {
                 await this.restartToUpdate();
             }
         } catch {
@@ -163,24 +159,24 @@ export class UpdateClientContribution implements FrontendApplicationContribution
     protected async showCannotUpdate(): Promise<void> {
         const mac = navigator.platform.startsWith('Mac');
         const body = mac ? POWERBROWSER_UPDATE_COPY.cannotUpdateMacBody : POWERBROWSER_UPDATE_COPY.cannotUpdateBody;
-        await this.setStatusBar('PowerBrowser: this copy cannot update');
+        await this.setStatusBar(POWERBROWSER_UPDATE_COPY.cannotUpdateStatus);
         try {
-            await this.messages.warn(body, 'Open download page');
+            await this.messages.warn(body, POWERBROWSER_UPDATE_COPY.openDownloadPageLabel);
         } catch {
             // Off-host: status-bar state above still records the condition.
         }
     }
 
     protected async showCouldNotCheck(): Promise<void> {
-        await this.setStatusBar('PowerBrowser: update check failed');
+        await this.setStatusBar(POWERBROWSER_UPDATE_COPY.checkFailedStatus);
         const transition = shouldShowCheckAgain(this.checkAgainShown);
         this.checkAgainShown = transition.next;
         if (!transition.show) {
             return;
         }
         try {
-            const actions = await this.messages.warn(POWERBROWSER_UPDATE_COPY.couldNotCheckBody, 'Check again');
-            if (actions === 'Check again') {
+            const actions = await this.messages.warn(POWERBROWSER_UPDATE_COPY.couldNotCheckBody, POWERBROWSER_UPDATE_COPY.checkAgainLabel);
+            if (actions === POWERBROWSER_UPDATE_COPY.checkAgainLabel) {
                 await this.checkForUpdates();
             }
         } catch {
@@ -200,7 +196,10 @@ export class UpdateClientContribution implements FrontendApplicationContribution
         const reply = await this.request({ kind: 'restartToUpdate' });
         if (reply === 'no-chrome' || !reply.ok) {
             try {
-                await this.messages.warn('PowerBrowser: Restart to Update is unavailable while the browser host is unreachable. Try again when the browser is running.');
+                const actions = await this.messages.warn(POWERBROWSER_UPDATE_COPY.restartUnavailableBody, POWERBROWSER_UPDATE_COPY.tryAgainLabel);
+                if (actions === POWERBROWSER_UPDATE_COPY.tryAgainLabel) {
+                    await this.restartToUpdate();
+                }
             } catch {
                 // Message channel unavailable too: nothing further to report through.
             }
@@ -237,7 +236,7 @@ export class UpdateClientContribution implements FrontendApplicationContribution
                 }
                 settle(detail.reply && typeof detail.reply === 'object'
                     ? detail.reply as ShellReply
-                    : { ok: false, reason: 'validation', message: 'malformed reply' });
+                    : { ok: false, reason: 'validation', message: 'malformed-reply' });
             };
             const timer = window.setTimeout(() => settle({ ok: false, reason: 'timeout' }), SHELL_STATE_ACK_TIMEOUT_MS);
             window.addEventListener(SHELL_STATE_RESPONSE_EVENT, onResponse);

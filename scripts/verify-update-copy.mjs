@@ -1,38 +1,40 @@
 #!/usr/bin/env node
 // scripts/verify-update-copy.mjs
 //
-// The update-copy shape gate (Phase 46, UPD-32). The six contracted
-// in-app-update strings (UPD-20 ready, UPD-21 cannot-update + macOS variant,
-// UPD-22 could-not-check, UPD-23 two command titles) live once in the
-// @powerbrowser/branding contribution
-// (theia/extensions/branding/src/browser/powerbrowser-update-copy.ts). This
-// row derives them at check time and applies the no-internal-identifier
-// shape test: each names "PowerBrowser", matches neither the ALL-CAPS token
-// pattern nor the DOTTED_KEY pattern, and ends with a next step that is an
-// on-screen affordance. A seventh string is red (enumeration completeness),
-// and the client must import the copy (no second literal site).
+// The update-copy shape gate (Phase 46, UPD-32; review WR-05, WR-06, CR-06).
+// Every user-readable update string lives once in the @powerbrowser/branding
+// contribution (theia/extensions/branding/src/browser/
+// powerbrowser-update-copy.ts). This row derives all of them at check time:
 //
-// HOW IT ASSERTS, and why it is not a banned-literal list. It DERIVES, from
-// the contribution at check time, the exported const's string values (never
-// a literal list in this row), plus the affordance set, and compares as set
-// equality. A hand-kept list of forbidden strings can only ever agree with
-// the tree it was written from; these comparisons go red on an ADDED leak,
-// an ad-hoc literal in the client, a STALE string, and a REMOVED string.
+//   1. Classification by key suffix (Title, Body, Status, Label). An
+//      unclassified key is red.
+//   2. Shape: every Title, Body and Status names "PowerBrowser" and carries
+//      no ALL-CAPS token or dotted key (no internal identifier).
+//   3. Next step: a Body is wired in the client to one of the copy's own
+//      Label or Title keys in the same method that renders it. A Status
+//      either is a progress message (ends in an ellipsis) or its last sentence
+//      names a Label or a command Title as the next step.
+//   4. Client literals: the client's code (comments and console calls
+//      stripped) carries no string literal that contains whitespace or equals
+//      a copy value. User-facing text reaches the client only through the
+//      copy module.
+//   5. Single site: the client imports the copy module, and no 24-character
+//      slice of a Body or Title appears literally in the client.
+//   6. Once-per-session (UPD-22, CR-06): the real update client is
+//      transpiled from the tree and driven through its push path, stubbed only
+//      at the Theia import boundary. No constant stands in for the transition.
 //
-// The once-per-session rule (UPD-22, review CR-06) is checked BEHAVIOURALLY:
-// the real update client is transpiled from the tree and driven through its
-// push path, stubbed only at the Theia import boundary. No constant stands in
-// for the transition.
+// No expectation list is hand-kept: the key set, the affordance set and the
+// classification are all read from the contribution at check time.
 //
 // Usage:
 //   node scripts/verify-update-copy.mjs
 //   node scripts/verify-update-copy.mjs --self-test
 //
-// Exit 0 pass, 1 fail. --self-test plants every fault in memory and requires
-// each to go red naming the string or the prompt count; a check that can only
-// go green is not a check.
+// Exit 0 pass, 1 fail. --self-test plants each fault in memory and requires
+// each to go red naming its drift; a check that can only go green is not a
+// check.
 
-import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
@@ -61,18 +63,7 @@ const THEIA_PKG_REL = 'theia/package.json';
 const ALL_CAPS_TOKEN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
 // A dotted key of three or more segments.
 const DOTTED_KEY = /\b[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*){2,}\b/g;
-
-// The contracted affordance each BODY wires to (REQUIREMENTS.md UPD-20..22:
-// the buttons + status-bar item, not sentence text). Titles are labels, not
-// sentences: they name PowerBrowser with no internals and carry no
-// affordance-ending requirement.
-const BODY_AFFORDANCES = Object.freeze({
-    readyBody: ['Restart now', 'Later', 'status'],
-    cannotUpdateBody: ['Open download page', 'download page'],
-    cannotUpdateMacBody: ['Applications folder', 'open it again', 'Open download page'],
-    couldNotCheckBody: ['Check again'],
-});
-const TITLE_KEYS = new Set(['readyTitle', 'restartToUpdateTitle', 'checkForUpdatesTitle']);
+const CLIENT_NAME = 'POWERBROWSER_UPDATE_COPY';
 
 function readText(root, rel) {
     try {
@@ -82,19 +73,8 @@ function readText(root, rel) {
     }
 }
 
-function listTracked(root) {
-    try {
-        return execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-            .split('\n')
-            .map(l => l.trim())
-            .filter(l => l !== '');
-    } catch {
-        return null;
-    }
-}
-
 /** The exported const's NAME = "..." string values, in file order. */
-function deriveStrings(src) {
+export function deriveStrings(src) {
     const m = src.match(/export\s+const\s+POWERBROWSER_UPDATE_COPY\s*=\s*Object\.freeze\(\{([\s\S]*?)\}\);/);
     if (!m) return null;
     const out = [];
@@ -106,6 +86,35 @@ function deriveStrings(src) {
             return null;
         }
         out.push({ key: x[1], value });
+    }
+    return out;
+}
+
+/** The suffix classification (Title | Body | Status | Label), or null when unclassified. */
+export function classify(key) {
+    const m = key.match(/(Title|Body|Status|Label)$/);
+    return m ? m[1] : null;
+}
+
+/** The client's code with comments and console statements removed. */
+export function clientCode(src) {
+    const noBlock = src.replace(/\/\*[\s\S]*?\*\//g, '');
+    const noLine = noBlock.split('\n').map(line => line.replace(/\/\/.*$/, '')).join('\n');
+    return noLine.replace(/console\.\w+\([^;]*\);/g, '');
+}
+
+/** Method-sized blocks of the client's class body (four-space indented declarations). */
+export function methodBlocks(code) {
+    const starts = [...code.matchAll(/^ {4}(?:protected |public |private )?(?:async )?[A-Za-z_]\w*\s*\(/gm)].map(m => m.index);
+    return starts.map((start, i) => code.slice(start, i + 1 < starts.length ? starts[i + 1] : code.length));
+}
+
+/** Every string literal in the client code: quoted or backticked. */
+export function literalsIn(code) {
+    const out = [];
+    for (const m of code.matchAll(/'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`((?:[^`\\\n]|\\.)*)`/g)) {
+        // A template's ${...} expressions are code, not text: only its static parts count.
+        out.push(m[3] !== undefined ? m[3].replace(/\$\{[^}]*\}/g, '') : (m[1] ?? m[2] ?? ''));
     }
     return out;
 }
@@ -216,74 +225,97 @@ export function runChecks(root, overrides = {}) {
         return { failures, strings: [] };
     }
 
-    // Six contracted strings. The count is the contract: a seventh string is
-    // red until the row's affordance set covers it, and a removed one is red
-    // as a missing member.
-    const EXPECTED_KEYS = ['readyTitle', 'readyBody', 'cannotUpdateBody', 'cannotUpdateMacBody', 'couldNotCheckBody', 'restartToUpdateTitle', 'checkForUpdatesTitle'];
-    // readyTitle + readyBody are the UPD-20 pair; the row counts seven keys
-    // (title plus body) for six contracted sentences.
-    if (strings.length !== EXPECTED_KEYS.length) {
-        failures.push(`${COPY_REL} declares ${strings.length} update strings but the contract is ${EXPECTED_KEYS.length} (${EXPECTED_KEYS.join(', ')}); a new string is red until the row covers it. Next step: extend the row's affordance set or remove the string.`);
-    }
-    const keys = new Set(strings.map(s => s.key));
-    for (const k of EXPECTED_KEYS) {
-        if (!keys.has(k)) {
-            failures.push(`${COPY_REL} is missing the contracted string '${k}'. Next step: restore it from REQUIREMENTS.md UPD-20..23.`);
-        }
-    }
+    const kindOf = new Map(strings.map(s => [s.key, classify(s.key)]));
+    const byKind = (kind) => strings.filter(s => kindOf.get(s.key) === kind);
     for (const s of strings) {
-        if (!EXPECTED_KEYS.includes(s.key)) {
-            failures.push(`${COPY_REL} carries an extra update string '${s.key}' the contract does not cover. Next step: extend the row or remove the string.`);
+        if (kindOf.get(s.key) === null) {
+            failures.push(`${COPY_REL} string '${s.key}' has no classification suffix (Title, Body, Status or Label), so the row cannot apply its rules to it. Next step: rename the key with its kind suffix.`);
         }
+    }
+    const labelKeys = byKind('Label').map(s => s.key);
+    const titleKeys = byKind('Title').map(s => s.key);
+    const bodies = byKind('Body');
+    const statuses = byKind('Status');
+    if (labelKeys.length === 0 || bodies.length === 0) {
+        failures.push(`${COPY_REL} has no Label or no Body string, so the affordance contract is unproven. Next step: restore the button labels and the notification bodies.`);
     }
 
+    // 2. Shape: names the product and carries no internal identifier.
     for (const s of strings) {
-        if (!s.value.includes('PowerBrowser')) {
+        const kind = kindOf.get(s.key);
+        if (kind !== 'Label' && !s.value.includes('PowerBrowser')) {
             failures.push(`${COPY_REL} string '${s.key}' does not name the product ("PowerBrowser"): ${JSON.stringify(s.value)}. Next step: name PowerBrowser in the string.`);
         }
         for (const hit of s.value.match(ALL_CAPS_TOKEN) ?? []) {
-            if (hit.length >= 4) {
-                failures.push(`${COPY_REL} string '${s.key}' leaks the internal identifier "${hit}" (all-caps underscored token) into user-facing copy -- it belongs in a diagnostics field row. Next step: reword without the token.`);
-            }
+            failures.push(`${COPY_REL} string '${s.key}' leaks the internal identifier "${hit}" (all-caps underscored token) into user-facing copy -- it belongs in a diagnostics field row. Next step: reword without the token.`);
         }
         for (const hit of s.value.match(DOTTED_KEY) ?? []) {
             failures.push(`${COPY_REL} string '${s.key}' leaks the internal identifier "${hit}" (dotted multi-segment key) into user-facing copy -- it belongs in a diagnostics field row. Next step: reword without the key.`);
         }
-        if (TITLE_KEYS.has(s.key)) continue;
-        const affordances = BODY_AFFORDANCES[s.key];
-        if (affordances === undefined) continue;
-        // The affordance lives in the client wiring (buttons + status-bar),
-        // not necessarily the sentence text: require the client to render it
-        // next to the string's use. Derive from the client at check time.
-        const clientForAffordance = read(CLIENT_REL) ?? '';
-        const wired = affordances.some(a => clientForAffordance.includes(a) && clientForAffordance.includes(s.key));
-        if (!wired) {
-            failures.push(`${COPY_REL} string '${s.key}' has none of its contracted affordances (${affordances.join(' / ')}) wired in the client next to its use; every update body must end with a next step that is a real affordance. Next step: render one of them beside this string in ${CLIENT_REL}.`);
-        }
     }
 
-    // No second literal site: the client must import the copy module, and no
-    // update sentence may appear literally in the client.
+    // The affordances a sentence can name: the button labels, and the command
+    // titles without their "PowerBrowser: " product prefix.
+    const affordanceValues = [
+        ...byKind('Label').map(s => s.value),
+        ...byKind('Title').map(s => s.value.replace(/^PowerBrowser:\s*/, '')),
+    ];
+    const affordanceKeys = [...labelKeys, ...titleKeys];
+
     const clientSrc = read(CLIENT_REL);
     if (clientSrc === null) {
         failures.push(`${CLIENT_REL} could not be read, so the single-site rule is unproven. Next step: restore it.`);
-    } else {
-        if (!clientSrc.includes('powerbrowser-update-copy')) {
-            failures.push(`${CLIENT_REL} does not import the update copy module -- a literal sentence in the client would ship beside the contribution. Next step: import POWERBROWSER_UPDATE_COPY and use it.`);
+        return { failures, strings };
+    }
+    const code = clientCode(clientSrc);
+    const blocks = methodBlocks(code);
+
+    // 3. Next step: every Body is rendered by a method that wires one of the
+    // copy's own affordances; every progress-free Status ends with one.
+    for (const body of bodies) {
+        const users = blocks.filter(b => b.includes(`${CLIENT_NAME}.${body.key}`));
+        if (users.length === 0) {
+            failures.push(`${CLIENT_REL} never renders ${CLIENT_NAME}.${body.key} -- the notification body is not on screen. Next step: render it through the messages service.`);
+            continue;
         }
-        for (const s of strings) {
-            if (TITLE_KEYS.has(s.key)) continue;
-            // A 24-char slice is long enough to be sentence-specific, short
-            // enough to survive interpolation splits. Titles necessarily
-            // appear via the label import; bodies must never be quoted.
-            const needle = s.value.slice(0, 24);
-            if (needle.length >= 24 && clientSrc.includes(needle)) {
-                failures.push(`${CLIENT_REL} carries the literal sentence slice ${JSON.stringify(needle)}... -- update sentences live once in the branding contribution. Next step: replace it with the POWERBROWSER_UPDATE_COPY import.`);
-            }
+        const wired = users.some(b => affordanceKeys.some(k => b.includes(`${CLIENT_NAME}.${k}`)));
+        if (!wired) {
+            failures.push(`${CLIENT_REL} renders '${body.key}' without any of its affordances (${affordanceKeys.join(', ')}) in the same method; every update body must end with a next step that is a real affordance. Next step: pass a Label from ${CLIENT_NAME} beside this body.`);
         }
-        // The client must render the once-per-session rule: the flag names.
-        if (!clientSrc.includes('Check again')) {
-            failures.push(`${CLIENT_REL} never mentions 'Check again' -- the UPD-22 affordance has no client path. Next step: render the could-not-check notification with Check again.`);
+    }
+    for (const status of statuses) {
+        if (status.value.includes('…')) continue;
+        const sentence = lastSentence(status.value);
+        if (!affordanceValues.some(a => a !== '' && sentence.includes(a))) {
+            failures.push(`${COPY_REL} status '${status.key}' ends without a next step (no button label or command title in its last sentence): ${JSON.stringify(status.value)}. Next step: end it with the affordance the user takes.`);
+        }
+    }
+
+    // Every label is on screen somewhere in the client.
+    for (const key of labelKeys) {
+        if (!code.includes(`${CLIENT_NAME}.${key}`)) {
+            failures.push(`${CLIENT_REL} never uses ${CLIENT_NAME}.${key} -- a button label with no client path. Next step: wire it or remove it.`);
+        }
+    }
+
+    // 4. No user-facing literal in the client: whitespace-bearing literals and
+    // copy values are red wherever they appear in the client code.
+    const copyValues = new Set(strings.map(s => s.value));
+    for (const literal of literalsIn(code)) {
+        if (/\s/.test(literal) || copyValues.has(literal)) {
+            failures.push(`${CLIENT_REL} carries the literal ${JSON.stringify(literal)} -- user-facing text lives once in the copy module. Next step: replace it with a ${CLIENT_NAME} key.`);
+        }
+    }
+
+    // 5. Single site: the client imports the copy module; no 24-char slice of
+    // a body or title appears literally in the client.
+    if (!clientSrc.includes('powerbrowser-update-copy')) {
+        failures.push(`${CLIENT_REL} does not import the update copy module -- a literal sentence in the client would ship beside the contribution. Next step: import ${CLIENT_NAME} and use it.`);
+    }
+    for (const s of [...bodies, ...byKind('Title')]) {
+        const needle = s.value.slice(0, 24);
+        if (needle.length >= 24 && clientSrc.includes(needle)) {
+            failures.push(`${CLIENT_REL} carries the literal sentence slice ${JSON.stringify(needle)}... -- update sentences live once in the branding contribution. Next step: replace it with the ${CLIENT_NAME} import.`);
         }
     }
 
@@ -300,7 +332,7 @@ async function main() {
         failures.forEach(f => console.error(`  ${f}`));
         return 1;
     }
-    console.log(`${NAME}: PASS -- every update string names PowerBrowser, carries no internal identifier, and ends with an on-screen affordance; the client imports the single site; the once-per-session rule holds in the real client`);
+    console.log(`${NAME}: PASS -- every update string names PowerBrowser or is a label, carries no internal identifier, and ends with an on-screen affordance; the client renders only copy-module text; the once-per-session rule holds in the real client`);
     return 0;
 }
 
@@ -325,19 +357,31 @@ async function selfTest() {
     const withClient = (fn) => ({
         read: (rel) => (rel === CLIENT_REL ? fn(realRead(rel)) : realRead(rel)),
     });
-    const victim = baseline.strings[1].key;
+    const bodyKey = 'readyBody';
+    const bodyValue = baseline.strings.find(s => s.key === bodyKey).value;
+    const titleKey = 'readyTitle';
+    const titleValue = baseline.strings.find(s => s.key === titleKey).value;
 
+    // Each plant must change its file, or it proves nothing.
     const plants = [
-        ['pref key in one string', withCopy(t => t.replace(baseline.strings[1].value.slice(0, 20), 'app.update.url.manual is not here ')), victim, 'pref'],
-        ['ALL-CAPS token in one string', withCopy(t => t.replace(baseline.strings[2].value.slice(0, 20), 'POWERBROWSER_TOKEN reached here ')), baseline.strings[2].key, 'caps'],
-        ['product name removed', withCopy(t => t.replace(baseline.strings[0].value, baseline.strings[0].value.replace('PowerBrowser', 'Browser'))), baseline.strings[0].key, 'name'],
-        ['affordance unwired (client drops Check again)', { read: (rel) => { if (rel === CLIENT_REL) return realRead(rel).split('\n').filter(l => !l.includes('Check again')).join('\n'); if (rel === COPY_REL) return realRead(rel); return realRead(rel); } }, 'couldNotCheckBody', 'affordance'],
-        ['seventh string added', withCopy(t => t.replace('});', `    extraString: 'PowerBrowser extra string. Choose Check again.',\n});`)), 'extraString', 'extra'],
-        ['literal sentence in the client', withClient(t => `${t}\n// plant: ${baseline.strings[1].value.slice(0, 30)}\n`), CLIENT_REL, 'literal'],
+        ['pref key in one body', withCopy(t => t.replace(bodyValue.slice(0, 20), 'app.update.url.manual is not here ')), bodyKey, 'pref'],
+        ['ALL-CAPS token in one body', withCopy(t => t.replace(bodyValue.slice(0, 20), 'POWERBROWSER_TOKEN reached here ')), bodyKey, 'caps'],
+        ['product name removed from a title', withCopy(t => t.replace(titleValue, titleValue.replace('PowerBrowser', 'Browser'))), titleKey, 'name'],
+        ['affordance unwired (client drops the Check-again label)', withClient(t => t.split('\n').filter(l => !l.includes('checkAgainLabel')).join('\n')), 'couldNotCheckBody', 'affordance'],
+        ['status with no next step', withCopy(t => t.replace('PowerBrowser: update check failed. Choose Check again to retry.', 'PowerBrowser: update check failed.')), 'checkFailedStatus', 'status'],
+        ['unclassified string added', withCopy(t => t.replace('});', `    extraString: 'PowerBrowser extra string. Choose Check again.',\n});`)), 'extraString', 'extra'],
+        ['literal user-facing text in the client', withClient(t => t.replace('export class UpdateClientContribution', "export const STRAY = 'PowerBrowser stray literal. Choose Later.';\nexport class UpdateClientContribution")), 'stray literal', 'literal'],
+        ['single-word copy value typed into the client', withClient(t => t.replace('export class UpdateClientContribution', "export const STRAY = 'Later';\nexport class UpdateClientContribution")), 'Later', 'literal'],
     ];
 
     let failed = 0;
     for (const [name, overrides, needle] of plants) {
+        const planted = overrides.read(COPY_REL) !== realRead(COPY_REL) || overrides.read(CLIENT_REL) !== realRead(CLIENT_REL);
+        if (!planted) {
+            console.error(`${NAME}: --self-test FAIL -- '${name}' did not apply (its search text is gone); the plant proves nothing.`);
+            failed += 1;
+            continue;
+        }
         const { failures } = runChecks(REPO_ROOT, overrides);
         const hit = failures.some(f => f.includes(needle));
         if (hit) {
@@ -348,8 +392,7 @@ async function selfTest() {
         }
     }
 
-    // CR-06 plants, driven through the real client. Each must change the
-    // client text first, or it proves nothing.
+    // CR-06 plants, driven through the real client.
     const clientPlants = [
         ['Check-again flag reset on request acceptance', (t) => t.replace("await this.request({ kind: 'checkForUpdates' });", "await this.request({ kind: 'checkForUpdates' }); this.checkAgainShown = false;")],
         ['flag never cleared by a completed check', (t) => t.replace('CHECK_COMPLETED_STATUSES.has(status) ? false : alreadyShown', 'alreadyShown')],

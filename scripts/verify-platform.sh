@@ -4780,10 +4780,11 @@ run_own_checks() {
     # the client). Honestly --quick: text reads only.
     "update-copy|node $REPO_ROOT/scripts/verify-update-copy.mjs"
     # update-copy-self-test plants, in memory only, a pref key, an ALL-CAPS
-    # token, a missing product name, an unwired affordance, a seventh string
-    # and a client literal, each red naming the string; plus the
-    # once-per-session double-failure fixture (exactly one Check-again prompt,
-    # reset after success).
+    # token, a missing product name, an unwired affordance, a status with no
+    # next step, an unclassified string, client literals (whitespace-bearing
+    # and single-word) and the two Check-again faults, each red naming its
+    # drift. The once-per-session rule is driven through the real client
+    # (prompts 1, 1, 2), not a constant stub (CR-06, WR-05, WR-06).
     "update-copy-self-test|node $REPO_ROOT/scripts/verify-update-copy.mjs --self-test"
     # NEW (Phase 46, review CR-01): the update observer is started from the real
     # startup path (TheiaService._swap) and its stop function is invoked on
