@@ -98,6 +98,20 @@ export function runChecks(root, overrides = {}) {
         }
     }
 
+    // CR-03: the service interface has no readyUpdate attribute. The ready
+    // update is read from the update manager's getReadyUpdate(), which the IDL
+    // declares on nsIUpdateManager.
+    if (/\b(?:svc|service|updateService\(\))\.readyUpdate\b/.test(shell)) {
+        failures.push(`${SHELL_REL} reads readyUpdate off the update service -- nsIApplicationUpdateService has no readyUpdate attribute, so the read is always undefined. Next step: read it from nsIUpdateManager.getReadyUpdate().`);
+    }
+    const managerIface = /interface\s+nsIUpdateManager\s*:[^{]*\{[\s\S]*?Promise\s+getReadyUpdate\s*\(\s*\)\s*;/.test(idl);
+    if (!managerIface) {
+        failures.push(`${IDL_REL} no longer declares nsIUpdateManager.getReadyUpdate(), so the ready-update read is unproven. Next step: re-derive the read from the shipped IDL.`);
+    }
+    if (!/nsIUpdateManager\b/.test(shell) || !/\.getReadyUpdate\(\)/.test(shell)) {
+        failures.push(`${SHELL_REL} does not read the ready update through nsIUpdateManager.getReadyUpdate(), so the pull path yields no version. Next step: restore readyUpdate() in the update manager.`);
+    }
+
     return { failures, constants: [...constants] };
 }
 
@@ -129,12 +143,21 @@ function selfTest() {
 
     const onShell = (fn) => ({ read: (rel) => (rel === SHELL_REL ? fn(realRead(rel)) : realRead(rel)) });
     const plants = [
-        ['string compare of currentState', onShell(t => t.replace('svc.currentState === Ci.nsIApplicationUpdateService.STATE_PENDING', 'svc.currentState === "pending"')), 'string literal'],
-        ['bare numeric compare of currentState', onShell(t => t.replace('svc.currentState === Ci.nsIApplicationUpdateService.STATE_PENDING', 'svc.currentState === 5')), 'bare number'],
+        ['string compare of currentState', onShell(t => t.replace(/currentState\s*!==\s*Ci\.nsIApplicationUpdateService\.STATE_PENDING/, 'currentState !== "pending"')), 'string literal'],
+        ['bare numeric compare of currentState', onShell(t => t.replace(/currentState\s*!==\s*Ci\.nsIApplicationUpdateService\.STATE_PENDING/, 'currentState !== 5')), 'bare number'],
         ['misspelled IDL constant', onShell(t => t.replace('STATE_PENDING', 'STATE_PENDNG')), 'STATE_PENDNG'],
+        ['readyUpdate read off the service (the always-undefined read)', onShell(t => t.replace('const ready = await PowerBrowserAPI.readyUpdate();', 'const ready = svc.readyUpdate;')), 'readyUpdate'],
+        ['manager read replaced by the attribute form', onShell(t => t.replace('um.getReadyUpdate()', 'um.readyUpdate')), 'getReadyUpdate'],
     ];
     let failed = 0;
     for (const [name, overrides, needle] of plants) {
+        // A plant whose search text no longer matches changes nothing and would
+        // stay green for the wrong reason: require the planted tree to differ.
+        if (overrides.read(SHELL_REL) === realRead(SHELL_REL)) {
+            console.error(`${NAME}: --self-test FAIL -- '${name}' did not apply (its search text is gone); the plant proves nothing.`);
+            failed += 1;
+            continue;
+        }
         const { failures } = runChecks(REPO_ROOT, overrides);
         if (failures.some(f => f.includes(needle))) {
             console.log(`  ok  ${name} -> red naming '${needle}'`);

@@ -2267,7 +2267,7 @@ export const PowerBrowserAPI = Object.freeze({
           return { ok: true, kind };
         }
         case "appUpdateState": {
-          const state = PowerBrowserAPI.readUpdateState();
+          const state = await PowerBrowserAPI.readUpdateState();
           if (!state.ok) {
             return { ok: false, reason: "store", message: "handleShellMessage: update state unavailable" };
           }
@@ -2325,7 +2325,7 @@ export const PowerBrowserAPI = Object.freeze({
    * when the service exposes one. Never throws: an unreadable service
    * resolves { ok: false }.
    */
-  readUpdateState() {
+  async readUpdateState() {
     try {
       const svc = PowerBrowserAPI.updateService();
       if (!svc) {
@@ -2334,17 +2334,34 @@ export const PowerBrowserAPI = Object.freeze({
       // Gecko's currentState is a numeric nsIApplicationUpdateService constant.
       // The boundary maps it to the contract string here, once, so no caller
       // compares against a Gecko enum value.
-      const pending = svc.currentState === Ci.nsIApplicationUpdateService.STATE_PENDING;
-      let version = "";
-      try {
-        const ready = svc.readyUpdate;
-        version = (ready && (ready.displayVersion || ready.appVersion)) || "";
-      } catch {
-        version = "";
+      if (svc.currentState !== Ci.nsIApplicationUpdateService.STATE_PENDING) {
+        return { ok: true, state: "idle", version: "" };
       }
-      return { ok: true, state: pending ? "pending" : "idle", version };
+      // A pending state with no readable ready update is refused, not rendered
+      // as a version-less ready prompt (UPD-20 names the version).
+      const ready = await PowerBrowserAPI.readyUpdate();
+      const version = (ready && (ready.displayVersion || ready.appVersion)) || "";
+      if (!version) {
+        return { ok: false };
+      }
+      return { ok: true, state: "pending", version };
     } catch {
       return { ok: false };
+    }
+  },
+
+  /**
+   * UPD-20 (46-02, review CR-03): the staged update, read from the update
+   * manager (nsIUpdateManager.getReadyUpdate). nsIApplicationUpdateService has
+   * no readyUpdate attribute; the manager owns the ready update. Never throws:
+   * an unreadable manager resolves null.
+   */
+  async readyUpdate() {
+    try {
+      const um = Cc["@mozilla.org/updates/update-manager;1"].getService(Ci.nsIUpdateManager);
+      return (await um.getReadyUpdate()) || null;
+    } catch {
+      return null;
     }
   },
 
