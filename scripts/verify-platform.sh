@@ -4766,6 +4766,18 @@ run_own_checks() {
     # kind, a stray dispatched kind, a removed kind on each side, and a
     # throwing default case; each must go red naming the kind and the side.
     "shell-request-kinds-self-test|node $REPO_ROOT/scripts/verify-shell-request-kinds.mjs --self-test"
+    # NEW (Phase 46, UPD-32): the update-copy shape gate. Derives the seven
+    # contracted strings from the @powerbrowser/branding contribution and
+    # applies the no-internal-identifier shape test (names PowerBrowser, no
+    # ALL-CAPS token or dotted key, body wired to its on-screen affordance in
+    # the client). Honestly --quick: text reads only.
+    "update-copy|node $REPO_ROOT/scripts/verify-update-copy.mjs"
+    # update-copy-self-test plants, in memory only, a pref key, an ALL-CAPS
+    # token, a missing product name, an unwired affordance, a seventh string
+    # and a client literal, each red naming the string; plus the
+    # once-per-session double-failure fixture (exactly one Check-again prompt,
+    # reset after success).
+    "update-copy-self-test|node $REPO_ROOT/scripts/verify-update-copy.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then

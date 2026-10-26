@@ -292,30 +292,26 @@ function runChecks(root, overrides = {}) {
     }
 
     // Only the shell-request kinds participate (OUT_OF_SCOPE already
-    // removed the web-tab/stock/store/push kinds at collection). Until the
-    // plan 46-02 client lands, the three new kinds live on the chrome side
-    // alone by design: the row derives the dispatched set from the union
-    // plus channel files as-is, and the wave-2 client closes the gap. The
-    // final contract is set equality; the interim green counts a chrome-only
-    // new kind as pending-client, named in the PASS line.
+    // removed the web-tab/stock/store kinds at collection; pushKinds removes
+    // the chrome->frontend pushes). Final contract: strict set equality in
+    // both directions.
     const dispatched = [...dispatchedSet];
-    const pushKinds = new Set(['flushShellState']);
+    // Chrome->frontend pushes (never a handleShellMessage request): the
+    // flushShellState quit-flush push plus the appUpdate push the 46-02
+    // client listens for on WEB_TAB_STATE_EVENT (update-client.ts
+    // onAppUpdatePush's `detail.kind !== 'appUpdate'` guard). Excluded from
+    // the request equality by construction, not exemption.
+    const pushKinds = new Set(['flushShellState', 'appUpdate']);
     const acceptedReq = accepted.filter(k => !pushKinds.has(k));
     const dispatchedReq = dispatched.filter(k => !pushKinds.has(k));
-    const pendingClient = acceptedReq.filter(k => !dispatchedReq.includes(k) && (k === 'appUpdateState' || k === 'checkForUpdates' || k === 'restartToUpdate'));
-
     const dispatchedOnly = dispatchedReq.filter(k => !acceptedReq.includes(k));
-    const acceptedOnly = acceptedReq.filter(k => !dispatchedReq.includes(k) && !pendingClient.includes(k));
+    const acceptedOnly = acceptedReq.filter(k => !dispatchedReq.includes(k));
     for (const k of dispatchedOnly) {
         failures.push(`Theia dispatches '${k}' but handleShellMessage accepts no such kind. Next step: add the chrome case (plus the SHELL_MESSAGE_KINDS entry) or stop dispatching it.`);
     }
     for (const k of acceptedOnly) {
         failures.push(`handleShellMessage accepts '${k}' but no Theia client dispatches it. Next step: dispatch it from the client or remove the chrome case (plus the SHELL_MESSAGE_KINDS entry).`);
     }
-    if (pendingClient.length > 0 && failures.length === 0) {
-        console.log(`${NAME}: pending-client kinds (chrome landed, 46-02 client next): ${pendingClient.join(', ')}`);
-    }
-
     return { failures, accepted: acceptedReq, dispatched: dispatchedReq };
 }
 
