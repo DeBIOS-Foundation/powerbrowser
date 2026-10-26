@@ -292,7 +292,7 @@ let groupSenderPort = null;
 // one JSON document per profile, written atomically by the one chrome-side
 // writer. The frontend sends the whole map; the cap keeps a runaway frontend
 // from filling the disk through this channel.
-const SHELL_MESSAGE_KINDS = new Set(["shellStateLoad", "shellStateSave", "shellFlushed", "shellArmWebTabHistory"]);
+const SHELL_MESSAGE_KINDS = new Set(["shellStateLoad", "shellStateSave", "shellFlushed", "shellArmWebTabHistory", "appUpdateState", "checkForUpdates", "restartToUpdate"]);
 const SHELL_STATE_FILE_NAME = "powerbrowser-shell-state.json";
 const SHELL_STATE_MAX_CHARS = 16 * 1024 * 1024;
 // NG-032/NG-033: quit flushes chrome is waiting on, flushId -> resolve.
@@ -2266,6 +2266,30 @@ export const PowerBrowserAPI = Object.freeze({
           armedWebTabHistories.add(data.key);
           return { ok: true, kind };
         }
+        case "appUpdateState": {
+          const state = PowerBrowserAPI.readUpdateState();
+          if (!state.ok) {
+            return { ok: false, reason: "store", message: "handleShellMessage: update state unavailable" };
+          }
+          if (state.version) {
+            return { ok: true, kind, state: state.state, version: state.version };
+          }
+          return { ok: true, kind, state: state.state };
+        }
+        case "checkForUpdates": {
+          const accepted = await PowerBrowserAPI.requestUpdateCheck();
+          if (!accepted) {
+            return { ok: false, reason: "store", message: "handleShellMessage: update check not started" };
+          }
+          return { ok: true, kind, accepted: true };
+        }
+        case "restartToUpdate": {
+          const restarted = PowerBrowserAPI.restartToUpdate();
+          if (!restarted) {
+            return { ok: false, reason: "cancelled", message: "handleShellMessage: restart cancelled by an observer" };
+          }
+          return { ok: true, kind, accepted: true };
+        }
         default:
           return { ok: false, reason: "validation", message: `handleShellMessage: unknown kind ${String(kind)}` };
       }
@@ -2273,6 +2297,180 @@ export const PowerBrowserAPI = Object.freeze({
       // Final-review M3: the IOUtils failure names the profile file -- reply
       // with the fixed string plus err.name, never the message text.
       return { ok: false, reason: "store", message: `handleShellMessage: ${kind} failed (store ${err && err.name ? err.name : "error"})` };
+    }
+  },
+
+  /**
+   * UPD-18/19 (46-01): the update-service read helpers behind appUpdateState,
+   * checkForUpdates and restartToUpdate. Each reaches Gecko through the one
+   * boundary accessor below, never around it.
+   */
+
+  /**
+   * UPD-18/19 (46-01): the one accessor for the Gecko update service. Reads
+   * through the platform contract id, never a stored handle. Never throws:
+   * an unreached service resolves null.
+   */
+  updateService() {
+    try {
+      return Cc["@mozilla.org/updates/update-service;1"].getService(Ci.nsIApplicationUpdateService);
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * UPD-18/19 (46-01): the one current-state read. Mirrors the AppUpdater
+   * shape: currentState plus the ready update's displayVersion/appVersion
+   * when the service exposes one. Never throws: an unreadable service
+   * resolves { ok: false }.
+   */
+  readUpdateState() {
+    try {
+      const svc = PowerBrowserAPI.updateService();
+      if (!svc) {
+        return { ok: false };
+      }
+      const state = svc.currentState;
+      let version = "";
+      try {
+        const ready = svc.readyUpdate;
+        version = (ready && (ready.displayVersion || ready.appVersion)) || "";
+      } catch {
+        version = "";
+      }
+      return { ok: true, state, version };
+    } catch {
+      return { ok: false };
+    }
+  },
+
+  /**
+   * UPD-18 (46-01): one update topic notification mapped to the contracted
+   * appUpdate status. The mapping is total over the four observed topics:
+   * staged/downloaded to ready, cant-apply to cant-apply, error to error,
+   * and show-prompt (plus download-equivalents and any unknown status) to
+   * available/checking. The subject may be null (cant-apply notifies with a
+   * null subject): the null guard runs before any QueryInterface, and the
+   * version read never throws. The returned triple is primitives only.
+   */
+  mapUpdateNotification(topic, status) {
+    if (topic === "update-staged" || topic === "update-downloaded") {
+      return "ready";
+    }
+    if (topic === "update-available" && status === "cant-apply") {
+      return "cant-apply";
+    }
+    if (topic === "update-error") {
+      return "error";
+    }
+    return "checking";
+  },
+
+  /**
+   * UPD-18 (46-01): the subject's version half of an appUpdate push. The
+   * null guard runs before QueryInterface: cant-apply notifies with subject
+   * null (UpdateService.sys.mjs:3972), and QueryInterface on it would throw.
+   * Never throws: an unreadable subject resolves "".
+   */
+  updateVersionFromSubject(subject) {
+    try {
+      const update = subject ? subject.QueryInterface(Ci.nsIUpdate) : null;
+      return (update && (update.displayVersion || update.appVersion)) || "";
+    } catch {
+      return "";
+    }
+  },
+
+  /**
+   * UPD-18 (46-01): one observer for the four update topics, registered
+   * chrome-side (parent process) next to startTabStoreTriggers. Pushes
+   * { kind: "appUpdate", status, version } over the existing
+   * PowerBrowserWebTabState path (the flushShellState shape). Returns a stop
+   * function removing every observer added here.
+   */
+  startUpdateObserver(theiaBrowser) {
+    const topics = ["update-available", "update-staged", "update-downloaded", "update-error"];
+    const observer = {
+      observe: (subject, topic, status) => {
+        try {
+          PowerBrowserAPI.pushAppUpdate(theiaBrowser, PowerBrowserAPI.mapUpdateNotification(topic, status), PowerBrowserAPI.updateVersionFromSubject(subject));
+        } catch (err) {
+          PowerBrowserAPI.log("error", `[update-observer] push failed (${err && err.name ? err.name : "error"})`);
+        }
+      },
+    };
+    for (const topic of topics) {
+      Services.obs.addObserver(observer, topic);
+    }
+    return () => {
+      for (const topic of topics) {
+        try {
+          Services.obs.removeObserver(observer, topic);
+        } catch {
+          // Observer removal is best-effort on teardown.
+        }
+      }
+    };
+  },
+
+  /**
+   * UPD-18 (46-01): the chrome half of the appUpdate push. Same actor pair
+   * and event the web-tab state rides: the Theia frame's WindowGlobal's
+   * parent actor sends to its child, which re-dispatches the payload into
+   * the content window as a PowerBrowserWebTabState event. Primitives only
+   * (status, version), never the raw update object. A frame that is mid-swap
+   * throws here; the throw is logged and dropped, never unwound into the
+   * observer notification.
+   */
+  pushAppUpdate(theiaBrowser, status, version) {
+    try {
+      theiaBrowser.browsingContext.currentWindowGlobal
+        .getActor(GROUP_ACTOR_NAME)
+        .sendAsyncMessage("PowerBrowserWebTabState", { kind: "appUpdate", status, version });
+    } catch (err) {
+      PowerBrowserAPI.log("error", `[update-observer] state push failed (${err && err.name ? err.name : "error"})`);
+    }
+  },
+
+  /**
+   * UPD-19 (46-01): triggers one background update check through the update
+   * service accessor. The result arrives as an appUpdate push, never as this
+   * call's return: true means the check was accepted, false means the
+   * service was unreachable. Never throws.
+   */
+  async requestUpdateCheck() {
+    try {
+      const svc = PowerBrowserAPI.updateService();
+      if (!svc || typeof svc.checkForBackgroundUpdates !== "function") {
+        return false;
+      }
+      await svc.checkForBackgroundUpdates();
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * UPD-19 (46-01): restarts into the staged update. Copies UpdateListener
+   * requestRestart exactly: announces quit-application-requested with data
+   * "restart", and only when no observer cancelled quits with
+   * eAttemptQuit | eRestart. The granted observer then runs the same
+   * runQuitFlushSync flush every quit runs, so the layout restores. Returns
+   * true when the restart was requested, false when cancelled. Never throws.
+   */
+  restartToUpdate() {
+    try {
+      const cancelQuit = Cc["@mozilla.org/supports-PRBool;1"].createInstance(Ci.nsISupportsPRBool);
+      Services.obs.notifyObservers(cancelQuit, "quit-application-requested", "restart");
+      if (cancelQuit.data) {
+        return false;
+      }
+      Services.startup.quit(Ci.nsIAppStartup.eAttemptQuit | Ci.nsIAppStartup.eRestart);
+      return true;
+    } catch {
+      return false;
     }
   },
 

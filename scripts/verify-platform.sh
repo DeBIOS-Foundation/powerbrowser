@@ -4755,6 +4755,17 @@ run_own_checks() {
     # actions/checkout@v4) must exit non-zero naming template-injection and unpinned-uses, clean
     # must exit 0. It writes nothing in the tree.
     "zizmor-self-test|node $REPO_ROOT/scripts/verify-zizmor.mjs --self-test"
+    # NEW (Phase 46, UPD-19): the chrome/frontend shell-request kind contract.
+    # Derives the accepted kinds from handleShellMessage cases plus
+    # SHELL_MESSAGE_KINDS and the dispatched kinds from the Theia shell-state
+    # channel clients plus the ShellStateMessage union, and compares as set
+    # equality; out-of-scope kinds (other dispatches, pushes) derive from
+    # their own unions. Honestly --quick: text reads only.
+    "shell-request-kinds|node $REPO_ROOT/scripts/verify-shell-request-kinds.mjs"
+    # shell-request-kinds-self-test plants, in memory only, a stray accepted
+    # kind, a stray dispatched kind, a removed kind on each side, and a
+    # throwing default case; each must go red naming the kind and the side.
+    "shell-request-kinds-self-test|node $REPO_ROOT/scripts/verify-shell-request-kinds.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
