@@ -4797,6 +4797,12 @@ run_own_checks() {
     # a bare number. Derived from the IDL and the shell at check time.
     "update-state-contract|node $REPO_ROOT/scripts/verify-update-state-contract.mjs"
     "update-state-contract-self-test|node $REPO_ROOT/scripts/verify-update-state-contract.mjs --self-test"
+    # NEW (Phase 46, WR-07 owner ruling 2026-10-25): no tracked descriptor template,
+    # generator output or fixture names a github.com /releases/download/ URL as an
+    # update download (github.com is user-initiated; the MAR fetch must not touch it).
+    # Derived from git ls-files; self-test plants three github forms and two controls.
+    "update-download-host|node $REPO_ROOT/scripts/verify-update-download-host.mjs"
+    "update-download-host-self-test|node $REPO_ROOT/scripts/verify-update-download-host.mjs --self-test"
   )
 
   if [ "$QUICK" -eq 0 ]; then
