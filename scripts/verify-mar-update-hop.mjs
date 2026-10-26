@@ -55,6 +55,12 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+
+// WR-08: the shell's stdout capture of the N+1 run. PowerBrowserAPI's update
+// observer logs one line per appUpdate push, which is the logged event the
+// transcript's ready string is derived from.
+const CLIENT_UPDATE_LOG = 'client-update.log';
+const READY_EVENT_RE = /\[update-observer\] appUpdate status=ready version=(\S+)/g;
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { isIP } from 'node:net';
@@ -293,8 +299,25 @@ function runChecks(root) {
     if (transcript === undefined || transcript === null || typeof transcript !== 'object') {
         r.fail(`hop.json carries no transcript -- the ready notification, Restart-now click, N+1 landing and layout-restore proof are absent. The plumbing below still verifies, but the experience proof needs a re-run per docs/BUILD.md mar-hop procedure. Next step: re-run the hop with the UI transcript captured`);
     } else if (contracted !== null) {
-        const wantReady = readyNotificationFor(hop.nplus1.version, contracted);
-        r.eq('ready notification text', transcript.readyNotification, wantReady, 'hop.json transcript (must equal the contracted UPD-20 string with the N+1 version interpolated)');
+        // WR-08 (46 review): the transcript is bound to the run. The shell's stdout
+        // capture (client-update.log) must hash to transcript.evidence.sha256, and
+        // the ready string is derived from the logged ready event, never from the
+        // transcript's own field alone.
+        const capturePath = join(evDir, CLIENT_UPDATE_LOG);
+        const captureText = existsSync(capturePath) ? readFileSync(capturePath, 'utf8') : null;
+        if (captureText === null) {
+            r.fail(`${CLIENT_UPDATE_LOG} is absent under .mozbuild/mar-hop/, so the transcript has no provenance. Next step: re-run the hop with the shell stdout captured to ${CLIENT_UPDATE_LOG}.`);
+        } else {
+            r.eq('transcript bound to capture (sha256)', transcript.evidence?.sha256, createHash('sha256').update(captureText).digest('hex'), `hop.json transcript evidence must hash ${CLIENT_UPDATE_LOG} (a transcript edited after the run fails here)`);
+            const events = [...captureText.matchAll(READY_EVENT_RE)].map(m => m[1]);
+            if (events.length === 0) {
+                r.fail(`${CLIENT_UPDATE_LOG} carries no ready event ([update-observer] appUpdate status=ready version=...). Next step: re-run the hop; the ready string is derived from the logged event.`);
+            } else {
+                const eventVersion = events[events.length - 1];
+                r.eq('ready event names N+1', eventVersion, hop.nplus1.version, `${CLIENT_UPDATE_LOG} (the logged ready event must name the N+1 version)`);
+                r.eq('ready notification text', transcript.readyNotification, readyNotificationFor(eventVersion, contracted), 'hop.json transcript (must equal the contracted UPD-20 string derived from the logged ready event)');
+            }
+        }
         r.eq('Restart-now click', transcript.restartClicked, true, 'hop.json transcript');
         r.eq('transcript post-restart version', transcript.postVersion, hop.nplus1.version, 'hop.json transcript (Restart now must land N+1)');
         r.eq('transcript post-restart buildID', transcript.postBuildID, hop.nplus1.buildID, 'hop.json transcript (buildID must match the served MAR)');
@@ -432,6 +455,9 @@ function selfTest() {
                 displayVersion: version,
             });
             writeFileSync(join(evDir, 'update.xml'), xml);
+            // The shell's capture carries the ready event; the transcript hashes it.
+            const clientUpdateLog = `[update-observer] appUpdate status=ready version=${version}\n`;
+            writeFileSync(join(evDir, CLIENT_UPDATE_LOG), clientUpdateLog);
             writeFileSync(join(evDir, 'hop.json'), JSON.stringify({
                 n: { version: '153.1.0', buildID: '20260904000000' },
                 nplus1: { version, buildID, platformVersion: '153.1.0', displayVersion: version },
@@ -443,6 +469,7 @@ function selfTest() {
                 postHop: { version, buildID },
                 transcript: {
                     readyNotification: readyNotificationFor(version, CONTR),
+                    evidence: { file: CLIENT_UPDATE_LOG, sha256: createHash('sha256').update(clientUpdateLog).digest('hex') },
                     restartClicked: true,
                     postVersion: version,
                     postBuildID: buildID,
@@ -556,6 +583,29 @@ function selfTest() {
             },
             'transcript',
             'ready notification',
+        );
+        expectRed(
+            'capture edited after the transcript (sha256 binding)',
+            () => {
+                const logPath = join(evDir, CLIENT_UPDATE_LOG);
+                writeFileSync(logPath, readFileSync(logPath, 'utf8') + 'edited after the run\n');
+            },
+            'transcript bound to capture',
+            'sha256',
+        );
+        expectRed(
+            'ready event absent from the capture (sha re-bound so only the event fails)',
+            () => {
+                const logPath = join(evDir, CLIENT_UPDATE_LOG);
+                const text = '[PowerBrowserAPI] info: no update event in this capture\n';
+                writeFileSync(logPath, text);
+                const hopPath = join(evDir, 'hop.json');
+                const hop = JSON.parse(readFileSync(hopPath, 'utf8'));
+                hop.transcript.evidence.sha256 = createHash('sha256').update(text).digest('hex');
+                writeFileSync(hopPath, JSON.stringify(hop));
+            },
+            CLIENT_UPDATE_LOG,
+            'ready event',
         );
         expectRed(
             'post-restart version not N+1',

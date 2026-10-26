@@ -2453,6 +2453,8 @@ export const PowerBrowserAPI = Object.freeze({
       theiaBrowser.browsingContext.currentWindowGlobal
         .getActor(GROUP_ACTOR_NAME)
         .sendAsyncMessage("PowerBrowserWebTabState", { kind: "appUpdate", status, version });
+      // WR-08 (46 review): the logged event the MAR-hop transcript is derived from.
+      PowerBrowserAPI.log("info", `[update-observer] appUpdate status=${status} version=${version}`);
     } catch (err) {
       PowerBrowserAPI.log("error", `[update-observer] state push failed (${err && err.name ? err.name : "error"})`);
     }
