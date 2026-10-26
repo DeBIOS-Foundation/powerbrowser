@@ -22,6 +22,11 @@
       "reason": "Mozilla's AUS (Application Update Service) host. The updater is compiled in since 08-04. The effective update URL is application.ini's [AppUpdate] URL, whose host is MOZ_APPUPDATE_HOST from configuration.toml [urls] update (NG-064, UPD-12); no enterprise policy overrides it. MAR signature and MAR channel verification are on (NG-065). A resolution of aus5 therefore means the baked host is missing or bypassed -- fail-loud by design (layer 3 catches it red). media.gmp-manager.url / extensions.systemAddon.update.url stay blanked (D-84/D-86) so no other path can name this host."
     },
     {
+      "host": "crash-reports.mozilla.com",
+      "disposition": "deny",
+      "reason": "UPD-15 (owner decision 9): the crash reporter is compiled out (--disable-crashreporter), so no report path may name this host. Pairs with the blanked breakpad.reportURL pref expect above. A resolution of this host means a compiled-out path was re-enabled -- fail-loud by design."
+    },
+    {
       "host": "updates.powerbrowser.org",
       "disposition": "allow",
       "reason": "08-04 (PKG-02, T-08-04a): the fork's own update-descriptor host. The only unattended callout the enabled updater may make: the application.ini [AppUpdate] URL from configuration.toml [urls] update, with no policy involved (UPD-12), and the hash-pinned update.xml it serves, fetched over HTTPS from infrastructure this project controls. Deliberate waiver in the same category as the Safe Browsing entries -- a real capability (self-update), not an inherited default. Until the static file host exists the name does not resolve and checks fail closed; scripts/verify-mar-update-hop.mjs proves each hop with zero *.mozilla.org / *.mozilla.net resolutions."
@@ -54,7 +59,7 @@
     {
       "host": "location.services.mozilla.com",
       "disposition": "deny",
-      "reason": "browser.region.network.url (modules/libpref/init/all.js:3094), blanked in powerbrowser/branding/dev/pref/firefox-branding.js -- Mozilla's region-lookup service, used for search-engine/locale defaults and queried unattended at startup. Not a DRM/security-parity concern; disabled rather than waived. This host is distinct from the geolocation provider (geo.provider.network.url, also this same host by stock default) that actually serves an explicit site's navigator.geolocation request -- that pref is deliberately left untouched (real capability, fires only on explicit request), so a site that does request geolocation will still attempt this host and fail; that trade-off is accepted for this phase, which ships no Theia-side feature depending on it."
+      "reason": "browser.region.network.url (modules/libpref/init/all.js:3094), blanked in powerbrowser/branding/dev/pref/firefox-branding.js -- Mozilla's region-lookup service, used for search-engine/locale defaults and queried unattended at startup. Not a DRM/security-parity concern; disabled rather than waived. Distinct half, deliberately untouched: geo.provider.network.url (stock default names this same host) serves an explicit site's navigator.geolocation request -- a real capability that fires only on explicit site request, never unattended. A site that requests geolocation will still attempt this host and fail; that trade-off is accepted and no pref change ships here."
     },
     {
       "host": "edgedl.me.gvt1.com",
@@ -91,6 +96,11 @@
       "disposition": "user-initiated",
       "manifest": "urls.release_notes",
       "reason": "UPD-33: the About dialog's release-notes link (app.releaseNotesURL, app.releaseNotesURL.aboutDialog and app.update.url.details from configuration.toml [urls] release_notes, UPD-13) points at the GitHub Releases page (SEED-002 section 7), reached only by an explicit click. network.dns.disablePrefetch = true closes the speculative prefetch; an unattended resolution of this host is a failure exactly as for a `deny` entry."
+    },
+    {
+      "host": "release-assets.githubusercontent.com",
+      "disposition": "allow",
+      "reason": "UPD-15: the updater fetches MAR bytes unattended after staging (not a click destination, so not user-initiated). The Release asset URL (github.com) 302s here at download time. Layer-3 observation of a real update's asset download is Phase 50 criterion 5; this row lands now with the stated reason and the Phase 50 observation reference. github.com stays user-initiated (release-notes click destinations only)."
     },
     {
       "host": "cloudflare-dns.com",
